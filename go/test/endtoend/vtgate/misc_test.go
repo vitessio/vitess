@@ -27,6 +27,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestInsertOnDuplicateKey(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "insert into t11(id, sharding_key, col1, col2, col3) values(1, 2, 'a', 1, 2)")
+	utils.Exec(t, conn, "insert into t11(id, sharding_key, col1, col2, col3) values(1, 2, 'a', 1, 2) on duplicate key update id=10;")
+	utils.AssertMatches(t, conn, "select id, sharding_key from t11 where id=10", "[[INT64(10) INT64(2)]]")
+
+}
+
 func TestInsertNeg(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()

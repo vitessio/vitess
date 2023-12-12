@@ -431,8 +431,13 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field Suffix string
-	size += hack.RuntimeAllocSize(int64(len(cached.Suffix)))
+	// field Suffix vitess.io/vitess/go/vt/sqlparser.OnDup
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Suffix)) * int64(8))
+		for _, elem := range cached.Suffix {
+			size += elem.CachedSize(true)
+		}
+	}
 	// field VindexValueOffset [][]int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.VindexValueOffset)) * int64(24))
