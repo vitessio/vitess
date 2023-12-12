@@ -1981,7 +1981,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	case len(req.TabletAliases) > 0:
 		span.Annotate("tablet_aliases", strings.Join(topoproto.TabletAliasList(req.TabletAliases).ToStringSlice(), ","))
 
-		tabletMap, err = s.ts.GetTabletMap(ctx, req.TabletAliases)
+		tabletMap, err = s.ts.GetTabletMap(ctx, req.TabletAliases, nil)
 		if err != nil {
 			err = fmt.Errorf("GetTabletMap(%v) failed: %w", req.TabletAliases, err)
 		}
@@ -2057,7 +2057,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 		go func(cell string) {
 			defer wg.Done()
 
-			tablets, err := s.ts.GetTabletsByCell(ctx, cell)
+			tablets, err := s.ts.GetTabletsByCell(ctx, cell, nil)
 			if err != nil {
 				if req.Strict {
 					log.Infof("GetTablets got an error from cell %s: %s. Running in strict mode, so canceling other cell RPCs", cell, err)
@@ -4390,7 +4390,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 
 	getTabletMapCtx, getTabletMapCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer getTabletMapCancel()
-	tabletMap, _ := s.ts.GetTabletMap(getTabletMapCtx, aliases)
+	tabletMap, _ := s.ts.GetTabletMap(getTabletMapCtx, aliases, nil)
 
 	var primaryAlias *topodatapb.TabletAlias
 	for _, alias := range aliases {
