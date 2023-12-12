@@ -236,7 +236,7 @@ func TestLookupHashCreate(t *testing.T) {
 	}
 
 	err = lookuphash.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NULL}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
-	require.ErrorContains(t, err, "VT03027: Column 'fromc' cannot be null")
+	require.ErrorContains(t, err, "VT03028: Column 'fromc' cannot be null on row 0, col 0")
 
 	vc.queries = nil
 	lookuphash.(*LookupHash).lkp.IgnoreNulls = true

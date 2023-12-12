@@ -157,7 +157,7 @@ func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sq
 		// for integral types, batch query all ids and then map them back to the input order
 		vars, err := sqltypes.BuildBindVariable(ids)
 		if err != nil {
-			return nil, vterrors.Wrap(err, "lookup.Map")
+			return nil, err
 		}
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: vars,
@@ -181,7 +181,7 @@ func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sq
 		for _, id := range ids {
 			vars, err := sqltypes.BuildBindVariable([]any{id})
 			if err != nil {
-				return nil, vterrors.Wrap(err, "lookup.Map")
+				return nil, err
 			}
 			bindVars := map[string]*querypb.BindVariable{
 				lkp.FromColumns[0]: vars,
@@ -289,7 +289,7 @@ nextRow:
 			if col.IsNull() {
 				if !lkp.IgnoreNulls {
 					cols := strings.Join(lkp.FromColumns, ",")
-					return vterrors.Wrapf(vterrors.VT03027(cols), "lookup.Create: input has null values: row: %d, col: %d", i, j)
+					return vterrors.VT03028(cols, i, j)
 				}
 				continue nextRow
 			}
@@ -303,7 +303,7 @@ nextRow:
 	// We only need to check the first row. Number of cols per row
 	// is guaranteed by the engine to be uniform.
 	if len(trimmedRowsCols[0]) != len(lkp.FromColumns) {
-		return vterrors.Wrapf(vterrors.VT03006(), "lookup.Create: (columns, count): (%v, %d)", lkp.FromColumns, len(trimmedRowsCols[0]))
+		return vterrors.VT03030(lkp.FromColumns, len(trimmedRowsCols[0]))
 	}
 	sort.Sort(&sorter{rowsColValues: trimmedRowsCols, toValues: trimmedToValues})
 
@@ -379,7 +379,7 @@ func (lkp *lookupInternal) Delete(ctx context.Context, vcursor VCursor, rowsColV
 	// We only need to check the first row. Number of cols per row
 	// is guaranteed by the engine to be uniform.
 	if len(rowsColValues[0]) != len(lkp.FromColumns) {
-		return vterrors.Wrapf(vterrors.VT03006(), "lookup.Delete: (columns, count): (%v, %d)", lkp.FromColumns, len(rowsColValues[0]))
+		return vterrors.VT03030(lkp.FromColumns, len(rowsColValues[0]))
 	}
 	for _, column := range rowsColValues {
 		bindVars := make(map[string]*querypb.BindVariable, len(rowsColValues))

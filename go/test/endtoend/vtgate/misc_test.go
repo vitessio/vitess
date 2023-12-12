@@ -802,26 +802,27 @@ func TestLookupErrorMetric(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	var errCount float64
-	apiErr := getVar(t, "VtgateApiErrorCounts")
-	if apiErr != nil {
-		mapErrors := apiErr.(map[string]interface{})
-		val, exists := mapErrors["Execute.ks.primary.ALREADY_EXISTS"]
-		if exists {
-			errCount = val.(float64)
-		}
-	}
+	oldErrCount := getVtgateApiErrorCounts(t)
 
 	utils.Exec(t, conn, `insert into t1 values (1,1)`)
 	_, err := utils.ExecAllowError(t, conn, `insert into t1 values (2,1)`)
 	require.ErrorContains(t, err, `(errno 1062) (sqlstate 23000)`)
 
-	apiErr = getVar(t, "VtgateApiErrorCounts")
-	require.NotNil(t, apiErr)
+	newErrCount := getVtgateApiErrorCounts(t)
+	require.EqualValues(t, oldErrCount+1, newErrCount)
+}
+
+func getVtgateApiErrorCounts(t *testing.T) float64 {
+	apiErr := getVar(t, "VtgateApiErrorCounts")
+	if apiErr == nil {
+		return 0
+	}
 	mapErrors := apiErr.(map[string]interface{})
 	val, exists := mapErrors["Execute.ks.primary.ALREADY_EXISTS"]
-	require.True(t, exists)
-	require.EqualValues(t, errCount+1, val)
+	if exists {
+		return val.(float64)
+	}
+	return 0
 }
 
 func getVar(t *testing.T, key string) interface{} {

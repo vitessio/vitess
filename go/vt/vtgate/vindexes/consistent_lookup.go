@@ -310,7 +310,7 @@ func (lu *clCommon) SetOwnerInfo(keyspace, table string, cols []sqlparser.Identi
 	lu.keyspace = keyspace
 	lu.ownerTable = sqlparser.String(sqlparser.NewIdentifierCS(table))
 	if len(cols) != len(lu.lkp.FromColumns) {
-		return vterrors.Wrapf(vterrors.VT03006(), "owner table column count does not match vindex %s", lu.name)
+		return vterrors.VT03029(lu.name)
 	}
 	lu.ownerColumns = make([]string, len(cols))
 	for i, col := range cols {

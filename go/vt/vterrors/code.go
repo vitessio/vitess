@@ -53,6 +53,9 @@ var (
 	VT03025 = errorWithState("VT03025", vtrpcpb.Code_INVALID_ARGUMENT, WrongArguments, "Incorrect arguments to %s", "The execute statement have wrong number of arguments")
 	VT03026 = errorWithoutState("VT03024", vtrpcpb.Code_INVALID_ARGUMENT, "'%s' bind variable does not exists", "The query cannot be executed as missing the bind variable.")
 	VT03027 = errorWithState("VT03027", vtrpcpb.Code_INVALID_ARGUMENT, BadNullError, "Column '%s' cannot be null", "The column cannot have null value.")
+	VT03028 = errorWithState("VT03028", vtrpcpb.Code_INVALID_ARGUMENT, BadNullError, "Column '%s' cannot be null on row %d, col %d", "The column cannot have null value.")
+	VT03029 = errorWithState("VT03029", vtrpcpb.Code_INVALID_ARGUMENT, WrongValueCountOnRow, "column count does not match value count with the row for vindex '%s'", "The number of columns you want to insert do not match the number of columns of your SELECT query.")
+	VT03030 = errorWithState("VT03030", vtrpcpb.Code_INVALID_ARGUMENT, WrongValueCountOnRow, "lookup column count does not match value count with the row (columns, count): (%v, %d)", "The number of columns you want to insert do not match the number of columns of your SELECT query.")
 
 	VT05001 = errorWithState("VT05001", vtrpcpb.Code_NOT_FOUND, DbDropExists, "cannot drop database '%s'; database does not exists", "The given database does not exist; Vitess cannot drop it.")
 	VT05002 = errorWithState("VT05002", vtrpcpb.Code_NOT_FOUND, BadDb, "cannot alter database '%s'; unknown database", "The given database does not exist; Vitess cannot alter it.")
@@ -132,6 +135,8 @@ var (
 		VT03025,
 		VT03026,
 		VT03027,
+		VT03028,
+		VT03029,
 		VT05001,
 		VT05002,
 		VT05003,
