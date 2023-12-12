@@ -473,27 +473,25 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *App
 	}
 
 	var newColumns []int
-	var newColumnsAST []JoinColumn
+	newColumnsAST := &applyJoinColumns{}
 	for _, col := range ap {
 		switch colInfo := col.Info.(type) {
 		case Offset:
 			newColumns = append(newColumns, join.Columns[colInfo])
-			newColumnsAST = append(newColumnsAST, join.JoinColumns[colInfo])
+			newColumnsAST.add(join.JoinColumns.columns[colInfo])
 		case nil:
 			if !ctx.SemTable.EqualsExprWithDeps(col.EvalExpr, col.ColExpr) {
 				// the inner expression is different from what we are presenting to the outside - this means we need to evaluate
 				return p, NoRewrite
 			}
-			offset := slices.IndexFunc(join.JoinColumns, func(jc JoinColumn) bool {
-				return ctx.SemTable.EqualsExprWithDeps(jc.Original, col.ColExpr)
-			})
+			offset := slices.IndexFunc(join.JoinColumns.columns, applyJoinCompare(ctx, col.ColExpr))
 			if offset < 0 {
 				return p, NoRewrite
 			}
 			if len(join.Columns) > 0 {
 				newColumns = append(newColumns, join.Columns[offset])
 			}
-			newColumnsAST = append(newColumnsAST, join.JoinColumns[offset])
+			newColumnsAST.add(join.JoinColumns.columns[offset])
 		default:
 			return p, NoRewrite
 		}

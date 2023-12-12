@@ -134,7 +134,7 @@ func checkForCorrelatedSubqueries(
 type joinPredicateCollector struct {
 	predicates          sqlparser.Exprs
 	remainingPredicates sqlparser.Exprs
-	joinColumns         []JoinColumn
+	joinColumns         []applyJoinColumn
 
 	totalID,
 	subqID,

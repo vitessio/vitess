@@ -47,7 +47,8 @@ func planOffsets(ctx *plancontext.PlanningContext, root Operator) Operator {
 	return TopDown(root, TableID, visitor, stopAtRoute)
 }
 
-func fetchByOffset(e sqlparser.SQLNode) bool {
+// mustFetchFromInput returns true for expressions that have to be fetched from the input and cannot be evaluated
+func mustFetchFromInput(e sqlparser.SQLNode) bool {
 	switch e.(type) {
 	case *sqlparser.ColName, sqlparser.AggrFunc:
 		return true
@@ -167,7 +168,7 @@ func getOffsetRewritingVisitor(
 			return false
 		}
 
-		if fetchByOffset(e) {
+		if mustFetchFromInput(e) {
 			err = notFound(e)
 			return false
 		}
