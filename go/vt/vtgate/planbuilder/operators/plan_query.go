@@ -37,6 +37,7 @@ package operators
 
 import (
 	"fmt"
+	"runtime"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -86,12 +87,14 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (resu
 
 func PanicHandler(err *error) {
 	if r := recover(); r != nil {
-		badness, ok := r.(error)
-		if !ok {
+		switch badness := r.(type) {
+		case runtime.Error:
+			panic(r)
+		case error:
+			*err = badness
+		default:
 			panic(r)
 		}
-
-		*err = badness
 	}
 }
 
