@@ -1126,7 +1126,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamFailover"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vstream_failover",
+			"Shard": "vstream",
 			"RetryMax": 3,
 			"Tags": []
 		},
@@ -1135,7 +1135,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamStopOnReshardTrue"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vstream_stoponreshard_true",
+			"Shard": "vstream",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1144,7 +1144,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamStopOnReshardFalse"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vstream_stoponreshard_false",
+			"Shard": "vstream",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1153,7 +1153,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamWithKeyspacesToWatch"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vstream_with_keyspaces_to_watch",
+			"Shard": "vstream",
 			"RetryMax": 1,
 			"Tags": []
 		},
