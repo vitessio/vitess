@@ -97,11 +97,7 @@ func createUpsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Inser
 				expr = row[pIdx.idx]
 			}
 			equalExpr := sqlparser.NewComparisonExpr(sqlparser.EqualOp, sqlparser.NewColName(pIdx.col.String()), expr, nil)
-			if whereExpr == nil {
-				whereExpr = equalExpr
-			} else {
-				whereExpr = sqlparser.AndExpressions(whereExpr, equalExpr)
-			}
+			whereExpr = sqlparser.AndExpressions(whereExpr, equalExpr)
 		}
 
 		var updExprs sqlparser.UpdateExprs
