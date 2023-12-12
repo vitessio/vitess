@@ -78,7 +78,7 @@ func newInsert(
 	table *vindexes.Table,
 	prefix string,
 	mid sqlparser.Values,
-	suffix string,
+	suffix sqlparser.OnDup,
 ) *Insert {
 	ins := &Insert{
 		InsertCommon: InsertCommon{
@@ -265,25 +265,30 @@ func (ins *Insert) getInsertShardedQueries(
 		for _, indexValue := range indexesPerRss[i] {
 			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
 			if keyspaceIDs[index] != nil {
+				walkFunc := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+					if arg, ok := node.(*sqlparser.Argument); ok {
+						bv, exists := bindVars[arg.Name]
+						if !exists {
+							return false, vterrors.VT03026(arg.Name)
+						}
+						shardBindVars[arg.Name] = bv
+					}
+					return true, nil
+				}
 				mids = append(mids, sqlparser.String(ins.Mid[index]))
 				for _, expr := range ins.Mid[index] {
-					err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-						if arg, ok := node.(*sqlparser.Argument); ok {
-							bv, exists := bindVars[arg.Name]
-							if !exists {
-								return false, vterrors.VT03026(arg.Name)
-							}
-							shardBindVars[arg.Name] = bv
-						}
-						return true, nil
-					}, expr, nil)
+					err = sqlparser.Walk(walkFunc, expr, nil)
 					if err != nil {
 						return nil, nil, err
 					}
 				}
+				err = sqlparser.Walk(walkFunc, ins.Suffix, nil)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
 		}
-		rewritten := ins.Prefix + strings.Join(mids, ",") + ins.Suffix
+		rewritten := ins.Prefix + strings.Join(mids, ",") + sqlparser.String(ins.Suffix)
 		queries[i] = &querypb.BoundQuery{
 			Sql:           rewritten,
 			BindVariables: shardBindVars,
