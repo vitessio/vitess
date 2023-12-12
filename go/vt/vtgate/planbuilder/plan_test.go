@@ -650,6 +650,7 @@ func readJSONTests(filename string) []planTest {
 		panic(err)
 	}
 	dec := json.NewDecoder(file)
+	dec.DisallowUnknownFields()
 	err = dec.Decode(&output)
 	if err != nil {
 		panic(err)
