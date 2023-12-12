@@ -32,8 +32,6 @@ import (
 
 // TestMoveTablesTZ tests the conversion of datetime based on the source timezone passed to the MoveTables workflow
 func TestMoveTablesTZ(t *testing.T) {
-	allCellNames = "zone1"
-	defaultCellName := "zone1"
 	workflow := "tz"
 	sourceKs := "product"
 	targetKs := "customer"
@@ -43,7 +41,7 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	cells := []*Cell{defaultCell}
 
 	cell1 := vc.Cells["zone1"]
@@ -89,7 +87,6 @@ func TestMoveTablesTZ(t *testing.T) {
 	err = cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard)
 	require.NoError(t, err)
 
-	defaultCell := vc.Cells["zone1"]
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[targetKs]
 	customerTab := custKs.Shards["0"].Tablets["zone1-200"].Vttablet
 

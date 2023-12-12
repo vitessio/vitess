@@ -63,8 +63,6 @@ const initDataQuery = `insert into ks1.tx(id, typ, val) values (1, 1, 'abc'), (2
 
 // testShardedMaterialize tests a materialize workflow for a sharded cluster (single shard) using comparison filters
 func testShardedMaterialize(t *testing.T, useVtctldClient bool) {
-	defaultCellName := "zone1"
-	allCellNames = "zone1"
 	vc = NewVitessCluster(t, nil)
 	ks1 := "ks1"
 	ks2 := "ks2"
@@ -74,8 +72,7 @@ func testShardedMaterialize(t *testing.T, useVtctldClient bool) {
 	defer func() { defaultReplicas = 1 }()
 
 	defer vc.TearDown()
-
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks1, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 100, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
@@ -181,8 +178,6 @@ RETURN id * length(val);
 `
 
 func testMaterialize(t *testing.T, useVtctldClient bool) {
-	defaultCellName := "zone1"
-	allCellNames = "zone1"
 	vc = NewVitessCluster(t, nil)
 	sourceKs := "source"
 	targetKs := "target"
@@ -193,7 +188,7 @@ func testMaterialize(t *testing.T, useVtctldClient bool) {
 
 	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", smMaterializeVSchemaSource, smMaterializeSchemaSource, defaultReplicas, defaultRdonly, 300, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)

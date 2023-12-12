@@ -48,15 +48,13 @@ func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 // hence the VTDATAROOT env variable gets overwritten.
 // Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
 func TestVtctlMigrate(t *testing.T) {
-	defaultCellName := "zone1"
-	allCellNames = "zone1"
 	vc = NewVitessCluster(t, nil)
 
 	defaultReplicas = 0
 	defaultRdonly = 0
 	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	require.NoError(t, err, "failed to create product keyspace")
 	err = cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
@@ -174,15 +172,13 @@ func TestVtctlMigrate(t *testing.T) {
 // hence the VTDATAROOT env variable gets overwritten.
 // Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
 func TestVtctldMigrate(t *testing.T) {
-	defaultCellName := "zone1"
-	allCellNames = "zone1"
 	vc = NewVitessCluster(t, nil)
 
 	defaultReplicas = 0
 	defaultRdonly = 0
 	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0",
 		initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	require.NoError(t, err, "failed to create product keyspace")

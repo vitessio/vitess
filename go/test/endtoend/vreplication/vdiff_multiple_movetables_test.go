@@ -37,9 +37,6 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
 
-	allCellNames = cellName
-	defaultCellName := cellName
-	defaultCell = vc.Cells[defaultCellName]
 	sourceKeyspace := "product"
 	shardName := "0"
 

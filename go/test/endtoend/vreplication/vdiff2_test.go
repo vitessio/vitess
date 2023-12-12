@@ -112,7 +112,7 @@ var testCases = []*testCase{
 }
 
 func TestVDiff2(t *testing.T) {
-	allCellNames = "zone5,zone1,zone2,zone3,zone4"
+	cellNames := "zone5,zone1,zone2,zone3,zone4"
 	sourceKs := "product"
 	sourceShards := []string{"0"}
 	targetKs := "customer"
@@ -120,13 +120,13 @@ func TestVDiff2(t *testing.T) {
 	// This forces us to use multiple vstream packets even with small test tables.
 	extraVTTabletArgs = []string{"--vstream_packet_size=1"}
 
-	vc = NewVitessCluster(t, &clusterOptions{cells: strings.Split(allCellNames, ",")})
+	vc = NewVitessCluster(t, &clusterOptions{cells: strings.Split(cellNames, ",")})
 	defer vc.TearDown()
 
 	zone1 := vc.Cells["zone1"]
 	zone2 := vc.Cells["zone2"]
 	zone3 := vc.Cells["zone3"]
-	defaultCell = zone1
+	defaultCell := zone1
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
@@ -186,6 +186,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	if tc.typ == "Reshard" {
 		args = append(args, "--source_shards", tc.sourceShards, "--target_shards", tc.targetShards)
 	}
+	allCellNames := getCellNames(nil)
 	args = append(args, "--cells", allCellNames)
 	args = append(args, "--tables", tc.tables)
 	args = append(args, "Create")

@@ -51,9 +51,6 @@ func TestFKWorkflow(t *testing.T) {
 	cellName := "zone1"
 	vc = NewVitessCluster(t, nil)
 
-	allCellNames = cellName
-	defaultCellName := cellName
-	defaultCell = vc.Cells[defaultCellName]
 	sourceKeyspace := "fksource"
 	shardName := "0"
 

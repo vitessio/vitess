@@ -101,9 +101,7 @@ func TestFKExt(t *testing.T) {
 		cells:         cells,
 		clusterConfig: fkextConfig.ClusterConfig,
 	})
-	allCellNames = cellName
-	defaultCellName := cellName
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	cell := vc.Cells[cellName]
 
 	defer vc.TearDown()

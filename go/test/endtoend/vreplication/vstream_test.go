@@ -43,8 +43,6 @@ import (
 //   - We ensure that this works through active reparents and doesn't miss any events
 //   - We stream only from the primary and while streaming we reparent to a replica and then back to the original primary
 func testVStreamWithFailover(t *testing.T, failover bool) {
-	defaultCellName := "zone1"
-	allCellNames = "zone1"
 	vc = NewVitessCluster(t, nil)
 
 	require.NotNil(t, vc)
@@ -52,7 +50,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	defaultRdonly = 0
 	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
@@ -242,7 +240,6 @@ type numEvents struct {
 // tests the StopOnReshard flag
 func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID int) *numEvents {
 	defaultCellName := "zone1"
-	allCellNames = "zone1"
 	vc = NewVitessCluster(t, nil)
 
 	require.NotNil(t, vc)
@@ -251,7 +248,7 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 
 	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "unsharded", "0", vschemaUnsharded, schemaUnsharded, defaultReplicas, defaultRdonly, baseTabletID+100, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
@@ -390,18 +387,14 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 // Validate that we can continue streaming from multiple keyspaces after first copying some tables and then resharding one of the keyspaces
 // Ensure that there are no missing row events during the resharding process.
 func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEvents {
-	defaultCellName := "zone1"
-	allCellNames = defaultCellName
 	vc = NewVitessCluster(t, nil)
-
-	require.NotNil(t, vc)
 	ogdr := defaultReplicas
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func(dr int) { defaultReplicas = dr }(ogdr)
 
 	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "unsharded", "0", vschemaUnsharded, schemaUnsharded, defaultReplicas, defaultRdonly, baseTabletID+100, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)

@@ -50,13 +50,10 @@ import (
 )
 
 var (
-	vc          *VitessCluster
-	vtgate      *cluster.VtgateProcess
-	defaultCell *Cell
-	//vtgateConn             *mysql.Conn
+	vc                     *VitessCluster
+	vtgate                 *cluster.VtgateProcess
 	defaultRdonly          int
 	defaultReplicas        int
-	allCellNames           string
 	sourceKsOpts           = make(map[string]string)
 	targetKsOpts           = make(map[string]string)
 	httpClient             = throttlebase.SetupHTTPClient(time.Second)
@@ -129,7 +126,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	shard := "0"
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
-	defaultCell = vc.Cells[cell]
+	defaultCell := vc.Cells[cell]
 
 	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
 		t.Fatal(err)
@@ -235,7 +232,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	shard := "0"
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
-	defaultCell = vc.Cells[cell]
+	defaultCell := vc.Cells[cell]
 	// To test vstreamer source throttling for the MoveTables operation
 	maxSourceTrxHistory := int64(5)
 	extraVTTabletArgs = []string{
@@ -301,10 +298,7 @@ func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
 // If limited == true, we only run a limited set of workflows.
 func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string) {
 	defaultCellName := "zone1"
-	allCellNames = "zone1"
 	vc = NewVitessCluster(t, nil)
-
-	require.NotNil(t, vc)
 	// Keep the cluster processes minimal to deal with CI resource constraints
 	defaultReplicas = 0
 	defaultRdonly = 0
@@ -316,7 +310,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 	}
 	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
@@ -424,13 +418,12 @@ func TestMoveTablesMariaDBToMySQL(t *testing.T) {
 
 func TestVStreamFlushBinlog(t *testing.T) {
 	defaultCellName := "zone1"
-	allCellNames = defaultCellName
 	workflow := "test_vstream_p2c"
 	shard := "0"
 	vc = NewVitessCluster(t, nil)
 	require.NotNil(t, vc)
 	defer vc.TearDown()
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[defaultCellName]
 
 	// Keep the cluster processes minimal (no rdonly and no replica tablets)
 	// to deal with CI resource constraints.
@@ -793,8 +786,9 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			}
 		}
 		vdiffSideBySide(t, ksWorkflow, "")
-		switchReadsDryRun(t, workflowType, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
-		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
+		cellNames := getCellNames(cells)
+		switchReadsDryRun(t, workflowType, cellNames, ksWorkflow, dryRunResultsReadCustomerShard)
+		switchReads(t, workflowType, cellNames, ksWorkflow, false)
 		assertQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query)
 
 		var commit func(t *testing.T)
@@ -838,7 +832,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		execVtgateQuery(t, vtgateConn, "customer", "update customer set meta = convert(x'7b7d' using utf8mb4) where cid = 1")
 		if testReverse {
 			// Reverse Replicate
-			switchReads(t, workflowType, allCellNames, ksWorkflow, true)
+			switchReads(t, workflowType, cellNames, ksWorkflow, true)
 			printShardPositions(vc, ksShards)
 			switchWrites(t, workflowType, ksWorkflow, true)
 
@@ -858,7 +852,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			waitForNoWorkflowLag(t, vc, targetKs, workflow)
 
 			// Go forward again
-			switchReads(t, workflowType, allCellNames, ksWorkflow, false)
+			switchReads(t, workflowType, cellNames, ksWorkflow, false)
 			switchWrites(t, workflowType, ksWorkflow, false)
 
 			var exists bool
@@ -866,7 +860,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.True(t, exists)
 
-			moveTablesAction(t, "Complete", allCellNames, workflow, sourceKs, targetKs, tables)
+			moveTablesAction(t, "Complete", cellNames, workflow, sourceKs, targetKs, tables)
 
 			exists, err = isTableInDenyList(t, vc, "product:0", "customer")
 			require.NoError(t, err, "Error getting denylist for customer:0")
@@ -1020,12 +1014,14 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 	tabletIDBase int, counts map[string]int, dryRunResultSwitchReads, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string,
 	autoIncrementStep int) {
 	t.Run("reshard", func(t *testing.T) {
+		defaultCell := vc.Cells[vc.CellNames[0]]
 		if cells == nil {
 			cells = []*Cell{defaultCell}
 		}
 		if sourceCellOrAlias == "" {
 			sourceCellOrAlias = defaultCell.Name
 		}
+		callNames := getCellNames(cells)
 		ksWorkflow := ksName + "." + workflow
 		keyspace := vc.Cells[defaultCell.Name].Keyspaces[ksName]
 		require.NoError(t, vc.AddShards(t, cells, keyspace, targetShards, defaultReplicas, defaultRdonly, tabletIDBase, targetKsOpts))
@@ -1058,13 +1054,13 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		restartWorkflow(t, ksWorkflow)
 		vdiffSideBySide(t, ksWorkflow, "")
 		if dryRunResultSwitchReads != nil {
-			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "rdonly,replica", "--dry-run")
+			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "rdonly,replica", "--dry-run")
 		}
-		reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "rdonly,replica")
+		reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "rdonly,replica")
 		if dryRunResultSwitchWrites != nil {
-			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "primary", "--dry-run")
+			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "primary", "--dry-run")
 		}
-		reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "primary")
+		reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "primary")
 		reshardAction(t, "Complete", workflow, ksName, "", "", "", "")
 		for tabletName, count := range counts {
 			if tablets[tabletName] == nil {
@@ -1079,6 +1075,7 @@ func shardOrders(t *testing.T) {
 	t.Run("shardOrders", func(t *testing.T) {
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
+		defaultCell := vc.Cells[vc.CellNames[0]]
 		workflow := "o2c"
 		cell := defaultCell.Name
 		sourceKs := "product"
@@ -1095,7 +1092,7 @@ func shardOrders(t *testing.T) {
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
 		vdiffSideBySide(t, ksWorkflow, "")
-		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
+		switchReads(t, workflowType, strings.Join(vc.CellNames, ","), ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		moveTablesAction(t, "Complete", cell, workflow, sourceKs, targetKs, tables)
 		waitForRowCountInTablet(t, customerTab1, "customer", "orders", 1)
@@ -1124,6 +1121,7 @@ func shardMerchant(t *testing.T) {
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
 		workflow := "p2m"
+		defaultCell := vc.Cells[vc.CellNames[0]]
 		cell := defaultCell.Name
 		sourceKs := "product"
 		targetKs := merchantKeyspace
@@ -1145,7 +1143,7 @@ func shardMerchant(t *testing.T) {
 		catchup(t, merchantTab2, workflow, workflowType)
 
 		vdiffSideBySide(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
-		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
+		switchReads(t, workflowType, strings.Join(vc.CellNames, ","), ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		printRoutingRules(t, vc, "After merchant movetables")
 
@@ -1198,6 +1196,7 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		// materializing from "product" keyspace to "customer" keyspace
 		workflow := "cproduct"
 		keyspace := "customer"
+		defaultCell := vc.Cells[vc.CellNames[0]]
 		applyVSchema(t, materializeProductVSchema, keyspace)
 		materialize(t, materializeProductSpec, useVtctldClient)
 		customerTablets := vc.getVttabletsInKeyspace(t, defaultCell, keyspace, "primary")
@@ -1281,6 +1280,7 @@ func materializeRollup(t *testing.T, useVtctldClient bool) {
 		keyspace := "product"
 		workflow := "rollup"
 		applyVSchema(t, materializeSalesVSchema, keyspace)
+		defaultCell := vc.Cells[vc.CellNames[0]]
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 		materialize(t, materializeRollupSpec, useVtctldClient)
 		catchup(t, productTab, workflow, "Materialize")
@@ -1297,6 +1297,7 @@ func materializeSales(t *testing.T, useVtctldClient bool) {
 		keyspace := "product"
 		applyVSchema(t, materializeSalesVSchema, keyspace)
 		materialize(t, materializeSalesSpec, useVtctldClient)
+		defaultCell := vc.Cells[vc.CellNames[0]]
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 		catchup(t, productTab, "sales", "Materialize")
 		waitForRowCount(t, vtgateConn, "product", "sales", 2)
@@ -1311,6 +1312,7 @@ func materializeMerchantSales(t *testing.T, useVtctldClient bool) {
 		defer vtgateConn.Close()
 		workflow := "msales"
 		materialize(t, materializeMerchantSalesSpec, useVtctldClient)
+		defaultCell := vc.Cells[vc.CellNames[0]]
 		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, merchantKeyspace, "primary")
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
@@ -1329,6 +1331,7 @@ func materializeMerchantOrders(t *testing.T, useVtctldClient bool) {
 		keyspace := merchantKeyspace
 		applyVSchema(t, merchantOrdersVSchema, keyspace)
 		materialize(t, materializeMerchantOrdersSpec, useVtctldClient)
+		defaultCell := vc.Cells[vc.CellNames[0]]
 		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, merchantKeyspace, "primary")
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
@@ -1589,6 +1592,7 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 		log.Infof("------------------- START Extra debug info %s Switch writes %s", msg, ksWorkflow)
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
+		defaultCell := vc.Cells[vc.CellNames[0]]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet

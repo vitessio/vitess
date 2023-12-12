@@ -268,7 +268,7 @@ func validateWritesRouteToTarget(t *testing.T) {
 func revert(t *testing.T, workflowType string) {
 	switchWrites(t, workflowType, ksWorkflow, true)
 	validateWritesRouteToSource(t)
-	switchReadsNew(t, workflowType, allCellNames, ksWorkflow, true)
+	switchReadsNew(t, workflowType, getCellNames(nil), ksWorkflow, true)
 	validateReadsRouteToSource(t, "replica")
 
 	// cancel the workflow to cleanup
@@ -623,10 +623,6 @@ func testRestOfWorkflow(t *testing.T) {
 func setupCluster(t *testing.T) *VitessCluster {
 	vc = NewVitessCluster(t, &clusterOptions{cells: []string{"zone1", "zone2"}})
 
-	defaultCellName := "zone1"
-	allCellNames = defaultCellName
-	defaultCell = vc.Cells[defaultCellName]
-
 	zone1 := vc.Cells["zone1"]
 	zone2 := vc.Cells["zone2"]
 
@@ -642,7 +638,7 @@ func setupCluster(t *testing.T) *VitessCluster {
 	defer getVTGateConn()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
-
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	sourceTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 	sourceReplicaTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
 	sourceRdonlyTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-102"].Vttablet
@@ -661,6 +657,7 @@ func setupCustomerKeyspace(t *testing.T) {
 	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 2, 30*time.Second))
 	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "-80"), 1, 30*time.Second))
 	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "80-"), 1, 30*time.Second))
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 	targetTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 	targetTab2 = custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
@@ -685,9 +682,7 @@ func setupCustomer2Keyspace(t *testing.T) {
 func setupMinimalCluster(t *testing.T) *VitessCluster {
 	vc = NewVitessCluster(t, nil)
 
-	defaultCellName := "zone1"
-	allCellNames = defaultCellName
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 
 	zone1 := vc.Cells["zone1"]
 
@@ -716,6 +711,7 @@ func setupMinimalCustomerKeyspace(t *testing.T) {
 	require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, "customer", "80-"))
 	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1, 30*time.Second))
 	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1, 30*time.Second))
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 	targetTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 	targetTab2 = custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
@@ -755,7 +751,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		catchup(t, targetTab2, workflow, workflowType)
 		vdiffSideBySide(t, ksWorkflow, "")
 	}
-
+	allCellNames := getCellNames(cells)
 	var switchReadsFollowedBySwitchWrites = func() {
 		moveTablesAndWait()
 
@@ -835,6 +831,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 
 func createAdditionalCustomerShards(t *testing.T, shards string) {
 	ksName := "customer"
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	keyspace := vc.Cells[defaultCell.Name].Keyspaces[ksName]
 	require.NoError(t, vc.AddShards(t, []*Cell{defaultCell, vc.Cells["zone2"]}, keyspace, shards, defaultReplicas, defaultRdonly, 400, targetKsOpts))
 	arrTargetShardNames := strings.Split(shards, ",")

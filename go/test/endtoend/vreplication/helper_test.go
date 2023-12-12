@@ -920,3 +920,17 @@ func waitForCondition(name string, condition func() bool, timeout time.Duration)
 		}
 	}
 }
+
+func getCellNames(cells []*Cell) string {
+	var cellNames []string
+	if cells == nil {
+		cells = []*Cell{}
+		for _, cell := range vc.Cells {
+			cells = append(cells, cell)
+		}
+	}
+	for _, cell := range cells {
+		cellNames = append(cellNames, cell.Name)
+	}
+	return strings.Join(cellNames, ",")
+}
