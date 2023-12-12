@@ -192,6 +192,11 @@ func tryPushProjection(
 			return p, NoRewrite
 		}
 		return pushProjectionInApplyJoin(ctx, p, src)
+	case *HashJoin:
+		if !p.canPush(ctx) {
+			return p, NoRewrite
+		}
+		return pushProjectionThroughHashJoin(ctx, p, src)
 	case *Vindex:
 		if !p.canPush(ctx) {
 			return p, NoRewrite
@@ -209,6 +214,17 @@ func tryPushProjection(
 	default:
 		return p, NoRewrite
 	}
+}
+
+func pushProjectionThroughHashJoin(ctx *plancontext.PlanningContext, p *Projection, hj *HashJoin) (Operator, *ApplyResult) {
+	cols := p.Columns.(AliasedProjections)
+	for _, col := range cols {
+		if !col.isSameInAndOut(ctx) {
+			return p, NoRewrite
+		}
+		hj.columns.add(col.ColExpr)
+	}
+	return hj, Rewrote("merged projection into hash join")
 }
 
 func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *SubQuery) (Operator, *ApplyResult) {
@@ -284,7 +300,7 @@ func pushProjectionInApplyJoin(
 		rhs.explicitColumnAliases = true
 	}
 
-	src.JoinColumns = nil
+	src.JoinColumns = &applyJoinColumns{}
 	for idx, pe := range ap {
 		var col *sqlparser.IdentifierCI
 		if p.DT != nil && idx < len(p.DT.Columns) {
@@ -315,13 +331,12 @@ func splitProjectionAcrossJoin(
 ) {
 
 	// Check if the current expression can reuse an existing column in the ApplyJoin.
-	if _, found := canReuseColumn(ctx, join.JoinColumns, pe.EvalExpr, joinColumnToExpr); found {
+	if _, found := canReuseColumn(ctx, join.JoinColumns.columns, pe.EvalExpr, joinColumnToExpr); found {
 		return
 	}
 
-	// Add the new JoinColumn to the ApplyJoin's JoinPredicates.
-	join.JoinColumns = append(join.JoinColumns,
-		splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
+	// Add the new applyJoinColumn to the ApplyJoin's JoinPredicates.
+	join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
 }
 
 func splitUnexploredExpression(
@@ -330,11 +345,11 @@ func splitUnexploredExpression(
 	lhs, rhs *projector,
 	pe *ProjExpr,
 	colAlias *sqlparser.IdentifierCI,
-) JoinColumn {
-	// Get a JoinColumn for the current expression.
+) applyJoinColumn {
+	// Get a applyJoinColumn for the current expression.
 	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
 
-	// Update the left and right child columns and names based on the JoinColumn type.
+	// Update the left and right child columns and names based on the applyJoinColumn type.
 	switch {
 	case col.IsPureLeft():
 		lhs.add(pe, colAlias)
@@ -379,7 +394,7 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 	if err != nil {
 		panic(err)
 	}
-	for _, predicate := range src.JoinPredicates {
+	for _, predicate := range src.JoinPredicates.columns {
 		for idx, bve := range predicate.LHSExprs {
 			expr := bve.Expr
 			tbl, err := ctx.SemTable.TableInfoForExpr(expr)
@@ -511,7 +526,7 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, 
 	case *Projection:
 		// we can move ordering under a projection if it's not introducing a column we're sorting by
 		for _, by := range in.Order {
-			if !fetchByOffset(by.SimplifiedExpr) {
+			if !mustFetchFromInput(by.SimplifiedExpr) {
 				return in, NoRewrite
 			}
 		}
@@ -683,7 +698,7 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 	for _, p := range filter.Predicates {
 		cantPush := false
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			if !fetchByOffset(node) {
+			if !mustFetchFromInput(node) {
 				return true, nil
 			}
 
@@ -735,9 +750,9 @@ func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {
 		in.PushedPerformance = true
 
 		return in, Rewrote("push down distinct under union")
-	case *ApplyJoin:
-		src.LHS = &Distinct{Source: src.LHS}
-		src.RHS = &Distinct{Source: src.RHS}
+	case JoinOp:
+		src.SetLHS(&Distinct{Source: src.GetLHS()})
+		src.SetRHS(&Distinct{Source: src.GetRHS()})
 		in.PushedPerformance = true
 
 		if in.Required {

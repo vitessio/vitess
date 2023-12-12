@@ -41,6 +41,7 @@ func TestJoinPredicates(t *testing.T) {
 		LHS:      lhs,
 		RHS:      rhs,
 		LeftJoin: false,
+		columns:  &hashJoinColumns{},
 	}
 
 	cmp := &sqlparser.ComparisonExpr{
@@ -91,6 +92,7 @@ func TestOffsetPlanning(t *testing.T) {
 				LHS:      lhs,
 				RHS:      rhs,
 				LeftJoin: false,
+				columns:  &hashJoinColumns{},
 			}
 			hj.AddColumn(ctx, true, false, aeWrap(test.expr))
 			hj.planOffsets(ctx)

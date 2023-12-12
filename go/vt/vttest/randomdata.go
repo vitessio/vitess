@@ -151,9 +151,6 @@ func (db *LocalCluster) populateShard(dbname string, rng *rand.Rand) error {
 func (db *LocalCluster) populateWithRandomData() error {
 	rng := rand.New(rand.NewSource(int64(db.Seed.RngSeed)))
 	for _, kpb := range db.Topology.Keyspaces {
-		if kpb.ServedFrom != "" {
-			continue
-		}
 		for _, dbname := range db.shardNames(kpb) {
 			if err := db.populateShard(dbname, rng); err != nil {
 				return err
