@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -85,6 +87,23 @@ type ClusterConfig struct {
 	vtorcPort            int
 
 	vreplicationCompressGTID bool
+}
+
+func (cc *ClusterConfig) compressGTID() func() {
+	cc.vreplicationCompressGTID = true
+	return func() {
+		cc.vreplicationCompressGTID = false
+	}
+}
+
+func setVTTabletExperimentalFlags() func() {
+	experimentalArgs := fmt.Sprintf("--vreplication_experimental_flags=%d",
+		vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching)
+	oldArgs := extraVTTabletArgs
+	extraVTTabletArgs = append(extraVTTabletArgs, experimentalArgs)
+	return func() {
+		extraVTTabletArgs = oldArgs
+	}
 }
 
 // VitessCluster represents all components within the test cluster

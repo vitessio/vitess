@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
@@ -280,11 +279,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	ogflags := extraVTTabletArgs
-	defer func() { extraVTTabletArgs = ogflags }()
-	// Test VPlayer batching mode.
-	extraVTTabletArgs = append(extraVTTabletArgs, fmt.Sprintf("--vreplication_experimental_flags=%d",
-		vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching))
+	defer setVTTabletExperimentalFlags()
 	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t, "noblob")
@@ -425,37 +420,6 @@ func TestMoveTablesMariaDBToMySQL(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mariadb-10.10"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testVreplicationWorkflows(t, true /* only do MoveTables */, "")
-}
-
-func TestMultiCellVreplicationWorkflow(t *testing.T) {
-	cells := []string{"zone1", "zone2"}
-	allCellNames = strings.Join(cells, ",")
-
-	vc = NewVitessCluster(t, &clusterOptions{cells: cells})
-	defer vc.TearDown()
-	defaultCellName := "zone1"
-	defaultCell = vc.Cells[defaultCellName]
-	keyspace := "product"
-	shard := "0"
-
-	cell1 := vc.Cells["zone1"]
-	cell2 := vc.Cells["zone2"]
-	vc.AddKeyspace(t, []*Cell{cell1, cell2}, keyspace, shard, initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
-
-	vtgate = cell1.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, keyspace, shard)
-	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2, 30*time.Second)
-
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
-	verifyClusterHealth(t, vc)
-	insertInitialData(t)
-	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name, true)
-	isTableInDenyList(t, vc, "product:0", "customer")
-	// we tag along this test so as not to create the overhead of creating another cluster
-	testVStreamCellFlag(t)
 }
 
 func TestVStreamFlushBinlog(t *testing.T) {
@@ -622,23 +586,11 @@ func testVStreamCellFlag(t *testing.T) {
 // We also reuse the setup of this test to validate that the "vstream * from" vtgate query functionality is functional
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
-	mainClusterConfig.vreplicationCompressGTID = true
-	oldVTTabletExtraArgs := extraVTTabletArgs
-	extraVTTabletArgs = append(extraVTTabletArgs,
-		// Test VPlayer batching mode.
-		fmt.Sprintf("--vreplication_experimental_flags=%d",
-			vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
-	)
-	defer func() {
-		mainClusterConfig.vreplicationCompressGTID = false
-		extraVTTabletArgs = oldVTTabletExtraArgs
-	}()
+	defer mainClusterConfig.compressGTID()
+	defer setVTTabletExperimentalFlags()
 	vc = NewVitessCluster(t, &clusterOptions{cells: cells})
 	defer vc.TearDown()
 
-	allCellNames = "zone1,zone2"
-	defaultCellName := "zone1"
-	defaultCell = vc.Cells[defaultCellName]
 	keyspace := "product"
 	shard := "0"
 
@@ -669,6 +621,9 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 		testVStreamFrom(t, keyspace, 2)
 	})
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
+	isTableInDenyList(t, vc, "product:0", "customer")
+	// we tag along this test so as not to create the overhead of creating another cluster
+	testVStreamCellFlag(t)
 }
 
 // testVStreamFrom confirms that the "vstream * from" endpoint is serving data

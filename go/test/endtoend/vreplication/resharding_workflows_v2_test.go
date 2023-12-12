@@ -609,7 +609,6 @@ func testRestOfWorkflow(t *testing.T) {
 
 func setupCluster(t *testing.T) *VitessCluster {
 	vc = NewVitessCluster(t, &clusterOptions{cells: []string{"zone1", "zone2"}})
-	defer vc.TearDown()
 
 	defaultCellName := "zone1"
 	allCellNames = defaultCellName

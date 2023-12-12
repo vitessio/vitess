@@ -68,6 +68,9 @@ func TestVtctlMigrate(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
+	t.Run("VStreamFrom", func(t *testing.T) {
+		testVStreamFrom(t, "product", 2)
+	})
 
 	// create external cluster
 	extCell := "extcell1"

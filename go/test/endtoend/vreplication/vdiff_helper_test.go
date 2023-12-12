@@ -34,7 +34,7 @@ import (
 const (
 	vdiffTimeout             = 90 * time.Second // we can leverage auto retry on error with this longer-than-usual timeout
 	vdiffRetryTimeout        = 30 * time.Second
-	vdiffStatusCheckInterval = 1 * time.Second
+	vdiffStatusCheckInterval = 5 * time.Second
 	vdiffRetryInterval       = 5 * time.Second
 )
 

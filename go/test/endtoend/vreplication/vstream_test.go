@@ -62,6 +62,9 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
+	t.Run("VStreamFrom", func(t *testing.T) {
+		testVStreamFrom(t, "product", 2)
+	})
 	ctx := context.Background()
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	if err != nil {
