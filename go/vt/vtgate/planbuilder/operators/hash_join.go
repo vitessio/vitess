@@ -90,9 +90,10 @@ func NewHashJoin(lhs, rhs Operator, outerJoin bool) *HashJoin {
 func (hj *HashJoin) Clone(inputs []Operator) Operator {
 	kopy := *hj
 	kopy.LHS, kopy.RHS = inputs[0], inputs[1]
-	kopy.columns = &hashJoinColumns{columns: slices.Clone(hj.columns.columns)}
+	kopy.columns = hj.columns.clone()
 	kopy.LHSKeys = slices.Clone(hj.LHSKeys)
 	kopy.RHSKeys = slices.Clone(hj.RHSKeys)
+	kopy.JoinComparisons = slices.Clone(hj.JoinComparisons)
 	return &kopy
 }
 

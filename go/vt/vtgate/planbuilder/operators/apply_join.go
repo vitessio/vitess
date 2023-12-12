@@ -103,8 +103,8 @@ func (aj *ApplyJoin) Clone(inputs []Operator) Operator {
 	kopy.LHS = inputs[0]
 	kopy.RHS = inputs[1]
 	kopy.Columns = slices.Clone(aj.Columns)
-	kopy.JoinColumns = &applyJoinColumns{columns: slices.Clone(aj.JoinColumns.columns)}
-	kopy.JoinPredicates = &applyJoinColumns{columns: slices.Clone(aj.JoinPredicates.columns)}
+	kopy.JoinColumns = aj.JoinColumns.clone()
+	kopy.JoinPredicates = aj.JoinPredicates.clone()
 	kopy.Vars = maps.Clone(aj.Vars)
 	kopy.Predicate = sqlparser.CloneExpr(aj.Predicate)
 	kopy.ExtraLHSVars = slices.Clone(aj.ExtraLHSVars)

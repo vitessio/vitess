@@ -15,6 +15,7 @@ package operators
 
 import (
 	"fmt"
+	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -74,28 +75,36 @@ func (jc *applyJoinColumns) addRight(expr sqlparser.Expr) {
 	})
 }
 
+func (jc *applyJoinColumns) clone() *applyJoinColumns {
+	return &applyJoinColumns{columns: slices.Clone(jc.columns)}
+}
+
 func (jc *applyJoinColumns) add(col applyJoinColumn) {
 	jc.columns = append(jc.columns, col)
 }
 
-func (jc *hashJoinColumns) addLeft(expr sqlparser.Expr) {
-	jc.columns = append(jc.columns, hashJoinColumn{
+func (hj *hashJoinColumns) addLeft(expr sqlparser.Expr) {
+	hj.columns = append(hj.columns, hashJoinColumn{
 		expr: expr,
 		side: Left,
 	})
 }
 
-func (jc *hashJoinColumns) add(expr sqlparser.Expr) {
-	jc.columns = append(jc.columns, hashJoinColumn{
+func (hj *hashJoinColumns) add(expr sqlparser.Expr) {
+	hj.columns = append(hj.columns, hashJoinColumn{
 		expr: expr,
 	})
 }
 
-func (jc *hashJoinColumns) addRight(expr sqlparser.Expr) {
-	jc.columns = append(jc.columns, hashJoinColumn{
+func (hj *hashJoinColumns) addRight(expr sqlparser.Expr) {
+	hj.columns = append(hj.columns, hashJoinColumn{
 		expr: expr,
 		side: Right,
 	})
+}
+
+func (hj *hashJoinColumns) clone() *hashJoinColumns {
+	return &hashJoinColumns{columns: slices.Clone(hj.columns)}
 }
 
 func (ab *aggBuilder) leftCountStar(ctx *plancontext.PlanningContext) *sqlparser.AliasedExpr {
