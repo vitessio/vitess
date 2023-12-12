@@ -2705,7 +2705,7 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 		// GetTabletMap ignores ErrNoNode, and it's good for
 		// our purpose, it means a tablet was deleted but is
 		// still referenced.
-		tabletMap, err := s.ts.GetTabletMap(ctx, aliases)
+		tabletMap, err := s.ts.GetTabletMap(ctx, aliases, nil)
 		if err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "GetTabletMap() failed: %v", err)
 		}
