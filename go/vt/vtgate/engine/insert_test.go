@@ -213,7 +213,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		sqlparser.Values{
 			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
 		},
-		" suffix",
+		nil,
 	)
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -227,7 +227,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:_id_0 /* INT64 */) suffix {_id_0: type:INT64 value:"1"} ` +
+			`sharded.20-: prefix(:_id_0 /* INT64 */) {_id_0: type:INT64 value:"1"} ` +
 			`true true`,
 	})
 
@@ -252,7 +252,9 @@ func TestInsertShardedSimple(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}},
 			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}},
 		},
-		" suffix",
+		sqlparser.OnDup{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix"), Expr: &sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
+		},
 	)
 	vc = newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -266,8 +268,8 @@ func TestInsertShardedSimple(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) suffix {_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
-			`sharded.-20: prefix(:_id_1 /* INT64 */) suffix {_id_1: type:INT64 value:"2"} ` +
+			`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
+			`sharded.-20: prefix(:_id_1 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2"} ` +
 			`true false`,
 	})
 
@@ -293,7 +295,9 @@ func TestInsertShardedSimple(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}},
 			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}},
 		},
-		" suffix",
+		sqlparser.OnDup{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix"), Expr: &sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
+		},
 	)
 	ins.MultiShardAutocommit = true
 
@@ -309,8 +313,156 @@ func TestInsertShardedSimple(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) suffix {_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
-			`sharded.-20: prefix(:_id_1 /* INT64 */) suffix {_id_1: type:INT64 value:"2"} ` +
+			`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
+			`sharded.-20: prefix(:_id_1 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2"} ` +
+			`true true`,
+	})
+}
+
+func TestInsertShardWithONDuplicateKey(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "hash",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
+		},
+	}
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	// A single row insert should be autocommitted
+	ins := NewInsert(
+		InsertSharded,
+		false,
+		ks.Keyspace,
+		[][][]evalengine.Expr{{
+			// colVindex columns: id
+			{
+				evalengine.NewLiteralInt(1),
+			},
+		}},
+		ks.Tables["t1"],
+		"prefix",
+		sqlparser.Values{
+			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
+		},
+		sqlparser.OnDup{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix"), Expr: &sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
+		},
+	)
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+
+	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		// Based on shardForKsid, values returned will be 20-.
+		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		// Row 2 will go to -20, rows 1 & 3 will go to 20-
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix(:_id_0 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1"} ` +
+			`true true`,
+	})
+
+	// Multiple rows are not autocommitted by default
+	ins = NewInsert(
+		InsertSharded,
+		false,
+		ks.Keyspace,
+		[][][]evalengine.Expr{{
+			// colVindex columns: id
+			// 3 rows.
+			{
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
+		}},
+		ks.Tables["t1"],
+		"prefix",
+		sqlparser.Values{
+			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
+			{&sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}},
+			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}},
+		},
+		sqlparser.OnDup{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix"), Expr: &sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
+		},
+	)
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+
+	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		// Based on shardForKsid, values returned will be 20-, -20, 20-.
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		// Row 2 will go to -20, rows 1 & 3 will go to 20-
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
+			`sharded.-20: prefix(:_id_1 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2"} ` +
+			`true false`,
+	})
+
+	// Optional flag overrides autocommit
+	ins = NewInsert(
+		InsertSharded,
+		false,
+		ks.Keyspace,
+		[][][]evalengine.Expr{{
+			// colVindex columns: id
+			// 3 rows.
+			{
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
+		}},
+
+		ks.Tables["t1"],
+		"prefix",
+		sqlparser.Values{
+			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
+			{&sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}},
+			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}},
+		},
+		sqlparser.OnDup{
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix"), Expr: &sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
+		},
+	)
+	ins.MultiShardAutocommit = true
+
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+
+	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		// Based on shardForKsid, values returned will be 20-, -20, 20-.
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		// Row 2 will go to -20, rows 1 & 3 will go to 20-
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
+			`sharded.-20: prefix(:_id_1 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2"} ` +
 			`true true`,
 	})
 }
@@ -360,7 +512,7 @@ func TestInsertShardedFail(t *testing.T) {
 		sqlparser.Values{
 			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
 		},
-		" suffix",
+		nil,
 	)
 
 	vc := &loggingVCursor{}
@@ -414,7 +566,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 			{&sqlparser.Argument{Name: "__seq1", Type: sqltypes.Int64}},
 			{&sqlparser.Argument{Name: "__seq2", Type: sqltypes.Int64}},
 		},
-		" suffix",
+		nil,
 	)
 
 	ins.Generate = &Generate{
@@ -454,9 +606,9 @@ func TestInsertShardedGenerate(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:__seq0 /* INT64 */),(:__seq2 /* INT64 */) suffix ` +
+			`sharded.20-: prefix(:__seq0 /* INT64 */),(:__seq2 /* INT64 */) ` +
 			`{__seq0: type:INT64 value:"1" __seq2: type:INT64 value:"3"} ` +
-			`sharded.-20: prefix(:__seq1 /* INT64 */) suffix ` +
+			`sharded.-20: prefix(:__seq1 /* INT64 */) ` +
 			`{__seq1: type:INT64 value:"2"} ` +
 			`true false`,
 	})
@@ -552,7 +704,7 @@ func TestInsertShardedOwned(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c2_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_1", Type: sqltypes.Int64}},
 			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c2_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_2", Type: sqltypes.Int64}},
 		},
-		" suffix",
+		nil,
 	)
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -574,12 +726,12 @@ func TestInsertShardedOwned(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix(:_id_0 /* INT64 */, :_c1_0 /* INT64 */, :_c2_0 /* INT64 */, :_c3_0 /* INT64 */)` +
-			`,(:_id_2 /* INT64 */, :_c1_2 /* INT64 */, :_c2_2 /* INT64 */, :_c3_2 /* INT64 */) suffix ` +
+			`,(:_id_2 /* INT64 */, :_c1_2 /* INT64 */, :_c2_2 /* INT64 */, :_c3_2 /* INT64 */) ` +
 			`{_c1_0: type:INT64 value:"4" _c1_2: type:INT64 value:"6" ` +
 			`_c2_0: type:INT64 value:"7" _c2_2: type:INT64 value:"9" ` +
 			`_c3_0: type:INT64 value:"10" _c3_2: type:INT64 value:"12" ` +
 			`_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
-			`sharded.-20: prefix(:_id_1 /* INT64 */, :_c1_1 /* INT64 */, :_c2_1 /* INT64 */, :_c3_1 /* INT64 */) suffix ` +
+			`sharded.-20: prefix(:_id_1 /* INT64 */, :_c1_1 /* INT64 */, :_c2_1 /* INT64 */, :_c3_1 /* INT64 */) ` +
 			`{_c1_1: type:INT64 value:"5" _c2_1: type:INT64 value:"8" _c3_1: type:INT64 value:"11" ` +
 			`_id_1: type:INT64 value:"2"} ` +
 			`true false`,
@@ -644,7 +796,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 		sqlparser.Values{
 			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_0", Type: sqltypes.Null}},
 		},
-		" suffix",
+		nil,
 	)
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -656,7 +808,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sharded.20-: prefix(:_id_0 /* INT64 */, :_c3_0 /* NULL_TYPE */) suffix ` +
+		`ExecuteMultiShard sharded.20-: prefix(:_id_0 /* INT64 */, :_c3_0 /* NULL_TYPE */) ` +
 			`{_c3_0:  _id_0: type:INT64 value:"1"} true true`,
 	})
 }
@@ -730,7 +882,7 @@ func TestInsertShardedGeo(t *testing.T) {
 			{&sqlparser.Argument{Name: "_region_0", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
 			{&sqlparser.Argument{Name: "_region_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}},
 		},
-		" suffix",
+		nil,
 	)
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -745,9 +897,9 @@ func TestInsertShardedGeo(t *testing.T) {
 			`id_0: type:INT64 value:"1" id_1: type:INT64 value:"1" ` +
 			`keyspace_id_0: type:VARBINARY value:"\x01\x16k@\xb4J\xbaK\xd6" keyspace_id_1: type:VARBINARY value:"\xff\x16k@\xb4J\xbaK\xd6" true`,
 		`ResolveDestinations sharded [value:"0" value:"1"] Destinations:DestinationKeyspaceID(01166b40b44aba4bd6),DestinationKeyspaceID(ff166b40b44aba4bd6)`,
-		`ExecuteMultiShard sharded.20-: prefix(:_region_0 /* INT64 */, :_id_0 /* INT64 */) suffix ` +
+		`ExecuteMultiShard sharded.20-: prefix(:_region_0 /* INT64 */, :_id_0 /* INT64 */) ` +
 			`{_id_0: type:INT64 value:"1" _region_0: type:INT64 value:"1"} ` +
-			`sharded.-20: prefix(:_region_1 /* INT64 */, :_id_1 /* INT64 */) suffix ` +
+			`sharded.-20: prefix(:_region_1 /* INT64 */, :_id_1 /* INT64 */) ` +
 			`{_id_1: type:INT64 value:"1" _region_1: type:INT64 value:"255"} ` +
 			`true false`,
 	})
@@ -854,7 +1006,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c2_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_2", Type: sqltypes.Int64}},
 			{&sqlparser.Argument{Name: "_id_3", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_3", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c2_3", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_3", Type: sqltypes.Int64}},
 		},
-		" suffix",
+		nil,
 	)
 
 	ksid0Lookup := sqltypes.MakeTestResult(
@@ -917,9 +1069,9 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"3"] Destinations:DestinationKeyspaceID(00),DestinationKeyspaceID(00)`,
 		// Bind vars for rows 2 & 3 may be missing because they were not sent.
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:_id_0 /* INT64 */, :_c1_0 /* INT64 */, :_c2_0 /* INT64 */, :_c3_0 /* INT64 */) suffix ` +
+			`sharded.20-: prefix(:_id_0 /* INT64 */, :_c1_0 /* INT64 */, :_c2_0 /* INT64 */, :_c3_0 /* INT64 */) ` +
 			`{_c1_0: type:INT64 value:"5" _c2_0: type:INT64 value:"9" _c3_0: type:INT64 value:"13" _id_0: type:INT64 value:"1"} ` +
-			`sharded.-20: prefix(:_id_3 /* INT64 */, :_c1_3 /* INT64 */, :_c2_3 /* INT64 */, :_c3_3 /* INT64 */) suffix ` +
+			`sharded.-20: prefix(:_id_3 /* INT64 */, :_c1_3 /* INT64 */, :_c2_3 /* INT64 */, :_c3_3 /* INT64 */) ` +
 			`{_c1_3: type:INT64 value:"8" _c2_3: type:INT64 value:"12" _c3_3: type:INT64 value:"16" _id_3: type:INT64 value:"4"} ` +
 			`true false`,
 	})
@@ -984,7 +1136,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 		sqlparser.Values{
 			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_0", Type: sqltypes.Int64}},
 		},
-		" suffix",
+		nil,
 	)
 
 	ksid0 := sqltypes.MakeTestResult(
@@ -1009,7 +1161,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`Execute select from from lkp1 where from = :from and toc = :toc from:  toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" false`,
 		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sharded.-20: prefix(:_id_0 /* INT64 */, :_c3_0 /* INT64 */) suffix ` +
+		`ExecuteMultiShard sharded.-20: prefix(:_id_0 /* INT64 */, :_c3_0 /* INT64 */) ` +
 			`{_c3_0:  _id_0: type:INT64 value:"1"} true true`,
 	})
 }
@@ -1102,7 +1254,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c2_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_1", Type: sqltypes.Int64}},
 			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c2_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_2", Type: sqltypes.Int64}},
 		},
-		" suffix",
+		nil,
 	)
 
 	// nonemptyResult will cause the lookup verify queries to succeed.
@@ -1141,12 +1293,12 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix(:_id_0 /* INT64 */, :_c1_0 /* INT64 */, :_c2_0 /* INT64 */, :_c3_0 /* INT64 */),` +
-			`(:_id_2 /* INT64 */, :_c1_2 /* INT64 */, :_c2_2 /* INT64 */, :_c3_2 /* INT64 */) suffix ` +
+			`(:_id_2 /* INT64 */, :_c1_2 /* INT64 */, :_c2_2 /* INT64 */, :_c3_2 /* INT64 */) ` +
 			`{_c1_0: type:INT64 value:"4" _c1_2: type:INT64 value:"6" ` +
 			`_c2_0: type:INT64 value:"7" _c2_2: type:INT64 value:"9" ` +
 			`_c3_0: type:INT64 value:"10" _c3_2: type:INT64 value:"12" ` +
 			`_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
-			`sharded.-20: prefix(:_id_1 /* INT64 */, :_c1_1 /* INT64 */, :_c2_1 /* INT64 */, :_c3_1 /* INT64 */) suffix ` +
+			`sharded.-20: prefix(:_id_1 /* INT64 */, :_c1_1 /* INT64 */, :_c2_1 /* INT64 */, :_c3_1 /* INT64 */) ` +
 			`{_c1_1: type:INT64 value:"5" _c2_1: type:INT64 value:"8" ` +
 			`_c3_1: type:INT64 value:"11" _id_1: type:INT64 value:"2"} ` +
 			`true false`,
@@ -1216,7 +1368,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "v2", Type: sqltypes.VarChar}},
 			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "v3", Type: sqltypes.VarChar}},
 		},
-		" suffix",
+		nil,
 	)
 
 	// nonemptyResult will cause the lookup verify queries to succeed.
@@ -1251,9 +1403,9 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 		// Based on shardForKsid, values returned will be 20-, -20.
 		`ResolveDestinations sharded [value:"0" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:_id_0 /* INT64 */, :_c3_0 /* INT64 */, :v1 /* VARCHAR */) suffix ` +
+			`sharded.20-: prefix(:_id_0 /* INT64 */, :_c3_0 /* INT64 */, :v1 /* VARCHAR */) ` +
 			`{_c3_0: type:INT64 value:"10" _id_0: type:INT64 value:"1" v1: type:VARCHAR value:"a"} ` +
-			`sharded.-20: prefix(:_id_2 /* INT64 */, :_c3_2 /* INT64 */, :v3 /* VARCHAR */) suffix ` +
+			`sharded.-20: prefix(:_id_2 /* INT64 */, :_c3_2 /* INT64 */, :v3 /* VARCHAR */) ` +
 			`{_c3_2: type:INT64 value:"12" _id_2: type:INT64 value:"3" v3: type:VARCHAR value:"c"} ` +
 			`true false`,
 	})
@@ -1316,7 +1468,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 		sqlparser.Values{
 			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_0", Type: sqltypes.Int64}},
 		},
-		" suffix",
+		nil,
 	)
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -1413,7 +1565,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_1", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_1", Type: sqltypes.Null}, &sqlparser.Argument{Name: "_c2_1", Type: sqltypes.Null}, &sqlparser.Argument{Name: "_c3_1", Type: sqltypes.Null}},
 			{&sqlparser.Argument{Name: "_id_2", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c1_2", Type: sqltypes.Null}, &sqlparser.Argument{Name: "_c2_2", Type: sqltypes.Null}, &sqlparser.Argument{Name: "_c3_2", Type: sqltypes.Null}},
 		},
-		" suffix",
+		nil,
 	)
 
 	// nonemptyResult will cause the lookup verify queries to succeed.
@@ -1439,13 +1591,13 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard sharded.20-: ` +
 			`prefix(:_id_0 /* INT64 */, :_c1_0 /* NULL_TYPE */, :_c2_0 /* NULL_TYPE */, :_c3_0 /* NULL_TYPE */),` +
-			`(:_id_2 /* INT64 */, :_c1_2 /* NULL_TYPE */, :_c2_2 /* NULL_TYPE */, :_c3_2 /* NULL_TYPE */) suffix ` +
+			`(:_id_2 /* INT64 */, :_c1_2 /* NULL_TYPE */, :_c2_2 /* NULL_TYPE */, :_c3_2 /* NULL_TYPE */) ` +
 			`{_c1_0: type:UINT64 value:"1" _c1_2: type:UINT64 value:"3" ` +
 			`_c2_0:  _c2_2:  ` +
 			`_c3_0: type:UINT64 value:"1" _c3_2: type:UINT64 value:"3" ` +
 			`_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
 			`sharded.-20: ` +
-			`prefix(:_id_1 /* INT64 */, :_c1_1 /* NULL_TYPE */, :_c2_1 /* NULL_TYPE */, :_c3_1 /* NULL_TYPE */) suffix ` +
+			`prefix(:_id_1 /* INT64 */, :_c1_1 /* NULL_TYPE */, :_c2_1 /* NULL_TYPE */, :_c3_1 /* NULL_TYPE */) ` +
 			`{_c1_1: type:UINT64 value:"2" _c2_1:  _c3_1: type:UINT64 value:"2" _id_1: type:INT64 value:"2"} true false`,
 	})
 }
@@ -1507,7 +1659,7 @@ func TestInsertShardedUnownedReverseMapSuccess(t *testing.T) {
 		sqlparser.Values{
 			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}, &sqlparser.Argument{Name: "_c3_0", Type: sqltypes.Null}},
 		},
-		" suffix",
+		nil,
 	)
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -1547,7 +1699,6 @@ func TestInsertSelectSimple(t *testing.T) {
 
 	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t1"].ColumnVindexes...)
 	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1571,10 +1722,10 @@ func TestInsertSelectSimple(t *testing.T) {
 
 		// two rows go to the 20- shard, and one row go to the -20 shard
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) suffix ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
 			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1"` +
 			` _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
-			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1)` +
 			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`})
 
 	vc.Rewind()
@@ -1591,10 +1742,10 @@ func TestInsertSelectSimple(t *testing.T) {
 
 		// two rows go to the 20- shard, and one row go to the -20 shard
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) suffix ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
 			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1"` +
 			` _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
-			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1)` +
 			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`})
 }
 
@@ -1639,7 +1790,6 @@ func TestInsertSelectOwned(t *testing.T) {
 
 	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t1"].ColumnVindexes...)
 	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1669,11 +1819,11 @@ func TestInsertSelectOwned(t *testing.T) {
 		// insert values into the main table
 		`ExecuteMultiShard ` +
 			// first we insert two rows on the 20- shard
-			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) suffix ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
 			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
 
 			// next we insert one row on the -20 shard
-			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix ` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1) ` +
 			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} ` +
 			`true false`})
 
@@ -1697,11 +1847,11 @@ func TestInsertSelectOwned(t *testing.T) {
 		// insert values into the main table
 		`ExecuteMultiShard ` +
 			// first we insert two rows on the 20- shard
-			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) suffix ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
 			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
 
 			// next we insert one row on the -20 shard
-			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix ` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1) ` +
 			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} ` +
 			`true false`})
 }
@@ -1731,7 +1881,7 @@ func TestInsertSelectGenerate(t *testing.T) {
 		ks.Tables["t1"],
 		"prefix ",
 		nil,
-		" suffix")
+		nil)
 	ins.Query = "dummy_insert"
 	ins.VindexValueOffset = [][]int{{1}} // The primary vindex has a single column as sharding key
 	ins.Input = &Route{
@@ -1785,13 +1935,13 @@ func TestInsertSelectGenerate(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			// first we send the insert to the 20- shard
-			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) suffix ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
 			`{_c0_0: type:VARCHAR value:"a" ` +
 			`_c0_1: type:INT64 value:"1" ` +
 			`_c2_0: type:VARCHAR value:"b" ` +
 			`_c2_1: type:INT64 value:"3"} ` +
 			// next we send the insert to the -20 shard
-			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix ` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1) ` +
 			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"2"} ` +
 			`true false`,
 	})
@@ -1840,7 +1990,6 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 		Offset: 1,
 	}
 	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1881,13 +2030,13 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			// first we send the insert to the 20- shard
-			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) suffix ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
 			`{_c0_0: type:VARCHAR value:"a" ` +
 			`_c0_1: type:INT64 value:"1" ` +
 			`_c2_0: type:VARCHAR value:"b" ` +
 			`_c2_1: type:INT64 value:"3"} ` +
 			// next we send the insert to the -20 shard
-			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix ` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1) ` +
 			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"2"} ` +
 			`true false`,
 	})
@@ -1936,7 +2085,6 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		Offset: 2,
 	}
 	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -1972,10 +2120,10 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		`ExecuteStandalone dummy_generate n: type:INT64 value:"3" ks2 -20`,
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix values (:_c0_0, :_c0_1, :_c0_2), (:_c2_0, :_c2_1, :_c2_2) suffix ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1, :_c0_2), (:_c2_0, :_c2_1, :_c2_2) ` +
 			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c0_2: type:INT64 value:"10" ` +
 			`_c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"3" _c2_2: type:INT64 value:"12"} ` +
-			`sharded.-20: prefix values (:_c1_0, :_c1_1, :_c1_2) suffix ` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1, :_c1_2) ` +
 			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"2" _c1_2: type:INT64 value:"11"} ` +
 			`true false`,
 	})
@@ -2024,7 +2172,6 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 		Offset: 2,
 	}
 	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -2064,10 +2211,10 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 		`ExecuteStandalone dummy_generate n: type:INT64 value:"3" ks2 -20`,
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix values (:_c0_0, :_c0_1, :_c0_2), (:_c2_0, :_c2_1, :_c2_2) suffix ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1, :_c0_2), (:_c2_0, :_c2_1, :_c2_2) ` +
 			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c0_2: type:INT64 value:"10" ` +
 			`_c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"3" _c2_2: type:INT64 value:"12"} ` +
-			`sharded.-20: prefix values (:_c1_0, :_c1_1, :_c1_2) suffix ` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1, :_c1_2) ` +
 			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"2" _c1_2: type:INT64 value:"11"} ` +
 			`true false`,
 	})
@@ -2114,7 +2261,6 @@ func TestInsertSelectUnowned(t *testing.T) {
 
 	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t2"].ColumnVindexes...)
 	ins.Prefix = "prefix "
-	ins.Suffix = " suffix"
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
@@ -2141,11 +2287,11 @@ func TestInsertSelectUnowned(t *testing.T) {
 		// insert values into the main table
 		`ExecuteMultiShard ` +
 			// first we insert two rows on the 20- shard
-			`sharded.20-: prefix values (:_c0_0), (:_c2_0) suffix ` +
+			`sharded.20-: prefix values (:_c0_0), (:_c2_0) ` +
 			`{_c0_0: type:INT64 value:"1" _c2_0: type:INT64 value:"2"} ` +
 
 			// next we insert one row on the -20 shard
-			`sharded.-20: prefix values (:_c1_0) suffix ` +
+			`sharded.-20: prefix values (:_c1_0) ` +
 			`{_c1_0: type:INT64 value:"3"} ` +
 			`true false`})
 
@@ -2169,11 +2315,11 @@ func TestInsertSelectUnowned(t *testing.T) {
 		// insert values into the main table
 		`ExecuteMultiShard ` +
 			// first we insert two rows on the 20- shard
-			`sharded.20-: prefix values (:_c0_0), (:_c2_0) suffix ` +
+			`sharded.20-: prefix values (:_c0_0), (:_c2_0) ` +
 			`{_c0_0: type:INT64 value:"1" _c2_0: type:INT64 value:"2"} ` +
 
 			// next we insert one row on the -20 shard
-			`sharded.-20: prefix values (:_c1_0) suffix ` +
+			`sharded.-20: prefix values (:_c1_0) ` +
 			`{_c1_0: type:INT64 value:"3"} ` +
 			`true false`})
 }
@@ -2225,7 +2371,6 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		Keyspace:          sks1.Keyspace,
 		Query:             "dummy_insert",
 		Prefix:            "prefix ",
-		Suffix:            " suffix",
 		ColVindexes:       sks1.Tables["s1"].ColumnVindexes,
 		VindexValueOffset: [][]int{{0}},
 		Input:             sRoute,
@@ -2252,7 +2397,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2266,7 +2411,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
 
 	// sks1 and uks2
 	ins.Input = uRoute
@@ -2281,7 +2426,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2295,7 +2440,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
 
 	// uks1 and sks2
 	ins = &Insert{
@@ -2303,7 +2448,6 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		Keyspace: uks1.Keyspace,
 		Query:    "dummy_insert",
 		Prefix:   "prefix ",
-		Suffix:   " suffix",
 		Input:    sRoute,
 	}
 
@@ -2317,7 +2461,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2331,7 +2475,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
 
 	// uks1 and uks2
 	ins.Input = uRoute
@@ -2346,7 +2490,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2360,5 +2504,5 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
 }

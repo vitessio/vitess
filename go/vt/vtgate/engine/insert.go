@@ -77,7 +77,7 @@ type (
 		// Prefix, Mid and Suffix are for sharded insert plans.
 		Prefix string
 		Mid    sqlparser.Values
-		Suffix string
+		Suffix sqlparser.OnDup
 
 		// Option to override the standard behavior and allow a multi-shard insert
 		// to use single round trip autocommit.
@@ -134,7 +134,7 @@ func NewInsert(
 	table *vindexes.Table,
 	prefix string,
 	mid sqlparser.Values,
-	suffix string,
+	suffix sqlparser.OnDup,
 ) *Insert {
 	ins := &Insert{
 		Opcode:       opcode,
@@ -345,7 +345,7 @@ func (ins *Insert) getInsertQueryForUnsharded(result *sqltypes.Result, bindVars 
 		}
 		mids = append(mids, row)
 	}
-	return ins.Prefix + sqlparser.String(mids) + ins.Suffix
+	return ins.Prefix + sqlparser.String(mids) + sqlparser.String(ins.Suffix)
 }
 
 func (ins *Insert) execInsertSharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -467,7 +467,7 @@ func (ins *Insert) getInsertSelectQueries(
 				mids = append(mids, row)
 			}
 		}
-		rewritten := ins.Prefix + sqlparser.String(mids) + ins.Suffix
+		rewritten := ins.Prefix + sqlparser.String(mids) + sqlparser.String(ins.Suffix)
 		queries[i] = &querypb.BoundQuery{
 			Sql:           rewritten,
 			BindVariables: bvs,
@@ -764,25 +764,30 @@ func (ins *Insert) getInsertShardedRoute(
 		for _, indexValue := range indexesPerRss[i] {
 			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
 			if keyspaceIDs[index] != nil {
+				walkFunc := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+					if arg, ok := node.(*sqlparser.Argument); ok {
+						bv, exists := bindVars[arg.Name]
+						if !exists {
+							return false, vterrors.VT03026(arg.Name)
+						}
+						shardBindVars[arg.Name] = bv
+					}
+					return true, nil
+				}
 				mids = append(mids, sqlparser.String(ins.Mid[index]))
 				for _, expr := range ins.Mid[index] {
-					err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-						if arg, ok := node.(*sqlparser.Argument); ok {
-							bv, exists := bindVars[arg.Name]
-							if !exists {
-								return false, vterrors.VT03026(arg.Name)
-							}
-							shardBindVars[arg.Name] = bv
-						}
-						return true, nil
-					}, expr, nil)
+					err = sqlparser.Walk(walkFunc, expr, nil)
 					if err != nil {
 						return nil, nil, err
 					}
 				}
+				err = sqlparser.Walk(walkFunc, ins.Suffix, nil)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
 		}
-		rewritten := ins.Prefix + strings.Join(mids, ",") + ins.Suffix
+		rewritten := ins.Prefix + strings.Join(mids, ",") + sqlparser.String(ins.Suffix)
 		queries[i] = &querypb.BoundQuery{
 			Sql:           rewritten,
 			BindVariables: shardBindVars,
@@ -1005,7 +1010,7 @@ func (ins *Insert) description() PrimitiveDescription {
 		mids := slice.Map(ins.Mid, func(from sqlparser.ValTuple) string {
 			return sqlparser.String(from)
 		})
-		shardQuery := fmt.Sprintf("%s%s%s", ins.Prefix, strings.Join(mids, ", "), ins.Suffix)
+		shardQuery := fmt.Sprintf("%s%s%s", ins.Prefix, strings.Join(mids, ", "), sqlparser.String(ins.Suffix))
 		if shardQuery != ins.Query {
 			other["ShardedQuery"] = shardQuery
 		}
