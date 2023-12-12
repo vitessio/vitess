@@ -66,6 +66,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformFkVerify(ctx, op)
 	case *operators.InsertSelection:
 		return transformInsertionSelection(ctx, op)
+	case *operators.Upsert:
+		return transformUpsert(ctx, op)
 	case *operators.HashJoin:
 		return transformHashJoin(ctx, op)
 	case *operators.Sequential:
@@ -73,6 +75,31 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (logicalPlan, error) {
+	u := &upsert{}
+	for _, source := range op.Sources {
+		iLp, uLp, err := transformOneUpsert(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+		u.insert = append(u.insert, iLp)
+		u.update = append(u.update, uLp)
+	}
+	return u, nil
+}
+
+func transformOneUpsert(ctx *plancontext.PlanningContext, source operators.UpsertSource) (iLp, uLp logicalPlan, err error) {
+	iLp, err = transformToLogicalPlan(ctx, source.Insert)
+	if err != nil {
+		return
+	}
+	if ins, ok := iLp.(*insert); ok {
+		ins.eInsert.PreventAutoCommit = true
+	}
+	uLp, err = transformToLogicalPlan(ctx, source.Update)
+	return
 }
 
 func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (logicalPlan, error) {
