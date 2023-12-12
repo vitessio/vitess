@@ -1207,7 +1207,7 @@
   {
     "comment": "insert with mimatched column list",
     "query": "insert into user(id) values (1, 2)",
-    "plan": "VT03006: column count does not match value count at row 1"
+    "plan": "VT03006: column count does not match value count with the row"
   },
   {
     "comment": "insert no column list for sharded authoritative table",
@@ -3759,17 +3759,17 @@
   {
     "comment": "insert using select with more columns in insert",
     "query": "insert into music(id, user_id) select 1",
-    "plan": "VT03006: column count does not match value count at row 1"
+    "plan": "VT03006: column count does not match value count with the row"
   },
   {
     "comment": "insert using select with more columns in select",
     "query": "insert into music(id, user_id) select id, count(user_id), sum(user_id) from user group by id",
-    "plan": "VT03006: column count does not match value count at row 1"
+    "plan": "VT03006: column count does not match value count with the row"
   },
   {
     "comment": "insert using select with more columns in select after accounting for star column",
     "query": "insert into music(id, user_id) select id, *, 2 from user",
-    "plan": "VT03006: column count does not match value count at row 1"
+    "plan": "VT03006: column count does not match value count with the row"
   },
   {
     "comment": "insert using select with auto-inc column using vitess sequence, sequence column not present",
@@ -4893,12 +4893,12 @@
   {
     "comment": "insert row values smaller than number of columns",
     "query": "insert into user(one, two, three, four) values (1, 2, 3)",
-    "plan": "VT03006: column count does not match value count at row 1"
+    "plan": "VT03006: column count does not match value count with the row"
   },
   {
     "comment": "insert row values greater than number of columns",
     "query": "insert into user(one, two, three) values (1, 2, 3, 4)",
-    "plan": "VT03006: column count does not match value count at row 1"
+    "plan": "VT03006: column count does not match value count with the row"
   },
   {
     "comment": "insert on duplicate key update with database qualifier",

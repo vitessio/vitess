@@ -102,7 +102,7 @@
   {
     "comment": "unsharded insert, col list does not match values",
     "query": "insert into unsharded_auto(id, val) values(1)",
-    "plan": "VT03006: column count does not match value count at row 1"
+    "plan": "VT03006: column count does not match value count with the row"
   },
   {
     "comment": "sharded upsert can't change vindex",
