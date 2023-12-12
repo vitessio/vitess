@@ -159,7 +159,6 @@ func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.C
 	}
 
 	ks := &topodatapb.Keyspace{
-		ServedFroms:  req.ServedFroms,
 		KeyspaceType: req.Type,
 		BaseKeyspace: req.BaseKeyspace,
 		SnapshotTime: req.SnapshotTime,

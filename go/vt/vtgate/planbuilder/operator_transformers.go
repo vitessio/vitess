@@ -278,9 +278,6 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		})
 	}
 
-	if err != nil {
-		return nil, err
-	}
 	oa.truncateColumnCount = op.ResultColumns
 	return oa, nil
 }
@@ -458,9 +455,6 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, h
 
 	rp := newRoutingParams(ctx, op.Routing.OpCode())
 	op.Routing.UpdateRoutingParams(ctx, rp)
-	if err != nil {
-		return nil, err
-	}
 
 	e := &engine.Route{
 		TableName:           strings.Join(tableNames, ", "),
@@ -623,7 +617,7 @@ func autoIncGenerate(gen *operators.Generate) *engine.Generate {
 	}
 }
 
-func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlparser.Values, suffix string) {
+func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlparser.Values, suffix sqlparser.OnDup) {
 	mids, isValues := ins.Rows.(sqlparser.Values)
 	prefixFormat := "insert %v%sinto %v%v "
 	if isValues {
@@ -638,9 +632,13 @@ func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlp
 		ins.Table, ins.Columns)
 	prefix = prefixBuf.String()
 
-	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	suffixBuf.Myprintf("%v", ins.OnDup)
-	suffix = suffixBuf.String()
+	suffix = sqlparser.CopyOnRewrite(ins.OnDup, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		if tblName, ok := cursor.Node().(sqlparser.TableName); ok {
+			if tblName.Qualifier != sqlparser.NewIdentifierCS("") {
+				cursor.Replace(sqlparser.NewTableName(tblName.Name.String()))
+			}
+		}
+	}, nil).(sqlparser.OnDup)
 	return
 }
 

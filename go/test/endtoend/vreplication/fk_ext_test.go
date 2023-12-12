@@ -194,17 +194,8 @@ func TestFKExt(t *testing.T) {
 
 }
 
-// compareRowCounts compares the row counts for the parent and child tables in the source and target shards. In addition to vdiffs,
-// it is another check to ensure that both tables have the same number of rows in the source and target shards after load generation
-// has stopped.
-func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []string) error {
-	log.Infof("Comparing row counts for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards)
-	lg.Stop()
-	defer lg.Start()
-	if err := waitForCondition("load generator to stop", func() bool { return lg.State() == LoadGeneratorStateStopped }, 10*time.Second); err != nil {
-		return err
-	}
-
+// checkRowCounts checks that the parent and child tables in the source and target shards have the same number of rows.
+func checkRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []string) bool {
 	sourceTabs := make(map[string]*cluster.VttabletProcess)
 	targetTabs := make(map[string]*cluster.VttabletProcess)
 	for _, shard := range sourceShards {
@@ -239,9 +230,26 @@ func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards 
 	log.Infof("Source parent count: %d, child count: %d, target parent count: %d, child count: %d.",
 		sourceParentCount, sourceChildCount, targetParentCount, targetChildCount)
 	if sourceParentCount != targetParentCount || sourceChildCount != targetChildCount {
-		return fmt.Errorf(fmt.Sprintf("source and target row counts do not match; source parent count: %d, target parent count: %d, source child count: %d, target child count: %d",
-			sourceParentCount, targetParentCount, sourceChildCount, targetChildCount))
+		log.Infof("Row counts do not match for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards)
+		return false
 	}
+	return true
+}
+
+// compareRowCounts compares the row counts for the parent and child tables in the source and target shards. In addition to vdiffs,
+// it is another check to ensure that both tables have the same number of rows in the source and target shards after load generation
+// has stopped.
+func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []string) error {
+	log.Infof("Comparing row counts for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards)
+	lg.Stop()
+	defer lg.Start()
+	if err := waitForCondition("load generator to stop", func() bool { return lg.State() == LoadGeneratorStateStopped }, 10*time.Second); err != nil {
+		return err
+	}
+	if err := waitForCondition("matching row counts", func() bool { return checkRowCounts(t, keyspace, sourceShards, targetShards) }, 30*time.Second); err != nil {
+		return err
+	}
+
 	return nil
 }
 

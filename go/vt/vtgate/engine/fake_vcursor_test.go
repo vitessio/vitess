@@ -275,10 +275,6 @@ func (t *noopVCursor) SetAutocommit(context.Context, bool) error {
 	panic("implement me")
 }
 
-func (t *noopVCursor) SetSessionForeignKeyChecks(ctx context.Context, foreignKeyChecks bool) error {
-	panic("implement me")
-}
-
 func (t *noopVCursor) SetClientFoundRows(context.Context, bool) error {
 	panic("implement me")
 }
@@ -744,10 +740,6 @@ func (f *loggingVCursor) Rewind() {
 }
 
 func (f *loggingVCursor) SetAutocommit(context.Context, bool) error {
-	panic("implement me")
-}
-
-func (f *loggingVCursor) SetSessionForeignKeyChecks(ctx context.Context, foreignKeyChecks bool) error {
 	panic("implement me")
 }
 

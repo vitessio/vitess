@@ -29,13 +29,14 @@ import (
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // ReplicatorPlan is the execution plan for the replicator. It contains
@@ -195,6 +196,7 @@ type TablePlan struct {
 	Insert           *sqlparser.ParsedQuery
 	Update           *sqlparser.ParsedQuery
 	Delete           *sqlparser.ParsedQuery
+	MultiDelete      *sqlparser.ParsedQuery
 	Fields           []*querypb.Field
 	EnumValuesMap    map[string](map[string]string)
 	ConvertIntToEnum map[string]bool
@@ -442,6 +444,126 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	}
 	// Unreachable.
 	return nil, nil
+}
+
+// applyBulkDeleteChanges applies a bulk DELETE statement from the row changes
+// to the target table -- which resulted from a DELETE statement executed on the
+// source that deleted N rows -- using an IN clause with the primary key values
+// of the rows to be deleted. This currently only supports tables with single
+// column primary keys. This limitation is in place for now as we know that case
+// will still be efficient. When using large multi-column IN or OR group clauses
+// in DELETES we could end up doing large (table) scans that actually make things
+// slower.
+// TODO: Add support for multi-column primary keys.
+func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
+	if len(rowDeletes) == 0 {
+		return &sqltypes.Result{}, nil
+	}
+	if (len(tp.TablePlanBuilder.pkCols) + len(tp.TablePlanBuilder.extraSourcePkCols)) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bulk delete is only supported for tables with a single primary key column")
+	}
+	if tp.MultiDelete == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk delete query")
+	}
+
+	baseQuerySize := int64(len(tp.MultiDelete.Query))
+	querySize := baseQuerySize
+
+	execQuery := func(pkVals *[]sqltypes.Value) (*sqltypes.Result, error) {
+		pksBV, err := sqltypes.BuildBindVariable(*pkVals)
+		if err != nil {
+			return nil, err
+		}
+		query, err := tp.MultiDelete.GenerateQuery(map[string]*querypb.BindVariable{"bulk_pks": pksBV}, nil)
+		if err != nil {
+			return nil, err
+		}
+		tp.TablePlanBuilder.stats.BulkQueryCount.Add("delete", 1)
+		return executor(query)
+	}
+
+	pkIndex := -1
+	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
+	for _, rowDelete := range rowDeletes {
+		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
+		if pkIndex == -1 {
+			for i := range vals {
+				if tp.PKIndices[i] {
+					pkIndex = i
+					break
+				}
+			}
+		}
+		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
+		if querySize+addedSize > maxQuerySize {
+			if _, err := execQuery(&pkVals); err != nil {
+				return nil, err
+			}
+			pkVals = nil
+			querySize = baseQuerySize
+		}
+		pkVals = append(pkVals, vals[pkIndex])
+		querySize += addedSize
+	}
+
+	return execQuery(&pkVals)
+}
+
+// applyBulkInsertChanges generates a multi-row INSERT statement from the row
+// changes generated from a multi-row INSERT statement executed on the source.
+func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
+	if len(rowInserts) == 0 {
+		return &sqltypes.Result{}, nil
+	}
+	if tp.BulkInsertFront == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk insert query")
+	}
+
+	prefix := &strings.Builder{}
+	prefix.WriteString(tp.BulkInsertFront.Query)
+	prefix.WriteString(" values ")
+	insertPrefix := prefix.String()
+	maxQuerySize -= int64(len(insertPrefix))
+	values := &strings.Builder{}
+
+	execQuery := func(vals *strings.Builder) (*sqltypes.Result, error) {
+		if tp.BulkInsertOnDup != nil {
+			vals.WriteString(tp.BulkInsertOnDup.Query)
+		}
+		tp.TablePlanBuilder.stats.BulkQueryCount.Add("insert", 1)
+		return executor(insertPrefix + vals.String())
+	}
+
+	newStmt := true
+	for _, rowInsert := range rowInserts {
+		rowValues := &strings.Builder{}
+		bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
+		vals := sqltypes.MakeRowTrusted(tp.Fields, rowInsert.After)
+		for n, field := range tp.Fields {
+			bindVar, err := tp.bindFieldVal(field, &vals[n])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["a_"+field.Name] = bindVar
+		}
+		if err := tp.BulkInsertValues.Append(rowValues, bindvars, nil); err != nil {
+			return nil, err
+		}
+		if int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
+			if _, err := execQuery(values); err != nil {
+				return nil, err
+			}
+			values.Reset()
+			newStmt = true
+		}
+		if !newStmt {
+			values.WriteString(", ")
+		}
+		values.WriteString(rowValues.String())
+		newStmt = false
+	}
+
+	return execQuery(values)
 }
 
 func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable) (string, error) {

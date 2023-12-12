@@ -40,18 +40,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/schema"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vttablet"
 )
 
 type testcase struct {
@@ -436,6 +436,9 @@ func TestMain(m *testing.M) {
 			"--migration_check_interval", "5s",
 			"--vstream_packet_size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
 			"--watch_replication_stream",
+			// Test VPlayer batching mode.
+			fmt.Sprintf("--vreplication_experimental_flags=%d",
+				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",

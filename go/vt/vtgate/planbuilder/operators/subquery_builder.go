@@ -116,7 +116,7 @@ func createSubqueryOp(
 // and extracts subqueries into operators
 func (sqb *SubQueryBuilder) inspectStatement(ctx *plancontext.PlanningContext,
 	stmt sqlparser.SelectStatement,
-) (sqlparser.Exprs, []JoinColumn) {
+) (sqlparser.Exprs, []applyJoinColumn) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		return sqb.inspectSelect(ctx, stmt)
@@ -134,7 +134,7 @@ func (sqb *SubQueryBuilder) inspectStatement(ctx *plancontext.PlanningContext,
 func (sqb *SubQueryBuilder) inspectSelect(
 	ctx *plancontext.PlanningContext,
 	sel *sqlparser.Select,
-) (sqlparser.Exprs, []JoinColumn) {
+) (sqlparser.Exprs, []applyJoinColumn) {
 	// first we need to go through all the places where one can find predicates
 	// and search for subqueries
 	newWhere, wherePreds, whereJoinCols := sqb.inspectWhere(ctx, sel.Where)
@@ -169,12 +169,9 @@ func createSubquery(
 	sqc := &SubQueryBuilder{totalID: totalID, subqID: subqID, outerID: outerID}
 
 	predicates, joinCols := sqc.inspectStatement(ctx, subq.Select)
-	stmt := rewriteRemainingColumns(ctx, subq.Select, subqID)
+	correlated := checkForCorrelatedSubqueries(ctx, subq.Select, subqID)
 
-	// TODO: this should not be needed. We are using CopyOnRewrite above, but somehow this is not getting copied
-	ctx.SemTable.CopySemanticInfo(subq.Select, stmt)
-
-	opInner := translateQueryToOp(ctx, stmt)
+	opInner := translateQueryToOp(ctx, subq.Select)
 
 	opInner = sqc.getRootOperator(opInner, nil)
 	return &SubQuery{
@@ -187,13 +184,14 @@ func createSubquery(
 		IsProjection:     isProjection,
 		TopLevel:         topLevel,
 		JoinColumns:      joinCols,
+		correlated:       correlated,
 	}
 }
 
 func (sqb *SubQueryBuilder) inspectWhere(
 	ctx *plancontext.PlanningContext,
 	in *sqlparser.Where,
-) (*sqlparser.Where, sqlparser.Exprs, []JoinColumn) {
+) (*sqlparser.Where, sqlparser.Exprs, []applyJoinColumn) {
 	if in == nil {
 		return nil, nil, nil
 	}
@@ -223,7 +221,7 @@ func (sqb *SubQueryBuilder) inspectWhere(
 func (sqb *SubQueryBuilder) inspectOnExpr(
 	ctx *plancontext.PlanningContext,
 	from []sqlparser.TableExpr,
-) (newFrom []sqlparser.TableExpr, onPreds sqlparser.Exprs, onJoinCols []JoinColumn) {
+) (newFrom []sqlparser.TableExpr, onPreds sqlparser.Exprs, onJoinCols []applyJoinColumn) {
 	for _, tbl := range from {
 		tbl := sqlparser.CopyOnRewrite(tbl, dontEnterSubqueries, func(cursor *sqlparser.CopyOnWriteCursor) {
 			cond, ok := cursor.Node().(*sqlparser.JoinCondition)

@@ -28,26 +28,25 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/vttablet"
-
-	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/dbconfigs"
-
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -70,6 +69,7 @@ var (
 	globalFBC                = &fakeBinlogClient{}
 	vrepldb                  = "vrepl"
 	globalDBQueries          = make(chan string, 1000)
+	lastMultiExecQuery       = ""
 	testForeignKeyQueries    = false
 	testSetForeignKeyQueries = false
 	doNotLogDBQueries        = false
@@ -492,6 +492,23 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		globalDBQueries <- query
 	}
 	return qr, err
+}
+
+func (dc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	queries, err := sqlparser.SplitStatementToPieces(query)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*sqltypes.Result, 0, len(queries))
+	for _, query := range queries {
+		qr, err := dc.ExecuteFetch(query, maxrows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, qr)
+	}
+	lastMultiExecQuery = query
+	return results, nil
 }
 
 func expectDeleteQueries(t *testing.T) {

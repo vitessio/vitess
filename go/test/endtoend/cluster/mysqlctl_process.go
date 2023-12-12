@@ -30,6 +30,7 @@ import (
 	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/tlstest"
@@ -215,11 +216,11 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	// If we found a valid associated mysqld_safe process then let's kill
 	// it first.
 	if err == nil && mysqldSafePID > 0 {
-		if err = syscall.Kill(mysqldSafePID, syscall.SIGKILL); err != nil {
+		if err = syscallutil.Kill(mysqldSafePID, syscall.SIGKILL); err != nil {
 			return err
 		}
 	}
-	return syscall.Kill(pid, syscall.SIGKILL)
+	return syscallutil.Kill(pid, syscall.SIGKILL)
 }
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference

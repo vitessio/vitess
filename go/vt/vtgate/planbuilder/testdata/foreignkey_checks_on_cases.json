@@ -1931,7 +1931,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl1 where (id) in ((1))",
+                "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from u_tbl1 where (id) in ((1))",
                 "Table": "u_tbl1"
               }
             ]

@@ -108,23 +108,24 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 	return
 }
 
-func rewriteRemainingColumns(
+func checkForCorrelatedSubqueries(
 	ctx *plancontext.PlanningContext,
 	stmt sqlparser.SelectStatement,
 	subqID semantics.TableSet,
-) sqlparser.SelectStatement {
-	return sqlparser.CopyOnRewrite(stmt, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		colname, isColname := cursor.Node().(*sqlparser.ColName)
+) (correlated bool) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		colname, isColname := node.(*sqlparser.ColName)
 		if !isColname {
-			return
+			return true, nil
 		}
 		deps := ctx.SemTable.RecursiveDeps(colname)
 		if deps.IsSolvedBy(subqID) {
-			return
+			return true, nil
 		}
-		rsv := ctx.GetReservedArgumentFor(colname)
-		cursor.Replace(sqlparser.NewArgument(rsv))
-	}, nil).(sqlparser.SelectStatement)
+		correlated = true
+		return false, nil
+	}, stmt)
+	return correlated
 }
 
 // joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any
@@ -133,7 +134,7 @@ func rewriteRemainingColumns(
 type joinPredicateCollector struct {
 	predicates          sqlparser.Exprs
 	remainingPredicates sqlparser.Exprs
-	joinColumns         []JoinColumn
+	joinColumns         []applyJoinColumn
 
 	totalID,
 	subqID,

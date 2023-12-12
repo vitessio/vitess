@@ -169,6 +169,16 @@ func TestVReplicationStats(t *testing.T) {
 	require.Equal(t, int64(11), testStats.status().Controllers[0].QueryCounts["replicate"])
 	require.Equal(t, int64(23), testStats.status().Controllers[0].QueryCounts["fastforward"])
 
+	blpStats.BulkQueryCount.Add("insert", 101)
+	blpStats.BulkQueryCount.Add("delete", 203)
+	require.Equal(t, int64(101), testStats.status().Controllers[0].BulkQueryCounts["insert"])
+	require.Equal(t, int64(203), testStats.status().Controllers[0].BulkQueryCounts["delete"])
+
+	blpStats.TrxQueryBatchCount.Add("without_commit", 10)
+	blpStats.TrxQueryBatchCount.Add("with_commit", 2193)
+	require.Equal(t, int64(10), testStats.status().Controllers[0].TrxQueryBatchCounts["without_commit"])
+	require.Equal(t, int64(2193), testStats.status().Controllers[0].TrxQueryBatchCounts["with_commit"])
+
 	blpStats.CopyLoopCount.Add(100)
 	blpStats.CopyRowCount.Add(200)
 	require.Equal(t, int64(100), testStats.status().Controllers[0].CopyLoopCount)

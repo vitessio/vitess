@@ -246,7 +246,9 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 	case *sqlparser.Load:
 		plan, err = &Plan{PlanID: PlanLoad}, nil
 	case *sqlparser.Flush:
-		plan, err = &Plan{PlanID: PlanFlush, FullQuery: GenerateFullQuery(stmt)}, nil
+		plan, err = analyzeFlush(stmt, tables)
+	case *sqlparser.UnlockTables:
+		plan, err = &Plan{PlanID: PlanUnlockTables}, nil
 	case *sqlparser.CallProc:
 		plan, err = &Plan{PlanID: PlanCallProc, FullQuery: GenerateFullQuery(stmt)}, nil
 	default:
