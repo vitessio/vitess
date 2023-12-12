@@ -23,12 +23,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestInsertOnDuplicateKey(t *testing.T) {
@@ -790,12 +791,57 @@ func TestJoinWithMergedRouteWithPredicate(t *testing.T) {
 }
 
 func TestRowCountExceed(t *testing.T) {
-	conn, closer := start(t)
-	defer closer()
+	conn, _ := start(t)
+	defer func() {
+		cluster.PanicHandler(t)
+		// needs special delete logic as it exceeds row count.
+		for i := 50; i <= 300; i += 50 {
+			utils.Exec(t, conn, fmt.Sprintf("delete from t1 where id1 < %d", i))
+		}
+		conn.Close()
+	}()
 
 	for i := 0; i < 250; i++ {
 		utils.Exec(t, conn, fmt.Sprintf("insert into t1 (id1, id2) values (%d, %d)", i, i+1))
 	}
 
 	utils.AssertContainsError(t, conn, "select id1 from t1 where id1 < 1000", `Row count exceeded 100`)
+}
+
+func TestLookupErrorMetric(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	oldErrCount := getVtgateApiErrorCounts(t)
+
+	utils.Exec(t, conn, `insert into t1 values (1,1)`)
+	_, err := utils.ExecAllowError(t, conn, `insert into t1 values (2,1)`)
+	require.ErrorContains(t, err, `(errno 1062) (sqlstate 23000)`)
+
+	newErrCount := getVtgateApiErrorCounts(t)
+	require.EqualValues(t, oldErrCount+1, newErrCount)
+}
+
+func getVtgateApiErrorCounts(t *testing.T) float64 {
+	apiErr := getVar(t, "VtgateApiErrorCounts")
+	if apiErr == nil {
+		return 0
+	}
+	mapErrors := apiErr.(map[string]interface{})
+	val, exists := mapErrors["Execute.ks.primary.ALREADY_EXISTS"]
+	if exists {
+		return val.(float64)
+	}
+	return 0
+}
+
+func getVar(t *testing.T, key string) interface{} {
+	vars, err := clusterInstance.VtgateProcess.GetVars()
+	require.NoError(t, err)
+
+	val, exists := vars[key]
+	if !exists {
+		return nil
+	}
+	return val
 }
