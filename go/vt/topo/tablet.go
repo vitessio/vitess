@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/key"
 
@@ -287,7 +289,7 @@ func (ts *Server) GetTabletAliasesByCell(ctx context.Context, cell string) ([]*t
 type GetTabletsByCellOptions struct {
 	// Concurrency controls the maximum number of concurrent calls to GetTablet.
 	// For backwards compatibility, concurrency of 0 is considered unlimited.
-	Concurrency int
+	Concurrency int64
 }
 
 // GetTabletsByCell returns all the tablets in the cell.
@@ -528,28 +530,37 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 		tabletMap = make(map[string]*TabletInfo)
 		returnErr error
 		// Previously this was always run with unlimited concurrency, so 32 should be fine.
-		concurrency = 32
+		concurrency int64 = 32
 	)
 
 	if opt != nil && opt.Concurrency > 0 {
 		concurrency = opt.Concurrency
 	}
-	sem := make(chan int, concurrency)
+	var sem = semaphore.NewWeighted(concurrency)
 
 	for _, tabletAlias := range tabletAliases {
 		wg.Add(1)
 		go func(tabletAlias *topodatapb.TabletAlias) {
 			defer wg.Done()
-			sem <- 1
+			if err := sem.Acquire(ctx, 1); err != nil {
+				// Only happens if context is cancelled.
+				mu.Lock()
+				log.Warningf("%v: %v", tabletAlias, err)
+				// We only need to set this on the first error.
+				if returnErr == nil {
+					returnErr = NewError(PartialResult, tabletAlias.GetCell())
+				}
+				mu.Unlock()
+			}
 			tabletInfo, err := ts.GetTablet(ctx, tabletAlias)
-			<-sem
+			sem.Release(1)
 			mu.Lock()
 			if err != nil {
 				log.Warningf("%v: %v", tabletAlias, err)
 				// There can be data races removing nodes - ignore them for now.
-				if returnErr != nil && !IsErrType(err, NoNode) {
-					// only need to set this the first time
-					returnErr = NewError(PartialResult, "")
+				// We only need to set this on first error.
+				if returnErr == nil && !IsErrType(err, NoNode) {
+					returnErr = NewError(PartialResult, tabletAlias.GetCell())
 				}
 			} else {
 				tabletMap[topoproto.TabletAliasString(tabletAlias)] = tabletInfo

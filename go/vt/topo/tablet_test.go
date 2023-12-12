@@ -27,6 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
+// Test various cases of calls to GetTabletsByCell.
+// GetTabletsByCell first tries to get all the tablets using List.
+// If the response is too large, we will get an error, and fall back to one tablet at a time.
 func TestServerGetTabletsByCell(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -41,30 +44,35 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			opt: &topo.GetTabletsByCellOptions{Concurrency: -1},
 		},
 		{
-			name:    "unsharded",
+			name:    "single",
 			tablets: 1,
 			// Make sure the defaults apply as expected.
 			opt: nil,
 		},
 		{
-			name:    "sharded",
+			name: "multiple",
+			// should work with more than 1 tablet
 			tablets: 32,
 			opt:     &topo.GetTabletsByCellOptions{Concurrency: 8},
 		},
 		{
-			name:      "sharded with list error",
+			name: "multiple with list error",
+			// should work with more than 1 tablet when List returns an error
 			tablets:   32,
 			opt:       &topo.GetTabletsByCellOptions{Concurrency: 8},
 			listError: topo.NewError(topo.ResourceExhausted, ""),
 		},
 	}
 
+	const cell = "zone1"
+	const keyspace = "keyspace"
+	const shard = "shard"
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			const cell = "zone1"
 			ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
 			defer ts.Close()
 			if tt.listError != nil {
@@ -73,10 +81,7 @@ func TestServerGetTabletsByCell(t *testing.T) {
 
 			// Create an ephemeral keyspace and generate shard records within
 			// the keyspace to fetch later.
-			const keyspace = "keyspace"
 			require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
-
-			const shard = "shard"
 			require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
 
 			tablets := make([]*topo.TabletInfo, tt.tablets)
@@ -91,16 +96,16 @@ func TestServerGetTabletsByCell(t *testing.T) {
 					PortMap: map[string]int32{
 						"vt": int32(i),
 					},
-					Keyspace: "keyspace",
-					Shard:    "shard",
+					Keyspace: keyspace,
+					Shard:    shard,
 				}
 				tInfo := &topo.TabletInfo{Tablet: tablet}
 				tablets[i] = tInfo
 				require.NoError(t, ts.CreateTablet(ctx, tablet))
 			}
 
-			// Verify that we return a complete list of shards and that each
-			// key range is present in the output.
+			// Verify that we return a complete list of tablets and that each
+			// tablet matches what we expect.
 			out, err := ts.GetTabletsByCell(ctx, cell, tt.opt)
 			require.NoError(t, err)
 			require.Len(t, out, tt.tablets)
