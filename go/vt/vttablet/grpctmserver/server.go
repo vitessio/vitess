@@ -300,7 +300,7 @@ func (s *server) PrimaryPosition(ctx context.Context, request *tabletmanagerdata
 }
 
 func (s *server) WaitForPosition(ctx context.Context, request *tabletmanagerdatapb.WaitForPositionRequest) (response *tabletmanagerdatapb.WaitForPositionResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "WaitForPosition", request, response, false /*verbose*/, &err)
+	defer s.tm.HandleRPCPanic(ctx, "WaitForPosition", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.WaitForPositionResponse{}
 	return response, s.tm.WaitForPosition(ctx, request.Position)
@@ -426,7 +426,7 @@ func (s *server) InitPrimary(ctx context.Context, request *tabletmanagerdatapb.I
 }
 
 func (s *server) PopulateReparentJournal(ctx context.Context, request *tabletmanagerdatapb.PopulateReparentJournalRequest) (response *tabletmanagerdatapb.PopulateReparentJournalResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "PopulateReparentJournal", request, response, false /*verbose*/, &err)
+	defer s.tm.HandleRPCPanic(ctx, "PopulateReparentJournal", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PopulateReparentJournalResponse{}
 	return response, s.tm.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, request.PrimaryAlias, request.ReplicationPosition)
