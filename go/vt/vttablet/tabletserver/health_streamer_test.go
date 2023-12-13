@@ -29,13 +29,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/constants/sidecar"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -86,7 +85,7 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 	hs.Open()
 	defer hs.Close()
 	target := &querypb.Target{}
-	hs.InitDBConfig(target, db.ConnParams())
+	hs.InitDBConfig(target, dbconfigs.New(db.ConnParams()))
 
 	// Let's say the tablet goes to a non-serving primary state.
 	hs.MakePrimary(false)
@@ -116,7 +115,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	hs.Open()
 	defer hs.Close()
 	target := &querypb.Target{}
-	hs.InitDBConfig(target, db.ConnParams())
+	hs.InitDBConfig(target, dbconfigs.New(db.ConnParams()))
 
 	ch, cancel := testStream(hs)
 	defer cancel()

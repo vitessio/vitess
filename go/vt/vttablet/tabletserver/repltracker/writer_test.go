@@ -70,7 +70,7 @@ func newTestWriter(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatWriter {
 	config.ReplicationTracker.Mode = tabletenv.Heartbeat
 	config.ReplicationTracker.HeartbeatInterval = time.Second
 
-	params, _ := db.ConnParams().MysqlParams()
+	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 

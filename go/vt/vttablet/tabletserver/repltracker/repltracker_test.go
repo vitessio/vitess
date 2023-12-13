@@ -40,7 +40,7 @@ func TestReplTracker(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.ReplicationTracker.Mode = tabletenv.Heartbeat
 	config.ReplicationTracker.HeartbeatInterval = time.Second
-	params, _ := db.ConnParams().MysqlParams()
+	params := db.ConnParams()
 	cp := *params
 	config.DB = dbconfigs.NewTestDBConfigs(cp, cp, "")
 	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8())

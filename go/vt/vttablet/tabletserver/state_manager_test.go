@@ -24,19 +24,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/collations"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -726,7 +724,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		tableGC:     &testTableGC{},
 	}
 	sm.Init(env, &querypb.Target{})
-	sm.hs.InitDBConfig(&querypb.Target{}, fakesqldb.New(t).ConnParams())
+	sm.hs.InitDBConfig(&querypb.Target{}, dbconfigs.New(fakesqldb.New(t).ConnParams()))
 	log.Infof("returning sm: %p", sm)
 	return sm
 }

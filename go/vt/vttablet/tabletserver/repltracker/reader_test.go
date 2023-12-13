@@ -141,7 +141,7 @@ func newReader(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatReader {
 	config := tabletenv.NewDefaultConfig()
 	config.ReplicationTracker.Mode = tabletenv.Heartbeat
 	config.ReplicationTracker.HeartbeatInterval = time.Second
-	params, _ := db.ConnParams().MysqlParams()
+	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 	config.DB = dbc

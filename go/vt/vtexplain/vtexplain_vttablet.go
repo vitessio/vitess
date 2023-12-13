@@ -131,7 +131,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatap
 		},
 	)
 
-	params, _ := db.ConnParams().MysqlParams()
+	params := db.ConnParams()
 	cp := *params
 	dbcfgs := dbconfigs.NewTestDBConfigs(cp, cp, "")
 	cnf := mysqlctl.NewMycnf(22222, 6802)
