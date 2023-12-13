@@ -125,7 +125,8 @@ func TestTranslateSimplification(t *testing.T) {
 
 			cfg := &Config{
 				ResolveColumn:     fields.Column,
-				Collation:         collations.Default(),
+				Collation:         collations.Local().DefaultConnectionCharset(),
+				CollationEnv:      collations.Local(),
 				NoConstantFolding: true,
 				NoCompilation:     true,
 			}
@@ -301,7 +302,10 @@ func TestEvaluate(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, &Config{Collation: collations.Default()})
+			sqltypesExpr, err := Translate(astExpr, &Config{
+				Collation:    collations.Local().DefaultConnectionCharset(),
+				CollationEnv: collations.Local(),
+			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := NewExpressionEnv(context.Background(), map[string]*querypb.BindVariable{
@@ -311,14 +315,14 @@ func TestEvaluate(t *testing.T) {
 				"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
 				"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 				"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
-			}, nil)
+			}, NewEmptyVCursor(collations.Local()))
 
 			// When
 			r, err := env.Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
-			assert.Equal(t, test.expected, r.Value(collations.Default()), "expected %s", test.expected.String())
+			assert.Equal(t, test.expected, r.Value(collations.Local().DefaultConnectionCharset()), "expected %s", test.expected.String())
 		})
 	}
 }
@@ -346,12 +350,16 @@ func TestEvaluateTuple(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, &Config{Collation: collations.Default()})
+			collationEnv := collations.Local()
+			sqltypesExpr, err := Translate(astExpr, &Config{
+				Collation:    collationEnv.DefaultConnectionCharset(),
+				CollationEnv: collationEnv,
+			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 
 			// When
-			r, err := EmptyExpressionEnv().Evaluate(sqltypesExpr)
+			r, err := EmptyExpressionEnv(collationEnv).Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
@@ -383,7 +391,10 @@ func TestTranslationFailures(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + testcase.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			_, err = Translate(astExpr, &Config{Collation: collations.Default()})
+			_, err = Translate(astExpr, &Config{
+				Collation:    collations.Local().DefaultConnectionCharset(),
+				CollationEnv: collations.Local(),
+			})
 			require.EqualError(t, err, testcase.expectedErr)
 		})
 	}
@@ -419,7 +430,11 @@ func TestCardinalityWithBindVariables(t *testing.T) {
 				}
 
 				astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-				_, err = Translate(astExpr, &Config{Collation: collations.Default(), NoCompilation: true})
+				_, err = Translate(astExpr, &Config{
+					Collation:     collations.Local().DefaultConnectionCharset(),
+					CollationEnv:  collations.Local(),
+					NoCompilation: true,
+				})
 				return err
 			}()
 

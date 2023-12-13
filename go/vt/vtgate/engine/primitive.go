@@ -87,6 +87,7 @@ type (
 		Session() SessionActions
 
 		ConnCollation() collations.ID
+		CollationEnv() *collations.Environment
 		TimeZone() *time.Location
 		SQLMode() string
 

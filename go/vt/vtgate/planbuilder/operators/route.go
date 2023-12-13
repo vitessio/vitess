@@ -118,7 +118,7 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 	}
 	nr := &NoneRouting{keyspace: ks}
 
-	if isConstantFalse(expr) {
+	if isConstantFalse(expr, ctx.VSchema.ConnCollation(), ctx.VSchema.CollationEnv()) {
 		return nr
 	}
 
@@ -162,9 +162,12 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 
 // isConstantFalse checks whether this predicate can be evaluated at plan-time. If it returns `false` or `null`,
 // we know that the query will not return anything, and this can be used to produce better plans
-func isConstantFalse(expr sqlparser.Expr) bool {
-	eenv := evalengine.EmptyExpressionEnv()
-	eexpr, err := evalengine.Translate(expr, nil)
+func isConstantFalse(expr sqlparser.Expr, collation collations.ID, collationEnv *collations.Environment) bool {
+	eenv := evalengine.EmptyExpressionEnv(collationEnv)
+	eexpr, err := evalengine.Translate(expr, &evalengine.Config{
+		Collation:    collation,
+		CollationEnv: collationEnv,
+	})
 	if err != nil {
 		return false
 	}
@@ -172,7 +175,7 @@ func isConstantFalse(expr sqlparser.Expr) bool {
 	if err != nil {
 		return false
 	}
-	if eres.Value(collations.Default()).IsNull() {
+	if eres.Value(collation).IsNull() {
 		return false
 	}
 	b, err := eres.ToBooleanStrict()

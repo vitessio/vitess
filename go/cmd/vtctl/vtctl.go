@@ -27,6 +27,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
@@ -126,7 +128,7 @@ func main() {
 
 	ts := topo.Open()
 	defer ts.Close()
-
+	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	installSignalHandlers(cancel)
 
@@ -171,7 +173,7 @@ func main() {
 	default:
 		log.Warningf("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
 
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv)
 
 		if args[0] == "--" {
 			vtctl.PrintDoubleDashDeprecationNotice(wr)

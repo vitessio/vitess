@@ -88,7 +88,7 @@ func Test{{ .Method }}(t *testing.T) {
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
 	{{ if not .SerializeCases }}
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.Local())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -101,7 +101,7 @@ func Test{{ .Method }}(t *testing.T) {
 	t.Run("{{ .Name }}", func(t *testing.T) {
 		t.Parallel()
 		{{ if $test.SerializeCases }}
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.Local())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())

@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -27,7 +28,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
+func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table, collationEnv *collations.Environment) (plan *Plan, err error) {
 	plan = &Plan{
 		PlanID:    PlanSelect,
 		FullQuery: GenerateLimitQuery(sel),
@@ -48,7 +49,10 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.ToString(sel.From))
 		}
 		plan.PlanID = PlanNextval
-		v, err := evalengine.Translate(nextVal.Expr, nil)
+		v, err := evalengine.Translate(nextVal.Expr, &evalengine.Config{
+			CollationEnv: collationEnv,
+			Collation:    collationEnv.DefaultConnectionCharset(),
+		})
 		if err != nil {
 			return nil, err
 		}

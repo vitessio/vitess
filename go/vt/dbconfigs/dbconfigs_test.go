@@ -37,7 +37,7 @@ func TestInit(t *testing.T) {
 		dbaParams: mysql.ConnParams{Host: "host"},
 		Charset:   "utf8",
 	}
-	dbConfigs.InitWithSocket("default")
+	dbConfigs.InitWithSocket(collations.Local(), "default")
 	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket", Charset: collations.CollationUtf8mb3ID}, dbConfigs.appParams)
 	assert.Equal(t, mysql.ConnParams{Host: "host", Charset: collations.CollationUtf8mb3ID}, dbConfigs.dbaParams)
 	assert.Equal(t, mysql.ConnParams{UnixSocket: "default", Charset: collations.CollationUtf8mb3ID}, dbConfigs.appdebugParams)
@@ -73,7 +73,7 @@ func TestInit(t *testing.T) {
 			Host: "host",
 		},
 	}
-	dbConfigs.InitWithSocket("default")
+	dbConfigs.InitWithSocket(collations.Local(), "default")
 
 	want := mysql.ConnParams{
 		Host:             "a",
@@ -151,7 +151,7 @@ func TestInit(t *testing.T) {
 			Flags: 2,
 		},
 	}
-	dbConfigs.InitWithSocket("default")
+	dbConfigs.InitWithSocket(collations.Local(), "default")
 	want = mysql.ConnParams{
 		Host:       "a",
 		Port:       1,
@@ -202,7 +202,7 @@ func TestUseTCP(t *testing.T) {
 		},
 		Charset: "utf8",
 	}
-	dbConfigs.InitWithSocket("default")
+	dbConfigs.InitWithSocket(collations.Local(), "default")
 
 	want := mysql.ConnParams{
 		Host:    "a",

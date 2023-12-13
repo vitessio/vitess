@@ -155,6 +155,7 @@ type TabletManager struct {
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
 	VDiffEngine         *vdiff.Engine
+	CollationEnv        *collations.Environment
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
@@ -206,7 +207,7 @@ type TabletManager struct {
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
-func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs) (*topodatapb.Tablet, error) {
+func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs, collationEnv *collations.Environment) (*topodatapb.Tablet, error) {
 	hostname := tabletHostname
 	if hostname == "" {
 		var err error
@@ -246,12 +247,12 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 
 	var charset collations.ID
 	if db != nil && db.Charset != "" {
-		charset, err = collations.Local().ParseConnectionCharset(db.Charset)
+		charset, err = collationEnv.ParseConnectionCharset(db.Charset)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		charset = collations.Local().DefaultConnectionCharset()
+		charset = collationEnv.DefaultConnectionCharset()
 	}
 
 	return &topodatapb.Tablet{

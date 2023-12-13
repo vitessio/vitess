@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -49,7 +51,10 @@ func TestConversion(t *testing.T) {
 			require.NoError(t, err)
 			slct := statement.(*sqlparser.Select)
 			exprs := extract(slct.SelectExprs)
-			ec := &expressionConverter{}
+			ec := &expressionConverter{
+				collationEnv: collations.Local(),
+				collation:    collations.Local().DefaultConnectionCharset(),
+			}
 			var result []evalengine.Expr
 			for _, expr := range exprs {
 				evalExpr, err := ec.convert(expr, false, false)

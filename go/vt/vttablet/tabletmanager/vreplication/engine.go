@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 
@@ -111,6 +112,8 @@ type Engine struct {
 	// enabled in NewSimpleTestEngine. This should NOT be used in
 	// production.
 	shortcircuit bool
+
+	collationEnv *collations.Environment
 }
 
 type journalEvent struct {
@@ -127,15 +130,16 @@ type PostCopyAction struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler, collationEnv *collations.Environment) *Engine {
 	vre := &Engine{
 		controllers:     make(map[int32]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		journaler:       make(map[string]*journalEvent),
-		ec:              newExternalConnector(config.ExternalConnections),
+		ec:              newExternalConnector(config.ExternalConnections, collationEnv),
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, throttle.ThrottleCheckPrimaryWrite),
+		collationEnv:    collationEnv,
 	}
 
 	return vre
@@ -157,7 +161,7 @@ func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 }
 
 // NewTestEngine creates a new Engine for testing.
-func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
+func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs, collationEnv *collations.Environment) *Engine {
 	vre := &Engine{
 		controllers:             make(map[int32]*controller),
 		ts:                      ts,
@@ -167,14 +171,15 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig),
+		ec:                      newExternalConnector(externalConfig, collationEnv),
+		collationEnv:            collationEnv,
 	}
 	return vre
 }
 
 // NewSimpleTestEngine creates a new Engine for testing that can
 // also short circuit functions as needed.
-func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
+func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs, collationEnv *collations.Environment) *Engine {
 	vre := &Engine{
 		controllers:             make(map[int32]*controller),
 		ts:                      ts,
@@ -184,8 +189,9 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig),
+		ec:                      newExternalConnector(externalConfig, collationEnv),
 		shortcircuit:            true,
+		collationEnv:            collationEnv,
 	}
 	return vre
 }

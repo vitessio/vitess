@@ -24,6 +24,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -49,13 +51,16 @@ type workflowDiffer struct {
 
 	tableDiffers map[string]*tableDiffer // key is table name
 	opts         *tabletmanagerdatapb.VDiffOptions
+
+	collationEnv *collations.Environment
 }
 
-func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (*workflowDiffer, error) {
+func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions, collationEnv *collations.Environment) (*workflowDiffer, error) {
 	wd := &workflowDiffer{
 		ct:           ct,
 		opts:         opts,
 		tableDiffers: make(map[string]*tableDiffer, 1),
+		collationEnv: collationEnv,
 	}
 	return wd, nil
 }
@@ -315,7 +320,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		}
 		td.lastPK = lastpkpb
 		wd.tableDiffers[table.Name] = td
-		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName); err != nil {
+		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName, wd.collationEnv); err != nil {
 			return err
 		}
 	}

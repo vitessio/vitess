@@ -25,6 +25,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -77,10 +79,12 @@ type controller struct {
 	sourceTimeZone, targetTimeZone string // named time zones if conversions are necessary for datetime values
 
 	externalCluster string // for Mount+Migrate
+
+	collationEnv *collations.Environment
 }
 
 func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
-	ts *topo.Server, vde *Engine, options *tabletmanagerdata.VDiffOptions) (*controller, error) {
+	ts *topo.Server, vde *Engine, options *tabletmanagerdata.VDiffOptions, collationEnv *collations.Environment) (*controller, error) {
 
 	log.Infof("VDiff controller initializing for %+v", row)
 	id, _ := row["id"].ToInt64()
@@ -96,6 +100,7 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 		tmc:             vde.tmClientFactory(),
 		sources:         make(map[string]*migrationSource),
 		options:         options,
+		collationEnv:    collationEnv,
 	}
 	ctx, ct.cancel = context.WithCancel(ctx)
 	go ct.run(ctx)
@@ -240,7 +245,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		return err
 	}
 
-	wd, err := newWorkflowDiffer(ct, ct.options)
+	wd, err := newWorkflowDiffer(ct, ct.options, ct.collationEnv)
 	if err != nil {
 		return err
 	}

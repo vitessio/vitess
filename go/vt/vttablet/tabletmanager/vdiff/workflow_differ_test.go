@@ -49,7 +49,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 	)
 
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts, collations.Local())
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -438,8 +438,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 				Direction: sqlparser.AscOrder,
 			}},
 			aggregates: []*engine.AggregateParams{
-				engine.NewAggregateParam(opcode.AggregateSum, 2, ""),
-				engine.NewAggregateParam(opcode.AggregateSum, 3, ""),
+				engine.NewAggregateParam(opcode.AggregateSum, 2, "", collations.Local()),
+				engine.NewAggregateParam(opcode.AggregateSum, 3, "", collations.Local()),
 			},
 		},
 	}, {
@@ -478,7 +478,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			dbc := binlogplayer.NewMockDBClient(t)
 			filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
 			vdiffenv.opts.CoreOptions.Tables = tcase.table
-			wd, err := newWorkflowDiffer(ct, vdiffenv.opts)
+			wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.Local())
 			require.NoError(t, err)
 			dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 			columnList := make([]string, len(tcase.tablePlan.comparePKs))
@@ -530,7 +530,7 @@ func TestBuildPlanInclude(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts, collations.Local())
 	require.NoError(t, err)
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -577,7 +577,7 @@ func TestBuildPlanInclude(t *testing.T) {
 	for _, tcase := range testcases {
 		dbc := binlogplayer.NewMockDBClient(t)
 		vdiffenv.opts.CoreOptions.Tables = strings.Join(tcase.tables, ",")
-		wd, err := newWorkflowDiffer(ct, vdiffenv.opts)
+		wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.Local())
 		require.NoError(t, err)
 		for _, table := range tcase.tables {
 			query := fmt.Sprintf(`select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
@@ -609,7 +609,7 @@ func TestBuildPlanFailure(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts, collations.Local())
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -650,7 +650,7 @@ func TestBuildPlanFailure(t *testing.T) {
 		dbc := binlogplayer.NewMockDBClient(t)
 		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
 		vdiffenv.opts.CoreOptions.Tables = tcase.input.Match
-		wd, err := newWorkflowDiffer(ct, vdiffenv.opts)
+		wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.Local())
 		require.NoError(t, err)
 		dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 		err = wd.buildPlan(dbc, filter, testSchema)

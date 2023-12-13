@@ -26,6 +26,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -704,7 +706,7 @@ func verifySubcomponent(t *testing.T, order int64, component any, state testStat
 func newTestStateManager(t *testing.T) *stateManager {
 	order.Store(0)
 	config := tabletenv.NewDefaultConfig()
-	env := tabletenv.NewEnv(config, "StateManagerTest")
+	env := tabletenv.NewEnv(config, "StateManagerTest", collations.Local())
 	sm := &stateManager{
 		statelessql: NewQueryList("stateless"),
 		statefulql:  NewQueryList("stateful"),

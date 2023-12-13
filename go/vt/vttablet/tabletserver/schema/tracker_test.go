@@ -17,11 +17,12 @@ limitations under the License.
 package schema
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"context"
+	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -78,7 +79,7 @@ func TestTracker(t *testing.T) {
 	}
 	config := se.env.Config()
 	config.TrackSchemaVersions = true
-	env := tabletenv.NewEnv(config, "TrackerTest")
+	env := tabletenv.NewEnv(config, "TrackerTest", collations.Local())
 	initial := env.Stats().ErrorCounters.Counts()["INTERNAL"]
 	tracker := NewTracker(env, vs, se)
 	tracker.Open()
@@ -122,7 +123,7 @@ func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 	}
 	config := se.env.Config()
 	config.TrackSchemaVersions = true
-	env := tabletenv.NewEnv(config, "TrackerTest")
+	env := tabletenv.NewEnv(config, "TrackerTest", collations.Local())
 	tracker := NewTracker(env, vs, se)
 	tracker.Open()
 	<-vs.done

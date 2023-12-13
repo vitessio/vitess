@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqlescape"
@@ -118,7 +120,7 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards, targetShards []string, fmtQuery string) *testMigraterEnv {
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
-	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
+	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient(), collations.Local())
 	tme.wr.sem = semaphore.NewWeighted(1)
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
@@ -382,7 +384,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 	require.Greater(t, len(shards), 1, "shard by shard migrations can only be done on sharded keyspaces")
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
-	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
+	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient(), collations.Local())
 	tme.wr.sem = semaphore.NewWeighted(1)
 	tme.sourceShards = shards
 	tme.targetShards = shards
@@ -538,7 +540,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targetShards []string) *testShardMigraterEnv {
 	tme := &testShardMigraterEnv{}
 	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
-	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
+	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient(), collations.Local())
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)
@@ -731,7 +733,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		tme.dbSourceClients = append(tme.dbSourceClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
 		// Replace existing engine with a new one
-		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, primary.Tablet.GetAlias().GetCell(), primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil)
+		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, primary.Tablet.GetAlias().GetCell(), primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil, collations.Local())
 		primary.TM.VREngine.Open(ctx)
 	}
 	for _, primary := range tme.targetPrimaries {
@@ -740,7 +742,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		tme.dbTargetClients = append(tme.dbTargetClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
 		// Replace existing engine with a new one
-		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, primary.Tablet.GetAlias().GetCell(), primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil)
+		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, primary.Tablet.GetAlias().GetCell(), primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil, collations.Local())
 		primary.TM.VREngine.Open(ctx)
 	}
 	for _, primary := range tme.additionalPrimaries {

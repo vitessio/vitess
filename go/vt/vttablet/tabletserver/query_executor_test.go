@@ -28,6 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -1487,7 +1489,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	}
 	dbconfigs := newDBConfigs(db)
 	config.DB = dbconfigs
-	tsv := NewTabletServer(ctx, "TabletServerTest", config, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	tsv := NewTabletServer(ctx, "TabletServerTest", config, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.Local())
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
 	if config.TwoPCEnable {

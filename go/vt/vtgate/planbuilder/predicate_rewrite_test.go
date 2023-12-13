@@ -103,17 +103,19 @@ func TestFuzzRewriting(t *testing.T) {
 			simplified := sqlparser.RewritePredicate(predicate)
 
 			original, err := evalengine.Translate(predicate, &evalengine.Config{
-				Collation:     collations.Default(),
+				Collation:     collations.Local().DefaultConnectionCharset(),
+				CollationEnv:  collations.Local(),
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)
 			simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), &evalengine.Config{
-				Collation:     collations.Default(),
+				Collation:     collations.Local().DefaultConnectionCharset(),
+				CollationEnv:  collations.Local(),
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)
 
-			env := evalengine.EmptyExpressionEnv()
+			env := evalengine.EmptyExpressionEnv(collations.Local())
 			env.Row = make([]sqltypes.Value, tc.nodes)
 			for i := range env.Row {
 				env.Row[i] = sqltypes.NewInt32(1)
@@ -139,7 +141,7 @@ func testValues(t *testing.T, env *evalengine.ExpressionEnv, i int, original, si
 		require.NoError(t, err)
 		v2, err := env.Evaluate(simpler)
 		require.NoError(t, err)
-		assert.Equal(t, v1.Value(collations.Default()), v2.Value(collations.Default()))
+		assert.Equal(t, v1.Value(collations.Local().DefaultConnectionCharset()), v2.Value(collations.Local().DefaultConnectionCharset()))
 		if len(env.Row) > i+1 {
 			testValues(t, env, i+1, original, simpler)
 		}

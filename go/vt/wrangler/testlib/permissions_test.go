@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -47,8 +48,8 @@ func TestPermissions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.Local())
+	vp := NewVtctlPipe(t, ts, collations.Local())
 	defer vp.Close()
 
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)

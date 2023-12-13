@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -41,7 +43,7 @@ func TestReplTracker(t *testing.T) {
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	config.DB = dbconfigs.NewTestDBConfigs(cp, cp, "")
-	env := tabletenv.NewEnv(config, "ReplTrackerTest")
+	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.Local())
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,

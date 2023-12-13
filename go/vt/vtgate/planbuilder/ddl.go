@@ -147,6 +147,7 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 			TargetDestination: destination,
 			DDL:               ddlStatement,
 			SQL:               query,
+			CollationEnv:      vschema.CollationEnv(),
 		}, nil
 }
 

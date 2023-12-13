@@ -54,7 +54,7 @@ func evalCollation(e eval) collations.TypedCollation {
 	}
 }
 
-func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (collations.TypedCollation, colldata.Coercion, colldata.Coercion, error) {
+func mergeCollations(env *collations.Environment, c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (collations.TypedCollation, colldata.Coercion, colldata.Coercion, error) {
 	if c1.Collation == c2.Collation {
 		return c1, nil, nil, nil
 	}
@@ -71,18 +71,17 @@ func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type) (co
 		return collationBinary, nil, nil, nil
 	}
 
-	env := collations.Local()
 	return colldata.Merge(env, c1, c2, colldata.CoercionOptions{
 		ConvertToSuperset:   true,
 		ConvertWithCoercion: true,
 	})
 }
 
-func mergeAndCoerceCollations(left, right eval) (eval, eval, collations.TypedCollation, error) {
+func mergeAndCoerceCollations(env *collations.Environment, left, right eval) (eval, eval, collations.TypedCollation, error) {
 	lt := left.SQLType()
 	rt := right.SQLType()
 
-	mc, coerceLeft, coerceRight, err := mergeCollations(evalCollation(left), evalCollation(right), lt, rt)
+	mc, coerceLeft, coerceRight, err := mergeCollations(env, evalCollation(left), evalCollation(right), lt, rt)
 	if err != nil {
 		return nil, nil, collations.TypedCollation{}, err
 	}

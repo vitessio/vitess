@@ -682,7 +682,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling is done when we actually
 	// receive the row event. We'll build a JOURNAL event instead.
-	plan, err := buildREPlan(table, nil, "")
+	plan, err := buildREPlan(table, nil, "", vs.se.CollationEnv())
 	if err != nil {
 		return err
 	}
@@ -716,7 +716,7 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling is done when we actually
 	// receive the row event. We'll build a JOURNAL event instead.
-	plan, err := buildREPlan(table, nil, "")
+	plan, err := buildREPlan(table, nil, "", vs.se.CollationEnv())
 	if err != nil {
 		return err
 	}
@@ -738,7 +738,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		Name:   tm.Name,
 		Fields: cols,
 	}
-	plan, err := buildPlan(table, vs.vschema, vs.filter)
+	plan, err := buildPlan(table, vs.vschema, vs.filter, vs.se.CollationEnv())
 	if err != nil {
 		return nil, err
 	}
@@ -768,11 +768,12 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		if err != nil {
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
+		coll := collations.CollationForType(t, vs.se.CollationEnv().DefaultConnectionCharset())
 		fields = append(fields, &querypb.Field{
 			Name:    fmt.Sprintf("@%d", i+1),
 			Type:    t,
-			Charset: uint32(collations.DefaultCollationForType(t)),
-			Flags:   mysql.FlagsForColumn(t, collations.DefaultCollationForType(t)),
+			Charset: uint32(coll),
+			Flags:   mysql.FlagsForColumn(t, coll),
 		})
 	}
 	st, err := vs.se.GetTableForPos(sqlparser.NewIdentifierCS(tm.Name), replication.EncodePosition(vs.pos))
@@ -956,7 +957,7 @@ func (vs *vstreamer) rebuildPlans() error {
 			// cause that to change.
 			continue
 		}
-		newPlan, err := buildPlan(plan.Table, vs.vschema, vs.filter)
+		newPlan, err := buildPlan(plan.Table, vs.vschema, vs.filter, vs.se.CollationEnv())
 		if err != nil {
 			return err
 		}

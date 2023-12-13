@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -233,7 +234,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 		Size:        2,
 		IdleTimeout: 10 * time.Second,
 	}
-	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest"), "", cfg)
+	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest", collations.Local()), "", cfg)
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx, nil)
 	if err != nil {
@@ -241,7 +242,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	}
 	defer conn.Recycle()
 
-	return LoadTable(conn, "fakesqldb", "test_table", tableType, comment)
+	return LoadTable(conn, "fakesqldb", "test_table", tableType, comment, collations.Local())
 }
 
 func mockLoadTableQueries(db *fakesqldb.DB) {

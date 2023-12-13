@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -72,7 +74,7 @@ func newTestWriter(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatWriter {
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tw := newHeartbeatWriter(tabletenv.NewEnv(config, "WriterTest"), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
+	tw := newHeartbeatWriter(tabletenv.NewEnv(config, "WriterTest", collations.Local()), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
 	tw.keyspaceShard = "test:0"
 
 	if frozenTime != nil {

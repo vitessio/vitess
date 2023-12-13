@@ -31,6 +31,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/constants/sidecar"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -581,7 +583,7 @@ func newEngine(reloadTime time.Duration, idleTimeout time.Duration, schemaMaxAge
 	config.OlapReadPool.IdleTimeout = idleTimeout
 	config.TxPool.IdleTimeout = idleTimeout
 	config.SchemaVersionMaxAgeSeconds = schemaMaxAgeSeconds
-	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest"))
+	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest", collations.Local()))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }

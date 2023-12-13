@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -65,7 +66,7 @@ func newTestLoadTable(tableName, comment string, db *fakesqldb.DB) (*schema.Tabl
 		IdleTimeout: 10 * time.Second,
 	}
 
-	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest"), "", cfg)
+	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest", collations.Local()), "", cfg)
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx, nil)
 	if err != nil {
@@ -73,5 +74,5 @@ func newTestLoadTable(tableName, comment string, db *fakesqldb.DB) (*schema.Tabl
 	}
 	defer conn.Recycle()
 
-	return schema.LoadTable(conn, "fakesqldb", tableName, "BASE_TABLE", comment)
+	return schema.LoadTable(conn, "fakesqldb", tableName, "BASE_TABLE", comment, collations.Local())
 }

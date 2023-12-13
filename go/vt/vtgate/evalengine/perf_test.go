@@ -33,6 +33,7 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 			ResolveColumn: fields.Column,
 			ResolveType:   fields.Type,
 			Collation:     collations.CollationUtf8mb4ID,
+			CollationEnv:  collations.Local(),
 		}
 
 		translated, err := evalengine.Translate(expr, cfg)

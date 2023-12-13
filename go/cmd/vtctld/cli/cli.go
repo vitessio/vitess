@@ -19,6 +19,8 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -26,8 +28,9 @@ import (
 )
 
 var (
-	ts   *topo.Server
-	Main = &cobra.Command{
+	ts           *topo.Server
+	collationEnv *collations.Environment
+	Main         = &cobra.Command{
 		Use:   "vtctld",
 		Short: "The Vitess cluster management daemon.",
 		Long: `vtctld provides web and gRPC interfaces to manage a single Vitess cluster.
@@ -59,8 +62,9 @@ func run(cmd *cobra.Command, args []string) error {
 	ts = topo.Open()
 	defer ts.Close()
 
+	collationEnv = collations.NewEnvironment(servenv.MySQLServerVersion())
 	// Init the vtctld core
-	if err := vtctld.InitVtctld(ts); err != nil {
+	if err := vtctld.InitVtctld(ts, collationEnv); err != nil {
 		return err
 	}
 

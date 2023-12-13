@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -199,7 +200,8 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		MysqlDaemon:         ft.FakeMysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
-		VDiffEngine:         vdiff2.NewEngine(config, wr.TopoServer(), ft.Tablet),
+		VDiffEngine:         vdiff2.NewEngine(config, wr.TopoServer(), ft.Tablet, collations.Local()),
+		CollationEnv:        collations.Local(),
 	}
 	if err := ft.TM.Start(ft.Tablet, nil); err != nil {
 		t.Fatal(err)

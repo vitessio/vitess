@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -60,7 +62,7 @@ func TestEngineOpen(t *testing.T) {
 			vdenv.dbClient = binlogplayer.NewMockDBClient(t)
 			vdenv.vde.Close() // ensure we close any open one
 			vdenv.vde = nil
-			vdenv.vde = NewTestEngine(tstenv.TopoServ, vdenv.tablets[100].tablet, vdiffDBName, vdenv.dbClientFactory, vdenv.tmClientFactory)
+			vdenv.vde = NewTestEngine(tstenv.TopoServ, vdenv.tablets[100].tablet, vdiffDBName, vdenv.dbClientFactory, vdenv.tmClientFactory, collations.Local())
 			require.False(t, vdenv.vde.IsOpen())
 
 			initialQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(

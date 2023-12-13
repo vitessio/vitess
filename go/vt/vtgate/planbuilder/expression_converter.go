@@ -30,6 +30,8 @@ import (
 
 type expressionConverter struct {
 	tabletExpressions []sqlparser.Expr
+	collationEnv      *collations.Environment
+	collation         collations.ID
 }
 
 func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
@@ -81,7 +83,10 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 			return evalExpr, nil
 		}
 	}
-	evalExpr, err := evalengine.Translate(astExpr, nil)
+	evalExpr, err := evalengine.Translate(astExpr, &evalengine.Config{
+		Collation:    ec.collation,
+		CollationEnv: ec.collationEnv,
+	})
 	if err != nil {
 		if !strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			return nil, err

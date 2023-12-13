@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -145,7 +146,7 @@ func newReader(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatReader {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 	config.DB = dbc
 
-	tr := newHeartbeatReader(tabletenv.NewEnv(config, "ReaderTest"))
+	tr := newHeartbeatReader(tabletenv.NewEnv(config, "ReaderTest", collations.Local()))
 	tr.keyspaceShard = "test:0"
 
 	if frozenTime != nil {

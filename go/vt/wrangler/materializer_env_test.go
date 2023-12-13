@@ -30,6 +30,8 @@ import (
 
 	"go.uber.org/goleak"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -129,7 +131,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.Local())
 	tabletID := 100
 	for _, shard := range sources {
 		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)

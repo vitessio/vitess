@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -35,8 +36,8 @@ func TestDeleteShardCleanup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.Local())
+	vp := NewVtctlPipe(t, ts, collations.Local())
 	defer vp.Close()
 
 	// Create a primary, a couple good replicas

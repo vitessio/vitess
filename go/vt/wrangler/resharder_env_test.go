@@ -26,6 +26,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
@@ -93,7 +95,7 @@ func newTestResharderEnv(t *testing.T, ctx context.Context, sources, targets []s
 		cell:     "cell",
 		tmc:      newTestResharderTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.Local())
 	initTopo(t, env.topoServ, "ks", sources, targets, []string{"cell"})
 	tabletID := 100
 	for _, shard := range sources {

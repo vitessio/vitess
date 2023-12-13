@@ -41,17 +41,6 @@ func Local() *Environment {
 	return defaultEnv
 }
 
-// Default returns the default collation for this Vitess process.
-// This is based on the local collation environment, which is based on the user's configured
-// MySQL version for this Vitess deployment.
-func Default() ID {
-	return ID(Local().DefaultConnectionCharset())
-}
-
-func DefaultCollationForType(t sqltypes.Type) ID {
-	return CollationForType(t, Default())
-}
-
 func CollationForType(t sqltypes.Type, fallback ID) ID {
 	switch {
 	case sqltypes.IsText(t):

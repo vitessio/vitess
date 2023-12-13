@@ -28,6 +28,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
@@ -178,7 +180,7 @@ func unmarshalRequest(r *http.Request, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
+func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, collationEnv *collations.Environment) {
 	tabletHealthCache := newTabletHealthCache(ts)
 	tmClient := tmclient.NewTabletManagerClient()
 
@@ -487,7 +489,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 
 		logstream := logutil.NewMemoryLogger()
 
-		wr := wrangler.New(logstream, ts, tmClient)
+		wr := wrangler.New(logstream, ts, tmClient, collationEnv)
 		err := vtctl.RunCommand(r.Context(), wr, args)
 		if err != nil {
 			resp.Error = err.Error()
@@ -523,7 +525,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 		logger := logutil.NewCallbackLogger(func(ev *logutilpb.Event) {
 			w.Write([]byte(logutil.EventString(ev)))
 		})
-		wr := wrangler.New(logger, ts, tmClient)
+		wr := wrangler.New(logger, ts, tmClient, collationEnv)
 
 		apiCallUUID, err := schema.CreateUUID()
 		if err != nil {

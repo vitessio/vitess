@@ -318,7 +318,7 @@ func (dbcfgs *DBConfigs) Clone() *DBConfigs {
 // parameters. This is only for legacy support.
 // If no per-user parameters are supplied, then the defaultSocketFile
 // is used to initialize the per-user conn params.
-func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
+func (dbcfgs *DBConfigs) InitWithSocket(collationEnv *collations.Environment, defaultSocketFile string) {
 	for _, userKey := range All {
 		uc, cp := dbcfgs.getParams(userKey, dbcfgs)
 		// TODO @rafael: For ExternalRepl we need to respect the provided host / port
@@ -339,10 +339,10 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 		// If the connection params has a charset defined, it will not be overridden by the
 		// global configuration.
 		if dbcfgs.Charset != "" && cp.Charset == collations.Unknown {
-			ch, err := collations.Local().ParseConnectionCharset(dbcfgs.Charset)
+			ch, err := collationEnv.ParseConnectionCharset(dbcfgs.Charset)
 			if err != nil {
 				log.Warningf("Error parsing charset %s: %v", dbcfgs.Charset, err)
-				ch = collations.Local().DefaultConnectionCharset()
+				ch = collationEnv.DefaultConnectionCharset()
 			}
 			cp.Charset = ch
 		}

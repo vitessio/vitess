@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -92,8 +94,8 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.Local())
+	vp := NewVtctlPipe(t, ts, collations.Local())
 	defer vp.Close()
 
 	// Set up mock query results.
@@ -344,8 +346,8 @@ func TestBackupRestoreLagged(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.Local())
+	vp := NewVtctlPipe(t, ts, collations.Local())
 	defer vp.Close()
 
 	// Set up mock query results.
@@ -563,8 +565,8 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.Local())
+	vp := NewVtctlPipe(t, ts, collations.Local())
 	defer vp.Close()
 
 	// Set up mock query results.
@@ -738,8 +740,8 @@ func TestDisableActiveReparents(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.Local())
+	vp := NewVtctlPipe(t, ts, collations.Local())
 	defer vp.Close()
 
 	// Set up mock query results.

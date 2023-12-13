@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/mysql"
@@ -50,8 +52,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.Local())
+	vp := NewVtctlPipe(t, ts, collations.Local())
 	defer vp.Close()
 
 	// Create a primary, a couple good replicas
@@ -204,7 +206,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.Local())
 
 	// Create a primary, a couple good replicas
 	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)

@@ -41,12 +41,13 @@ type InfoSchemaRouting struct {
 	Table               *QueryTable
 }
 
-func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) {
+func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.SysTableTableSchema = nil
 	for _, expr := range isr.SysTableTableSchema {
 		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
 			Collation:     collations.SystemCollation.Collation,
 			ResolveColumn: NotImplementedSchemaInfoResolver,
+			CollationEnv:  ctx.VSchema.CollationEnv(),
 		})
 		if err != nil {
 			panic(err)
@@ -59,6 +60,7 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext
 		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
 			Collation:     collations.SystemCollation.Collation,
 			ResolveColumn: NotImplementedSchemaInfoResolver,
+			CollationEnv:  ctx.VSchema.CollationEnv(),
 		})
 		if err != nil {
 			panic(err)
@@ -132,6 +134,7 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 	_, err := evalengine.Translate(rhs, &evalengine.Config{
 		Collation:     collations.SystemCollation.Collation,
 		ResolveColumn: NotImplementedSchemaInfoResolver,
+		CollationEnv:  ctx.VSchema.CollationEnv(),
 	})
 	if err != nil {
 		// if we can't translate this to an evalengine expression,

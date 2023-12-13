@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -160,7 +161,7 @@ func TestEngineGenerate(t *testing.T) {
 func newTestEngine(db *fakesqldb.DB) *Engine {
 	config := tabletenv.NewDefaultConfig()
 	tsv := &fakeTabletServer{
-		Env: tabletenv.NewEnv(config, "MessagerTest"),
+		Env: tabletenv.NewEnv(config, "MessagerTest", collations.Local()),
 	}
 	se := schema.NewEngine(tsv)
 	te := NewEngine(tsv, se, newFakeVStreamer())

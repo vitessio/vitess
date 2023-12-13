@@ -32,6 +32,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -158,7 +160,7 @@ func setup(ctx context.Context) (func(), int) {
 		"exta": env.Dbcfgs,
 		"extb": env.Dbcfgs,
 	}
-	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
+	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig, collations.Local())
 	playerEngine.Open(ctx)
 
 	return cleanup, 0
