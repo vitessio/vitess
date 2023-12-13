@@ -97,8 +97,8 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 		sources:         make(map[string]*migrationSource),
 		options:         options,
 	}
-	if options != nil && options.CoreOptions != nil && options.CoreOptions.RestartSeconds > 0 {
-		ctx, ct.cancel = context.WithTimeout(ctx, time.Duration(options.CoreOptions.RestartSeconds*int64(time.Second)))
+	if options != nil && options.CoreOptions != nil && options.CoreOptions.MaxDiffSeconds > 0 {
+		ctx, ct.cancel = context.WithTimeout(ctx, time.Duration(options.CoreOptions.MaxDiffSeconds*int64(time.Second)))
 	} else {
 		ctx, ct.cancel = context.WithCancel(ctx)
 	}

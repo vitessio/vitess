@@ -4747,7 +4747,7 @@ func (m *VDiffCreateRequest) CloneVT() *VDiffCreateRequest {
 		AutoRetry:                   m.AutoRetry,
 		Verbose:                     m.Verbose,
 		MaxReportSampleRows:         m.MaxReportSampleRows,
-		RestartPeriod:               m.RestartPeriod.CloneVT(),
+		MaxDiffDuration:             m.MaxDiffDuration.CloneVT(),
 	}
 	if rhs := m.SourceCells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
@@ -17744,8 +17744,8 @@ func (m *VDiffCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.RestartPeriod != nil {
-		size, err := m.RestartPeriod.MarshalToSizedBufferVT(dAtA[:i])
+	if m.MaxDiffDuration != nil {
+		size, err := m.MaxDiffDuration.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -23921,8 +23921,8 @@ func (m *VDiffCreateRequest) SizeVT() (n int) {
 	if m.MaxReportSampleRows != 0 {
 		n += 2 + sov(uint64(m.MaxReportSampleRows))
 	}
-	if m.RestartPeriod != nil {
-		l = m.RestartPeriod.SizeVT()
+	if m.MaxDiffDuration != nil {
+		l = m.MaxDiffDuration.SizeVT()
 		n += 2 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -55137,7 +55137,7 @@ func (m *VDiffCreateRequest) UnmarshalVT(dAtA []byte) error {
 			}
 		case 20:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field RestartPeriod", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxDiffDuration", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -55164,10 +55164,10 @@ func (m *VDiffCreateRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.RestartPeriod == nil {
-				m.RestartPeriod = &vttime.Duration{}
+			if m.MaxDiffDuration == nil {
+				m.MaxDiffDuration = &vttime.Duration{}
 			}
-			if err := m.RestartPeriod.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.MaxDiffDuration.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

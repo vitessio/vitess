@@ -621,7 +621,7 @@ message VDiffCoreOptions {
   int64 timeout_seconds = 6;
   int64 max_extra_rows_to_compare = 7;
   bool update_table_stats = 8;
-  int64 restart_seconds = 9;
+  int64 max_diff_seconds = 9;
 }
 
 message VDiffOptions {
