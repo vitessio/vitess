@@ -604,6 +604,7 @@ func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet
 	span, _ := trace.FromContext(ctx)
 
 	tablets, err := c.GetTablets(ctx)
+
 	if err != nil {
 		return nil, err
 	}
@@ -1248,12 +1249,46 @@ func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 }
 
 func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
-	rows, err := c.DB.ShowTablets(ctx)
+	res, err := c.Vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	return c.parseTablets(rows)
+	var (
+		m       sync.Mutex
+		wg      sync.WaitGroup
+		tablets []*vtadminpb.Tablet
+	)
+
+	for _, t := range res.Tablets {
+		wg.Add(1)
+
+		go func(tablet *topodatapb.Tablet) {
+			defer wg.Done()
+			var state vtadminpb.Tablet_ServingState
+			_, err := c.Vtctld.RunHealthCheck(ctx, &vtctldatapb.RunHealthCheckRequest{
+				TabletAlias: tablet.Alias,
+			})
+			if err != nil {
+				state = vtadminpb.Tablet_UNKNOWN
+			} else {
+				state = vtadminpb.Tablet_SERVING
+			}
+
+			m.Lock()
+			defer m.Unlock()
+
+			tablets = append(tablets, &vtadminpb.Tablet{
+				Cluster: c.ToProto(),
+				Tablet:  tablet,
+				State:   state,
+			})
+		}(t)
+	}
+
+	wg.Wait()
+
+	return tablets, nil
 }
 
 // GetSchemaOptions contains the options that modify the behavior of the

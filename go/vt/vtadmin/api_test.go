@@ -50,6 +50,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/topodata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -82,6 +83,25 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetTabletsResults: &struct {
+							Tablets []*topodatapb.Tablet
+							Error   error
+						}{
+							Tablets: []*topodatapb.Tablet{
+								{
+									Alias: &topodatapb.TabletAlias{
+										Cell: "zone1",
+										Uid:  100,
+									},
+									Keyspace: "testkeyspace",
+									Shard:    "-",
+								},
+							},
+							Error: nil,
+						},
+						RunHealthCheckResults: map[string]error{
+							"zone1-0000000100": nil,
+						},
 						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
@@ -171,6 +191,13 @@ func TestFindSchema(t *testing.T) {
 						ShouldErr: true,
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetTabletsResults: &struct {
+							Tablets []*topodatapb.Tablet
+							Error   error
+						}{
+							Tablets: nil,
+							Error:   assert.AnError,
+						},
 						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
@@ -196,6 +223,25 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetTabletsResults: &struct {
+							Tablets []*topodatapb.Tablet
+							Error   error
+						}{
+							Tablets: []*topodatapb.Tablet{
+								{
+									Alias: &topodatapb.TabletAlias{
+										Cell: "zone1",
+										Uid:  100,
+									},
+									Keyspace: "testkeyspace",
+									Shard:    "-",
+								},
+							},
+							Error: nil,
+						},
+						RunHealthCheckResults: map[string]error{
+							"zone1-0000000100": nil,
+						},
 						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
@@ -231,6 +277,25 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetTabletsResults: &struct {
+							Tablets []*topodatapb.Tablet
+							Error   error
+						}{
+							Tablets: []*topodatapb.Tablet{
+								{
+									Alias: &topodatapb.TabletAlias{
+										Cell: "zone1",
+										Uid:  100,
+									},
+									Keyspace: "testkeyspace",
+									Shard:    "-",
+								},
+							},
+							Error: nil,
+						},
+						RunHealthCheckResults: map[string]error{
+							"zone1-0000000100": nil,
+						},
 						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
@@ -278,6 +343,25 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetTabletsResults: &struct {
+							Tablets []*topodatapb.Tablet
+							Error   error
+						}{
+							Tablets: []*topodatapb.Tablet{
+								{
+									Alias: &topodatapb.TabletAlias{
+										Cell: "zone1",
+										Uid:  100,
+									},
+									Keyspace: "testkeyspace",
+									Shard:    "-",
+								},
+							},
+							Error: nil,
+						},
+						RunHealthCheckResults: map[string]error{
+							"zone1-0000000100": nil,
+						},
 						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
@@ -333,6 +417,25 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetTabletsResults: &struct {
+							Tablets []*topodatapb.Tablet
+							Error   error
+						}{
+							Tablets: []*topodatapb.Tablet{
+								{
+									Alias: &topodatapb.TabletAlias{
+										Cell: "zone1",
+										Uid:  100,
+									},
+									Keyspace: "testkeyspace",
+									Shard:    "-",
+								},
+							},
+							Error: nil,
+						},
+						RunHealthCheckResults: map[string]error{
+							"zone1-0000000100": nil,
+						},
 						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
@@ -379,6 +482,25 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetTabletsResults: &struct {
+							Tablets []*topodatapb.Tablet
+							Error   error
+						}{
+							Tablets: []*topodatapb.Tablet{
+								{
+									Alias: &topodatapb.TabletAlias{
+										Cell: "zone2",
+										Uid:  200,
+									},
+									Keyspace: "testkeyspace",
+									Shard:    "-",
+								},
+							},
+							Error: nil,
+						},
+						RunHealthCheckResults: map[string]error{
+							"zone2-0000000200": nil,
+						},
 						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
@@ -434,6 +556,25 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster1",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetTabletsResults: &struct {
+							Tablets []*topodatapb.Tablet
+							Error   error
+						}{
+							Tablets: []*topodatapb.Tablet{
+								{
+									Alias: &topodatapb.TabletAlias{
+										Cell: "zone1",
+										Uid:  100,
+									},
+									Keyspace: "testkeyspace1",
+									Shard:    "-",
+								},
+							},
+							Error: nil,
+						},
+						RunHealthCheckResults: map[string]error{
+							"zone1-0000000100": nil,
+						},
 						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
@@ -480,6 +621,25 @@ func TestFindSchema(t *testing.T) {
 						Name: "cluster2",
 					},
 					VtctldClient: &fakevtctldclient.VtctldClient{
+						GetTabletsResults: &struct {
+							Tablets []*topodatapb.Tablet
+							Error   error
+						}{
+							Tablets: []*topodatapb.Tablet{
+								{
+									Alias: &topodatapb.TabletAlias{
+										Cell: "zone2",
+										Uid:  200,
+									},
+									Keyspace: "testkeyspace2",
+									Shard:    "-",
+								},
+							},
+							Error: nil,
+						},
+						RunHealthCheckResults: map[string]error{
+							"zone2-0000000200": nil,
+						},
 						GetKeyspacesResults: &struct {
 							Keyspaces []*vtctldatapb.Keyspace
 							Error     error
@@ -585,6 +745,34 @@ func TestFindSchema(t *testing.T) {
 		c1 := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
 			Cluster: c1pb,
 			VtctldClient: &fakevtctldclient.VtctldClient{
+				GetTabletsResults: &struct {
+					Tablets []*topodatapb.Tablet
+					Error   error
+				}{
+					Tablets: []*topodatapb.Tablet{
+						{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c1zone1",
+								Uid:  100,
+							},
+							Keyspace: "testkeyspace",
+							Shard:    "-80",
+						},
+						{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c1zone1",
+								Uid:  200,
+							},
+							Keyspace: "testkeyspace",
+							Shard:    "80-",
+						},
+					},
+					Error: nil,
+				},
+				RunHealthCheckResults: map[string]error{
+					"c1zone1-0000000100": nil,
+					"c1zone1-0000000200": nil,
+				},
 				FindAllShardsInKeyspaceResults: map[string]struct {
 					Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 					Error    error
@@ -707,6 +895,25 @@ func TestFindSchema(t *testing.T) {
 		c2 := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
 			Cluster: c2pb,
 			VtctldClient: &fakevtctldclient.VtctldClient{
+				GetTabletsResults: &struct {
+					Tablets []*topodatapb.Tablet
+					Error   error
+				}{
+					Tablets: []*topodatapb.Tablet{
+						{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c2z1",
+								Uid:  100,
+							},
+							Keyspace: "ks2",
+							Shard:    "-",
+						},
+					},
+					Error: nil,
+				},
+				RunHealthCheckResults: map[string]error{
+					"c2z1-0000000100": nil,
+				},
 				FindAllShardsInKeyspaceResults: map[string]struct {
 					Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 					Error    error
@@ -1349,11 +1556,14 @@ func TestGetSchema(t *testing.T) {
 	defer cancel()
 
 	tests := []struct {
-		name      string
-		clusterID int
-		ts        *topo.Server
-		tmc       tmclient.TabletManagerClient
-		tablets   []*vtadminpb.Tablet
+		name          string
+		clusterID     int
+		ts            *topo.Server
+		schemaResults map[string]struct {
+			Response *vtctldatapb.GetSchemaResponse
+			Error    error
+		}
+		tablets   []*topodata.Tablet
 		req       *vtadminpb.GetSchemaRequest
 		expected  *vtadminpb.Schema
 		shouldErr bool
@@ -1362,12 +1572,12 @@ func TestGetSchema(t *testing.T) {
 			name:      "success",
 			clusterID: 1,
 			ts:        memorytopo.NewServer(ctx, "zone1"),
-			tmc: &testutil.TabletManagerClient{
-				GetSchemaResults: map[string]struct {
-					Schema *tabletmanagerdatapb.SchemaDefinition
-					Error  error
-				}{
-					"zone1-0000000100": {
+			schemaResults: map[string]struct {
+				Response *vtctldatapb.GetSchemaResponse
+				Error    error
+			}{
+				"zone1-0000000100": {
+					Response: &vtctldatapb.GetSchemaResponse{
 						Schema: &tabletmanagerdatapb.SchemaDefinition{
 							TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 								{
@@ -1378,20 +1588,13 @@ func TestGetSchema(t *testing.T) {
 					},
 				},
 			},
-			tablets: []*vtadminpb.Tablet{
-				{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
+			tablets: []*topodata.Tablet{
+				&topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
 					},
-					State: vtadminpb.Tablet_SERVING,
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  100,
-						},
-						Keyspace: "testkeyspace",
-					},
+					Keyspace: "testkeyspace",
 				},
 			},
 			req: &vtadminpb.GetSchemaRequest{
@@ -1430,20 +1633,13 @@ func TestGetSchema(t *testing.T) {
 			name:      "tablet not found for keyspace",
 			clusterID: 1,
 			ts:        memorytopo.NewServer(ctx, "zone1"),
-			tablets: []*vtadminpb.Tablet{
-				{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
+			tablets: []*topodata.Tablet{
+				&topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
 					},
-					State: vtadminpb.Tablet_SERVING,
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  100,
-						},
-						Keyspace: "otherkeyspace",
-					},
+					Keyspace: "otherkeyspace",
 				},
 			},
 			req: &vtadminpb.GetSchemaRequest{
@@ -1458,20 +1654,13 @@ func TestGetSchema(t *testing.T) {
 			name:      "no serving tablet found for keyspace",
 			clusterID: 1,
 			ts:        memorytopo.NewServer(ctx, "zone1"),
-			tablets: []*vtadminpb.Tablet{
-				{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
+			tablets: []*topodata.Tablet{
+				&topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
 					},
-					State: vtadminpb.Tablet_NOT_SERVING,
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  100,
-						},
-						Keyspace: "testkeyspace",
-					},
+					Keyspace: "testkeyspace",
 				},
 			},
 			req: &vtadminpb.GetSchemaRequest{
@@ -1486,12 +1675,12 @@ func TestGetSchema(t *testing.T) {
 			name:      "error in GetSchema call",
 			clusterID: 1,
 			ts:        memorytopo.NewServer(ctx, "zone1"),
-			tmc: &testutil.TabletManagerClient{
-				GetSchemaResults: map[string]struct {
-					Schema *tabletmanagerdatapb.SchemaDefinition
-					Error  error
-				}{
-					"zone1-0000000100": {
+			schemaResults: map[string]struct {
+				Response *vtctldatapb.GetSchemaResponse
+				Error    error
+			}{
+				"zone1-0000000100": {
+					Response: &vtctldatapb.GetSchemaResponse{
 						Schema: &tabletmanagerdatapb.SchemaDefinition{
 							TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 								{
@@ -1505,24 +1694,17 @@ func TestGetSchema(t *testing.T) {
 								},
 							},
 						},
-						Error: assert.AnError,
 					},
+					Error: assert.AnError,
 				},
 			},
-			tablets: []*vtadminpb.Tablet{
-				{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
+			tablets: []*topodata.Tablet{
+				&topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
 					},
-					State: vtadminpb.Tablet_SERVING,
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  100,
-						},
-						Keyspace: "testkeyspace",
-					},
+					Keyspace: "testkeyspace",
 				},
 			},
 			req: &vtadminpb.GetSchemaRequest{
@@ -1543,39 +1725,46 @@ func TestGetSchema(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts)
+			runHealthCheckResults := map[string]error{}
+			for _, t := range tt.tablets {
+				runHealthCheckResults[topoproto.TabletAliasString(t.Alias)] = nil
+			}
+
+			vtctld := &fakevtctldclient.VtctldClient{
+				GetTabletsResults: &struct {
+					Tablets []*topodatapb.Tablet
+					Error   error
+				}{
+					Tablets: tt.tablets,
+				},
+				RunHealthCheckResults: runHealthCheckResults,
+				GetSchemaResults:      tt.schemaResults,
+			}
+
+			c := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   fmt.Sprintf("c%d", tt.clusterID),
+					Name: fmt.Sprintf("cluster%d", tt.clusterID),
+				},
+				VtctldClient: vtctld,
 			})
+			api := NewAPI([]*cluster.Cluster{c}, Options{})
+			defer api.Close()
 
-			testutil.AddTablets(ctx, t, tt.ts, nil, vtadmintestutil.TopodataTabletsFromVTAdminTablets(tt.tablets)...)
+			resp, err := api.GetSchema(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
 
-			testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
-				c := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
-					Cluster: &vtadminpb.Cluster{
-						Id:   fmt.Sprintf("c%d", tt.clusterID),
-						Name: fmt.Sprintf("cluster%d", tt.clusterID),
-					},
-					VtctldClient: client,
-					Tablets:      tt.tablets,
-				})
-				api := NewAPI([]*cluster.Cluster{c}, Options{})
-				defer api.Close()
+				return
+			}
 
-				resp, err := api.GetSchema(ctx, tt.req)
-				if tt.shouldErr {
-					assert.Error(t, err)
+			if resp != nil {
+				// Clone so our mutation below doesn't trip the race detector.
+				resp = resp.CloneVT()
+			}
 
-					return
-				}
-
-				if resp != nil {
-					// Clone so our mutation below doesn't trip the race detector.
-					resp = resp.CloneVT()
-				}
-
-				assert.NoError(t, err)
-				assert.Truef(t, proto.Equal(tt.expected, resp), "expected %v, got %v", tt.expected, resp)
-			})
+			assert.NoError(t, err)
+			assert.Truef(t, proto.Equal(tt.expected, resp), "expected %v, got %v", tt.expected, resp)
 		})
 	}
 
@@ -1587,6 +1776,33 @@ func TestGetSchema(t *testing.T) {
 		c1 := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
 			Cluster: c1pb,
 			VtctldClient: &fakevtctldclient.VtctldClient{
+				GetTabletsResults: &struct {
+					Tablets []*topodatapb.Tablet
+					Error   error
+				}{
+					Tablets: []*topodatapb.Tablet{
+						{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c1zone1",
+								Uid:  100,
+							},
+							Keyspace: "testkeyspace",
+							Shard:    "-80",
+						},
+						{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c1zone1",
+								Uid:  200,
+							},
+							Keyspace: "testkeyspace",
+							Shard:    "80-",
+						},
+					},
+				},
+				RunHealthCheckResults: map[string]error{
+					"c1zone1-0000000100": nil,
+					"c1zone1-0000000200": nil,
+				},
 				FindAllShardsInKeyspaceResults: map[string]struct {
 					Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 					Error    error
@@ -1650,32 +1866,6 @@ func TestGetSchema(t *testing.T) {
 							},
 						},
 					},
-				},
-			},
-			Tablets: []*vtadminpb.Tablet{
-				{
-					Cluster: c1pb,
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "c1zone1",
-							Uid:  100,
-						},
-						Keyspace: "testkeyspace",
-						Shard:    "-80",
-					},
-					State: vtadminpb.Tablet_SERVING,
-				},
-				{
-					Cluster: c1pb,
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "c1zone1",
-							Uid:  200,
-						},
-						Keyspace: "testkeyspace",
-						Shard:    "80-",
-					},
-					State: vtadminpb.Tablet_SERVING,
 				},
 			},
 		},
