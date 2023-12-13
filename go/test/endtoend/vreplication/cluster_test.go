@@ -397,6 +397,7 @@ func NewVitessCluster(t *testing.T, opts *clusterOptions) *VitessCluster {
 	vc.setupVtctl()
 	vc.setupVtctlClient()
 	vc.setupVtctldClient()
+
 	return vc
 }
 
@@ -485,8 +486,14 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 		cell.Keyspaces[ksName] = keyspace
 		cellsToWatch = cellsToWatch + cell.Name
 	}
-	require.NoError(t, vc.AddShards(t, cells, keyspace, shards, numReplicas, numRdonly, tabletIDBase, opts))
+	for _, cell := range cells {
+		if len(cell.Vtgates) == 0 {
+			log.Infof("Starting vtgate")
+			vc.StartVtgate(t, cell, cellsToWatch)
+		}
+	}
 
+	require.NoError(t, vc.AddShards(t, cells, keyspace, shards, numReplicas, numRdonly, tabletIDBase, opts))
 	if schema != "" {
 		if err := vc.VtctlClient.ApplySchema(ksName, schema); err != nil {
 			t.Fatalf(err.Error())
@@ -499,12 +506,6 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 		}
 	}
 	keyspace.VSchema = vschema
-	for _, cell := range cells {
-		if len(cell.Vtgates) == 0 {
-			log.Infof("Starting vtgate")
-			vc.StartVtgate(t, cell, cellsToWatch)
-		}
-	}
 
 	err = vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
 	require.NoError(t, err)
@@ -580,11 +581,11 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		}
 	}
 
-	arrNames := strings.Split(names, ",")
-	log.Infof("Addshards got %d shards with %+v", len(arrNames), arrNames)
-	isSharded := len(arrNames) > 1
+	shardNames := strings.Split(names, ",")
+	log.Infof("Addshards got %d shards with %+v", len(shardNames), shardNames)
+	isSharded := len(shardNames) > 1
 	primaryTabletUID := 0
-	for ind, shardName := range arrNames {
+	for ind, shardName := range shardNames {
 		tabletID := tabletIDBase + ind*100
 		tabletIndex := 0
 		shard := &Shard{Name: shardName, IsSharded: isSharded, Tablets: make(map[string]*Tablet, 1)}
@@ -694,6 +695,37 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 
 		log.Infof("Finished creating shard %s", shard.Name)
+	}
+	for _, shard := range shardNames {
+		require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, keyspace.Name, shard))
+	}
+
+	waitTimeout := 30 * time.Second
+	vtgate := cells[0].Vtgates[0]
+	for _, shard := range keyspace.Shards {
+		numReplicas, numRDOnly := 0, 0
+		for _, tablet := range shard.Tablets {
+			switch strings.ToLower(tablet.Vttablet.TabletType) {
+			case "replica":
+				numReplicas++
+			case "rdonly":
+				numRDOnly++
+			}
+		}
+		numReplicas-- // account for primary, which also has replica type
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1, waitTimeout); err != nil {
+			return err
+		}
+		if numReplicas > 0 {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), numReplicas, waitTimeout); err != nil {
+				return err
+			}
+		}
+		if numRDOnly > 0 {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name), numRDOnly, waitTimeout); err != nil {
+				return err
+			}
+		}
 	}
 
 	err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)

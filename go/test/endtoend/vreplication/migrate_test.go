@@ -25,8 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -57,8 +55,6 @@ func TestVtctlMigrate(t *testing.T) {
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	require.NoError(t, err, "failed to create product keyspace")
-	err = cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
-	require.NoError(t, err, "product shard did not become healthy")
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate, "failed to get vtgate")
 
@@ -67,7 +63,7 @@ func TestVtctlMigrate(t *testing.T) {
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	t.Run("VStreamFrom", func(t *testing.T) {
-		testVStreamFrom(t, "product", 2)
+		testVStreamFrom(t, vtgate, "product", 2)
 	})
 
 	// create external cluster
@@ -80,8 +76,6 @@ func TestVtctlMigrate(t *testing.T) {
 	extVtgate := extCell2.Vtgates[0]
 	require.NotNil(t, extVtgate)
 
-	err = cluster.WaitForHealthyShard(extVc.VtctldClient, "rating", "0")
-	require.NoError(t, err)
 	verifyClusterHealth(t, extVc)
 	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
 	insertInitialDataIntoExternalCluster(t, extVtgateConn)
@@ -182,8 +176,6 @@ func TestVtctldMigrate(t *testing.T) {
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0",
 		initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	require.NoError(t, err, "failed to create product keyspace")
-	err = cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
-	require.NoError(t, err, "product shard did not become healthy")
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate, "failed to get vtgate")
 
@@ -207,8 +199,6 @@ func TestVtctldMigrate(t *testing.T) {
 	extVtgate := extCell2.Vtgates[0]
 	require.NotNil(t, extVtgate)
 
-	err = cluster.WaitForHealthyShard(extVc.VtctldClient, "rating", "0")
-	require.NoError(t, err)
 	verifyClusterHealth(t, extVc)
 	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
 	insertInitialDataIntoExternalCluster(t, extVtgateConn)

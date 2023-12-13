@@ -20,8 +20,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 const smSchema = `
@@ -63,10 +61,10 @@ const initDataQuery = `insert into ks1.tx(id, typ, val) values (1, 1, 'abc'), (2
 
 // testShardedMaterialize tests a materialize workflow for a sharded cluster (single shard) using comparison filters
 func testShardedMaterialize(t *testing.T, useVtctldClient bool) {
+	var err error
 	vc = NewVitessCluster(t, nil)
 	ks1 := "ks1"
 	ks2 := "ks2"
-	shard := "0"
 	require.NotNil(t, vc)
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func() { defaultReplicas = 1 }()
@@ -76,12 +74,8 @@ func testShardedMaterialize(t *testing.T, useVtctldClient bool) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks1, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 100, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, ks1, shard)
-	require.NoError(t, err)
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks2, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 200, nil)
-	err = cluster.WaitForHealthyShard(vc.VtctldClient, ks2, shard)
-	require.NoError(t, err)
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -178,6 +172,7 @@ RETURN id * length(val);
 `
 
 func testMaterialize(t *testing.T, useVtctldClient bool) {
+	var err error
 	vc = NewVitessCluster(t, nil)
 	sourceKs := "source"
 	targetKs := "target"
@@ -192,12 +187,8 @@ func testMaterialize(t *testing.T, useVtctldClient bool) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", smMaterializeVSchemaSource, smMaterializeSchemaSource, defaultReplicas, defaultRdonly, 300, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard)
-	require.NoError(t, err)
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "0", smMaterializeVSchemaTarget, smMaterializeSchemaTarget, defaultReplicas, defaultRdonly, 400, nil)
-	err = cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard)
-	require.NoError(t, err)
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()

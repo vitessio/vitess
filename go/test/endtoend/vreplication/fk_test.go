@@ -28,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet"
 
@@ -59,19 +58,10 @@ func TestFKWorkflow(t *testing.T) {
 	cell := vc.Cells[cellName]
 	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialFKSourceVSchema, initialFKSchema, 0, 0, 100, sourceKsOpts)
 
-	vtgate = cell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKeyspace, shardName)
-	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, shardName), 1, 30*time.Second)
-
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
+	insertInitialFKData(t)
 
 	var ls *fkLoadSimulator
-
-	insertInitialFKData(t)
 	withLoad := true // Set it to false to skip load simulation, while debugging
 	var cancel context.CancelFunc
 	var ctx context.Context
@@ -90,7 +80,6 @@ func TestFKWorkflow(t *testing.T) {
 	targetKeyspace := "fktarget"
 	targetTabletId := 200
 	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, "", 0, 0, targetTabletId, sourceKsOpts)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKeyspace, shardName), 1, 30*time.Second)
 
 	workflowName := "fk"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)

@@ -109,14 +109,6 @@ func TestFKExt(t *testing.T) {
 	sourceKeyspace := fkextConfig.sourceKeyspaceName
 	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, "0", FKExtSourceVSchema, FKExtSourceSchema, 0, 0, 100, nil)
 
-	vtgate = cell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKeyspace, "0")
-	require.NoError(t, err)
-	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, "0"), 1, shardStatusWaitTimeout))
-
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
 	lg = &SimpleLoadGenerator{}

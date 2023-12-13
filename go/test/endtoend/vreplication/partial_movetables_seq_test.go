@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -207,10 +206,6 @@ func (tc *vrepTestCase) setupKeyspace(ks *keyspace) {
 		require.NotNil(tc.t, defaultCell)
 		tc.vtgate = defaultCell.Vtgates[0]
 
-	}
-	for _, shard := range ks.shards {
-		require.NoError(t, cluster.WaitForHealthyShard(tc.vc.VtctldClient, ks.name, shard))
-		require.NoError(t, tc.vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ks.name, shard), 1, 30*time.Second))
 	}
 }
 

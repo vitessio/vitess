@@ -29,7 +29,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -135,9 +134,6 @@ func TestVDiff2(t *testing.T) {
 
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	for _, shard := range sourceShards {
-		require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard))
-	}
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -159,9 +155,6 @@ func TestVDiff2(t *testing.T) {
 	// We ONLY add primary tablets in this test.
 	tks, err := vc.AddKeyspace(t, []*Cell{zone3, zone1, zone2}, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
 	require.NoError(t, err)
-	for _, shard := range targetShards {
-		require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard))
-	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -175,9 +168,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	arrTargetShards := strings.Split(tc.targetShards, ",")
 	if tc.typ == "Reshard" {
 		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID, targetKsOpts))
-		for _, shard := range arrTargetShards {
-			require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, tc.targetKs, shard))
-		}
+
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 	var args []string

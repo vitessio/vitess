@@ -628,13 +628,6 @@ func setupCluster(t *testing.T) *VitessCluster {
 
 	vc.AddKeyspace(t, []*Cell{zone1, zone2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 
-	vtgate = zone1.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
-	require.NoError(t, err)
-	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2, 30*time.Second))
-	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "product", "0"), 1, 30*time.Second))
-
 	defer getVTGateConn()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
@@ -651,12 +644,6 @@ func setupCustomerKeyspace(t *testing.T) {
 		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, nil); err != nil {
 		t.Fatal(err)
 	}
-	require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, "customer", "-80"))
-	require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, "customer", "80-"))
-	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "-80"), 2, 30*time.Second))
-	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 2, 30*time.Second))
-	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "-80"), 1, 30*time.Second))
-	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "80-"), 1, 30*time.Second))
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 	targetTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -672,11 +659,6 @@ func setupCustomer2Keyspace(t *testing.T) {
 		customerVSchema, customerSchema, 0, 0, 1200, nil); err != nil {
 		t.Fatal(err)
 	}
-	for _, c2shard := range c2shards {
-		err := cluster.WaitForHealthyShard(vc.VtctldClient, c2keyspace, c2shard)
-		require.NoError(t, err)
-		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", c2keyspace, c2shard), 1, 30*time.Second))
-	}
 }
 
 func setupMinimalCluster(t *testing.T) *VitessCluster {
@@ -690,8 +672,6 @@ func setupMinimalCluster(t *testing.T) *VitessCluster {
 
 	vtgate = zone1.Vtgates[0]
 	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
-	require.NoError(t, err)
 	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1, 30*time.Second))
 
 	verifyClusterHealth(t, vc)
@@ -707,10 +687,6 @@ func setupMinimalCustomerKeyspace(t *testing.T) {
 		customerVSchema, customerSchema, 0, 0, 200, nil); err != nil {
 		t.Fatal(err)
 	}
-	require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, "customer", "-80"))
-	require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, "customer", "80-"))
-	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1, 30*time.Second))
-	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1, 30*time.Second))
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 	targetTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -837,8 +813,6 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 	arrTargetShardNames := strings.Split(shards, ",")
 
 	for _, shardName := range arrTargetShardNames {
-		err := cluster.WaitForHealthyShard(vc.VtctldClient, ksName, shardName)
-		require.NoError(t, err)
 		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shardName), 2, 30*time.Second))
 		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shardName), 1, 30*time.Second))
 	}
