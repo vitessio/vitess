@@ -261,8 +261,8 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		"timeout_seconds":           "60",
 	}
 	pickerOpts := map[string]string{
-		"source_cell":  "zone1,zone2,zone3,zonefoo",
-		"target_cell":  "zone1,zone2,zone3,zonefoo",
+		"source_cell":  "zone1,zone2,zone3,zonefoosource",
+		"target_cell":  "zone1,zone2,zone3,zonefootarget",
 		"tablet_types": "replica,primary,rdonly",
 	}
 	reportOpts := map[string]string{
