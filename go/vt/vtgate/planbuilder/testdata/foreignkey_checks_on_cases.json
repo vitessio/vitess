@@ -1693,7 +1693,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-                "Query": "select col1 from u_tbl1 where id = 1 for update nowait",
+                "Query": "select col1 from u_tbl1 where id = 1 for update",
                 "Table": "u_tbl1"
               },
               {
@@ -1713,7 +1713,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update nowait",
+                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                     "Table": "u_tbl2"
                   },
                   {
