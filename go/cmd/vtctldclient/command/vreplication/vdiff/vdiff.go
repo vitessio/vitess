@@ -113,7 +113,7 @@ var (
 				createOptions.Tables[i] = strings.TrimSpace(table)
 			}
 		}
-		// Enforce positive values for limits and max values.
+		// Enforce non-negative values for limits and max values.
 		if createOptions.Limit < 1 {
 			return fmt.Errorf("--limit must be a positive value greater than 1")
 		}
