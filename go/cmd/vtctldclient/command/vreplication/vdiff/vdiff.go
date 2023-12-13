@@ -115,7 +115,7 @@ var (
 		}
 		// Enforce non-negative values for limits and max values.
 		if createOptions.Limit < 1 {
-			return fmt.Errorf("--limit must be a positive value greater than 1")
+			return fmt.Errorf("--limit must be a positive value of at least 1")
 		}
 		if createOptions.MaxReportSampleRows < 0 {
 			return fmt.Errorf("--max-report-sample-rows must not be a negative value")
