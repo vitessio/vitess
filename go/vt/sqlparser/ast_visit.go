@@ -1305,6 +1305,9 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
+	if err := VisitExpr(in.Fsp, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfDateAddExpr(in *DateAddExpr, f Visit) error {
