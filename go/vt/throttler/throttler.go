@@ -32,6 +32,7 @@ import (
 	"math"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
