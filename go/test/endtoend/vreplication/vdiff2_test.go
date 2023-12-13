@@ -22,8 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -40,10 +42,11 @@ type testCase struct {
 	retryInsert string
 	resume      bool // test resume functionality with this workflow
 	// If testing resume, what new rows should be diff'd. These rows must have a PK > all initial rows and retry rows.
-	resumeInsert      string
-	stop              bool // test stop functionality with this workflow
-	testCLIErrors     bool // test CLI errors against this workflow (only needs to be done once)
-	testCLICreateWait bool // test CLI create and wait until done against this workflow (only needs to be done once)
+	resumeInsert        string
+	stop                bool // test stop functionality with this workflow
+	testCLIErrors       bool // test CLI errors against this workflow (only needs to be done once)
+	testCLICreateWait   bool // test CLI create and wait until done against this workflow (only needs to be done once)
+	testCLIFlagHandling bool
 }
 
 const (
@@ -55,21 +58,22 @@ const (
 
 var testCases = []*testCase{
 	{
-		name:              "MoveTables/unsharded to two shards",
-		workflow:          "p1c2",
-		typ:               "MoveTables",
-		sourceKs:          "product",
-		targetKs:          "customer",
-		sourceShards:      "0",
-		targetShards:      "-80,80-",
-		tabletBaseID:      200,
-		tables:            "customer,Lead,Lead-1",
-		autoRetryError:    true,
-		retryInsert:       `insert into customer(cid, name, typ) values(1991234, 'Testy McTester', 'soho')`,
-		resume:            true,
-		resumeInsert:      `insert into customer(cid, name, typ) values(1992234, 'Testy McTester (redux)', 'enterprise')`,
-		testCLIErrors:     true, // test for errors in the simplest workflow
-		testCLICreateWait: true, // test wait on create feature against simplest workflow
+		name:                "MoveTables/unsharded to two shards",
+		workflow:            "p1c2",
+		typ:                 "MoveTables",
+		sourceKs:            "product",
+		targetKs:            "customer",
+		sourceShards:        "0",
+		targetShards:        "-80,80-",
+		tabletBaseID:        200,
+		tables:              "customer,Lead,Lead-1",
+		autoRetryError:      true,
+		retryInsert:         `insert into customer(cid, name, typ) values(1991234, 'Testy McTester', 'soho')`,
+		resume:              true,
+		resumeInsert:        `insert into customer(cid, name, typ) values(1992234, 'Testy McTester (redux)', 'enterprise')`,
+		testCLIErrors:       true, // test for errors in the simplest workflow
+		testCLICreateWait:   true, // test wait on create feature against simplest workflow
+		testCLIFlagHandling: true,
 	},
 	{
 		name:           "Reshard Merge/split 2 to 3",
@@ -207,6 +211,9 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	if tc.testCLIErrors {
 		testCLIErrors(t, ksWorkflow, allCellNames)
 	}
+	if tc.testCLIFlagHandling {
+		testCLIFlagHandling(t, tc.targetKs, tc.workflow, cells[0])
+	}
 
 	testDelete(t, ksWorkflow, allCellNames)
 
@@ -239,6 +246,64 @@ func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "show", "last", false)
 		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "create", uuid, true)
 		require.Contains(t, output, "already exists")
+	})
+}
+
+// testCLIFlagHandling tests that the vtctldclient CLI flags are handled correctly
+// from vtctldclient->vtctld->vttablet->mysqld.
+func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell) {
+	// Keys are in the tabletmanagerdata.VDiff*Options proto message definitions.
+	coreOpts := map[string]string{
+		"max_rows":                  "999",
+		"max_extra_rows_to_compare": "777",
+		"auto_retry":                "true",
+		"update_table_stats":        "true",
+		"timeout_seconds":           "60",
+	}
+	pickerOpts := map[string]string{
+		"source_cell":  "zone1,zone2,zone3,zonefoo",
+		"target_cell":  "zone1,zone2,zone3,zonefoo",
+		"tablet_types": "replica,primary,rdonly",
+	}
+	reportOpts := map[string]string{
+		"max_sample_rows": "888",
+		"only_pks":        "true",
+	}
+
+	t.Run("Client flag handling", func(t *testing.T) {
+		res, err := vc.VtctldClient.ExecuteCommandWithOutput("vdiff", "--target-keyspace", targetKs, "--workflow", workflowName,
+			"create", "--limit", coreOpts["max_rows"], "--max-report-sample-rows", reportOpts["max_sample_rows"],
+			"--max-extra-rows-to-compare", coreOpts["max_extra_rows_to_compare"], "--filtered-replication-wait-time",
+			coreOpts["timeout_seconds"]+"s", "--source-cells", pickerOpts["source_cell"], "--target-cells",
+			pickerOpts["target_cell"], "--tablet-types", pickerOpts["tablet_types"],
+			fmt.Sprintf("--update-table-stats=%s", coreOpts["update_table_stats"]),
+			fmt.Sprintf("--auto-retry=%s", coreOpts["auto_retry"]), fmt.Sprintf("--only-pks=%s", reportOpts["only_pks"]),
+			"--tablet-types-in-preference-order=false", "--format=json")
+		require.NoError(t, err, "vdiff command failed: %s", res)
+		jsonRes := gjson.Parse(res)
+		vdid := jsonRes.Get("UUID").String()
+		_, err = uuid.Parse(vdid)
+		require.NoError(t, err, "invalid UUID: %s", vdid)
+
+		// Confirm that the options were set and saved correctly.
+		query := sqlparser.BuildParsedQuery("select options from %s.vdiff where vdiff_uuid = %s",
+			sidecarDBIdentifier, encodeString(vdid)).Query
+		tablets := vc.getVttabletsInKeyspace(t, cell, targetKs, "PRIMARY")
+		require.Greater(t, len(tablets), 0, "no primary tablets found in keyspace %s", targetKs)
+		tablet := maps.Values(tablets)[0]
+		qres, err := tablet.QueryTablet(query, targetKs, false)
+		require.NoError(t, err, "query failed: %s", query)
+		require.NotNil(t, qres, "query returned nil result: %s", query)
+		jsonRes = gjson.Parse(qres.Rows[0][0].ToString())
+		for key, val := range coreOpts {
+			require.Equal(t, val, jsonRes.Get("core_options."+key).String(), "unexpected value for key core_options.%s; expected: %s, got: %s", key, val, jsonRes.Get("core_options."+key).String())
+		}
+		for key, val := range pickerOpts {
+			require.Equal(t, val, jsonRes.Get("picker_options."+key).String(), "unexpected value for key picker_options.%s; expected: %s, got: %s", key, val, jsonRes.Get("picker_options."+key).String())
+		}
+		for key, val := range reportOpts {
+			require.Equal(t, val, jsonRes.Get("report_options."+key).String(), "unexpected value for key report_options.%s; expected: %s, got: %s", key, val, jsonRes.Get("report_options."+key).String())
+		}
 	})
 }
 
