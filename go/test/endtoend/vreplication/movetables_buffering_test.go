@@ -40,5 +40,4 @@ func TestMoveTablesBuffering(t *testing.T) {
 	lg.stop()
 
 	log.Infof("TestMoveTablesBuffering: done")
-	log.Flush()
 }

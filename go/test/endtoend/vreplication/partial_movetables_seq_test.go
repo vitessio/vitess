@@ -74,7 +74,7 @@ type vrepTestCase struct {
 	vtgate *cluster.VtgateProcess
 }
 
-func initPartialMoveTablesComplexTestCase(t *testing.T, name string) *vrepTestCase {
+func initPartialMoveTablesComplexTestCase(t *testing.T) *vrepTestCase {
 	const (
 		seqVSchema = `{
 			"sharded": false,
@@ -121,7 +121,7 @@ func initPartialMoveTablesComplexTestCase(t *testing.T, name string) *vrepTestCa
 	)
 	tc := &vrepTestCase{
 		t:               t,
-		testName:        name,
+		testName:        t.Name(),
 		keyspaces:       make(map[string]*keyspace),
 		defaultCellName: "zone1",
 		workflows:       make(map[string]*workflow),
@@ -283,7 +283,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		extraVTGateArgs = origExtraVTGateArgs
 	}()
 
-	tc := initPartialMoveTablesComplexTestCase(t, "TestPartialMoveTablesComplex")
+	tc := initPartialMoveTablesComplexTestCase(t)
 	defer tc.teardown()
 	var err error
 
@@ -346,7 +346,6 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	})
 
 	currentCustomerCount = getCustomerCount(t, "after customer2.80-/2")
-	log.Flush()
 
 	// This query uses an ID that should always get routed to shard 80-
 	shard80MinusRoutedQuery := "select name from customer where cid = 1 and noexistcol = 'foo'"

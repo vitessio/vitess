@@ -309,7 +309,6 @@ func TestBasicV2Workflows(t *testing.T) {
 
 	testMoveTablesV2Workflow(t)
 	testReshardV2Workflow(t)
-	log.Flush()
 }
 
 func getVtctldGRPCURL() string {

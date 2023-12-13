@@ -795,8 +795,6 @@ func (lg *loadGenerator) stop() {
 	log.Infof("Canceling load")
 	lg.cancel()
 	time.Sleep(loadTestWaitForCancel) // wait for cancel to take effect
-	log.Flush()
-
 }
 
 func (lg *loadGenerator) start() {
