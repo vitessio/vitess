@@ -696,13 +696,17 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		}}, nil
 
 	case *sqlparser.CurTimeFuncExpr:
-		fspLiteral, isLiteral := call.Fsp.(*sqlparser.Literal)
-		if !isLiteral || fspLiteral.Type != sqlparser.IntVal {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Bind variables not supported for CurTimeFuncExpr")
-		}
-		fsp, err := strconv.Atoi(fspLiteral.Val)
-		if err != nil {
-			return nil, err
+		var fsp int
+		if call.Fsp != nil {
+			fspLiteral, isLiteral := call.Fsp.(*sqlparser.Literal)
+			if !isLiteral || fspLiteral.Type != sqlparser.IntVal {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Bind variables not supported for CurTimeFuncExpr")
+			}
+			convVal, err := strconv.Atoi(fspLiteral.Val)
+			if err != nil {
+				return nil, err
+			}
+			fsp = convVal
 		}
 		if fsp > 6 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision 12 specified for '%s'. Maximum is 6.", call.Name.String())
