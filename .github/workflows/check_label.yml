@@ -69,8 +69,10 @@ jobs:
             exit 1
           fi
           if cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'NeedsBackportReason' ; then
-            echo "Expecting PR to not have the NeedsBackportReason label; please add your justification to the PR description and remove the label."
-            exit 1
+            if cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'Backport to:'; then
+              echo "Expecting PR to not have the NeedsBackportReason label; please add your justification to the PR description and remove the label."
+              exit 1
+            fi
           fi
           
 
