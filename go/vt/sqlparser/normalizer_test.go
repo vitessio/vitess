@@ -371,6 +371,18 @@ func TestNormalize(t *testing.T) {
 		in:      `select * from (select 12) as t`,
 		outstmt: `select * from (select 12 from dual) as t`,
 		outbv:   map[string]*querypb.BindVariable{},
+	}, {
+		// we don't want to replace literals in cur time function calls.
+		in:      `insert into t1(id2) values (NOW(1))`,
+		outstmt: `insert into t1(id2) values (now(1))`,
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
+		// we don't want to replace literals in cur time function calls.
+		in:      `select (select now(2)) from (select 1 from dual where NOW(1) < 2) as t`,
+		outstmt: `select (select now(2) from dual) from (select 1 from dual where now(1) < :bv1 /* INT64 */) as t`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(2),
+		},
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {

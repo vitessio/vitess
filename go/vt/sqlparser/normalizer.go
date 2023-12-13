@@ -70,6 +70,10 @@ func (nz *normalizer) walkStatementUp(cursor *Cursor) bool {
 	if !isLiteral {
 		return true
 	}
+	_, isCurTimeFunc := cursor.Parent().(*CurTimeFuncExpr)
+	if isCurTimeFunc {
+		return true
+	}
 	nz.convertLiteral(node, cursor)
 	return nz.err == nil // only continue if we haven't found any errors
 }
@@ -150,6 +154,8 @@ func (nz *normalizer) walkUpSelect(cursor *Cursor) bool {
 	}
 	parent := cursor.Parent()
 	switch parent.(type) {
+	case *CurTimeFuncExpr:
+		return true
 	case *Order, GroupBy:
 		return false
 	case *Limit:
