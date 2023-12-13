@@ -1,17 +1,50 @@
 /*
- Copyright 2017 GitHub Inc.
+Copyright 2023 The Vitess Authors.
 
- Licensed under MIT License. See https://github.com/github/freno/blob/master/LICENSE
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// This codebase originates from https://github.com/github/freno, See https://github.com/github/freno/blob/master/LICENSE
+/*
+	MIT License
+
+	Copyright (c) 2017 GitHub
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
 */
 
 package throttle
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"math/rand"
 	"net/http"
@@ -36,6 +69,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -47,15 +81,15 @@ import (
 )
 
 const (
-	leaderCheckInterval         = 5 * time.Second
-	mysqlCollectInterval        = 250 * time.Millisecond
-	mysqlDormantCollectInterval = 5 * time.Second
-	mysqlRefreshInterval        = 10 * time.Second
-	mysqlAggregateInterval      = 125 * time.Millisecond
-
-	aggregatedMetricsExpiration   = 5 * time.Second
+	leaderCheckInterval           = 5 * time.Second
+	mysqlCollectInterval          = 250 * time.Millisecond
+	mysqlDormantCollectInterval   = 5 * time.Second
+	mysqlRefreshInterval          = 10 * time.Second
+	mysqlAggregateInterval        = 125 * time.Millisecond
 	throttledAppsSnapshotInterval = 5 * time.Second
-	recentAppsExpiration          = time.Hour * 24
+
+	aggregatedMetricsExpiration = 5 * time.Second
+	recentAppsExpiration        = time.Hour * 24
 
 	nonDeprioritizedAppMapExpiration = time.Second
 
@@ -118,18 +152,26 @@ type Throttler struct {
 	isLeader  atomic.Bool
 	isOpen    atomic.Bool
 
-	env             tabletenv.Env
-	pool            *connpool.Pool
-	tabletTypeFunc  func() topodatapb.TabletType
-	ts              throttlerTopoService
-	srvTopoServer   srvtopo.Server
-	heartbeatWriter heartbeat.HeartbeatWriter
+	leaderCheckInterval           time.Duration
+	mysqlCollectInterval          time.Duration
+	mysqlDormantCollectInterval   time.Duration
+	mysqlRefreshInterval          time.Duration
+	mysqlAggregateInterval        time.Duration
+	throttledAppsSnapshotInterval time.Duration
+
+	env              tabletenv.Env
+	pool             *connpool.Pool
+	tabletTypeFunc   func() topodatapb.TabletType
+	ts               throttlerTopoService
+	srvTopoServer    srvtopo.Server
+	heartbeatWriter  heartbeat.HeartbeatWriter
+	overrideTmClient tmclient.TabletManagerClient
 
 	// recentCheckTickerValue is an ever increasing number, incrementing once per second.
-	recentCheckTickerValue int64
+	recentCheckTickerValue atomic.Int64
 	// recentCheckValue is set to match or exceed recentCheckTickerValue whenever a "check" was made (other than by the throttler itself).
 	// when recentCheckValue < recentCheckTickerValue that means there hasn't been a recent check.
-	recentCheckValue int64
+	recentCheckValue atomic.Int64
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
@@ -150,14 +192,15 @@ type Throttler struct {
 	recentApps             *cache.Cache
 	metricsHealth          *cache.Cache
 
-	lastCheckTimeNano int64
+	lastCheckTimeNano atomic.Int64
 
-	initMutex            sync.Mutex
-	enableMutex          sync.Mutex
-	cancelOpenContext    context.CancelFunc
-	cancelEnableContext  context.CancelFunc
-	throttledAppsMutex   sync.Mutex
-	watchSrvKeyspaceOnce sync.Once
+	initMutex           sync.Mutex
+	enableMutex         sync.Mutex
+	cancelOpenContext   context.CancelFunc
+	cancelEnableContext context.CancelFunc
+	throttledAppsMutex  sync.Mutex
+
+	readSelfThrottleMetric func(context.Context, *mysql.Probe) *mysql.MySQLThrottleMetric // overwritten by unit test
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
@@ -212,7 +255,17 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
+	throttler.leaderCheckInterval = leaderCheckInterval
+	throttler.mysqlCollectInterval = mysqlCollectInterval
+	throttler.mysqlDormantCollectInterval = mysqlDormantCollectInterval
+	throttler.mysqlRefreshInterval = mysqlRefreshInterval
+	throttler.mysqlAggregateInterval = mysqlAggregateInterval
+	throttler.throttledAppsSnapshotInterval = throttledAppsSnapshotInterval
+
 	throttler.StoreMetricsThreshold(defaultThrottleLagThreshold.Seconds()) //default
+	throttler.readSelfThrottleMetric = func(ctx context.Context, p *mysql.Probe) *mysql.MySQLThrottleMetric {
+		return throttler.readSelfMySQLThrottleMetric(ctx, p)
+	}
 
 	return throttler
 }
@@ -342,9 +395,9 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		throttler.ThrottleApp(appRule.Name, protoutil.TimeFromProto(appRule.ExpiresAt).UTC(), appRule.Ratio, appRule.Exempt)
 	}
 	if throttlerConfig.Enabled {
-		go throttler.Enable(ctx)
+		go throttler.Enable()
 	} else {
-		go throttler.Disable(ctx)
+		go throttler.Disable()
 	}
 }
 
@@ -372,18 +425,18 @@ func (throttler *Throttler) IsRunning() bool {
 
 // Enable activates the throttler probes; when enabled, the throttler responds to check queries based on
 // the collected metrics.
-func (throttler *Throttler) Enable(ctx context.Context) bool {
+func (throttler *Throttler) Enable() bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
-	isEnabled := throttler.isEnabled.Swap(true)
-	if isEnabled {
+	if wasEnabled := throttler.isEnabled.Swap(true); wasEnabled {
 		log.Infof("Throttler: already enabled")
 		return false
 	}
 	log.Infof("Throttler: enabling")
 
-	ctx, throttler.cancelEnableContext = context.WithCancel(ctx)
+	var ctx context.Context
+	ctx, throttler.cancelEnableContext = context.WithCancel(context.Background())
 	throttler.check.SelfChecks(ctx)
 	throttler.Operate(ctx)
 
@@ -395,12 +448,11 @@ func (throttler *Throttler) Enable(ctx context.Context) bool {
 
 // Disable deactivates the probes and associated operations. When disabled, the throttler responds to check
 // queries with "200 OK" irrespective of lag or any other metrics.
-func (throttler *Throttler) Disable(ctx context.Context) bool {
+func (throttler *Throttler) Disable() bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
-	isEnabled := throttler.isEnabled.Swap(false)
-	if !isEnabled {
+	if wasEnabled := throttler.isEnabled.Swap(false); !wasEnabled {
 		log.Infof("Throttler: already disabled")
 		return false
 	}
@@ -413,6 +465,54 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 
 	throttler.cancelEnableContext()
 	return true
+}
+
+// retryReadAndApplyThrottlerConfig() is called by Open(), read throttler config from topo, applies it, and starts watching
+// for topo changes.
+// But also, we're in an Open() function, which blocks state manager's operation, and affects
+// opening of all other components. We thus read the throttler config in the background.
+// However, we want to handle a situation where the read errors out.
+// So we kick a loop that keeps retrying reading the config, for as long as this throttler is open.
+func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context) {
+	var watchSrvKeyspaceOnce sync.Once
+	retryInterval := 10 * time.Second
+	retryTicker := time.NewTicker(retryInterval)
+	defer retryTicker.Stop()
+	for {
+		if !throttler.IsOpen() {
+			// Throttler is not open so no need to keep retrying.
+			log.Warningf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
+			return
+		}
+
+		requestCtx, requestCancel := context.WithTimeout(ctx, 5*time.Second)
+		defer requestCancel()
+		throttlerConfig, err := throttler.readThrottlerConfig(requestCtx)
+		if err == nil {
+			log.Infof("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
+			// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
+			// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
+			// attempt to read the throttler config; but we just want to ensure they don't step on each other
+			// while applying the changes.
+			throttler.initMutex.Lock()
+			defer throttler.initMutex.Unlock()
+			throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
+			go watchSrvKeyspaceOnce.Do(func() {
+				// We start watching SrvKeyspace only after we know it's been created. Now is that time!
+				// We watch using the given ctx, which is cancelled when the throttler is Close()d.
+				throttler.srvTopoServer.WatchSrvKeyspace(ctx, throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
+			})
+			return
+		}
+		log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
+		select {
+		case <-ctx.Done():
+			// Throttler is not open so no need to keep retrying.
+			log.Infof("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
+			return
+		case <-retryTicker.C:
+		}
+	}
 }
 
 // Open opens database pool and initializes the schema
@@ -439,52 +539,7 @@ func (throttler *Throttler) Open() error {
 
 	throttler.ThrottleApp("always-throttled-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
 
-	log.Infof("Throttler: throttler-config-via-topo detected")
-	// We want to read throttler config from topo and apply it.
-	// But also, we're in an Open() function, which blocks state manager's operation, and affects
-	// opening of all other components. We thus read the throttler config in the background.
-	// However, we want to handle a situation where the read errors out.
-	// So we kick a loop that keeps retrying reading the config, for as long as this throttler is open.
-	retryReadAndApplyThrottlerConfig := func(ctx context.Context) {
-		retryInterval := 10 * time.Second
-		retryTicker := time.NewTicker(retryInterval)
-		defer retryTicker.Stop()
-		for {
-			if !throttler.IsOpen() {
-				// Throttler is not open so no need to keep retrying.
-				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
-				return
-			}
-
-			requestCtx, requestCancel := context.WithTimeout(ctx, 5*time.Second)
-			defer requestCancel()
-			throttlerConfig, err := throttler.readThrottlerConfig(requestCtx)
-			if err == nil {
-				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
-				// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
-				// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
-				// attempt to read the throttler config; but we just want to ensure they don't step on each other
-				// while applying the changes.
-				throttler.initMutex.Lock()
-				defer throttler.initMutex.Unlock()
-				throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
-				go throttler.watchSrvKeyspaceOnce.Do(func() {
-					// We start watching SrvKeyspace only after we know it's been created. Now is that time!
-					throttler.srvTopoServer.WatchSrvKeyspace(context.Background(), throttler.cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
-				})
-				return
-			}
-			log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
-			select {
-			case <-ctx.Done():
-				// Throttler is not open so no need to keep retrying.
-				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): throttler no longer seems to be open, exiting")
-				return
-			case <-retryTicker.C:
-			}
-		}
-	}
-	go retryReadAndApplyThrottlerConfig(ctx)
+	go throttler.retryReadAndApplyThrottlerConfig(ctx)
 
 	return nil
 }
@@ -500,19 +555,24 @@ func (throttler *Throttler) Close() {
 		log.Infof("Throttler: throttler is not open")
 		return
 	}
-	ctx := context.Background()
-	throttler.Disable(ctx)
+	throttler.Disable()
 	throttler.isLeader.Store(false)
 
-	log.Infof("Throttler: closing pool")
-	throttler.pool.Close()
-	throttler.cancelOpenContext()
+	// The below " != nil " checks are relevant to unit tests, where perhaps not all
+	// fields are supplied.
+	if throttler.pool != nil {
+		log.Infof("Throttler: closing pool")
+		throttler.pool.Close()
+	}
+	if throttler.cancelOpenContext != nil {
+		throttler.cancelOpenContext()
+	}
 	log.Infof("Throttler: finished execution of Close")
 }
 
 func (throttler *Throttler) generateSelfMySQLThrottleMetricFunc(ctx context.Context, probe *mysql.Probe) func() *mysql.MySQLThrottleMetric {
 	f := func() *mysql.MySQLThrottleMetric {
-		return throttler.readSelfMySQLThrottleMetric(ctx, probe)
+		return throttler.readSelfThrottleMetric(ctx, probe)
 	}
 	return f
 }
@@ -521,7 +581,7 @@ func (throttler *Throttler) generateSelfMySQLThrottleMetricFunc(ctx context.Cont
 func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, probe *mysql.Probe) *mysql.MySQLThrottleMetric {
 	metric := &mysql.MySQLThrottleMetric{
 		ClusterName: selfStoreName,
-		Key:         *mysql.SelfInstanceKey,
+		Alias:       "",
 		Value:       0,
 		Err:         nil,
 	}
@@ -576,7 +636,7 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 
 // isDormant returns true when the last check was more than dormantPeriod ago
 func (throttler *Throttler) isDormant() bool {
-	lastCheckTime := time.Unix(0, atomic.LoadInt64(&throttler.lastCheckTimeNano))
+	lastCheckTime := time.Unix(0, throttler.lastCheckTimeNano.Load())
 	return time.Since(lastCheckTime) > dormantPeriod
 }
 
@@ -589,23 +649,28 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 		tickers = append(tickers, t)
 		return t
 	}
-	leaderCheckTicker := addTicker(leaderCheckInterval)
-	mysqlCollectTicker := addTicker(mysqlCollectInterval)
-	mysqlDormantCollectTicker := addTicker(mysqlDormantCollectInterval)
-	mysqlRefreshTicker := addTicker(mysqlRefreshInterval)
-	mysqlAggregateTicker := addTicker(mysqlAggregateInterval)
-	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
+	leaderCheckTicker := addTicker(throttler.leaderCheckInterval)
+	mysqlCollectTicker := addTicker(throttler.mysqlCollectInterval)
+	mysqlDormantCollectTicker := addTicker(throttler.mysqlDormantCollectInterval)
+	mysqlRefreshTicker := addTicker(throttler.mysqlRefreshInterval)
+	mysqlAggregateTicker := addTicker(throttler.mysqlAggregateInterval)
+	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
 	recentCheckTicker := addTicker(time.Second)
-
-	tmClient := tmclient.NewTabletManagerClient()
 
 	go func() {
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
-		defer tmClient.Close()
 		for _, t := range tickers {
 			defer t.Stop()
 			// since we just started the tickers now, speed up the ticks by forcing an immediate tick
 			go t.TickNow()
+		}
+
+		tmClient := throttler.overrideTmClient
+		if tmClient == nil {
+			// This is the normal production behavior.
+			// throttler.overrideTmClient != nil only in unit testing
+			tmClient = tmclient.NewTabletManagerClient()
+			defer tmClient.Close()
 		}
 
 		for {
@@ -613,94 +678,76 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-leaderCheckTicker.C:
-				{
-					func() {
-						throttler.initMutex.Lock()
-						defer throttler.initMutex.Unlock()
+				func() {
+					throttler.initMutex.Lock()
+					defer throttler.initMutex.Unlock()
 
-						// sparse
-						shouldBeLeader := false
-						if throttler.IsOpen() {
-							if throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
-								shouldBeLeader = true
-							}
-						}
+					// sparse
+					shouldBeLeader := false
+					if throttler.IsOpen() && throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
+						shouldBeLeader = true
+					}
 
-						isLeader := throttler.isLeader.Swap(shouldBeLeader)
-						transitionedIntoLeader := false
-						if shouldBeLeader && !isLeader {
-							log.Infof("Throttler: transition into leadership")
-							transitionedIntoLeader = true
-						}
-						if !shouldBeLeader && isLeader {
-							log.Infof("Throttler: transition out of leadership")
-						}
+					isLeader := throttler.isLeader.Swap(shouldBeLeader)
+					transitionedIntoLeader := false
+					if shouldBeLeader && !isLeader {
+						log.Infof("Throttler: transition into leadership")
+						transitionedIntoLeader = true
+					}
+					if !shouldBeLeader && isLeader {
+						log.Infof("Throttler: transition out of leadership")
+					}
 
-						if transitionedIntoLeader {
-							// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
-							go mysqlRefreshTicker.TickNow()
-							go throttler.heartbeatWriter.RequestHeartbeats()
-						}
-					}()
-				}
+					if transitionedIntoLeader {
+						// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
+						go mysqlRefreshTicker.TickNow()
+						go throttler.heartbeatWriter.RequestHeartbeats()
+					}
+				}()
 			case <-mysqlCollectTicker.C:
-				{
-					if throttler.IsOpen() {
-						// frequent
-						if !throttler.isDormant() {
-							throttler.collectMySQLMetrics(ctx, tmClient)
-						}
+				if throttler.IsOpen() {
+					// frequent
+					if !throttler.isDormant() {
+						throttler.collectMySQLMetrics(ctx, tmClient)
 					}
 				}
 			case <-mysqlDormantCollectTicker.C:
-				{
-					if throttler.IsOpen() {
-						// infrequent
-						if throttler.isDormant() {
-							throttler.collectMySQLMetrics(ctx, tmClient)
-						}
+				if throttler.IsOpen() {
+					// infrequent
+					if throttler.isDormant() {
+						throttler.collectMySQLMetrics(ctx, tmClient)
 					}
 				}
 			case metric := <-throttler.mysqlThrottleMetricChan:
-				{
-					// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
-					throttler.mysqlInventory.InstanceKeyMetrics[metric.GetClusterInstanceKey()] = metric
-				}
+				// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
+				throttler.mysqlInventory.TabletMetrics[metric.GetClusterTablet()] = metric
 			case <-mysqlRefreshTicker.C:
-				{
-					// sparse
-					if throttler.IsOpen() {
-						throttler.refreshMySQLInventory(ctx)
-					}
+				// sparse
+				if throttler.IsOpen() {
+					throttler.refreshMySQLInventory(ctx)
 				}
 			case probes := <-throttler.mysqlClusterProbesChan:
-				{
-					// incoming structural update, sparse, as result of refreshMySQLInventory()
-					throttler.updateMySQLClusterProbes(ctx, probes)
-				}
+				// incoming structural update, sparse, as result of refreshMySQLInventory()
+				throttler.updateMySQLClusterProbes(ctx, probes)
 			case <-mysqlAggregateTicker.C:
-				{
-					if throttler.IsOpen() {
-						throttler.aggregateMySQLMetrics(ctx)
-					}
+				if throttler.IsOpen() {
+					throttler.aggregateMySQLMetrics(ctx)
 				}
 			case <-throttledAppsTicker.C:
-				{
-					if throttler.IsOpen() {
-						go throttler.expireThrottledApps()
-					}
+				if throttler.IsOpen() {
+					go throttler.expireThrottledApps()
 				}
 			case throttlerConfig := <-throttler.throttlerConfigChan:
 				throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			case <-recentCheckTicker.C:
 				// Increment recentCheckTickerValue by one.
-				atomic.AddInt64(&throttler.recentCheckTickerValue, 1)
+				throttler.recentCheckTickerValue.Add(1)
 			}
 		}
 	}()
 }
 
-func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context, tmClient tmclient.TabletManagerClient, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
+func (throttler *Throttler) generateTabletProbeFunction(ctx context.Context, clusterName string, tmClient tmclient.TabletManagerClient, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
 	return func() *mysql.MySQLThrottleMetric {
 		// Some reasonable timeout, to ensure we release connections even if they're hanging (otherwise grpc-go keeps polling those connections forever)
 		ctx, cancel := context.WithTimeout(ctx, 4*mysqlCollectInterval)
@@ -709,55 +756,24 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a MySQLThrottleMetric
 		mySQLThrottleMetric := mysql.NewMySQLThrottleMetric()
 		mySQLThrottleMetric.ClusterName = clusterName
-		mySQLThrottleMetric.Key = probe.Key
+		mySQLThrottleMetric.Alias = probe.Alias
 
-		{
-			req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
-			if resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req); gRPCErr == nil {
-				mySQLThrottleMetric.Value = resp.Value
-				if resp.StatusCode == http.StatusInternalServerError {
-					mySQLThrottleMetric.Err = fmt.Errorf("Status code: %d", resp.StatusCode)
-				}
-				if resp.RecentlyChecked {
-					// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
-					// We therefore renew the heartbeats lease.
-					go throttler.heartbeatWriter.RequestHeartbeats()
-				}
-				return mySQLThrottleMetric
-
-				// } else {
-				// In v18 we need to be backwards compatible. If we have a gRPC error it might be because the replica is v17 and
-				// does not support CheckThrottler() RPC. This is why:
-				// 1. We fall back to HTTP
-				// 2. We don't log an error (it would just spam the logs)
-				// In v19 we will remove all HTTP code, and will *potentially* log an error.
-				// log.Errorf("error in GRPC call to tablet %v: %v", probe.Tablet.GetAlias(), gRPCErr)
-			}
-		}
-		// Backwards compatibility to v17: if the underlying tablets do not support CheckThrottler gRPC, attempt a HTTP check:
-		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", probe.TabletHost, probe.TabletPort, throttlerapp.VitessName)
-		resp, err := throttler.httpClient.Get(tabletCheckSelfURL)
-		if err != nil {
-			mySQLThrottleMetric.Err = err
+		if probe.Tablet == nil {
+			mySQLThrottleMetric.Err = fmt.Errorf("found nil tablet reference for alias %v, hostname %v", probe.Alias, probe.Tablet.Hostname)
 			return mySQLThrottleMetric
 		}
-		defer resp.Body.Close()
-		b, err := io.ReadAll(resp.Body)
-		if err != nil {
-			mySQLThrottleMetric.Err = err
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
+		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
+		if gRPCErr != nil {
+			resp.StatusCode = http.StatusInternalServerError
+			mySQLThrottleMetric.Err = fmt.Errorf("gRPC error accessing tablet %v. Err=%v", probe.Alias, gRPCErr)
 			return mySQLThrottleMetric
 		}
-		checkResult := &CheckResult{}
-		if err := json.Unmarshal(b, checkResult); err != nil {
-			mySQLThrottleMetric.Err = err
-			return mySQLThrottleMetric
+		mySQLThrottleMetric.Value = resp.Value
+		if resp.StatusCode == http.StatusInternalServerError {
+			mySQLThrottleMetric.Err = fmt.Errorf("Status code: %d", resp.StatusCode)
 		}
-		mySQLThrottleMetric.Value = checkResult.Value
-
-		if checkResult.StatusCode == http.StatusInternalServerError {
-			mySQLThrottleMetric.Err = fmt.Errorf("Status code: %d", checkResult.StatusCode)
-		}
-		if checkResult.RecentlyChecked {
+		if resp.RecentlyChecked {
 			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
 			// We therefore renew the heartbeats lease.
 			go throttler.heartbeatWriter.RequestHeartbeats()
@@ -770,33 +786,33 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tm
 	// synchronously, get lists of probes
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		clusterName := clusterName
-		probes := probes
-		go func() {
-			// probes is known not to change. It can be *replaced*, but not changed.
-			// so it's safe to iterate it
-			for _, probe := range *probes {
-				probe := probe
-				go func() {
-					// Avoid querying the same server twice at the same time. If previous read is still there,
-					// we avoid re-reading it.
-					if !atomic.CompareAndSwapInt64(&probe.QueryInProgress, 0, 1) {
-						return
-					}
-					defer atomic.StoreInt64(&probe.QueryInProgress, 0)
+		// probes is known not to change. It can be *replaced*, but not changed.
+		// so it's safe to iterate it
+		for _, probe := range probes {
+			go func(probe *mysql.Probe) {
+				// Avoid querying the same server twice at the same time. If previous read is still there,
+				// we avoid re-reading it.
+				if !atomic.CompareAndSwapInt64(&probe.QueryInProgress, 0, 1) {
+					return
+				}
+				defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
-					var throttleMetricFunc func() *mysql.MySQLThrottleMetric
-					if clusterName == selfStoreName {
-						// Throttler is probing its own tablet's metrics:
-						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
-					} else {
-						// Throttler probing other tablets:
-						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, tmClient, clusterName, probe)
-					}
-					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
-					throttler.mysqlThrottleMetricChan <- throttleMetrics
-				}()
-			}
-		}()
+				var throttleMetricFunc func() *mysql.MySQLThrottleMetric
+				if clusterName == selfStoreName {
+					// Throttler is probing its own tablet's metrics:
+					throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
+				} else {
+					// Throttler probing other tablets:
+					throttleMetricFunc = throttler.generateTabletProbeFunction(ctx, clusterName, tmClient, probe)
+				}
+				throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
+				select {
+				case <-ctx.Done():
+					return
+				case throttler.mysqlThrottleMetricChan <- throttleMetrics:
+				}
+			}(probe)
+		}
 	}
 	return nil
 }
@@ -806,50 +822,64 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
 	metricsQuery := throttler.GetMetricsQuery()
 	metricsThreshold := throttler.MetricsThreshold.Load()
-	addInstanceKey := func(tablet *topodatapb.Tablet, tabletHost string, tabletPort int, key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
+	addProbe := func(alias string, tablet *topodatapb.Tablet, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes mysql.Probes) bool {
 		for _, ignore := range clusterSettings.IgnoreHosts {
-			if strings.Contains(key.StringCode(), ignore) {
-				log.Infof("Throttler: instance key ignored: %+v", key)
-				return
+			if strings.Contains(alias, ignore) {
+				log.Infof("Throttler: tablet ignored: %+v", alias)
+				return false
 			}
 		}
-		if !key.IsValid() && !key.IsSelf() {
-			log.Infof("Throttler: read invalid instance key: [%+v] for cluster %+v", key, clusterName)
-			return
+		if clusterName != selfStoreName {
+			if alias == "" {
+				log.Errorf("Throttler: got empty alias for cluster: %+v", clusterName)
+				return false
+			}
+			if tablet == nil {
+				log.Errorf("Throttler: got nil tablet for alias: %v in cluster: %+v", alias, clusterName)
+				return false
+			}
 		}
 
 		probe := &mysql.Probe{
-			Key:         *key,
+			Alias:       alias,
 			Tablet:      tablet,
-			TabletHost:  tabletHost,
-			TabletPort:  tabletPort,
 			MetricQuery: clusterSettings.MetricQuery,
 			CacheMillis: clusterSettings.CacheMillis,
 		}
-		(*probes)[*key] = probe
+		probes[alias] = probe
+		return true
+	}
+
+	attemptWriteProbes := func(clusterProbes *mysql.ClusterProbes) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case throttler.mysqlClusterProbesChan <- clusterProbes:
+			return nil
+		}
 	}
 
 	for clusterName, clusterSettings := range config.Settings().Stores.MySQL.Clusters {
 		clusterName := clusterName
-		clusterSettings := clusterSettings
 		clusterSettings.MetricQuery = metricsQuery
 		clusterSettings.ThrottleThreshold.Store(metricsThreshold)
+
+		clusterSettingsCopy := *clusterSettings
 		// config may dynamically change, but internal structure (config.Settings().Stores.MySQL.Clusters in our case)
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
-		go func() {
-			throttler.mysqlClusterThresholds.Set(clusterName, math.Float64frombits(clusterSettings.ThrottleThreshold.Load()), cache.DefaultExpiration)
+		collect := func() error {
+			throttler.mysqlClusterThresholds.Set(clusterName, math.Float64frombits(clusterSettingsCopy.ThrottleThreshold.Load()), cache.DefaultExpiration)
 			clusterProbes := &mysql.ClusterProbes{
 				ClusterName:      clusterName,
-				IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
-				InstanceProbes:   mysql.NewProbes(),
+				IgnoreHostsCount: clusterSettingsCopy.IgnoreHostsCount,
+				TabletProbes:     mysql.NewProbes(),
 			}
 
 			if clusterName == selfStoreName {
 				// special case: just looking at this tablet's MySQL server.
 				// We will probe this "cluster" (of one server) is a special way.
-				addInstanceKey(nil, "", 0, mysql.SelfInstanceKey, clusterName, clusterSettings, clusterProbes.InstanceProbes)
-				throttler.mysqlClusterProbesChan <- clusterProbes
-				return
+				addProbe("", nil, clusterName, &clusterSettingsCopy, clusterProbes.TabletProbes)
+				return attemptWriteProbes(clusterProbes)
 			}
 			if !throttler.isLeader.Load() {
 				// This tablet may have used to be the primary, but it isn't now. It may have a recollection
@@ -858,33 +888,30 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 				// `clusterProbes` was created above as empty, and identifiable via `clusterName`. This will in turn
 				// be used to overwrite throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] in
 				// updateMySQLClusterProbes().
-				throttler.mysqlClusterProbesChan <- clusterProbes
+				return attemptWriteProbes(clusterProbes)
 				// not the leader (primary tablet)? Then no more work for us.
-				return
 			}
 			// The primary tablet is also in charge of collecting the shard's metrics
-			err := func() error {
-				ctx, cancel := context.WithTimeout(ctx, mysqlRefreshInterval)
-				defer cancel()
+			ctx, cancel := context.WithTimeout(ctx, mysqlRefreshInterval)
+			defer cancel()
 
-				tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
+			tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
+			if err != nil {
+				return err
+			}
+			for _, tabletAlias := range tabletAliases {
+				tablet, err := throttler.ts.GetTablet(ctx, tabletAlias)
 				if err != nil {
 					return err
 				}
-				for _, tabletAlias := range tabletAliases {
-					tablet, err := throttler.ts.GetTablet(ctx, tabletAlias)
-					if err != nil {
-						return err
-					}
-					if throttler.throttleTabletTypesMap[tablet.Type] {
-						key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
-						addInstanceKey(tablet.Tablet, tablet.Hostname, int(tablet.PortMap["vt"]), &key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
-					}
+				if throttler.throttleTabletTypesMap[tablet.Type] {
+					addProbe(topoproto.TabletAliasString(tabletAlias), tablet.Tablet, clusterName, &clusterSettingsCopy, clusterProbes.TabletProbes)
 				}
-				throttler.mysqlClusterProbesChan <- clusterProbes
-				return nil
-			}()
-			if err != nil {
+			}
+			return attemptWriteProbes(clusterProbes)
+		}
+		go func() {
+			if err := collect(); err != nil {
 				log.Errorf("refreshMySQLInventory: %+v", err)
 			}
 		}()
@@ -894,7 +921,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 
 // synchronous update of inventory
 func (throttler *Throttler) updateMySQLClusterProbes(ctx context.Context, clusterProbes *mysql.ClusterProbes) error {
-	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.InstanceProbes
+	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.TabletProbes
 	throttler.mysqlInventory.IgnoreHostsCount[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsCount
 	throttler.mysqlInventory.IgnoreHostsThreshold[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsThreshold
 	return nil
@@ -906,7 +933,7 @@ func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
 		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold[clusterName]
-		aggregatedMetric := aggregateMySQLProbes(ctx, probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, ignoreHostsCount, config.Settings().Stores.MySQL.IgnoreDialTCPErrors, ignoreHostsThreshold)
+		aggregatedMetric := aggregateMySQLProbes(ctx, probes, clusterName, throttler.mysqlInventory.TabletMetrics, ignoreHostsCount, config.Settings().Stores.MySQL.IgnoreDialTCPErrors, ignoreHostsThreshold)
 		throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 	}
 	return nil
@@ -1135,11 +1162,11 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
 		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
 		// to the PRIMARY so that it knows it must renew the heartbeat lease.
-		atomic.StoreInt64(&throttler.recentCheckValue, 1+atomic.LoadInt64(&throttler.recentCheckTickerValue))
+		throttler.recentCheckValue.Store(1 + throttler.recentCheckTickerValue.Load())
 	}
 	checkResult = throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
 
-	if atomic.LoadInt64(&throttler.recentCheckValue) >= atomic.LoadInt64(&throttler.recentCheckTickerValue) {
+	if throttler.recentCheckValue.Load() >= throttler.recentCheckTickerValue.Load() {
 		// This indicates someone, who is not "vitess" ie not internal to the throttling logic, did a _recent_ `check`.
 		// This could be online-ddl, or vreplication or whoever else.
 		// If this tablet is a REPLICA or RDONLY, we want to advertise to the PRIMARY that someone did a recent check,
