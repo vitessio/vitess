@@ -68,13 +68,8 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (resu
 	}
 
 	op = compact(ctx, op)
-	if err = checkValid(op); err != nil {
-		return nil, err
-	}
-
-	if op, err = planQuery(ctx, op); err != nil {
-		return nil, err
-	}
+	checkValid(op)
+	op = planQuery(ctx, op)
 
 	_, isRoute := op.(*Route)
 	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {

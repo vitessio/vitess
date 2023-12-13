@@ -77,7 +77,6 @@ type (
 	ProjCols interface {
 		GetColumns() []*sqlparser.AliasedExpr
 		GetSelectExprs() sqlparser.SelectExprs
-		AddColumn(*sqlparser.AliasedExpr) (ProjCols, int, error)
 	}
 
 	// Used when there are stars in the expressions that we were unable to expand
@@ -137,10 +136,6 @@ func (sp StarProjections) GetColumns() []*sqlparser.AliasedExpr {
 	panic(vterrors.VT09015())
 }
 
-func (sp StarProjections) AddColumn(*sqlparser.AliasedExpr) (ProjCols, int, error) {
-	return nil, 0, vterrors.VT09015()
-}
-
 func (sp StarProjections) GetSelectExprs() sqlparser.SelectExprs {
 	return sqlparser.SelectExprs(sp)
 }
@@ -155,11 +150,6 @@ func (ap AliasedProjections) GetSelectExprs() sqlparser.SelectExprs {
 	return slice.Map(ap, func(from *ProjExpr) sqlparser.SelectExpr {
 		return aeWrap(from.ColExpr)
 	})
-}
-
-func (ap AliasedProjections) AddColumn(col *sqlparser.AliasedExpr) (ProjCols, int, error) {
-	offset := len(ap)
-	return append(ap, newProjExpr(col)), offset, nil
 }
 
 func (pe *ProjExpr) String() string {

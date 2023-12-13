@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"io"
 
-	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -96,15 +95,12 @@ func buildVindexTableForDML(
 		return vindexTable, &AnyShardRouting{keyspace: vindexTable.Keyspace}
 	}
 
-	var dest key.Destination
-	var typ topodatapb.TabletType
-	var err error
 	tblName, ok := table.Alias.Expr.(sqlparser.TableName)
 	if !ok {
 		panic(vterrors.VT12001("multi shard UPDATE with LIMIT"))
 	}
 
-	_, _, _, typ, dest, err = ctx.VSchema.FindTableOrVindex(tblName)
+	_, _, _, typ, dest, err := ctx.VSchema.FindTableOrVindex(tblName)
 	if err != nil {
 		panic(err)
 	}

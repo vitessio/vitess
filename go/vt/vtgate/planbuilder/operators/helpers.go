@@ -43,14 +43,14 @@ func compact(ctx *plancontext.PlanningContext, op Operator) Operator {
 	return newOp
 }
 
-func checkValid(op Operator) error {
+func checkValid(op Operator) {
 	type checkable interface {
-		CheckValid() error
+		CheckValid()
 	}
 
-	return Visit(op, func(this Operator) error {
+	_ = Visit(op, func(this Operator) error {
 		if chk, ok := this.(checkable); ok {
-			return chk.CheckValid()
+			chk.CheckValid()
 		}
 		return nil
 	})

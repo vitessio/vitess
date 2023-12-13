@@ -142,15 +142,15 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		// TODO: this should be handled better by pushing the function down.
 		return errAbortAggrPushing
 	case opcode.AggregateUnassigned:
-		return vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
+		panic(vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original))))
 	case opcode.AggregateGtid:
 		// this is only used for SHOW GTID queries that will never contain joins
-		return vterrors.VT13001("cannot do join with vgtid")
+		panic(vterrors.VT13001("cannot do join with vgtid"))
 	case opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
 		// we are not going to see values multiple times, so we don't need to multiply with the count(*) from the other side
 		return ab.handlePushThroughAggregation(ctx, aggr)
 	default:
-		return vterrors.VT12001(fmt.Sprintf("aggregation not planned: %s", aggr.OpCode.String()))
+		panic(vterrors.VT12001(fmt.Sprintf("aggregation not planned: %s", aggr.OpCode.String())))
 	}
 }
 

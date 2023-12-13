@@ -33,12 +33,8 @@ type (
 	}
 )
 
-func planQuery(ctx *plancontext.PlanningContext, root Operator) (output Operator, err error) {
-	output, err = runPhases(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
+func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
+	output := runPhases(ctx, root)
 	output = planOffsets(ctx, output)
 
 	if DebugOperatorTree {
@@ -55,7 +51,7 @@ func planQuery(ctx *plancontext.PlanningContext, root Operator) (output Operator
 // If we can push it under a route - done.
 // If we can't, we will instead expand the Horizon into
 // smaller operators and try to push these down as far as possible
-func runPhases(ctx *plancontext.PlanningContext, root Operator) (Operator, error) {
+func runPhases(ctx *plancontext.PlanningContext, root Operator) Operator {
 	op := root
 
 	p := phaser{}
@@ -66,20 +62,14 @@ func runPhases(ctx *plancontext.PlanningContext, root Operator) (Operator, error
 		}
 
 		op = phase.act(ctx, op)
-
-		var err error
-		op, err = runRewriters(ctx, op)
-		if err != nil {
-			return nil, err
-		}
-
+		op = runRewriters(ctx, op)
 		op = compact(ctx, op)
 	}
 
-	return addGroupByOnRHSOfJoin(op), nil
+	return addGroupByOnRHSOfJoin(op)
 }
 
-func runRewriters(ctx *plancontext.PlanningContext, root Operator) (Operator, error) {
+func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		switch in := in.(type) {
 		case *Horizon:
@@ -111,7 +101,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) (Operator, er
 		}
 	}
 
-	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute), nil
+	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
 func pushLockAndComment(l *LockAndComment) (Operator, *ApplyResult) {
@@ -816,25 +806,25 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 }
 
 // addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
-func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, oldHorizon Operator, output Operator) (Operator, error) {
+func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, oldHorizon Operator, output Operator) Operator {
 	horizon, ok := oldHorizon.(*Horizon)
 	if !ok {
-		return output, nil
+		return output
 	}
 
 	cols := output.GetSelectExprs(ctx)
 	sel := sqlparser.GetFirstSelect(horizon.Query)
 	if len(sel.SelectExprs) == len(cols) {
-		return output, nil
+		return output
 	}
 
 	if tryTruncateColumnsAt(output, len(sel.SelectExprs)) {
-		return output, nil
+		return output
 	}
 
 	qp := horizon.getQP(ctx)
 	proj := createSimpleProjection(ctx, qp, output)
-	return proj, nil
+	return proj
 }
 
 func stopAtRoute(operator Operator) VisitRule {
