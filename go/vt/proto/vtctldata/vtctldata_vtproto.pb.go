@@ -4747,6 +4747,7 @@ func (m *VDiffCreateRequest) CloneVT() *VDiffCreateRequest {
 		AutoRetry:                   m.AutoRetry,
 		Verbose:                     m.Verbose,
 		MaxReportSampleRows:         m.MaxReportSampleRows,
+		RestartPeriod:               m.RestartPeriod.CloneVT(),
 	}
 	if rhs := m.SourceCells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
@@ -17743,6 +17744,18 @@ func (m *VDiffCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.RestartPeriod != nil {
+		size, err := m.RestartPeriod.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xa2
+	}
 	if m.MaxReportSampleRows != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.MaxReportSampleRows))
 		i--
@@ -23907,6 +23920,10 @@ func (m *VDiffCreateRequest) SizeVT() (n int) {
 	}
 	if m.MaxReportSampleRows != 0 {
 		n += 2 + sov(uint64(m.MaxReportSampleRows))
+	}
+	if m.RestartPeriod != nil {
+		l = m.RestartPeriod.SizeVT()
+		n += 2 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -55118,6 +55135,42 @@ func (m *VDiffCreateRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 20:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RestartPeriod", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.RestartPeriod == nil {
+				m.RestartPeriod = &vttime.Duration{}
+			}
+			if err := m.RestartPeriod.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

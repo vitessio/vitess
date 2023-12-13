@@ -1617,6 +1617,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("tables", req.Tables)
 	span.Annotate("auto_retry", req.AutoRetry)
+	span.Annotate("restart_period", req.RestartPeriod)
 
 	tabletTypesStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
 	if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
@@ -1636,6 +1637,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 			TimeoutSeconds:        req.FilteredReplicationWaitTime.Seconds,
 			MaxExtraRowsToCompare: req.MaxExtraRowsToCompare,
 			UpdateTableStats:      req.UpdateTableStats,
+			RestartSeconds:        req.RestartPeriod.Seconds,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
 			OnlyPks:       req.OnlyPKs,

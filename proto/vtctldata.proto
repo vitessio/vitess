@@ -1716,6 +1716,7 @@ message VDiffCreateRequest {
   bool auto_retry = 17;
   bool verbose = 18;
   int64 max_report_sample_rows = 19;
+  vttime.Duration restart_period = 20;
 }
 
 message VDiffCreateResponse {

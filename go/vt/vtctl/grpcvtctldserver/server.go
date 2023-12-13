@@ -4799,6 +4799,7 @@ func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCr
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("tables", req.Tables)
 	span.Annotate("auto_retry", req.AutoRetry)
+	span.Annotate("restart_period", req.RestartPeriod)
 
 	resp, err = s.ws.VDiffCreate(ctx, req)
 	return resp, err

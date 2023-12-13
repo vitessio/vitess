@@ -67,6 +67,7 @@ var (
 		Wait                        bool
 		WaitUpdateInterval          time.Duration
 		AutoRetry                   bool
+		RestartPeriod               time.Duration
 	}{}
 
 	deleteOptions = struct {
@@ -281,6 +282,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		WaitUpdateInterval:          protoutil.DurationToProto(createOptions.WaitUpdateInterval),
 		AutoRetry:                   createOptions.AutoRetry,
 		MaxReportSampleRows:         int64(createOptions.MaxReportSampleRows),
+		RestartPeriod:               protoutil.DurationToProto(createOptions.RestartPeriod),
 	})
 
 	if err != nil {
@@ -873,6 +875,7 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().DurationVar(&createOptions.WaitUpdateInterval, "wait-update-interval", time.Duration(1*time.Minute), "When waiting on a vdiff to finish, check and display the current status this often.")
 	create.Flags().BoolVar(&createOptions.AutoRetry, "auto-retry", true, "Should this vdiff automatically retry and continue in case of recoverable errors.")
 	create.Flags().BoolVar(&createOptions.UpdateTableStats, "update-table-stats", false, "Update the table statistics, using ANALYZE TABLE, on each table involved in the VDiff during initialization. This will ensure that progress estimates are as accurate as possible -- but it does involve locks and can potentially impact query processing on the target keyspace.")
+	create.Flags().DurationVar(&createOptions.RestartPeriod, "restart-period", time.Duration(0), "How often should the VDiff be stopped and resumed in order to lessen the impact on tablets due to holding open database snapshots for long periods of time (0 is the default and means do not restart).")
 	base.AddCommand(create)
 
 	base.AddCommand(delete)
