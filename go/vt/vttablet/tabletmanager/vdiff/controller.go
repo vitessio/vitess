@@ -95,18 +95,7 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 		sources:         make(map[string]*migrationSource),
 		options:         options,
 	}
-	if options != nil && options.CoreOptions != nil && options.CoreOptions.MaxDiffSeconds > 0 {
-		// Run until it completes, encounters an error, the timeout is
-		// reached, or the context is cancelled -- typically by the tablet
-		// shutting down or stepping down as primary, or a user executing
-		// the vdiff stop command.
-		ctx, ct.cancel = context.WithTimeout(ctx, time.Duration(options.CoreOptions.MaxDiffSeconds*int64(time.Second)))
-	} else {
-		// Run until it completes, encounters an error, or the context is
-		// cancelled -- typically by the tablet shutting down or stepping
-		// down as primary, or a user executing the vdiff stop command.
-		ctx, ct.cancel = context.WithCancel(ctx)
-	}
+	ctx, ct.cancel = context.WithCancel(ctx)
 	go ct.run(ctx)
 
 	return ct, nil

@@ -462,7 +462,7 @@ func (td *tableDiffer) setupRowSorters() {
 	}
 }
 
-func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows int64) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows int64, stop <-chan time.Time) (*DiffReport, error) {
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -520,7 +520,9 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		case <-ctx.Done():
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		case <-td.wd.ct.done:
-			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
+		case <-stop:
+			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped due to max execution time")
 		default:
 		}
 
@@ -574,8 +576,8 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 			return dr, nil
 		}
 		if targetRow == nil {
-			// no more rows from the target
-			// we know we have rows from source, drain, update count
+			// No more rows from the target but we know we have more rows from
+			// source, so drain them and update the counts.
 			diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, debug, onlyPks)
 			if err != nil {
 				return nil, vterrors.Wrap(err, "unexpected error generating diff")
@@ -628,7 +630,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		case err != nil:
 			return nil, err
 		case c != 0:
-			// We don't do a second pass to compare mismatched rows so we can cap the slice here
+			// We don't do a second pass to compare mismatched rows so we can cap the slice here.
 			if maxReportSampleRows == 0 || dr.MismatchedRows < maxReportSampleRows {
 				sourceDiffRow, err := td.genRowDiff(td.tablePlan.targetQuery, sourceRow, debug, onlyPks)
 				if err != nil {

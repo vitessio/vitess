@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -142,28 +143,55 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		td.wgShardStreamers.Wait()
 	}()
 
-	select {
-	case <-ctx.Done():
-		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
-	case <-wd.ct.done:
-		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
-	default:
-	}
+	var (
+		timer   *time.Timer
+		dr      *DiffReport
+		diffErr error
+	)
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
 
-	log.Infof("Starting differ on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
-	if err := td.updateTableState(ctx, dbClient, StartedState); err != nil {
-		return err
-	}
-	if err := td.initialize(ctx); err != nil {
-		return err
-	}
-	log.Infof("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
-	dr, err := td.diff(ctx, wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, wd.opts.ReportOptions.OnlyPks, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows)
-	if err != nil {
-		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
-		return err
+	for {
+		select {
+		case <-ctx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		case <-wd.ct.done:
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+		default:
+		}
+
+		// Restart the diff if it takes longer than the specified max diff time.
+		if wd.ct.options != nil && wd.ct.options.CoreOptions != nil && wd.ct.options.CoreOptions.MaxDiffSeconds > 0 {
+			if timer != nil { // We're restarting the diff
+				timer.Stop()
+				timer = nil
+				// Give the underlying resources (mainly MySQL) a moment to catch up.
+				time.Sleep(30 * time.Second)
+			}
+			timer = time.NewTimer(time.Duration(wd.ct.options.CoreOptions.MaxDiffSeconds) * time.Second)
+		} else {
+			timer = time.NewTimer(24 * time.Hour * 365) // 1 year (effectively forever)
+		}
+
+		log.Infof("Starting differ on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
+		if err := td.updateTableState(ctx, dbClient, StartedState); err != nil {
+			return err
+		}
+		if err := td.initialize(ctx); err != nil {
+			return err
+		}
+		log.Infof("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
+		dr, diffErr = td.diff(ctx, wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, wd.opts.ReportOptions.OnlyPks, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows, timer.C)
+		if diffErr == nil {
+			break
+		}
+		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr)
 	}
 	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, dr)
+
 	if dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0 {
 		if err := wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows); err != nil {
 			log.Errorf("Encountered an error reconciling extra rows found for table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
