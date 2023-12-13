@@ -86,7 +86,7 @@ func TestQP(t *testing.T) {
 			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 
-			qp, err := createQPFromSelect(ctx, sel)
+			qp := createQPFromSelect(ctx, sel)
 			if tcase.expErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.expErr)
@@ -193,7 +193,7 @@ func TestQPSimplifiedExpr(t *testing.T) {
 			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 			ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
-			qp, err := createQPFromSelect(ctx, sel)
+			qp := createQPFromSelect(ctx, sel)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected[1:], qp.toString())
 		})

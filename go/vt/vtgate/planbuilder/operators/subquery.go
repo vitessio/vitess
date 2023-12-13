@@ -199,20 +199,20 @@ func (sq *SubQuery) GetMergePredicates() []sqlparser.Expr {
 	return sq.Predicates
 }
 
-func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) (Operator, error) {
+func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Operator {
 	if !sq.TopLevel {
-		return nil, subqueryNotAtTopErr
+		panic(subqueryNotAtTopErr)
 	}
 	if sq.correlated {
-		return nil, correlatedSubqueryErr
+		panic(correlatedSubqueryErr)
 	}
 	if sq.IsProjection {
 		if len(sq.GetMergePredicates()) > 0 {
 			// this means that we have a correlated subquery on our hands
-			return nil, correlatedSubqueryErr
+			panic(correlatedSubqueryErr)
 		}
 		sq.SubqueryValueName = sq.ArgName
-		return outer, nil
+		return outer
 	}
 	return sq.settleFilter(ctx, outer)
 }
@@ -220,12 +220,12 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) (Op
 var correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
 var subqueryNotAtTopErr = vterrors.VT12001("unmergable subquery can not be inside complex expression")
 
-func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operator) (Operator, error) {
+func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operator) Operator {
 	if len(sq.Predicates) > 0 {
 		if sq.FilterType != opcode.PulloutExists {
-			return nil, correlatedSubqueryErr
+			panic(correlatedSubqueryErr)
 		}
-		return outer, nil
+		return outer
 	}
 
 	hasValuesArg := func() string {
@@ -272,7 +272,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	return &Filter{
 		Source:     outer,
 		Predicates: predicates,
-	}, nil
+	}
 }
 
 func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {

@@ -48,7 +48,7 @@ type (
 func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
-		e, err := d.QP.GetSimplifiedExpr(ctx, col.Expr)
+		e, err := d.QP.TryGetSimplifiedExpr(ctx, col.Expr)
 		if err != nil {
 			// ambiguous columns are not a problem for DISTINCT
 			e = col.Expr

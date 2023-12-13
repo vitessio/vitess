@@ -197,14 +197,9 @@ func (h *Horizon) src() Operator {
 }
 
 func (h *Horizon) getQP(ctx *plancontext.PlanningContext) *QueryProjection {
-	if h.QP != nil {
-		return h.QP
+	if h.QP == nil {
+		h.QP = CreateQPFromSelectStatement(ctx, h.Query)
 	}
-	qp, err := CreateQPFromSelectStatement(ctx, h.Query)
-	if err != nil {
-		panic(err)
-	}
-	h.QP = qp
 	return h.QP
 }
 

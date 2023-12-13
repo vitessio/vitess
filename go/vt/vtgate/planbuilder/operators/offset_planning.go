@@ -64,11 +64,10 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operat
 	in := op.Inputs()[0]
 	found := func(e sqlparser.Expr, offset int) { exprOffset = sqlparser.NewOffset(offset, e) }
 
-	notFound := func(e sqlparser.Expr) error {
+	notFound := func(e sqlparser.Expr) {
 		_, addToGroupBy := e.(*sqlparser.ColName)
 		offset := in.AddColumn(ctx, true, addToGroupBy, aeWrap(e))
 		exprOffset = sqlparser.NewOffset(offset, e)
-		return nil
 	}
 
 	visitor := getOffsetRewritingVisitor(ctx, in.FindCol, found, notFound)
@@ -102,11 +101,10 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator
 		}
 		addedColumns := false
 		found := func(expr sqlparser.Expr, i int) {}
-		notFound := func(e sqlparser.Expr) error {
+		notFound := func(e sqlparser.Expr) {
 			_, addToGroupBy := e.(*sqlparser.ColName)
 			proj.addColumnWithoutPushing(ctx, aeWrap(e), addToGroupBy)
 			addedColumns = true
-			return nil
 		}
 		visitor := getOffsetRewritingVisitor(ctx, proj.FindCol, found, notFound)
 
@@ -151,13 +149,9 @@ func getOffsetRewritingVisitor(
 	// this function will be called when an expression has been found on the input
 	found func(sqlparser.Expr, int),
 	// if we have an expression that mush be fetched, this method will be called
-	notFound func(sqlparser.Expr) error,
+	notFound func(sqlparser.Expr),
 ) func(node, parent sqlparser.SQLNode) bool {
-	var err error
 	return func(node, parent sqlparser.SQLNode) bool {
-		if err != nil {
-			return false
-		}
 		e, ok := node.(sqlparser.Expr)
 		if !ok {
 			return true
@@ -169,7 +163,7 @@ func getOffsetRewritingVisitor(
 		}
 
 		if mustFetchFromInput(e) {
-			err = notFound(e)
+			notFound(e)
 			return false
 		}
 

@@ -333,7 +333,7 @@ func createUniqueKeyComp(ins *sqlparser.Insert, expr sqlparser.Expr, vTbl *vinde
 		return []uComp{{idx, def}}, false
 	}
 	var offsets []uComp
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		col, ok := node.(*sqlparser.ColName)
 		if !ok {
 			return true, nil
