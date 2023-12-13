@@ -449,11 +449,7 @@ func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 
 // QueryTablet lets you execute a query in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
-	if !useDb {
-		keyspace = ""
-	}
-	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
-	conn, err := vttablet.conn(&dbParams)
+	conn, err := vttablet.TabletConn(keyspace, useDb)
 	if err != nil {
 		return nil, err
 	}
@@ -464,11 +460,7 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 // QueryTabletMultiple lets you execute multiple queries -- without any
 // results -- against the tablet.
 func (vttablet *VttabletProcess) QueryTabletMultiple(queries []string, keyspace string, useDb bool) error {
-	if !useDb {
-		keyspace = ""
-	}
-	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
-	conn, err := vttablet.conn(&dbParams)
+	conn, err := vttablet.TabletConn(keyspace, useDb)
 	if err != nil {
 		return err
 	}
@@ -482,6 +474,15 @@ func (vttablet *VttabletProcess) QueryTabletMultiple(queries []string, keyspace 
 		}
 	}
 	return nil
+}
+
+// TabletConn opens a MySQL connection on this tablet
+func (vttablet *VttabletProcess) TabletConn(keyspace string, useDb bool) (*mysql.Conn, error) {
+	if !useDb {
+		keyspace = ""
+	}
+	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
+	return vttablet.conn(&dbParams)
 }
 
 func (vttablet *VttabletProcess) defaultConn(dbname string) (*mysql.Conn, error) {

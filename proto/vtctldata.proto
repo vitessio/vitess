@@ -449,7 +449,6 @@ message CleanupSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
-
 message CompleteSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
@@ -680,6 +679,15 @@ message FindAllShardsInKeyspaceRequest {
 
 message FindAllShardsInKeyspaceResponse {
   map<string, Shard> shards = 1;
+}
+
+message ForceCutOverSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message ForceCutOverSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
 }
 
 message GetBackupsRequest {

@@ -23,6 +23,7 @@ package onlineddl
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -353,6 +354,112 @@ func TestDuplicateCreateTable(t *testing.T) {
 			newSQL := sqlparser.String(newCreateTable)
 			assert.Equal(t, tcase.expectSQL, newSQL)
 			assert.Equal(t, tcase.expectMapSize, len(constraintMap))
+		})
+	}
+}
+
+func TestShouldCutOverAccordingToBackoff(t *testing.T) {
+	tcases := []struct {
+		name string
+
+		shouldForceCutOverIndicator bool
+		forceCutOverAfter           time.Duration
+		sinceReadyToComplete        time.Duration
+		sinceLastCutoverAttempt     time.Duration
+		cutoverAttempts             int64
+
+		expectShouldCutOver      bool
+		expectShouldForceCutOver bool
+	}{
+		{
+			name:                "no reason why not, normal cutover",
+			expectShouldCutOver: true,
+		},
+		{
+			name:                "backoff",
+			cutoverAttempts:     1,
+			expectShouldCutOver: false,
+		},
+		{
+			name:                "more backoff",
+			cutoverAttempts:     3,
+			expectShouldCutOver: false,
+		},
+		{
+			name:                    "more backoff, since last cutover",
+			cutoverAttempts:         3,
+			sinceLastCutoverAttempt: time.Second,
+			expectShouldCutOver:     false,
+		},
+		{
+			name:                    "no backoff, long since last cutover",
+			cutoverAttempts:         3,
+			sinceLastCutoverAttempt: time.Hour,
+			expectShouldCutOver:     true,
+		},
+		{
+			name:                    "many attempts, long since last cutover",
+			cutoverAttempts:         3000,
+			sinceLastCutoverAttempt: time.Hour,
+			expectShouldCutOver:     true,
+		},
+		{
+			name:                        "force cutover",
+			shouldForceCutOverIndicator: true,
+			expectShouldCutOver:         true,
+			expectShouldForceCutOver:    true,
+		},
+		{
+			name:                        "force cutover overrides backoff",
+			cutoverAttempts:             3,
+			shouldForceCutOverIndicator: true,
+			expectShouldCutOver:         true,
+			expectShouldForceCutOver:    true,
+		},
+		{
+			name:                     "backoff; cutover-after not in effect yet",
+			cutoverAttempts:          3,
+			forceCutOverAfter:        time.Second,
+			expectShouldCutOver:      false,
+			expectShouldForceCutOver: false,
+		},
+		{
+			name:                     "backoff; cutover-after still not in effect yet",
+			cutoverAttempts:          3,
+			forceCutOverAfter:        time.Second,
+			sinceReadyToComplete:     time.Millisecond,
+			expectShouldCutOver:      false,
+			expectShouldForceCutOver: false,
+		},
+		{
+			name:                     "cutover-after overrides backoff",
+			cutoverAttempts:          3,
+			forceCutOverAfter:        time.Second,
+			sinceReadyToComplete:     time.Second * 2,
+			expectShouldCutOver:      true,
+			expectShouldForceCutOver: true,
+		},
+		{
+			name:                     "cutover-after overrides backoff, realistic value",
+			cutoverAttempts:          300,
+			sinceLastCutoverAttempt:  time.Minute,
+			forceCutOverAfter:        time.Hour,
+			sinceReadyToComplete:     time.Hour * 2,
+			expectShouldCutOver:      true,
+			expectShouldForceCutOver: true,
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			shouldCutOver, shouldForceCutOver := shouldCutOverAccordingToBackoff(
+				tcase.shouldForceCutOverIndicator,
+				tcase.forceCutOverAfter,
+				tcase.sinceReadyToComplete,
+				tcase.sinceLastCutoverAttempt,
+				tcase.cutoverAttempts,
+			)
+			assert.Equal(t, tcase.expectShouldCutOver, shouldCutOver)
+			assert.Equal(t, tcase.expectShouldForceCutOver, shouldForceCutOver)
 		})
 	}
 }
