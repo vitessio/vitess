@@ -158,11 +158,6 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 	aj.RHS = rhs
 }
 
-func (aj *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	offset := aj.RHS.AddColumn(ctx, true, addToGroupBy, e)
-	return offset, nil
-}
-
 func (aj *ApplyJoin) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return slice.Map(aj.JoinColumns.columns, func(from applyJoinColumn) *sqlparser.AliasedExpr {
 		return aeWrap(from.Original)
@@ -309,7 +304,7 @@ func (aj *ApplyJoin) isColNameMovedFromL2R(bindVarName string) bool {
 
 // findOrAddColNameBindVarName goes through the JoinColumns and looks for the given colName coming from the LHS of the join
 // and returns the argument name if found. if it's not found, a new applyJoinColumn passing this through will be added
-func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContext, col *sqlparser.ColName) (string, error) {
+func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContext, col *sqlparser.ColName) string {
 	for i, thisCol := range aj.JoinColumns.columns {
 		idx := slices.IndexFunc(thisCol.LHSExprs, func(e BindVarExpr) bool {
 			return ctx.SemTable.EqualsExpr(e.Expr, col)
@@ -324,7 +319,7 @@ func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContex
 				expr.Name = bvname
 				aj.JoinColumns.columns[i].LHSExprs[idx] = expr
 			}
-			return thisCol.LHSExprs[idx].Name, nil
+			return thisCol.LHSExprs[idx].Name
 		}
 	}
 	for _, thisCol := range aj.JoinPredicates.columns {
@@ -332,7 +327,7 @@ func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContex
 			return ctx.SemTable.EqualsExpr(e.Expr, col)
 		})
 		if idx != -1 {
-			return thisCol.LHSExprs[idx].Name, nil
+			return thisCol.LHSExprs[idx].Name
 		}
 	}
 
@@ -340,7 +335,7 @@ func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContex
 		return ctx.SemTable.EqualsExpr(e.Expr, col)
 	})
 	if idx != -1 {
-		return aj.ExtraLHSVars[idx].Name, nil
+		return aj.ExtraLHSVars[idx].Name
 	}
 
 	// we didn't find it, so we need to add it
@@ -349,7 +344,7 @@ func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContex
 		Name: bvName,
 		Expr: col,
 	})
-	return bvName, nil
+	return bvName
 }
 
 func (a *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed sqlparser.Exprs) {
