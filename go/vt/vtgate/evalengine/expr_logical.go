@@ -254,7 +254,7 @@ func (expr *NotExpr) compile(c *compiler) (ctype, error) {
 		c.asm.Not_i()
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(arg.Flag) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (l *LogicalExpr) eval(env *ExpressionEnv) (eval, error) {
@@ -331,7 +331,7 @@ func (expr *LogicalExpr) compile(c *compiler) (ctype, error) {
 
 	c.asm.LogicalRight(expr.opname)
 	c.asm.jumpDestination(jump)
-	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: ((lt.Flag | rt.Flag) & flagNullable) | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func intervalCompare(n, val eval) (int, bool, error) {
@@ -629,7 +629,11 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 	}
 
-	ct := ctype{Type: ta.result(), Col: ca.result()}
+	var f typeFlag
+	if ta.nullable {
+		f |= flagNullable
+	}
+	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result()}
 	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Col)
 	return ct, nil
 }

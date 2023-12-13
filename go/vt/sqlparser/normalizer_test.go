@@ -372,6 +372,14 @@ func TestNormalize(t *testing.T) {
 		outstmt: `select * from (select 12 from dual) as t`,
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
+		// HexVal and Int should not share a bindvar just because they have the same value
+		in:      `select * from t where v1 = x'31' and v2 = 31`,
+		outstmt: `select * from t where v1 = :v1 /* HEXVAL */ and v2 = :v2 /* INT64 */`,
+		outbv: map[string]*querypb.BindVariable{
+			"v1": sqltypes.HexValBindVariable([]byte("x'31'")),
+			"v2": sqltypes.Int64BindVariable(31),
+		},
+	}, {
 		// we don't want to replace literals in cur time function calls.
 		in:      `insert into t1(id2) values (NOW(1))`,
 		outstmt: `insert into t1(id2) values (now(1))`,

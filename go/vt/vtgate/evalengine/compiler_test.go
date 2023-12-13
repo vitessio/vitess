@@ -444,6 +444,38 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `INTERVAL(0, 0, 0, -1, NULL, NULL, 1)`,
 			result:     `INT64(5)`,
 		},
+		{
+			expression: `cast(null * 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null + 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null - 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null / 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null % 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `1 AND NULL * 1`,
+			result:     `NULL`,
+		},
+		{
+			expression: `case 0 when NULL then 1 else 0 end`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `case when null is null then 23 else null end`,
+			result:     `INT64(23)`,
+		},
 	}
 
 	for _, tc := range testCases {
