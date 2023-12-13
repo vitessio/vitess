@@ -871,17 +871,17 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				return err
 			}
 			qre := &QueryExecutor{
-				query:          query,
-				marginComments: comments,
-				bindVars:       bindVariables,
-				connID:         connID,
-				options:        options,
-				plan:           plan,
-				ctx:            ctx,
-				logStats:       logStats,
-				tsv:            tsv,
-				tabletType:     targetType,
-				setting:        connSetting,
+				query:            query,
+				marginComments:   comments,
+				bindVars:         bindVariables,
+				connID:           connID,
+				options:          options,
+				plan:             plan,
+				ctx:              ctx,
+				logStats:         logStats,
+				tsv:              tsv,
+				targetTabletType: targetType,
+				setting:          connSetting,
 			}
 			result, err = qre.Execute()
 			if err != nil {
@@ -973,17 +973,17 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				}
 			}
 			qre := &QueryExecutor{
-				query:          query,
-				marginComments: comments,
-				bindVars:       bindVariables,
-				connID:         connID,
-				options:        options,
-				plan:           plan,
-				ctx:            ctx,
-				logStats:       logStats,
-				tsv:            tsv,
-				tabletType:     target.GetTabletType(),
-				setting:        connSetting,
+				query:            query,
+				marginComments:   comments,
+				bindVars:         bindVariables,
+				connID:           connID,
+				options:          options,
+				plan:             plan,
+				ctx:              ctx,
+				logStats:         logStats,
+				tsv:              tsv,
+				targetTabletType: target.GetTabletType(),
+				setting:          connSetting,
 			}
 			return qre.Stream(callback)
 		},
