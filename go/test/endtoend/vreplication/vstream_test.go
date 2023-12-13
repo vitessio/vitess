@@ -43,11 +43,11 @@ import (
 //   - We stream only from the primary and while streaming we reparent to a replica and then back to the original primary
 func testVStreamWithFailover(t *testing.T, failover bool) {
 	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 
 	require.NotNil(t, vc)
 	defaultReplicas = 2
 	defaultRdonly = 0
-	defer vc.TearDown()
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)

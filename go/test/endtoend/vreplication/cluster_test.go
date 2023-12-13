@@ -702,7 +702,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 
 	waitTimeout := 30 * time.Second
 	vtgate := cells[0].Vtgates[0]
-	for _, shard := range keyspace.Shards {
+	for _, shardName := range shardNames {
+		shard := keyspace.Shards[shardName]
 		numReplicas, numRDOnly := 0, 0
 		for _, tablet := range shard.Tablets {
 			switch strings.ToLower(tablet.Vttablet.TabletType) {
@@ -732,7 +733,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 	require.NoError(t, err)
 
 	log.Infof("Waiting for throttler config to be applied on all shards")
-	for _, shard := range keyspace.Shards {
+	for _, shardName := range shardNames {
+		shard := keyspace.Shards[shardName]
 		for _, tablet := range shard.Tablets {
 			clusterTablet := &cluster.Vttablet{
 				Alias:    tablet.Name,

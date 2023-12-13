@@ -810,12 +810,6 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	keyspace := vc.Cells[defaultCell.Name].Keyspaces[ksName]
 	require.NoError(t, vc.AddShards(t, []*Cell{defaultCell, vc.Cells["zone2"]}, keyspace, shards, defaultReplicas, defaultRdonly, 400, targetKsOpts))
-	arrTargetShardNames := strings.Split(shards, ",")
-
-	for _, shardName := range arrTargetShardNames {
-		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shardName), 2, 30*time.Second))
-		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shardName), 1, 30*time.Second))
-	}
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[ksName]
 	targetTab2 = custKs.Shards["80-c0"].Tablets["zone1-600"].Vttablet
 	targetTab1 = custKs.Shards["40-80"].Tablets["zone1-500"].Vttablet

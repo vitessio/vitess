@@ -151,7 +151,6 @@ func TestFKExt(t *testing.T) {
 		require.NoError(t, vc.AddShards(t, []*Cell{defaultCell}, ks, threeShards, numReplicas, 0, tabletID, nil))
 		tablets := make(map[string]*cluster.VttabletProcess)
 		for i, shard := range strings.Split(threeShards, ",") {
-			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), numReplicas, shardStatusWaitTimeout))
 			tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID+i*100)].Vttablet
 		}
 		sqls := strings.Split(FKExtSourceSchema, "\n")
@@ -167,7 +166,6 @@ func TestFKExt(t *testing.T) {
 		shard := "0"
 		require.NoError(t, vc.AddShards(t, []*Cell{defaultCell}, ks, shard, numReplicas, 0, tabletID, nil))
 		tablets := make(map[string]*cluster.VttabletProcess)
-		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), numReplicas, shardStatusWaitTimeout))
 		tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID)].Vttablet
 		sqls := strings.Split(FKExtSourceSchema, "\n")
 		for _, sql := range sqls {
@@ -341,13 +339,9 @@ func moveKeyspace(t *testing.T) {
 
 func newKeyspace(t *testing.T, keyspaceName, shards, vschema, schema string, tabletId, numReplicas int) map[string]*cluster.VttabletProcess {
 	tablets := make(map[string]*cluster.VttabletProcess)
-	cellName := fkextConfig.cell
 	cell := vc.Cells[fkextConfig.cell]
+	vtgate := cell.Vtgates[0]
 	vc.AddKeyspace(t, []*Cell{cell}, keyspaceName, shards, vschema, schema, numReplicas, 0, tabletId, nil)
-	for i, shard := range strings.Split(shards, ",") {
-		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1, shardStatusWaitTimeout))
-		tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletId+i*100)].Vttablet
-	}
 	err := vc.VtctldClient.ExecuteCommand("RebuildVSchemaGraph")
 	require.NoError(t, err)
 	require.NoError(t, waitForColumn(t, vtgate, keyspaceName, "parent", "id"))
