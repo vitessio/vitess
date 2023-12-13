@@ -65,7 +65,6 @@ func TestBitVals(t *testing.T) {
 }
 
 // TestTimeFunctionWithPrecision tests that inserting data with NOW(1) works as intended.
-// This test doesn't deal with order by clauses and has been added here for running in upgrade-downgrade tests.
 func TestTimeFunctionWithPrecision(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
