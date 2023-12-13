@@ -170,6 +170,16 @@ func TestGetFlavor(t *testing.T) {
 			capability: CheckConstraintsCapability,
 			isCapable:  true,
 		},
+		{
+			version:    "5.7.38",
+			capability: PerformanceSchemaDataLocksTableCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "8.0.20",
+			capability: PerformanceSchemaDataLocksTableCapability,
+			isCapable:  true,
+		},
 	}
 	for _, tc := range testcases {
 		name := fmt.Sprintf("%s %v", tc.version, tc.capability)

@@ -679,6 +679,37 @@ func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldat
 	return resp, nil
 }
 
+// ForceCutOverSchemaMigration is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ForceCutOverSchemaMigration(ctx context.Context, req *vtctldatapb.ForceCutOverSchemaMigrationRequest) (resp *vtctldatapb.ForceCutOverSchemaMigrationResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ForceCutOverSchemaMigration")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("uuid", req.Uuid)
+
+	query, err := alterSchemaMigrationQuery("force_cutover", req.Uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("Calling ApplySchema to force cut-over migration %s", req.Uuid)
+	qr, err := s.ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
+		Keyspace:            req.Keyspace,
+		Sql:                 []string{query},
+		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp = &vtctldatapb.ForceCutOverSchemaMigrationResponse{
+		RowsAffectedByShard: qr.RowsAffectedByShard,
+	}
+	return resp, nil
+}
+
 // CompleteSchemaMigration is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) CompleteSchemaMigration(ctx context.Context, req *vtctldatapb.CompleteSchemaMigrationRequest) (resp *vtctldatapb.CompleteSchemaMigrationResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.CompleteSchemaMigration")
