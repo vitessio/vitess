@@ -379,6 +379,15 @@ func TestNormalize(t *testing.T) {
 			"v1": sqltypes.HexValBindVariable([]byte("x'31'")),
 			"v2": sqltypes.Int64BindVariable(31),
 		},
+	}, {
+		// ORDER BY and GROUP BY variable
+		in:      "select a, b from t group by 1, field(a,1,2,3) order by 1 asc, field(a,1,2,3)",
+		outstmt: "select a, b from t group by 1, field(a, :bv1 /* INT64 */, :bv2 /* INT64 */, :bv3 /* INT64 */) order by 1 asc, field(a, :bv1 /* INT64 */, :bv2 /* INT64 */, :bv3 /* INT64 */) asc",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+			"bv2": sqltypes.Int64BindVariable(2),
+			"bv3": sqltypes.Int64BindVariable(3),
+		},
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
