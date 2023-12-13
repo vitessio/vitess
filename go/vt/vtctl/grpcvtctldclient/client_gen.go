@@ -128,6 +128,15 @@ func (client *gRPCVtctldClient) CleanupSchemaMigration(ctx context.Context, in *
 	return client.c.CleanupSchemaMigration(ctx, in, opts...)
 }
 
+// ForceCutOverSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ForceCutOverSchemaMigration(ctx context.Context, in *vtctldatapb.ForceCutOverSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.ForceCutOverSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ForceCutOverSchemaMigration(ctx, in, opts...)
+}
+
 // CompleteSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldatapb.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
 	if client.c == nil {

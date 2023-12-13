@@ -285,6 +285,7 @@ var keywords = []keyword{
 	{"following", FOLLOWING},
 	{"for", FOR},
 	{"force", FORCE},
+	{"force_cutover", FORCE_CUTOVER},
 	{"foreign", FOREIGN},
 	{"format", FORMAT},
 	{"format_bytes", FORMAT_BYTES},
