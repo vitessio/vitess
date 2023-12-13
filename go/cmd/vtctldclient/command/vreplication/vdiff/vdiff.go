@@ -118,10 +118,10 @@ var (
 			return fmt.Errorf("--limit must be a positive value greater than 1")
 		}
 		if createOptions.MaxReportSampleRows < 0 {
-			return fmt.Errorf("--max-report-sample-rows must be a positive value")
+			return fmt.Errorf("--max-report-sample-rows must not be a negative value")
 		}
 		if createOptions.MaxExtraRowsToCompare < 0 {
-			return fmt.Errorf("--max-extra-rows-to-compare must be a positive value")
+			return fmt.Errorf("--max-extra-rows-to-compare must not be a negative value")
 		}
 		return nil
 	}
