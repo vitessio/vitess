@@ -706,7 +706,7 @@ func verifySubcomponent(t *testing.T, order int64, component any, state testStat
 func newTestStateManager(t *testing.T) *stateManager {
 	order.Store(0)
 	config := tabletenv.NewDefaultConfig()
-	env := tabletenv.NewEnv(config, "StateManagerTest", collations.Local())
+	env := tabletenv.NewEnv(config, "StateManagerTest", collations.MySQL8())
 	sm := &stateManager{
 		statelessql: NewQueryList("stateless"),
 		statefulql:  NewQueryList("stateful"),

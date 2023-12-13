@@ -47,7 +47,7 @@ func TestEngineOpen(t *testing.T) {
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
 
-	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.Local())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
 	require.False(t, vre.IsOpen())
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", sqltypes.MakeTestResult(
@@ -88,7 +88,7 @@ func TestEngineOpenRetry(t *testing.T) {
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
 
-	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.Local())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
 
 	// Fail twice to ensure the retry retries at least once.
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
@@ -152,7 +152,7 @@ func TestEngineExec(t *testing.T) {
 
 	// Test Insert
 
-	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.Local())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	vre.Open(context.Background())
@@ -316,7 +316,7 @@ func TestEngineBadInsert(t *testing.T) {
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
 
-	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.Local())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	vre.Open(context.Background())
@@ -345,7 +345,7 @@ func TestEngineSelect(t *testing.T) {
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
 
-	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.Local())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	vre.Open(context.Background())
@@ -380,7 +380,7 @@ func TestWaitForPos(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.Local())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	vre.Open(context.Background())
@@ -410,7 +410,7 @@ func TestWaitForPosError(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.Local())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
 
 	err := vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
 	want := `vreplication engine is closed`
@@ -448,7 +448,7 @@ func TestWaitForPosCancel(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.Local())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	vre.Open(context.Background())
@@ -492,7 +492,7 @@ func TestGetDBClient(t *testing.T) {
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
 
-	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactoryFiltered, dbClientFactoryDba, dbClientDba.DBName(), nil, collations.Local())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactoryFiltered, dbClientFactoryDba, dbClientDba.DBName(), nil, collations.MySQL8())
 
 	shouldBeDbaClient := vre.getDBClient(true /*runAsAdmin*/)
 	assert.Equal(t, shouldBeDbaClient, dbClientDba)

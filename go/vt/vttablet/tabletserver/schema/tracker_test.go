@@ -79,7 +79,7 @@ func TestTracker(t *testing.T) {
 	}
 	config := se.env.Config()
 	config.TrackSchemaVersions = true
-	env := tabletenv.NewEnv(config, "TrackerTest", collations.Local())
+	env := tabletenv.NewEnv(config, "TrackerTest", collations.MySQL8())
 	initial := env.Stats().ErrorCounters.Counts()["INTERNAL"]
 	tracker := NewTracker(env, vs, se)
 	tracker.Open()
@@ -123,7 +123,7 @@ func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 	}
 	config := se.env.Config()
 	config.TrackSchemaVersions = true
-	env := tabletenv.NewEnv(config, "TrackerTest", collations.Local())
+	env := tabletenv.NewEnv(config, "TrackerTest", collations.MySQL8())
 	tracker := NewTracker(env, vs, se)
 	tracker.Open()
 	<-vs.done

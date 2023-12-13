@@ -77,7 +77,7 @@ func TestTinyWeightStrings(t *testing.T) {
 					return cmp
 				}
 
-				cmp, err := NullsafeCompare(collations.Local(), a, b, tc.col)
+				cmp, err := NullsafeCompare(collations.MySQL8(), a, b, tc.col)
 				require.NoError(t, err)
 
 				fullComparisons++
@@ -88,7 +88,7 @@ func TestTinyWeightStrings(t *testing.T) {
 				a := items[i]
 				b := items[i+1]
 
-				cmp, err := NullsafeCompare(collations.Local(), a, b, tc.col)
+				cmp, err := NullsafeCompare(collations.MySQL8(), a, b, tc.col)
 				require.NoError(t, err)
 
 				if cmp > 0 {
@@ -161,7 +161,7 @@ func TestWeightStrings(t *testing.T) {
 					v2, err := valueToEvalCast(b.value, typ, tc.col, 0)
 					require.NoError(t, err)
 
-					cmp, err := evalCompareNullSafe(collations.Local(), v1, v2)
+					cmp, err := evalCompareNullSafe(collations.MySQL8(), v1, v2)
 					require.NoError(t, err)
 
 					if cmp > 0 {

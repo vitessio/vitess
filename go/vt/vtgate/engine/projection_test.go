@@ -39,8 +39,8 @@ func TestMultiply(t *testing.T) {
 		Right:    &sqlparser.Offset{V: 1},
 	}
 	evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
-		CollationEnv: collations.Local(),
-		Collation:    collations.Local().DefaultConnectionCharset(),
+		CollationEnv: collations.MySQL8(),
+		Collation:    collations.MySQL8().DefaultConnectionCharset(),
 	})
 	require.NoError(t, err)
 	fp := &fakePrimitive{
@@ -82,8 +82,8 @@ func TestProjectionStreaming(t *testing.T) {
 		Right:    &sqlparser.Offset{V: 1},
 	}
 	evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
-		CollationEnv: collations.Local(),
-		Collation:    collations.Local().DefaultConnectionCharset(),
+		CollationEnv: collations.MySQL8(),
+		Collation:    collations.MySQL8().DefaultConnectionCharset(),
 	})
 	require.NoError(t, err)
 	fp := &fakePrimitive{
@@ -128,8 +128,8 @@ func TestEmptyInput(t *testing.T) {
 		Right:    &sqlparser.Offset{V: 1},
 	}
 	evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
-		CollationEnv: collations.Local(),
-		Collation:    collations.Local().DefaultConnectionCharset(),
+		CollationEnv: collations.MySQL8(),
+		Collation:    collations.MySQL8().DefaultConnectionCharset(),
 	})
 	require.NoError(t, err)
 	fp := &fakePrimitive{
@@ -161,8 +161,8 @@ func TestEmptyInput(t *testing.T) {
 
 func TestHexAndBinaryArgument(t *testing.T) {
 	hexExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), &evalengine.Config{
-		CollationEnv: collations.Local(),
-		Collation:    collations.Local().DefaultConnectionCharset(),
+		CollationEnv: collations.MySQL8(),
+		Collation:    collations.MySQL8().DefaultConnectionCharset(),
 	})
 	require.NoError(t, err)
 	proj := &Projection{
@@ -195,7 +195,7 @@ func TestFields(t *testing.T) {
 			name:      `string`,
 			bindVar:   sqltypes.StringBindVariable("test"),
 			typ:       querypb.Type_VARCHAR,
-			collation: collations.Local().DefaultConnectionCharset(),
+			collation: collations.MySQL8().DefaultConnectionCharset(),
 		},
 		{
 			name:      `binary`,
@@ -208,8 +208,8 @@ func TestFields(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			bindExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), &evalengine.Config{
-				CollationEnv: collations.Local(),
-				Collation:    collations.Local().DefaultConnectionCharset(),
+				CollationEnv: collations.MySQL8(),
+				Collation:    collations.MySQL8().DefaultConnectionCharset(),
 			})
 			require.NoError(t, err)
 			proj := &Projection{

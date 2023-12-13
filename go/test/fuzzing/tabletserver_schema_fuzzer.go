@@ -66,7 +66,7 @@ func newTestLoadTable(tableName, comment string, db *fakesqldb.DB) (*schema.Tabl
 		IdleTimeout: 10 * time.Second,
 	}
 
-	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest", collations.Local()), "", cfg)
+	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest", collations.MySQL8()), "", cfg)
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx, nil)
 	if err != nil {
@@ -74,5 +74,5 @@ func newTestLoadTable(tableName, comment string, db *fakesqldb.DB) (*schema.Tabl
 	}
 	defer conn.Recycle()
 
-	return schema.LoadTable(conn, "fakesqldb", tableName, "BASE_TABLE", comment, collations.Local())
+	return schema.LoadTable(conn, "fakesqldb", tableName, "BASE_TABLE", comment, collations.MySQL8())
 }

@@ -43,7 +43,7 @@ func TestReplTracker(t *testing.T) {
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	config.DB = dbconfigs.NewTestDBConfigs(cp, cp, "")
-	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.Local())
+	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8())
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,

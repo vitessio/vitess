@@ -532,7 +532,7 @@ func (vc *loggingVCursor) ConnCollation() collations.ID {
 }
 
 func (vc *loggingVCursor) CollationEnv() *collations.Environment {
-	return collations.Local()
+	return collations.MySQL8()
 }
 
 type bv struct {

@@ -71,7 +71,7 @@ func TestFilterPass(t *testing.T) {
 			pred, err := evalengine.Translate(predicate, &evalengine.Config{
 				Collation:     utf8mb4Bin,
 				ResolveColumn: evalengine.FieldResolver(tc.res.Fields).Column,
-				CollationEnv:  collations.Local(),
+				CollationEnv:  collations.MySQL8(),
 			})
 			require.NoError(t, err)
 
@@ -128,7 +128,7 @@ func TestFilterStreaming(t *testing.T) {
 			pred, err := evalengine.Translate(predicate, &evalengine.Config{
 				Collation:     utf8mb4Bin,
 				ResolveColumn: evalengine.FieldResolver(tc.res[0].Fields).Column,
-				CollationEnv:  collations.Local(),
+				CollationEnv:  collations.MySQL8(),
 			})
 			require.NoError(t, err)
 

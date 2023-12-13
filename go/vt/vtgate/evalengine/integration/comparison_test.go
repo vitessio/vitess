@@ -143,7 +143,7 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 	var localVal, remoteVal sqltypes.Value
 	var localCollation, remoteCollation collations.ID
 	if localErr == nil {
-		v := local.Value(collations.Local().DefaultConnectionCharset())
+		v := local.Value(collations.MySQL8().DefaultConnectionCharset())
 		if debugCheckCollations {
 			if v.IsNull() {
 				localCollation = collations.CollationBinaryID
@@ -219,7 +219,7 @@ func (vc *vcursor) SQLMode() string {
 }
 
 func (vc *vcursor) CollationEnv() *collations.Environment {
-	return collations.Local()
+	return collations.MySQL8()
 }
 
 func initTimezoneData(t *testing.T, conn *mysql.Conn) {

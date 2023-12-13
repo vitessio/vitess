@@ -121,7 +121,7 @@ func onlineDDLTest(t *testing.T, args []string, expectedQuery string) {
 	tmclienttest.SetProtocol("go.vt.vtctl.endtoend", t.Name())
 
 	logger := logutil.NewMemoryLogger()
-	wr := wrangler.New(logger, fakeTopo, &tmc, collations.Local())
+	wr := wrangler.New(logger, fakeTopo, &tmc, collations.MySQL8())
 
 	err := vtctl.RunCommand(ctx, wr, args)
 	assert.Error(t, err)

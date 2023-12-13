@@ -127,7 +127,7 @@ func (vw *VSchemaWrapper) ConnCollation() collations.ID {
 }
 
 func (vw *VSchemaWrapper) CollationEnv() *collations.Environment {
-	return collations.Local()
+	return collations.MySQL8()
 }
 
 func (vw *VSchemaWrapper) PlannerWarning(_ string) {

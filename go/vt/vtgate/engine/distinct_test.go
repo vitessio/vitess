@@ -91,7 +91,7 @@ func TestDistinct(t *testing.T) {
 				checkCols = append(checkCols, CheckCol{
 					Col:          i,
 					Type:         evalengine.NewTypeEx(tc.inputs.Fields[i].Type, collID, false, 0, 0),
-					CollationEnv: collations.Local(),
+					CollationEnv: collations.MySQL8(),
 				})
 			}
 		}

@@ -234,7 +234,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 		Size:        2,
 		IdleTimeout: 10 * time.Second,
 	}
-	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest", collations.Local()), "", cfg)
+	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest", collations.MySQL8()), "", cfg)
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx, nil)
 	if err != nil {
@@ -242,7 +242,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	}
 	defer conn.Recycle()
 
-	return LoadTable(conn, "fakesqldb", "test_table", tableType, comment, collations.Local())
+	return LoadTable(conn, "fakesqldb", "test_table", tableType, comment, collations.MySQL8())
 }
 
 func mockLoadTableQueries(db *fakesqldb.DB) {

@@ -85,7 +85,7 @@ func testPlan(t *testing.T, fileName string) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName", false, collations.Local())
+				plan, err = Build(statement, testSchema, "dbName", false, collations.MySQL8())
 			}
 			PassthroughDMLs = false
 
@@ -122,7 +122,7 @@ func TestPlanInReservedConn(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName", false, collations.Local())
+				plan, err = Build(statement, testSchema, "dbName", false, collations.MySQL8())
 			}
 			PassthroughDMLs = false
 
@@ -173,7 +173,7 @@ func TestCustom(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Got error: %v, parsing sql: %v", err.Error(), tcase.input)
 				}
-				plan, err := Build(statement, schem, "dbName", false, collations.Local())
+				plan, err := Build(statement, schem, "dbName", false, collations.MySQL8())
 				var out string
 				if err != nil {
 					out = err.Error()
@@ -260,7 +260,7 @@ func TestLockPlan(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName", false, collations.Local())
+				plan, err = Build(statement, testSchema, "dbName", false, collations.MySQL8())
 			}
 
 			var out string

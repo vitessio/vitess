@@ -125,8 +125,8 @@ func TestTranslateSimplification(t *testing.T) {
 
 			cfg := &Config{
 				ResolveColumn:     fields.Column,
-				Collation:         collations.Local().DefaultConnectionCharset(),
-				CollationEnv:      collations.Local(),
+				Collation:         collations.MySQL8().DefaultConnectionCharset(),
+				CollationEnv:      collations.MySQL8(),
 				NoConstantFolding: true,
 				NoCompilation:     true,
 			}
@@ -303,8 +303,8 @@ func TestEvaluate(t *testing.T) {
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
 			sqltypesExpr, err := Translate(astExpr, &Config{
-				Collation:    collations.Local().DefaultConnectionCharset(),
-				CollationEnv: collations.Local(),
+				Collation:    collations.MySQL8().DefaultConnectionCharset(),
+				CollationEnv: collations.MySQL8(),
 			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
@@ -315,14 +315,14 @@ func TestEvaluate(t *testing.T) {
 				"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
 				"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 				"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
-			}, NewEmptyVCursor(collations.Local()))
+			}, NewEmptyVCursor(collations.MySQL8()))
 
 			// When
 			r, err := env.Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
-			assert.Equal(t, test.expected, r.Value(collations.Local().DefaultConnectionCharset()), "expected %s", test.expected.String())
+			assert.Equal(t, test.expected, r.Value(collations.MySQL8().DefaultConnectionCharset()), "expected %s", test.expected.String())
 		})
 	}
 }
@@ -350,7 +350,7 @@ func TestEvaluateTuple(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			collationEnv := collations.Local()
+			collationEnv := collations.MySQL8()
 			sqltypesExpr, err := Translate(astExpr, &Config{
 				Collation:    collationEnv.DefaultConnectionCharset(),
 				CollationEnv: collationEnv,
@@ -392,8 +392,8 @@ func TestTranslationFailures(t *testing.T) {
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
 			_, err = Translate(astExpr, &Config{
-				Collation:    collations.Local().DefaultConnectionCharset(),
-				CollationEnv: collations.Local(),
+				Collation:    collations.MySQL8().DefaultConnectionCharset(),
+				CollationEnv: collations.MySQL8(),
 			})
 			require.EqualError(t, err, testcase.expectedErr)
 		})
@@ -431,8 +431,8 @@ func TestCardinalityWithBindVariables(t *testing.T) {
 
 				astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
 				_, err = Translate(astExpr, &Config{
-					Collation:     collations.Local().DefaultConnectionCharset(),
-					CollationEnv:  collations.Local(),
+					Collation:     collations.MySQL8().DefaultConnectionCharset(),
+					CollationEnv:  collations.MySQL8(),
 					NoCompilation: true,
 				})
 				return err

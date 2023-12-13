@@ -44,7 +44,7 @@ import (
 func TestDisabledThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = false
-	env := tabletenv.NewEnv(config, t.Name(), collations.Local())
+	env := tabletenv.NewEnv(config, t.Name(), collations.MySQL8())
 	throttler := NewTxThrottler(env, nil)
 	throttler.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
@@ -108,7 +108,7 @@ func TestEnabledThrottler(t *testing.T) {
 	config.EnableTxThrottler = true
 	config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
 
-	env := tabletenv.NewEnv(config, t.Name(), collations.Local())
+	env := tabletenv.NewEnv(config, t.Name(), collations.MySQL8())
 	throttler := NewTxThrottler(env, ts)
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.NotNil(t, throttlerImpl)
@@ -171,7 +171,7 @@ func TestFetchKnownCells(t *testing.T) {
 
 func TestDryRunThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	env := tabletenv.NewEnv(config, t.Name(), collations.Local())
+	env := tabletenv.NewEnv(config, t.Name(), collations.MySQL8())
 
 	testCases := []struct {
 		Name                           string

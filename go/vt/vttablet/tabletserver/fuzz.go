@@ -58,7 +58,7 @@ func FuzzGetPlan(data []byte) int {
 	// Set up the environment
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
-	env := tabletenv.NewEnv(config, "TabletServerTest", collations.Local())
+	env := tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8())
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 	defer qe.Close()

@@ -69,7 +69,7 @@ func newWranglerTestEnv(t testing.TB, ctx context.Context, sourceShards, targetS
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestWranglerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.Local())
+	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.MySQL8())
 	env.tmc.tablets = make(map[int]*testWranglerTablet)
 
 	// Generate a unique dialer name.

@@ -828,7 +828,7 @@ func NewEngineForTests() *Engine {
 		isOpen:    true,
 		tables:    make(map[string]*Table),
 		historian: newHistorian(false, 0, nil),
-		env:       tabletenv.NewEnv(tabletenv.NewDefaultConfig(), "SchemaEngineForTests", collations.Local()),
+		env:       tabletenv.NewEnv(tabletenv.NewDefaultConfig(), "SchemaEngineForTests", collations.MySQL8()),
 	}
 	return se
 }

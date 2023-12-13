@@ -120,7 +120,7 @@ func TestSimplifyEvalEngineExpr(t *testing.T) {
 	p0 := plus(p11, p12)
 
 	expr := SimplifyExpr(p0, func(expr sqlparser.Expr) bool {
-		collationEnv := collations.Local()
+		collationEnv := collations.MySQL8()
 		local, err := evalengine.Translate(expr, &evalengine.Config{
 			CollationEnv: collationEnv,
 			Collation:    collationEnv.DefaultConnectionCharset(),

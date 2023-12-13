@@ -146,7 +146,7 @@ func newReader(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatReader {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 	config.DB = dbc
 
-	tr := newHeartbeatReader(tabletenv.NewEnv(config, "ReaderTest", collations.Local()))
+	tr := newHeartbeatReader(tabletenv.NewEnv(config, "ReaderTest", collations.MySQL8()))
 	tr.keyspaceShard = "test:0"
 
 	if frozenTime != nil {

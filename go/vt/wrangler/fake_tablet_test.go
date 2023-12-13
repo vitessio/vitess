@@ -200,8 +200,8 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		MysqlDaemon:         ft.FakeMysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
-		VDiffEngine:         vdiff2.NewEngine(config, wr.TopoServer(), ft.Tablet, collations.Local()),
-		CollationEnv:        collations.Local(),
+		VDiffEngine:         vdiff2.NewEngine(config, wr.TopoServer(), ft.Tablet, collations.MySQL8()),
+		CollationEnv:        collations.MySQL8(),
 	}
 	if err := ft.TM.Start(ft.Tablet, nil); err != nil {
 		t.Fatal(err)

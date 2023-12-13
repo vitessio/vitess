@@ -1489,7 +1489,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	}
 	dbconfigs := newDBConfigs(db)
 	config.DB = dbconfigs
-	tsv := NewTabletServer(ctx, "TabletServerTest", config, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.Local())
+	tsv := NewTabletServer(ctx, "TabletServerTest", config, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8())
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
 	if config.TwoPCEnable {

@@ -80,7 +80,7 @@ func newTestVTCtlEnv(ctx context.Context) *testVTCtlEnv {
 		tmc:        newTestVTCtlTMClient(),
 		cmdlog:     logutil.NewMemoryLogger(),
 	}
-	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc, collations.Local())
+	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc, collations.MySQL8())
 	return env
 }
 

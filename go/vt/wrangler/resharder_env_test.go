@@ -95,7 +95,7 @@ func newTestResharderEnv(t *testing.T, ctx context.Context, sources, targets []s
 		cell:     "cell",
 		tmc:      newTestResharderTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.Local())
+	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.MySQL8())
 	initTopo(t, env.topoServ, "ks", sources, targets, []string{"cell"})
 	tabletID := 100
 	for _, shard := range sources {

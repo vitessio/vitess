@@ -1543,7 +1543,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	defer cancel()
 
 	topoServ := memorytopo.NewServer(ctx, "cell")
-	wr := New(logutil.NewConsoleLogger(), topoServ, nil, collations.Local())
+	wr := New(logutil.NewConsoleLogger(), topoServ, nil, collations.MySQL8())
 
 	unique := map[string]*vschemapb.Vindex{
 		"v": {
@@ -2543,7 +2543,7 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.Local())
+	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.MySQL8())
 	defer env.close()
 
 	tabletID := 100

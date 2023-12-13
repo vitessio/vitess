@@ -181,7 +181,7 @@ func Fuzz(data []byte) int {
 		// Add params to the command
 		commandSlice = append(commandSlice, args...)
 
-		_ = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc, collations.Local()), commandSlice)
+		_ = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc, collations.MySQL8()), commandSlice)
 		command++
 	}
 

@@ -49,7 +49,7 @@ func TestAPI(t *testing.T) {
 	cells := []string{"cell1", "cell2"}
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
-	actionRepo := NewActionRepository(ts, collations.Local())
+	actionRepo := NewActionRepository(ts, collations.MySQL8())
 	server := testutils.HTTPTestServer()
 	defer server.Close()
 
@@ -124,7 +124,7 @@ func TestAPI(t *testing.T) {
 			return "TestTabletAction Result", nil
 		})
 
-	initAPI(ctx, ts, actionRepo, collations.Local())
+	initAPI(ctx, ts, actionRepo, collations.MySQL8())
 
 	// all-tablets response for keyspace/ks1/tablets/ endpoints
 	keyspaceKs1AllTablets := `[

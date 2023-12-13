@@ -279,7 +279,7 @@ type LocalCluster struct {
 // cluster access should be performed through the vtgate port.
 func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
 	connParams := db.mysql.Params(db.DbName())
-	ch, err := collations.Local().ParseConnectionCharset(db.Config.Charset)
+	ch, err := collations.MySQL8().ParseConnectionCharset(db.Config.Charset)
 	if err != nil {
 		panic(err)
 	}
@@ -304,7 +304,7 @@ func (db *LocalCluster) MySQLCleanConnParams() mysql.ConnParams {
 		mysqlctl = toxiproxy.mysqlctl
 	}
 	connParams := mysqlctl.Params(db.DbName())
-	ch, err := collations.Local().ParseConnectionCharset(db.Config.Charset)
+	ch, err := collations.MySQL8().ParseConnectionCharset(db.Config.Charset)
 	if err != nil {
 		panic(err)
 	}

@@ -131,7 +131,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.Local())
+	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.MySQL8())
 	tabletID := 100
 	for _, shard := range sources {
 		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)

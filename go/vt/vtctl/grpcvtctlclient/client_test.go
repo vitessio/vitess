@@ -54,7 +54,7 @@ func TestVtctlServer(t *testing.T) {
 
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
-	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts, collations.Local()))
+	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts, collations.MySQL8()))
 	go server.Serve(listener)
 
 	// Create a VtctlClient gRPC client to talk to the fake server
@@ -88,7 +88,7 @@ func TestVtctlAuthClient(t *testing.T) {
 	opts = append(opts, grpc.UnaryInterceptor(servenv.FakeAuthUnaryInterceptor))
 	server := grpc.NewServer(opts...)
 
-	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts, collations.Local()))
+	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts, collations.MySQL8()))
 	go server.Serve(listener)
 
 	authJSON := `{

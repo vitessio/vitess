@@ -51,7 +51,7 @@ func (*FakeSI) ConnCollation() collations.ID {
 }
 
 func (*FakeSI) CollationEnv() *collations.Environment {
-	return collations.Local()
+	return collations.MySQL8()
 }
 
 func (s *FakeSI) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {

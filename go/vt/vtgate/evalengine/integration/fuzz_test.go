@@ -146,7 +146,7 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 		cfg := &evalengine.Config{
 			ResolveColumn:     evalengine.FieldResolver(fields).Column,
 			Collation:         collations.CollationUtf8mb4ID,
-			CollationEnv:      collations.Local(),
+			CollationEnv:      collations.MySQL8(),
 			NoConstantFolding: !debugSimplify,
 		}
 		expr, err = evalengine.Translate(astExpr, cfg)
@@ -200,7 +200,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 	compareWithMySQL := func(expr sqlparser.Expr) *mismatch {
 		query := "SELECT " + sqlparser.String(expr)
 
-		env := evalengine.EmptyExpressionEnv(collations.Local())
+		env := evalengine.EmptyExpressionEnv(collations.MySQL8())
 		eval, localErr := evaluateLocalEvalengine(env, query, nil)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
@@ -218,7 +218,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 			remoteErr: remoteErr,
 		}
 		if localErr == nil {
-			res.localVal = eval.Value(collations.Local().DefaultConnectionCharset())
+			res.localVal = eval.Value(collations.MySQL8().DefaultConnectionCharset())
 		}
 		if remoteErr == nil {
 			res.remoteVal = remote.Rows[0][0]
@@ -333,7 +333,7 @@ func compareResult(local, remote Result, cmp *testcases.Comparison) error {
 
 	var localCollationName string
 	var remoteCollationName string
-	env := collations.Local()
+	env := collations.MySQL8()
 	if coll := local.Collation; coll != collations.Unknown {
 		localCollationName = env.LookupName(coll)
 	}

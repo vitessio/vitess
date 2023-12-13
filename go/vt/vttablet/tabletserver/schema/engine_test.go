@@ -583,7 +583,7 @@ func newEngine(reloadTime time.Duration, idleTimeout time.Duration, schemaMaxAge
 	config.OlapReadPool.IdleTimeout = idleTimeout
 	config.TxPool.IdleTimeout = idleTimeout
 	config.SchemaVersionMaxAgeSeconds = schemaMaxAgeSeconds
-	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest", collations.Local()))
+	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest", collations.MySQL8()))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }

@@ -110,7 +110,7 @@ func newTestThrottler() *Throttler {
 		s.ThrottleThreshold = &atomic.Uint64{}
 		s.ThrottleThreshold.Store(1)
 	}
-	env := tabletenv.NewEnv(nil, "TabletServerTest", collations.Local())
+	env := tabletenv.NewEnv(nil, "TabletServerTest", collations.MySQL8())
 	throttler := &Throttler{
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),

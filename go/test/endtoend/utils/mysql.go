@@ -63,7 +63,7 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 	var cfg dbconfigs.DBConfigs
 	// ensure the DBA username is 'root' instead of the system's default username so that mysqladmin can shutdown
 	cfg.Dba.User = "root"
-	cfg.InitWithSocket(collations.Local(), mycnf.SocketFile)
+	cfg.InitWithSocket(collations.MySQL8(), mycnf.SocketFile)
 	return mysqlctl.NewMysqld(&cfg), mycnf, nil
 }
 

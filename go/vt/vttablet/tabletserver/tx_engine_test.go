@@ -49,7 +49,7 @@ func TestTxEngineClose(t *testing.T) {
 	config.TxPool.Size = 10
 	config.Oltp.TxTimeout = 100 * time.Millisecond
 	config.GracePeriods.Shutdown = 0
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.Local()))
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8()))
 
 	// Normal close.
 	te.AcceptReadWrite()
@@ -152,7 +152,7 @@ func TestTxEngineBegin(t *testing.T) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.Local()))
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8()))
 
 	for _, exec := range []func() (int64, string, error){
 		func() (int64, string, error) {
@@ -198,7 +198,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.Local()))
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8()))
 	te.AcceptReadOnly()
 	options := &querypb.ExecuteOptions{}
 	connID, _, err := te.ReserveBegin(ctx, options, nil, nil)
@@ -536,7 +536,7 @@ func setupTxEngine(db *fakesqldb.DB) *TxEngine {
 	config.TxPool.Size = 10
 	config.Oltp.TxTimeout = 100 * time.Millisecond
 	config.GracePeriods.Shutdown = 0
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.Local()))
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8()))
 	return te
 }
 
@@ -568,7 +568,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.Local()))
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8()))
 
 	options := &querypb.ExecuteOptions{}
 	_, err := te.Reserve(ctx, options, 0, nil)

@@ -57,7 +57,7 @@ func (si *declarativeSchemaInformation) ConnCollation() collations.ID {
 }
 
 func (si *declarativeSchemaInformation) CollationEnv() *collations.Environment {
-	return collations.Local()
+	return collations.MySQL8()
 }
 
 func (si *declarativeSchemaInformation) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {

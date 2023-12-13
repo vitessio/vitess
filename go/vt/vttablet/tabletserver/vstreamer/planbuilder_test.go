@@ -259,7 +259,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
-			collationEnv: collations.Local(),
+			collationEnv: collations.MySQL8(),
 		},
 	}, {
 		inTable: t1,
@@ -290,7 +290,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0},
 				KeyRange:      nil,
 			}},
-			collationEnv: collations.Local(),
+			collationEnv: collations.MySQL8(),
 		},
 	}, {
 		inTable: t1,
@@ -313,7 +313,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
-			collationEnv: collations.Local(),
+			collationEnv: collations.MySQL8(),
 		},
 	}, {
 		inTable: t1,
@@ -336,7 +336,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
-			collationEnv: collations.Local(),
+			collationEnv: collations.MySQL8(),
 		},
 	}, {
 		inTable: t1,
@@ -359,7 +359,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}},
-			collationEnv: collations.Local(),
+			collationEnv: collations.MySQL8(),
 		},
 	}, {
 		inTable: t1,
@@ -390,7 +390,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0},
 				KeyRange:      nil,
 			}},
-			collationEnv: collations.Local(),
+			collationEnv: collations.MySQL8(),
 		},
 	}, {
 		inTable: t1,
@@ -421,7 +421,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0},
 				KeyRange:      nil,
 			}},
-			collationEnv: collations.Local(),
+			collationEnv: collations.MySQL8(),
 		},
 	}, {
 		inTable: t1,
@@ -452,7 +452,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: nil,
 				KeyRange:      nil,
 			}},
-			collationEnv: collations.Local(),
+			collationEnv: collations.MySQL8(),
 		},
 	}, {
 		inTable: t2,
@@ -486,7 +486,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0, 1},
 				KeyRange:      nil,
 			}},
-			collationEnv: collations.Local(),
+			collationEnv: collations.MySQL8(),
 		},
 	}, {
 		inTable: t1,
@@ -510,7 +510,7 @@ func TestPlanBuilder(t *testing.T) {
 				},
 			}},
 			convertUsingUTF8Columns: map[string]bool{"val": true},
-			collationEnv:            collations.Local(),
+			collationEnv:            collations.MySQL8(),
 		},
 	}, {
 		inTable: regional,
@@ -534,7 +534,7 @@ func TestPlanBuilder(t *testing.T) {
 				Vindex:        testLocalVSchema.vschema.Keyspaces["ks"].Vindexes["region_vdx"],
 				VindexColumns: []int{0, 1},
 			}},
-			collationEnv: collations.Local(),
+			collationEnv: collations.MySQL8(),
 		},
 	}, {
 		inTable: t1,
@@ -647,7 +647,7 @@ func TestPlanBuilder(t *testing.T) {
 		t.Run(tcase.inRule.String(), func(t *testing.T) {
 			plan, err := buildPlan(tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{tcase.inRule},
-			}, collations.Local())
+			}, collations.MySQL8())
 
 			if tcase.outErr != "" {
 				assert.Nil(t, plan)
@@ -744,7 +744,7 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			plan, err := buildPlan(t1, testLocalVSchema, &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: tcase.inFilter}},
-			}, collations.Local())
+			}, collations.MySQL8())
 
 			if tcase.outErr != "" {
 				assert.Nil(t, plan)
@@ -786,7 +786,7 @@ func TestCompare(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run("", func(t *testing.T) {
-			got, err := compare(tc.opcode, tc.columnValue, tc.filterValue, collations.Local(), collations.CollationUtf8mb4ID)
+			got, err := compare(tc.opcode, tc.columnValue, tc.filterValue, collations.MySQL8(), collations.CollationUtf8mb4ID)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, got)
 		})

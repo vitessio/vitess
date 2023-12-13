@@ -78,7 +78,7 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 	}
 	TopoServer = memorytopo.NewServer(ctx, "")
 
-	Server = tabletserver.NewTabletServer(ctx, "", config, TopoServer, &topodatapb.TabletAlias{}, collations.Local())
+	Server = tabletserver.NewTabletServer(ctx, "", config, TopoServer, &topodatapb.TabletAlias{}, collations.MySQL8())
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs, nil /* mysqld */)
 	if err != nil {

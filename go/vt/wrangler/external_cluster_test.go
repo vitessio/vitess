@@ -19,7 +19,7 @@ func TestVitessCluster(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	tmc := newTestWranglerTMClient()
-	wr := New(logutil.NewConsoleLogger(), ts, tmc, collations.Local())
+	wr := New(logutil.NewConsoleLogger(), ts, tmc, collations.MySQL8())
 	name, topoType, topoServer, topoRoot := "c1", "x", "y", "z"
 
 	t.Run("Zero clusters to start", func(t *testing.T) {

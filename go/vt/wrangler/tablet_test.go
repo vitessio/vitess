@@ -37,7 +37,7 @@ func TestInitTabletShardConversion(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.Local())
+	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8())
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -71,7 +71,7 @@ func TestDeleteTabletBasic(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.Local())
+	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8())
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -103,7 +103,7 @@ func TestDeleteTabletTruePrimary(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.Local())
+	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8())
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -150,7 +150,7 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.Local())
+	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8())
 
 	tablet1 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -202,7 +202,7 @@ func TestDeleteTabletShardNonExisting(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.Local())
+	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8())
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{

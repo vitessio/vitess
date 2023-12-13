@@ -821,7 +821,7 @@ func newEnv(exporterName string) tabletenv.Env {
 	config.OltpReadPool.IdleTimeout = 30 * time.Second
 	config.OlapReadPool.IdleTimeout = 30 * time.Second
 	config.TxPool.IdleTimeout = 30 * time.Second
-	env := tabletenv.NewEnv(config, exporterName, collations.Local())
+	env := tabletenv.NewEnv(config, exporterName, collations.MySQL8())
 	return env
 }
 

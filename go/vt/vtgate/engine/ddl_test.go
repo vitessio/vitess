@@ -35,7 +35,7 @@ func TestDDL(t *testing.T) {
 		},
 		DirectDDLEnabled: true,
 		OnlineDDL: &OnlineDDL{
-			CollationEnv: collations.Local(),
+			CollationEnv: collations.MySQL8(),
 		},
 		NormalDDL: &Send{
 			Keyspace: &vindexes.Keyspace{

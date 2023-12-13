@@ -31,7 +31,7 @@ func TestTypeOf(t *testing.T) {
 	env := &ExpressionEnv{
 		BindVars:     make(map[string]*querypb.BindVariable),
 		now:          time.Now(),
-		collationEnv: collations.Local(),
+		collationEnv: collations.MySQL8(),
 	}
 	c := &Column{
 		Type: sqltypes.Unknown,

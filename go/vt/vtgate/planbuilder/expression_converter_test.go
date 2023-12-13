@@ -52,8 +52,8 @@ func TestConversion(t *testing.T) {
 			slct := statement.(*sqlparser.Select)
 			exprs := extract(slct.SelectExprs)
 			ec := &expressionConverter{
-				collationEnv: collations.Local(),
-				collation:    collations.Local().DefaultConnectionCharset(),
+				collationEnv: collations.MySQL8(),
+				collation:    collations.MySQL8().DefaultConnectionCharset(),
 			}
 			var result []evalengine.Expr
 			for _, expr := range exprs {

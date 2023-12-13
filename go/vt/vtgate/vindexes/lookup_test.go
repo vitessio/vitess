@@ -119,7 +119,7 @@ func (vc *vcursor) ConnCollation() collations.ID {
 }
 
 func (vc *vcursor) CollationEnv() *collations.Environment {
-	return collations.Local()
+	return collations.MySQL8()
 }
 
 func lookupCreateVindexTestCase(

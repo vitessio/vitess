@@ -169,7 +169,7 @@ func (tenv *testEnv) addTablet(t *testing.T, id int, keyspace, shard string) *fa
 	dbClientFactory := func() binlogplayer.DBClient {
 		return tenv.tmc.tablets[id].vrdbClient
 	}
-	tenv.tmc.tablets[id].vrengine = vreplication.NewTestEngine(tenv.ts, tenv.cells[0], tenv.mysqld, dbClientFactory, dbClientFactory, tenv.dbName, nil, collations.Local())
+	tenv.tmc.tablets[id].vrengine = vreplication.NewTestEngine(tenv.ts, tenv.cells[0], tenv.mysqld, dbClientFactory, dbClientFactory, tenv.dbName, nil, collations.MySQL8())
 	tenv.tmc.tablets[id].vrdbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", tenv.dbName), &sqltypes.Result{}, nil)
 	tenv.tmc.tablets[id].vrengine.Open(tenv.ctx)
 	require.True(t, tenv.tmc.tablets[id].vrengine.IsOpen(), "vreplication engine was not open")

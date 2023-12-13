@@ -47,7 +47,7 @@ func TestInitShardPrimary(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tmc := tmclient.NewTabletManagerClient()
 	defer tmc.Close()
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc, collations.Local())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc, collations.MySQL8())
 
 	primaryDb := fakesqldb.New(t)
 	defer primaryDb.Close()
@@ -110,7 +110,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tmc := tmclient.NewTabletManagerClient()
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc, collations.Local())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc, collations.MySQL8())
 
 	primaryDb := fakesqldb.New(t)
 	defer primaryDb.Close()

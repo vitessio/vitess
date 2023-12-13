@@ -62,7 +62,7 @@ func TestEngineOpen(t *testing.T) {
 			vdenv.dbClient = binlogplayer.NewMockDBClient(t)
 			vdenv.vde.Close() // ensure we close any open one
 			vdenv.vde = nil
-			vdenv.vde = NewTestEngine(tstenv.TopoServ, vdenv.tablets[100].tablet, vdiffDBName, vdenv.dbClientFactory, vdenv.tmClientFactory, collations.Local())
+			vdenv.vde = NewTestEngine(tstenv.TopoServ, vdenv.tablets[100].tablet, vdiffDBName, vdenv.dbClientFactory, vdenv.tmClientFactory, collations.MySQL8())
 			require.False(t, vdenv.vde.IsOpen())
 
 			initialQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(

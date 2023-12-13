@@ -74,7 +74,7 @@ func newTestWriter(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatWriter {
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tw := newHeartbeatWriter(tabletenv.NewEnv(config, "WriterTest", collations.Local()), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
+	tw := newHeartbeatWriter(tabletenv.NewEnv(config, "WriterTest", collations.MySQL8()), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
 	tw.keyspaceShard = "test:0"
 
 	if frozenTime != nil {

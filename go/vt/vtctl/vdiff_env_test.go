@@ -80,7 +80,7 @@ func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShar
 		tmc:        newTestVDiffTMClient(),
 		cmdlog:     logutil.NewMemoryLogger(),
 	}
-	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc, collations.Local())
+	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc, collations.MySQL8())
 
 	// Generate a unique dialer name.
 	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.Intn(1000000000))

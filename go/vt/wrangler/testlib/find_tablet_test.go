@@ -37,7 +37,7 @@ func TestFindTablet(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.Local())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8())
 
 	// Create an old primary, two good replicas
 	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)

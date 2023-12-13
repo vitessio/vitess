@@ -274,8 +274,8 @@ func TestScalarDistinctAggrOnEngine(t *testing.T) {
 
 	oa := &ScalarAggregate{
 		Aggregates: []*AggregateParams{
-			NewAggregateParam(AggregateCountDistinct, 0, "count(distinct value)", collations.Local()),
-			NewAggregateParam(AggregateSumDistinct, 1, "sum(distinct value)", collations.Local()),
+			NewAggregateParam(AggregateCountDistinct, 0, "count(distinct value)", collations.MySQL8()),
+			NewAggregateParam(AggregateSumDistinct, 1, "sum(distinct value)", collations.MySQL8()),
 		},
 		Input: fp,
 	}
@@ -312,9 +312,9 @@ func TestScalarDistinctPushedDown(t *testing.T) {
 		"8|90",
 	)}}
 
-	countAggr := NewAggregateParam(AggregateSum, 0, "count(distinct value)", collations.Local())
+	countAggr := NewAggregateParam(AggregateSum, 0, "count(distinct value)", collations.MySQL8())
 	countAggr.OrigOpcode = AggregateCountDistinct
-	sumAggr := NewAggregateParam(AggregateSum, 1, "sum(distinct value)", collations.Local())
+	sumAggr := NewAggregateParam(AggregateSum, 1, "sum(distinct value)", collations.MySQL8())
 	sumAggr.OrigOpcode = AggregateSumDistinct
 	oa := &ScalarAggregate{
 		Aggregates: []*AggregateParams{

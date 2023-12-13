@@ -79,7 +79,7 @@ func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShar
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestVDiffTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.Local())
+	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.MySQL8())
 
 	// Generate a unique dialer name.
 	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.Intn(1000000000))

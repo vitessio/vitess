@@ -160,7 +160,7 @@ func setup(ctx context.Context) (func(), int) {
 		"exta": env.Dbcfgs,
 		"extb": env.Dbcfgs,
 	}
-	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig, collations.Local())
+	playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig, collations.MySQL8())
 	playerEngine.Open(ctx)
 
 	return cleanup, 0
