@@ -86,7 +86,7 @@ func TestQP(t *testing.T) {
 			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 
-			qp := createQPFromSelect(ctx, sel)
+			qp, err := getQPAndError(ctx, sel)
 			if tcase.expErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.expErr)
@@ -101,6 +101,12 @@ func TestQP(t *testing.T) {
 			}
 		})
 	}
+}
+
+func getQPAndError(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (qp *QueryProjection, err error) {
+	defer PanicHandler(&err)
+	qp = createQPFromSelect(ctx, sel)
+	return
 }
 
 func TestQPSimplifiedExpr(t *testing.T) {
