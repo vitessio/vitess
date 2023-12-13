@@ -51,7 +51,6 @@ import (
 
 var (
 	vc                     *VitessCluster
-	vtgate                 *cluster.VtgateProcess
 	defaultRdonly          int
 	defaultReplicas        int
 	sourceKsOpts           = make(map[string]string)
@@ -135,7 +134,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil); err != nil {
 		t.Fatal(err)
 	}
-	vtgate = defaultCell.Vtgates[0]
+	vtgate := defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 
 	verifyClusterHealth(t, vc)
@@ -247,7 +246,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil); err != nil {
 		t.Fatal(err)
 	}
-	vtgate = defaultCell.Vtgates[0]
+	vtgate := defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 
 	// Confirm that the initial copy table phase does not proceed until the source tablet(s)
@@ -307,7 +306,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 
 	defaultCell := vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
-	vtgate = defaultCell.Vtgates[0]
+	vtgate := defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -428,12 +427,8 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil); err != nil {
 		t.Fatal(err)
 	}
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
 	verifyClusterHealth(t, vc)
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
 	sourceTab = vc.getPrimaryTablet(t, sourceKs, shard)
 
 	insertInitialData(t)
@@ -449,7 +444,9 @@ func TestVStreamFlushBinlog(t *testing.T) {
 
 	// Generate a lot of binlog event bytes
 	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 1024
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
+	defer vtgateConn.Close()
+
 	queryF := "insert into db_order_test (c_uuid, dbstuff, created_at) values ('%d', '%s', now())"
 	for i := 100; i < 10000; i++ {
 		randStr, err := randHex(6500)
@@ -590,7 +587,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 
-	vtgate = cell1.Vtgates[0]
+	vtgate := cell1.Vtgates[0]
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, vtgate, keyspace, 2)
 	})

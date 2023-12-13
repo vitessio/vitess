@@ -23,8 +23,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestReplicationStress(t *testing.T) {
@@ -55,8 +53,6 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 100, nil)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()

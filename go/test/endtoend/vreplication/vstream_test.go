@@ -53,7 +53,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
-	vtgate = defaultCell.Vtgates[0]
+	vtgate := defaultCell.Vtgates[0]
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, vtgate, "product", 2)
 	})
@@ -247,11 +247,7 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "unsharded", "0", vschemaUnsharded, schemaUnsharded, defaultReplicas, defaultRdonly, baseTabletID+100, nil)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
 
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
 	// some initial data

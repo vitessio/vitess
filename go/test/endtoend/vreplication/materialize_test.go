@@ -72,8 +72,6 @@ func testShardedMaterialize(t *testing.T, useVtctldClient bool) {
 	defer vc.TearDown()
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks1, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 100, nil)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks2, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 200, nil)
 
@@ -185,8 +183,6 @@ func testMaterialize(t *testing.T, useVtctldClient bool) {
 
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", smMaterializeVSchemaSource, smMaterializeSchemaSource, defaultReplicas, defaultRdonly, 300, nil)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "0", smMaterializeVSchemaTarget, smMaterializeSchemaTarget, defaultReplicas, defaultRdonly, 400, nil)
 

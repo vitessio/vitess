@@ -55,7 +55,7 @@ func TestVtctlMigrate(t *testing.T) {
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	require.NoError(t, err, "failed to create product keyspace")
-	vtgate = defaultCell.Vtgates[0]
+	vtgate := defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate, "failed to get vtgate")
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -176,8 +176,6 @@ func TestVtctldMigrate(t *testing.T) {
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0",
 		initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	require.NoError(t, err, "failed to create product keyspace")
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate, "failed to get vtgate")
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()

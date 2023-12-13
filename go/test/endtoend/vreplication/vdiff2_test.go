@@ -125,17 +125,13 @@ func TestVDiff2(t *testing.T) {
 	zone1 := vc.Cells["zone1"]
 	zone2 := vc.Cells["zone2"]
 	zone3 := vc.Cells["zone3"]
-	defaultCell := zone1
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
 	_, err := vc.AddKeyspace(t, []*Cell{zone2, zone1, zone3}, sourceKs, strings.Join(sourceShards, ","), initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
 	require.NoError(t, err)
 
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
-
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 

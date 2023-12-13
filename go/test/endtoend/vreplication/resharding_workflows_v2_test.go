@@ -669,10 +669,6 @@ func setupMinimalCluster(t *testing.T) *VitessCluster {
 
 	vc.AddKeyspace(t, []*Cell{zone1}, "product", "0", initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
 
-	vtgate = zone1.Vtgates[0]
-	require.NotNil(t, vtgate)
-	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1, 30*time.Second))
-
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 
