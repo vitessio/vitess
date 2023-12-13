@@ -40,9 +40,7 @@ const (
 	targetKs          = "customer"
 	ksWorkflow        = targetKs + "." + workflowName
 	reverseKsWorkflow = sourceKs + "." + workflowName + "_reverse"
-	tablesToMove      = "customer"
 	defaultCellName   = "zone1"
-	readQuery         = "select cid from customer"
 )
 
 const (
@@ -84,7 +82,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 
 func createMoveTablesWorkflow(t *testing.T, tables string) {
 	if tables == "" {
-		tables = tablesToMove
+		tables = "customer"
 	}
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
 		tables, workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
@@ -97,7 +95,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 }
 
 func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
-	return tstWorkflowExec(t, cells, workflowName, sourceKs, targetKs, tablesToMove, action, tabletTypes, "", "", defaultWorkflowExecOptions)
+	return tstWorkflowExec(t, cells, workflowName, sourceKs, targetKs, "customer", action, tabletTypes, "", "", defaultWorkflowExecOptions)
 }
 
 func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes,
@@ -232,6 +230,7 @@ func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.Vttabl
 	for _, tt := range []string{"replica", "rdonly"} {
 		destination := fmt.Sprintf("%s:%s@%s", tablet.Keyspace, tablet.Shard, tt)
 		if strings.Contains(tabletTypes, tt) {
+			readQuery := "select * from customer"
 			assertQueryExecutesOnTablet(t, vtgateConn, tablet, destination, readQuery, readQuery)
 		}
 	}
