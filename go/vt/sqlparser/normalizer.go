@@ -139,6 +139,8 @@ func (nz *normalizer) walkDownSelect(node, parent SQLNode) bool {
 	case *ConvertType:
 		// we should not rewrite the type description
 		return false
+	case *CurTimeFuncExpr:
+		return false
 	}
 	return nz.err == nil // only continue if we haven't found any errors
 }
@@ -154,8 +156,6 @@ func (nz *normalizer) walkUpSelect(cursor *Cursor) bool {
 	}
 	parent := cursor.Parent()
 	switch parent.(type) {
-	case *CurTimeFuncExpr:
-		return true
 	case *Order, GroupBy:
 		return false
 	case *Limit:
