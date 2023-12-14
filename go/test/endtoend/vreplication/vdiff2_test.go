@@ -46,7 +46,7 @@ type testCase struct {
 	stop                bool // test stop functionality with this workflow
 	testCLIErrors       bool // test CLI errors against this workflow (only needs to be done once)
 	testCLICreateWait   bool // test CLI create and wait until done against this workflow (only needs to be done once)
-	testCLIFlagHandling bool
+	testCLIFlagHandling bool // test vtctldclient flag handling from end-to-end
 }
 
 const (
@@ -73,7 +73,7 @@ var testCases = []*testCase{
 		resumeInsert:        `insert into customer(cid, name, typ) values(1992234, 'Testy McTester (redux)', 'enterprise')`,
 		testCLIErrors:       true, // test for errors in the simplest workflow
 		testCLICreateWait:   true, // test wait on create feature against simplest workflow
-		testCLIFlagHandling: true,
+		testCLIFlagHandling: true, // test flag handling end-to-end against simplest workflow
 	},
 	{
 		name:           "Reshard Merge/split 2 to 3",
@@ -281,19 +281,20 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			"--tablet-types-in-preference-order=false", "--format=json")
 		require.NoError(t, err, "vdiff command failed: %s", res)
 		jsonRes := gjson.Parse(res)
-		vdid := jsonRes.Get("UUID").String()
-		_, err = uuid.Parse(vdid)
-		require.NoError(t, err, "invalid UUID: %s", vdid)
+		vduuid, err := uuid.Parse(jsonRes.Get("UUID").String())
+		require.NoError(t, err, "invalid UUID: %s", jsonRes.Get("UUID").String())
 
 		// Confirm that the options were set and saved correctly.
 		query := sqlparser.BuildParsedQuery("select options from %s.vdiff where vdiff_uuid = %s",
-			sidecarDBIdentifier, encodeString(vdid)).Query
+			sidecarDBIdentifier, encodeString(vduuid.String())).Query
 		tablets := vc.getVttabletsInKeyspace(t, cell, targetKs, "PRIMARY")
 		require.Greater(t, len(tablets), 0, "no primary tablets found in keyspace %s", targetKs)
 		tablet := maps.Values(tablets)[0]
 		qres, err := tablet.QueryTablet(query, targetKs, false)
-		require.NoError(t, err, "query failed: %s", query)
-		require.NotNil(t, qres, "query returned nil result: %s", query)
+		require.NoError(t, err, "query %q failed: %v", query, err)
+		require.NotNil(t, qres, "query %q returned nil result", query) // Should never happen
+		require.Equal(t, 1, len(qres.Rows), "query %q returned %d rows, expected 1", query, len(qres.Rows))
+		require.Equal(t, 1, len(qres.Rows[0]), "query %q returned %d columns, expected 1", query, len(qres.Rows[0]))
 		jsonRes = gjson.Parse(qres.Rows[0][0].ToString())
 		for key, val := range coreOpts {
 			require.Equal(t, val, jsonRes.Get("core_options."+key).String(), "unexpected value for key core_options.%s; expected: %s, got: %s", key, val, jsonRes.Get("core_options."+key).String())
