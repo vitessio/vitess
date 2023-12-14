@@ -15,11 +15,8 @@ permissions: read-all
 jobs:
 
   upgrade_downgrade_test:
-    if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test - Reparent Old VTTablet
     runs-on: gh-hosted-runners-16cores-1
-    needs:
-      - get_previous_release
 
     steps:
     - name: Skip CI
