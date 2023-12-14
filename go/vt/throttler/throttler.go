@@ -234,7 +234,7 @@ func (t *Throttler) LastMaxLagNotIgnoredForTabletType(tabletType topodata.Tablet
 	var maxLag uint32
 	cacheEntries := cache.entries
 
-	for key, _ := range cacheEntries {
+	for key := range cacheEntries {
 		if cache.isIgnored(key) {
 			continue
 		}
