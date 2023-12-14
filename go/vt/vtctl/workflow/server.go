@@ -1637,7 +1637,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
 			Tables:                strings.Join(req.Tables, ","),
 			AutoRetry:             req.AutoRetry,
-			MaxRows:               req.MaxExtraRowsToCompare,
+			MaxRows:               req.Limit,
 			TimeoutSeconds:        req.FilteredReplicationWaitTime.Seconds,
 			MaxExtraRowsToCompare: req.MaxExtraRowsToCompare,
 			UpdateTableStats:      req.UpdateTableStats,
