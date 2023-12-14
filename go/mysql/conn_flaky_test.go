@@ -31,17 +31,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -878,14 +874,6 @@ func TestMultiStatement(t *testing.T) {
 
 func TestMultiStatementOnSplitError(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
-	// Set the splitStatementFunction to return an error.
-	splitStatementFunction = func(blob string) (pieces []string, err error) {
-		return nil, fmt.Errorf("Error in split statements")
-	}
-	defer func() {
-		// Set the splitStatementFunction to the correct function back
-		splitStatementFunction = sqlparser.SplitStatementToPieces
-	}()
 	sConn.Capabilities |= CapabilityClientMultiStatements
 	defer func() {
 		listener.Close()
@@ -893,7 +881,7 @@ func TestMultiStatementOnSplitError(t *testing.T) {
 		cConn.Close()
 	}()
 
-	err := cConn.WriteComQuery("select 1;select 2")
+	err := cConn.WriteComQuery("broken>'query 1;parse<error 2")
 	require.NoError(t, err)
 
 	// this handler will return results according to the query. In case the query contains "error" it will return an error
