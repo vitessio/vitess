@@ -403,10 +403,7 @@ func pushAggregationThroughHashJoin(ctx *plancontext.PlanningContext, rootAggr *
 
 	// The grouping columns need to be pushed down as grouping columns on the respective sides
 	for _, groupBy := range rootAggr.Grouping {
-		expr, err := rootAggr.QP.GetSimplifiedExpr(ctx, groupBy.Inner)
-		if err != nil {
-			panic(err)
-		}
+		expr := rootAggr.QP.GetSimplifiedExpr(ctx, groupBy.Inner)
 		deps := ctx.SemTable.RecursiveDeps(expr)
 		switch {
 		case deps.IsSolvedBy(lhs.tableID):
@@ -455,10 +452,7 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAgg
 	for _, pred := range join.JoinPredicates.columns {
 		for _, bve := range pred.LHSExprs {
 			expr := bve.Expr
-			wexpr, err := rootAggr.QP.GetSimplifiedExpr(ctx, expr)
-			if err != nil {
-				panic(err)
-			}
+			wexpr := rootAggr.QP.GetSimplifiedExpr(ctx, expr)
 			idx, found := canReuseColumn(ctx, lhs.pushed.Columns, expr, extractExpr)
 			if !found {
 				idx = len(lhs.pushed.Columns)
@@ -489,10 +483,7 @@ func splitGroupingToLeftAndRight(
 	columns joinColumns,
 ) {
 	for _, groupBy := range rootAggr.Grouping {
-		expr, err := rootAggr.QP.GetSimplifiedExpr(ctx, groupBy.Inner)
-		if err != nil {
-			panic(err)
-		}
+		expr := rootAggr.QP.GetSimplifiedExpr(ctx, groupBy.Inner)
 		deps := ctx.SemTable.RecursiveDeps(expr)
 		switch {
 		case deps.IsSolvedBy(lhs.tableID):

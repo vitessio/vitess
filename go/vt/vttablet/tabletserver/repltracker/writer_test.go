@@ -66,7 +66,7 @@ func TestWriteHeartbeatError(t *testing.T) {
 func newTestWriter(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatWriter {
 	config := tabletenv.NewDefaultConfig()
 	config.ReplicationTracker.Mode = tabletenv.Heartbeat
-	_ = config.ReplicationTracker.HeartbeatIntervalSeconds.Set("1s")
+	config.ReplicationTracker.HeartbeatInterval = time.Second
 
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params

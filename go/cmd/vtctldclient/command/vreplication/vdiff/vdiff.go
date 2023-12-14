@@ -114,6 +114,16 @@ var (
 				createOptions.Tables[i] = strings.TrimSpace(table)
 			}
 		}
+		// Enforce non-negative values for limits and max options.
+		if createOptions.Limit < 1 {
+			return fmt.Errorf("--limit must be a positive value")
+		}
+		if createOptions.MaxReportSampleRows < 0 {
+			return fmt.Errorf("--max-report-sample-rows must not be a negative value")
+		}
+		if createOptions.MaxExtraRowsToCompare < 0 {
+			return fmt.Errorf("--max-extra-rows-to-compare must not be a negative value")
+		}
 		return nil
 	}
 
@@ -272,17 +282,16 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		TabletTypes:                 createOptions.TabletTypes,
 		TabletSelectionPreference:   tsp,
 		Tables:                      createOptions.Tables,
-		Limit:                       int64(createOptions.Limit),
+		Limit:                       createOptions.Limit,
 		FilteredReplicationWaitTime: protoutil.DurationToProto(createOptions.FilteredReplicationWaitTime),
 		DebugQuery:                  createOptions.DebugQuery,
 		OnlyPKs:                     createOptions.OnlyPKs,
 		UpdateTableStats:            createOptions.UpdateTableStats,
-		MaxExtraRowsToCompare:       int64(createOptions.MaxExtraRowsToCompare),
+		MaxExtraRowsToCompare:       createOptions.MaxExtraRowsToCompare,
 		Wait:                        createOptions.Wait,
 		WaitUpdateInterval:          protoutil.DurationToProto(createOptions.WaitUpdateInterval),
 		AutoRetry:                   createOptions.AutoRetry,
-		MaxReportSampleRows:         int64(createOptions.MaxReportSampleRows),
-		MaxDiffDuration:             protoutil.DurationToProto(createOptions.MaxDiffDuration),
+		MaxReportSampleRows:         createOptions.MaxReportSampleRows,
 	})
 
 	if err != nil {

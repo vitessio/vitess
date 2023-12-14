@@ -72,17 +72,17 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	config := env.Config()
 
 	// config.EnableLagThrottler is a feature flag for the throttler; if throttler runs, then heartbeat must also run
-	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && config.ReplicationTracker.HeartbeatOnDemandSeconds.Get() == 0 {
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && config.ReplicationTracker.HeartbeatOnDemand == 0 {
 		return &heartbeatWriter{}
 	}
-	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
+	heartbeatInterval := config.ReplicationTracker.HeartbeatInterval
 	w := &heartbeatWriter{
 		env:              env,
 		enabled:          true,
 		tabletAlias:      alias.CloneVT(),
 		now:              time.Now,
 		interval:         heartbeatInterval,
-		onDemandDuration: config.ReplicationTracker.HeartbeatOnDemandSeconds.Get(),
+		onDemandDuration: config.ReplicationTracker.HeartbeatOnDemand,
 		ticks:            timer.NewTimer(heartbeatInterval),
 		errorLog:         logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted

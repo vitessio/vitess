@@ -149,7 +149,7 @@ func (nz *normalizer) walkUpSelect(cursor *Cursor) bool {
 	parent := cursor.Parent()
 	switch parent.(type) {
 	case *Order, GroupBy:
-		return false
+		return true
 	case *Limit:
 		nz.convertLiteral(node, cursor)
 	default:
