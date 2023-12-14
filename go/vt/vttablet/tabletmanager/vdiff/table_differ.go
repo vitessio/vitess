@@ -53,6 +53,7 @@ import (
 var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
 
 var ErrMaxDiffDurationExceeded = vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "table diff was stopped due to exceeding the max-diff-duration time")
+var ErrVDiffStoppedByUser = vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
@@ -522,7 +523,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		case <-ctx.Done():
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		case <-td.wd.ct.done:
-			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
+			return nil, ErrVDiffStoppedByUser
 		case <-stop:
 			return nil, ErrMaxDiffDurationExceeded
 		default:
@@ -703,13 +704,16 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		if err != nil {
 			return err
 		}
+
 		// Update the in-memory lastPK as well so that we can restart the table
-		// diff if --max-diff-time was specified.
-		lastpkpb := &querypb.QueryResult{}
-		if err := prototext.Unmarshal(lastPK, lastpkpb); err != nil {
-			return err
+		// diff if --max-diff-duration was specified.
+		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
+			lastpkpb := &querypb.QueryResult{}
+			if err := prototext.Unmarshal(lastPK, lastpkpb); err != nil {
+				return err
+			}
+			td.lastPK = lastpkpb
 		}
-		td.lastPK = lastpkpb
 
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),

@@ -292,6 +292,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		WaitUpdateInterval:          protoutil.DurationToProto(createOptions.WaitUpdateInterval),
 		AutoRetry:                   createOptions.AutoRetry,
 		MaxReportSampleRows:         createOptions.MaxReportSampleRows,
+		MaxDiffDuration:             protoutil.DurationToProto(createOptions.MaxDiffDuration),
 	})
 
 	if err != nil {

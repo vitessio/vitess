@@ -136,22 +136,25 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 }
 
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
-	defer func() {
+	cancelShardStreams := func() {
 		if td.shardStreamsCancel != nil {
 			td.shardStreamsCancel()
 		}
 		// Wait for all the shard streams to finish before returning.
 		td.wgShardStreamers.Wait()
+	}
+	defer func() {
+		cancelShardStreams()
 	}()
 
 	var (
-		timer   *time.Timer
-		dr      *DiffReport
-		diffErr error
+		diffTimer  *time.Timer
+		diffReport *DiffReport
+		diffErr    error
 	)
 	defer func() {
-		if timer != nil {
-			timer.Stop()
+		if diffTimer != nil {
+			diffTimer.Stop()
 		}
 	}()
 
@@ -171,23 +174,25 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		case <-wd.ct.done:
-			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+			return ErrVDiffStoppedByUser
 		default:
 		}
 
-		if timer != nil { // We're restarting the diff
-			timer.Stop()
-			timer = nil
-			// Give the underlying resources (mainly MySQL) a moment to catch up.
+		if diffTimer != nil { // We're restarting the diff
+			diffTimer.Stop()
+			diffTimer = nil
+			cancelShardStreams()
+			// Give the underlying resources (mainly MySQL) a moment to catch up
+			// before we pick up where we left off (but with a new database snapshot).
 			time.Sleep(30 * time.Second)
 		}
-		timer = time.NewTimer(maxDiffRuntime)
+		diffTimer = time.NewTimer(maxDiffRuntime)
 
 		if err := td.initialize(ctx); err != nil {
 			return err
 		}
 		log.Infof("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
-		dr, diffErr = td.diff(ctx, wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, wd.opts.ReportOptions.OnlyPks, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows, timer.C)
+		diffReport, diffErr = td.diff(ctx, wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, wd.opts.ReportOptions.OnlyPks, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows, diffTimer.C)
 		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr)
 		if diffErr == nil { // We finished the diff successfully
 			break
@@ -196,23 +201,23 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 			return diffErr
 		}
 	}
-	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, dr)
+	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport)
 
-	if dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0 {
-		if err := wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows); err != nil {
+	if diffReport.ExtraRowsSource > 0 || diffReport.ExtraRowsTarget > 0 {
+		if err := wd.reconcileExtraRows(diffReport, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows); err != nil {
 			log.Errorf("Encountered an error reconciling extra rows found for table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
 			return vterrors.Wrap(err, "failed to reconcile extra rows")
 		}
 	}
 
-	if dr.MismatchedRows > 0 || dr.ExtraRowsTarget > 0 || dr.ExtraRowsSource > 0 {
+	if diffReport.MismatchedRows > 0 || diffReport.ExtraRowsTarget > 0 || diffReport.ExtraRowsSource > 0 {
 		if err := updateTableMismatch(dbClient, wd.ct.id, td.table.Name); err != nil {
 			return err
 		}
 	}
 
-	log.Infof("Completed reconciliation on table %s for vdiff %s with updated report: %+v", td.table.Name, wd.ct.uuid, dr)
-	if err := td.updateTableStateAndReport(ctx, dbClient, CompletedState, dr); err != nil {
+	log.Infof("Completed reconciliation on table %s for vdiff %s with updated report: %+v", td.table.Name, wd.ct.uuid, diffReport)
+	if err := td.updateTableStateAndReport(ctx, dbClient, CompletedState, diffReport); err != nil {
 		return err
 	}
 	return nil
