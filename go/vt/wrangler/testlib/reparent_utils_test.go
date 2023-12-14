@@ -25,18 +25,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/mysql/replication"
-
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
-
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 

@@ -132,7 +132,7 @@ func TestHashJoinVariations(t *testing.T) {
 
 		expected := sqltypes.MakeTestResult(fields, tc.expected...)
 
-		typ, err := evalengine.CoerceTypes(collations.MySQL8(), typeForOffset(tc.lhs), typeForOffset(tc.rhs))
+		typ, err := evalengine.CoerceTypes(typeForOffset(tc.lhs), typeForOffset(tc.rhs), collations.MySQL8())
 		require.NoError(t, err)
 
 		jn := &HashJoin{

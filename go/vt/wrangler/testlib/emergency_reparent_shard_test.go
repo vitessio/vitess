@@ -25,11 +25,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
@@ -53,7 +51,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8())
-	vp := NewVtctlPipe(t, ts, collations.MySQL8())
+	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// Create a primary, a couple good replicas

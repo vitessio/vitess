@@ -23,7 +23,6 @@ import (
 	"sync"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
@@ -80,7 +79,7 @@ func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShar
 		tmc:        newTestVDiffTMClient(),
 		cmdlog:     logutil.NewMemoryLogger(),
 	}
-	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc, collations.MySQL8())
+	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc)
 
 	// Generate a unique dialer name.
 	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.Intn(1000000000))

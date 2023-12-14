@@ -24,7 +24,6 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -77,14 +76,14 @@ func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClien
 
 // NewTestWrangler creates a new Wrangler object for use in tests. This should NOT be used
 // in production.
-func NewTestWrangler(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient, collationEnv *collations.Environment) *Wrangler {
+func NewTestWrangler(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
 	return &Wrangler{
 		logger:       logger,
 		ts:           ts,
 		tmc:          tmc,
 		vtctld:       grpcvtctldserver.NewTestVtctldServer(ts, tmc),
 		sourceTs:     ts,
-		collationEnv: collationEnv,
+		collationEnv: collations.MySQL8(),
 	}
 }
 

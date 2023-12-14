@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -91,7 +90,7 @@ func TestControllerKeyRange(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
-	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
+	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre)
 	if err != nil {
@@ -153,7 +152,7 @@ func TestControllerTables(t *testing.T) {
 		},
 	}
 	mysqld.MysqlPort.Store(3306)
-	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
+	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre)
 	if err != nil {
@@ -223,7 +222,7 @@ func TestControllerOverrides(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
-	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
+	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, vre)
 	if err != nil {
@@ -250,7 +249,7 @@ func TestControllerCanceledContext(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, nil, nil, nil, "", nil, collations.MySQL8())
+	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, nil, nil, nil, "", nil)
 
 	ct, err := newController(ctx, params, nil, nil, env.TopoServ, env.Cells[0], "rdonly", nil, vre)
 	if err != nil {
@@ -296,7 +295,7 @@ func TestControllerRetry(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
-	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
+	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, vre)
 	if err != nil {
@@ -358,7 +357,7 @@ func TestControllerStopPosition(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
-	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil, collations.MySQL8())
+	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre)
 	if err != nil {

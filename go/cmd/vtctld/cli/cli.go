@@ -19,9 +19,8 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctld"

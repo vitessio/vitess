@@ -115,7 +115,7 @@ func (a *aggregatorDistinct) shouldReturn(row []sqltypes.Value) (bool, error) {
 		next := row[a.column]
 		if !last.IsNull() {
 			if last.TinyWeightCmp(next) == 0 {
-				cmp, err := evalengine.NullsafeCompare(a.collationEnv, last, next, a.coll)
+				cmp, err := evalengine.NullsafeCompare(last, next, a.collationEnv, a.coll)
 				if err != nil {
 					return true, err
 				}
@@ -412,7 +412,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 			ag = &aggregatorMin{
 				aggregatorMinMax{
 					from:   aggr.Col,
-					minmax: evalengine.NewAggregationMinMax(aggr.CollationEnv, sourceType, aggr.Type.Collation()),
+					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.CollationEnv, aggr.Type.Collation()),
 				},
 			}
 
@@ -420,7 +420,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 			ag = &aggregatorMax{
 				aggregatorMinMax{
 					from:   aggr.Col,
-					minmax: evalengine.NewAggregationMinMax(aggr.CollationEnv, sourceType, aggr.Type.Collation()),
+					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.CollationEnv, aggr.Type.Collation()),
 				},
 			}
 

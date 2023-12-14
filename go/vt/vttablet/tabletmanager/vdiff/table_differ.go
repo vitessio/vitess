@@ -673,7 +673,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		if collationID == collations.Unknown {
 			collationID = collations.CollationBinaryID
 		}
-		c, err = evalengine.NullsafeCompare(td.wd.collationEnv, sourceRow[compareIndex], targetRow[compareIndex], collationID)
+		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.wd.collationEnv, collationID)
 		if err != nil {
 			return 0, err
 		}

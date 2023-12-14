@@ -88,7 +88,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, tablet *topodata
 // NewTestEngine creates an Engine for use in tests. It uses the custom db client factory and
 // tablet manager client factory, while setting the fortests field to true to modify any engine
 // behavior when used in tests (e.g. not starting the retry goroutine).
-func NewTestEngine(ts *topo.Server, tablet *topodata.Tablet, dbn string, dbcf func() binlogplayer.DBClient, tmcf func() tmclient.TabletManagerClient, collationEnv *collations.Environment) *Engine {
+func NewTestEngine(ts *topo.Server, tablet *topodata.Tablet, dbn string, dbcf func() binlogplayer.DBClient, tmcf func() tmclient.TabletManagerClient) *Engine {
 	vde := &Engine{
 		controllers:             make(map[int64]*controller),
 		ts:                      ts,
@@ -98,7 +98,7 @@ func NewTestEngine(ts *topo.Server, tablet *topodata.Tablet, dbn string, dbcf fu
 		dbClientFactoryDba:      dbcf,
 		tmClientFactory:         tmcf,
 		fortests:                true,
-		collationEnv:            collationEnv,
+		collationEnv:            collations.MySQL8(),
 	}
 	return vde
 }
@@ -210,7 +210,7 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 // addController creates a new controller using the given vdiff record and adds it to the engine.
 // You must already have the main engine mutex (mu) locked before calling this.
 func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletmanagerdata.VDiffOptions) error {
-	ct, err := newController(vde.ctx, row, vde.dbClientFactoryDba, vde.ts, vde, options, vde.collationEnv)
+	ct, err := newController(vde.ctx, row, vde.dbClientFactoryDba, vde.ts, vde, options)
 	if err != nil {
 		return fmt.Errorf("controller could not be initialized for stream %+v on tablet %v",
 			row, vde.thisTablet.Alias)

@@ -49,7 +49,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 	)
 
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts, collations.MySQL8())
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts)
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -530,7 +530,7 @@ func TestBuildPlanInclude(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts, collations.MySQL8())
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts)
 	require.NoError(t, err)
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -609,7 +609,7 @@ func TestBuildPlanFailure(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts, collations.MySQL8())
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts)
 	require.NoError(t, err)
 
 	testcases := []struct {

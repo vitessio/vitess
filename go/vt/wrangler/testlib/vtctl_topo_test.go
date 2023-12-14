@@ -25,8 +25,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -64,7 +62,7 @@ func TestVtctlTopoCommands(t *testing.T) {
 	if err := ts.CreateKeyspace(context.Background(), "ks2", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT}); err != nil {
 		t.Fatalf("CreateKeyspace() failed: %v", err)
 	}
-	vp := NewVtctlPipe(t, ts, collations.MySQL8())
+	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	tmp := t.TempDir()

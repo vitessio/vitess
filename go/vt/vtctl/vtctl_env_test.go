@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
@@ -80,7 +79,7 @@ func newTestVTCtlEnv(ctx context.Context) *testVTCtlEnv {
 		tmc:        newTestVTCtlTMClient(),
 		cmdlog:     logutil.NewMemoryLogger(),
 	}
-	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc, collations.MySQL8())
+	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc)
 	return env
 }
 

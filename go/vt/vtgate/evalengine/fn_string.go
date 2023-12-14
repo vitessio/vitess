@@ -978,7 +978,7 @@ func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
 		args = append(args, a)
 		tt = concatSQLType(a.SQLType(), tt)
 
-		err = ca.add(env.collationEnv, evalCollation(a))
+		err = ca.add(evalCollation(a), env.collationEnv)
 		if err != nil {
 			return nil, err
 		}
@@ -1029,7 +1029,7 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 		args = append(args, a)
 		tt = concatSQLType(a.Type, tt)
 
-		err = ca.add(c.collationEnv, a.Col)
+		err = ca.add(a.Col, c.collationEnv)
 		if err != nil {
 			return ctype{}, err
 		}
@@ -1090,7 +1090,7 @@ func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
 		args = append(args, a)
 		tt = concatSQLType(a.SQLType(), tt)
 
-		err = ca.add(env.collationEnv, evalCollation(a))
+		err = ca.add(evalCollation(a), env.collationEnv)
 		if err != nil {
 			return nil, err
 		}
@@ -1152,7 +1152,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 		}
 		tt = concatSQLType(a.Type, tt)
 
-		err = ca.add(c.collationEnv, a.Col)
+		err = ca.add(a.Col, c.collationEnv)
 		if err != nil {
 			return ctype{}, err
 		}

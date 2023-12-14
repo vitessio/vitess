@@ -604,7 +604,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		ta.addEval(then)
-		if err := ca.add(env.collationEnv, evalCollation(then)); err != nil {
+		if err := ca.add(evalCollation(then), env.collationEnv); err != nil {
 			return nil, err
 		}
 
@@ -619,7 +619,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		ta.addEval(e)
-		if err := ca.add(env.collationEnv, evalCollation(e)); err != nil {
+		if err := ca.add(evalCollation(e), env.collationEnv); err != nil {
 			return nil, err
 		}
 		if !matched {
@@ -691,7 +691,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 
 		ta.add(then.Type, then.Flag)
-		if err := ca.add(c.collationEnv, then.Col); err != nil {
+		if err := ca.add(then.Col, c.collationEnv); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -703,7 +703,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 
 		ta.add(els.Type, els.Flag)
-		if err := ca.add(c.collationEnv, els.Col); err != nil {
+		if err := ca.add(els.Col, c.collationEnv); err != nil {
 			return ctype{}, err
 		}
 	}

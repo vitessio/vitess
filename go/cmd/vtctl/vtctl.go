@@ -27,12 +27,11 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -128,7 +127,6 @@ func main() {
 
 	ts := topo.Open()
 	defer ts.Close()
-	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	installSignalHandlers(cancel)
 
@@ -172,7 +170,7 @@ func main() {
 		fallthrough
 	default:
 		log.Warningf("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
-
+		collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
 		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv)
 
 		if args[0] == "--" {

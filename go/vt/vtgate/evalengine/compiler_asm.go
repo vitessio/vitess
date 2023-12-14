@@ -723,7 +723,7 @@ func (asm *assembler) CmpTuple(collationEnv *collations.Environment, fullEqualit
 		l := env.vm.stack[env.vm.sp-2].(*evalTuple)
 		r := env.vm.stack[env.vm.sp-1].(*evalTuple)
 		env.vm.sp -= 2
-		env.vm.flags.cmp, env.vm.flags.null, env.vm.err = evalCompareMany(collationEnv, l.t, r.t, fullEquality)
+		env.vm.flags.cmp, env.vm.flags.null, env.vm.err = evalCompareMany(l.t, r.t, fullEquality, collationEnv)
 		return 1
 	}, "CMP TUPLE(SP-2), TUPLE(SP-1)")
 }
@@ -735,7 +735,7 @@ func (asm *assembler) CmpTupleNullsafe(collationsEnv *collations.Environment) {
 		r := env.vm.stack[env.vm.sp-1].(*evalTuple)
 
 		var equals int
-		equals, env.vm.err = evalCompareTuplesNullSafe(collationsEnv, l.t, r.t)
+		equals, env.vm.err = evalCompareTuplesNullSafe(l.t, r.t, collationsEnv)
 
 		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBool(equals == 0)
 		env.vm.sp -= 1

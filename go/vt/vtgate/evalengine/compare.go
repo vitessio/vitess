@@ -134,8 +134,8 @@ func compareDateAndString(l, r eval) int {
 
 // More on string collations coercibility on MySQL documentation:
 //   - https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
-func compareStrings(env *collations.Environment, l, r eval) (int, error) {
-	l, r, col, err := mergeAndCoerceCollations(env, l, r)
+func compareStrings(l, r eval, env *collations.Environment) (int, error) {
+	l, r, col, err := mergeAndCoerceCollations(l, r, env)
 	if err != nil {
 		return 0, err
 	}

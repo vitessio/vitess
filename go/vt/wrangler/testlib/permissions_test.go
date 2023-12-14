@@ -49,7 +49,7 @@ func TestPermissions(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8())
-	vp := NewVtctlPipe(t, ts, collations.MySQL8())
+	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)

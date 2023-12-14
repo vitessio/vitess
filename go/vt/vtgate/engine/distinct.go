@@ -141,7 +141,7 @@ func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (evalengine.HashCode
 
 func (pt *probeTable) equal(a, b sqltypes.Row) (bool, error) {
 	for i, checkCol := range pt.checkCols {
-		cmp, err := evalengine.NullsafeCompare(pt.collationEnv, a[i], b[i], checkCol.Type.Collation())
+		cmp, err := evalengine.NullsafeCompare(a[i], b[i], pt.collationEnv, checkCol.Type.Collation())
 		if err != nil {
 			_, isCollErr := err.(evalengine.UnsupportedCollationError)
 			if !isCollErr || checkCol.WsCol == nil {
@@ -149,7 +149,7 @@ func (pt *probeTable) equal(a, b sqltypes.Row) (bool, error) {
 			}
 			checkCol = checkCol.SwitchToWeightString()
 			pt.checkCols[i] = checkCol
-			cmp, err = evalengine.NullsafeCompare(pt.collationEnv, a[i], b[i], checkCol.Type.Collation())
+			cmp, err = evalengine.NullsafeCompare(a[i], b[i], pt.collationEnv, checkCol.Type.Collation())
 			if err != nil {
 				return false, err
 			}

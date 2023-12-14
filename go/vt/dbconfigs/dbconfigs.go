@@ -123,7 +123,7 @@ func RegisterFlags(userKeys ...string) {
 	servenv.OnParse(func(fs *pflag.FlagSet) {
 		registerBaseFlags(fs)
 		for _, userKey := range userKeys {
-			uc, cp := GlobalDBConfigs.getParams(userKey, &GlobalDBConfigs)
+			uc, cp := GlobalDBConfigs.getParams(userKey)
 			registerPerUserFlags(fs, userKey, uc, cp)
 		}
 	})
@@ -318,9 +318,9 @@ func (dbcfgs *DBConfigs) Clone() *DBConfigs {
 // parameters. This is only for legacy support.
 // If no per-user parameters are supplied, then the defaultSocketFile
 // is used to initialize the per-user conn params.
-func (dbcfgs *DBConfigs) InitWithSocket(collationEnv *collations.Environment, defaultSocketFile string) {
+func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string, collationEnv *collations.Environment) {
 	for _, userKey := range All {
-		uc, cp := dbcfgs.getParams(userKey, dbcfgs)
+		uc, cp := dbcfgs.getParams(userKey)
 		// TODO @rafael: For ExternalRepl we need to respect the provided host / port
 		// At the moment this is an snowflake user connection type that it used by
 		// vreplication to connect to external mysql hosts that are not part of a vitess
@@ -372,7 +372,7 @@ func (dbcfgs *DBConfigs) InitWithSocket(collationEnv *collations.Environment, de
 	log.Infof("DBConfigs: %v\n", dbcfgs.String())
 }
 
-func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig, *mysql.ConnParams) {
+func (dbcfgs *DBConfigs) getParams(userKey string) (*UserConfig, *mysql.ConnParams) {
 	var uc *UserConfig
 	var cp *mysql.ConnParams
 	switch userKey {

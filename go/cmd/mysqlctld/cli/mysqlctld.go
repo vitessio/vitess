@@ -27,9 +27,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"

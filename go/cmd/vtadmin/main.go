@@ -24,8 +24,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -37,8 +37,6 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
-
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (

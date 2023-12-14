@@ -210,7 +210,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		mysqld.SetReadOnly(false)
 
 	} else {
-		dbconfigs.GlobalDBConfigs.InitWithSocket(collationEnv, "")
+		dbconfigs.GlobalDBConfigs.InitWithSocket("", collationEnv)
 		mysqld.Mysqld = mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)
 		servenv.OnClose(mysqld.Close)
 	}

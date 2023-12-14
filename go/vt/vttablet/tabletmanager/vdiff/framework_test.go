@@ -29,8 +29,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -537,7 +535,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 		}
 	})
 
-	vdiffenv.vre = vreplication.NewSimpleTestEngine(tstenv.TopoServ, tstenv.Cells[0], tstenv.Mysqld, realDBClientFactory, realDBClientFactory, vdiffDBName, nil, collations.MySQL8())
+	vdiffenv.vre = vreplication.NewSimpleTestEngine(tstenv.TopoServ, tstenv.Cells[0], tstenv.Mysqld, realDBClientFactory, realDBClientFactory, vdiffDBName, nil)
 	vdiffenv.vre.Open(context.Background())
 
 	vdiffenv.tmc.schema = testSchema
@@ -553,7 +551,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 	tabletID := 100
 	primary := vdiffenv.addTablet(tabletID, tstenv.KeyspaceName, tstenv.ShardName, topodatapb.TabletType_PRIMARY)
 
-	vdiffenv.vde = NewTestEngine(tstenv.TopoServ, primary.tablet, vdiffDBName, vdiffenv.dbClientFactory, vdiffenv.tmClientFactory, collations.MySQL8())
+	vdiffenv.vde = NewTestEngine(tstenv.TopoServ, primary.tablet, vdiffDBName, vdiffenv.dbClientFactory, vdiffenv.tmClientFactory)
 	require.False(t, vdiffenv.vde.IsOpen())
 
 	vdiffenv.opts = &tabletmanagerdatapb.VDiffOptions{

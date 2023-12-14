@@ -458,7 +458,7 @@ func (a *aggregationMinMax) minmax(value sqltypes.Value, max bool) (err error) {
 		a.current = value
 		return nil
 	}
-	n, err := compare(a.collationEnv, a.current, value, a.collation)
+	n, err := compare(a.current, value, a.collationEnv, a.collation)
 	if err != nil {
 		return err
 	}
@@ -484,7 +484,7 @@ func (a *aggregationMinMax) Reset() {
 	a.current = sqltypes.NULL
 }
 
-func NewAggregationMinMax(collationEnv *collations.Environment, typ sqltypes.Type, collation collations.ID) MinMax {
+func NewAggregationMinMax(typ sqltypes.Type, collationEnv *collations.Environment, collation collations.ID) MinMax {
 	switch {
 	case sqltypes.IsSigned(typ):
 		return &aggregationInt{t: typ}

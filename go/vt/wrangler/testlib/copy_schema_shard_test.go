@@ -23,10 +23,9 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/discovery"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -58,7 +57,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8())
-	vp := NewVtctlPipe(t, ts, collations.MySQL8())
+	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {

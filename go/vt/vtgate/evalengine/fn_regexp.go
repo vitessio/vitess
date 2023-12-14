@@ -108,7 +108,7 @@ func evalRegexpCollation(env *collations.Environment, input, pat eval, f string)
 		}
 	}
 
-	input, pat, typedCol, err = mergeAndCoerceCollations(env, input, pat)
+	input, pat, typedCol, err = mergeAndCoerceCollations(input, pat, env)
 	if err != nil {
 		return nil, nil, collations.TypedCollation{}, 0, err
 	}
@@ -138,7 +138,7 @@ func compileRegexpCollation(env *collations.Environment, input, pat ctype, f str
 	}
 
 	if input.Col.Collation != pat.Col.Collation {
-		merged, _, _, err = mergeCollations(env, input.Col, pat.Col, input.Type, pat.Type)
+		merged, _, _, err = mergeCollations(input.Col, pat.Col, input.Type, pat.Type, env)
 	} else {
 		merged = input.Col
 	}

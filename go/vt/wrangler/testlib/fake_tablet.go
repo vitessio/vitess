@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"

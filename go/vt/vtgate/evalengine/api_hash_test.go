@@ -52,7 +52,7 @@ func TestHashCodes(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("%v %s %v", tc.static, equality(tc.equal).Operator(), tc.dynamic), func(t *testing.T) {
-			cmp, err := NullsafeCompare(collations.MySQL8(), tc.static, tc.dynamic, collations.CollationUtf8mb4ID)
+			cmp, err := NullsafeCompare(tc.static, tc.dynamic, collations.MySQL8(), collations.CollationUtf8mb4ID)
 			require.NoError(t, err)
 			require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
 
@@ -77,7 +77,7 @@ func TestHashCodesRandom(t *testing.T) {
 	for time.Now().Before(endTime) {
 		tested++
 		v1, v2 := sqltypes.TestRandomValues()
-		cmp, err := NullsafeCompare(collations.MySQL8(), v1, v2, collation)
+		cmp, err := NullsafeCompare(v1, v2, collations.MySQL8(), collation)
 		require.NoErrorf(t, err, "%s compared with %s", v1.String(), v2.String())
 		typ, err := coerceTo(v1.Type(), v2.Type())
 		require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestHashCodes128(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("%v %s %v", tc.static, equality(tc.equal).Operator(), tc.dynamic), func(t *testing.T) {
-			cmp, err := NullsafeCompare(collations.MySQL8(), tc.static, tc.dynamic, collations.CollationUtf8mb4ID)
+			cmp, err := NullsafeCompare(tc.static, tc.dynamic, collations.MySQL8(), collations.CollationUtf8mb4ID)
 			require.NoError(t, err)
 			require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
 
@@ -166,7 +166,7 @@ func TestHashCodesRandom128(t *testing.T) {
 	for time.Now().Before(endTime) {
 		tested++
 		v1, v2 := sqltypes.TestRandomValues()
-		cmp, err := NullsafeCompare(collations.MySQL8(), v1, v2, collation)
+		cmp, err := NullsafeCompare(v1, v2, collations.MySQL8(), collation)
 		require.NoErrorf(t, err, "%s compared with %s", v1.String(), v2.String())
 		typ, err := coerceTo(v1.Type(), v2.Type())
 		require.NoError(t, err)

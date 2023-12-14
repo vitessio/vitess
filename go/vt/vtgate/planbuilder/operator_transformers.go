@@ -871,7 +871,7 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")))
 	}
 
-	comparisonType, err := evalengine.CoerceTypes(ctx.VSchema.CollationEnv(), ltyp, rtyp)
+	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp, ctx.VSchema.CollationEnv())
 	if err != nil {
 		return nil, err
 	}

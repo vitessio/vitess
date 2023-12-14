@@ -72,7 +72,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 			f = 0
 		}
 		ta.add(tt.Type, tt.Flag)
-		if err := ca.add(c.collationEnv, tt.Col); err != nil {
+		if err := ca.add(tt.Col, c.collationEnv); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -234,7 +234,7 @@ func compareAllText(collationEnv *collations.Environment, args []eval, cmp int) 
 	var ca collationAggregation
 	for _, arg := range args {
 		col := evalCollation(arg)
-		if err := ca.add(collationEnv, col); err != nil {
+		if err := ca.add(col, collationEnv); err != nil {
 			return nil, err
 		}
 		charsets = append(charsets, colldata.Lookup(col.Collation).Charset())
@@ -288,7 +288,7 @@ func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype) (ctype,
 	var f typeFlag
 	for _, arg := range args {
 		f |= nullableFlags(arg.Flag)
-		if err := ca.add(c.collationEnv, arg.Col); err != nil {
+		if err := ca.add(arg.Col, c.collationEnv); err != nil {
 			return ctype{}, err
 		}
 	}

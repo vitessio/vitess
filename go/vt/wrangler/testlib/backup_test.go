@@ -27,15 +27,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/mysql/replication"
-
-	"vitess.io/vitess/go/vt/discovery"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -95,7 +92,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8())
-	vp := NewVtctlPipe(t, ts, collations.MySQL8())
+	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// Set up mock query results.
@@ -347,7 +344,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8())
-	vp := NewVtctlPipe(t, ts, collations.MySQL8())
+	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// Set up mock query results.
@@ -566,7 +563,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8())
-	vp := NewVtctlPipe(t, ts, collations.MySQL8())
+	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// Set up mock query results.
@@ -741,7 +738,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8())
-	vp := NewVtctlPipe(t, ts, collations.MySQL8())
+	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// Set up mock query results.

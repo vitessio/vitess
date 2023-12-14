@@ -26,7 +26,7 @@ import (
 // only be used for testing where we know it's safe to use this
 // version, and we don't need a specific other version.
 func MySQL8() *Environment {
-	return NewEnvironment("8.0.30")
+	return fetchCacheEnvironment(collverMySQL8)
 }
 
 func CollationForType(t sqltypes.Type, fallback ID) ID {

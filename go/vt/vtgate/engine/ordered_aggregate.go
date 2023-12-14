@@ -344,14 +344,14 @@ func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (n
 			return nextRow, true, nil
 		}
 
-		cmp, err := evalengine.NullsafeCompare(oa.CollationEnv, v1, v2, gb.Type.Collation())
+		cmp, err := evalengine.NullsafeCompare(v1, v2, oa.CollationEnv, gb.Type.Collation())
 		if err != nil {
 			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
 			if !isCollationErr || gb.WeightStringCol == -1 {
 				return nil, false, err
 			}
 			gb.KeyCol = gb.WeightStringCol
-			cmp, err = evalengine.NullsafeCompare(oa.CollationEnv, currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], gb.Type.Collation())
+			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], oa.CollationEnv, gb.Type.Collation())
 			if err != nil {
 				return nil, false, err
 			}
