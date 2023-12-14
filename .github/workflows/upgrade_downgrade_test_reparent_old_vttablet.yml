@@ -1,4 +1,4 @@
-name: Upgrade Downgrade Testing Reparent Old VTTablet
+name: Reparent Old VTTablet - Upgrade Downgrade Testing
 on:
   push:
   pull_request:

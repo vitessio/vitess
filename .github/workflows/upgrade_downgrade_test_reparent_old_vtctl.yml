@@ -1,4 +1,4 @@
-name: Upgrade Downgrade Testing Reparent Old Vtctl
+name: Reparent Old Vtctl - Upgrade Downgrade Testing
 on:
   push:
   pull_request:

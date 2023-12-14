@@ -1,4 +1,4 @@
-name: Upgrade Downgrade Testing - Backups - E2E
+name: Backups - E2E - Upgrade Downgrade Testing
 on:
   push:
   pull_request:

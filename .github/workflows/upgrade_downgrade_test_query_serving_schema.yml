@@ -1,4 +1,4 @@
-name: Upgrade Downgrade Testing Query Serving (Schema)
+name: Query Serving (Schema) - Upgrade Downgrade Testing
 on:
   push:
   pull_request:
