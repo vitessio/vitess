@@ -576,10 +576,10 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 
 func newEngine(reloadTime time.Duration, idleTimeout time.Duration, schemaMaxAgeSeconds int64, db *fakesqldb.DB) *Engine {
 	config := tabletenv.NewDefaultConfig()
-	_ = config.SchemaReloadIntervalSeconds.Set(reloadTime.String())
-	_ = config.OltpReadPool.IdleTimeoutSeconds.Set(idleTimeout.String())
-	_ = config.OlapReadPool.IdleTimeoutSeconds.Set(idleTimeout.String())
-	_ = config.TxPool.IdleTimeoutSeconds.Set(idleTimeout.String())
+	config.SchemaReloadInterval = reloadTime
+	config.OltpReadPool.IdleTimeout = idleTimeout
+	config.OlapReadPool.IdleTimeout = idleTimeout
+	config.TxPool.IdleTimeout = idleTimeout
 	config.SchemaVersionMaxAgeSeconds = schemaMaxAgeSeconds
 	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest"))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())

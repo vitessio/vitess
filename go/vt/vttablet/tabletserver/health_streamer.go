@@ -98,13 +98,13 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 	if env.Config().SignalWhenSchemaChange {
 		// We need one connection for the reloader.
 		pool = connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:               1,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+			Size:        1,
+			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		})
 	}
 	hs := &healthStreamer{
 		stats:             env.Stats(),
-		degradedThreshold: env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
+		degradedThreshold: env.Config().Healthcheck.DegradedThreshold,
 		clients:           make(map[chan *querypb.StreamHealthResponse]struct{}),
 
 		state: &querypb.StreamHealthResponse{
@@ -122,7 +122,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 		viewsEnabled:           env.Config().EnableViews,
 		se:                     engine,
 	}
-	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
+	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThreshold.Nanoseconds())
 	return hs
 }
 
