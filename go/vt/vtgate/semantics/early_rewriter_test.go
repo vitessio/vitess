@@ -579,16 +579,19 @@ func TestDeleteTargetTableRewrite(t *testing.T) {
 	cDB := "db"
 	tcases := []struct {
 		sql    string
-		expSQL string
+		target string
 	}{{
 		sql:    "delete from t",
-		expSQL: "delete t from t",
+		target: "t",
 	}, {
 		sql:    "delete from t t1",
-		expSQL: "delete t1 from t as t1",
+		target: "t1",
 	}, {
 		sql:    "delete t2 from t t1, t t2",
-		expSQL: "delete t2 from t as t1, t as t2",
+		target: "t2",
+	}, {
+		sql:    "delete t2,t1 from t t1, t t2",
+		target: "t2, t1",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
@@ -596,7 +599,7 @@ func TestDeleteTargetTableRewrite(t *testing.T) {
 			require.NoError(t, err)
 			_, err = Analyze(ast, cDB, fakeSchemaInfo())
 			require.NoError(t, err)
-			require.Equal(t, tcase.expSQL, sqlparser.String(ast))
+			require.Equal(t, tcase.target, sqlparser.String(ast.(*sqlparser.Delete).Targets))
 		})
 	}
 }

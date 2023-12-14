@@ -2455,13 +2455,13 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteTableNames(node, node.Targets, func(newNode, parent SQLNode) {
-		parent.(*Delete).Targets = newNode.(TableNames)
+	if !a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
+		parent.(*Delete).TableExprs = newNode.(TableExprs)
 	}) {
 		return false
 	}
-	if !a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
-		parent.(*Delete).TableExprs = newNode.(TableExprs)
+	if !a.rewriteTableNames(node, node.Targets, func(newNode, parent SQLNode) {
+		parent.(*Delete).Targets = newNode.(TableNames)
 	}) {
 		return false
 	}

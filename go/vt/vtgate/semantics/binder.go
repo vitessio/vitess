@@ -110,9 +110,13 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 				b.typer.m[ae.Expr] = t
 			}
 		}
-	case *sqlparser.Delete:
+	case sqlparser.TableNames:
+		_, isDelete := cursor.Parent().(*sqlparser.Delete)
+		if !isDelete {
+			return nil
+		}
 		current := b.scoper.currentScope()
-		for _, target := range node.Targets {
+		for _, target := range node {
 			finalDep, err := b.findDependentTableSet(current, target)
 			if err != nil {
 				return err

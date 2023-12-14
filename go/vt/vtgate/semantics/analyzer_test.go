@@ -275,6 +275,26 @@ func TestBindingMultiAliasedTableNegative(t *testing.T) {
 	}
 }
 
+func TestBindingDelete(t *testing.T) {
+	queries := []string{
+		"delete tbl from tbl",
+		"delete from tbl",
+		"delete t1 from t1, t2",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, query, "d")
+			del := stmt.(*sqlparser.Delete)
+			t1 := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+			ts := semTable.TableSetFor(t1)
+			assert.Equal(t, SingleTableSet(0), ts)
+
+			actualTs := semTable.Targets[del.Targets[0].Name]
+			assert.Equal(t, ts, actualTs)
+		})
+	}
+}
+
 func TestNotUniqueTableName(t *testing.T) {
 	queries := []string{
 		"select * from t, t",
