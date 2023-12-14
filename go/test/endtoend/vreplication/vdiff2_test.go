@@ -26,8 +26,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 	"golang.org/x/exp/maps"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -253,32 +256,40 @@ func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 // from vtctldclient->vtctld->vttablet->mysqld.
 func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell) {
 	// Keys are in the tabletmanagerdata.VDiff*Options proto message definitions.
-	coreOpts := map[string]string{
-		"max_rows":                  "999",
-		"max_extra_rows_to_compare": "777",
-		"auto_retry":                "true",
-		"update_table_stats":        "true",
-		"timeout_seconds":           "60",
-	}
-	pickerOpts := map[string]string{
-		"source_cell":  "zone1,zone2,zone3,zonefoosource",
-		"target_cell":  "zone1,zone2,zone3,zonefootarget",
-		"tablet_types": "replica,primary,rdonly",
-	}
-	reportOpts := map[string]string{
-		"max_sample_rows": "888",
-		"only_pks":        "true",
+	options := &tabletmanagerdata.VDiffOptions{
+		CoreOptions: &tabletmanagerdata.VDiffCoreOptions{
+			MaxRows:               999,
+			MaxExtraRowsToCompare: 777,
+			AutoRetry:             true,
+			UpdateTableStats:      true,
+			TimeoutSeconds:        60,
+		},
+		PickerOptions: &tabletmanagerdata.VDiffPickerOptions{
+			SourceCell:  "zone1,zone2,zone3,zonefoosource",
+			TargetCell:  "zone1,zone2,zone3,zonefootarget",
+			TabletTypes: "replica,primary,rdonly",
+		},
+		ReportOptions: &tabletmanagerdata.VDiffReportOptions{
+			MaxSampleRows: 888,
+			OnlyPks:       true,
+		},
 	}
 
 	t.Run("Client flag handling", func(t *testing.T) {
 		res, err := vc.VtctldClient.ExecuteCommandWithOutput("vdiff", "--target-keyspace", targetKs, "--workflow", workflowName,
-			"create", "--limit", coreOpts["max_rows"], "--max-report-sample-rows", reportOpts["max_sample_rows"],
-			"--max-extra-rows-to-compare", coreOpts["max_extra_rows_to_compare"], "--filtered-replication-wait-time",
-			coreOpts["timeout_seconds"]+"s", "--source-cells", pickerOpts["source_cell"], "--target-cells",
-			pickerOpts["target_cell"], "--tablet-types", pickerOpts["tablet_types"],
-			fmt.Sprintf("--update-table-stats=%s", coreOpts["update_table_stats"]),
-			fmt.Sprintf("--auto-retry=%s", coreOpts["auto_retry"]), fmt.Sprintf("--only-pks=%s", reportOpts["only_pks"]),
-			"--tablet-types-in-preference-order=false", "--format=json")
+			"create",
+			"--limit", fmt.Sprintf("%d", options.CoreOptions.MaxRows),
+			"--max-report-sample-rows", fmt.Sprintf("%d", options.ReportOptions.MaxSampleRows),
+			"--max-extra-rows-to-compare", fmt.Sprintf("%d", options.CoreOptions.MaxExtraRowsToCompare),
+			"--filtered-replication-wait-time", fmt.Sprintf("%v", time.Duration(options.CoreOptions.TimeoutSeconds)*time.Second),
+			"--source-cells", options.PickerOptions.SourceCell,
+			"--target-cells", options.PickerOptions.TargetCell,
+			"--tablet-types", options.PickerOptions.TabletTypes,
+			fmt.Sprintf("--update-table-stats=%t", options.CoreOptions.UpdateTableStats),
+			fmt.Sprintf("--auto-retry=%t", options.CoreOptions.AutoRetry),
+			fmt.Sprintf("--only-pks=%t", options.ReportOptions.OnlyPks),
+			"--tablet-types-in-preference-order=false", // So tablet_types should not start with "in_order:", which is the default
+			"--format=json") // So we can easily grab the UUID
 		require.NoError(t, err, "vdiff command failed: %s", res)
 		jsonRes := gjson.Parse(res)
 		vduuid, err := uuid.Parse(jsonRes.Get("UUID").String())
@@ -295,16 +306,12 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		require.NotNil(t, qres, "query %q returned nil result", query) // Should never happen
 		require.Equal(t, 1, len(qres.Rows), "query %q returned %d rows, expected 1", query, len(qres.Rows))
 		require.Equal(t, 1, len(qres.Rows[0]), "query %q returned %d columns, expected 1", query, len(qres.Rows[0]))
-		jsonRes = gjson.Parse(qres.Rows[0][0].ToString())
-		for key, val := range coreOpts {
-			require.Equal(t, val, jsonRes.Get("core_options."+key).String(), "unexpected value for key core_options.%s; expected: %s, got: %s", key, val, jsonRes.Get("core_options."+key).String())
-		}
-		for key, val := range pickerOpts {
-			require.Equal(t, val, jsonRes.Get("picker_options."+key).String(), "unexpected value for key picker_options.%s; expected: %s, got: %s", key, val, jsonRes.Get("picker_options."+key).String())
-		}
-		for key, val := range reportOpts {
-			require.Equal(t, val, jsonRes.Get("report_options."+key).String(), "unexpected value for key report_options.%s; expected: %s, got: %s", key, val, jsonRes.Get("report_options."+key).String())
-		}
+		storedOptions := &tabletmanagerdata.VDiffOptions{}
+		bytes, err := qres.Rows[0][0].ToBytes()
+		require.NoError(t, err, "failed to convert result %+v to bytes: %v", qres.Rows[0], err)
+		err = protojson.Unmarshal(bytes, storedOptions)
+		require.NoError(t, err, "failed to unmarshal result %s to a %T: %v", string(bytes), storedOptions, err)
+		require.True(t, proto.Equal(options, storedOptions), "stored options %v != expected options %v", storedOptions, options)
 	})
 }
 
