@@ -60,10 +60,6 @@ var (
 		Limit                       int64
 		FilteredReplicationWaitTime time.Duration
 		DebugQuery                  bool
-<<<<<<< HEAD
-=======
-		MaxReportSampleRows         int64
->>>>>>> 3b906cf6a3 (VDiff: Fix vtctldclient limit bug (#14778))
 		OnlyPKs                     bool
 		UpdateTableStats            bool
 		MaxExtraRowsToCompare       int64
@@ -119,9 +115,6 @@ var (
 		// Enforce non-negative values for limits and max options.
 		if createOptions.Limit < 1 {
 			return fmt.Errorf("--limit must be a positive value")
-		}
-		if createOptions.MaxReportSampleRows < 0 {
-			return fmt.Errorf("--max-report-sample-rows must not be a negative value")
 		}
 		if createOptions.MaxExtraRowsToCompare < 0 {
 			return fmt.Errorf("--max-extra-rows-to-compare must not be a negative value")
@@ -293,10 +286,6 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		Wait:                        createOptions.Wait,
 		WaitUpdateInterval:          protoutil.DurationToProto(createOptions.WaitUpdateInterval),
 		AutoRetry:                   createOptions.AutoRetry,
-<<<<<<< HEAD
-=======
-		MaxReportSampleRows:         createOptions.MaxReportSampleRows,
->>>>>>> 3b906cf6a3 (VDiff: Fix vtctldclient limit bug (#14778))
 	})
 
 	if err != nil {
@@ -881,10 +870,6 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().DurationVar(&createOptions.FilteredReplicationWaitTime, "filtered-replication-wait-time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for replication to catch up when syncing tablet streams.")
 	create.Flags().Int64Var(&createOptions.Limit, "limit", math.MaxInt64, "Max rows to stop comparing after.")
 	create.Flags().BoolVar(&createOptions.DebugQuery, "debug-query", false, "Adds a mysql query to the report that can be used for further debugging.")
-<<<<<<< HEAD
-=======
-	create.Flags().Int64Var(&createOptions.MaxReportSampleRows, "max-report-sample-rows", 10, "Maximum number of row differences to report (0 for all differences). NOTE: when increasing this value it is highly recommended to also specify --only-pks")
->>>>>>> 3b906cf6a3 (VDiff: Fix vtctldclient limit bug (#14778))
 	create.Flags().BoolVar(&createOptions.OnlyPKs, "only-pks", false, "When reporting missing rows, only show primary keys in the report.")
 	create.Flags().StringSliceVar(&createOptions.Tables, "tables", nil, "Only run vdiff for these tables in the workflow.")
 	create.Flags().Int64Var(&createOptions.MaxExtraRowsToCompare, "max-extra-rows-to-compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")

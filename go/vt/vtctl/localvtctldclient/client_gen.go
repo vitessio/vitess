@@ -246,11 +246,6 @@ func (client *localVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in
 	return client.s.FindAllShardsInKeyspace(ctx, in)
 }
 
-// ForceCutOverSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) ForceCutOverSchemaMigration(ctx context.Context, in *vtctldatapb.ForceCutOverSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.ForceCutOverSchemaMigrationResponse, error) {
-	return client.s.ForceCutOverSchemaMigration(ctx, in)
-}
-
 // GetBackups is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetBackups(ctx context.Context, in *vtctldatapb.GetBackupsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetBackupsResponse, error) {
 	return client.s.GetBackups(ctx, in)

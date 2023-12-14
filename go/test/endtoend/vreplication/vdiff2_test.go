@@ -270,8 +270,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			TabletTypes: "replica,primary,rdonly",
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			MaxSampleRows: 888,
-			OnlyPks:       true,
+			OnlyPks: true,
 		},
 	}
 
@@ -279,7 +278,6 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		res, err := vc.VtctldClient.ExecuteCommandWithOutput("vdiff", "--target-keyspace", targetKs, "--workflow", workflowName,
 			"create",
 			"--limit", fmt.Sprintf("%d", expectedOptions.CoreOptions.MaxRows),
-			"--max-report-sample-rows", fmt.Sprintf("%d", expectedOptions.ReportOptions.MaxSampleRows),
 			"--max-extra-rows-to-compare", fmt.Sprintf("%d", expectedOptions.CoreOptions.MaxExtraRowsToCompare),
 			"--filtered-replication-wait-time", fmt.Sprintf("%v", time.Duration(expectedOptions.CoreOptions.TimeoutSeconds)*time.Second),
 			"--source-cells", expectedOptions.PickerOptions.SourceCell,
