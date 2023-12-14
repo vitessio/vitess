@@ -117,6 +117,8 @@ type (
 		// It doesn't recurse inside derived tables to find the original dependencies.
 		Direct ExprDependencies
 
+		Targets map[sqlparser.IdentifierCS]TableSet
+
 		// ColumnEqualities is used for transitive closures (e.g., if a == b and b == c, then a == c).
 		ColumnEqualities map[columnName][]sqlparser.Expr
 
