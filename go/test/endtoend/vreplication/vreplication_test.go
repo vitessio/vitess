@@ -293,6 +293,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 	var err error
 	defaultCellName := "zone1"
 	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 	// Keep the cluster processes minimal to deal with CI resource constraints
 	defaultReplicas = 0
 	defaultRdonly = 0
@@ -302,12 +303,9 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
 		defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
 	}
-	defer vc.TearDown()
 
 	defaultCell := vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
-	vtgate := defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
