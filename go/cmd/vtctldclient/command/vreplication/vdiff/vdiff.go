@@ -113,9 +113,9 @@ var (
 				createOptions.Tables[i] = strings.TrimSpace(table)
 			}
 		}
-		// Enforce non-negative values for limits and max values.
+		// Enforce non-negative values for limits and max options.
 		if createOptions.Limit < 1 {
-			return fmt.Errorf("--limit must be a positive value of at least 1")
+			return fmt.Errorf("--limit must be a positive value")
 		}
 		if createOptions.MaxReportSampleRows < 0 {
 			return fmt.Errorf("--max-report-sample-rows must not be a negative value")
