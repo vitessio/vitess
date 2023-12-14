@@ -30,8 +30,9 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/sqlparser"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 type testCase struct {
@@ -255,21 +256,20 @@ func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 // testCLIFlagHandling tests that the vtctldclient CLI flags are handled correctly
 // from vtctldclient->vtctld->vttablet->mysqld.
 func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell) {
-	// Keys are in the tabletmanagerdata.VDiff*Options proto message definitions.
-	options := &tabletmanagerdata.VDiffOptions{
-		CoreOptions: &tabletmanagerdata.VDiffCoreOptions{
+	expectedOptions := &tabletmanagerdatapb.VDiffOptions{
+		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
 			MaxRows:               999,
 			MaxExtraRowsToCompare: 777,
 			AutoRetry:             true,
 			UpdateTableStats:      true,
 			TimeoutSeconds:        60,
 		},
-		PickerOptions: &tabletmanagerdata.VDiffPickerOptions{
+		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			SourceCell:  "zone1,zone2,zone3,zonefoosource",
 			TargetCell:  "zone1,zone2,zone3,zonefootarget",
 			TabletTypes: "replica,primary,rdonly",
 		},
-		ReportOptions: &tabletmanagerdata.VDiffReportOptions{
+		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
 			MaxSampleRows: 888,
 			OnlyPks:       true,
 		},
@@ -278,16 +278,16 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 	t.Run("Client flag handling", func(t *testing.T) {
 		res, err := vc.VtctldClient.ExecuteCommandWithOutput("vdiff", "--target-keyspace", targetKs, "--workflow", workflowName,
 			"create",
-			"--limit", fmt.Sprintf("%d", options.CoreOptions.MaxRows),
-			"--max-report-sample-rows", fmt.Sprintf("%d", options.ReportOptions.MaxSampleRows),
-			"--max-extra-rows-to-compare", fmt.Sprintf("%d", options.CoreOptions.MaxExtraRowsToCompare),
-			"--filtered-replication-wait-time", fmt.Sprintf("%v", time.Duration(options.CoreOptions.TimeoutSeconds)*time.Second),
-			"--source-cells", options.PickerOptions.SourceCell,
-			"--target-cells", options.PickerOptions.TargetCell,
-			"--tablet-types", options.PickerOptions.TabletTypes,
-			fmt.Sprintf("--update-table-stats=%t", options.CoreOptions.UpdateTableStats),
-			fmt.Sprintf("--auto-retry=%t", options.CoreOptions.AutoRetry),
-			fmt.Sprintf("--only-pks=%t", options.ReportOptions.OnlyPks),
+			"--limit", fmt.Sprintf("%d", expectedOptions.CoreOptions.MaxRows),
+			"--max-report-sample-rows", fmt.Sprintf("%d", expectedOptions.ReportOptions.MaxSampleRows),
+			"--max-extra-rows-to-compare", fmt.Sprintf("%d", expectedOptions.CoreOptions.MaxExtraRowsToCompare),
+			"--filtered-replication-wait-time", fmt.Sprintf("%v", time.Duration(expectedOptions.CoreOptions.TimeoutSeconds)*time.Second),
+			"--source-cells", expectedOptions.PickerOptions.SourceCell,
+			"--target-cells", expectedOptions.PickerOptions.TargetCell,
+			"--tablet-types", expectedOptions.PickerOptions.TabletTypes,
+			fmt.Sprintf("--update-table-stats=%t", expectedOptions.CoreOptions.UpdateTableStats),
+			fmt.Sprintf("--auto-retry=%t", expectedOptions.CoreOptions.AutoRetry),
+			fmt.Sprintf("--only-pks=%t", expectedOptions.ReportOptions.OnlyPks),
 			"--tablet-types-in-preference-order=false", // So tablet_types should not start with "in_order:", which is the default
 			"--format=json") // So we can easily grab the UUID
 		require.NoError(t, err, "vdiff command failed: %s", res)
@@ -295,7 +295,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		vduuid, err := uuid.Parse(jsonRes.Get("UUID").String())
 		require.NoError(t, err, "invalid UUID: %s", jsonRes.Get("UUID").String())
 
-		// Confirm that the options were set and saved correctly.
+		// Confirm that the options were passed through and saved correctly.
 		query := sqlparser.BuildParsedQuery("select options from %s.vdiff where vdiff_uuid = %s",
 			sidecarDBIdentifier, encodeString(vduuid.String())).Query
 		tablets := vc.getVttabletsInKeyspace(t, cell, targetKs, "PRIMARY")
@@ -306,12 +306,12 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		require.NotNil(t, qres, "query %q returned nil result", query) // Should never happen
 		require.Equal(t, 1, len(qres.Rows), "query %q returned %d rows, expected 1", query, len(qres.Rows))
 		require.Equal(t, 1, len(qres.Rows[0]), "query %q returned %d columns, expected 1", query, len(qres.Rows[0]))
-		storedOptions := &tabletmanagerdata.VDiffOptions{}
+		storedOptions := &tabletmanagerdatapb.VDiffOptions{}
 		bytes, err := qres.Rows[0][0].ToBytes()
 		require.NoError(t, err, "failed to convert result %+v to bytes: %v", qres.Rows[0], err)
 		err = protojson.Unmarshal(bytes, storedOptions)
 		require.NoError(t, err, "failed to unmarshal result %s to a %T: %v", string(bytes), storedOptions, err)
-		require.True(t, proto.Equal(options, storedOptions), "stored options %v != expected options %v", storedOptions, options)
+		require.True(t, proto.Equal(expectedOptions, storedOptions), "stored options %v != expected options %v", storedOptions, expectedOptions)
 	})
 }
 
