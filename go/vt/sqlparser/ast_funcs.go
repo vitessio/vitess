@@ -2536,3 +2536,11 @@ func IsLiteral(expr Expr) bool {
 func (ct *ColumnType) Invisible() bool {
 	return ct.Options.Invisible != nil && *ct.Options.Invisible
 }
+
+func (node TableExprs) isSingleAliasExpr() bool {
+	if len(node) != 1 {
+		return false
+	}
+	_, isAliasExpr := node[0].(*AliasedTableExpr)
+	return isAliasExpr
+}
