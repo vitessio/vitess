@@ -1039,7 +1039,12 @@ func tmRPCTestPopulateReparentJournal(ctx context.Context, t *testing.T, client 
 
 func tmRPCTestPopulateReparentJournalPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.PopulateReparentJournal(ctx, tablet, testTimeCreatedNS, testActionName, testPrimaryAlias, testReplicationPosition)
-	expectHandleRPCPanic(t, "PopulateReparentJournal", false /*verbose*/, err)
+	expectHandleRPCPanic(t, "PopulateReparentJournal", true /*verbose*/, err)
+}
+
+func tmRPCTestWaitForPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.WaitForPosition(ctx, tablet, testReplicationPosition)
+	expectHandleRPCPanic(t, "WaitForPosition", true /*verbose*/, err)
 }
 
 var testInitReplicaCalled = false
@@ -1447,6 +1452,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestResetReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestInitPrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestPopulateReparentJournalPanic(ctx, t, client, tablet)
+	tmRPCTestWaitForPositionPanic(ctx, t, client, tablet)
 	tmRPCTestDemotePrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestUndoDemotePrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestSetReplicationSourcePanic(ctx, t, client, tablet)
