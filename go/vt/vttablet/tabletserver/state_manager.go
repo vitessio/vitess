@@ -487,11 +487,6 @@ func (sm *stateManager) unservePrimary() error {
 }
 
 func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) error {
-	// We are likely transitioning from primary. We have to honor
-	// the shutdown grace period.
-	cancel := sm.handleShutdownGracePeriod(nil)
-	defer cancel()
-
 	sm.ddle.Close()
 	sm.tableGC.Close()
 	sm.messager.Close()
@@ -545,8 +540,8 @@ func (sm *stateManager) unserveCommon() {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	log.Infof("Started execution of unserveCommon")
-	cancel := sm.handleShutdownGracePeriod(&wg)
-	log.Infof("Finished execution of handleShutdownGracePeriod")
+	cancel := sm.terminateAllQueries(&wg)
+	log.Infof("Finished execution of terminateAllQueries")
 	defer cancel()
 
 	log.Infof("Started online ddl executor close")
@@ -564,7 +559,12 @@ func (sm *stateManager) unserveCommon() {
 	log.Info("Finished Killing all OLAP queries. Started tracker close")
 	sm.tracker.Close()
 	log.Infof("Finished tracker close. Started wait for requests")
-	// If there is not shutdown grace period, then we should wait for all the requests to be empty.
+	sm.handleShutdownGracePeriod(&wg)
+	log.Infof("Finished handling grace period. Finished execution of unserveCommon")
+}
+
+func (sm *stateManager) handleShutdownGracePeriod(wg *sync.WaitGroup) {
+	// If there is no shutdown grace period specified, then we should wait for all the requests to be empty.
 	if sm.shutdownGracePeriod == 0 {
 		sm.waitForRequestsToBeEmpty()
 	} else {
@@ -578,8 +578,6 @@ func (sm *stateManager) unserveCommon() {
 		// We don't need to wait for requests to be empty since we have ensured all the queries against MySQL have been killed.
 		wg.Wait()
 	}
-
-	log.Infof("Finished wait for requests. Finished execution of unserveCommon")
 }
 
 func (sm *stateManager) waitForRequestsToBeEmpty() {
@@ -594,7 +592,7 @@ func (sm *stateManager) waitForRequestsToBeEmpty() {
 	}
 }
 
-func (sm *stateManager) handleShutdownGracePeriod(wg *sync.WaitGroup) (cancel func()) {
+func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) {
 	if sm.shutdownGracePeriod == 0 {
 		return func() {}
 	}
@@ -608,7 +606,7 @@ func (sm *stateManager) handleShutdownGracePeriod(wg *sync.WaitGroup) (cancel fu
 		}
 		log.Infof("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod)
 		sm.statelessql.TerminateAll()
-		log.Infof("Killed all stateful OLTP queries.")
+		log.Infof("Killed all stateless OLTP queries.")
 		sm.statefulql.TerminateAll()
 		log.Infof("Killed all OLTP queries.")
 	}()
@@ -658,7 +656,7 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 	log.Infof("TabletServer transition: %v -> %v for tablet %s:%s/%s",
 		sm.stateStringLocked(sm.target.TabletType, sm.state), sm.stateStringLocked(tabletType, state),
 		sm.target.Cell, sm.target.Keyspace, sm.target.Shard)
-	sm.handleGracePeriod(tabletType)
+	sm.handleTransitionGracePeriod(tabletType)
 	sm.target.TabletType = tabletType
 	if sm.state == StateNotConnected {
 		// If we're transitioning out of StateNotConnected, we have
@@ -677,7 +675,7 @@ func (sm *stateManager) stateStringLocked(tabletType topodatapb.TabletType, stat
 	return fmt.Sprintf("%v: %v, %v", tabletType, state, sm.ptsTimestamp.Local().Format("Jan 2, 2006 at 15:04:05 (MST)"))
 }
 
-func (sm *stateManager) handleGracePeriod(tabletType topodatapb.TabletType) {
+func (sm *stateManager) handleTransitionGracePeriod(tabletType topodatapb.TabletType) {
 	if tabletType != topodatapb.TabletType_PRIMARY {
 		// We allow serving of previous type only for a primary transition.
 		sm.alsoAllow = nil
