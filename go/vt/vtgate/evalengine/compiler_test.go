@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine_test
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -598,7 +599,7 @@ func TestCompilerSingle(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			env := evalengine.EmptyExpressionEnv(collations.MySQL8())
+			env := evalengine.NewExpressionEnv(context.Background(), nil, evalengine.NewEmptyVCursor(collations.MySQL8(), tz))
 			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 0, tz))
 			env.Row = tc.values
 

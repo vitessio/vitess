@@ -78,7 +78,7 @@ func (tc testCase) run(t *testing.T) {
 	for i, value := range tc.row {
 		fields[i] = &querypb.Field{Type: value.Type()}
 	}
-	env := NewExpressionEnv(context.Background(), tc.bv, NewEmptyVCursor(collations.MySQL8()))
+	env := NewExpressionEnv(context.Background(), tc.bv, NewEmptyVCursor(collations.MySQL8(), time.UTC))
 	env.Row = tc.row
 	ast := &astCompiler{
 		cfg: &Config{

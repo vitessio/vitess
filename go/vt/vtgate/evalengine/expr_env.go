@@ -119,10 +119,11 @@ func (env *ExpressionEnv) SetTime(now time.Time) {
 
 type emptyVCursor struct {
 	collationEnv *collations.Environment
+	tz           *time.Location
 }
 
 func (e *emptyVCursor) TimeZone() *time.Location {
-	return time.Local
+	return e.tz
 }
 
 func (e *emptyVCursor) GetKeyspace() string {
@@ -137,13 +138,13 @@ func (e *emptyVCursor) CollationEnv() *collations.Environment {
 	return e.collationEnv
 }
 
-func NewEmptyVCursor(collationEnv *collations.Environment) VCursor {
-	return &emptyVCursor{collationEnv: collationEnv}
+func NewEmptyVCursor(collationEnv *collations.Environment, tz *time.Location) VCursor {
+	return &emptyVCursor{collationEnv: collationEnv, tz: tz}
 }
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv(collationEnv *collations.Environment) *ExpressionEnv {
-	return NewExpressionEnv(context.Background(), nil, NewEmptyVCursor(collationEnv))
+	return NewExpressionEnv(context.Background(), nil, NewEmptyVCursor(collationEnv, time.Local))
 }
 
 // NewExpressionEnv returns an expression environment with no current row, but with bindvars
