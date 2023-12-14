@@ -52,6 +52,8 @@ import (
 // how long to wait for background operations to complete
 var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
 
+var ErrMaxDiffDurationExceeded = vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "table diff was stopped due to exceeding the max-diff-duration time")
+
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
 	colIndex  int           // index of the column in the filter's select
@@ -522,7 +524,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		case <-td.wd.ct.done:
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
 		case <-stop:
-			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped due to max execution time")
+			return nil, ErrMaxDiffDurationExceeded
 		default:
 		}
 
@@ -535,7 +537,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		}
 		rowsToCompare--
 		if rowsToCompare < 0 {
-			log.Infof("Stopping vdiff, specified limit reached")
+			log.Infof("Stopping vdiff, specified row limit reached")
 			return dr, nil
 		}
 		if advanceSource {
@@ -566,7 +568,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 			}
 			dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
 
-			// drain target, update count
+			// Drain target, update count.
 			count, err := targetExecutor.drain(ctx)
 			if err != nil {
 				return nil, err
@@ -701,6 +703,13 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		if err != nil {
 			return err
 		}
+		// Update the in-memory lastPK as well so that we can restart the table
+		// diff if --max-diff-time was specified.
+		lastpkpb := &querypb.QueryResult{}
+		if err := prototext.Unmarshal(lastPK, lastpkpb); err != nil {
+			return err
+		}
+		td.lastPK = lastpkpb
 
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),

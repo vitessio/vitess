@@ -18,6 +18,7 @@ package vdiff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -154,6 +155,17 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		}
 	}()
 
+	maxDiffRuntime := time.Duration(24 * time.Hour * 365) // 1 year (effectively forever)
+	if wd.ct.options.CoreOptions.MaxDiffSeconds > 0 {
+		// Restart the diff if it takes longer than the specified max diff time.
+		maxDiffRuntime = time.Duration(wd.ct.options.CoreOptions.MaxDiffSeconds) * time.Second
+	}
+
+	log.Infof("Starting differ on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
+	if err := td.updateTableState(ctx, dbClient, StartedState); err != nil {
+		return err
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -163,32 +175,26 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		default:
 		}
 
-		// Restart the diff if it takes longer than the specified max diff time.
-		if wd.ct.options != nil && wd.ct.options.CoreOptions != nil && wd.ct.options.CoreOptions.MaxDiffSeconds > 0 {
-			if timer != nil { // We're restarting the diff
-				timer.Stop()
-				timer = nil
-				// Give the underlying resources (mainly MySQL) a moment to catch up.
-				time.Sleep(30 * time.Second)
-			}
-			timer = time.NewTimer(time.Duration(wd.ct.options.CoreOptions.MaxDiffSeconds) * time.Second)
-		} else {
-			timer = time.NewTimer(24 * time.Hour * 365) // 1 year (effectively forever)
+		if timer != nil { // We're restarting the diff
+			timer.Stop()
+			timer = nil
+			// Give the underlying resources (mainly MySQL) a moment to catch up.
+			time.Sleep(30 * time.Second)
 		}
+		timer = time.NewTimer(maxDiffRuntime)
 
-		log.Infof("Starting differ on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
-		if err := td.updateTableState(ctx, dbClient, StartedState); err != nil {
-			return err
-		}
 		if err := td.initialize(ctx); err != nil {
 			return err
 		}
 		log.Infof("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
 		dr, diffErr = td.diff(ctx, wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, wd.opts.ReportOptions.OnlyPks, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows, timer.C)
-		if diffErr == nil {
+		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr)
+		if diffErr == nil { // We finished the diff successfully
 			break
 		}
-		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr)
+		if !errors.Is(diffErr, ErrMaxDiffDurationExceeded) { // We only want to retry if we hit the max-diff-duration
+			return diffErr
+		}
 	}
 	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, dr)
 
