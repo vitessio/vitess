@@ -161,7 +161,7 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		topoServer:             topoServer,
 		alias:                  alias.CloneVT(),
 	}
-	tsv.QueryTimeout.Store(config.Oltp.QueryTimeoutSeconds.Get().Nanoseconds())
+	tsv.QueryTimeout.Store(config.Oltp.QueryTimeout.Nanoseconds())
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(ctx, topoServer, "TabletSrvTopo") })
 

@@ -242,7 +242,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	extraVTTabletArgs = []string{
 		// We rely on holding open transactions to generate innodb history so extend the timeout
 		// to avoid flakiness when the CI is very slow.
-		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", int64(defaultTimeout.Seconds())*3),
+		fmt.Sprintf("--queryserver-config-transaction-timeout=%s", (defaultTimeout * 3).String()),
 		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
 		parallelInsertWorkers,
 	}

@@ -185,12 +185,12 @@ const (
 // QueryServerArgs are the default arguments passed to all Vitess query servers
 var QueryServerArgs = []string{
 	"--queryserver-config-pool-size", "4",
-	"--queryserver-config-query-timeout", "300",
-	"--queryserver-config-schema-reload-time", "60",
+	"--queryserver-config-query-timeout", "300s",
+	"--queryserver-config-schema-reload-time", "60s",
 	"--queryserver-config-stream-pool-size", "4",
 	"--queryserver-config-transaction-cap", "4",
-	"--queryserver-config-transaction-timeout", "300",
-	"--queryserver-config-txpool-timeout", "300",
+	"--queryserver-config-transaction-timeout", "300s",
+	"--queryserver-config-txpool-timeout", "300s",
 }
 
 // VtcomboProcess returns a VtProcess handle for a local `vtcombo` service,

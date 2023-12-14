@@ -17,6 +17,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -60,9 +61,9 @@ func newTestLoadTable(tableName, comment string, db *fakesqldb.DB) (*schema.Tabl
 	appParams := db.ConnParams()
 	dbaParams := db.ConnParams()
 	cfg := tabletenv.ConnPoolConfig{
-		Size: 2,
+		Size:        2,
+		IdleTimeout: 10 * time.Second,
 	}
-	_ = cfg.IdleTimeoutSeconds.Set("10s")
 
 	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest"), "", cfg)
 	connPool.Open(appParams, dbaParams, appParams)

@@ -233,8 +233,8 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 		ts:              ts,
 		heartbeatWriter: heartbeatWriter,
 		pool: connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{
-			Size:               2,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+			Size:        2,
+			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
 	}
 

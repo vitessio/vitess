@@ -265,8 +265,8 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 		tabletAlias: tabletAlias.CloneVT(),
 
 		pool: connpool.NewPool(env, "OnlineDDLExecutorPool", tabletenv.ConnPoolConfig{
-			Size:               databasePoolSize,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+			Size:        databasePoolSize,
+			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
 		tabletTypeFunc:        tabletTypeFunc,
 		ts:                    ts,
