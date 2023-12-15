@@ -150,7 +150,7 @@ func TestVDiff2(t *testing.T) {
 	query := `insert into customer(cid, name, typ, sport) values(1001, null, 'soho','')`
 	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
 
-	generateMoreCustomers(t, sourceKs, 100)
+	generateMoreCustomers(t, sourceKs, 100000)
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
@@ -195,7 +195,14 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		catchup(t, tab, tc.workflow, tc.typ)
 	}
 
-	vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
+	//vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
+	doVtctldclientVDiff(t, tc.targetKs, tc.workflow, allCellNames, nil, "--max-diff-time=50ns")
+
+	tablet := vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0])
+	stat, err := getDebugVar(t, tablet.Port, []string{"VDiffRestartedTableDiffsCount"})
+	require.NoError(t, err, "failed to get VDiffRestartedTableDiffsCount stat: %v", err)
+	restarts := gjson.Parse(stat).Get("customer").Int()
+	require.Greater(t, restarts, int64(0), "expected VDiffRestartedTableDiffsCount stat to be greater than 0, got %d", restarts)
 
 	if tc.autoRetryError {
 		testAutoRetryError(t, tc, allCellNames)
@@ -205,7 +212,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		testResume(t, tc, allCellNames)
 	}
 
-	// These are done here so that we have a valid workflow to test the commands against
+	// These are done here so that we have a valid workflow to test the commands against.
 	if tc.stop {
 		testStop(t, ksWorkflow, allCellNames)
 	}
@@ -221,7 +228,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 
 	testDelete(t, ksWorkflow, allCellNames)
 
-	// create another VDiff record to confirm it gets deleted when the workflow is completed
+	// Create another VDiff record to confirm it gets deleted when the workflow is completed.
 	ts := time.Now()
 	uuid, _ := performVDiff2Action(t, false, ksWorkflow, allCellNames, "create", "", false)
 	waitForVDiff2ToComplete(t, false, ksWorkflow, allCellNames, uuid, ts)
@@ -231,7 +238,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "Complete", ksWorkflow)
 	require.NoError(t, err)
 
-	// confirm the VDiff data is deleted for the workflow
+	// Confirm the VDiff data is deleted for the workflow.
 	testNoOrphanedData(t, tc.targetKs, tc.workflow, arrTargetShards)
 }
 

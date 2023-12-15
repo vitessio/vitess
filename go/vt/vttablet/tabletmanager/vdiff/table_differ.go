@@ -509,7 +509,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 	advanceSource := true
 	advanceTarget := true
 
-	// Save our progress when we finish the run
+	// Save our progress when we finish the run.
 	defer func() {
 		if err := td.updateTableProgress(dbClient, dr, lastProcessedRow); err != nil {
 			log.Errorf("Failed to update vdiff progress on %s table: %v", td.table.Name, err)
