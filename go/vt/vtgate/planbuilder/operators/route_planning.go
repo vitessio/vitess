@@ -138,6 +138,7 @@ func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete
 			buf.Myprintf(", %v", column)
 		}
 	}
+	sqlparser.RemoveKeyspaceInTables(tblExpr)
 	buf.Myprintf(" from %v%v%v%v for update", tblExpr, del.Where, del.OrderBy, del.Limit)
 	return buf.String()
 }

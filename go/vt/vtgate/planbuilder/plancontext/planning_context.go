@@ -49,11 +49,13 @@ type PlanningContext struct {
 	// CurrentPhase keeps track of how far we've gone in the planning process
 	// The type should be operators.Phase, but depending on that would lead to circular dependencies
 	CurrentPhase int
+
+	// Statement contains the originally parsed statement
+	Statement sqlparser.Statement
 }
 
 func CreatePlanningContext(stmt sqlparser.Statement,
 	reservedVars *sqlparser.ReservedVars,
-
 	vschema VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
 ) (*PlanningContext, error) {
@@ -78,6 +80,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		SkipPredicates:    map[sqlparser.Expr]any{},
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
+		Statement:         stmt,
 	}, nil
 }
 

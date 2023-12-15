@@ -19,8 +19,11 @@ package operators
 import (
 	"fmt"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -372,13 +375,12 @@ func findVSchemaTableAndCreateRoute(
 	solves semantics.TableSet,
 	planAlternates bool,
 ) *Route {
-	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(tableName)
-	if target != nil {
-		panic(vterrors.VT09017("SELECT with a target destination is not allowed"))
-	}
+	vschemaTable, _, _, tabletType, target, err := ctx.VSchema.FindTableOrVindex(tableName)
 	if err != nil {
 		panic(err)
 	}
+
+	targeted := createTargetedRouting(ctx, target, tabletType, vschemaTable)
 
 	return createRouteFromVSchemaTable(
 		ctx,
@@ -386,7 +388,40 @@ func findVSchemaTableAndCreateRoute(
 		vschemaTable,
 		solves,
 		planAlternates,
+		targeted,
 	)
+}
+
+func createTargetedRouting(ctx *plancontext.PlanningContext, target key.Destination, tabletType topodatapb.TabletType, vschemaTable *vindexes.Table) Routing {
+	switch ctx.Statement.(type) {
+	case *sqlparser.Update:
+		if tabletType != topodatapb.TabletType_PRIMARY {
+			panic(vterrors.VT09002("update"))
+		}
+	case *sqlparser.Delete:
+		if tabletType != topodatapb.TabletType_PRIMARY {
+			panic(vterrors.VT09002("delete"))
+		}
+	case *sqlparser.Insert:
+		if tabletType != topodatapb.TabletType_PRIMARY {
+			panic(vterrors.VT09002("insert"))
+		}
+		if target != nil {
+			panic(vterrors.VT09017("INSERT with a target destination is not allowed"))
+		}
+	case sqlparser.SelectStatement:
+		if target != nil {
+			panic(vterrors.VT09017("SELECT with a target destination is not allowed"))
+		}
+	}
+
+	if target != nil {
+		return &TargetedRouting{
+			keyspace:          vschemaTable.Keyspace,
+			TargetDestination: target,
+		}
+	}
+	return nil
 }
 
 // createRouteFromTable creates a route from the given VSchema table.
@@ -396,6 +431,7 @@ func createRouteFromVSchemaTable(
 	vschemaTable *vindexes.Table,
 	solves semantics.TableSet,
 	planAlternates bool,
+	targeted Routing,
 ) *Route {
 	if vschemaTable.Name.String() != queryTable.Table.Name.String() {
 		// we are dealing with a routed table
@@ -420,8 +456,14 @@ func createRouteFromVSchemaTable(
 		},
 	}
 
-	// We create the appropiate Routing struct here, depending on the type of table we are dealing with.
-	routing := createRoutingForVTable(vschemaTable, solves)
+	// We create the appropriate Routing struct here, depending on the type of table we are dealing with.
+	var routing Routing
+	if targeted != nil {
+		routing = targeted
+	} else {
+		routing = createRoutingForVTable(vschemaTable, solves)
+	}
+
 	for _, predicate := range queryTable.Predicates {
 		routing = UpdateRoutingLogic(ctx, predicate, routing)
 	}

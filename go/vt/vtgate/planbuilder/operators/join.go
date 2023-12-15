@@ -92,7 +92,7 @@ func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) Oper
 		panic(vterrors.VT12001("subquery in outer join predicate"))
 	}
 	predicate := tableExpr.Condition.On
-	sqlparser.RemoveKeyspaceFromColName(predicate)
+	sqlparser.RemoveKeyspace(predicate)
 	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: predicate}
 }
 
@@ -115,7 +115,7 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 	sqc := &SubQueryBuilder{}
 	outerID := TableID(op)
 	joinPredicate := tableExpr.Condition.On
-	sqlparser.RemoveKeyspaceFromColName(joinPredicate)
+	sqlparser.RemoveKeyspace(joinPredicate)
 	exprs := sqlparser.SplitAndExpression(nil, joinPredicate)
 	for _, pred := range exprs {
 		subq := sqc.handleSubquery(ctx, pred, outerID)

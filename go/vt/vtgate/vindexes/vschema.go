@@ -55,6 +55,7 @@ var TabletTypeSuffix = map[topodatapb.TabletType]string{
 
 // The following constants represent table types.
 const (
+	TypeTable     = ""
 	TypeSequence  = "sequence"
 	TypeReference = "reference"
 )

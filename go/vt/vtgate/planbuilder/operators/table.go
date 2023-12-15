@@ -115,7 +115,7 @@ func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.
 	if !ok {
 		panic(vterrors.VT09018(fmt.Sprintf("cannot add '%s' expression to a table/vindex", sqlparser.String(e))))
 	}
-	sqlparser.RemoveKeyspaceFromColName(col)
+	sqlparser.RemoveKeyspace(col)
 	cols := op.GetColNames()
 	colAsExpr := func(c *sqlparser.ColName) sqlparser.Expr { return c }
 	if offset, found := canReuseColumn(ctx, cols, e, colAsExpr); found {

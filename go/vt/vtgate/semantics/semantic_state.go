@@ -50,7 +50,7 @@ type (
 		authoritative() bool
 
 		// getAliasedTableExpr returns the AST struct behind this table
-		getAliasedTableExpr() *sqlparser.AliasedTableExpr
+		GetAliasedTableExpr() *sqlparser.AliasedTableExpr
 
 		// canShortCut will return nil when the keyspace needs to be checked,
 		// and a true/false if the decision has been made already
@@ -518,7 +518,7 @@ func EmptySemTable() *SemTable {
 // TableSetFor returns the bitmask for this particular table
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2.getAliasedTableExpr() {
+		if t == t2.GetAliasedTableExpr() {
 			return SingleTableSet(idx)
 		}
 	}
