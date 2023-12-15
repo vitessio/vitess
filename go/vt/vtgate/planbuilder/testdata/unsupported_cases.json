@@ -383,5 +383,10 @@
     "comment": "correlated subqueries in select expressions are unsupported",
     "query": "SELECT (SELECT sum(user.name) FROM music LIMIT 1) FROM user",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "We need schema tracking to allow unexpanded columns inside UNION",
+    "query": "select x from (select users.*, 0 as x from main.users union select user_merchants.*, 1 as x from main.user_merchants) AS T",
+    "plan": "VT09015: schema tracking required"
   }
 ]
