@@ -183,7 +183,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 	case <-ctx.Done():
 		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 	case <-ct.done:
-		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+		return ErrVDiffStoppedByUser
 	default:
 	}
 	ct.workflowFilter = fmt.Sprintf("where workflow = %s and db_name = %s", encodeString(ct.workflow),
@@ -199,7 +199,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		case <-ct.done:
-			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+			return ErrVDiffStoppedByUser
 		default:
 		}
 		source := newMigrationSource()
@@ -326,7 +326,7 @@ func (ct *controller) saveErrorState(ctx context.Context, saveErr error) error {
 			case <-ctx.Done():
 				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "engine is shutting down")
 			case <-ct.done:
-				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+				return ErrVDiffStoppedByUser
 			case <-time.After(retryDelay):
 				if retryDelay < maxRetryDelay {
 					retryDelay = time.Duration(float64(retryDelay) * 1.5)

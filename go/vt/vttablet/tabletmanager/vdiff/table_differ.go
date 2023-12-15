@@ -434,7 +434,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			case <-ctx.Done():
 				return vterrors.Wrap(ctx.Err(), "VStreamRows")
 			case <-td.wd.ct.done:
-				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+				return ErrVDiffStoppedByUser
 			}
 			return nil
 		})
@@ -705,9 +705,9 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			return err
 		}
 
-		// Update the in-memory lastPK as well so that we can restart the table
-		// diff if --max-diff-duration was specified.
 		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
+			// Update the in-memory lastPK as well so that we can restart the table
+			// diff if needed.
 			lastpkpb := &querypb.QueryResult{}
 			if err := prototext.Unmarshal(lastPK, lastpkpb); err != nil {
 				return err

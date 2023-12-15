@@ -234,7 +234,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 	case <-ctx.Done():
 		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 	case <-wd.ct.done:
-		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+		return ErrVDiffStoppedByUser
 	default:
 	}
 
@@ -255,7 +255,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		case <-wd.ct.done:
-			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+			return ErrVDiffStoppedByUser
 		default:
 		}
 		query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
