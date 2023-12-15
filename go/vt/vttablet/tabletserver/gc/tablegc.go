@@ -145,8 +145,8 @@ func NewTableGC(env tabletenv.Env, ts *topo.Server, lagThrottler *throttle.Throt
 		env: env,
 		ts:  ts,
 		pool: connpool.NewPool(env, "TableGCPool", tabletenv.ConnPoolConfig{
-			Size:               2,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+			Size:        2,
+			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
 
 		purgingTables:    map[string]bool{},

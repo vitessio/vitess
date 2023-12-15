@@ -54,8 +54,8 @@ func TestConnPoolTimeout(t *testing.T) {
 	cfg := tabletenv.ConnPoolConfig{
 		Size: 1,
 	}
-	_ = cfg.TimeoutSeconds.Set("1s")
-	_ = cfg.IdleTimeoutSeconds.Set("10s")
+	cfg.Timeout = time.Second
+	cfg.IdleTimeout = 10 * time.Second
 	connPool := NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", cfg)
 	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
@@ -325,9 +325,8 @@ func newPool() *Pool {
 }
 
 func newPoolWithCapacity(capacity int) *Pool {
-	cfg := tabletenv.ConnPoolConfig{
-		Size: capacity,
-	}
-	_ = cfg.IdleTimeoutSeconds.Set("10s")
-	return NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", cfg)
+	return NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
+		Size:        capacity,
+		IdleTimeout: 10 * time.Second,
+	})
 }

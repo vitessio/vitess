@@ -68,14 +68,14 @@ type Pool struct {
 // to publish stats only.
 func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool {
 	cp := &Pool{
-		timeout: cfg.TimeoutSeconds.Get(),
+		timeout: cfg.Timeout,
 		env:     env,
 	}
 
 	config := smartconnpool.Config[*Conn]{
 		Capacity:        int64(cfg.Size),
-		IdleTimeout:     cfg.IdleTimeoutSeconds.Get(),
-		MaxLifetime:     cfg.MaxLifetimeSeconds.Get(),
+		IdleTimeout:     cfg.IdleTimeout,
+		MaxLifetime:     cfg.MaxLifetime,
 		RefreshInterval: mysqlctl.PoolDynamicHostnameResolution,
 	}
 

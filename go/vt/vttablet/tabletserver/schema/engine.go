@@ -100,14 +100,14 @@ type Engine struct {
 
 // NewEngine creates a new Engine.
 func NewEngine(env tabletenv.Env) *Engine {
-	reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
+	reloadTime := env.Config().SchemaReloadInterval
 	se := &Engine{
 		env: env,
 		// We need three connections: one for the reloader, one for
 		// the historian, and one for the tracker.
 		conns: connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:               3,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+			Size:        3,
+			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
 		ticks: timer.NewTimer(reloadTime),
 	}
