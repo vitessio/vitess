@@ -81,6 +81,7 @@ type ThrottlerInterface interface {
 	GetConfiguration() *throttlerdatapb.Configuration
 	UpdateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error
 	ResetConfiguration()
+	LastMaxLagNotIgnoredForTabletType(tabletType topodatapb.TabletType) uint32
 }
 
 // TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
@@ -356,7 +357,18 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 	// Serialize calls to ts.throttle.Throttle()
 	ts.throttleMu.Lock()
 	defer ts.throttleMu.Unlock()
-	return ts.throttler.Throttle(0 /* threadId */) > 0
+
+	var maxLag uint32
+
+	for tabletType, _ := range ts.tabletTypes {
+		maxLagPerTabletType := ts.throttler.LastMaxLagNotIgnoredForTabletType(tabletType)
+		if maxLagPerTabletType > maxLag {
+			maxLag = maxLagPerTabletType
+		}
+	}
+
+	return ts.throttler.Throttle(0 /* threadId */) > 0 &&
+		int64(maxLag) > ts.config.TxThrottlerConfig.TargetReplicationLagSec
 }
 
 func (ts *txThrottlerStateImpl) deallocateResources() {
