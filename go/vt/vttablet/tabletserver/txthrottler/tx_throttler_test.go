@@ -49,7 +49,7 @@ func TestDisabledThrottler(t *testing.T) {
 		Shard:    "shard",
 	})
 	assert.Nil(t, throttler.Open())
-	assert.False(t, throttler.Throttle(0, "some_workload"))
+	assert.False(t, throttler.Throttle(0, "some-workload"))
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 	throttler.Close()
@@ -84,10 +84,10 @@ func TestEnabledThrottler(t *testing.T) {
 	call := mockThrottler.EXPECT().UpdateConfiguration(gomock.Any(), true /* copyZeroValues */)
 	calls = append(calls, call)
 
+	// No underlying throttling & lag present
 	call = mockThrottler.EXPECT().LastMaxLagNotIgnoredForTabletType(topodatapb.TabletType_REPLICA)
 	call.Return(uint32(20))
 	calls = append(calls, call)
-
 	call = mockThrottler.EXPECT().Throttle(0)
 	call.Return(0 * time.Second)
 	calls = append(calls, call)
@@ -102,26 +102,26 @@ func TestEnabledThrottler(t *testing.T) {
 	call = mockThrottler.EXPECT().RecordReplicationLag(gomock.Any(), tabletStats)
 	calls = append(calls, call)
 
+	// Underlying throttling & lag present
 	call = mockThrottler.EXPECT().LastMaxLagNotIgnoredForTabletType(topodatapb.TabletType_REPLICA)
 	call.Return(uint32(20))
 	calls = append(calls, call)
-
 	call = mockThrottler.EXPECT().Throttle(0)
 	call.Return(1 * time.Second)
 	calls = append(calls, call)
 
+	// Underlying throttling & lag present
 	call = mockThrottler.EXPECT().LastMaxLagNotIgnoredForTabletType(topodatapb.TabletType_REPLICA)
 	call.Return(uint32(20))
 	calls = append(calls, call)
-
 	call = mockThrottler.EXPECT().Throttle(0)
 	call.Return(1 * time.Second)
 	calls = append(calls, call)
 
+	// Underlying throttling & no lag present
 	call = mockThrottler.EXPECT().LastMaxLagNotIgnoredForTabletType(topodatapb.TabletType_REPLICA)
 	call.Return(uint32(1))
 	calls = append(calls, call)
-
 	call = mockThrottler.EXPECT().Throttle(0)
 	call.Return(1 * time.Second)
 	calls = append(calls, call)
@@ -152,9 +152,10 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)
 	assert.Equal(t, int64(1), throttlerImpl.throttlerRunning.Get())
 
-	assert.False(t, throttlerImpl.Throttle(100, "some_workload"))
-	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Counts()["some_workload"])
-	assert.Zero(t, throttlerImpl.requestsThrottled.Counts()["some_workload"])
+	// No underlying throttling & lag present - Don't throttle despite priority
+	assert.False(t, throttlerImpl.Throttle(100, "some-workload"))
+	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Counts()["some-workload"])
+	assert.Zero(t, throttlerImpl.requestsThrottled.Counts()["some-workload"])
 
 	throttlerImpl.state.StatsUpdate(tabletStats) // This calls replication lag thing
 	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttlerImpl.healthChecksReadTotal.Counts())
@@ -170,22 +171,17 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1, "cell2.RDONLY": 1}, throttlerImpl.healthChecksReadTotal.Counts())
 	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttlerImpl.healthChecksRecordedTotal.Counts())
 
-	// The second throttle call should reject.
-	assert.True(t, throttlerImpl.Throttle(100, "some_workload"))
-	assert.Equal(t, int64(2), throttlerImpl.requestsTotal.Counts()["some_workload"])
-	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some_workload"])
+	// Underlying throttling & lag present - Throttle due to priority
+	assert.True(t, throttlerImpl.Throttle(100, "some-workload"))
+	assert.Equal(t, int64(2), throttlerImpl.requestsTotal.Counts()["some-workload"])
+	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])
 
-	// This call should not throttle due to priority. Check that's the case and counters agree.
-	assert.False(t, throttlerImpl.Throttle(0, "some_workload"))
-	assert.Equal(t, int64(3), throttlerImpl.requestsTotal.Counts()["some_workload"])
-	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some_workload"])
-	throttlerImpl.Close()
-	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
-	assert.False(t, throttler.Throttle(0, "some-workload"))
+	// Underlying throttling & lag present - Do not throttle due to priority
+	assert.False(t, throttlerImpl.Throttle(0, "some-workload"))
 	assert.Equal(t, int64(3), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])
 
-	// This call should not throttle despite priority. Check that's the case and counters agree.
+	// Underlying throttling & no lag present - Do no throttle despite priority
 	assert.False(t, throttler.Throttle(100, "some-workload"))
 	assert.Equal(t, int64(4), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])
