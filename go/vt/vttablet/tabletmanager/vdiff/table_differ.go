@@ -525,6 +525,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		case <-td.wd.ct.done:
 			return nil, ErrVDiffStoppedByUser
 		case <-stop:
+			globalStats.RestartedTableDiffs.Add(td.table.Name, 1)
 			return nil, ErrMaxDiffDurationExceeded
 		default:
 		}
