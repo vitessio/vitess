@@ -263,6 +263,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			AutoRetry:             true,
 			UpdateTableStats:      true,
 			TimeoutSeconds:        60,
+			MaxDiffSeconds:        333,
 		},
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			SourceCell:  "zone1,zone2,zone3,zonefoosource",
@@ -282,6 +283,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 			"--max-report-sample-rows", fmt.Sprintf("%d", expectedOptions.ReportOptions.MaxSampleRows),
 			"--max-extra-rows-to-compare", fmt.Sprintf("%d", expectedOptions.CoreOptions.MaxExtraRowsToCompare),
 			"--filtered-replication-wait-time", fmt.Sprintf("%v", time.Duration(expectedOptions.CoreOptions.TimeoutSeconds)*time.Second),
+			"--max-diff-duration", fmt.Sprintf("%v", time.Duration(expectedOptions.CoreOptions.MaxDiffSeconds)*time.Second),
 			"--source-cells", expectedOptions.PickerOptions.SourceCell,
 			"--target-cells", expectedOptions.PickerOptions.TargetCell,
 			"--tablet-types", expectedOptions.PickerOptions.TabletTypes,
