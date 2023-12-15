@@ -114,24 +114,12 @@ func (rs *ResolvedShard) WithKeyspace(newKeyspace string) *ResolvedShard {
 	}
 }
 
-// GetKeyspaceShards return all the shards in a keyspace. It follows
-// redirection if ServedFrom is set. It is only valid for the local cell.
+// GetKeyspaceShards return all the shards in a keyspace. It is only valid for the local cell.
 // Do not use it to further resolve shards, instead use the Resolve* methods.
 func (r *Resolver) GetKeyspaceShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
 	srvKeyspace, err := r.topoServ.GetSrvKeyspace(ctx, r.localCell, keyspace)
 	if err != nil {
 		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace %v fetch error: %v", keyspace, err)
-	}
-
-	// check if the keyspace has been redirected for this tabletType.
-	for _, sf := range srvKeyspace.ServedFrom {
-		if sf.TabletType == tabletType {
-			keyspace = sf.Keyspace
-			srvKeyspace, err = r.topoServ.GetSrvKeyspace(ctx, r.localCell, keyspace)
-			if err != nil {
-				return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace %v fetch error: %v", keyspace, err)
-			}
-		}
 	}
 
 	partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)

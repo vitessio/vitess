@@ -199,11 +199,11 @@ func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
 	sm.target = target.CloneVT()
 	sm.transitioning = semaphore.NewWeighted(1)
 	sm.checkMySQLThrottler = semaphore.NewWeighted(1)
-	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
-	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
-	sm.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
-	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
-	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
+	sm.timebombDuration = env.Config().OltpReadPool.Timeout * 10
+	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.Interval)
+	sm.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThreshold.Nanoseconds())
+	sm.shutdownGracePeriod = env.Config().GracePeriods.Shutdown
+	sm.transitionGracePeriod = env.Config().GracePeriods.Transition
 }
 
 // SetServingType changes the state to the specified settings.

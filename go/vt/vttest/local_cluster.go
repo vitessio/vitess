@@ -492,11 +492,6 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 	}
 
 	for _, kpb := range db.Topology.Keyspaces {
-		if kpb.ServedFrom != "" {
-			// redirected keyspaces have no underlying database
-			continue
-		}
-
 		keyspace := kpb.Name
 		keyspaceDir := path.Join(db.SchemaDir, keyspace)
 
@@ -569,9 +564,6 @@ func (db *LocalCluster) createDatabases() error {
 
 	var sql []string
 	for _, kpb := range db.Topology.Keyspaces {
-		if kpb.ServedFrom != "" {
-			continue
-		}
 		for _, dbname := range db.shardNames(kpb) {
 			sql = append(sql, fmt.Sprintf("create database `%s`", dbname))
 		}
