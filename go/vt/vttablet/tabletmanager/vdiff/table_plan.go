@@ -223,6 +223,9 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 // saves the collations in the tablePlan's comparePKs column info
 // structs for those subsequent operations.
 func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient) error {
+	if len(tp.comparePKs) == 0 {
+		return nil
+	}
 	columnList := make([]string, len(tp.comparePKs))
 	for i := range tp.comparePKs {
 		columnList[i] = tp.comparePKs[i].colName
