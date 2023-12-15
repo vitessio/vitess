@@ -386,7 +386,7 @@
   },
   {
     "comment": "We need schema tracking to allow unexpanded columns inside UNION",
-    "query": "select x from (select users.*, 0 as x from main.users union select user_merchants.*, 1 as x from main.user_merchants) AS T",
+    "query": "select x from (select t.*, 0 as x from user t union select t.*, 1 as x from user_extra t) AS t",
     "plan": "VT09015: schema tracking required"
   }
 ]
