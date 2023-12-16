@@ -17,6 +17,7 @@ limitations under the License.
 package vdiff
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -24,6 +25,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -153,8 +155,17 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 	}
 
 	if len(tp.table.PrimaryKeyColumns) == 0 {
-		// We use every column together as a substitute PK.
-		tp.table.PrimaryKeyColumns = append(tp.table.PrimaryKeyColumns, tp.table.Columns...)
+		// We use the columns from a PKE if there is one.
+		pkeCols, err := tp.getPKEquivalentColumns(dbClient)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "error getting PK equivalent columns for table %s", tp.table.Name)
+		}
+		if len(pkeCols) > 0 {
+			tp.table.PrimaryKeyColumns = append(tp.table.PrimaryKeyColumns, pkeCols...)
+		} else {
+			// We use every column together as a substitute PK.
+			tp.table.PrimaryKeyColumns = append(tp.table.PrimaryKeyColumns, tp.table.Columns...)
+		}
 	}
 
 	err = tp.findPKs(dbClient, targetSelect)
@@ -270,4 +281,18 @@ func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient) error
 		}
 	}
 	return nil
+}
+
+func (tp *tablePlan) getPKEquivalentColumns(dbClient binlogplayer.DBClient) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout/2)
+	defer cancel()
+	executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+		// This sets wantfields to true.
+		return dbClient.ExecuteFetch(query, maxrows)
+	}
+	pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, tp.dbName, tp.table.Name)
+	if err != nil {
+		return nil, err
+	}
+	return pkeCols, nil
 }

@@ -272,6 +272,29 @@ func TestBuildPlanSuccess(t *testing.T) {
 			},
 		},
 	}, {
+		// No PK, but a PKE on c3.
+		input: &binlogdatapb.Rule{
+			Match:  "nopkwithpke",
+			Filter: "select * from nopkwithpke",
+		},
+		table: "nopkwithpke",
+		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
+			table:       testSchema.TableDefinitions[tableDefMap["nopkwithpke"]],
+			sourceQuery: "select c1, c2, c3 from nopkwithpke order by c3 asc",
+			targetQuery: "select c1, c2, c3 from nopkwithpke order by c3 asc",
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}, {2, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			comparePKs:  []compareColInfo{{2, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			pkCols:      []int{2},
+			selectPks:   []int{2},
+			orderBy: sqlparser.OrderBy{
+				&sqlparser.Order{
+					Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c3")},
+					Direction: sqlparser.AscOrder,
+				},
+			},
+		},
+	}, {
 		// Text column as expression.
 		input: &binlogdatapb.Rule{
 			Match:  "pktext",
@@ -512,6 +535,19 @@ func TestBuildPlanSuccess(t *testing.T) {
 			wd, err := newWorkflowDiffer(ct, vdiffenv.opts)
 			require.NoError(t, err)
 			dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
+			if len(tcase.tablePlan.table.PrimaryKeyColumns) == 0 {
+				result := noResults
+				if tcase.table == "nopkwithpke" { // This has a PKE column: c3
+					result = sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields(
+							"column_name|index_name",
+							"varchar|varchar",
+						),
+						"c3|c3",
+					)
+				}
+				dbc.ExpectRequestRE("SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS", result, nil)
+			}
 			if len(tcase.tablePlan.comparePKs) > 0 {
 				columnList := make([]string, len(tcase.tablePlan.comparePKs))
 				collationList := make([]string, len(tcase.tablePlan.comparePKs))

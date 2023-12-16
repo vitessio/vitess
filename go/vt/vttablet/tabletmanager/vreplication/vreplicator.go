@@ -350,7 +350,11 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 			pks = td.PrimaryKeyColumns
 		} else {
 			// Use a PK equivalent if one exists.
-			if pks, _, err = vr.mysqld.GetPrimaryKeyEquivalentColumns(ctx, vr.dbClient.DBName(), td.Name); err != nil {
+			executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+				// This sets wantfields to true.
+				return vr.dbClient.ExecuteFetch(query, maxrows)
+			}
+			if pks, _, err = mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, vr.dbClient.DBName(), td.Name); err != nil {
 				return nil, err
 			}
 			// Fall back to using every column in the table if there's no PK or PKE.

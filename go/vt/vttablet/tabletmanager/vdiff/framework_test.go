@@ -104,17 +104,22 @@ var (
 				Name:    "nopk",
 				Columns: []string{"c1", "c2", "c3"},
 				Fields:  sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
+			}, {
+				Name:    "nopkwithpke",
+				Columns: []string{"c1", "c2", "c3"},
+				Fields:  sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
 			},
 		},
 	}
 	tableDefMap = map[string]int{
-		"t1":        0,
-		"nonpktext": 1,
-		"pktext":    2,
-		"multipk":   3,
-		"aggr":      4,
-		"datze":     5,
-		"nopk":      6,
+		"t1":          0,
+		"nonpktext":   1,
+		"pktext":      2,
+		"multipk":     3,
+		"aggr":        4,
+		"datze":       5,
+		"nopk":        6,
+		"nopkwithpke": 7,
 	}
 )
 
