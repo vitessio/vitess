@@ -35,7 +35,7 @@ import (
 
 var (
 	pprofFlag []string
-	httpPprof bool
+	httpPprof = true
 )
 
 type profmode string
