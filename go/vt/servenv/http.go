@@ -22,6 +22,9 @@ import (
 	"net/http"
 	"net/http/pprof"
 
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv/internal/mux"
 )
 
@@ -48,6 +51,10 @@ func HTTPServe(l net.Listener) error {
 func HTTPRegisterProfile() {
 	if !httpPprof {
 		return
+	}
+
+	if !pflag.Lookup("pprof-http").Changed {
+		log.Warning("Beginning in vitess version 20, pprof-http will default to `false`; to continue enabling pprof endpoints, please manually set this flag before upgrading.")
 	}
 
 	HTTPHandleFunc("/debug/pprof/", pprof.Index)
