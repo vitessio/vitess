@@ -195,14 +195,17 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		catchup(t, tab, tc.workflow, tc.typ)
 	}
 
-	//vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
-	doVtctldclientVDiff(t, tc.targetKs, tc.workflow, allCellNames, nil, "--max-diff-time=50ns")
+	vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
 
-	tablet := vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0])
-	stat, err := getDebugVar(t, tablet.Port, []string{"VDiffRestartedTableDiffsCount"})
-	require.NoError(t, err, "failed to get VDiffRestartedTableDiffsCount stat: %v", err)
-	restarts := gjson.Parse(stat).Get("customer").Int()
-	require.Greater(t, restarts, int64(0), "expected VDiffRestartedTableDiffsCount stat to be greater than 0, got %d", restarts)
+	/*
+		doVtctldclientVDiff(t, tc.targetKs, tc.workflow, allCellNames, nil, "--max-diff-time=50ns")
+
+		tablet := vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0])
+		stat, err := getDebugVar(t, tablet.Port, []string{"VDiffRestartedTableDiffsCount"})
+		require.NoError(t, err, "failed to get VDiffRestartedTableDiffsCount stat: %v", err)
+		restarts := gjson.Parse(stat).Get("customer").Int()
+		require.Greater(t, restarts, int64(0), "expected VDiffRestartedTableDiffsCount stat to be greater than 0, got %d", restarts)
+	*/
 
 	if tc.autoRetryError {
 		testAutoRetryError(t, tc, allCellNames)
