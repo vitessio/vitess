@@ -46,6 +46,10 @@ func HTTPServe(l net.Listener) error {
 
 // HTTPRegisterProfile registers the default pprof HTTP endpoints with the internal servenv mux.
 func HTTPRegisterProfile() {
+	if !httpPprof {
+		return
+	}
+
 	HTTPHandleFunc("/debug/pprof/", pprof.Index)
 	HTTPHandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 	HTTPHandleFunc("/debug/pprof/profile", pprof.Profile)
