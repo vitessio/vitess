@@ -100,6 +100,10 @@ var (
 				Columns:           []string{"id", "dt"},
 				PrimaryKeyColumns: []string{"id"},
 				Fields:            sqltypes.MakeTestFields("id|dt", "int64|datetime"),
+			}, {
+				Name:    "nopk",
+				Columns: []string{"c1", "c2"},
+				Fields:  sqltypes.MakeTestFields("c1|c2", "int64|int64"),
 			},
 		},
 	}
@@ -110,6 +114,7 @@ var (
 		"multipk":   3,
 		"aggr":      4,
 		"datze":     5,
+		"nopk":      6,
 	}
 )
 

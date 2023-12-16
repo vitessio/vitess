@@ -157,7 +157,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// non-pk text column.
+		// Non-PK text column.
 		input: &binlogdatapb.Rule{
 			Match:  "nonpktext",
 			Filter: "select c1, textcol from nonpktext",
@@ -178,7 +178,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// non-pk text column, different order.
+		// Non-PK text column, different order.
 		input: &binlogdatapb.Rule{
 			Match:  "nonpktext",
 			Filter: "select textcol, c1 from nonpktext",
@@ -199,7 +199,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// pk text column.
+		// PK text column.
 		input: &binlogdatapb.Rule{
 			Match:  "pktext",
 			Filter: "select textcol, c2 from pktext",
@@ -220,7 +220,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// pk text column, different order.
+		// PK text column, different order.
 		input: &binlogdatapb.Rule{
 			Match:  "pktext",
 			Filter: "select c2, textcol from pktext",
@@ -241,7 +241,31 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// text column as expression.
+		// No PK.
+		input: &binlogdatapb.Rule{
+			Match:  "nopk",
+			Filter: "select c1, c2 from nopk",
+		},
+		table: "nopk",
+		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
+			table:       testSchema.TableDefinitions[tableDefMap["nopk"]],
+			sourceQuery: "select c1, c2 from nopk order by c1 asc, c2 asc",
+			targetQuery: "select c1, c2 from nopk order by c1 asc, c2 asc",
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			orderBy: sqlparser.OrderBy{
+				&sqlparser.Order{
+					Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")},
+					Direction: sqlparser.AscOrder,
+				},
+				&sqlparser.Order{
+					Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")},
+					Direction: sqlparser.AscOrder,
+				},
+			},
+		},
+	}, {
+		// Text column as expression.
 		input: &binlogdatapb.Rule{
 			Match:  "pktext",
 			Filter: "select c2, a+b as textcol from pktext",
@@ -262,7 +286,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// multiple pk columns.
+		// Multiple PK columns.
 		input: &binlogdatapb.Rule{
 			Match: "multipk",
 		},
@@ -397,7 +421,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// group by
+		// Group by.
 		input: &binlogdatapb.Rule{
 			Match:  "t1",
 			Filter: "select * from t1 group by c1",
@@ -418,7 +442,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// aggregations
+		// Aggregations.
 		input: &binlogdatapb.Rule{
 			Match:  "aggr",
 			Filter: "select c1, c2, count(*) as c3, sum(c4) as c4 from t1 group by c1",
@@ -443,7 +467,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			},
 		},
 	}, {
-		// date conversion on import.
+		// Date conversion on import.
 		input: &binlogdatapb.Rule{
 			Match: "datze",
 		},
@@ -492,20 +516,22 @@ func TestBuildPlanSuccess(t *testing.T) {
 					collationList[i] = sqltypes.NULL.String()
 				}
 			}
-			columnBV, err := sqltypes.BuildBindVariable(columnList)
-			require.NoError(t, err)
-			query, err := sqlparser.ParseAndBind(sqlSelectColumnCollations,
-				sqltypes.StringBindVariable(vdiffDBName),
-				sqltypes.StringBindVariable(tcase.tablePlan.table.Name),
-				columnBV,
-			)
-			require.NoError(t, err)
-			dbc.ExpectRequest(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"collation_name",
-				"varchar",
-			),
-				collationList...,
-			), nil)
+			if len(columnList) > 0 {
+				columnBV, err := sqltypes.BuildBindVariable(columnList)
+				require.NoError(t, err)
+				query, err := sqlparser.ParseAndBind(sqlSelectColumnCollations,
+					sqltypes.StringBindVariable(vdiffDBName),
+					sqltypes.StringBindVariable(tcase.tablePlan.table.Name),
+					columnBV,
+				)
+				require.NoError(t, err)
+				dbc.ExpectRequest(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+					"collation_name",
+					"varchar",
+				),
+					collationList...,
+				), nil)
+			}
 			err = wd.buildPlan(dbc, filter, testSchema)
 			require.NoError(t, err, tcase.input)
 			require.Equal(t, 1, len(wd.tableDiffers), tcase.input)

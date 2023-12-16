@@ -23,15 +23,15 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const sqlSelectColumnCollations = "select column_name as column_name, collation_name as collation_name from information_schema.columns where table_schema=%a and table_name=%a and column_name in %a"
@@ -75,7 +75,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 	sourceSelect := &sqlparser.Select{}
 	targetSelect := &sqlparser.Select{}
-	// aggregates is the list of Aggregate functions, if any.
+	// Aggregates is the list of Aggregate functions, if any.
 	var aggregates []*engine.AggregateParams
 	for _, selExpr := range sel.SelectExprs {
 		switch selExpr := selExpr.(type) {
@@ -152,10 +152,22 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 		},
 	}
 
-	err = tp.findPKs(dbClient, targetSelect)
-	if err != nil {
-		return nil, err
+	if len(tp.table.PrimaryKeyColumns) == 0 { // Then we need to ORDER BY every column in the table.
+		orderByAll := make(sqlparser.OrderBy, len(tp.compareCols))
+		for i := range tp.compareCols {
+			orderByAll[i] = &sqlparser.Order{
+				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(tp.compareCols[i].colName)},
+				Direction: sqlparser.AscOrder,
+			}
+		}
+		tp.orderBy = orderByAll
+	} else {
+		err = tp.findPKs(dbClient, targetSelect)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	// Remove in_keyrange. It's not understood by mysql.
 	sourceSelect.Where = sel.Where // removeKeyrange(sel.Where)
 	// The source should also perform the group by.
@@ -177,6 +189,9 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 // findPKs identifies PKs and removes them from the columns to do data comparison.
 func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlparser.Select) error {
+	if len(tp.table.PrimaryKeyColumns) == 0 {
+		return nil
+	}
 	var orderby sqlparser.OrderBy
 	for _, pk := range tp.table.PrimaryKeyColumns {
 		found := false
@@ -195,7 +210,7 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 				tp.compareCols[i].isPK = true
 				tp.comparePKs = append(tp.comparePKs, tp.compareCols[i])
 				tp.selectPks = append(tp.selectPks, i)
-				// We'll be comparing pks separately. So, remove them from compareCols.
+				// We'll be comparing PKs separately. So, remove them from compareCols.
 				tp.pkCols = append(tp.pkCols, i)
 				found = true
 				break
