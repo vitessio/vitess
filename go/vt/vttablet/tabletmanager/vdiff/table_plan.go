@@ -152,20 +152,14 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 		},
 	}
 
-	if len(tp.table.PrimaryKeyColumns) == 0 { // Then we need to ORDER BY every column in the table.
-		orderByAll := make(sqlparser.OrderBy, len(tp.compareCols))
-		for i := range tp.compareCols {
-			orderByAll[i] = &sqlparser.Order{
-				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(tp.compareCols[i].colName)},
-				Direction: sqlparser.AscOrder,
-			}
-		}
-		tp.orderBy = orderByAll
-	} else {
-		err = tp.findPKs(dbClient, targetSelect)
-		if err != nil {
-			return nil, err
-		}
+	if len(tp.table.PrimaryKeyColumns) == 0 {
+		// We use every column together as a substitute PK.
+		tp.table.PrimaryKeyColumns = append(tp.table.PrimaryKeyColumns, tp.table.Columns...)
+	}
+
+	err = tp.findPKs(dbClient, targetSelect)
+	if err != nil {
+		return nil, err
 	}
 
 	// Remove in_keyrange. It's not understood by mysql.

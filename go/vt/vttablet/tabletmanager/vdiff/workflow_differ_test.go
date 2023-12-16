@@ -241,18 +241,21 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// No PK.
+		// No PK. Use all columns as a substitute.
 		input: &binlogdatapb.Rule{
 			Match:  "nopk",
-			Filter: "select c1, c2 from nopk",
+			Filter: "select * from nopk",
 		},
 		table: "nopk",
 		tablePlan: &tablePlan{
 			dbName:      vdiffDBName,
 			table:       testSchema.TableDefinitions[tableDefMap["nopk"]],
-			sourceQuery: "select c1, c2 from nopk order by c1 asc, c2 asc",
-			targetQuery: "select c1, c2 from nopk order by c1 asc, c2 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			sourceQuery: "select c1, c2, c3 from nopk order by c1 asc, c2 asc, c3 asc",
+			targetQuery: "select c1, c2, c3 from nopk order by c1 asc, c2 asc, c3 asc",
+			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			pkCols:      []int{0, 1, 2},
+			selectPks:   []int{0, 1, 2},
 			orderBy: sqlparser.OrderBy{
 				&sqlparser.Order{
 					Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")},
@@ -260,6 +263,10 @@ func TestBuildPlanSuccess(t *testing.T) {
 				},
 				&sqlparser.Order{
 					Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")},
+					Direction: sqlparser.AscOrder,
+				},
+				&sqlparser.Order{
+					Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c3")},
 					Direction: sqlparser.AscOrder,
 				},
 			},
@@ -505,18 +512,18 @@ func TestBuildPlanSuccess(t *testing.T) {
 			wd, err := newWorkflowDiffer(ct, vdiffenv.opts)
 			require.NoError(t, err)
 			dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
-			columnList := make([]string, len(tcase.tablePlan.comparePKs))
-			collationList := make([]string, len(tcase.tablePlan.comparePKs))
-			env := collations.Local()
-			for i := range tcase.tablePlan.comparePKs {
-				columnList[i] = tcase.tablePlan.comparePKs[i].colName
-				if tcase.tablePlan.comparePKs[i].collation != collations.Unknown {
-					collationList[i] = env.LookupName(tcase.tablePlan.comparePKs[i].collation)
-				} else {
-					collationList[i] = sqltypes.NULL.String()
+			if len(tcase.tablePlan.comparePKs) > 0 {
+				columnList := make([]string, len(tcase.tablePlan.comparePKs))
+				collationList := make([]string, len(tcase.tablePlan.comparePKs))
+				env := collations.Local()
+				for i := range tcase.tablePlan.comparePKs {
+					columnList[i] = tcase.tablePlan.comparePKs[i].colName
+					if tcase.tablePlan.comparePKs[i].collation != collations.Unknown {
+						collationList[i] = env.LookupName(tcase.tablePlan.comparePKs[i].collation)
+					} else {
+						collationList[i] = sqltypes.NULL.String()
+					}
 				}
-			}
-			if len(columnList) > 0 {
 				columnBV, err := sqltypes.BuildBindVariable(columnList)
 				require.NoError(t, err)
 				query, err := sqlparser.ParseAndBind(sqlSelectColumnCollations,

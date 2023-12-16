@@ -102,8 +102,8 @@ var (
 				Fields:            sqltypes.MakeTestFields("id|dt", "int64|datetime"),
 			}, {
 				Name:    "nopk",
-				Columns: []string{"c1", "c2"},
-				Fields:  sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+				Columns: []string{"c1", "c2", "c3"},
+				Fields:  sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
 			},
 		},
 	}
