@@ -22,11 +22,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"golang.org/x/exp/maps"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/sqlparser"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 type testCase struct {
@@ -40,10 +46,11 @@ type testCase struct {
 	retryInsert string
 	resume      bool // test resume functionality with this workflow
 	// If testing resume, what new rows should be diff'd. These rows must have a PK > all initial rows and retry rows.
-	resumeInsert      string
-	stop              bool // test stop functionality with this workflow
-	testCLIErrors     bool // test CLI errors against this workflow (only needs to be done once)
-	testCLICreateWait bool // test CLI create and wait until done against this workflow (only needs to be done once)
+	resumeInsert        string
+	stop                bool // test stop functionality with this workflow
+	testCLIErrors       bool // test CLI errors against this workflow (only needs to be done once)
+	testCLICreateWait   bool // test CLI create and wait until done against this workflow (only needs to be done once)
+	testCLIFlagHandling bool // test vtctldclient flag handling from end-to-end
 }
 
 const (
@@ -55,21 +62,22 @@ const (
 
 var testCases = []*testCase{
 	{
-		name:              "MoveTables/unsharded to two shards",
-		workflow:          "p1c2",
-		typ:               "MoveTables",
-		sourceKs:          "product",
-		targetKs:          "customer",
-		sourceShards:      "0",
-		targetShards:      "-80,80-",
-		tabletBaseID:      200,
-		tables:            "customer,Lead,Lead-1",
-		autoRetryError:    true,
-		retryInsert:       `insert into customer(cid, name, typ) values(1991234, 'Testy McTester', 'soho')`,
-		resume:            true,
-		resumeInsert:      `insert into customer(cid, name, typ) values(1992234, 'Testy McTester (redux)', 'enterprise')`,
-		testCLIErrors:     true, // test for errors in the simplest workflow
-		testCLICreateWait: true, // test wait on create feature against simplest workflow
+		name:                "MoveTables/unsharded to two shards",
+		workflow:            "p1c2",
+		typ:                 "MoveTables",
+		sourceKs:            "product",
+		targetKs:            "customer",
+		sourceShards:        "0",
+		targetShards:        "-80,80-",
+		tabletBaseID:        200,
+		tables:              "customer,Lead,Lead-1",
+		autoRetryError:      true,
+		retryInsert:         `insert into customer(cid, name, typ) values(1991234, 'Testy McTester', 'soho')`,
+		resume:              true,
+		resumeInsert:        `insert into customer(cid, name, typ) values(1992234, 'Testy McTester (redux)', 'enterprise')`,
+		testCLIErrors:       true, // test for errors in the simplest workflow
+		testCLICreateWait:   true, // test wait on create feature against simplest workflow
+		testCLIFlagHandling: true, // test flag handling end-to-end against simplest workflow
 	},
 	{
 		name:           "Reshard Merge/split 2 to 3",
@@ -207,6 +215,9 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	if tc.testCLIErrors {
 		testCLIErrors(t, ksWorkflow, allCellNames)
 	}
+	if tc.testCLIFlagHandling {
+		testCLIFlagHandling(t, tc.targetKs, tc.workflow, cells[0])
+	}
 
 	testDelete(t, ksWorkflow, allCellNames)
 
@@ -239,6 +250,66 @@ func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "show", "last", false)
 		_, output = performVDiff2Action(t, false, ksWorkflow, cells, "create", uuid, true)
 		require.Contains(t, output, "already exists")
+	})
+}
+
+// testCLIFlagHandling tests that the vtctldclient CLI flags are handled correctly
+// from vtctldclient->vtctld->vttablet->mysqld.
+func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell) {
+	expectedOptions := &tabletmanagerdatapb.VDiffOptions{
+		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
+			MaxRows:               999,
+			MaxExtraRowsToCompare: 777,
+			AutoRetry:             true,
+			UpdateTableStats:      true,
+			TimeoutSeconds:        60,
+		},
+		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
+			SourceCell:  "zone1,zone2,zone3,zonefoosource",
+			TargetCell:  "zone1,zone2,zone3,zonefootarget",
+			TabletTypes: "replica,primary,rdonly",
+		},
+		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
+			OnlyPks: true,
+		},
+	}
+
+	t.Run("Client flag handling", func(t *testing.T) {
+		res, err := vc.VtctldClient.ExecuteCommandWithOutput("vdiff", "--target-keyspace", targetKs, "--workflow", workflowName,
+			"create",
+			"--limit", fmt.Sprintf("%d", expectedOptions.CoreOptions.MaxRows),
+			"--max-extra-rows-to-compare", fmt.Sprintf("%d", expectedOptions.CoreOptions.MaxExtraRowsToCompare),
+			"--filtered-replication-wait-time", fmt.Sprintf("%v", time.Duration(expectedOptions.CoreOptions.TimeoutSeconds)*time.Second),
+			"--source-cells", expectedOptions.PickerOptions.SourceCell,
+			"--target-cells", expectedOptions.PickerOptions.TargetCell,
+			"--tablet-types", expectedOptions.PickerOptions.TabletTypes,
+			fmt.Sprintf("--update-table-stats=%t", expectedOptions.CoreOptions.UpdateTableStats),
+			fmt.Sprintf("--auto-retry=%t", expectedOptions.CoreOptions.AutoRetry),
+			fmt.Sprintf("--only-pks=%t", expectedOptions.ReportOptions.OnlyPks),
+			"--tablet-types-in-preference-order=false", // So tablet_types should not start with "in_order:", which is the default
+			"--format=json") // So we can easily grab the UUID
+		require.NoError(t, err, "vdiff command failed: %s", res)
+		jsonRes := gjson.Parse(res)
+		vduuid, err := uuid.Parse(jsonRes.Get("UUID").String())
+		require.NoError(t, err, "invalid UUID: %s", jsonRes.Get("UUID").String())
+
+		// Confirm that the options were passed through and saved correctly.
+		query := sqlparser.BuildParsedQuery("select options from %s.vdiff where vdiff_uuid = %s",
+			sidecarDBIdentifier, encodeString(vduuid.String())).Query
+		tablets := vc.getVttabletsInKeyspace(t, cell, targetKs, "PRIMARY")
+		require.Greater(t, len(tablets), 0, "no primary tablets found in keyspace %s", targetKs)
+		tablet := maps.Values(tablets)[0]
+		qres, err := tablet.QueryTablet(query, targetKs, false)
+		require.NoError(t, err, "query %q failed: %v", query, err)
+		require.NotNil(t, qres, "query %q returned nil result", query) // Should never happen
+		require.Equal(t, 1, len(qres.Rows), "query %q returned %d rows, expected 1", query, len(qres.Rows))
+		require.Equal(t, 1, len(qres.Rows[0]), "query %q returned %d columns, expected 1", query, len(qres.Rows[0]))
+		storedOptions := &tabletmanagerdatapb.VDiffOptions{}
+		bytes, err := qres.Rows[0][0].ToBytes()
+		require.NoError(t, err, "failed to convert result %+v to bytes: %v", qres.Rows[0], err)
+		err = protojson.Unmarshal(bytes, storedOptions)
+		require.NoError(t, err, "failed to unmarshal result %s to a %T: %v", string(bytes), storedOptions, err)
+		require.True(t, proto.Equal(expectedOptions, storedOptions), "stored options %v != expected options %v", storedOptions, expectedOptions)
 	})
 }
 
