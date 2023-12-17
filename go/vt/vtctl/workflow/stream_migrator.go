@@ -26,7 +26,6 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -156,7 +155,8 @@ func (sm *StreamMigrator) CancelMigration(ctx context.Context) {
 	_ = sm.deleteTargetStreams(ctx)
 
 	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow != %s", encodeString(source.GetPrimary().DbName()), encodeString(sm.ts.ReverseWorkflowName()))
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow=%s",
+			encodeString(source.GetPrimary().DbName()), encodeString(sm.ts.WorkflowName()))
 		_, err := sm.ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})

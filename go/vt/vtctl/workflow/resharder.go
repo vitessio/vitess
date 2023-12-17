@@ -321,7 +321,8 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 func (rs *resharder) startStreams(ctx context.Context) error {
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary := rs.targetPrimaries[target.ShardName()]
-		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s", encodeString(targetPrimary.DbName()))
+		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow=%s",
+			encodeString(targetPrimary.DbName()), encodeString(rs.workflow))
 		if _, err := rs.s.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
 		}
