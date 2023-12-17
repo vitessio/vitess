@@ -27,12 +27,14 @@ import (
 // typer is responsible for setting the type for expressions
 // it does it's work after visiting the children (up), since the children types is often needed to type a node.
 type typer struct {
-	m map[sqlparser.Expr]evalengine.Type
+	m            map[sqlparser.Expr]evalengine.Type
+	collationEnv *collations.Environment
 }
 
-func newTyper() *typer {
+func newTyper(collationEnv *collations.Environment) *typer {
 	return &typer{
-		m: map[sqlparser.Expr]evalengine.Type{},
+		m:            map[sqlparser.Expr]evalengine.Type{},
+		collationEnv: collationEnv,
 	}
 }
 
@@ -43,10 +45,10 @@ func (t *typer) exprType(expr sqlparser.Expr) evalengine.Type {
 func (t *typer) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Literal:
-		t.m[node] = evalengine.NewType(node.SQLType(), collations.DefaultCollationForType(node.SQLType()))
+		t.m[node] = evalengine.NewType(node.SQLType(), collations.CollationForType(node.SQLType(), t.collationEnv.DefaultConnectionCharset()))
 	case *sqlparser.Argument:
 		if node.Type >= 0 {
-			t.m[node] = evalengine.NewType(node.Type, collations.DefaultCollationForType(node.Type))
+			t.m[node] = evalengine.NewType(node.Type, collations.CollationForType(node.Type, t.collationEnv.DefaultConnectionCharset()))
 		}
 	case sqlparser.AggrFunc:
 		code, ok := opcode.SupportedAggregates[node.AggrName()]
@@ -62,7 +64,7 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		type_ := code.Type(inputType)
 		_, isCount := node.(*sqlparser.Count)
 		_, isCountStart := node.(*sqlparser.CountStar)
-		t.m[node] = evalengine.NewTypeEx(type_, collations.DefaultCollationForType(type_), !(isCount || isCountStart), 0, 0)
+		t.m[node] = evalengine.NewTypeEx(type_, collations.CollationForType(type_, t.collationEnv.DefaultConnectionCharset()), !(isCount || isCountStart), 0, 0)
 	}
 	return nil
 }

@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/cache/theine"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -62,7 +63,7 @@ func TestStrictMode(t *testing.T) {
 	// Test default behavior.
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
-	env := tabletenv.NewEnv(config, "TabletServerTest")
+	env := tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8())
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 	qe.se.InitDBConfig(newDBConfigs(db).DbaWithDB())
@@ -355,7 +356,7 @@ func newTestQueryEngine(idleTimeout time.Duration, strict bool, dbcfgs *dbconfig
 	config.OltpReadPool.IdleTimeout = idleTimeout
 	config.OlapReadPool.IdleTimeout = idleTimeout
 	config.TxPool.IdleTimeout = idleTimeout
-	env := tabletenv.NewEnv(config, "TabletServerTest")
+	env := tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8())
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 	// the integration tests that check cache behavior do not expect a doorkeeper; disable it
@@ -455,7 +456,7 @@ func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, par int) {
 	config := tabletenv.NewDefaultConfig()
 	config.DB = dbcfgs
 
-	env := tabletenv.NewEnv(config, "TabletServerTest")
+	env := tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8())
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 
@@ -513,7 +514,7 @@ func TestPlanCachePollution(t *testing.T) {
 	config.DB = dbcfgs
 	// config.LFUQueryCacheSizeBytes = 3 * 1024 * 1024
 
-	env := tabletenv.NewEnv(config, "TabletServerTest")
+	env := tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8())
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 
@@ -829,7 +830,7 @@ func TestAddQueryStats(t *testing.T) {
 			config := tabletenv.NewDefaultConfig()
 			config.DB = newDBConfigs(fakesqldb.New(t))
 			config.EnablePerWorkloadTableMetrics = testcase.enablePerWorkloadTableMetrics
-			env := tabletenv.NewEnv(config, "TestAddQueryStats_"+testcase.name)
+			env := tabletenv.NewEnv(config, "TestAddQueryStats_"+testcase.name, collations.MySQL8())
 			se := schema.NewEngine(env)
 			qe := NewQueryEngine(env, se)
 			qe.AddStats(testcase.planType, testcase.tableName, testcase.workload, testcase.tabletType, testcase.queryCount, testcase.duration, testcase.mysqlTime, testcase.rowsAffected, testcase.rowsReturned, testcase.errorCount, testcase.errorCode)
@@ -870,7 +871,7 @@ func TestPlanPoolUnsafe(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			statement, err := sqlparser.Parse(tcase.query)
 			require.NoError(t, err)
-			plan, err := planbuilder.Build(statement, map[string]*schema.Table{}, "dbName", false)
+			plan, err := planbuilder.Build(statement, map[string]*schema.Table{}, "dbName", false, collations.MySQL8())
 			// Plan building will not fail, but it will mark that reserved connection is needed.
 			// checking plan is valid will fail.
 			require.NoError(t, err)

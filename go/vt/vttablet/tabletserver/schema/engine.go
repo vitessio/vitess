@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/maps2"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
@@ -498,7 +499,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		tableType := row[1].String()
-		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString())
+		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.CollationEnv())
 		if err != nil {
 			if isView := strings.Contains(tableType, tmutils.TableView); isView {
 				log.Warningf("Failed reading schema for the view: %s, error: %v", tableName, err)
@@ -827,6 +828,7 @@ func NewEngineForTests() *Engine {
 		isOpen:    true,
 		tables:    make(map[string]*Table),
 		historian: newHistorian(false, 0, nil),
+		env:       tabletenv.NewEnv(tabletenv.NewDefaultConfig(), "SchemaEngineForTests", collations.MySQL8()),
 	}
 	return se
 }
@@ -840,6 +842,10 @@ func (se *Engine) SetTableForTests(table *Table) {
 
 func (se *Engine) GetDBConnector() dbconfigs.Connector {
 	return se.cp
+}
+
+func (se *Engine) CollationEnv() *collations.Environment {
+	return se.env.CollationEnv()
 }
 
 func extractNamesFromTablesList(tables []*Table) []string {

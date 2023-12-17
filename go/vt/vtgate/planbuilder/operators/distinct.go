@@ -62,9 +62,10 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		}
 
 		d.Columns = append(d.Columns, engine.CheckCol{
-			Col:   idx,
-			WsCol: wsCol,
-			Type:  typ,
+			Col:          idx,
+			WsCol:        wsCol,
+			Type:         typ,
+			CollationEnv: ctx.VSchema.CollationEnv(),
 		})
 	}
 	return nil

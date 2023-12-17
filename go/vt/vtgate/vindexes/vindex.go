@@ -44,6 +44,7 @@ type (
 		InTransactionAndIsDML() bool
 		LookupRowLockShardSession() vtgatepb.CommitOrder
 		ConnCollation() collations.ID
+		CollationEnv() *collations.Environment
 	}
 
 	// Vindex defines the interface required to register a vindex.

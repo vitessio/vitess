@@ -71,7 +71,7 @@ type TabletGateway struct {
 	srvTopoServer        srvtopo.Server
 	localCell            string
 	retryCount           int
-	defaultConnCollation uint32
+	defaultConnCollation atomic.Uint32
 
 	// mu protects the fields of this group.
 	mu sync.Mutex
@@ -431,17 +431,17 @@ func (gw *TabletGateway) TabletsHealthyStatus() discovery.TabletsCacheStatusList
 }
 
 func (gw *TabletGateway) updateDefaultConnCollation(tablet *topodatapb.Tablet) {
-	if atomic.CompareAndSwapUint32(&gw.defaultConnCollation, 0, tablet.DefaultConnCollation) {
+	if gw.defaultConnCollation.CompareAndSwap(0, tablet.DefaultConnCollation) {
 		return
 	}
-	if atomic.LoadUint32(&gw.defaultConnCollation) != tablet.DefaultConnCollation {
+	if gw.defaultConnCollation.Load() != tablet.DefaultConnCollation {
 		log.Warning("this Vitess cluster has tablets with different default connection collations")
 	}
 }
 
 // DefaultConnCollation returns the default connection collation of this TabletGateway
 func (gw *TabletGateway) DefaultConnCollation() collations.ID {
-	return collations.ID(atomic.LoadUint32(&gw.defaultConnCollation))
+	return collations.ID(gw.defaultConnCollation.Load())
 }
 
 // NewShardError returns a new error with the shard info amended.

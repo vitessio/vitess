@@ -19,6 +19,7 @@ package semantics
 import (
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -31,6 +32,7 @@ type RealTable struct {
 	ASTNode           *sqlparser.AliasedTableExpr
 	Table             *vindexes.Table
 	isInfSchema       bool
+	collationEnv      *collations.Environment
 }
 
 var _ TableInfo = (*RealTable)(nil)
@@ -67,7 +69,7 @@ func (r *RealTable) IsInfSchema() bool {
 
 // GetColumns implements the TableInfo interface
 func (r *RealTable) getColumns() []ColumnInfo {
-	return vindexTableToColumnInfo(r.Table)
+	return vindexTableToColumnInfo(r.Table, r.collationEnv)
 }
 
 // GetExpr implements the TableInfo interface
@@ -115,7 +117,7 @@ func (r *RealTable) matches(name sqlparser.TableName) bool {
 	return (name.Qualifier.IsEmpty() || name.Qualifier.String() == r.dbName) && r.tableName == name.Name.String()
 }
 
-func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
+func vindexTableToColumnInfo(tbl *vindexes.Table, collationEnv *collations.Environment) []ColumnInfo {
 	if tbl == nil {
 		return nil
 	}
@@ -125,7 +127,7 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 
 		cols = append(cols, ColumnInfo{
 			Name:      col.Name.String(),
-			Type:      col.ToEvalengineType(),
+			Type:      col.ToEvalengineType(collationEnv),
 			Invisible: col.Invisible,
 		})
 		nameMap[col.Name.String()] = nil

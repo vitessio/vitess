@@ -23,7 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/dbconfigs"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -227,13 +229,13 @@ func TestLoadTableMessage(t *testing.T) {
 
 func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Table, error) {
 	ctx := context.Background()
-	appParams := db.ConnParams()
-	dbaParams := db.ConnParams()
+	appParams := dbconfigs.New(db.ConnParams())
+	dbaParams := dbconfigs.New(db.ConnParams())
 	cfg := tabletenv.ConnPoolConfig{
 		Size:        2,
 		IdleTimeout: 10 * time.Second,
 	}
-	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest"), "", cfg)
+	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest", collations.MySQL8()), "", cfg)
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx, nil)
 	if err != nil {
@@ -241,7 +243,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	}
 	defer conn.Recycle()
 
-	return LoadTable(conn, "fakesqldb", "test_table", tableType, comment)
+	return LoadTable(conn, "fakesqldb", "test_table", tableType, comment, collations.MySQL8())
 }
 
 func mockLoadTableQueries(db *fakesqldb.DB) {

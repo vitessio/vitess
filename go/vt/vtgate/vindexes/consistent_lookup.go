@@ -413,7 +413,7 @@ func (lu *clCommon) Delete(ctx context.Context, vcursor VCursor, rowsColValues [
 func (lu *clCommon) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	equal := true
 	for i := range oldValues {
-		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], vcursor.ConnCollation())
+		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], vcursor.CollationEnv(), vcursor.ConnCollation())
 		// errors from NullsafeCompare can be ignored. if they are real problems, we'll see them in the Create/Update
 		if err != nil || result != 0 {
 			equal = false
