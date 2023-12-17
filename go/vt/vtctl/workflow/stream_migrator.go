@@ -199,8 +199,8 @@ func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 /* tablet streams */
 
 func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, constraint string) ([]*VReplicationStream, error) {
-	query := fmt.Sprintf("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name=%s and workflow != %s",
-		encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
+	query := fmt.Sprintf("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name=%s and workflow=%s",
+		encodeString(ti.DbName()), encodeString(sm.ts.WorkflowName()))
 	if constraint != "" {
 		query += fmt.Sprintf(" and %s", constraint)
 	}
