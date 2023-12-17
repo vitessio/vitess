@@ -54,7 +54,7 @@ func HTTPRegisterProfile() {
 	}
 
 	if !pflag.Lookup("pprof-http").Changed {
-		log.Warning("Beginning in vitess version 20, pprof-http will default to `false`; to continue enabling pprof endpoints, please manually set this flag before upgrading.")
+		log.Warning("Beginning in v20, pprof-http will default to `false`; to continue enabling pprof endpoints, please manually set this flag before upgrading.")
 	}
 
 	HTTPHandleFunc("/debug/pprof/", pprof.Index)
