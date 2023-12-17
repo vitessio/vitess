@@ -683,6 +683,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				if err := tablet.Vttablet.Setup(); err != nil {
 					t.Fatalf(err.Error())
 				}
+				// Set time_zone to UTC for all tablets. Without this it fails locally on some MacOS setups.
 				query := "SET GLOBAL time_zone = '+00:00';"
 				qr, err := tablet.Vttablet.QueryTablet(query, tablet.Vttablet.Keyspace, false)
 				if err != nil {
