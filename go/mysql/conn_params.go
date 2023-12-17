@@ -19,35 +19,36 @@ package mysql
 import (
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vttls"
 )
 
 // ConnParams contains all the parameters to use to connect to mysql.
 type ConnParams struct {
-	Host       string `json:"host"`
-	Port       int    `json:"port"`
-	Uname      string `json:"uname"`
-	Pass       string `json:"pass"`
-	DbName     string `json:"dbname"`
-	UnixSocket string `json:"unix_socket"`
-	Charset    string `json:"charset"`
-	Flags      uint64 `json:"flags"`
-	Flavor     string `json:"flavor,omitempty"`
+	Host       string
+	Port       int
+	Uname      string
+	Pass       string
+	DbName     string
+	UnixSocket string
+	Charset    collations.ID
+	Flags      uint64
+	Flavor     string
 
 	// The following SSL flags control the SSL behavior.
 	//
 	// Not setting this value implies preferred mode unless
 	// the CapabilityClientSSL bit is set in db_flags. In the
 	// flag is set, it ends up equivalent to verify_identity mode.
-	SslMode          vttls.SslMode `json:"ssl_mode"`
-	SslCa            string        `json:"ssl_ca"`
-	SslCaPath        string        `json:"ssl_ca_path"`
-	SslCert          string        `json:"ssl_cert"`
-	SslCrl           string        `json:"ssl_crl"`
-	SslKey           string        `json:"ssl_key"`
-	TLSMinVersion    string        `json:"tls_min_version"`
-	ServerName       string        `json:"server_name"`
-	ConnectTimeoutMs uint64        `json:"connect_timeout_ms"`
+	SslMode          vttls.SslMode
+	SslCa            string
+	SslCaPath        string
+	SslCert          string
+	SslCrl           string
+	SslKey           string
+	TLSMinVersion    string
+	ServerName       string
+	ConnectTimeoutMs uint64
 
 	// The following is only set to force the client to connect without
 	// using CapabilityClientDeprecateEOF

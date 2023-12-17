@@ -25,6 +25,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -110,14 +112,15 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to parse --tablet-path: %w", err)
 	}
 
+	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
 	// config and mycnf initializations are intertwined.
-	config, mycnf, err := initConfig(tabletAlias)
+	config, mycnf, err := initConfig(tabletAlias, collationEnv)
 	if err != nil {
 		return err
 	}
 
 	ts := topo.Open()
-	qsc, err := createTabletServer(context.Background(), config, ts, tabletAlias)
+	qsc, err := createTabletServer(context.Background(), config, ts, tabletAlias, collationEnv)
 	if err != nil {
 		ts.Close()
 		return err
@@ -136,7 +139,7 @@ func run(cmd *cobra.Command, args []string) error {
 	if servenv.GRPCPort() != 0 {
 		gRPCPort = int32(servenv.GRPCPort())
 	}
-	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(servenv.Port()), gRPCPort, config.DB)
+	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(servenv.Port()), gRPCPort, config.DB, collationEnv)
 	if err != nil {
 		return fmt.Errorf("failed to parse --tablet-path: %w", err)
 	}
@@ -148,8 +151,9 @@ func run(cmd *cobra.Command, args []string) error {
 		DBConfigs:           config.DB.Clone(),
 		QueryServiceControl: qsc,
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
-		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
-		VDiffEngine:         vdiff.NewEngine(config, ts, tablet),
+		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler(), collationEnv),
+		VDiffEngine:         vdiff.NewEngine(config, ts, tablet, collationEnv),
+		CollationEnv:        collationEnv,
 	}
 	if err := tm.Start(tablet, config); err != nil {
 		ts.Close()
@@ -169,7 +173,7 @@ func run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *mysqlctl.Mycnf, error) {
+func initConfig(tabletAlias *topodatapb.TabletAlias, collationEnv *collations.Environment) (*tabletenv.TabletConfig, *mysqlctl.Mycnf, error) {
 	tabletenv.Init()
 	// Load current config after tabletenv.Init, because it changes it.
 	config := tabletenv.NewCurrentConfig()
@@ -211,9 +215,9 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 	// If connection parameters were specified, socketFile will be empty.
 	// Otherwise, the socketFile (read from mycnf) will be used to initialize
 	// dbconfigs.
-	config.DB.InitWithSocket(socketFile)
+	config.DB.InitWithSocket(socketFile, collationEnv)
 	for _, cfg := range config.ExternalConnections {
-		cfg.InitWithSocket("")
+		cfg.InitWithSocket("", collationEnv)
 	}
 	return config, mycnf, nil
 }
@@ -237,7 +241,7 @@ func extractOnlineDDL() error {
 	return nil
 }
 
-func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias) (*tabletserver.TabletServer, error) {
+func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, collationEnv *collations.Environment) (*tabletserver.TabletServer, error) {
 	if tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
@@ -246,7 +250,7 @@ func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts 
 	}
 
 	// creates and registers the query service
-	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias)
+	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias, collationEnv)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)

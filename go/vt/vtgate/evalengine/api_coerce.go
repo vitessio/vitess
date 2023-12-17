@@ -32,7 +32,7 @@ func CoerceTo(value sqltypes.Value, typ sqltypes.Type, sqlmode SQLMode) (sqltype
 }
 
 // CoerceTypes takes two input types, and decides how they should be coerced before compared
-func CoerceTypes(v1, v2 Type) (out Type, err error) {
+func CoerceTypes(v1, v2 Type, collationEnv *collations.Environment) (out Type, err error) {
 	if v1 == v2 {
 		return v1, nil
 	}
@@ -47,7 +47,7 @@ func CoerceTypes(v1, v2 Type) (out Type, err error) {
 
 	switch {
 	case sqltypes.IsTextOrBinary(v1.Type()) && sqltypes.IsTextOrBinary(v2.Type()):
-		mergedCollation, _, _, ferr := mergeCollations(typedCoercionCollation(v1.Type(), v1.Collation()), typedCoercionCollation(v2.Type(), v2.Collation()), v1.Type(), v2.Type())
+		mergedCollation, _, _, ferr := mergeCollations(typedCoercionCollation(v1.Type(), v1.Collation()), typedCoercionCollation(v2.Type(), v2.Collation()), v1.Type(), v2.Type(), collationEnv)
 		if ferr != nil {
 			return Type{}, ferr
 		}

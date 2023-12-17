@@ -34,6 +34,7 @@ type compiler struct {
 	dynamicTypes []ctype
 	asm          assembler
 	sqlmode      SQLMode
+	collationEnv *collations.Environment
 }
 
 type CompilerLog interface {
@@ -415,7 +416,7 @@ func (c *compiler) compareNumericTypes(lt ctype, rt ctype) (swapped bool) {
 }
 
 func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
-	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type)
+	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type, c.collationEnv)
 	if err != nil {
 		return err
 	}

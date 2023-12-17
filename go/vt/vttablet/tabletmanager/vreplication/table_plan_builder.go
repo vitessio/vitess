@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -60,6 +61,8 @@ type tablePlanBuilder struct {
 	stats             *binlogplayer.Stats
 	source            *binlogdatapb.BinlogSource
 	pkIndices         []bool
+
+	collationEnv *collations.Environment
 }
 
 // colExpr describes the processing to be performed to
@@ -129,7 +132,7 @@ const (
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment) (*ReplicatorPlan, error) {
 	filter := source.Filter
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
@@ -138,6 +141,7 @@ func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[strin
 		ColInfoMap:    colInfoMap,
 		stats:         stats,
 		Source:        source,
+		collationEnv:  collationEnv,
 	}
 	for tableName := range colInfoMap {
 		lastpk, ok := copyState[tableName]
@@ -156,7 +160,7 @@ func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[strin
 		if !ok {
 			return nil, fmt.Errorf("table %s not found in schema", tableName)
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv)
 		if err != nil {
 			return nil, err
 		}
@@ -196,7 +200,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 }
 
 func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
-	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource) (*TablePlan, error) {
+	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment) (*TablePlan, error) {
 
 	filter := rule.Filter
 	query := filter
@@ -245,6 +249,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			EnumValuesMap:    enumValuesMap,
 			ConvertCharset:   rule.ConvertCharset,
 			ConvertIntToEnum: rule.ConvertIntToEnum,
+			CollationEnv:     collationEnv,
 		}
 
 		return tablePlan, nil
@@ -256,10 +261,11 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			From:  sel.From,
 			Where: sel.Where,
 		},
-		lastpk:   lastpk,
-		colInfos: colInfos,
-		stats:    stats,
-		source:   source,
+		lastpk:       lastpk,
+		colInfos:     colInfos,
+		stats:        stats,
+		source:       source,
+		collationEnv: collationEnv,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -371,6 +377,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		TablePlanBuilder:        tpb,
 		PartialInserts:          make(map[string]*sqlparser.ParsedQuery, 0),
 		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery, 0),
+		CollationEnv:            tpb.collationEnv,
 	}
 }
 

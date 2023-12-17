@@ -89,8 +89,9 @@ func TestDistinct(t *testing.T) {
 					collID = collations.CollationBinaryID
 				}
 				checkCols = append(checkCols, CheckCol{
-					Col:  i,
-					Type: evalengine.NewTypeEx(tc.inputs.Fields[i].Type, collID, false, 0, 0),
+					Col:          i,
+					Type:         evalengine.NewTypeEx(tc.inputs.Fields[i].Type, collID, false, 0, 0),
+					CollationEnv: collations.MySQL8(),
 				})
 			}
 		}

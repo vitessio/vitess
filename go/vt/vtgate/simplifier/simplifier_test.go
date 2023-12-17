@@ -120,15 +120,19 @@ func TestSimplifyEvalEngineExpr(t *testing.T) {
 	p0 := plus(p11, p12)
 
 	expr := SimplifyExpr(p0, func(expr sqlparser.Expr) bool {
-		local, err := evalengine.Translate(expr, nil)
+		collationEnv := collations.MySQL8()
+		local, err := evalengine.Translate(expr, &evalengine.Config{
+			CollationEnv: collationEnv,
+			Collation:    collationEnv.DefaultConnectionCharset(),
+		})
 		if err != nil {
 			return false
 		}
-		res, err := evalengine.EmptyExpressionEnv().Evaluate(local)
+		res, err := evalengine.EmptyExpressionEnv(collationEnv).Evaluate(local)
 		if err != nil {
 			return false
 		}
-		toInt64, err := res.Value(collations.Default()).ToInt64()
+		toInt64, err := res.Value(collationEnv.DefaultConnectionCharset()).ToInt64()
 		if err != nil {
 			return false
 		}

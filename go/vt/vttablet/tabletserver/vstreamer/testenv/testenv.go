@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -108,7 +109,7 @@ func Init(ctx context.Context) (*Env, error) {
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
 	config := tabletenv.NewDefaultConfig()
 	config.DB = te.Dbcfgs
-	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest")
+	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest", collations.MySQL8())
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	pos, _ := te.Mysqld.PrimaryPosition()
 	if strings.HasPrefix(strings.ToLower(pos.GTIDSet.Flavor()), string(mysqlctl.FlavorMariaDB)) {

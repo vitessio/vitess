@@ -32,7 +32,7 @@ type (
 		CallExpr
 	}
 
-	multiComparisonFunc func(args []eval, cmp int) (eval, error)
+	multiComparisonFunc func(collationEnv *collations.Environment, args []eval, cmp int) (eval, error)
 
 	builtinMultiComparison struct {
 		CallExpr
@@ -58,9 +58,8 @@ func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 	var (
-		ta    typeAggregation
-		ca    collationAggregation
-		local = collations.Local()
+		ta typeAggregation
+		ca collationAggregation
 	)
 
 	f := flagNullable
@@ -73,7 +72,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 			f = 0
 		}
 		ta.add(tt.Type, tt.Flag)
-		if err := ca.add(local, tt.Col); err != nil {
+		if err := ca.add(tt.Col, c.collationEnv); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -115,7 +114,7 @@ func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 
 	for _, arg := range args {
 		if arg == nil {
-			return func(args []eval, cmp int) (eval, error) {
+			return func(collationEnv *collations.Environment, args []eval, cmp int) (eval, error) {
 				return nil, nil
 			}
 		}
@@ -166,7 +165,7 @@ func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 	panic("unexpected argument type")
 }
 
-func compareAllInteger_u(args []eval, cmp int) (eval, error) {
+func compareAllInteger_u(_ *collations.Environment, args []eval, cmp int) (eval, error) {
 	x := args[0].(*evalUint64)
 	for _, arg := range args[1:] {
 		y := arg.(*evalUint64)
@@ -177,7 +176,7 @@ func compareAllInteger_u(args []eval, cmp int) (eval, error) {
 	return x, nil
 }
 
-func compareAllInteger_i(args []eval, cmp int) (eval, error) {
+func compareAllInteger_i(_ *collations.Environment, args []eval, cmp int) (eval, error) {
 	x := args[0].(*evalInt64)
 	for _, arg := range args[1:] {
 		y := arg.(*evalInt64)
@@ -188,7 +187,7 @@ func compareAllInteger_i(args []eval, cmp int) (eval, error) {
 	return x, nil
 }
 
-func compareAllFloat(args []eval, cmp int) (eval, error) {
+func compareAllFloat(_ *collations.Environment, args []eval, cmp int) (eval, error) {
 	candidateF, ok := evalToFloat(args[0])
 	if !ok {
 		return nil, errDecimalOutOfRange
@@ -213,7 +212,7 @@ func evalDecimalPrecision(e eval) int32 {
 	return 0
 }
 
-func compareAllDecimal(args []eval, cmp int) (eval, error) {
+func compareAllDecimal(_ *collations.Environment, args []eval, cmp int) (eval, error) {
 	decExtreme := evalToDecimal(args[0], 0, 0).dec
 	precExtreme := evalDecimalPrecision(args[0])
 
@@ -230,14 +229,12 @@ func compareAllDecimal(args []eval, cmp int) (eval, error) {
 	return newEvalDecimalWithPrec(decExtreme, precExtreme), nil
 }
 
-func compareAllText(args []eval, cmp int) (eval, error) {
-	env := collations.Local()
-
+func compareAllText(collationEnv *collations.Environment, args []eval, cmp int) (eval, error) {
 	var charsets = make([]charset.Charset, 0, len(args))
 	var ca collationAggregation
 	for _, arg := range args {
 		col := evalCollation(arg)
-		if err := ca.add(env, col); err != nil {
+		if err := ca.add(col, collationEnv); err != nil {
 			return nil, err
 		}
 		charsets = append(charsets, colldata.Lookup(col.Collation).Charset())
@@ -265,7 +262,7 @@ func compareAllText(args []eval, cmp int) (eval, error) {
 	return newEvalText(b1, tc), nil
 }
 
-func compareAllBinary(args []eval, cmp int) (eval, error) {
+func compareAllBinary(_ *collations.Environment, args []eval, cmp int) (eval, error) {
 	candidateB := args[0].ToRawBytes()
 
 	for _, arg := range args[1:] {
@@ -283,17 +280,15 @@ func (call *builtinMultiComparison) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
-	return getMultiComparisonFunc(args)(args, call.cmp)
+	return getMultiComparisonFunc(args)(env.collationEnv, args, call.cmp)
 }
 
 func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype) (ctype, error) {
-	env := collations.Local()
-
 	var ca collationAggregation
 	var f typeFlag
 	for _, arg := range args {
 		f |= nullableFlags(arg.Flag)
-		if err := ca.add(env, arg.Col); err != nil {
+		if err := ca.add(arg.Col, c.collationEnv); err != nil {
 			return ctype{}, err
 		}
 	}

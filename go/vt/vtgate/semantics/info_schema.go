@@ -1637,6 +1637,11 @@ func (i *infoSchemaWithColumns) ConnCollation() collations.ID {
 	return i.inner.ConnCollation()
 }
 
+// CollationEnv implements the SchemaInformation interface
+func (i *infoSchemaWithColumns) CollationEnv() *collations.Environment {
+	return i.inner.CollationEnv()
+}
+
 func (i *infoSchemaWithColumns) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
 	return i.inner.ForeignKeyMode(keyspace)
 }

@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -70,7 +72,7 @@ create table t2 (
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	vte, err := Init(ctx, testVSchema, testSchema, "", opts)
+	vte, err := Init(ctx, testVSchema, testSchema, "", opts, collations.MySQL8())
 	require.NoError(t, err)
 	defer vte.Stop()
 
@@ -128,14 +130,14 @@ create table test_partitioned (
 	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
 	defer vte.Stop()
 
-	tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts())
+	tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts(), collations.MySQL8())
 	vte.setGlobalTabletEnv(tabletEnv)
 
 	tablet := vte.newTablet(ctx, defaultTestOpts(), &topodatapb.Tablet{
 		Keyspace: "test_keyspace",
 		Shard:    "-80",
 		Alias:    &topodatapb.TabletAlias{},
-	})
+	}, collations.MySQL8())
 	se := tablet.tsv.SchemaEngine()
 	tables := se.GetSchema()
 
@@ -184,6 +186,6 @@ func TestErrParseSchema(t *testing.T) {
 	ddl, err := parseSchema(testSchema, &Options{StrictDDL: true})
 	require.NoError(t, err)
 
-	_, err = newTabletEnvironment(ddl, defaultTestOpts())
+	_, err = newTabletEnvironment(ddl, defaultTestOpts(), collations.MySQL8())
 	require.Error(t, err, "check your schema, table[t2] doesn't exist")
 }

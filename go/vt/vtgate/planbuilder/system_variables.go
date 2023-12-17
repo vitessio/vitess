@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -27,8 +28,9 @@ import (
 )
 
 type sysvarPlanCache struct {
-	funcs map[string]planFunc
-	once  sync.Once
+	funcs        map[string]planFunc
+	once         sync.Once
+	collationEnv *collations.Environment
 }
 
 func (pc *sysvarPlanCache) initForSettings(systemVariables []sysvars.SystemVariable, f func(setting) planFunc) {
@@ -59,15 +61,19 @@ func (pc *sysvarPlanCache) parseAndBuildDefaultValue(sysvar sysvars.SystemVariab
 	}
 	sel := stmt.(*sqlparser.Select)
 	aliasedExpr := sel.SelectExprs[0].(*sqlparser.AliasedExpr)
-	def, err := evalengine.Translate(aliasedExpr.Expr, nil)
+	def, err := evalengine.Translate(aliasedExpr.Expr, &evalengine.Config{
+		Collation:    pc.collationEnv.DefaultConnectionCharset(),
+		CollationEnv: pc.collationEnv,
+	})
 	if err != nil {
 		panic(fmt.Sprintf("bug in set plan init - default value for %s not able to convert to evalengine.Expr: %s", sysvar.Name, sysvar.Default))
 	}
 	return def
 }
 
-func (pc *sysvarPlanCache) init() {
+func (pc *sysvarPlanCache) init(collationEnv *collations.Environment) {
 	pc.once.Do(func() {
+		pc.collationEnv = collationEnv
 		pc.funcs = make(map[string]planFunc)
 		pc.initForSettings(sysvars.ReadOnly, buildSetOpReadOnly)
 		pc.initForSettings(sysvars.IgnoreThese, buildSetOpIgnore)
@@ -80,8 +86,8 @@ func (pc *sysvarPlanCache) init() {
 
 var sysvarPlanningFuncs sysvarPlanCache
 
-func (pc *sysvarPlanCache) Get(expr *sqlparser.SetExpr) (planFunc, error) {
-	pc.init()
+func (pc *sysvarPlanCache) Get(expr *sqlparser.SetExpr, collationEnv *collations.Environment) (planFunc, error) {
+	pc.init(collationEnv)
 	pf, ok := pc.funcs[expr.Var.Name.Lowered()]
 	if !ok {
 		return nil, vterrors.VT05006(sqlparser.String(expr))

@@ -28,6 +28,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/sqlescape"
@@ -136,6 +138,7 @@ type trafficSwitcher struct {
 
 func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.wr.ts }
 func (ts *trafficSwitcher) TabletManagerClient() tmclient.TabletManagerClient { return ts.wr.tmc }
+func (ts *trafficSwitcher) CollationEnv() *collations.Environment             { return ts.wr.collationEnv }
 func (ts *trafficSwitcher) Logger() logutil.Logger                            { return ts.wr.logger }
 func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
 	return ts.wr.VReplicationExec(ctx, alias, query)
