@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -49,6 +50,69 @@ const (
 	selectQuery
 	reshardingJournalQuery
 )
+
+// Check that the given WHERE clause is using at least one of the specified
+// columns with an equality or in operator to ensure that it is being
+// properly selective and not unintentionally going to potentially affect
+// multiple workflows.
+// The engine's exec function -- used by the VReplicationExec RPC -- should
+// provide guardrails for data changing statements and if the user wants get
+// around them they can e.g. use the ExecuteAsDba RPC.
+var isSelective = func(where *sqlparser.Where, columns ...*sqlparser.ColName) bool {
+	if where == nil {
+		return false
+	}
+	if len(columns) == 0 {
+		return true
+	}
+	selective := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ComparisonExpr:
+			colName, ok := node.Left.(*sqlparser.ColName)
+			if !ok {
+				return true, nil
+			}
+			wantedColumn := false
+			for i := range columns {
+				if !columns[i].Equal(colName) {
+					wantedColumn = true
+					break
+				}
+			}
+			if !wantedColumn {
+				return true, nil
+			}
+			// We found a desired column, check that it is being used with an
+			// equality operator (in being equal to any of N things).
+			if node.Operator != sqlparser.EqualOp && node.Operator != sqlparser.InOp {
+				return true, nil
+			}
+			selective = true  // This is a safe statement
+			return false, nil // We can stop walking
+		}
+		return true, nil
+	}, where)
+	return selective
+}
+
+var tableSelectiveColumns = map[string][]*sqlparser.ColName{
+	vreplicationTableName: {
+		{Name: sqlparser.NewIdentifierCI("id")},
+		{Name: sqlparser.NewIdentifierCI("workflow")},
+	},
+}
+
+func columnsStrForErr(columns []*sqlparser.ColName) string {
+	if len(columns) == 0 {
+		return ""
+	}
+	colsForError := make([]string, len(columns))
+	for i := range columns {
+		colsForError[i] = columns[i].Name.String()
+	}
+	return strings.Join(colsForError, ", ")
+}
 
 // buildControllerPlan parses the input query and returns an appropriate plan.
 func buildControllerPlan(query string) (*controllerPlan, error) {
@@ -163,7 +227,10 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 			opcode: reshardingJournalQuery,
 		}, nil
 	case vreplicationTableName:
-		// no-op
+		if safe := isSelective(upd.Where, tableSelectiveColumns[vreplicationTableName]...); !safe {
+			return nil, fmt.Errorf("unsafe WHERE clause in update: %s; should be using = or in with at least one of the following columns: %v",
+				sqlparser.String(upd.Where), columnsStrForErr(tableSelectiveColumns[vreplicationTableName]))
+		}
 	default:
 		return nil, fmt.Errorf("invalid table name: %s", tableName.Name.String())
 	}
@@ -220,7 +287,10 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 			opcode: reshardingJournalQuery,
 		}, nil
 	case vreplicationTableName:
-		// no-op
+		if safe := isSelective(del.Where, tableSelectiveColumns[vreplicationTableName]...); !safe {
+			return nil, fmt.Errorf("unsafe WHERE clause in delete: %s; should be using = or in with at least one of the following columns: %v",
+				sqlparser.String(del.Where), columnsStrForErr(tableSelectiveColumns[vreplicationTableName]))
+		}
 	default:
 		return nil, fmt.Errorf("invalid table name: %s", tableName.Name.String())
 	}
