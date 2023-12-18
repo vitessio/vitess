@@ -3836,20 +3836,6 @@ func (asm *assembler) Fn_YEARWEEK() {
 	}, "FN YEARWEEK DATE(SP-1)")
 }
 
-func (asm *assembler) Interval_i(l int) {
-	asm.adjustStack(-l)
-	asm.emit(func(env *ExpressionEnv) int {
-		if env.vm.stack[env.vm.sp-l] == nil {
-			env.vm.stack[env.vm.sp-l] = env.vm.arena.newEvalInt64(-1)
-			env.vm.sp -= l
-			return 1
-		}
-
-		env.vm.sp -= l
-		return 1
-	}, "INTERVAL INT64(SP-1)...INT64(SP-%d)", l)
-}
-
 func (asm *assembler) Interval(l int) {
 	asm.adjustStack(-l)
 	asm.emit(func(env *ExpressionEnv) int {

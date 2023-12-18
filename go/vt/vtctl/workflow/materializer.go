@@ -598,22 +598,6 @@ func (mz *materializer) startStreams(ctx context.Context) error {
 	})
 }
 
-func Materialize(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, ms *vtctldatapb.MaterializeSettings) error {
-	mz := &materializer{
-		ctx:      ctx,
-		ts:       ts,
-		sourceTs: ts,
-		tmc:      tmc,
-		ms:       ms,
-	}
-
-	err := mz.createMaterializerStreams()
-	if err != nil {
-		return err
-	}
-	return mz.startStreams(ctx)
-}
-
 func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}

@@ -660,13 +660,6 @@ func GenerateUpdateTimeThrottled(uid int32, timeThrottledUnix int64, componentTh
 	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_throttled=%v, component_throttled='%v' where id=%v", timeThrottledUnix, timeThrottledUnix, componentThrottled, uid), nil
 }
 
-// StartVReplication returns a statement to start the replication.
-func StartVReplication(uid int32) string {
-	return fmt.Sprintf(
-		"update _vt.vreplication set state='%v', stop_pos=NULL where id=%v",
-		binlogdatapb.VReplicationWorkflowState_Running.String(), uid)
-}
-
 // StartVReplicationUntil returns a statement to start the replication with a stop position.
 func StartVReplicationUntil(uid int32, pos string) string {
 	return fmt.Sprintf(
