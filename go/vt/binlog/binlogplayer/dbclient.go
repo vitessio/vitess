@@ -183,8 +183,6 @@ func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetchMulti(query string,
 		}
 		qps[i] = uq
 	}
-	if err != nil {
-		return nil, err
-	}
+
 	return dcr.dbClientImpl.ExecuteFetchMulti(strings.Join(qps, ";"), maxrows)
 }

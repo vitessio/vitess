@@ -1041,10 +1041,8 @@ func (s *Schema) getTableColumnNames(t *CreateTableEntity) (columnNames []*sqlpa
 }
 
 // getViewColumnNames returns the names of aliased columns returned by a given view.
-func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *declarativeSchemaInformation) (
-	columnNames []*sqlparser.IdentifierCI,
-	err error,
-) {
+func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *declarativeSchemaInformation) ([]*sqlparser.IdentifierCI, error) {
+	var columnNames []*sqlparser.IdentifierCI
 	for _, node := range v.Select.GetColumns() {
 		switch node := node.(type) {
 		case *sqlparser.StarExpr:
@@ -1074,8 +1072,5 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 		}
 	}
 
-	if err != nil {
-		return nil, err
-	}
 	return columnNames, nil
 }
