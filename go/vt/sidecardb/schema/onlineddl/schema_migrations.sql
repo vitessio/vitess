@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     `postpone_launch`                 tinyint unsigned NOT NULL DEFAULT '0',
     `stage`                           text             NOT NULL,
     `cutover_attempts`                int unsigned     NOT NULL DEFAULT '0',
+    `capable_immediate_operation`     tinyint unsigned NOT NULL DEFAULT '0',
     `is_immediate_operation`          tinyint unsigned NOT NULL DEFAULT '0',
     `reviewed_timestamp`              timestamp        NULL DEFAULT NULL,
     `ready_to_complete_timestamp`     timestamp        NULL DEFAULT NULL,

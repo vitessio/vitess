@@ -348,44 +348,44 @@ func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.
 
 // analyzeSpecialAlterPlan checks if the given ALTER onlineDDL, and for the current state of affected table,
 // can be executed in a special way. If so, it returns with a "special plan"
-func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, capableOf mysql.CapableOf) (*SpecialAlterPlan, error) {
+func analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, createTable *sqlparser.CreateTable, capableOf mysql.CapableOf) (plan *SpecialAlterPlan, shouldApplyPlanPerStrategy bool, err error) {
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	alterTable, ok := ddlStmt.(*sqlparser.AlterTable)
 	if !ok {
 		// We only deal here with ALTER TABLE
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected ALTER TABLE. Got %v", sqlparser.CanonicalString(ddlStmt))
-	}
-
-	createTable, err := e.getCreateTableStatement(ctx, onlineDDL.Table)
-	if err != nil {
-		return nil, vterrors.Wrapf(err, "in Executor.analyzeSpecialAlterPlan(), uuid=%v, table=%v", onlineDDL.UUID, onlineDDL.Table)
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected ALTER TABLE. Got %v", sqlparser.CanonicalString(ddlStmt))
 	}
 
 	// special plans which support reverts are trivially desired:
 	// special plans which do not support reverts are flag protected:
-	if onlineDDL.StrategySetting().IsFastRangeRotationFlag() {
+	{
+		shouldApplyPlanPerStrategy := onlineDDL.StrategySetting().IsFastRangeRotationFlag()
 		op, err := analyzeDropRangePartition(alterTable, createTable)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if op != nil {
-			return op, nil
-		}
-		if op := analyzeAddRangePartition(alterTable, createTable); op != nil {
-			return op, nil
+			return op, shouldApplyPlanPerStrategy, nil
 		}
 	}
-	if onlineDDL.StrategySetting().IsPreferInstantDDL() {
+	{
+		shouldApplyPlanPerStrategy := onlineDDL.StrategySetting().IsFastRangeRotationFlag()
+		if op := analyzeAddRangePartition(alterTable, createTable); op != nil {
+			return op, shouldApplyPlanPerStrategy, nil
+		}
+	}
+	{
+		shouldApplyPlanPerStrategy := onlineDDL.StrategySetting().IsPreferInstantDDL()
 		op, err := AnalyzeInstantDDL(alterTable, createTable, capableOf)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if op != nil {
-			return op, nil
+			return op, shouldApplyPlanPerStrategy, nil
 		}
 	}
-	return nil, nil
+	return nil, false, nil
 }

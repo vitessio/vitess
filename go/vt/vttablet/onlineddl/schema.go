@@ -45,6 +45,7 @@ const (
 			migration_uuid,
 			ddl_action,
 			is_view,
+			capable_immediate_operation,
 			is_immediate_operation,
 			postpone_launch,
 			postpone_completion,
@@ -88,6 +89,11 @@ const (
 	`
 	sqlUpdateMigrationIsView = `UPDATE _vt.schema_migrations
 			SET is_view=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationSetCapableImmediateOperation = `UPDATE _vt.schema_migrations
+			SET capable_immediate_operation=1
 		WHERE
 			migration_uuid=%a
 	`
@@ -416,6 +422,7 @@ const (
 			component_throttled,
 			postpone_launch,
 			postpone_completion,
+			capable_immediate_operation,
 			is_immediate_operation,
 			reviewed_timestamp
 		FROM _vt.schema_migrations

@@ -1109,6 +1109,13 @@ func testScheduler(t *testing.T) {
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 			})
+
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				assert.True(t, row.AsBool("is_immediate_operation", false))
+				assert.True(t, row.AsBool("capable_immediate_operation", false))
+			}
 		})
 	}
 	// Failure scenarios

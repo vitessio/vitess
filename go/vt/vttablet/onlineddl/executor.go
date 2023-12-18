@@ -2443,26 +2443,37 @@ func (e *Executor) reviewEmptyTableRevertMigrations(ctx context.Context, onlineD
 // Non immediate operations are:
 // - A gh-ost migration
 // - A vitess (vreplication) migration
-func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysql.CapableOf, onlineDDL *schema.OnlineDDL, ddlAction string, isRevert bool, isView bool) (bool, error) {
+func (e *Executor) reviewImmediateOperations(
+	ctx context.Context,
+	capableOf mysql.CapableOf,
+	onlineDDL *schema.OnlineDDL,
+	ddlAction string,
+	isRevert bool,
+	isView bool,
+) (capableImmediate bool, isImmediate bool, err error) {
 	switch ddlAction {
 	case sqlparser.CreateStr, sqlparser.DropStr:
-		return true, nil
+		return true, true, nil
 	case sqlparser.AlterStr:
 		switch {
 		case isView:
-			return true, nil
+			return true, true, nil
 		case isRevert:
 			// REVERT for a true ALTER TABLE. not an immediate operation
-			return false, nil
+			return false, false, nil
 		default:
-			specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, capableOf)
+			createTable, err := e.getCreateTableStatement(ctx, onlineDDL.Table)
 			if err != nil {
-				return false, err
+				return false, false, vterrors.Wrapf(err, "in Executor.reviewImmediateOperations(), uuid=%v, table=%v", onlineDDL.UUID, onlineDDL.Table)
 			}
-			return (specialPlan != nil), nil
+			specialPlan, shouldApplyPlanPerStrategy, err := analyzeSpecialAlterPlan(ctx, onlineDDL, createTable, capableOf)
+			if err != nil {
+				return false, false, err
+			}
+			return (specialPlan != nil), (specialPlan != nil) && shouldApplyPlanPerStrategy, nil
 		}
 	}
-	return false, nil
+	return false, false, nil
 }
 
 // reviewQueuedMigration investigates a single migration found in `queued` state.
@@ -2493,9 +2504,14 @@ func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capab
 		}
 	}
 	isView := row.AsBool("is_view", false)
-	isImmediate, err := e.reviewImmediateOperations(ctx, capableOf, onlineDDL, ddlAction, isRevert, isView)
+	capableImmediate, isImmediate, err := e.reviewImmediateOperations(ctx, capableOf, onlineDDL, ddlAction, isRevert, isView)
 	if err != nil {
 		return err
+	}
+	if capableImmediate {
+		if err := e.updateMigrationSetCapableImmediateOperation(ctx, onlineDDL.UUID); err != nil {
+			return err
+		}
 	}
 	if isImmediate {
 		if err := e.updateMigrationSetImmediateOperation(ctx, onlineDDL.UUID); err != nil {
@@ -3122,11 +3138,19 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 	defer conn.Close()
 	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
 
-	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, capableOf)
+	createTable, err := e.getCreateTableStatement(ctx, onlineDDL.Table)
+	if err != nil {
+		return false, vterrors.Wrapf(err, "in Executor.executeSpecialAlterDDLActionMigrationIfApplicable(), uuid=%v, table=%v", onlineDDL.UUID, onlineDDL.Table)
+	}
+
+	specialPlan, shouldApplyPlanPerStrategy, err := analyzeSpecialAlterPlan(ctx, onlineDDL, createTable, capableOf)
 	if err != nil {
 		return false, err
 	}
 	if specialPlan == nil {
+		return false, nil
+	}
+	if !shouldApplyPlanPerStrategy {
 		return false, nil
 	}
 
@@ -4557,6 +4581,17 @@ func (e *Executor) updateMigrationIsView(ctx context.Context, uuid string, isVie
 
 func (e *Executor) updateMigrationSetImmediateOperation(ctx context.Context, uuid string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationSetImmediateOperation,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationSetCapableImmediateOperation(ctx context.Context, uuid string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationSetCapableImmediateOperation,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

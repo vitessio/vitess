@@ -21,17 +21,19 @@ Functionality of this Executor is tested in go/test/endtoend/onlineddl/...
 package onlineddl
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestAnalyzeInstantDDL(t *testing.T) {
-	tt := []struct {
+	tcases := []struct {
 		version     string
 		create      string
 		alter       string
@@ -208,30 +210,287 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 			instant: false,
 		},
 	}
-	for _, tc := range tt {
-		name := tc.version + " " + tc.create
+	for _, tcase := range tcases {
+		name := tcase.version + " " + tcase.create
 		t.Run(name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(tc.create)
+			stmt, err := sqlparser.ParseStrictDDL(tcase.create)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = sqlparser.ParseStrictDDL(tc.alter)
+			stmt, err = sqlparser.ParseStrictDDL(tcase.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
 
-			_, capableOf, _ := mysql.GetFlavor(tc.version, nil)
+			_, capableOf, _ := mysql.GetFlavor(tcase.version, nil)
 			plan, err := AnalyzeInstantDDL(alterTable, createTable, capableOf)
-			if tc.expectError {
+			if tcase.expectError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				if tc.instant {
+				if tcase.instant {
 					require.NotNil(t, plan)
 					assert.Equal(t, instantDDLSpecialOperation, plan.operation)
 				} else {
 					require.Nil(t, plan)
+				}
+			}
+		})
+	}
+}
+
+func TestAnalyzeSpecialAlterPlan(t *testing.T) {
+	tcases := []struct {
+		version                    string
+		create                     string
+		alter                      string
+		strategy                   string
+		strategyOptions            string
+		expectError                bool
+		expectPlan                 bool
+		expectPlanOperation        specialAlterOperation
+		shouldApplyPlanPerStrategy bool
+	}{
+		// add/drop columns
+		{
+			version:    "5.7.28",
+			create:     "create table t(id int, i1 int not null, primary key(id))",
+			alter:      "alter table t add column i2 int not null",
+			expectPlan: false,
+		},
+		{
+			version:                    "8.0.21",
+			create:                     "create table t(id int, i1 int not null, primary key(id))",
+			alter:                      "alter table t add column i2 int not null",
+			strategy:                   "vitess",
+			expectPlan:                 true,
+			expectPlanOperation:        instantDDLSpecialOperation,
+			shouldApplyPlanPerStrategy: false,
+		},
+		{
+			version:                    "8.0.21",
+			create:                     "create table t(id int, i1 int not null, primary key(id))",
+			alter:                      "alter table t add column i2 int not null",
+			strategy:                   "mysql",
+			expectPlan:                 true,
+			expectPlanOperation:        instantDDLSpecialOperation,
+			shouldApplyPlanPerStrategy: false,
+		},
+		{
+			version:                    "8.0.21",
+			create:                     "create table t(id int, i1 int not null, primary key(id))",
+			alter:                      "alter table t add column i2 int not null",
+			strategy:                   "vitess",
+			strategyOptions:            "--prefer-instant-ddl",
+			expectPlan:                 true,
+			expectPlanOperation:        instantDDLSpecialOperation,
+			shouldApplyPlanPerStrategy: true,
+		},
+		{
+			version:                    "8.0.21",
+			create:                     "create table t(id int, i1 int not null, primary key(id))",
+			alter:                      "alter table t add column i2 int not null",
+			strategy:                   "mysql",
+			strategyOptions:            "--prefer-instant-ddl",
+			expectPlan:                 true,
+			expectPlanOperation:        instantDDLSpecialOperation,
+			shouldApplyPlanPerStrategy: true,
+		},
+		{
+			version:                    "8.0.21",
+			create:                     "create table t(id int, i1 int not null, primary key(id))",
+			alter:                      "alter table t add column i2 int not null, add column i3 int not null",
+			expectPlan:                 true,
+			expectPlanOperation:        instantDDLSpecialOperation,
+			shouldApplyPlanPerStrategy: false,
+		},
+		{
+			version:                    "8.0.21",
+			create:                     "create table t(id int, i1 int not null, primary key(id))",
+			alter:                      "alter table t add column i2 int not null, add column i3 int not null",
+			strategy:                   "vitess",
+			strategyOptions:            "--allow-zero-in-date --prefer-instant-ddl --allow-concurrent",
+			expectPlan:                 true,
+			expectPlanOperation:        instantDDLSpecialOperation,
+			shouldApplyPlanPerStrategy: true,
+		},
+		{
+			// fail add mid column in older versions
+			version:                    "8.0.21",
+			create:                     "create table t(id int, i1 int not null, primary key(id))",
+			alter:                      "alter table t add column i2 int not null after id",
+			strategy:                   "vitess",
+			strategyOptions:            "--prefer-instant-ddl",
+			expectPlan:                 false,
+			expectPlanOperation:        instantDDLSpecialOperation,
+			shouldApplyPlanPerStrategy: false,
+		},
+		{
+			version:    "8.0.21",
+			create:     "create table t(id int, i1 int not null, primary key(id))",
+			alter:      "alter table t drop column i1",
+			expectPlan: false,
+		},
+		{
+			// drop virtual column
+			version:             "8.0.21",
+			create:              "create table t(id int, i1 int not null, i2 int generated always as (i1 + 1) virtual, primary key(id))",
+			alter:               "alter table t drop column i2",
+			expectPlan:          true,
+			expectPlanOperation: instantDDLSpecialOperation,
+		},
+		{
+			// drop virtual column
+			version:                    "8.0.21",
+			create:                     "create table t(id int, i1 int not null, i2 int generated always as (i1 + 1) virtual, primary key(id))",
+			alter:                      "alter table t drop column i2",
+			strategy:                   "vitess",
+			strategyOptions:            "--allow-zero-in-date --prefer-instant-ddl --allow-concurrent",
+			expectPlan:                 true,
+			expectPlanOperation:        instantDDLSpecialOperation,
+			shouldApplyPlanPerStrategy: true,
+		},
+		{
+			// drop range partition
+			version: "8.0.21",
+			create: `
+				CREATE TABLE t (
+					id INT NOT NULL,
+					ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					primary key (id)
+				)
+				PARTITION BY RANGE (id) (
+						PARTITION p1 VALUES LESS THAN (10),
+						PARTITION p2 VALUES LESS THAN (20),
+						PARTITION p3 VALUES LESS THAN (30),
+						PARTITION p4 VALUES LESS THAN (40),
+						PARTITION p5 VALUES LESS THAN (50),
+						PARTITION p6 VALUES LESS THAN (60)
+				)
+			`,
+			alter:                      "alter table t drop partition p1",
+			strategy:                   "vitess",
+			strategyOptions:            "--allow-zero-in-date --prefer-instant-ddl --allow-concurrent",
+			expectPlan:                 true,
+			expectPlanOperation:        dropRangePartitionSpecialOperation,
+			shouldApplyPlanPerStrategy: false, // strategy options require "--fast-range-rotation"
+		},
+		{
+			// drop range partition
+			version: "8.0.21",
+			create: `
+				CREATE TABLE t (
+					id INT NOT NULL,
+					ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					primary key (id)
+				)
+				PARTITION BY RANGE (id) (
+						PARTITION p1 VALUES LESS THAN (10),
+						PARTITION p2 VALUES LESS THAN (20),
+						PARTITION p3 VALUES LESS THAN (30),
+						PARTITION p4 VALUES LESS THAN (40),
+						PARTITION p5 VALUES LESS THAN (50),
+						PARTITION p6 VALUES LESS THAN (60)
+				)
+			`,
+			alter:                      "alter table t drop partition p1",
+			strategy:                   "vitess",
+			strategyOptions:            "--fast-range-rotation",
+			expectPlan:                 true,
+			expectPlanOperation:        dropRangePartitionSpecialOperation,
+			shouldApplyPlanPerStrategy: true,
+		},
+		{
+			//  drop mid-range partition
+			version: "8.0.21",
+			create: `
+				CREATE TABLE t (
+					id INT NOT NULL,
+					ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					primary key (id)
+				)
+				PARTITION BY RANGE (id) (
+						PARTITION p1 VALUES LESS THAN (10),
+						PARTITION p2 VALUES LESS THAN (20),
+						PARTITION p3 VALUES LESS THAN (30),
+						PARTITION p4 VALUES LESS THAN (40),
+						PARTITION p5 VALUES LESS THAN (50),
+						PARTITION p6 VALUES LESS THAN (60)
+				)
+			`,
+			alter:                      "alter table t drop partition p3",
+			strategy:                   "vitess",
+			strategyOptions:            "--fast-range-rotation",
+			expectPlan:                 true,
+			expectPlanOperation:        dropRangePartitionSpecialOperation,
+			shouldApplyPlanPerStrategy: true,
+		},
+		{
+			// add range partition
+			version: "8.0.21",
+			create: `
+				CREATE TABLE t (
+					id INT NOT NULL,
+					ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					primary key (id)
+				)
+				PARTITION BY RANGE (id) (
+						PARTITION p1 VALUES LESS THAN (10),
+						PARTITION p2 VALUES LESS THAN (20),
+						PARTITION p3 VALUES LESS THAN (30),
+						PARTITION p4 VALUES LESS THAN (40),
+						PARTITION p5 VALUES LESS THAN (50),
+						PARTITION p6 VALUES LESS THAN (60)
+				)
+			`,
+			alter:                      "alter table t add partition (partition p7 values less than (70))",
+			strategy:                   "vitess",
+			strategyOptions:            "--fast-range-rotation",
+			expectPlan:                 true,
+			expectPlanOperation:        addRangePartitionSpecialOperation,
+			shouldApplyPlanPerStrategy: true,
+		},
+	}
+	ctx := context.Background()
+	for _, tcase := range tcases {
+		name := tcase.version + " " + tcase.create
+		t.Run(name, func(t *testing.T) {
+			stmt, err := sqlparser.ParseStrictDDL(tcase.create)
+			require.NoError(t, err)
+			createTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+
+			stmt, err = sqlparser.ParseStrictDDL(tcase.alter)
+			require.NoError(t, err)
+			alterTable, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+
+			require.Equal(t, createTable.Table.Name.String(), alterTable.Table.Name.String())
+
+			onlineDDL := &schema.OnlineDDL{
+				UUID:     "a5a563da_dc1a_11ec_a416_0a43f95f28a3",
+				Table:    createTable.Table.Name.String(),
+				SQL:      tcase.alter,
+				Strategy: schema.DDLStrategy(tcase.strategy),
+				Options:  tcase.strategyOptions,
+			}
+
+			_, capableOf, _ := mysql.GetFlavor(tcase.version, nil)
+			plan, shouldApplyPlanPerStrategy, err := analyzeSpecialAlterPlan(ctx, onlineDDL, createTable, capableOf)
+			if tcase.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if shouldApplyPlanPerStrategy {
+					require.NotNil(t, plan)
+				}
+				assert.Equal(t, tcase.shouldApplyPlanPerStrategy, shouldApplyPlanPerStrategy)
+				if tcase.expectPlan {
+					require.NotNil(t, plan)
+					assert.Equal(t, tcase.expectPlanOperation, plan.operation)
+				} else {
+					assert.Nil(t, plan)
 				}
 			}
 		})
