@@ -4970,5 +4970,30 @@
         "user.ref"
       ]
     }
+  },
+  {
+    "comment": "delete by target destination with limit",
+    "query": "delete from `user[-]`.`user` limit 20",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from `user[-]`.`user` limit 20",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` limit 20 for update",
+        "Query": "delete from `user` limit 20",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

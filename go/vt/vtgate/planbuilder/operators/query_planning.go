@@ -110,7 +110,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Route:
-		if in.Limit != nil && !src.IsSingleShard() {
+		if in.Limit != nil && !src.IsSingleShardOrByDestination() {
 			panic(vterrors.VT12001("multi shard DELETE with LIMIT"))
 		}
 

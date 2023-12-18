@@ -278,6 +278,14 @@ func (r *Route) IsSingleShard() bool {
 	return false
 }
 
+func (r *Route) IsSingleShardOrByDestination() bool {
+	switch r.Routing.OpCode() {
+	case engine.Unsharded, engine.DBA, engine.Next, engine.EqualUnique, engine.Reference, engine.ByDestination:
+		return true
+	}
+	return false
+}
+
 func tupleAccess(expr sqlparser.Expr, coordinates []int) sqlparser.Expr {
 	tuple, _ := expr.(sqlparser.ValTuple)
 	for _, idx := range coordinates {
