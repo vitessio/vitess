@@ -118,7 +118,7 @@ func (env *testResharderEnv) expectValidation() {
 
 		if tabletID >= 200 {
 			// validateTargets
-			env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
+			env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
 		}
 	}
 }
