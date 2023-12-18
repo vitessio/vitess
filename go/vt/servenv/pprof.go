@@ -35,6 +35,7 @@ import (
 
 var (
 	pprofFlag []string
+	httpPprof = true
 )
 
 type profmode string
@@ -298,6 +299,7 @@ func (prof *profile) init() (start func(), stop func()) {
 
 func init() {
 	OnParse(func(fs *pflag.FlagSet) {
+		fs.BoolVar(&httpPprof, "pprof-http", httpPprof, "enable pprof http endpoints")
 		fs.StringSliceVar(&pprofFlag, "pprof", pprofFlag, "enable profiling")
 	})
 	OnInit(pprofInit)
