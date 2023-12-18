@@ -6346,7 +6346,7 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 		if returnTypeNumber != -1 {
 			break
 		}
-		panic(fmt.Errorf("error reading file %s: line %d: %s - Expected keyword", fileName, lineno, err.Error()))
+		panic(fmt.Errorf("error reading file %s: line %d: Expected keyword", fileName, lineno))
 	}
 	input := ""
 	for {
