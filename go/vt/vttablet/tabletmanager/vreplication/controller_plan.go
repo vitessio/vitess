@@ -69,27 +69,27 @@ var isSelective = func(where *sqlparser.Where, columns ...*sqlparser.ColName) bo
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ComparisonExpr:
-			colName, ok := node.Left.(*sqlparser.ColName)
+			column, ok := node.Left.(*sqlparser.ColName)
 			if !ok {
 				return true, nil
 			}
 			wantedColumn := false
 			for i := range columns {
-				if !columns[i].Equal(colName) {
+				if columns[i].Equal(column) {
 					wantedColumn = true
 					break
 				}
 			}
-			if !wantedColumn {
-				return true, nil
+			// If we found a desired column, check that it is being used with an
+			// equality operator with = rather than != OR an in clause, logically
+			// being equal to any of N things.
+			if wantedColumn &&
+				(node.Operator == sqlparser.EqualOp && node.Operator.ToString() == sqlparser.EqualStr) ||
+				node.Operator == sqlparser.InOp {
+				selective = true  // This is a safe statement
+				return false, nil // We can stop walking
 			}
-			// We found a desired column, check that it is being used with an
-			// equality operator (in being equal to any of N things).
-			if node.Operator != sqlparser.EqualOp && node.Operator != sqlparser.InOp {
-				return true, nil
-			}
-			selective = true  // This is a safe statement
-			return false, nil // We can stop walking
+		default:
 		}
 		return true, nil
 	}, where)

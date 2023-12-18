@@ -118,6 +118,16 @@ func TestControllerPlan(t *testing.T) {
 			selector: "select id from _vt.vreplication",
 			applier:  "update _vt.vreplication set state = 'Running' where id in ::ids",
 		},
+		err: "unsafe WHERE clause in update: ; should be using = or in with at least one of the following columns: id, workflow",
+	}, {
+		in:  "update _vt.vreplication set state='Running', message='' where workflow != 'wut'",
+		err: "unsafe WHERE clause in update:  where workflow != 'wut'; should be using = or in with at least one of the following columns: id, workflow",
+	}, {
+		in:  "update _vt.vreplication set state='Running', message='' where id >= 1",
+		err: "unsafe WHERE clause in update:  where id >= 1; should be using = or in with at least one of the following columns: id, workflow",
+	}, {
+		in:  "update _vt.vreplication set state='Running', message='' where state='Stopped'",
+		err: "unsafe WHERE clause in update:  where state = 'Stopped'; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in: "update _vt.vreplication set state='Running' where a = 1",
 		plan: &testControllerPlan{
@@ -126,6 +136,7 @@ func TestControllerPlan(t *testing.T) {
 			selector: "select id from _vt.vreplication where a = 1",
 			applier:  "update _vt.vreplication set state = 'Running' where id in ::ids",
 		},
+		err: "unsafe WHERE clause in update:  where a = 1; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in: "update _vt.resharding_journal set col = 1",
 		plan: &testControllerPlan{
@@ -166,6 +177,13 @@ func TestControllerPlan(t *testing.T) {
 			delCopyState:      "delete from _vt.copy_state where vrepl_id in ::ids",
 			delPostCopyAction: "delete from _vt.post_copy_action where vrepl_id in ::ids",
 		},
+		err: "unsafe WHERE clause in delete: ; should be using = or in with at least one of the following columns: id, workflow",
+	}, {
+		in:  "delete from _vt.vreplication where workflow != 'wut'",
+		err: "unsafe WHERE clause in delete:  where workflow != 'wut'; should be using = or in with at least one of the following columns: id, workflow",
+	}, {
+		in:  "delete from _vt.vreplication where state='Stopped'",
+		err: "unsafe WHERE clause in delete:  where state = 'Stopped'; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in: "delete from _vt.vreplication where a = 1",
 		plan: &testControllerPlan{
@@ -176,6 +194,7 @@ func TestControllerPlan(t *testing.T) {
 			delCopyState:      "delete from _vt.copy_state where vrepl_id in ::ids",
 			delPostCopyAction: "delete from _vt.post_copy_action where vrepl_id in ::ids",
 		},
+		err: "unsafe WHERE clause in delete:  where a = 1; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in: "delete from _vt.resharding_journal where id = 1",
 		plan: &testControllerPlan{
