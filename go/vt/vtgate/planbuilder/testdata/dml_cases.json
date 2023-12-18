@@ -4995,5 +4995,57 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "delete sharded table with join with reference table",
+    "query": "delete u from user u join ref_with_source r on u.col = r.col",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u from user u join ref_with_source r on u.col = r.col",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u for update",
+        "Query": "delete u from `user` as u, ref_with_source as r where u.col = r.col",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete sharded table with join with another sharded table on vindex column",
+    "query": "delete u from user u join music m on u.id = m.user_id",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u from user u join music m on u.id = m.user_id",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u for update",
+        "Query": "delete u from `user` as u, music as m where u.id = m.user_id",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   }
 ]
