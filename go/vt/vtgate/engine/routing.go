@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -258,7 +259,12 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 }
 
 func (rp *RoutingParameters) routedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, tableSchema string, tableNames map[string]string) ([]*srvtopo.ResolvedShard, error) {
-	var routedKs *vindexes.Keyspace
+	var (
+		// Guards the first keyspace found among table names.
+		once     sync.Once
+		routedKs *vindexes.Keyspace
+	)
+
 	for tblBvName, tableName := range tableNames {
 		tbl := sqlparser.TableName{
 			Name:      sqlparser.NewIdentifierCS(tableName),
@@ -273,9 +279,8 @@ func (rp *RoutingParameters) routedTable(ctx context.Context, vcursor VCursor, b
 			// if we were able to find information about this table, let's use it
 
 			// check if the query is send to single keyspace.
-			if routedKs == nil {
-				routedKs = routedTable.Keyspace
-			}
+			once.Do(func() { routedKs = routedTable.Keyspace })
+
 			if routedKs.Name != routedTable.Keyspace.Name {
 				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot send the query to multiple keyspace due to different table_name: %s, %s", routedKs.Name, routedTable.Keyspace.Name)
 			}
