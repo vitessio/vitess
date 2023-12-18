@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -137,7 +138,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 
 	ks := cmd.Flags().Arg(0)
 
-	resp, err := client.ApplySchema(commandCtx, &vtctldatapb.ApplySchemaRequest{
+	req := &vtctldatapb.ApplySchemaRequest{
 		Keyspace:            ks,
 		DdlStrategy:         applySchemaOptions.DDLStrategy,
 		Sql:                 parts,
@@ -146,7 +147,11 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 		WaitReplicasTimeout: protoutil.DurationToProto(applySchemaOptions.WaitReplicasTimeout),
 		CallerId:            cid,
 		BatchSize:           applySchemaOptions.BatchSize,
-	})
+	}
+
+	log.Infof("Calling ApplySchema on VtctldServer: keyspace=%s, migrationContext=%v, ddlStrategy=%v, batchSize=%v", req.Keyspace, req.MigrationContext, req.DdlStrategy, req.BatchSize)
+
+	resp, err := client.ApplySchema(commandCtx, req)
 	if err != nil {
 		return err
 	}

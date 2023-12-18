@@ -2926,7 +2926,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		return err
 	}
 
-	log.Info("Calling ApplySchema on VtctldServer")
+	log.Infof("Calling ApplySchema on VtctldServer: keyspace=%s, migrationContext=%v, ddlStrategy=%v, batchSize=%v", keyspace, *migrationContext, *ddlStrategy, *batchSize)
 
 	resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:            keyspace,
@@ -3068,7 +3068,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 	}
 
 	if applySchemaQuery != "" {
-		log.Info("Calling ApplySchema on VtctldServer")
+		log.Infof("Calling ApplySchema on VtctldServer: keyspace=%s", keyspace)
 
 		resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 			Keyspace:            keyspace,
