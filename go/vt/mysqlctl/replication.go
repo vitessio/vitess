@@ -237,7 +237,8 @@ func (mysqld *Mysqld) IsSuperReadOnly() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if err == nil && len(qr.Rows) == 1 {
+
+	if len(qr.Rows) == 1 {
 		sro := qr.Rows[0][0].ToString()
 		if sro == "1" || sro == "ON" {
 			return true, nil
