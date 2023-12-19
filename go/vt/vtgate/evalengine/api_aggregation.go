@@ -445,8 +445,9 @@ func NewAggregationSum(type_ sqltypes.Type) Sum {
 // The aggregation is performed using the slow NullSafeComparison path of the
 // evaluation engine.
 type aggregationMinMax struct {
-	current   sqltypes.Value
-	collation collations.ID
+	current      sqltypes.Value
+	collation    collations.ID
+	collationEnv *collations.Environment
 }
 
 func (a *aggregationMinMax) minmax(value sqltypes.Value, max bool) (err error) {
@@ -457,7 +458,7 @@ func (a *aggregationMinMax) minmax(value sqltypes.Value, max bool) (err error) {
 		a.current = value
 		return nil
 	}
-	n, err := compare(a.current, value, a.collation)
+	n, err := compare(a.current, value, a.collationEnv, a.collation)
 	if err != nil {
 		return err
 	}
@@ -483,17 +484,17 @@ func (a *aggregationMinMax) Reset() {
 	a.current = sqltypes.NULL
 }
 
-func NewAggregationMinMax(type_ sqltypes.Type, collation collations.ID) MinMax {
+func NewAggregationMinMax(typ sqltypes.Type, collationEnv *collations.Environment, collation collations.ID) MinMax {
 	switch {
-	case sqltypes.IsSigned(type_):
-		return &aggregationInt{t: type_}
-	case sqltypes.IsUnsigned(type_):
-		return &aggregationUint{t: type_}
-	case sqltypes.IsFloat(type_):
-		return &aggregationFloat{t: type_}
-	case sqltypes.IsDecimal(type_):
+	case sqltypes.IsSigned(typ):
+		return &aggregationInt{t: typ}
+	case sqltypes.IsUnsigned(typ):
+		return &aggregationUint{t: typ}
+	case sqltypes.IsFloat(typ):
+		return &aggregationFloat{t: typ}
+	case sqltypes.IsDecimal(typ):
 		return &aggregationDecimal{}
 	default:
-		return &aggregationMinMax{collation: collation}
+		return &aggregationMinMax{collation: collation, collationEnv: collationEnv}
 	}
 }

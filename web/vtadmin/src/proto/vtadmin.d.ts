@@ -15096,9 +15096,6 @@ export namespace topodata {
     /** Properties of a Keyspace. */
     interface IKeyspace {
 
-        /** Keyspace served_froms */
-        served_froms?: (topodata.Keyspace.IServedFrom[]|null);
-
         /** Keyspace keyspace_type */
         keyspace_type?: (topodata.KeyspaceType|null);
 
@@ -15126,9 +15123,6 @@ export namespace topodata {
          * @param [properties] Properties to set
          */
         constructor(properties?: topodata.IKeyspace);
-
-        /** Keyspace served_froms. */
-        public served_froms: topodata.Keyspace.IServedFrom[];
 
         /** Keyspace keyspace_type. */
         public keyspace_type: topodata.KeyspaceType;
@@ -15224,118 +15218,6 @@ export namespace topodata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace Keyspace {
-
-        /** Properties of a ServedFrom. */
-        interface IServedFrom {
-
-            /** ServedFrom tablet_type */
-            tablet_type?: (topodata.TabletType|null);
-
-            /** ServedFrom cells */
-            cells?: (string[]|null);
-
-            /** ServedFrom keyspace */
-            keyspace?: (string|null);
-        }
-
-        /** Represents a ServedFrom. */
-        class ServedFrom implements IServedFrom {
-
-            /**
-             * Constructs a new ServedFrom.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: topodata.Keyspace.IServedFrom);
-
-            /** ServedFrom tablet_type. */
-            public tablet_type: topodata.TabletType;
-
-            /** ServedFrom cells. */
-            public cells: string[];
-
-            /** ServedFrom keyspace. */
-            public keyspace: string;
-
-            /**
-             * Creates a new ServedFrom instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns ServedFrom instance
-             */
-            public static create(properties?: topodata.Keyspace.IServedFrom): topodata.Keyspace.ServedFrom;
-
-            /**
-             * Encodes the specified ServedFrom message. Does not implicitly {@link topodata.Keyspace.ServedFrom.verify|verify} messages.
-             * @param message ServedFrom message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: topodata.Keyspace.IServedFrom, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified ServedFrom message, length delimited. Does not implicitly {@link topodata.Keyspace.ServedFrom.verify|verify} messages.
-             * @param message ServedFrom message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: topodata.Keyspace.IServedFrom, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a ServedFrom message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns ServedFrom
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Keyspace.ServedFrom;
-
-            /**
-             * Decodes a ServedFrom message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns ServedFrom
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Keyspace.ServedFrom;
-
-            /**
-             * Verifies a ServedFrom message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a ServedFrom message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns ServedFrom
-             */
-            public static fromObject(object: { [k: string]: any }): topodata.Keyspace.ServedFrom;
-
-            /**
-             * Creates a plain object from a ServedFrom message. Also converts values to other types if specified.
-             * @param message ServedFrom
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: topodata.Keyspace.ServedFrom, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this ServedFrom to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for ServedFrom
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
     }
 
     /** Properties of a ShardReplication. */
@@ -16102,9 +15984,6 @@ export namespace topodata {
         /** SrvKeyspace partitions */
         partitions?: (topodata.SrvKeyspace.IKeyspacePartition[]|null);
 
-        /** SrvKeyspace served_from */
-        served_from?: (topodata.SrvKeyspace.IServedFrom[]|null);
-
         /** SrvKeyspace throttler_config */
         throttler_config?: (topodata.IThrottlerConfig|null);
     }
@@ -16120,9 +15999,6 @@ export namespace topodata {
 
         /** SrvKeyspace partitions. */
         public partitions: topodata.SrvKeyspace.IKeyspacePartition[];
-
-        /** SrvKeyspace served_from. */
-        public served_from: topodata.SrvKeyspace.IServedFrom[];
 
         /** SrvKeyspace throttler_config. */
         public throttler_config?: (topodata.IThrottlerConfig|null);
@@ -16310,109 +16186,6 @@ export namespace topodata {
 
             /**
              * Gets the default type url for KeyspacePartition
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
-
-        /** Properties of a ServedFrom. */
-        interface IServedFrom {
-
-            /** ServedFrom tablet_type */
-            tablet_type?: (topodata.TabletType|null);
-
-            /** ServedFrom keyspace */
-            keyspace?: (string|null);
-        }
-
-        /** Represents a ServedFrom. */
-        class ServedFrom implements IServedFrom {
-
-            /**
-             * Constructs a new ServedFrom.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: topodata.SrvKeyspace.IServedFrom);
-
-            /** ServedFrom tablet_type. */
-            public tablet_type: topodata.TabletType;
-
-            /** ServedFrom keyspace. */
-            public keyspace: string;
-
-            /**
-             * Creates a new ServedFrom instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns ServedFrom instance
-             */
-            public static create(properties?: topodata.SrvKeyspace.IServedFrom): topodata.SrvKeyspace.ServedFrom;
-
-            /**
-             * Encodes the specified ServedFrom message. Does not implicitly {@link topodata.SrvKeyspace.ServedFrom.verify|verify} messages.
-             * @param message ServedFrom message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: topodata.SrvKeyspace.IServedFrom, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified ServedFrom message, length delimited. Does not implicitly {@link topodata.SrvKeyspace.ServedFrom.verify|verify} messages.
-             * @param message ServedFrom message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: topodata.SrvKeyspace.IServedFrom, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a ServedFrom message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns ServedFrom
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.SrvKeyspace.ServedFrom;
-
-            /**
-             * Decodes a ServedFrom message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns ServedFrom
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.SrvKeyspace.ServedFrom;
-
-            /**
-             * Verifies a ServedFrom message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a ServedFrom message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns ServedFrom
-             */
-            public static fromObject(object: { [k: string]: any }): topodata.SrvKeyspace.ServedFrom;
-
-            /**
-             * Creates a plain object from a ServedFrom message. Also converts values to other types if specified.
-             * @param message ServedFrom
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: topodata.SrvKeyspace.ServedFrom, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this ServedFrom to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for ServedFrom
              * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
              * @returns The default type url
              */
@@ -46570,9 +46343,6 @@ export namespace vtctldata {
         /** CreateKeyspaceRequest allow_empty_v_schema */
         allow_empty_v_schema?: (boolean|null);
 
-        /** CreateKeyspaceRequest served_froms */
-        served_froms?: (topodata.Keyspace.IServedFrom[]|null);
-
         /** CreateKeyspaceRequest type */
         type?: (topodata.KeyspaceType|null);
 
@@ -46606,9 +46376,6 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest allow_empty_v_schema. */
         public allow_empty_v_schema: boolean;
-
-        /** CreateKeyspaceRequest served_froms. */
-        public served_froms: topodata.Keyspace.IServedFrom[];
 
         /** CreateKeyspaceRequest type. */
         public type: topodata.KeyspaceType;
@@ -49260,6 +49027,206 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for FindAllShardsInKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ForceCutOverSchemaMigrationRequest. */
+    interface IForceCutOverSchemaMigrationRequest {
+
+        /** ForceCutOverSchemaMigrationRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ForceCutOverSchemaMigrationRequest uuid */
+        uuid?: (string|null);
+    }
+
+    /** Represents a ForceCutOverSchemaMigrationRequest. */
+    class ForceCutOverSchemaMigrationRequest implements IForceCutOverSchemaMigrationRequest {
+
+        /**
+         * Constructs a new ForceCutOverSchemaMigrationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IForceCutOverSchemaMigrationRequest);
+
+        /** ForceCutOverSchemaMigrationRequest keyspace. */
+        public keyspace: string;
+
+        /** ForceCutOverSchemaMigrationRequest uuid. */
+        public uuid: string;
+
+        /**
+         * Creates a new ForceCutOverSchemaMigrationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ForceCutOverSchemaMigrationRequest instance
+         */
+        public static create(properties?: vtctldata.IForceCutOverSchemaMigrationRequest): vtctldata.ForceCutOverSchemaMigrationRequest;
+
+        /**
+         * Encodes the specified ForceCutOverSchemaMigrationRequest message. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationRequest.verify|verify} messages.
+         * @param message ForceCutOverSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IForceCutOverSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ForceCutOverSchemaMigrationRequest message, length delimited. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationRequest.verify|verify} messages.
+         * @param message ForceCutOverSchemaMigrationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IForceCutOverSchemaMigrationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ForceCutOverSchemaMigrationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ForceCutOverSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ForceCutOverSchemaMigrationRequest;
+
+        /**
+         * Decodes a ForceCutOverSchemaMigrationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ForceCutOverSchemaMigrationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ForceCutOverSchemaMigrationRequest;
+
+        /**
+         * Verifies a ForceCutOverSchemaMigrationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ForceCutOverSchemaMigrationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ForceCutOverSchemaMigrationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ForceCutOverSchemaMigrationRequest;
+
+        /**
+         * Creates a plain object from a ForceCutOverSchemaMigrationRequest message. Also converts values to other types if specified.
+         * @param message ForceCutOverSchemaMigrationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ForceCutOverSchemaMigrationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ForceCutOverSchemaMigrationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ForceCutOverSchemaMigrationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ForceCutOverSchemaMigrationResponse. */
+    interface IForceCutOverSchemaMigrationResponse {
+
+        /** ForceCutOverSchemaMigrationResponse rows_affected_by_shard */
+        rows_affected_by_shard?: ({ [k: string]: (number|Long) }|null);
+    }
+
+    /** Represents a ForceCutOverSchemaMigrationResponse. */
+    class ForceCutOverSchemaMigrationResponse implements IForceCutOverSchemaMigrationResponse {
+
+        /**
+         * Constructs a new ForceCutOverSchemaMigrationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IForceCutOverSchemaMigrationResponse);
+
+        /** ForceCutOverSchemaMigrationResponse rows_affected_by_shard. */
+        public rows_affected_by_shard: { [k: string]: (number|Long) };
+
+        /**
+         * Creates a new ForceCutOverSchemaMigrationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ForceCutOverSchemaMigrationResponse instance
+         */
+        public static create(properties?: vtctldata.IForceCutOverSchemaMigrationResponse): vtctldata.ForceCutOverSchemaMigrationResponse;
+
+        /**
+         * Encodes the specified ForceCutOverSchemaMigrationResponse message. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationResponse.verify|verify} messages.
+         * @param message ForceCutOverSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IForceCutOverSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ForceCutOverSchemaMigrationResponse message, length delimited. Does not implicitly {@link vtctldata.ForceCutOverSchemaMigrationResponse.verify|verify} messages.
+         * @param message ForceCutOverSchemaMigrationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IForceCutOverSchemaMigrationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ForceCutOverSchemaMigrationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ForceCutOverSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ForceCutOverSchemaMigrationResponse;
+
+        /**
+         * Decodes a ForceCutOverSchemaMigrationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ForceCutOverSchemaMigrationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ForceCutOverSchemaMigrationResponse;
+
+        /**
+         * Verifies a ForceCutOverSchemaMigrationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ForceCutOverSchemaMigrationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ForceCutOverSchemaMigrationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ForceCutOverSchemaMigrationResponse;
+
+        /**
+         * Creates a plain object from a ForceCutOverSchemaMigrationResponse message. Also converts values to other types if specified.
+         * @param message ForceCutOverSchemaMigrationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ForceCutOverSchemaMigrationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ForceCutOverSchemaMigrationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ForceCutOverSchemaMigrationResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -60855,224 +60822,6 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for SetKeyspaceDurabilityPolicyResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a SetKeyspaceServedFromRequest. */
-    interface ISetKeyspaceServedFromRequest {
-
-        /** SetKeyspaceServedFromRequest keyspace */
-        keyspace?: (string|null);
-
-        /** SetKeyspaceServedFromRequest tablet_type */
-        tablet_type?: (topodata.TabletType|null);
-
-        /** SetKeyspaceServedFromRequest cells */
-        cells?: (string[]|null);
-
-        /** SetKeyspaceServedFromRequest remove */
-        remove?: (boolean|null);
-
-        /** SetKeyspaceServedFromRequest source_keyspace */
-        source_keyspace?: (string|null);
-    }
-
-    /** Represents a SetKeyspaceServedFromRequest. */
-    class SetKeyspaceServedFromRequest implements ISetKeyspaceServedFromRequest {
-
-        /**
-         * Constructs a new SetKeyspaceServedFromRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.ISetKeyspaceServedFromRequest);
-
-        /** SetKeyspaceServedFromRequest keyspace. */
-        public keyspace: string;
-
-        /** SetKeyspaceServedFromRequest tablet_type. */
-        public tablet_type: topodata.TabletType;
-
-        /** SetKeyspaceServedFromRequest cells. */
-        public cells: string[];
-
-        /** SetKeyspaceServedFromRequest remove. */
-        public remove: boolean;
-
-        /** SetKeyspaceServedFromRequest source_keyspace. */
-        public source_keyspace: string;
-
-        /**
-         * Creates a new SetKeyspaceServedFromRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns SetKeyspaceServedFromRequest instance
-         */
-        public static create(properties?: vtctldata.ISetKeyspaceServedFromRequest): vtctldata.SetKeyspaceServedFromRequest;
-
-        /**
-         * Encodes the specified SetKeyspaceServedFromRequest message. Does not implicitly {@link vtctldata.SetKeyspaceServedFromRequest.verify|verify} messages.
-         * @param message SetKeyspaceServedFromRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.ISetKeyspaceServedFromRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified SetKeyspaceServedFromRequest message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceServedFromRequest.verify|verify} messages.
-         * @param message SetKeyspaceServedFromRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.ISetKeyspaceServedFromRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a SetKeyspaceServedFromRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns SetKeyspaceServedFromRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceServedFromRequest;
-
-        /**
-         * Decodes a SetKeyspaceServedFromRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns SetKeyspaceServedFromRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceServedFromRequest;
-
-        /**
-         * Verifies a SetKeyspaceServedFromRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a SetKeyspaceServedFromRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns SetKeyspaceServedFromRequest
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceServedFromRequest;
-
-        /**
-         * Creates a plain object from a SetKeyspaceServedFromRequest message. Also converts values to other types if specified.
-         * @param message SetKeyspaceServedFromRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.SetKeyspaceServedFromRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this SetKeyspaceServedFromRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for SetKeyspaceServedFromRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a SetKeyspaceServedFromResponse. */
-    interface ISetKeyspaceServedFromResponse {
-
-        /** SetKeyspaceServedFromResponse keyspace */
-        keyspace?: (topodata.IKeyspace|null);
-    }
-
-    /** Represents a SetKeyspaceServedFromResponse. */
-    class SetKeyspaceServedFromResponse implements ISetKeyspaceServedFromResponse {
-
-        /**
-         * Constructs a new SetKeyspaceServedFromResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.ISetKeyspaceServedFromResponse);
-
-        /** SetKeyspaceServedFromResponse keyspace. */
-        public keyspace?: (topodata.IKeyspace|null);
-
-        /**
-         * Creates a new SetKeyspaceServedFromResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns SetKeyspaceServedFromResponse instance
-         */
-        public static create(properties?: vtctldata.ISetKeyspaceServedFromResponse): vtctldata.SetKeyspaceServedFromResponse;
-
-        /**
-         * Encodes the specified SetKeyspaceServedFromResponse message. Does not implicitly {@link vtctldata.SetKeyspaceServedFromResponse.verify|verify} messages.
-         * @param message SetKeyspaceServedFromResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.ISetKeyspaceServedFromResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified SetKeyspaceServedFromResponse message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceServedFromResponse.verify|verify} messages.
-         * @param message SetKeyspaceServedFromResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.ISetKeyspaceServedFromResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a SetKeyspaceServedFromResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns SetKeyspaceServedFromResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceServedFromResponse;
-
-        /**
-         * Decodes a SetKeyspaceServedFromResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns SetKeyspaceServedFromResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceServedFromResponse;
-
-        /**
-         * Verifies a SetKeyspaceServedFromResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a SetKeyspaceServedFromResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns SetKeyspaceServedFromResponse
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceServedFromResponse;
-
-        /**
-         * Creates a plain object from a SetKeyspaceServedFromResponse message. Also converts values to other types if specified.
-         * @param message SetKeyspaceServedFromResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.SetKeyspaceServedFromResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this SetKeyspaceServedFromResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for SetKeyspaceServedFromResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

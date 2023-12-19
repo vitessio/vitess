@@ -76,7 +76,7 @@ func TestGenerateCharsetRows(t *testing.T) {
 		append(buildVarCharRow(
 			"utf8mb4",
 			"UTF-8 Unicode",
-			collations.Local().LookupName(collations.Default())),
+			collations.MySQL8().LookupName(collations.MySQL8().DefaultConnectionCharset())),
 			sqltypes.NewUint32(4)),
 	}
 	rows2 := [][]sqltypes.Value{
@@ -88,7 +88,7 @@ func TestGenerateCharsetRows(t *testing.T) {
 		append(buildVarCharRow(
 			"utf8mb4",
 			"UTF-8 Unicode",
-			collations.Local().LookupName(collations.Default())),
+			collations.MySQL8().LookupName(collations.MySQL8().DefaultConnectionCharset())),
 			sqltypes.NewUint32(4)),
 	}
 

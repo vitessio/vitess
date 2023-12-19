@@ -155,3 +155,13 @@ create table t10_id_to_keyspace_id_idx
     keyspace_id varbinary(10),
     primary key (id)
 ) Engine = InnoDB;
+
+create table t11
+(
+    id           bigint,
+    sharding_key bigint,
+    col1 varchar(50),
+    col2 int,
+    col3 int,
+    primary key (id)
+) Engine = InnoDB;

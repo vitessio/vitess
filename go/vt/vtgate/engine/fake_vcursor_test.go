@@ -129,7 +129,12 @@ func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
 
 // ConnCollation implements VCursor
 func (t *noopVCursor) ConnCollation() collations.ID {
-	return collations.Default()
+	return collations.MySQL8().DefaultConnectionCharset()
+}
+
+// CollationEnv implements VCursor
+func (t *noopVCursor) CollationEnv() *collations.Environment {
+	return collations.MySQL8()
 }
 
 func (t *noopVCursor) TimeZone() *time.Location {

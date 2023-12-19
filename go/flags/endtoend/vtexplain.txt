@@ -64,6 +64,7 @@ Flags:
       --output-mode string                                          Output in human-friendly text or json (default "text")
       --planner-version string                                      Sets the default planner to use. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right
       --pprof strings                                               enable profiling
+      --pprof-http                                                  enable pprof http endpoints (default true)
       --purge_logs_interval duration                                how often try to remove old logs (default 1h0m0s)
       --replication-mode string                                     The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")
       --schema string                                               The SQL table schema

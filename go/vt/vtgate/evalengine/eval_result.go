@@ -28,7 +28,8 @@ import (
 )
 
 type EvalResult struct {
-	v eval
+	v            eval
+	collationEnv *collations.Environment
 }
 
 // Value allows for retrieval of the value we expose for public consumption.
@@ -56,7 +57,7 @@ func (er EvalResult) Collation() collations.ID {
 }
 
 func (er EvalResult) String() string {
-	return er.Value(collations.Default()).String()
+	return er.Value(er.collationEnv.DefaultConnectionCharset()).String()
 }
 
 // TupleValues allows for retrieval of the value we expose for public consumption

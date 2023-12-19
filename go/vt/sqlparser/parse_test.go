@@ -2422,6 +2422,13 @@ var (
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 	}, {
+		input: "alter vitess_migration force_cutover all",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
+	}, {
+		input:  "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' FORCE_CUTOVER",
+		output: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
+	}, {
 		input: "alter vitess_migration cancel all",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle",
@@ -6339,7 +6346,7 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 		if returnTypeNumber != -1 {
 			break
 		}
-		panic(fmt.Errorf("error reading file %s: line %d: %s - Expected keyword", fileName, lineno, err.Error()))
+		panic(fmt.Errorf("error reading file %s: line %d: Expected keyword", fileName, lineno))
 	}
 	input := ""
 	for {

@@ -42,6 +42,8 @@ type OnlineDDL struct {
 	// TargetDestination specifies an explicit target destination to send the query to.
 	TargetDestination key.Destination
 
+	CollationEnv *collations.Environment
+
 	noTxNeeded
 
 	noInputs
@@ -79,7 +81,7 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 			{
 				Name:    "uuid",
 				Type:    sqltypes.VarChar,
-				Charset: uint32(collations.Default()),
+				Charset: uint32(v.CollationEnv.DefaultConnectionCharset()),
 			},
 		},
 		Rows: [][]sqltypes.Value{},

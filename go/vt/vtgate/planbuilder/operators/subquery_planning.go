@@ -78,11 +78,7 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 		case *SubQueryContainer:
 			outer := op.Outer
 			for _, subq := range op.Inner {
-				newOuter, err := subq.settle(ctx, outer)
-				if err != nil {
-					panic(err)
-				}
-				subq.Outer = newOuter
+				subq.Outer = subq.settle(ctx, outer)
 				outer = subq
 			}
 			return outer, Rewrote("extracted subqueries from subquery container")
@@ -324,7 +320,6 @@ func addSubQuery(in Operator, inner *SubQuery) Operator {
 // this is necessary because we are pushing the subquery into the RHS of the join, and we need to use the argument names
 // instead of the column names
 func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) sqlparser.Expr {
-	var err error
 	outerID := TableID(outer.LHS)
 	result := sqlparser.CopyOnRewrite(expression, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		col, ok := cursor.Node().(*sqlparser.ColName)
@@ -335,17 +330,9 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 		// this is a dependency we are being fed from the LHS of the join, so we
 		// need to find the argument name for it and use that instead
 		// we can't use the column name directly, because we're in the RHS of the join
-		name, innerErr := outer.findOrAddColNameBindVarName(ctx, col)
-		if err != nil {
-			err = innerErr
-			cursor.StopTreeWalk()
-			return
-		}
+		name := outer.findOrAddColNameBindVarName(ctx, col)
 		cursor.Replace(sqlparser.NewArgument(name))
 	}, nil)
-	if err != nil {
-		panic(err)
-	}
 	return result.(sqlparser.Expr)
 }
 

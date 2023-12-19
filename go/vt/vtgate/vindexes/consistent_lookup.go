@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -171,7 +172,7 @@ func (lu *ConsistentLookup) UnknownParams() []string {
 	return lu.unknownParams
 }
 
-//====================================================================
+// ====================================================================
 
 // ConsistentLookupUnique defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
@@ -271,7 +272,7 @@ func (lu *ConsistentLookupUnique) AutoCommitEnabled() bool {
 	return lu.lkp.Autocommit
 }
 
-//====================================================================
+// ====================================================================
 
 // clCommon defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
@@ -309,7 +310,7 @@ func (lu *clCommon) SetOwnerInfo(keyspace, table string, cols []sqlparser.Identi
 	lu.keyspace = keyspace
 	lu.ownerTable = sqlparser.String(sqlparser.NewIdentifierCS(table))
 	if len(cols) != len(lu.lkp.FromColumns) {
-		return fmt.Errorf("owner table column count does not match vindex %s", lu.name)
+		return vterrors.VT03029(lu.name)
 	}
 	lu.ownerColumns = make([]string, len(cols))
 	for i, col := range cols {
@@ -412,7 +413,7 @@ func (lu *clCommon) Delete(ctx context.Context, vcursor VCursor, rowsColValues [
 func (lu *clCommon) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	equal := true
 	for i := range oldValues {
-		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], vcursor.ConnCollation())
+		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], vcursor.CollationEnv(), vcursor.ConnCollation())
 		// errors from NullsafeCompare can be ignored. if they are real problems, we'll see them in the Create/Update
 		if err != nil || result != 0 {
 			equal = false

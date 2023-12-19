@@ -229,11 +229,6 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 		c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
 	}
 
-	charset, err := collations.Local().ParseConnectionCharset(params.Charset)
-	if err != nil {
-		return err
-	}
-
 	// Handle switch to SSL if necessary.
 	if params.SslEnabled() {
 		// If client asked for SSL, but server doesn't support it,
@@ -270,7 +265,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 		}
 
 		// Send the SSLRequest packet.
-		if err := c.writeSSLRequest(capabilities, charset, params); err != nil {
+		if err := c.writeSSLRequest(capabilities, uint8(params.Charset), params); err != nil {
 			return err
 		}
 
@@ -302,7 +297,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
-	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, charset, params); err != nil {
+	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, uint8(params.Charset), params); err != nil {
 		return err
 	}
 

@@ -19,37 +19,14 @@ limitations under the License.
 package collations
 
 import (
-	"sync"
-
-	"vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/servenv"
 )
 
-var defaultEnv *Environment
-var defaultEnvInit sync.Once
-
-// Local is the default collation Environment for Vitess. This depends
-// on the value of the `mysql_server_version` flag passed to this Vitess process.
-func Local() *Environment {
-	defaultEnvInit.Do(func() {
-		if !flag.Parsed() {
-			panic("collations.Local() called too early")
-		}
-		defaultEnv = NewEnvironment(servenv.MySQLServerVersion())
-	})
-	return defaultEnv
-}
-
-// Default returns the default collation for this Vitess process.
-// This is based on the local collation environment, which is based on the user's configured
-// MySQL version for this Vitess deployment.
-func Default() ID {
-	return ID(Local().DefaultConnectionCharset())
-}
-
-func DefaultCollationForType(t sqltypes.Type) ID {
-	return CollationForType(t, Default())
+// MySQL8 is the collation Environment for MySQL 8. This should
+// only be used for testing where we know it's safe to use this
+// version, and we don't need a specific other version.
+func MySQL8() *Environment {
+	return fetchCacheEnvironment(collverMySQL8)
 }
 
 func CollationForType(t sqltypes.Type, fallback ID) ID {

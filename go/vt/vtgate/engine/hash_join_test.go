@@ -132,7 +132,7 @@ func TestHashJoinVariations(t *testing.T) {
 
 		expected := sqltypes.MakeTestResult(fields, tc.expected...)
 
-		typ, err := evalengine.CoerceTypes(typeForOffset(tc.lhs), typeForOffset(tc.rhs))
+		typ, err := evalengine.CoerceTypes(typeForOffset(tc.lhs), typeForOffset(tc.rhs), collations.MySQL8())
 		require.NoError(t, err)
 
 		jn := &HashJoin{
@@ -142,6 +142,7 @@ func TestHashJoinVariations(t *testing.T) {
 			RHSKey:         tc.rhs,
 			Collation:      typ.Collation(),
 			ComparisonType: typ.Type(),
+			CollationEnv:   collations.MySQL8(),
 		}
 
 		t.Run(tc.name, func(t *testing.T) {
@@ -166,7 +167,7 @@ func typeForOffset(i int) evalengine.Type {
 	case 0:
 		return evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)
 	case 1:
-		return evalengine.NewType(sqltypes.VarChar, collations.Default())
+		return evalengine.NewType(sqltypes.VarChar, collations.MySQL8().DefaultConnectionCharset())
 	default:
 		panic(i)
 	}

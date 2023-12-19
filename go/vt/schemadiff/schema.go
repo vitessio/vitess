@@ -350,12 +350,26 @@ func (s *Schema) normalize() error {
 			return errors.Join(errs, err)
 		}
 	}
-	colTypeEqualForForeignKey := func(a, b *sqlparser.ColumnType) bool {
-		return a.Type == b.Type &&
-			a.Unsigned == b.Unsigned &&
-			a.Zerofill == b.Zerofill &&
-			sqlparser.Equals.ColumnCharset(a.Charset, b.Charset) &&
-			sqlparser.Equals.SliceOfString(a.EnumValues, b.EnumValues)
+	colTypeCompatibleForForeignKey := func(child, parent *sqlparser.ColumnType) bool {
+		if child.Type == parent.Type {
+			return true
+		}
+		if child.Type == "char" && parent.Type == "varchar" {
+			return true
+		}
+		return false
+	}
+	colTypeEqualForForeignKey := func(child, parent *sqlparser.ColumnType) bool {
+		if colTypeCompatibleForForeignKey(child, parent) &&
+			child.Unsigned == parent.Unsigned &&
+			child.Zerofill == parent.Zerofill &&
+			sqlparser.Equals.ColumnCharset(child.Charset, parent.Charset) &&
+			child.Options.Collate == parent.Options.Collate &&
+			sqlparser.Equals.SliceOfString(child.EnumValues, parent.EnumValues) {
+			// Complete identify (other than precision which is ignored)
+			return true
+		}
+		return false
 	}
 
 	// Now validate foreign key columns:
@@ -1027,10 +1041,8 @@ func (s *Schema) getTableColumnNames(t *CreateTableEntity) (columnNames []*sqlpa
 }
 
 // getViewColumnNames returns the names of aliased columns returned by a given view.
-func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *declarativeSchemaInformation) (
-	columnNames []*sqlparser.IdentifierCI,
-	err error,
-) {
+func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *declarativeSchemaInformation) ([]*sqlparser.IdentifierCI, error) {
+	var columnNames []*sqlparser.IdentifierCI
 	for _, node := range v.Select.GetColumns() {
 		switch node := node.(type) {
 		case *sqlparser.StarExpr:
@@ -1060,8 +1072,5 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 		}
 	}
 
-	if err != nil {
-		return nil, err
-	}
 	return columnNames, nil
 }
