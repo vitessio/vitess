@@ -68,11 +68,11 @@ func TestFailureInsertSelect(t *testing.T) {
 
 			// primary key same
 			mcmp.AssertContainsError("insert into s_tbl(id, num) select id, num*20 from s_tbl where id = 1", `AlreadyExists desc = Duplicate entry '1' for key`)
-			// lookup key same (does not fail on MySQL as there is no lookup, and we have not put unique contrains on num column)
-			utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `lookup.Create: Code: ALREADY_EXISTS`)
+			// lookup key same (does not fail on MySQL as there is no lookup, and we have not put unique constraint on num column)
+			utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `(errno 1062) (sqlstate 23000)`)
 			// mismatch column count
-			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count at row 1`)
-			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count at row 1`)
+			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count with the row`)
+			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count with the row`)
 		})
 	}
 }
@@ -298,7 +298,7 @@ func TestIgnoreInsertSelect(t *testing.T) {
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,100),(1,2,200),(1,3,300)")
 
 	// inserting same rows, throws error.
-	mcmp.AssertContainsError("insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl", `lookup.Create: Code: ALREADY_EXISTS`)
+	mcmp.AssertContainsError("insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl", `(errno 1062) (sqlstate 23000)`)
 	// inserting same rows with ignore
 	qr := mcmp.Exec("insert ignore into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl")
 	assert.EqualValues(t, 0, qr.RowsAffected)
@@ -336,7 +336,7 @@ func TestIgnoreInsertSelectOlapMode(t *testing.T) {
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,100),(1,2,200),(1,3,300)")
 
 	// inserting same rows, throws error.
-	mcmp.AssertContainsError("insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl", `lookup.Create: Code: ALREADY_EXISTS`)
+	mcmp.AssertContainsError("insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl", `(errno 1062) (sqlstate 23000)`)
 	// inserting same rows with ignore
 	qr := mcmp.Exec("insert ignore into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl")
 	assert.EqualValues(t, 0, qr.RowsAffected)

@@ -51,6 +51,8 @@ type (
 		// map of keyspace currently tracked
 		tracked      map[keyspaceStr]*updateController
 		consumeDelay time.Duration
+
+		parser *sqlparser.Parser
 	}
 )
 
@@ -58,17 +60,18 @@ type (
 const defaultConsumeDelay = 1 * time.Second
 
 // NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth, enableViews bool) *Tracker {
+func NewTracker(ch chan *discovery.TabletHealth, enableViews bool, parser *sqlparser.Parser) *Tracker {
 	t := &Tracker{
 		ctx:          context.Background(),
 		ch:           ch,
 		tables:       &tableMap{m: make(map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo)},
 		tracked:      map[keyspaceStr]*updateController{},
 		consumeDelay: defaultConsumeDelay,
+		parser:       parser,
 	}
 
 	if enableViews {
-		t.views = &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement{}}
+		t.views = &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement{}, parser: parser}
 	}
 	return t
 }
@@ -290,7 +293,7 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 
 func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 	for tableName, tableDef := range res {
-		stmt, err := sqlparser.Parse(tableDef)
+		stmt, err := t.parser.Parse(tableDef)
 		if err != nil {
 			log.Warningf("error parsing table definition for %s: %v", tableName, err)
 			continue
@@ -483,7 +486,8 @@ func (t *Tracker) clearKeyspaceTables(ks string) {
 }
 
 type viewMap struct {
-	m map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement
+	m      map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement
+	parser *sqlparser.Parser
 }
 
 func (vm *viewMap) set(ks, tbl, sql string) {
@@ -492,7 +496,7 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		m = make(map[tableNameStr]sqlparser.SelectStatement)
 		vm.m[ks] = m
 	}
-	stmt, err := sqlparser.Parse(sql)
+	stmt, err := vm.parser.Parse(sql)
 	if err != nil {
 		log.Warningf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql)
 		return

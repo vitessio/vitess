@@ -112,12 +112,10 @@ func (v *Vindex) AddCol(col *sqlparser.ColName) {
 	v.Columns = append(v.Columns, col)
 }
 
-func (v *Vindex) CheckValid() error {
+func (v *Vindex) CheckValid() {
 	if len(v.Table.Predicates) == 0 {
-		return vterrors.VT09018(wrongWhereCond + " (where clause missing)")
+		panic(vterrors.VT09018(wrongWhereCond + " (where clause missing)"))
 	}
-
-	return nil
 }
 
 func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
@@ -148,15 +146,12 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 		}
 
 		// check RHS
-		var err error
 		if sqlparser.IsValue(comparison.Right) || sqlparser.IsSimpleTuple(comparison.Right) {
 			v.Value = comparison.Right
 		} else {
 			panic(vterrors.VT09018(wrongWhereCond + " (rhs is not a value)"))
 		}
-		if err != nil {
-			panic(vterrors.VT09018(wrongWhereCond+": %v", err))
-		}
+
 		v.OpCode = engine.VindexMap
 		v.Table.Predicates = append(v.Table.Predicates, e)
 	}

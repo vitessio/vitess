@@ -56,8 +56,9 @@ func TestParseTable(t *testing.T) {
 		input: "k.t.",
 		err:   true,
 	}}
+	parser := NewTestParser()
 	for _, tcase := range testcases {
-		keyspace, table, err := ParseTable(tcase.input)
+		keyspace, table, err := parser.ParseTable(tcase.input)
 		assert.Equal(t, tcase.keyspace, keyspace)
 		assert.Equal(t, tcase.table, table)
 		if tcase.err {

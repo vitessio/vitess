@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -59,6 +61,8 @@ type tablePlanBuilder struct {
 	stats             *binlogplayer.Stats
 	source            *binlogdatapb.BinlogSource
 	pkIndices         []bool
+
+	collationEnv *collations.Environment
 }
 
 // colExpr describes the processing to be performed to
@@ -128,7 +132,7 @@ const (
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment, parser *sqlparser.Parser) (*ReplicatorPlan, error) {
 	filter := source.Filter
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
@@ -137,6 +141,7 @@ func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[strin
 		ColInfoMap:    colInfoMap,
 		stats:         stats,
 		Source:        source,
+		collationEnv:  collationEnv,
 	}
 	for tableName := range colInfoMap {
 		lastpk, ok := copyState[tableName]
@@ -155,7 +160,7 @@ func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[strin
 		if !ok {
 			return nil, fmt.Errorf("table %s not found in schema", tableName)
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser)
 		if err != nil {
 			return nil, err
 		}
@@ -195,7 +200,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 }
 
 func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
-	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource) (*TablePlan, error) {
+	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment, parser *sqlparser.Parser) (*TablePlan, error) {
 
 	filter := rule.Filter
 	query := filter
@@ -212,7 +217,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	case filter == ExcludeStr:
 		return nil, nil
 	}
-	sel, fromTable, err := analyzeSelectFrom(query)
+	sel, fromTable, err := analyzeSelectFrom(query, parser)
 	if err != nil {
 		return nil, err
 	}
@@ -244,6 +249,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			EnumValuesMap:    enumValuesMap,
 			ConvertCharset:   rule.ConvertCharset,
 			ConvertIntToEnum: rule.ConvertIntToEnum,
+			CollationEnv:     collationEnv,
 		}
 
 		return tablePlan, nil
@@ -255,10 +261,11 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			From:  sel.From,
 			Where: sel.Where,
 		},
-		lastpk:   lastpk,
-		colInfos: colInfos,
-		stats:    stats,
-		source:   source,
+		lastpk:       lastpk,
+		colInfos:     colInfos,
+		stats:        stats,
+		source:       source,
+		collationEnv: collationEnv,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -361,6 +368,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		Insert:                  tpb.generateInsertStatement(),
 		Update:                  tpb.generateUpdateStatement(),
 		Delete:                  tpb.generateDeleteStatement(),
+		MultiDelete:             tpb.generateMultiDeleteStatement(),
 		PKReferences:            pkrefs,
 		PKIndices:               tpb.pkIndices,
 		Stats:                   tpb.stats,
@@ -369,11 +377,12 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		TablePlanBuilder:        tpb,
 		PartialInserts:          make(map[string]*sqlparser.ParsedQuery, 0),
 		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery, 0),
+		CollationEnv:            tpb.collationEnv,
 	}
 }
 
-func analyzeSelectFrom(query string) (sel *sqlparser.Select, from string, err error) {
-	statement, err := sqlparser.Parse(query)
+func analyzeSelectFrom(query string, parser *sqlparser.Parser) (sel *sqlparser.Select, from string, err error) {
+	statement, err := parser.Parse(query)
 	if err != nil {
 		return nil, "", err
 	}
@@ -868,6 +877,18 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 		return nil
 	}
 	return buf.ParsedQuery()
+}
+
+func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQuery {
+	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
+		(len(tpb.pkCols)+len(tpb.extraSourcePkCols)) != 1 {
+		return nil
+	}
+	return sqlparser.BuildParsedQuery("delete from %s where %s in %a",
+		sqlparser.String(tpb.name),
+		sqlparser.String(tpb.pkCols[0].colName),
+		"::bulk_pks",
+	)
 }
 
 func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {

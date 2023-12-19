@@ -83,14 +83,6 @@ type ThrottlerInterface interface {
 	ResetConfiguration()
 }
 
-// TopologyWatcherInterface defines the public interface that is implemented by
-// discovery.LegacyTopologyWatcher. It is only used here to allow mocking out
-// go/vt/discovery.LegacyTopologyWatcher.
-type TopologyWatcherInterface interface {
-	Start()
-	Stop()
-}
-
 // TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
 // go/vt/throttler.GlobalManager.
 const TxThrottlerName = "TransactionThrottler"

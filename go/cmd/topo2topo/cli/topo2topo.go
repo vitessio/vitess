@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/helpers"
 )
@@ -94,12 +95,21 @@ func run(cmd *cobra.Command, args []string) error {
 		return compareTopos(ctx, fromTS, toTS)
 	}
 
-	return copyTopos(ctx, fromTS, toTS)
+	parser, err := sqlparser.New(sqlparser.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		return fmt.Errorf("cannot create sqlparser: %w", err)
+	}
+
+	return copyTopos(ctx, fromTS, toTS, parser)
 }
 
-func copyTopos(ctx context.Context, fromTS, toTS *topo.Server) error {
+func copyTopos(ctx context.Context, fromTS, toTS *topo.Server, parser *sqlparser.Parser) error {
 	if doKeyspaces {
-		if err := helpers.CopyKeyspaces(ctx, fromTS, toTS); err != nil {
+		if err := helpers.CopyKeyspaces(ctx, fromTS, toTS, parser); err != nil {
 			return err
 		}
 	}

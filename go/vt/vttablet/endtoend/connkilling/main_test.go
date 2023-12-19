@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -81,7 +82,7 @@ func TestMain(m *testing.M) {
 		connParams = cluster.MySQLConnParams()
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
 		config := tabletenv.NewDefaultConfig()
-		_ = config.Oltp.TxTimeoutSeconds.Set("3s")
+		config.Oltp.TxTimeout = 3 * time.Second
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		err := framework.StartCustomServer(ctx, connParams, connAppDebugParams, cluster.DbName(), config)

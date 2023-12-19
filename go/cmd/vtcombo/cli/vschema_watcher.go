@@ -63,7 +63,7 @@ func loadKeyspacesFromDir(dir string, keyspaces []*vttestpb.Keyspace, ts *topo.S
 				log.Fatalf("Unable to parse keyspace file %v: %v", ksFile, err)
 			}
 
-			_, err = vindexes.BuildKeyspace(keyspace)
+			_, err = vindexes.BuildKeyspace(keyspace, parser)
 			if err != nil {
 				log.Fatalf("Invalid keyspace definition: %v", err)
 			}

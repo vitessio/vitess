@@ -29,16 +29,16 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/schema"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vttablet"
 )
 
 type WriteMetrics struct {
@@ -184,6 +184,9 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--watch_replication_stream",
+			// Test VPlayer batching mode.
+			fmt.Sprintf("--vreplication_experimental_flags=%d",
+				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",

@@ -25,6 +25,10 @@ import (
 
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -40,12 +44,14 @@ import (
 // VtctlServer is our RPC server
 type VtctlServer struct {
 	vtctlservicepb.UnimplementedVtctlServer
-	ts *topo.Server
+	ts           *topo.Server
+	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
 // NewVtctlServer returns a new Vtctl Server for the topo server.
-func NewVtctlServer(ts *topo.Server) *VtctlServer {
-	return &VtctlServer{ts: ts}
+func NewVtctlServer(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) *VtctlServer {
+	return &VtctlServer{ts: ts, collationEnv: collationEnv, parser: parser}
 }
 
 // ExecuteVtctlCommand is part of the vtctldatapb.VtctlServer interface
@@ -72,13 +78,13 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *vtctldatapb.ExecuteVtctlCommandR
 	// create the wrangler
 	tmc := tmclient.NewTabletManagerClient()
 	defer tmc.Close()
-	wr := wrangler.New(logger, s.ts, tmc)
+	wr := wrangler.New(logger, s.ts, tmc, s.collationEnv, s.parser)
 
 	// execute the command
 	return vtctl.RunCommand(stream.Context(), wr, args.Args)
 }
 
 // StartServer registers the VtctlServer for RPCs
-func StartServer(s *grpc.Server, ts *topo.Server) {
-	vtctlservicepb.RegisterVtctlServer(s, NewVtctlServer(ts))
+func StartServer(s *grpc.Server, ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) {
+	vtctlservicepb.RegisterVtctlServer(s, NewVtctlServer(ts, collationEnv, parser))
 }

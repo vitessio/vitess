@@ -64,6 +64,9 @@ var (
 		DeferSecondaryKeys           bool
 		AutoStart                    bool
 		StopAfterCopy                bool
+		MySQLServerVersion           string
+		TruncateUILen                int
+		TruncateErrLen               int
 	}{}
 )
 

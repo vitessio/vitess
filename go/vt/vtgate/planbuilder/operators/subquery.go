@@ -42,13 +42,16 @@ type SubQuery struct {
 	OuterPredicate    sqlparser.Expr       // This is the predicate that is using the subquery expression. It will not be empty for projections
 	ArgName           string               // This is the name of the ColName or Argument used to replace the subquery
 	TopLevel          bool                 // will be false if the subquery is deeply nested
-	JoinColumns       []JoinColumn         // Broken up join predicates.
+	JoinColumns       []applyJoinColumn    // Broken up join predicates.
 	SubqueryValueName string               // Value name returned by the subquery (uncorrelated queries).
 	HasValuesName     string               // Argument name passed to the subquery (uncorrelated queries).
 
 	// Fields related to correlated subqueries:
 	Vars    map[string]int // Arguments copied from outer to inner, set during offset planning.
 	outerID semantics.TableSet
+	// correlated stores whether this subquery is correlated or not.
+	// We use this information to fail the planning if we are unable to merge the subquery with a route.
+	correlated bool
 
 	IsProjection bool
 }
@@ -85,7 +88,7 @@ func (sq *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, out
 	return result
 }
 
-func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer Operator) ([]JoinColumn, error) {
+func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer Operator) ([]applyJoinColumn, error) {
 	if outer == nil {
 		return nil, vterrors.VT13001("outer operator cannot be nil")
 	}
@@ -96,7 +99,7 @@ func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer Opera
 		}
 	}
 	sq.outerID = outerID
-	mapper := func(in sqlparser.Expr) (JoinColumn, error) {
+	mapper := func(in sqlparser.Expr) (applyJoinColumn, error) {
 		return breakExpressionInLHSandRHSForApplyJoin(ctx, in, outerID), nil
 	}
 	joinPredicates, err := slice.MapWithError(sq.Predicates, mapper)
@@ -196,17 +199,20 @@ func (sq *SubQuery) GetMergePredicates() []sqlparser.Expr {
 	return sq.Predicates
 }
 
-func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) (Operator, error) {
+func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Operator {
 	if !sq.TopLevel {
-		return nil, subqueryNotAtTopErr
+		panic(subqueryNotAtTopErr)
+	}
+	if sq.correlated {
+		panic(correlatedSubqueryErr)
 	}
 	if sq.IsProjection {
 		if len(sq.GetMergePredicates()) > 0 {
 			// this means that we have a correlated subquery on our hands
-			return nil, correlatedSubqueryErr
+			panic(correlatedSubqueryErr)
 		}
 		sq.SubqueryValueName = sq.ArgName
-		return outer, nil
+		return outer
 	}
 	return sq.settleFilter(ctx, outer)
 }
@@ -214,12 +220,12 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) (Op
 var correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
 var subqueryNotAtTopErr = vterrors.VT12001("unmergable subquery can not be inside complex expression")
 
-func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operator) (Operator, error) {
+func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operator) Operator {
 	if len(sq.Predicates) > 0 {
 		if sq.FilterType != opcode.PulloutExists {
-			return nil, correlatedSubqueryErr
+			panic(correlatedSubqueryErr)
 		}
-		return outer, nil
+		return outer
 	}
 
 	hasValuesArg := func() string {
@@ -266,7 +272,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	return &Filter{
 		Source:     outer,
 		Predicates: predicates,
-	}, nil
+	}
 }
 
 func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {

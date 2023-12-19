@@ -102,6 +102,15 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		TabletSelectionPreference: tsp,
 	}
 
+	createOptions.TableSettings.parser, err = sqlparser.New(sqlparser.Options{
+		MySQLServerVersion: common.CreateOptions.MySQLServerVersion,
+		TruncateUILen:      common.CreateOptions.TruncateUILen,
+		TruncateErrLen:     common.CreateOptions.TruncateErrLen,
+	})
+	if err != nil {
+		return err
+	}
+
 	req := &vtctldatapb.MaterializeCreateRequest{
 		Settings: ms,
 	}
@@ -132,7 +141,8 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 // tableSettings is a wrapper around a slice of TableMaterializeSettings
 // proto messages that implements the pflag.Value interface.
 type tableSettings struct {
-	val []*vtctldatapb.TableMaterializeSettings
+	val    []*vtctldatapb.TableMaterializeSettings
+	parser *sqlparser.Parser
 }
 
 func (ts *tableSettings) String() string {
@@ -157,7 +167,7 @@ func (ts *tableSettings) Set(v string) error {
 			return fmt.Errorf("missing target_table or source_expression")
 		}
 		// Validate that the query is valid.
-		stmt, err := sqlparser.Parse(tms.SourceExpression)
+		stmt, err := ts.parser.Parse(tms.SourceExpression)
 		if err != nil {
 			return fmt.Errorf("invalid source_expression: %q", tms.SourceExpression)
 		}

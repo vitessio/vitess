@@ -19,10 +19,24 @@ package cli
 // This plugin imports staticauthserver to register the flat-file implementation of AuthServer.
 
 import (
+	"time"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vtgate"
 )
 
+var (
+	mysqlAuthServerStaticFile           string
+	mysqlAuthServerStaticString         string
+	mysqlAuthServerStaticReloadInterval time.Duration
+)
+
 func init() {
-	vtgate.RegisterPluginInitializer(func() { mysql.InitAuthServerStatic() })
+	Main.Flags().StringVar(&mysqlAuthServerStaticFile, "mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
+	Main.Flags().StringVar(&mysqlAuthServerStaticString, "mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
+	Main.Flags().DurationVar(&mysqlAuthServerStaticReloadInterval, "mysql_auth_static_reload_interval", 0, "Ticker to reload credentials")
+
+	vtgate.RegisterPluginInitializer(func() {
+		mysql.InitAuthServerStatic(mysqlAuthServerStaticFile, mysqlAuthServerStaticString, mysqlAuthServerStaticReloadInterval)
+	})
 }

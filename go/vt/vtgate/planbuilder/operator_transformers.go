@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -66,6 +67,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformFkVerify(ctx, op)
 	case *operators.InsertSelection:
 		return transformInsertionSelection(ctx, op)
+	case *operators.Upsert:
+		return transformUpsert(ctx, op)
 	case *operators.HashJoin:
 		return transformHashJoin(ctx, op)
 	case *operators.Sequential:
@@ -73,6 +76,31 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (logicalPlan, error) {
+	u := &upsert{}
+	for _, source := range op.Sources {
+		iLp, uLp, err := transformOneUpsert(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+		u.insert = append(u.insert, iLp)
+		u.update = append(u.update, uLp)
+	}
+	return u, nil
+}
+
+func transformOneUpsert(ctx *plancontext.PlanningContext, source operators.UpsertSource) (iLp, uLp logicalPlan, err error) {
+	iLp, err = transformToLogicalPlan(ctx, source.Insert)
+	if err != nil {
+		return
+	}
+	if ins, ok := iLp.(*insert); ok {
+		ins.eInsert.PreventAutoCommit = true
+	}
+	uLp, err = transformToLogicalPlan(ctx, source.Update)
+	return
 }
 
 func transformSequential(ctx *plancontext.PlanningContext, op *operators.Sequential) (logicalPlan, error) {
@@ -227,13 +255,14 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 
 	oa := &orderedAggregate{
 		resultsBuilder: newResultsBuilder(plan, nil),
+		collationEnv:   ctx.VSchema.CollationEnv(),
 	}
 
 	for _, aggr := range op.Aggregations {
 		if aggr.OpCode == opcode.AggregateUnassigned {
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 		}
-		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias)
+		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias, ctx.VSchema.CollationEnv())
 		aggrParam.Expr = aggr.Func
 		aggrParam.Original = aggr.Original
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
@@ -248,12 +277,10 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			WeightStringCol: groupBy.WSOffset,
 			Expr:            groupBy.SimplifiedExpr,
 			Type:            typ,
+			CollationEnv:    ctx.VSchema.CollationEnv(),
 		})
 	}
 
-	if err != nil {
-		return nil, err
-	}
 	oa.truncateColumnCount = op.ResultColumns
 	return oa, nil
 }
@@ -291,6 +318,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 			WeightStringCol: ordering.WOffset[idx],
 			Desc:            order.Inner.Direction == sqlparser.DescOrder,
 			Type:            typ,
+			CollationEnv:    ctx.VSchema.CollationEnv(),
 		})
 	}
 
@@ -431,9 +459,6 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, h
 
 	rp := newRoutingParams(ctx, op.Routing.OpCode())
 	op.Routing.UpdateRoutingParams(ctx, rp)
-	if err != nil {
-		return nil, err
-	}
 
 	e := &engine.Route{
 		TableName:           strings.Join(tableNames, ", "),
@@ -521,6 +546,7 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 			WeightStringCol: order.WOffset,
 			Desc:            order.Direction == sqlparser.DescOrder,
 			Type:            typ,
+			CollationEnv:    ctx.VSchema.CollationEnv(),
 		})
 	}
 	if err != nil {
@@ -596,7 +622,7 @@ func autoIncGenerate(gen *operators.Generate) *engine.Generate {
 	}
 }
 
-func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlparser.Values, suffix string) {
+func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlparser.Values, suffix sqlparser.OnDup) {
 	mids, isValues := ins.Rows.(sqlparser.Values)
 	prefixFormat := "insert %v%sinto %v%v "
 	if isValues {
@@ -611,9 +637,13 @@ func generateInsertShardedQuery(ins *sqlparser.Insert) (prefix string, mids sqlp
 		ins.Table, ins.Columns)
 	prefix = prefixBuf.String()
 
-	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	suffixBuf.Myprintf("%v", ins.OnDup)
-	suffix = suffixBuf.String()
+	suffix = sqlparser.CopyOnRewrite(ins.OnDup, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		if tblName, ok := cursor.Node().(sqlparser.TableName); ok {
+			if tblName.Qualifier != sqlparser.NewIdentifierCS("") {
+				cursor.Replace(sqlparser.NewTableName(tblName.Name.String()))
+			}
+		}
+	}, nil).(sqlparser.OnDup)
 	return
 }
 
@@ -780,19 +810,23 @@ func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logi
 		return nil, err
 	}
 
-	return createLimit(plan, op.AST)
+	return createLimit(plan, op.AST, ctx.VSchema.CollationEnv())
 }
 
-func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error) {
+func createLimit(input logicalPlan, limit *sqlparser.Limit, collationEnv *collations.Environment) (logicalPlan, error) {
 	plan := newLimit(input)
-	pv, err := evalengine.Translate(limit.Rowcount, nil)
+	cfg := &evalengine.Config{
+		Collation:    collationEnv.DefaultConnectionCharset(),
+		CollationEnv: collationEnv,
+	}
+	pv, err := evalengine.Translate(limit.Rowcount, cfg)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unexpected expression in LIMIT")
 	}
 	plan.elimit.Count = pv
 
 	if limit.Offset != nil {
-		pv, err = evalengine.Translate(limit.Offset, nil)
+		pv, err = evalengine.Translate(limit.Offset, cfg)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "unexpected expression in OFFSET")
 		}
@@ -837,7 +871,7 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")))
 	}
 
-	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp)
+	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp, ctx.VSchema.CollationEnv())
 	if err != nil {
 		return nil, err
 	}
@@ -853,6 +887,7 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			ASTPred:        op.JoinPredicate(),
 			Collation:      comparisonType.Collation(),
 			ComparisonType: comparisonType.Type(),
+			CollationEnv:   ctx.VSchema.CollationEnv(),
 		},
 	}, nil
 }

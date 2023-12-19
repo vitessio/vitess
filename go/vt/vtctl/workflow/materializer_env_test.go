@@ -82,7 +82,8 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.ws = NewServer(env.topoServ, env.tmc)
+	parser := sqlparser.NewTestParser()
+	env.ws = NewServer(env.topoServ, env.tmc, parser)
 	tabletID := 100
 	for _, shard := range sources {
 		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
@@ -98,7 +99,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 
 	for _, ts := range ms.TableSettings {
 		tableName := ts.TargetTable
-		table, err := sqlparser.TableFromStatement(ts.SourceExpression)
+		table, err := parser.TableFromStatement(ts.SourceExpression)
 		if err == nil {
 			tableName = table.Name.String()
 		}

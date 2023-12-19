@@ -37,6 +37,7 @@ package operators
 
 import (
 	"fmt"
+	"runtime"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -67,13 +68,8 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (resu
 	}
 
 	op = compact(ctx, op)
-	if err = checkValid(op); err != nil {
-		return nil, err
-	}
-
-	if op, err = planQuery(ctx, op); err != nil {
-		return nil, err
-	}
+	checkValid(op)
+	op = planQuery(ctx, op)
 
 	_, isRoute := op.(*Route)
 	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
@@ -86,12 +82,14 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (resu
 
 func PanicHandler(err *error) {
 	if r := recover(); r != nil {
-		badness, ok := r.(error)
-		if !ok {
+		switch badness := r.(type) {
+		case runtime.Error:
+			panic(r)
+		case error:
+			*err = badness
+		default:
 			panic(r)
 		}
-
-		*err = badness
 	}
 }
 

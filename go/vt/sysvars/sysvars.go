@@ -57,6 +57,8 @@ var (
 	off     = "0"
 	utf8mb4 = "'utf8mb4'"
 
+	ForeignKeyChecks = "foreign_key_checks"
+
 	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
 	Charset                     = SystemVariable{Name: "charset", Default: utf8mb4, IdentifierAsString: true}
 	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
@@ -71,7 +73,6 @@ var (
 	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
 	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}
 	QueryTimeout                = SystemVariable{Name: "query_timeout"}
-	ForeignKeyChecks            = SystemVariable{Name: "foreign_key_checks", IsBoolean: true, SupportSetVar: true}
 
 	// Online DDL
 	DDLStrategy      = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
@@ -105,7 +106,6 @@ var (
 		ReadAfterWriteTimeOut,
 		SessionTrackGTIDs,
 		QueryTimeout,
-		ForeignKeyChecks,
 	}
 
 	ReadOnly = []SystemVariable{
@@ -188,6 +188,7 @@ var (
 		{Name: "end_markers_in_json", IsBoolean: true, SupportSetVar: true},
 		{Name: "eq_range_index_dive_limit", SupportSetVar: true},
 		{Name: "explicit_defaults_for_timestamp"},
+		{Name: ForeignKeyChecks, IsBoolean: true, SupportSetVar: true},
 		{Name: "group_concat_max_len", SupportSetVar: true},
 		{Name: "information_schema_stats_expiry"},
 		{Name: "max_heap_table_size", SupportSetVar: true},

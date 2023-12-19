@@ -28,9 +28,8 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
-
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -39,6 +38,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -111,6 +111,9 @@ type Engine struct {
 	// enabled in NewSimpleTestEngine. This should NOT be used in
 	// production.
 	shortcircuit bool
+
+	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
 type journalEvent struct {
@@ -127,15 +130,17 @@ type PostCopyAction struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler, collationEnv *collations.Environment, parser *sqlparser.Parser) *Engine {
 	vre := &Engine{
 		controllers:     make(map[int32]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		journaler:       make(map[string]*journalEvent),
-		ec:              newExternalConnector(config.ExternalConnections),
+		ec:              newExternalConnector(config.ExternalConnections, collationEnv, parser),
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, throttle.ThrottleCheckPrimaryWrite),
+		collationEnv:    collationEnv,
+		parser:          parser,
 	}
 
 	return vre
@@ -148,10 +153,10 @@ func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 		return
 	}
 	vre.dbClientFactoryFiltered = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB())
+		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB(), vre.parser)
 	}
 	vre.dbClientFactoryDba = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB())
+		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB(), vre.parser)
 	}
 	vre.dbName = dbcfgs.DBName
 }
@@ -167,7 +172,9 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig),
+		ec:                      newExternalConnector(externalConfig, collations.MySQL8(), sqlparser.NewTestParser()),
+		collationEnv:            collations.MySQL8(),
+		parser:                  sqlparser.NewTestParser(),
 	}
 	return vre
 }
@@ -184,8 +191,10 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig),
+		ec:                      newExternalConnector(externalConfig, collations.MySQL8(), sqlparser.NewTestParser()),
 		shortcircuit:            true,
+		collationEnv:            collations.MySQL8(),
+		parser:                  sqlparser.NewTestParser(),
 	}
 	return vre
 }
@@ -362,7 +371,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 	defer vre.updateStats()
 
-	plan, err := buildControllerPlan(query)
+	plan, err := buildControllerPlan(query, vre.parser)
 	if err != nil {
 		return nil, err
 	}

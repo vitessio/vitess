@@ -26,6 +26,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -113,7 +115,7 @@ func NoTestMycnfHook(t *testing.T) {
 	// this is not being passed, so it should be nil
 	os.Setenv("MY_VAR", "myvalue")
 
-	dbconfigs.GlobalDBConfigs.InitWithSocket(cnf.SocketFile)
+	dbconfigs.GlobalDBConfigs.InitWithSocket(cnf.SocketFile, collations.MySQL8())
 	mysqld := NewMysqld(&dbconfigs.GlobalDBConfigs)
 	servenv.OnClose(mysqld.Close)
 

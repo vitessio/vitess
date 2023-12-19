@@ -26,7 +26,7 @@ func TestTruncateQuery(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s-%d", tt.query, tt.max), func(t *testing.T) {
-			assert.Equalf(t, tt.want, truncateQuery(tt.query, tt.max), "truncateQuery(%v, %v)", tt.query, tt.max)
+			assert.Equalf(t, tt.want, TruncateQuery(tt.query, tt.max), "TruncateQuery(%v, %v)", tt.query, tt.max)
 		})
 	}
 }

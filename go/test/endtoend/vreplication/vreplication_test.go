@@ -27,27 +27,27 @@ import (
 	"testing"
 	"time"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-
+	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
-
-	"github.com/buger/jsonparser"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
 var (
@@ -242,7 +242,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	extraVTTabletArgs = []string{
 		// We rely on holding open transactions to generate innodb history so extend the timeout
 		// to avoid flakiness when the CI is very slow.
-		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", int64(defaultTimeout.Seconds())*3),
+		fmt.Sprintf("--queryserver-config-transaction-timeout=%s", (defaultTimeout * 3).String()),
 		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
 		parallelInsertWorkers,
 	}
@@ -280,6 +280,11 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
+	ogflags := extraVTTabletArgs
+	defer func() { extraVTTabletArgs = ogflags }()
+	// Test VPlayer batching mode.
+	extraVTTabletArgs = append(extraVTTabletArgs, fmt.Sprintf("--vreplication_experimental_flags=%d",
+		vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching))
 	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t, "noblob")
@@ -622,8 +627,15 @@ func testVStreamCellFlag(t *testing.T) {
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	mainClusterConfig.vreplicationCompressGTID = true
+	oldVTTabletExtraArgs := extraVTTabletArgs
+	extraVTTabletArgs = append(extraVTTabletArgs,
+		// Test VPlayer batching mode.
+		fmt.Sprintf("--vreplication_experimental_flags=%d",
+			vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
+	)
 	defer func() {
 		mainClusterConfig.vreplicationCompressGTID = false
+		extraVTTabletArgs = oldVTTabletExtraArgs
 	}()
 	vc = NewVitessCluster(t, "TestCellAliasVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
@@ -776,6 +788,12 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			}
 		}
 		require.Equal(t, true, dec80Replicated)
+
+		// Insert multiple rows in the loadtest table and immediately delete them to confirm that bulk delete
+		// works the same way with the vplayer optimization enabled and disabled. Currently this optimization
+		// is disabled by default, but enabled in TestCellAliasVreplicationWorkflow.
+		execVtgateQuery(t, vtgateConn, sourceKs, "insert into loadtest(id, name) values(10001, 'tempCustomer'), (10002, 'tempCustomer2'), (10003, 'tempCustomer3'), (10004, 'tempCustomer4')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "delete from loadtest where id > 10000")
 
 		// Confirm that all partial query metrics get updated when we are testing the noblob mode.
 		t.Run("validate partial query counts", func(t *testing.T) {

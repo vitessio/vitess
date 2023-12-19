@@ -444,20 +444,21 @@ func (td *tableDiffer) setupRowSorters() {
 	for shard, source := range td.wd.ct.sources {
 		sources[shard] = source.shardStreamer
 	}
-	td.sourcePrimitive = newMergeSorter(sources, td.tablePlan.comparePKs)
+	td.sourcePrimitive = newMergeSorter(sources, td.tablePlan.comparePKs, td.wd.collationEnv)
 
 	// Create a merge sorter for the target.
 	targets := make(map[string]*shardStreamer)
 	targets[td.wd.ct.targetShardStreamer.shard] = td.wd.ct.targetShardStreamer
-	td.targetPrimitive = newMergeSorter(targets, td.tablePlan.comparePKs)
+	td.targetPrimitive = newMergeSorter(targets, td.tablePlan.comparePKs, td.wd.collationEnv)
 
 	// If there were aggregate expressions, we have to re-aggregate
 	// the results, which engine.OrderedAggregate can do.
 	if len(td.tablePlan.aggregates) != 0 {
 		td.sourcePrimitive = &engine.OrderedAggregate{
-			Aggregates:  td.tablePlan.aggregates,
-			GroupByKeys: pkColsToGroupByParams(td.tablePlan.pkCols),
-			Input:       td.sourcePrimitive,
+			Aggregates:   td.tablePlan.aggregates,
+			GroupByKeys:  pkColsToGroupByParams(td.tablePlan.pkCols, td.wd.collationEnv),
+			Input:        td.sourcePrimitive,
+			CollationEnv: td.wd.collationEnv,
 		}
 	}
 }
@@ -672,7 +673,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		if collationID == collations.Unknown {
 			collationID = collations.CollationBinaryID
 		}
-		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collationID)
+		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.wd.collationEnv, collationID)
 		if err != nil {
 			return 0, err
 		}

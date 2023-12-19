@@ -73,6 +73,7 @@ type (
 		mu      sync.Mutex
 		entries []engine.ExecuteEntry
 		lastID  int
+		parser  *sqlparser.Parser
 	}
 
 	// autocommitState keeps track of whether a single round-trip
@@ -572,6 +573,26 @@ func (session *SafeSession) TimeZone() *time.Location {
 	return loc
 }
 
+// ForeignKeyChecks returns the foreign_key_checks stored in system_variables map in the session.
+func (session *SafeSession) ForeignKeyChecks() *bool {
+	session.mu.Lock()
+	fkVal, ok := session.SystemVariables[sysvars.ForeignKeyChecks]
+	session.mu.Unlock()
+
+	if !ok {
+		return nil
+	}
+	switch strings.ToLower(fkVal) {
+	case "off", "0":
+		fkCheckBool := false
+		return &fkCheckBool
+	case "on", "1":
+		fkCheckBool := true
+		return &fkCheckBool
+	}
+	return nil
+}
+
 // SetOptions sets the options
 func (session *SafeSession) SetOptions(options *querypb.ExecuteOptions) {
 	session.mu.Lock()
@@ -921,11 +942,13 @@ func (session *SafeSession) ClearAdvisoryLock() {
 	session.AdvisoryLock = nil
 }
 
-func (session *SafeSession) EnableLogging() {
+func (session *SafeSession) EnableLogging(parser *sqlparser.Parser) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	session.logging = &executeLogger{}
+	session.logging = &executeLogger{
+		parser: parser,
+	}
 }
 
 // GetUDV returns the bind variable value for the user defined variable.
@@ -978,7 +1001,7 @@ func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, 
 			FiredFrom: primitive,
 		})
 	}
-	ast, err := sqlparser.Parse(query)
+	ast, err := l.parser.Parse(query)
 	if err != nil {
 		panic("query not able to parse. this should not happen")
 	}

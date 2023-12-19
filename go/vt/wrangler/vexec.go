@@ -275,7 +275,7 @@ func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (
 
 // parseQuery parses the input query
 func (vx *vexec) parseQuery() (err error) {
-	if vx.stmt, err = sqlparser.Parse(vx.query); err != nil {
+	if vx.stmt, err = vx.wr.parser.Parse(vx.query); err != nil {
 		return err
 	}
 	if vx.tableName, err = extractTableName(vx.stmt); err != nil {
@@ -661,9 +661,6 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	workflowSubType, _ = row.ToInt32("workflow_sub_type")
 	deferSecondaryKeys, _ = row.ToBool("defer_secondary_keys")
 	rowsCopied = row.AsInt64("rows_copied", 0)
-	if err != nil {
-		return nil, "", err
-	}
 
 	status := &ReplicationStatus{
 		Shard:                primary.Shard,
@@ -698,8 +695,8 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	var rsr ReplicationStatusResult
 	rsr.ShardStatuses = make(map[string]*ShardReplicationStatus)
 	rsr.Workflow = workflow
-	var results map[*topo.TabletInfo]*querypb.QueryResult
-	query := `select 
+
+	const query = `select
 		id,
 		source,
 		pos,
@@ -854,7 +851,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 		where = " where state <> 'Stopped'"
 	}
 	query := "select distinct workflow from _vt.vreplication" + where
-	vx := vtctldvexec.NewVExec(keyspace, "", wr.ts, wr.tmc)
+	vx := vtctldvexec.NewVExec(keyspace, "", wr.ts, wr.tmc, wr.parser)
 	results, err := vx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
