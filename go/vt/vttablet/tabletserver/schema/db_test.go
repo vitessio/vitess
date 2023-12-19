@@ -26,12 +26,14 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/maps2"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (
@@ -81,7 +83,7 @@ func TestGenerateFullQuery(t *testing.T) {
 				tt.wantQuery = tt.query
 			}
 
-			got, err := generateFullQuery(tt.query)
+			got, err := generateFullQuery(tt.query, sqlparser.NewTestParser())
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				return
@@ -96,7 +98,8 @@ func TestGenerateFullQuery(t *testing.T) {
 
 func TestGetCreateStatement(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+	env := tabletenv.NewEnv(nil, "TestGetCreateStatement", collations.MySQL8(), sqlparser.NewTestParser())
+	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	// Success view
@@ -131,7 +134,8 @@ func TestGetCreateStatement(t *testing.T) {
 
 func TestGetChangedViewNames(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+	env := tabletenv.NewEnv(nil, "TestGetChangedViewNames", collations.MySQL8(), sqlparser.NewTestParser())
+	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	// Success
@@ -164,7 +168,8 @@ func TestGetChangedViewNames(t *testing.T) {
 
 func TestGetViewDefinition(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+	env := tabletenv.NewEnv(nil, "TestGetViewDefinition", collations.MySQL8(), sqlparser.NewTestParser())
+	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	viewsBV, err := sqltypes.BuildBindVariable([]string{"v1", "lead"})
@@ -209,7 +214,7 @@ func collectGetViewDefinitions(conn *connpool.Conn, bv map[string]*querypb.BindV
 		return nil
 	}, func() *sqltypes.Result {
 		return &sqltypes.Result{}
-	}, 1000)
+	}, 1000, sqlparser.NewTestParser())
 	return viewDefinitions, err
 }
 
@@ -336,7 +341,8 @@ func TestGetMismatchedTableNames(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser())
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			if tc.dbError != "" {
@@ -456,7 +462,8 @@ func TestReloadTablesInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser())
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -467,7 +474,7 @@ func TestReloadTablesInDB(t *testing.T) {
 				db.AddRejectedQuery(query, errorToThrow)
 			}
 
-			err = reloadTablesDataInDB(context.Background(), conn, tc.tablesToReload, tc.tablesToDelete)
+			err = reloadTablesDataInDB(context.Background(), conn, tc.tablesToReload, tc.tablesToDelete, sqlparser.NewTestParser())
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 				return
@@ -588,7 +595,8 @@ func TestReloadViewsInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser())
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -599,7 +607,7 @@ func TestReloadViewsInDB(t *testing.T) {
 				db.AddRejectedQuery(query, errorToThrow)
 			}
 
-			err = reloadViewsDataInDB(context.Background(), conn, tc.viewsToReload, tc.viewsToDelete)
+			err = reloadViewsDataInDB(context.Background(), conn, tc.viewsToReload, tc.viewsToDelete, sqlparser.NewTestParser())
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 				return
@@ -878,7 +886,8 @@ func TestReloadDataInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser())
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -889,7 +898,7 @@ func TestReloadDataInDB(t *testing.T) {
 				db.AddRejectedQuery(query, errorToThrow)
 			}
 
-			err = reloadDataInDB(context.Background(), conn, tc.altered, tc.created, tc.dropped)
+			err = reloadDataInDB(context.Background(), conn, tc.altered, tc.created, tc.dropped, sqlparser.NewTestParser())
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 				return
@@ -920,7 +929,7 @@ func TestGetFetchViewQuery(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			query, err := GetFetchViewQuery(testcase.viewNames)
+			query, err := GetFetchViewQuery(testcase.viewNames, sqlparser.NewTestParser())
 			require.NoError(t, err)
 			require.Equal(t, testcase.expectedQuery, query)
 		})
@@ -947,7 +956,7 @@ func TestGetFetchTableQuery(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			query, err := GetFetchTableQuery(testcase.tableNames)
+			query, err := GetFetchTableQuery(testcase.tableNames, sqlparser.NewTestParser())
 			require.NoError(t, err)
 			require.Equal(t, testcase.expectedQuery, query)
 		})
@@ -974,7 +983,7 @@ func TestGetFetchTableAndViewsQuery(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			query, err := GetFetchTableAndViewsQuery(testcase.tableNames)
+			query, err := GetFetchTableAndViewsQuery(testcase.tableNames, sqlparser.NewTestParser())
 			require.NoError(t, err)
 			require.Equal(t, testcase.expectedQuery, query)
 		})

@@ -98,7 +98,7 @@ func TestCompilerReference(t *testing.T) {
 	defer func() { evalengine.SystemTime = time.Now }()
 
 	track := NewTracker()
-
+	parser := sqlparser.NewTestParser()
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			var supported, total int
@@ -107,7 +107,7 @@ func TestCompilerReference(t *testing.T) {
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
 
-				stmt, err := sqlparser.ParseExpr(query)
+				stmt, err := parser.ParseExpr(query)
 				if err != nil {
 					// no need to test un-parseable queries
 					return
@@ -577,10 +577,10 @@ func TestCompilerSingle(t *testing.T) {
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
-
+	parser := sqlparser.NewTestParser()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			expr, err := sqlparser.ParseExpr(tc.expression)
+			expr, err := parser.ParseExpr(tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -657,9 +657,10 @@ func TestBindVarLiteral(t *testing.T) {
 		},
 	}
 
+	parser := sqlparser.NewTestParser()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			expr, err := sqlparser.ParseExpr(tc.expression)
+			expr, err := parser.ParseExpr(tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -722,9 +723,10 @@ func TestCompilerNonConstant(t *testing.T) {
 		},
 	}
 
+	parser := sqlparser.NewTestParser()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			expr, err := sqlparser.ParseExpr(tc.expression)
+			expr, err := parser.ParseExpr(tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}

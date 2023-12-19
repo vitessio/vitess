@@ -29,8 +29,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
@@ -79,6 +81,8 @@ var (
 	server        string
 	actionTimeout time.Duration
 	compactOutput bool
+
+	parser *sqlparser.Parser
 
 	topoOptions = struct {
 		implementation        string
@@ -208,7 +212,7 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 				return nil
 			})
 		})
-		vtctld := grpcvtctldserver.NewVtctldServer(ts)
+		vtctld := grpcvtctldserver.NewVtctldServer(ts, parser)
 		localvtctldclient.SetServer(vtctld)
 		VtctldClientProtocol = "local"
 		server = ""
@@ -225,4 +229,14 @@ func init() {
 	Root.PersistentFlags().StringSliceVar(&topoOptions.globalServerAddresses, "topo-global-server-address", topoOptions.globalServerAddresses, "the address of the global topology server(s)")
 	Root.PersistentFlags().StringVar(&topoOptions.globalRoot, "topo-global-root", topoOptions.globalRoot, "the path of the global topology data in the global topology server")
 	vreplcommon.RegisterCommands(Root)
+
+	var err error
+	parser, err = sqlparser.New(sqlparser.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		log.Fatalf("failed to initialize sqlparser: %v", err)
+	}
 }

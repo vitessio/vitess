@@ -23,15 +23,12 @@ import (
 	"strings"
 	"sync"
 
-	"vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-var versionFlagSync sync.Once
 
 // parserPool is a pool for parser objects.
 var parserPool = sync.Pool{
@@ -42,9 +39,6 @@ var parserPool = sync.Pool{
 
 // zeroParser is a zero-initialized parser to help reinitialize the parser for pooling.
 var zeroParser yyParserImpl
-
-// mySQLParserVersion is the version of MySQL that the parser would emulate
-var mySQLParserVersion string
 
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
 // particularly good reason to use yyParse directly, since it immediately discards its parser.
@@ -80,12 +74,12 @@ func yyParsePooled(yylex yyLexer) int {
 // bind variables that were found in the original SQL query. If a DDL statement
 // is partially parsed but still contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
-func Parse2(sql string) (Statement, BindVars, error) {
-	tokenizer := NewStringTokenizer(sql)
+func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
+	tokenizer := p.NewStringTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil {
 			if typ, val := tokenizer.Scan(); typ != 0 {
-				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
+				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", val)
 			}
 			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
 			switch x := tokenizer.partialDDL.(type) {
@@ -103,28 +97,6 @@ func Parse2(sql string) (Statement, BindVars, error) {
 		return nil, nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, tokenizer.BindVars, nil
-}
-
-func checkParserVersionFlag() {
-	if flag.Parsed() {
-		versionFlagSync.Do(func() {
-			convVersion, err := convertMySQLVersionToCommentVersion(servenv.MySQLServerVersion())
-			if err != nil {
-				log.Fatalf("unable to parse mysql version: %v", err)
-			}
-			mySQLParserVersion = convVersion
-		})
-	}
-}
-
-// SetParserVersion sets the mysql parser version
-func SetParserVersion(version string) {
-	mySQLParserVersion = version
-}
-
-// GetParserVersion returns the version of the mysql parser
-func GetParserVersion() string {
-	return mySQLParserVersion
 }
 
 // convertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
@@ -166,8 +138,8 @@ func convertMySQLVersionToCommentVersion(version string) (string, error) {
 }
 
 // ParseExpr parses an expression and transforms it to an AST
-func ParseExpr(sql string) (Expr, error) {
-	stmt, err := Parse("select " + sql)
+func (p *Parser) ParseExpr(sql string) (Expr, error) {
+	stmt, err := p.Parse("select " + sql)
 	if err != nil {
 		return nil, err
 	}
@@ -176,15 +148,15 @@ func ParseExpr(sql string) (Expr, error) {
 }
 
 // Parse behaves like Parse2 but does not return a set of bind variables
-func Parse(sql string) (Statement, error) {
-	stmt, _, err := Parse2(sql)
+func (p *Parser) Parse(sql string) (Statement, error) {
+	stmt, _, err := p.Parse2(sql)
 	return stmt, err
 }
 
 // ParseStrictDDL is the same as Parse except it errors on
 // partially parsed DDL statements.
-func ParseStrictDDL(sql string) (Statement, error) {
-	tokenizer := NewStringTokenizer(sql)
+func (p *Parser) ParseStrictDDL(sql string) (Statement, error) {
+	tokenizer := p.NewStringTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 {
 		return nil, tokenizer.LastError
 	}
@@ -198,7 +170,7 @@ func ParseStrictDDL(sql string) (Statement, error) {
 // returning a Statement which is the AST representation of the query.
 // The tokenizer will always read up to the end of the statement, allowing for
 // the next call to ParseNext to parse any subsequent SQL statements. When
-// there are no more statements to parse, a error of io.EOF is returned.
+// there are no more statements to parse, an error of io.EOF is returned.
 func ParseNext(tokenizer *Tokenizer) (Statement, error) {
 	return parseNext(tokenizer, false)
 }
@@ -237,10 +209,10 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 // ErrEmpty is a sentinel error returned when parsing empty statements.
 var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
 
-// SplitStatement returns the first sql statement up to either a ; or EOF
+// SplitStatement returns the first sql statement up to either a ';' or EOF
 // and the remainder from the given buffer
-func SplitStatement(blob string) (string, string, error) {
-	tokenizer := NewStringTokenizer(blob)
+func (p *Parser) SplitStatement(blob string) (string, string, error) {
+	tokenizer := p.NewStringTokenizer(blob)
 	tkn := 0
 	for {
 		tkn, _ = tokenizer.Scan()
@@ -259,7 +231,7 @@ func SplitStatement(blob string) (string, string, error) {
 
 // SplitStatementToPieces split raw sql statement that may have multi sql pieces to sql pieces
 // returns the sql pieces blob contains; or error if sql cannot be parsed
-func SplitStatementToPieces(blob string) (pieces []string, err error) {
+func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error) {
 	// fast path: the vast majority of SQL statements do not have semicolons in them
 	if blob == "" {
 		return nil, nil
@@ -267,12 +239,15 @@ func SplitStatementToPieces(blob string) (pieces []string, err error) {
 	switch strings.IndexByte(blob, ';') {
 	case -1: // if there is no semicolon, return blob as a whole
 		return []string{blob}, nil
-	case len(blob) - 1: // if there's a single semicolon and it's the last character, return blob without it
+	case len(blob) - 1: // if there's a single semicolon, and it's the last character, return blob without it
 		return []string{blob[:len(blob)-1]}, nil
 	}
 
 	pieces = make([]string, 0, 16)
-	tokenizer := NewStringTokenizer(blob)
+	// It's safe here to not case about version specific tokenization
+	// because we are only interested in semicolons and splitting
+	// statements.
+	tokenizer := p.NewStringTokenizer(blob)
 
 	tkn := 0
 	var stmt string
@@ -307,6 +282,49 @@ loop:
 	return
 }
 
-func IsMySQL80AndAbove() bool {
-	return mySQLParserVersion >= "80000"
+func (p *Parser) IsMySQL80AndAbove() bool {
+	return p.version >= "80000"
+}
+
+func (p *Parser) SetTruncateErrLen(l int) {
+	p.truncateErrLen = l
+}
+
+type Options struct {
+	MySQLServerVersion string
+	TruncateUILen      int
+	TruncateErrLen     int
+}
+
+type Parser struct {
+	version        string
+	truncateUILen  int
+	truncateErrLen int
+}
+
+func New(opts Options) (*Parser, error) {
+	if opts.MySQLServerVersion == "" {
+		opts.MySQLServerVersion = config.DefaultMySQLVersion
+	}
+	convVersion, err := convertMySQLVersionToCommentVersion(opts.MySQLServerVersion)
+	if err != nil {
+		return nil, err
+	}
+	return &Parser{
+		version:        convVersion,
+		truncateUILen:  opts.TruncateUILen,
+		truncateErrLen: opts.TruncateErrLen,
+	}, nil
+}
+
+func NewTestParser() *Parser {
+	convVersion, err := convertMySQLVersionToCommentVersion(config.DefaultMySQLVersion)
+	if err != nil {
+		panic(err)
+	}
+	return &Parser{
+		version:        convVersion,
+		truncateUILen:  512,
+		truncateErrLen: 0,
+	}
 }

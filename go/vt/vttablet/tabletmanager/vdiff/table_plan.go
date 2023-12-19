@@ -64,7 +64,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 		table:  td.table,
 		dbName: dbName,
 	}
-	statement, err := sqlparser.Parse(td.sourceQuery)
+	statement, err := td.wd.ct.vde.parser.Parse(td.sourceQuery)
 	if err != nil {
 		return nil, err
 	}

@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -72,7 +74,9 @@ create table t2 (
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	vte, err := Init(ctx, testVSchema, testSchema, "", opts, collations.MySQL8())
+	collationEnv := collations.MySQL8()
+	parser := sqlparser.NewTestParser()
+	vte, err := Init(ctx, testVSchema, testSchema, "", opts, collationEnv, parser)
 	require.NoError(t, err)
 	defer vte.Stop()
 
@@ -119,8 +123,9 @@ create table test_partitioned (
 	PARTITION p2018_06_16 VALUES LESS THAN (1529132400) ENGINE = InnoDB,
 	PARTITION p2018_06_17 VALUES LESS THAN (1529218800) ENGINE = InnoDB)*/;
 `
-
-	ddls, err := parseSchema(testSchema, &Options{StrictDDL: false})
+	collationEnv := collations.MySQL8()
+	parser := sqlparser.NewTestParser()
+	ddls, err := parseSchema(testSchema, &Options{StrictDDL: false}, parser)
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
@@ -130,14 +135,14 @@ create table test_partitioned (
 	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
 	defer vte.Stop()
 
-	tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts(), collations.MySQL8())
+	tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts(), collationEnv)
 	vte.setGlobalTabletEnv(tabletEnv)
 
 	tablet := vte.newTablet(ctx, defaultTestOpts(), &topodatapb.Tablet{
 		Keyspace: "test_keyspace",
 		Shard:    "-80",
 		Alias:    &topodatapb.TabletAlias{},
-	}, collations.MySQL8())
+	}, collationEnv, parser)
 	se := tablet.tsv.SchemaEngine()
 	tables := se.GetSchema()
 
@@ -183,7 +188,7 @@ create table test_partitioned (
 
 func TestErrParseSchema(t *testing.T) {
 	testSchema := `create table t1 like t2`
-	ddl, err := parseSchema(testSchema, &Options{StrictDDL: true})
+	ddl, err := parseSchema(testSchema, &Options{StrictDDL: true}, sqlparser.NewTestParser())
 	require.NoError(t, err)
 
 	_, err = newTabletEnvironment(ddl, defaultTestOpts(), collations.MySQL8())

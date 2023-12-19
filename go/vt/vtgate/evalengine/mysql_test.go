@@ -62,7 +62,7 @@ func knownBadQuery(e Expr) bool {
 var errKnownBadQuery = errors.New("this query is known to give bad results in MySQL")
 
 func convert(t *testing.T, query string, simplify bool) (Expr, error) {
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		t.Fatalf("failed to parse '%s': %v", query, err)
 	}

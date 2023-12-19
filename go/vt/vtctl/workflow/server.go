@@ -142,16 +142,22 @@ type Server struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 	// Limit the number of concurrent background goroutines if needed.
-	sem *semaphore.Weighted
+	sem    *semaphore.Weighted
+	parser *sqlparser.Parser
 }
 
 // NewServer returns a new server instance with the given topo.Server and
 // TabletManagerClient.
-func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *Server {
+func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient, parser *sqlparser.Parser) *Server {
 	return &Server{
-		ts:  ts,
-		tmc: tmc,
+		ts:     ts,
+		tmc:    tmc,
+		parser: parser,
 	}
+}
+
+func (s *Server) SQLParser() *sqlparser.Parser {
+	return s.parser
 }
 
 // CheckReshardingJournalExistsOnTablet returns the journal (or an empty
@@ -407,7 +413,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		where,
 	)
 
-	vx := vexec.NewVExec(req.Keyspace, "", s.ts, s.tmc)
+	vx := vexec.NewVExec(req.Keyspace, "", s.ts, s.tmc, s.SQLParser())
 	results, err := vx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -1243,6 +1249,7 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		sourceTs: s.ts,
 		tmc:      s.tmc,
 		ms:       ms,
+		parser:   s.SQLParser(),
 	}
 
 	err := mz.createMaterializerStreams()
@@ -1382,6 +1389,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		tmc:          s.tmc,
 		ms:           ms,
 		workflowType: workflowType,
+		parser:       s.SQLParser(),
 	}
 	err = mz.createMoveTablesStreams(req)
 	if err != nil {
@@ -1836,7 +1844,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	deleteReq := &tabletmanagerdatapb.DeleteVReplicationWorkflowRequest{
 		Workflow: req.Workflow,
 	}
-	vx := vexec.NewVExec(req.Keyspace, req.Workflow, s.ts, s.tmc)
+	vx := vexec.NewVExec(req.Keyspace, req.Workflow, s.ts, s.tmc, s.SQLParser())
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
 		res, err := s.tmc.DeleteVReplicationWorkflow(ctx, tablet.Tablet, deleteReq)
 		if err != nil {
@@ -2112,7 +2120,7 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
 	span.Annotate("state", req.TabletRequest.State)
 
-	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc)
+	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc, s.SQLParser())
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
 		res, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, req.TabletRequest)
 		if err != nil {
@@ -2525,7 +2533,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	if err != nil {
 		return nil, err
 	}
-	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace)
+	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace, s.SQLParser())
 	if err != nil {
 		return nil, err
 	}
@@ -3114,7 +3122,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	}
 	if !journalsExist {
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm, err := BuildStreamMigrator(ctx, ts, cancel)
+		sm, err := BuildStreamMigrator(ctx, ts, cancel, s.parser)
 		if err != nil {
 			return handleError("failed to migrate the workflow streams", err)
 		}
@@ -3444,7 +3452,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	if !strings.Contains(vindex.Type, "lookup") {
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex %s is not a lookup type", vindex.Type)
 	}
-	targetKeyspace, targetTableName, err = sqlparser.ParseTable(vindex.Params["table"])
+	targetKeyspace, targetTableName, err = s.parser.ParseTable(vindex.Params["table"])
 	if err != nil || targetKeyspace == "" {
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex table name (%s) must be in the form <keyspace>.<table>", vindex.Params["table"])
 	}

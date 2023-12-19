@@ -131,6 +131,11 @@ type TabletServer struct {
 	checkMysqlGaugeFunc *stats.GaugeFunc
 
 	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
+}
+
+func (tsv *TabletServer) SQLParser() *sqlparser.Parser {
+	return tsv.parser
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -141,8 +146,8 @@ var _ queryservice.QueryService = (*TabletServer)(nil)
 var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(ctx context.Context, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment) *TabletServer {
-	return NewTabletServer(ctx, name, tabletenv.NewCurrentConfig(), topoServer, alias, collationEnv)
+func NewServer(ctx context.Context, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser) *TabletServer {
+	return NewTabletServer(ctx, name, tabletenv.NewCurrentConfig(), topoServer, alias, collationEnv, parser)
 }
 
 var (
@@ -152,7 +157,7 @@ var (
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment) *TabletServer {
+func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser) *TabletServer {
 	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
 		exporter:               exporter,
@@ -164,6 +169,7 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		topoServer:             topoServer,
 		alias:                  alias.CloneVT(),
 		collationEnv:           collationEnv,
+		parser:                 parser,
 	}
 	tsv.QueryTimeout.Store(config.Oltp.QueryTimeout.Nanoseconds())
 
@@ -176,9 +182,9 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		return tsv.sm.Target().TabletType
 	}
 
-	tsv.statelessql = NewQueryList("oltp-stateless")
-	tsv.statefulql = NewQueryList("oltp-stateful")
-	tsv.olapql = NewQueryList("olap")
+	tsv.statelessql = NewQueryList("oltp-stateless", parser)
+	tsv.statefulql = NewQueryList("oltp-stateful", parser)
+	tsv.olapql = NewQueryList("olap", parser)
 	tsv.se = schema.NewEngine(tsv)
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
@@ -1612,13 +1618,13 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 		// not a concern.
 		var messagef, logMessage, query, truncatedQuery string
 		messagef = fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-		query = queryAsString(sql, bindVariables, tsv.TerseErrors, false)
+		query = queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.SQLParser())
 		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", fmt.Sprintf(messagef, query))
 		if tsv.TerseErrors == tsv.Config().SanitizeLogMessages {
-			truncatedQuery = queryAsString(sql, bindVariables, tsv.TerseErrors, true)
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.TerseErrors, true, tsv.SQLParser())
 			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		} else {
-			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true)
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser())
 			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		}
 		log.Error(logMessage)
@@ -1678,20 +1684,20 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false))
+			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.SQLParser()))
 			if logMethod != nil {
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
+				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser()))
 			}
 		} else {
-			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false))
+			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false, tsv.SQLParser()))
 			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser()))
 			}
 		}
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 		if logMethod != nil {
-			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
+			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser()))
 		}
 	}
 
@@ -2123,7 +2129,7 @@ func (tsv *TabletServer) ConsolidatorMode() string {
 // If sanitize is false it also includes the bind variables.
 // If truncateForLog is true, it truncates the sql query and the
 // bind variables.
-func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool, truncateForLog bool) string {
+func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool, truncateForLog bool, parser *sqlparser.Parser) string {
 	// Add the bind vars unless this needs to be sanitized, e.g. for log messages
 	bvBuf := &bytes.Buffer{}
 	fmt.Fprintf(bvBuf, "BindVars: {")
@@ -2147,7 +2153,7 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, s
 
 	// Truncate the bind vars if necessary
 	bv := bvBuf.String()
-	maxLen := sqlparser.GetTruncateErrLen()
+	maxLen := parser.GetTruncateErrLen()
 	if truncateForLog && maxLen > 0 && len(bv) > maxLen {
 		if maxLen <= 12 {
 			bv = sqlparser.TruncationText
@@ -2158,7 +2164,7 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, s
 
 	// Truncate the sql query if necessary
 	if truncateForLog {
-		sql = sqlparser.TruncateForLog(sql)
+		sql = parser.TruncateForLog(sql)
 	}
 
 	// sql is the normalized query without the bind vars

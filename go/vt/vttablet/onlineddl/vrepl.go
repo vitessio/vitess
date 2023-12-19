@@ -138,6 +138,7 @@ type VRepl struct {
 	convertCharset map[string](*binlogdatapb.CharsetConversion)
 
 	collationEnv *collations.Environment
+	sqlparser    *sqlparser.Parser
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
@@ -152,6 +153,7 @@ func NewVRepl(workflow string,
 	alterQuery string,
 	analyzeTable bool,
 	collationEnv *collations.Environment,
+	parser *sqlparser.Parser,
 ) *VRepl {
 	return &VRepl{
 		workflow:                workflow,
@@ -169,6 +171,7 @@ func NewVRepl(workflow string,
 		intToEnumMap:            map[string]bool{},
 		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
 		collationEnv:            collationEnv,
+		sqlparser:               parser,
 	}
 }
 
@@ -388,7 +391,7 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 		// Happens for REVERT
 		return nil
 	}
-	if err := v.parser.ParseAlterStatement(v.alterQuery); err != nil {
+	if err := v.parser.ParseAlterStatement(v.alterQuery, v.sqlparser); err != nil {
 		return err
 	}
 	if v.parser.IsRenameTable() {
@@ -459,7 +462,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.originalShowCreateTable, v.vreplShowCreateTable)
+	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.sqlparser, v.originalShowCreateTable, v.vreplShowCreateTable)
 	if err != nil {
 		return err
 	}

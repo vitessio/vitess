@@ -285,7 +285,7 @@ func TestTypeToMySQL(t *testing.T) {
 
 func TestMySQLToType(t *testing.T) {
 	testcases := []struct {
-		intype  int64
+		intype  byte
 		inflags int64
 		outtype querypb.Type
 	}{{

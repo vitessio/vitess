@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl"
@@ -181,7 +182,7 @@ func Fuzz(data []byte) int {
 		// Add params to the command
 		commandSlice = append(commandSlice, args...)
 
-		_ = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc, collations.MySQL8()), commandSlice)
+		_ = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc, collations.MySQL8(), sqlparser.NewTestParser()), commandSlice)
 		command++
 	}
 

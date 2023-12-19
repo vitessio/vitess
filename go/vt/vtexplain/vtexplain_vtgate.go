@@ -75,7 +75,7 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, vSchemaStr, ksShar
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
 	queryLogBufferSize := 10
 	plans := theine.NewStore[vtgate.PlanCacheKey, *engine.Plan](4*1024*1024, false)
-	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.explainTopo, vtexplainCell, resolver, opts.Normalize, false, streamSize, plans, schemaTracker, false, opts.PlannerVersion, 0, vte.collationEnv)
+	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.explainTopo, vtexplainCell, resolver, opts.Normalize, false, streamSize, plans, schemaTracker, false, opts.PlannerVersion, 0, vte.collationEnv, vte.parser)
 	vte.vtgateExecutor.SetQueryLogger(streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
 
 	return nil
@@ -107,7 +107,7 @@ func (vte *VTExplain) buildTopology(ctx context.Context, opts *Options, vschemaS
 	if err != nil {
 		return err
 	}
-	schema := vindexes.BuildVSchema(&srvVSchema)
+	schema := vindexes.BuildVSchema(&srvVSchema, vte.parser)
 	for ks, ksSchema := range schema.Keyspaces {
 		if ksSchema.Error != nil {
 			return vterrors.Wrapf(ksSchema.Error, "vschema failed to load on keyspace [%s]", ks)
@@ -143,7 +143,7 @@ func (vte *VTExplain) buildTopology(ctx context.Context, opts *Options, vschemaS
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard.Name)
 
 			tablet := vte.healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard.Name, topodatapb.TabletType_PRIMARY, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
-				return vte.newTablet(ctx, opts, t, vte.collationEnv)
+				return vte.newTablet(ctx, opts, t, vte.collationEnv, vte.parser)
 			})
 			vte.explainTopo.TabletConns[hostname] = tablet.(*explainTablet)
 			vte.explainTopo.KeyspaceShards[ks][shard.Name] = shard

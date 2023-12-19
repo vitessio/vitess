@@ -28,8 +28,6 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
@@ -180,7 +178,7 @@ func unmarshalRequest(r *http.Request, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, collationEnv *collations.Environment) {
+func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 	tabletHealthCache := newTabletHealthCache(ts)
 	tmClient := tmclient.NewTabletManagerClient()
 
@@ -489,7 +487,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, co
 
 		logstream := logutil.NewMemoryLogger()
 
-		wr := wrangler.New(logstream, ts, tmClient, collationEnv)
+		wr := wrangler.New(logstream, ts, tmClient, actions.collationEnv, actions.parser)
 		err := vtctl.RunCommand(r.Context(), wr, args)
 		if err != nil {
 			resp.Error = err.Error()
@@ -525,7 +523,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, co
 		logger := logutil.NewCallbackLogger(func(ev *logutilpb.Event) {
 			w.Write([]byte(logutil.EventString(ev)))
 		})
-		wr := wrangler.New(logger, ts, tmClient, collationEnv)
+		wr := wrangler.New(logger, ts, tmClient, actions.collationEnv, actions.parser)
 
 		apiCallUUID, err := schema.CreateUUID()
 		if err != nil {
@@ -533,7 +531,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, co
 		}
 
 		requestContext := fmt.Sprintf("vtctld/api:%s", apiCallUUID)
-		executor := schemamanager.NewTabletExecutor(requestContext, wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), time.Duration(req.ReplicaTimeoutSeconds)*time.Second, 0)
+		executor := schemamanager.NewTabletExecutor(requestContext, wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), time.Duration(req.ReplicaTimeoutSeconds)*time.Second, 0, actions.parser)
 		if err := executor.SetDDLStrategy(req.DDLStrategy); err != nil {
 			return fmt.Errorf("error setting DDL strategy: %v", err)
 		}

@@ -134,12 +134,12 @@ func (tr *Tracker) process(ctx context.Context) {
 					gtid = event.Gtid
 				}
 				if event.Type == binlogdatapb.VEventType_DDL &&
-					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName()) {
+					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName(), tr.env.SQLParser()) {
 
 					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
 						log.Errorf("Error updating schema: %s for ddl %s, gtid %s",
-							sqlparser.TruncateForLog(err.Error()), event.Statement, gtid)
+							tr.env.SQLParser().TruncateForLog(err.Error()), event.Statement, gtid)
 					}
 				}
 			}
@@ -248,8 +248,8 @@ func encodeString(in string) string {
 }
 
 // MustReloadSchemaOnDDL returns true if the ddl is for the db which is part of the workflow and is not an online ddl artifact
-func MustReloadSchemaOnDDL(sql string, dbname string) bool {
-	ast, err := sqlparser.Parse(sql)
+func MustReloadSchemaOnDDL(sql string, dbname string, parser *sqlparser.Parser) bool {
+	ast, err := parser.Parse(sql)
 	if err != nil {
 		return false
 	}
