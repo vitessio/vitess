@@ -19,6 +19,7 @@ package mysql
 import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -32,7 +33,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
-				sqlerr.Query = query
+				sqlerr.Query = sqlparser.TruncateQuery(query, c.truncateErrLen)
 			}
 		}
 	}()

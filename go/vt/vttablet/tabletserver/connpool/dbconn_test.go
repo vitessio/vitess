@@ -27,12 +27,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func compareTimingCounts(t *testing.T, op string, delta int64, before, after map[string]int64) {
@@ -330,7 +333,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := NewConn(context.Background(), params, connPool.dbaPool, nil)
+	dbConn, err := NewConn(context.Background(), params, connPool.dbaPool, nil, tabletenv.NewEnv(nil, "TestDBNoPoolConnKill", collations.MySQL8(), sqlparser.NewTestParser()))
 	if dbConn != nil {
 		defer dbConn.Close()
 	}

@@ -127,7 +127,8 @@ deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 
 func parseTableName(t *testing.T, sql string) (tableName string) {
 	// ddlStatement could possibly be composed of multiple DDL statements
-	tokenizer := sqlparser.NewStringTokenizer(sql)
+	parser := sqlparser.NewTestParser()
+	tokenizer := parser.NewStringTokenizer(sql)
 	for {
 		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
 		if err != nil && errors.Is(err, io.EOF) {

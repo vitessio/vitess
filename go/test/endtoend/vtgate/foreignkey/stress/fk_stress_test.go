@@ -810,7 +810,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	}
 
 	if expectHint != "" {
-		stmt, err := sqlparser.Parse(alterStatement)
+		stmt, err := sqlparser.NewTestParser().Parse(alterStatement)
 		require.NoError(t, err)
 		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 		require.True(t, ok)

@@ -389,9 +389,10 @@ func TestNormalize(t *testing.T) {
 			"bv3": sqltypes.Int64BindVariable(3),
 		},
 	}}
+	parser := NewTestParser()
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
-			stmt, err := Parse(tc.in)
+			stmt, err := parser.Parse(tc.in)
 			require.NoError(t, err)
 			known := GetBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
@@ -416,9 +417,10 @@ func TestNormalizeInvalidDates(t *testing.T) {
 		in:  "select timestamp'foo'",
 		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATETIME value: '%s'", "foo"),
 	}}
+	parser := NewTestParser()
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
-			stmt, err := Parse(tc.in)
+			stmt, err := parser.Parse(tc.in)
 			require.NoError(t, err)
 			known := GetBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
@@ -428,12 +430,13 @@ func TestNormalizeInvalidDates(t *testing.T) {
 }
 
 func TestNormalizeValidSQL(t *testing.T) {
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.partialDDL || tcase.ignoreNormalizerTest {
 				return
 			}
-			tree, err := Parse(tcase.input)
+			tree, err := parser.Parse(tcase.input)
 			require.NoError(t, err, tcase.input)
 			// Skip the test for the queries that do not run the normalizer
 			if !CanNormalize(tree) {
@@ -447,7 +450,7 @@ func TestNormalizeValidSQL(t *testing.T) {
 			if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 				return
 			}
-			_, err = Parse(normalizerOutput)
+			_, err = parser.Parse(normalizerOutput)
 			require.NoError(t, err, normalizerOutput)
 		})
 	}
@@ -463,7 +466,8 @@ func TestNormalizeOneCasae(t *testing.T) {
 	if testOne.input == "" {
 		t.Skip("empty test case")
 	}
-	tree, err := Parse(testOne.input)
+	parser := NewTestParser()
+	tree, err := parser.Parse(testOne.input)
 	require.NoError(t, err, testOne.input)
 	// Skip the test for the queries that do not run the normalizer
 	if !CanNormalize(tree) {
@@ -477,12 +481,13 @@ func TestNormalizeOneCasae(t *testing.T) {
 	if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 		return
 	}
-	_, err = Parse(normalizerOutput)
+	_, err = parser.Parse(normalizerOutput)
 	require.NoError(t, err, normalizerOutput)
 }
 
 func TestGetBindVars(t *testing.T) {
-	stmt, err := Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 in ::v5")
+	parser := NewTestParser()
+	stmt, err := parser.Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 in ::v5")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -506,8 +511,9 @@ Prior to skip:
 BenchmarkNormalize-8      500000              3620 ns/op            1461 B/op         55 allocs/op
 */
 func BenchmarkNormalize(b *testing.B) {
+	parser := NewTestParser()
 	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
-	ast, reservedVars, err := Parse2(sql)
+	ast, reservedVars, err := parser.Parse2(sql)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -517,6 +523,7 @@ func BenchmarkNormalize(b *testing.B) {
 }
 
 func BenchmarkNormalizeTraces(b *testing.B) {
+	parser := NewTestParser()
 	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
 		b.Run(trace, func(b *testing.B) {
 			queries := loadQueries(b, trace)
@@ -527,7 +534,7 @@ func BenchmarkNormalizeTraces(b *testing.B) {
 			parsed := make([]Statement, 0, len(queries))
 			reservedVars := make([]BindVars, 0, len(queries))
 			for _, q := range queries {
-				pp, kb, err := Parse2(q)
+				pp, kb, err := parser.Parse2(q)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -549,6 +556,7 @@ func BenchmarkNormalizeTraces(b *testing.B) {
 
 func BenchmarkNormalizeVTGate(b *testing.B) {
 	const keyspace = "main_keyspace"
+	parser := NewTestParser()
 
 	queries := loadQueries(b, "lobsters.sql.gz")
 	if len(queries) > 10000 {
@@ -560,7 +568,7 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, sql := range queries {
-			stmt, reservedVars, err := Parse2(sql)
+			stmt, reservedVars, err := parser.Parse2(sql)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -856,9 +864,10 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 	b.Helper()
 	b.ReportAllocs()
 	b.ResetTimer()
+	parser := NewTestParser()
 	for i := 0; i < b.N; i++ {
 		for _, sql := range sqls {
-			stmt, reserved, err := Parse2(sql)
+			stmt, reserved, err := parser.Parse2(sql)
 			if err != nil {
 				b.Fatalf("%v: %q", err, sql)
 			}

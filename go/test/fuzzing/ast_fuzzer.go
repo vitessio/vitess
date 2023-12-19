@@ -36,11 +36,11 @@ func FuzzEqualsSQLNode(data []byte) int {
 	if err != nil {
 		return 0
 	}
-	inA, err := sqlparser.Parse(query1)
+	inA, err := sqlparser.NewTestParser().Parse(query1)
 	if err != nil {
 		return 0
 	}
-	inB, err := sqlparser.Parse(query2)
+	inB, err := sqlparser.NewTestParser().Parse(query2)
 	if err != nil {
 		return 0
 	}

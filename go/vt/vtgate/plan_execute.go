@@ -80,7 +80,7 @@ func (e *Executor) newExecute(
 	query, comments := sqlparser.SplitMarginComments(sql)
 
 	// 2: Parse and Validate query
-	stmt, reservedVars, err := parseAndValidateQuery(query)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.parser)
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func (e *Executor) newExecute(
 			}
 		}
 
-		vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv, e.collationEnv)
+		vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 		if err != nil {
 			return err
 		}

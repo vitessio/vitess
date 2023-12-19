@@ -224,7 +224,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		return nil, nil, err
 	}
 
-	ws := workflow.NewServer(wr.ts, wr.tmc)
+	ws := workflow.NewServer(wr.ts, wr.tmc, wr.parser)
 	state := &workflow.State{
 		Workflow:           workflowName,
 		SourceKeyspace:     ts.SourceKeyspaceName(),
@@ -556,7 +556,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	}
 	if !journalsExist {
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm, err := workflow.BuildStreamMigrator(ctx, ts, cancel)
+		sm, err := workflow.BuildStreamMigrator(ctx, ts, cancel, wr.parser)
 		if err != nil {
 			return handleError("failed to migrate the workflow streams", err)
 		}
@@ -956,7 +956,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 	if err != nil {
 		return nil, err
 	}
-	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace)
+	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace, wr.parser)
 	if err != nil {
 		return nil, err
 	}
@@ -1150,7 +1150,7 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
 	var (
-		ws = workflow.NewServer(ts.TopoServer(), ts.TabletManagerClient())
+		ws = workflow.NewServer(ts.TopoServer(), ts.TabletManagerClient(), ts.wr.parser)
 		mu sync.Mutex
 	)
 

@@ -148,6 +148,7 @@ type (
 		globalTabletEnv *tabletEnv
 
 		collationEnv *collations.Environment
+		parser       *sqlparser.Parser
 	}
 )
 
@@ -183,13 +184,13 @@ type TabletActions struct {
 }
 
 // Init sets up the fake execution environment
-func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options, collationEnv *collations.Environment) (*VTExplain, error) {
+func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options, collationEnv *collations.Environment, parser *sqlparser.Parser) (*VTExplain, error) {
 	// Verify options
 	if opts.ReplicationMode != "ROW" && opts.ReplicationMode != "STATEMENT" {
 		return nil, fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
 	}
 
-	parsedDDLs, err := parseSchema(sqlSchema, opts)
+	parsedDDLs, err := parseSchema(sqlSchema, opts, parser)
 	if err != nil {
 		return nil, fmt.Errorf("parseSchema: %v", err)
 	}
@@ -204,6 +205,7 @@ func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts
 			Autocommit:   true,
 		},
 		collationEnv: collationEnv,
+		parser:       parser,
 	}
 	vte.setGlobalTabletEnv(tabletEnv)
 	err = vte.initVtgateExecutor(ctx, vSchemaStr, ksShardMapStr, opts)
@@ -232,10 +234,10 @@ func (vte *VTExplain) Stop() {
 	}
 }
 
-func parseSchema(sqlSchema string, opts *Options) ([]sqlparser.DDLStatement, error) {
+func parseSchema(sqlSchema string, opts *Options, parser *sqlparser.Parser) ([]sqlparser.DDLStatement, error) {
 	parsedDDLs := make([]sqlparser.DDLStatement, 0, 16)
 	for {
-		sql, rem, err := sqlparser.SplitStatement(sqlSchema)
+		sql, rem, err := parser.SplitStatement(sqlSchema)
 		sqlSchema = rem
 		if err != nil {
 			return nil, err
@@ -250,12 +252,12 @@ func parseSchema(sqlSchema string, opts *Options) ([]sqlparser.DDLStatement, err
 
 		var stmt sqlparser.Statement
 		if opts.StrictDDL {
-			stmt, err = sqlparser.ParseStrictDDL(sql)
+			stmt, err = parser.ParseStrictDDL(sql)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			stmt, err = sqlparser.Parse(sql)
+			stmt, err = parser.Parse(sql)
 			if err != nil {
 				log.Errorf("ERROR: failed to parse sql: %s, got error: %v", sql, err)
 				continue
@@ -299,7 +301,7 @@ func (vte *VTExplain) Run(sql string) ([]*Explain, error) {
 			sql = s
 		}
 
-		sql, rem, err = sqlparser.SplitStatement(sql)
+		sql, rem, err = vte.parser.SplitStatement(sql)
 		if err != nil {
 			return nil, err
 		}
@@ -386,7 +388,7 @@ func (vte *VTExplain) specialHandlingOfSavepoints(q *MysqlQuery) error {
 		return nil
 	}
 
-	stmt, err := sqlparser.Parse(q.SQL)
+	stmt, err := vte.parser.Parse(q.SQL)
 	if err != nil {
 		return err
 	}

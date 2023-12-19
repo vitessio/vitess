@@ -29,10 +29,9 @@ import (
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
-
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -160,10 +159,8 @@ func TestSelectDBA(t *testing.T) {
 }
 
 func TestSystemVariablesMySQLBelow80(t *testing.T) {
-	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "5.7.0")
 	executor.normalize = true
-
-	sqlparser.SetParserVersion("57000")
 	setVarEnabled = true
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
@@ -196,10 +193,9 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 }
 
 func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
-	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "8.0.0")
 	executor.normalize = true
 
-	sqlparser.SetParserVersion("80000")
 	setVarEnabled = false
 	defer func() {
 		setVarEnabled = true
@@ -234,10 +230,8 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 }
 
 func TestSetSystemVariablesTx(t *testing.T) {
-	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "8.0.1")
 	executor.normalize = true
-
-	sqlparser.SetParserVersion("80001")
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
@@ -284,8 +278,6 @@ func TestSetSystemVariablesTx(t *testing.T) {
 func TestSetSystemVariables(t *testing.T) {
 	executor, _, _, lookup, _ := createExecutorEnv(t)
 	executor.normalize = true
-
-	sqlparser.SetParserVersion("80001")
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
 
@@ -1563,7 +1555,7 @@ func TestStreamSelectIN(t *testing.T) {
 func createExecutor(ctx context.Context, serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	ex := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, collations.MySQL8())
+	ex := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, collations.MySQL8(), sqlparser.NewTestParser())
 	ex.SetQueryLogger(queryLogger)
 	return ex
 }
@@ -3189,7 +3181,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	}
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, collations.MySQL8())
+	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, collations.MySQL8(), sqlparser.NewTestParser())
 	executor.SetQueryLogger(queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start
@@ -4124,7 +4116,7 @@ func TestSelectCFC(t *testing.T) {
 func TestSelectView(t *testing.T) {
 	executor, sbc, _, _, _ := createExecutorEnv(t)
 	// add the view to local vschema
-	err := executor.vschema.AddView(KsTestSharded, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id")
+	err := executor.vschema.AddView(KsTestSharded, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id", executor.vm.parser)
 	require.NoError(t, err)
 
 	executor.normalize = true

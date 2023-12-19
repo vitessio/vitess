@@ -35,6 +35,8 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -554,7 +556,7 @@ func (db *LocalCluster) createVTSchema() error {
 		return db.ExecuteFetch(query, "")
 	}
 
-	if err := sidecardb.Init(context.Background(), sidecardbExec); err != nil {
+	if err := sidecardb.Init(context.Background(), sidecardbExec, sqlparser.NewTestParser()); err != nil {
 		return err
 	}
 	return nil

@@ -335,11 +335,11 @@ func TestRewrites(in *testing.T) {
 		socket:                      true,
 		queryTimeout:                true,
 	}}
-
+	parser := NewTestParser()
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
 			require := require.New(t)
-			stmt, err := Parse(tc.in)
+			stmt, err := parser.Parse(tc.in)
 			require.NoError(err)
 
 			result, err := RewriteAST(
@@ -353,7 +353,7 @@ func TestRewrites(in *testing.T) {
 			)
 			require.NoError(err)
 
-			expected, err := Parse(tc.expected)
+			expected, err := parser.Parse(tc.expected)
 			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
 
 			s := String(expected)
@@ -392,7 +392,8 @@ func (*fakeViews) FindView(name TableName) SelectStatement {
 	if name.Name.String() != "user_details" {
 		return nil
 	}
-	statement, err := Parse("select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id")
+	parser := NewTestParser()
+	statement, err := parser.Parse("select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id")
 	if err != nil {
 		return nil
 	}
@@ -434,16 +435,17 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 		setVarComment: "AA(a)",
 	}}
 
+	parser := NewTestParser()
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
 			require := require.New(t)
-			stmt, err := Parse(tc.in)
+			stmt, err := parser.Parse(tc.in)
 			require.NoError(err)
 
 			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil, nil, &fakeViews{})
 			require.NoError(err)
 
-			expected, err := Parse(tc.expected)
+			expected, err := parser.Parse(tc.expected)
 			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
 
 			assert.Equal(t, String(expected), String(result.AST))
@@ -482,16 +484,17 @@ func TestRewritesSysVar(in *testing.T) {
 		expected: "select :__vttransaction_isolation as `@@session.transaction_isolation` from dual",
 	}}
 
+	parser := NewTestParser()
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
 			require := require.New(t)
-			stmt, err := Parse(tc.in)
+			stmt, err := parser.Parse(tc.in)
 			require.NoError(err)
 
 			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar, nil, &fakeViews{})
 			require.NoError(err)
 
-			expected, err := Parse(tc.expected)
+			expected, err := parser.Parse(tc.expected)
 			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
 
 			assert.Equal(t, String(expected), String(result.AST))
@@ -532,16 +535,17 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 		expected: "SELECT 2 as `(select 2 from dual)` from DUAL",
 	}}
 
+	parser := NewTestParser()
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
 			require := require.New(t)
-			stmt, err := Parse(tc.in)
+			stmt, err := parser.Parse(tc.in)
 			require.NoError(err)
 
 			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil, nil, &fakeViews{})
 			require.NoError(err)
 
-			expected, err := Parse(tc.expected)
+			expected, err := parser.Parse(tc.expected)
 			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
 
 			assert.Equal(t, String(expected), String(result.AST))

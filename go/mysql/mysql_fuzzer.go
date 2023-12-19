@@ -31,6 +31,7 @@ import (
 
 	gofuzzheaders "github.com/AdaLogics/go-fuzz-headers"
 
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/tlstest"
@@ -327,7 +328,7 @@ func FuzzTLSServer(data []byte) int {
 		Password: "password1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, 0, "8.0.30-Vitess")
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, 0, DefaultFlushDelay, fmt.Sprintf("%s-Vitess", config.DefaultMySQLVersion), 512, 0)
 	if err != nil {
 		return -1
 	}

@@ -28,6 +28,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -397,6 +399,10 @@ func (k *killableConn) Kill(message string, elapsed time.Duration) error {
 	return nil
 }
 
+func (k *killableConn) SQLParser() *sqlparser.Parser {
+	return sqlparser.NewTestParser()
+}
+
 func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	sm := newTestStateManager(t)
 	defer sm.StopService()
@@ -704,11 +710,12 @@ func verifySubcomponent(t *testing.T, order int64, component any, state testStat
 func newTestStateManager(t *testing.T) *stateManager {
 	order.Store(0)
 	config := tabletenv.NewDefaultConfig()
-	env := tabletenv.NewEnv(config, "StateManagerTest", collations.MySQL8())
+	env := tabletenv.NewEnv(config, "StateManagerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	parser := sqlparser.NewTestParser()
 	sm := &stateManager{
-		statelessql: NewQueryList("stateless"),
-		statefulql:  NewQueryList("stateful"),
-		olapql:      NewQueryList("olap"),
+		statelessql: NewQueryList("stateless", parser),
+		statefulql:  NewQueryList("stateful", parser),
+		olapql:      NewQueryList("olap", parser),
 		hs:          newHealthStreamer(env, &topodatapb.TabletAlias{}, schema.NewEngine(env)),
 		se:          &testSchemaEngine{},
 		rt:          &testReplTracker{lag: 1 * time.Second},

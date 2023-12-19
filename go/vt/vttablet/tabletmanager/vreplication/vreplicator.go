@@ -726,7 +726,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	}
 	tableSchema := schema.TableDefinitions[0].Schema
 	var secondaryKeys []*sqlparser.IndexDefinition
-	parsedDDL, err := sqlparser.ParseStrictDDL(tableSchema)
+	parsedDDL, err := vr.vre.parser.ParseStrictDDL(tableSchema)
 	if err != nil {
 		return secondaryKeys, err
 	}
@@ -973,7 +973,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 				// the table schema and if so move forward and delete the
 				// post_copy_action record.
 				if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERDupKeyName {
-					stmt, err := sqlparser.ParseStrictDDL(action.Task)
+					stmt, err := vr.vre.parser.ParseStrictDDL(action.Task)
 					if err != nil {
 						return failedAlterErr
 					}

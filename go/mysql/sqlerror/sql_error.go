@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -62,7 +61,7 @@ func (se *SQLError) Error() string {
 	fmt.Fprintf(&buf, " (errno %v) (sqlstate %v)", se.Num, se.State)
 
 	if se.Query != "" {
-		fmt.Fprintf(&buf, " during query: %s", sqlparser.TruncateForLog(se.Query))
+		fmt.Fprintf(&buf, " during query: %s", se.Query)
 	}
 
 	return buf.String()

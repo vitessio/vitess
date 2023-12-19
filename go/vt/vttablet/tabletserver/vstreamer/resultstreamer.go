@@ -62,7 +62,7 @@ func (rs *resultStreamer) Cancel() {
 }
 
 func (rs *resultStreamer) Stream() error {
-	_, fromTable, err := analyzeSelect(rs.query)
+	_, fromTable, err := analyzeSelect(rs.query, rs.vse.env.SQLParser())
 	if err != nil {
 		return err
 	}
