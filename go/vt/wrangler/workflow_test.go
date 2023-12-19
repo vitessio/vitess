@@ -108,10 +108,10 @@ func expectCanSwitchQueries(t *testing.T, tme *testMigraterEnv, keyspace, state 
 		"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",
 		"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar"),
 		row)
-	copyStateResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"vrepl_id|table|lastpk",
-		"int64|varchar|varchar"),
+	copyStateResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("vrepl_id|table|lastpk", "int64|varchar|varchar"),
 		"1|t1|pk1",
+		"1|t2|pk2",
 	)
 
 	for _, db := range tme.dbTargetClients {

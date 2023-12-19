@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -1121,7 +1122,11 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 	span.Annotate("keyspace", tablet.Keyspace)
 	span.Annotate("shard", tablet.Shard)
 	span.Annotate("tablet_alias", tablet.AliasString())
-	span.Annotate("num_stream_ids", len(streamIds))
+	var strStreamIds []string
+	for _, streamId := range streamIds {
+		strStreamIds = append(strStreamIds, strconv.FormatInt(streamId, 10))
+	}
+	span.Annotate("stream_ids", strings.Join(strStreamIds, ","))
 
 	idsBV, err := sqltypes.BuildBindVariable(streamIds)
 	if err != nil {
