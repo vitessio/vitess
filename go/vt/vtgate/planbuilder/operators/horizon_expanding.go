@@ -136,10 +136,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 		return out
 	}
 
-	aggregations, complexAggr, err := qp.AggregationExpressions(ctx, true)
-	if err != nil {
-		panic(err)
-	}
+	aggregations, complexAggr := qp.AggregationExpressions(ctx, true)
 
 	a := &Aggregator{
 		Source:       horizon.src(),
@@ -249,16 +246,13 @@ func newStarProjection(src Operator, qp *QueryProjection) *Projection {
 	cols := sqlparser.SelectExprs{}
 
 	for _, expr := range qp.SelectExprs {
-		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			_, isSubQ := node.(*sqlparser.Subquery)
 			if !isSubQ {
 				return true, nil
 			}
-			return false, vterrors.VT09015()
+			panic(vterrors.VT09015())
 		}, expr.Col)
-		if err != nil {
-			panic(err)
-		}
 		cols = append(cols, expr.Col)
 	}
 

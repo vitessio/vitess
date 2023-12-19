@@ -44,8 +44,6 @@ import (
 )
 
 var (
-	collationEnv *collations.Environment
-
 	debugGolden          = false
 	debugNormalize       = true
 	debugSimplify        = time.Now().UnixNano()&1 != 0
@@ -82,7 +80,7 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 	return v
 }
 
-func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field, cmp *testcases.Comparison) {
+func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field, cmp *testcases.Comparison) {
 	t.Helper()
 
 	localQuery := "SELECT " + expr
@@ -145,7 +143,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	var localVal, remoteVal sqltypes.Value
 	var localCollation, remoteCollation collations.ID
 	if localErr == nil {
-		v := local.Value(collations.Default())
+		v := local.Value(collations.MySQL8().DefaultConnectionCharset())
 		if debugCheckCollations {
 			if v.IsNull() {
 				localCollation = collations.CollationBinaryID
@@ -220,6 +218,10 @@ func (vc *vcursor) SQLMode() string {
 	return config.DefaultSQLMode
 }
 
+func (vc *vcursor) CollationEnv() *collations.Environment {
+	return collations.MySQL8()
+}
+
 func initTimezoneData(t *testing.T, conn *mysql.Conn) {
 	// We load the timezone information into MySQL. The evalengine assumes
 	// our backend MySQL is configured with the timezone information as well
@@ -253,7 +255,7 @@ func TestMySQL(t *testing.T) {
 	// We require MySQL 8.0 collations for the comparisons in the tests
 
 	servenv.SetMySQLServerVersionForTest(conn.ServerVersion)
-	collationEnv = collations.NewEnvironment(conn.ServerVersion)
+	collationEnv := collations.NewEnvironment(conn.ServerVersion)
 	servenv.OnParse(registerFlags)
 	initTimezoneData(t, conn)
 
@@ -265,7 +267,7 @@ func TestMySQL(t *testing.T) {
 			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{})
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
-				compareRemoteExprEnv(t, env, conn, query, tc.Schema, tc.Compare)
+				compareRemoteExprEnv(t, collationEnv, env, conn, query, tc.Schema, tc.Compare)
 			})
 		})
 	}

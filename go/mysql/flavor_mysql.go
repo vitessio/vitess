@@ -24,8 +24,9 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // mysqlFlavor implements the Flavor interface for Mysql.
@@ -52,7 +53,7 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
 		return nil, err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
 	}
 	return replication.ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
@@ -65,7 +66,7 @@ func (mysqlFlavor) purgedGTIDSet(c *Conn) (replication.GTIDSet, error) {
 		return nil, err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
 	}
 	return replication.ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
@@ -78,7 +79,7 @@ func (mysqlFlavor) serverUUID(c *Conn) (string, error) {
 		return "", err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for server_uuid: %#v", qr)
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for server_uuid: %#v", qr)
 	}
 	return qr.Rows[0][0].ToString(), nil
 }
@@ -90,7 +91,7 @@ func (mysqlFlavor) gtidMode(c *Conn) (string, error) {
 		return "", err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_mode: %#v", qr)
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_mode: %#v", qr)
 	}
 	return qr.Rows[0][0].ToString(), nil
 }
@@ -135,7 +136,7 @@ func (mysqlFlavor) startSQLThreadCommand() string {
 func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position) error {
 	gtidSet, ok := startPos.GTIDSet.(replication.Mysql56GTIDSet)
 	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
 	}
 
 	// Build the command.
@@ -216,14 +217,14 @@ func (mysqlFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 	return replication.ParseMysqlPrimaryStatus(resultMap)
 }
 
-// waitUntilPositionCommand is part of the Flavor interface.
-func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error) {
+// waitUntilPosition is part of the Flavor interface.
+func (mysqlFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error {
 	// A timeout of 0 means wait indefinitely.
 	timeoutSeconds := 0
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := time.Until(deadline)
 		if timeout <= 0 {
-			return "", vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
+			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}
 
 		// Only whole numbers of seconds are supported.
@@ -234,7 +235,30 @@ func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos replication
 		}
 	}
 
-	return fmt.Sprintf("SELECT WAIT_FOR_EXECUTED_GTID_SET('%s', %v)", pos, timeoutSeconds), nil
+	query := fmt.Sprintf("SELECT WAIT_FOR_EXECUTED_GTID_SET('%s', %v)", pos, timeoutSeconds)
+	result, err := c.ExecuteFetch(query, 1, false)
+	if err != nil {
+		return err
+	}
+
+	// For WAIT_FOR_EXECUTED_GTID_SET(), the return value is the state of the query, where
+	// 0 represents success, and 1 represents timeout. Any other failures generate an error.
+	if len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid results: %#v", result)
+	}
+	val := result.Rows[0][0]
+	state, err := val.ToInt64()
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %#v", val)
+	}
+	switch state {
+	case 0:
+		return nil
+	case 1:
+		return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %d", state)
+	}
 }
 
 // readBinlogEvent is part of the Flavor interface.
@@ -399,6 +423,8 @@ func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorC
 		return ServerVersionAtLeast(serverVersion, 8, 0, 21)
 	case CheckConstraintsCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
+	case PerformanceSchemaDataLocksTableCapability:
+		return true, nil
 	default:
 		return false, nil
 	}

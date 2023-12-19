@@ -35,7 +35,7 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(112)
 	}
 	// field Alias string
 	size += hack.RuntimeAllocSize(int64(len(cached.Alias)))
@@ -45,6 +45,8 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	}
 	// field Original *vitess.io/vitess/go/vt/sqlparser.AliasedExpr
 	size += cached.Original.CachedSize(true)
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *AlterVSchema) CachedSize(alloc bool) int64 {
@@ -67,10 +69,12 @@ func (cached *CheckCol) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field WsCol *int
 	size += hack.RuntimeAllocSize(int64(8))
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 
@@ -199,7 +203,7 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	}
 	// field CheckCols []vitess.io/vitess/go/vt/vtgate/engine.CheckCol
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.CheckCols)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.CheckCols)) * int64(40))
 		for _, elem := range cached.CheckCols {
 			size += elem.CachedSize(false)
 		}
@@ -352,6 +356,8 @@ func (cached *GroupByParams) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *HashJoin) CachedSize(alloc bool) int64 {
@@ -378,6 +384,8 @@ func (cached *HashJoin) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.ASTPred.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *Insert) CachedSize(alloc bool) int64 {
@@ -386,7 +394,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(192)
+		size += int64(208)
 	}
 	// field InsertCommon vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
 	size += cached.InsertCommon.CachedSize(false)
@@ -433,7 +441,7 @@ func (cached *InsertCommon) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(144)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -450,8 +458,13 @@ func (cached *InsertCommon) CachedSize(alloc bool) int64 {
 	}
 	// field Prefix string
 	size += hack.RuntimeAllocSize(int64(len(cached.Prefix)))
-	// field Suffix string
-	size += hack.RuntimeAllocSize(int64(len(cached.Suffix)))
+	// field Suffix vitess.io/vitess/go/vt/sqlparser.OnDup
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Suffix)) * int64(8))
+		for _, elem := range cached.Suffix {
+			size += elem.CachedSize(true)
+		}
+	}
 	return size
 }
 func (cached *InsertSelect) CachedSize(alloc bool) int64 {
@@ -612,7 +625,10 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(48))
+		for _, elem := range cached.OrderBy {
+			size += elem.CachedSize(false)
+		}
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
@@ -639,7 +655,10 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(48))
+		for _, elem := range cached.OrderBy {
+			size += elem.CachedSize(false)
+		}
 	}
 	return size
 }
@@ -705,6 +724,8 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *Plan) CachedSize(alloc bool) int64 {
@@ -844,7 +865,10 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(48))
+		for _, elem := range cached.OrderBy {
+			size += elem.CachedSize(false)
+		}
 	}
 	// field RoutingParameters *vitess.io/vitess/go/vt/vtgate/engine.RoutingParameters
 	size += cached.RoutingParameters.CachedSize(true)
@@ -1262,6 +1286,23 @@ func (cached *UpdateTarget) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Target)))
 	return size
 }
+func (cached *Upsert) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Upserts []vitess.io/vitess/go/vt/vtgate/engine.upsert
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Upserts)) * int64(32))
+		for _, elem := range cached.Upserts {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
 func (cached *UserDefinedVariable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1469,6 +1510,24 @@ func (cached *shardRoute) CachedSize(alloc bool) int64 {
 	}
 	// field primitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.primitive.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *upsert) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Insert vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Insert.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Update vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Update.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

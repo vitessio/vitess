@@ -27,11 +27,11 @@ func AllSubsequent(diff EntityDiff) (diffs []EntityDiff) {
 // DiffCreateTablesQueries compares two `CREATE TABLE ...` queries (in string form) and returns the diff from table1 to table2.
 // Either or both of the queries can be empty. Based on this, the diff could be
 // nil, CreateTable, DropTable or AlterTable
-func DiffCreateTablesQueries(query1 string, query2 string, hints *DiffHints) (EntityDiff, error) {
+func DiffCreateTablesQueries(query1 string, query2 string, hints *DiffHints, parser *sqlparser.Parser) (EntityDiff, error) {
 	var fromCreateTable *sqlparser.CreateTable
 	var ok bool
 	if query1 != "" {
-		stmt, err := sqlparser.ParseStrictDDL(query1)
+		stmt, err := parser.ParseStrictDDL(query1)
 		if err != nil {
 			return nil, err
 		}
@@ -42,7 +42,7 @@ func DiffCreateTablesQueries(query1 string, query2 string, hints *DiffHints) (En
 	}
 	var toCreateTable *sqlparser.CreateTable
 	if query2 != "" {
-		stmt, err := sqlparser.ParseStrictDDL(query2)
+		stmt, err := parser.ParseStrictDDL(query2)
 		if err != nil {
 			return nil, err
 		}
@@ -89,11 +89,11 @@ func DiffTables(create1 *sqlparser.CreateTable, create2 *sqlparser.CreateTable, 
 // DiffCreateViewsQueries compares two `CREATE TABLE ...` queries (in string form) and returns the diff from table1 to table2.
 // Either or both of the queries can be empty. Based on this, the diff could be
 // nil, CreateView, DropView or AlterView
-func DiffCreateViewsQueries(query1 string, query2 string, hints *DiffHints) (EntityDiff, error) {
+func DiffCreateViewsQueries(query1 string, query2 string, hints *DiffHints, parser *sqlparser.Parser) (EntityDiff, error) {
 	var fromCreateView *sqlparser.CreateView
 	var ok bool
 	if query1 != "" {
-		stmt, err := sqlparser.ParseStrictDDL(query1)
+		stmt, err := parser.ParseStrictDDL(query1)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +104,7 @@ func DiffCreateViewsQueries(query1 string, query2 string, hints *DiffHints) (Ent
 	}
 	var toCreateView *sqlparser.CreateView
 	if query2 != "" {
-		stmt, err := sqlparser.ParseStrictDDL(query2)
+		stmt, err := parser.ParseStrictDDL(query2)
 		if err != nil {
 			return nil, err
 		}
@@ -151,12 +151,12 @@ func DiffViews(create1 *sqlparser.CreateView, create2 *sqlparser.CreateView, hin
 // DiffSchemasSQL compares two schemas and returns the rich diff that turns
 // 1st schema into 2nd. Schemas are build from SQL, each of which can contain an arbitrary number of
 // CREATE TABLE and CREATE VIEW statements.
-func DiffSchemasSQL(sql1 string, sql2 string, hints *DiffHints) (*SchemaDiff, error) {
-	schema1, err := NewSchemaFromSQL(sql1)
+func DiffSchemasSQL(sql1 string, sql2 string, hints *DiffHints, parser *sqlparser.Parser) (*SchemaDiff, error) {
+	schema1, err := NewSchemaFromSQL(sql1, parser)
 	if err != nil {
 		return nil, err
 	}
-	schema2, err := NewSchemaFromSQL(sql2)
+	schema2, err := NewSchemaFromSQL(sql2, parser)
 	if err != nil {
 		return nil, err
 	}

@@ -240,7 +240,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		return err
 	}
 
-	wd, err := newWorkflowDiffer(ct, ct.options)
+	wd, err := newWorkflowDiffer(ct, ct.options, ct.vde.collationEnv)
 	if err != nil {
 		return err
 	}

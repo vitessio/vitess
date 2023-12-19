@@ -54,7 +54,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 
 	// Handle special possible directives
 	var directives *sqlparser.CommentDirectives
-	if stmt, err := sqlparser.Parse(string(req.Query)); err == nil {
+	if stmt, err := tm.SQLParser.Parse(string(req.Query)); err == nil {
 		if cmnt, ok := stmt.(sqlparser.Commented); ok {
 			directives = cmnt.GetParsedComments().Directives()
 		}
@@ -66,7 +66,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 	}
 
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	uq, err := tm.SQLParser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	}
 
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	uq, err := tm.SQLParser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	}
 	defer conn.Recycle()
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	uq, err := tm.SQLParser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdat
 	tablet := tm.Tablet()
 	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	uq, err := tm.SQLParser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}

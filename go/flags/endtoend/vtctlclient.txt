@@ -30,6 +30,7 @@ Usage of vtctlclient:
       --logbuflevel int                                             Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
       --logtostderr                                                 log to standard error instead of files
       --pprof strings                                               enable profiling
+      --pprof-http                                                  enable pprof http endpoints (default true)
       --purge_logs_interval duration                                how often try to remove old logs (default 1h0m0s)
       --security_policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                                               server to use for connection

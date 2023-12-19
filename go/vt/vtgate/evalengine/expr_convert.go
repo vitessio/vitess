@@ -31,11 +31,13 @@ type (
 		Length, Scale       int
 		HasLength, HasScale bool
 		Collation           collations.ID
+		CollationEnv        *collations.Environment
 	}
 
 	ConvertUsingExpr struct {
 		UnaryExpr
-		Collation collations.ID
+		Collation    collations.ID
+		CollationEnv *collations.Environment
 	}
 )
 

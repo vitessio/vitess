@@ -79,14 +79,14 @@ func TestQP(t *testing.T) {
 	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(tcase.sql)
+			stmt, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 
 			sel := stmt.(*sqlparser.Select)
 			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 
-			qp, err := createQPFromSelect(ctx, sel)
+			qp, err := getQPAndError(ctx, sel)
 			if tcase.expErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.expErr)
@@ -101,6 +101,12 @@ func TestQP(t *testing.T) {
 			}
 		})
 	}
+}
+
+func getQPAndError(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (qp *QueryProjection, err error) {
+	defer PanicHandler(&err)
+	qp = createQPFromSelect(ctx, sel)
+	return
 }
 
 func TestQPSimplifiedExpr(t *testing.T) {
@@ -187,13 +193,13 @@ func TestQPSimplifiedExpr(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.query, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tc.query)
+			ast, err := sqlparser.NewTestParser().Parse(tc.query)
 			require.NoError(t, err)
 			sel := ast.(*sqlparser.Select)
 			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 			ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
-			qp, err := createQPFromSelect(ctx, sel)
+			qp := createQPFromSelect(ctx, sel)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected[1:], qp.toString())
 		})

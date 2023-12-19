@@ -25,8 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -532,7 +532,7 @@ func TestUpdateMultiOwned(t *testing.T) {
 	}
 }
 `
-	executor, sbc1, sbc2, sbclookup, ctx := createCustomExecutor(t, vschema)
+	executor, sbc1, sbc2, sbclookup, ctx := createCustomExecutor(t, vschema, config.DefaultMySQLVersion)
 
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(
@@ -1469,7 +1469,7 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 	}
 }
 `
-	executor, sbc1, sbc2, sbclookup, ctx := createCustomExecutor(t, vschema)
+	executor, sbc1, sbc2, sbclookup, ctx := createCustomExecutor(t, vschema, config.DefaultMySQLVersion)
 
 	_, err := executorExecSession(ctx, executor, "insert into user(id, v, name, music) values (1, 2, 'myname', 'star')", nil, &vtgatepb.Session{})
 	require.NoError(t, err)
@@ -2268,7 +2268,7 @@ func TestInsertBadAutoInc(t *testing.T) {
 	}
 }
 `
-	executor, _, _, _, ctx := createCustomExecutor(t, vschema)
+	executor, _, _, _, ctx := createCustomExecutor(t, vschema, config.DefaultMySQLVersion)
 
 	// If auto inc table cannot be found, the table should not be added to vschema.
 	session := &vtgatepb.Session{

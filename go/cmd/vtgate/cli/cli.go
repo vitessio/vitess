@@ -23,6 +23,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/discovery"
@@ -157,9 +159,10 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerName)
+	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
 
 	// pass nil for HealthCheck and it will be created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, cell, tabletTypes, plannerVersion)
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, cell, tabletTypes, plannerVersion, collationEnv)
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.

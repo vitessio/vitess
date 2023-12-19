@@ -329,7 +329,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 // VReplicationExec executes a vreplication command.
 func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
+	uq, err := tm.SQLParser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}

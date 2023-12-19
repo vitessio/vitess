@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -586,7 +585,6 @@ func (is *IsExpr) compile(c *compiler) (ctype, error) {
 func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	var ta typeAggregation
 	var ca collationAggregation
-	var local = collations.Local()
 	var result eval
 	var matched = false
 
@@ -606,7 +604,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		ta.addEval(then)
-		if err := ca.add(local, evalCollation(then)); err != nil {
+		if err := ca.add(evalCollation(then), env.collationEnv); err != nil {
 			return nil, err
 		}
 
@@ -621,7 +619,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		ta.addEval(e)
-		if err := ca.add(local, evalCollation(e)); err != nil {
+		if err := ca.add(evalCollation(e), env.collationEnv); err != nil {
 			return nil, err
 		}
 		if !matched {
@@ -676,7 +674,6 @@ func (c *CaseExpr) simplify(env *ExpressionEnv) error {
 func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	var ca collationAggregation
 	var ta typeAggregation
-	var local = collations.Local()
 
 	for _, wt := range cs.cases {
 		when, err := wt.when.compile(c)
@@ -694,7 +691,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 
 		ta.add(then.Type, then.Flag)
-		if err := ca.add(local, then.Col); err != nil {
+		if err := ca.add(then.Col, c.collationEnv); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -706,7 +703,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 
 		ta.add(els.Type, els.Flag)
-		if err := ca.add(local, els.Col); err != nil {
+		if err := ca.add(els.Col, c.collationEnv); err != nil {
 			return ctype{}, err
 		}
 	}

@@ -20,70 +20,12 @@ package netutil
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
-
-// byPriorityWeight sorts records by ascending priority and weight.
-type byPriorityWeight []*net.SRV
-
-func (addrs byPriorityWeight) Len() int { return len(addrs) }
-
-func (addrs byPriorityWeight) Swap(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] }
-
-func (addrs byPriorityWeight) Less(i, j int) bool {
-	return addrs[i].Priority < addrs[j].Priority ||
-		(addrs[i].Priority == addrs[j].Priority && addrs[i].Weight < addrs[j].Weight)
-}
-
-// shuffleByWeight shuffles SRV records by weight using the algorithm
-// described in RFC 2782.
-// NOTE(msolo) This is disabled when the weights are zero.
-func (addrs byPriorityWeight) shuffleByWeight(rand *rand.Rand) {
-	sum := 0
-	for _, addr := range addrs {
-		sum += int(addr.Weight)
-	}
-	for sum > 0 && len(addrs) > 1 {
-		s := 0
-		n := rand.Intn(sum)
-		for i := range addrs {
-			s += int(addrs[i].Weight)
-			if s > n {
-				if i > 0 {
-					t := addrs[i]
-					copy(addrs[1:i+1], addrs[0:i])
-					addrs[0] = t
-				}
-				break
-			}
-		}
-		sum -= int(addrs[0].Weight)
-		addrs = addrs[1:]
-	}
-}
-
-func (addrs byPriorityWeight) sortRfc2782(rand *rand.Rand) {
-	sort.Sort(addrs)
-	i := 0
-	for j := 1; j < len(addrs); j++ {
-		if addrs[i].Priority != addrs[j].Priority {
-			addrs[i:j].shuffleByWeight(rand)
-			i = j
-		}
-	}
-	addrs[i:].shuffleByWeight(rand)
-}
-
-// SortRfc2782 reorders SRV records as specified in RFC 2782.
-func SortRfc2782(srvs []*net.SRV) {
-	byPriorityWeight(srvs).sortRfc2782(rand.New(rand.NewSource(time.Now().UTC().UnixNano())))
-}
 
 // SplitHostPort is an alternative to net.SplitHostPort that also parses the
 // integer port. In addition, it is more tolerant of improperly escaped IPv6
@@ -162,29 +104,6 @@ func FullyQualifiedHostnameOrPanic() string {
 		panic(err)
 	}
 	return hostname
-}
-
-// ResolveIPv4Addrs resolves the address:port part into IP address:port pairs
-func ResolveIPv4Addrs(addr string) ([]string, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
-	}
-	ipAddrs, err := net.LookupIP(host)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]string, 0, len(ipAddrs))
-	for _, ipAddr := range ipAddrs {
-		ipv4 := ipAddr.To4()
-		if ipv4 != nil {
-			result = append(result, net.JoinHostPort(ipv4.String(), port))
-		}
-	}
-	if len(result) == 0 {
-		return nil, fmt.Errorf("no IPv4addr for name %v", host)
-	}
-	return result, nil
 }
 
 func dnsLookup(host string) ([]net.IP, error) {

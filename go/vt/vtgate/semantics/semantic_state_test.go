@@ -46,7 +46,7 @@ func TestBindingAndExprEquality(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.expressions, func(t *testing.T) {
-			parse, err := sqlparser.Parse(fmt.Sprintf("select %s from t1, t2", test.expressions))
+			parse, err := sqlparser.NewTestParser().Parse(fmt.Sprintf("select %s from t1, t2", test.expressions))
 			require.NoError(t, err)
 			st, err := Analyze(parse, "db", fakeSchemaInfoTest())
 			require.NoError(t, err)
@@ -853,7 +853,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(tt.query)
+			stmt, err := sqlparser.NewTestParser().Parse(tt.query)
 			require.NoError(t, err)
 			semTable, err := Analyze(stmt, keyspaceName, tt.fakeSi)
 			require.NoError(t, err)
@@ -970,7 +970,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(tt.query)
+			stmt, err := sqlparser.NewTestParser().Parse(tt.query)
 			require.NoError(t, err)
 			semTable, err := Analyze(stmt, keyspaceName, tt.fakeSi)
 			require.NoError(t, err)

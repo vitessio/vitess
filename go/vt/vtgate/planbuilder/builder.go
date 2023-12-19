@@ -70,7 +70,7 @@ func singleTable(ks, tbl string) string {
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
 func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error) {
-	stmt, reserved, err := sqlparser.Parse2(query)
+	stmt, reserved, err := vschema.SQLParser().Parse2(query)
 	if err != nil {
 		return nil, err
 	}
@@ -382,18 +382,12 @@ func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*pla
 		dest = key.DestinationAllShards{}
 	}
 
-	tc := &tableCollector{}
-	for _, tbl := range stmt.TableNames {
-		tc.addASTTable(keyspace.Name, tbl)
-	}
-
 	return newPlanResult(&engine.Send{
-		Keyspace:          keyspace,
-		TargetDestination: dest,
-		Query:             sqlparser.String(stmt),
-		IsDML:             false,
-		SingleShardOnly:   false,
-	}, tc.getTables()...), nil
+		Keyspace:                 keyspace,
+		TargetDestination:        dest,
+		Query:                    sqlparser.String(stmt),
+		ReservedConnectionNeeded: stmt.WithLock,
+	}), nil
 }
 
 func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
@@ -441,9 +435,10 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 	if len(tablesMap) == 1 {
 		for sendDest, tables := range tablesMap {
 			return newPlanResult(&engine.Send{
-				Keyspace:          sendDest.ks,
-				TargetDestination: sendDest.dest,
-				Query:             sqlparser.String(newFlushStmt(stmt, tables)),
+				Keyspace:                 sendDest.ks,
+				TargetDestination:        sendDest.dest,
+				Query:                    sqlparser.String(newFlushStmt(stmt, tables)),
+				ReservedConnectionNeeded: stmt.WithLock,
 			}, tc.getTables()...), nil
 		}
 	}
@@ -455,9 +450,10 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 	var sources []engine.Primitive
 	for _, sendDest := range keys {
 		plan := &engine.Send{
-			Keyspace:          sendDest.ks,
-			TargetDestination: sendDest.dest,
-			Query:             sqlparser.String(newFlushStmt(stmt, tablesMap[sendDest])),
+			Keyspace:                 sendDest.ks,
+			TargetDestination:        sendDest.dest,
+			Query:                    sqlparser.String(newFlushStmt(stmt, tablesMap[sendDest])),
+			ReservedConnectionNeeded: stmt.WithLock,
 		}
 		sources = append(sources, plan)
 	}

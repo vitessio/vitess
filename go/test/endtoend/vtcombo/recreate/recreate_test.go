@@ -60,8 +60,7 @@ func TestMain(m *testing.M) {
 				ReplicaCount: 2,
 			},
 			{
-				Name:       redirected,
-				ServedFrom: ks1,
+				Name: redirected,
 			},
 		}
 

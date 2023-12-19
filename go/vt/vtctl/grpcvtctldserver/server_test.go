@@ -28,6 +28,7 @@ import (
 	"time"
 
 	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -85,7 +86,7 @@ func TestPanicHandler(t *testing.T) {
 	}()
 
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, nil, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	_, err := vtctld.AddCellInfo(context.Background(), nil)
@@ -141,7 +142,7 @@ func TestAddCellInfo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			_, err := vtctld.AddCellInfo(ctx, tt.req)
 			if tt.shouldErr {
@@ -214,7 +215,7 @@ func TestAddCellsAlias(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			_, err := vtctld.AddCellsAlias(ctx, tt.req)
 			if tt.shouldErr {
@@ -326,7 +327,7 @@ func TestApplyRoutingRules(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			_, err := vtctld.ApplyRoutingRules(ctx, tt.req)
 			if tt.shouldErr {
@@ -515,7 +516,7 @@ func TestApplyVSchema(t *testing.T) {
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
@@ -795,7 +796,7 @@ func TestBackup(t *testing.T) {
 				testutil.AddTablet(ctx, t, tt.ts, tt.tablet, nil)
 			}
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			client := localvtctldclient.New(vtctld)
 			stream, err := client.Backup(ctx, tt.req)
@@ -1135,7 +1136,7 @@ func TestBackupShard(t *testing.T) {
 				}, tt.tablets...,
 			)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			client := localvtctldclient.New(vtctld)
 			stream, err := client.BackupShard(ctx, tt.req)
@@ -1355,7 +1356,7 @@ func TestCancelSchemaMigration(t *testing.T) {
 			}, test.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			resp, err := vtctld.CancelSchemaMigration(ctx, test.req)
@@ -1587,7 +1588,9 @@ func TestChangeTabletType(t *testing.T) {
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
 				TopoServer: ts,
-			}, func(ts *topo.Server) vtctlservicepb.VtctldServer { return NewVtctldServer(ts) })
+			}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
+			})
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary: true,
@@ -1633,7 +1636,9 @@ func TestChangeTabletType(t *testing.T) {
 		ts := memorytopo.NewServer(ctx, "zone1")
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
 			TopoServer: nil,
-		}, func(ts *topo.Server) vtctlservicepb.VtctldServer { return NewVtctldServer(ts) })
+		}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(ts, sqlparser.NewTestParser())
+		})
 
 		testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
@@ -1854,10 +1859,212 @@ func TestCleanupSchemaMigration(t *testing.T) {
 			}, test.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			resp, err := vtctld.CleanupSchemaMigration(ctx, test.req)
+			if test.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, test.expected, resp)
+		})
+	}
+}
+
+func TestForceCutOverSchemaMigration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		tablets   []*topodatapb.Tablet
+		tmc       *testutil.TabletManagerClient
+		req       *vtctldatapb.ForceCutOverSchemaMigrationRequest
+		expected  *vtctldatapb.ForceCutOverSchemaMigrationResponse
+		shouldErr bool
+	}{
+		{
+			tablets: []*topodatapb.Tablet{
+				{
+					Keyspace: "ks",
+					Shard:    "-80",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Keyspace: "ks",
+					Shard:    "80-",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteQueryResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &querypb.QueryResult{
+							RowsAffected: 1,
+						},
+					},
+					"zone1-0000000200": {
+						Response: &querypb.QueryResult{},
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {},
+					"zone1-0000000200": {},
+				},
+				ReloadSchemaResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000200": nil,
+				},
+			},
+			req: &vtctldatapb.ForceCutOverSchemaMigrationRequest{
+				Keyspace: "ks",
+				Uuid:     "abc",
+			},
+			expected: &vtctldatapb.ForceCutOverSchemaMigrationResponse{
+				RowsAffectedByShard: map[string]uint64{
+					"-80": 1,
+					"80-": 0,
+				},
+			},
+		},
+		{
+			name: "no shard primary",
+			tablets: []*topodatapb.Tablet{
+				{
+					Keyspace: "ks",
+					Shard:    "-80",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Keyspace: "ks",
+					Shard:    "80-",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteQueryResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &querypb.QueryResult{},
+					},
+					"zone1-0000000200": {
+						Response: &querypb.QueryResult{},
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {},
+					"zone1-0000000200": {},
+				},
+				ReloadSchemaResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000200": nil,
+				},
+			},
+			req: &vtctldatapb.ForceCutOverSchemaMigrationRequest{
+				Keyspace: "ks",
+				Uuid:     "abc",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "executeQuery failure",
+			tablets: []*topodatapb.Tablet{
+				{
+					Keyspace: "ks",
+					Shard:    "-80",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Keyspace: "ks",
+					Shard:    "80-",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ExecuteQueryResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: assert.AnError,
+					},
+					"zone1-0000000200": {
+						Response: &querypb.QueryResult{},
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {},
+					"zone1-0000000200": {},
+				},
+				ReloadSchemaResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000200": nil,
+				},
+			},
+			req: &vtctldatapb.ForceCutOverSchemaMigrationRequest{
+				Keyspace: "ks",
+				Uuid:     "abc",
+			},
+			shouldErr: true,
+		},
+		// execute query failure
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, "zone1")
+
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+				AlsoSetShardPrimary: true,
+			}, test.tablets...)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
+			})
+
+			resp, err := vtctld.ForceCutOverSchemaMigration(ctx, test.req)
 			if test.shouldErr {
 				assert.Error(t, err)
 				return
@@ -2058,7 +2265,7 @@ func TestCompleteSchemaMigration(t *testing.T) {
 			}, test.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			resp, err := vtctld.CompleteSchemaMigration(ctx, test.req)
@@ -2314,7 +2521,7 @@ func TestCreateKeyspace(t *testing.T) {
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			for name, ks := range tt.topo {
@@ -2592,7 +2799,7 @@ func TestCreateShard(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			for _, ks := range tt.keyspaces {
@@ -2647,7 +2854,7 @@ func TestDeleteCellInfo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			_, err := vtctld.DeleteCellInfo(ctx, tt.req)
 			if tt.shouldErr {
@@ -2708,7 +2915,7 @@ func TestDeleteCellsAlias(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			_, err := vtctld.DeleteCellsAlias(ctx, tt.req)
 			if tt.shouldErr {
@@ -2940,7 +3147,7 @@ func TestDeleteKeyspace(t *testing.T) {
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			defer ts.Close()
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
@@ -3449,12 +3656,12 @@ func TestDeleteShards(t *testing.T) {
 
 			cells := []string{"zone1", "zone2", "zone3"}
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
+			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			testutil.AddShards(ctx, t, ts, tt.shards...)
@@ -3597,7 +3804,7 @@ func TestDeleteSrvKeyspace(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			_, err := vtctld.DeleteSrvVSchema(ctx, tt.req)
 			if tt.shouldErr {
@@ -4058,7 +4265,7 @@ func TestDeleteTablets(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			// Setup tablets and shards
@@ -4287,7 +4494,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.EmergencyReparentShard(ctx, tt.req)
 
@@ -4429,7 +4636,7 @@ func TestExecuteFetchAsApp(t *testing.T) {
 			testutil.AddTablet(ctx, t, ts, tt.tablet, nil)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.ExecuteFetchAsApp(ctx, tt.req)
 			if tt.shouldErr {
@@ -4556,7 +4763,7 @@ func TestExecuteFetchAsDBA(t *testing.T) {
 			testutil.AddTablet(ctx, t, ts, tt.tablet, nil)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.ExecuteFetchAsDBA(ctx, tt.req)
 			if tt.shouldErr {
@@ -4741,7 +4948,7 @@ func TestExecuteHook(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testutil.AddTablets(ctx, t, tt.ts, nil, tt.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			_, err := vtctld.ExecuteHook(ctx, tt.req)
@@ -4762,7 +4969,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	ks := &vtctldatapb.Keyspace{
@@ -4804,7 +5011,7 @@ func TestGetBackups(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx)
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	testutil.BackupStorage.Backups = map[string][]string{
@@ -4912,7 +5119,7 @@ func TestGetKeyspace(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	expected := &vtctldatapb.GetKeyspaceResponse{
@@ -4938,7 +5145,7 @@ func TestGetCellInfoNames(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2", "cell3")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	resp, err := vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
@@ -4947,7 +5154,7 @@ func TestGetCellInfoNames(t *testing.T) {
 
 	ts = memorytopo.NewServer(ctx)
 	vtctld = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	resp, err = vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
@@ -4956,7 +5163,7 @@ func TestGetCellInfoNames(t *testing.T) {
 
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx, "cell1")
 	vtctld = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	topofactory.SetError(assert.AnError)
@@ -4971,7 +5178,7 @@ func TestGetCellInfo(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx)
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	expected := &topodatapb.CellInfo{
@@ -4999,7 +5206,7 @@ func TestGetCellsAliases(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "c11", "c12", "c13", "c21", "c22")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	alias1 := &topodatapb.CellsAlias{
@@ -5026,7 +5233,7 @@ func TestGetCellsAliases(t *testing.T) {
 
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx)
 	vtctld = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	topofactory.SetError(assert.AnError)
@@ -5106,7 +5313,9 @@ func TestGetFullStatus(t *testing.T) {
 				FullStatusResult: &replicationdatapb.FullStatus{
 					ServerUuid: tt.serverUUID,
 				},
-			}, func(ts *topo.Server) vtctlservicepb.VtctldServer { return NewVtctldServer(ts) })
+			}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
+			})
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
 				AlsoSetShardPrimary: true,
@@ -5131,7 +5340,7 @@ func TestGetKeyspaces(t *testing.T) {
 	defer cancel()
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	resp, err := vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
@@ -5299,7 +5508,7 @@ func TestGetPermissions(t *testing.T) {
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.GetPermissions(ctx, tt.req)
 			if tt.shouldErr {
@@ -5375,7 +5584,7 @@ func TestGetRoutingRules(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.GetRoutingRules(ctx, &vtctldatapb.GetRoutingRulesRequest{})
 			if tt.shouldErr {
@@ -5400,7 +5609,7 @@ func TestGetSchema(t *testing.T) {
 		}{},
 	}
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	validAlias := &topodatapb.TabletAlias{
@@ -5765,7 +5974,7 @@ func TestGetSchemaMigrations(t *testing.T) {
 			ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, test.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			if test.failTopo {
@@ -5856,7 +6065,7 @@ func TestGetShard(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			testutil.AddShards(ctx, t, ts, tt.topo...)
@@ -5993,7 +6202,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.GetSrvKeyspaceNames(ctx, tt.req)
 			if tt.shouldErr {
@@ -6150,7 +6359,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 
 			testutil.AddSrvKeyspaces(t, ts, tt.srvKeyspaces...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			if tt.topoErr != nil {
@@ -6177,7 +6386,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	defer cancel()
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	zone1SrvVSchema := &vschemapb.SrvVSchema{
@@ -6388,7 +6597,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2", "zone3")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			zone1SrvVSchema := &vschemapb.SrvVSchema{
@@ -6448,7 +6657,7 @@ func TestGetTablet(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	tablet := &topodatapb.Tablet{
@@ -7071,7 +7280,7 @@ func TestGetTablets(t *testing.T) {
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
@@ -7095,7 +7304,7 @@ func TestGetTopologyPath(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2", "cell3")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	err := ts.CreateKeyspace(ctx, "keyspace1", &topodatapb.Keyspace{})
@@ -7184,7 +7393,7 @@ func TestGetVSchema(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	t.Run("found", func(t *testing.T) {
@@ -7415,7 +7624,7 @@ func TestLaunchSchemaMigration(t *testing.T) {
 			}, test.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			resp, err := vtctld.LaunchSchemaMigration(ctx, test.req)
@@ -7502,7 +7711,7 @@ func TestPingTablet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			resp, err := vtctld.PingTablet(ctx, tt.req)
@@ -7750,7 +7959,7 @@ func TestPlannedReparentShard(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.PlannedReparentShard(ctx, tt.req)
 
@@ -7793,7 +8002,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 			Name: "testkeyspace",
 		})
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-			return NewVtctldServer(ts)
+			return NewVtctldServer(ts, sqlparser.NewTestParser())
 		})
 
 		_, err := vtctld.RebuildKeyspaceGraph(ctx, &vtctldatapb.RebuildKeyspaceGraphRequest{
@@ -7810,7 +8019,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 
 		ts := memorytopo.NewServer(ctx, "zone1")
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-			return NewVtctldServer(ts)
+			return NewVtctldServer(ts, sqlparser.NewTestParser())
 		})
 
 		_, err := vtctld.RebuildKeyspaceGraph(context.Background(), &vtctldatapb.RebuildKeyspaceGraphRequest{
@@ -7830,7 +8039,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 			Name: "testkeyspace",
 		})
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-			return NewVtctldServer(ts)
+			return NewVtctldServer(ts, sqlparser.NewTestParser())
 		})
 		factory.SetError(assert.AnError)
 
@@ -7851,7 +8060,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 			Name: "testkeyspace",
 		})
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-			return NewVtctldServer(ts)
+			return NewVtctldServer(ts, sqlparser.NewTestParser())
 		})
 
 		lctx, unlock, lerr := ts.LockKeyspace(context.Background(), "testkeyspace", "test lock")
@@ -7900,7 +8109,7 @@ func TestRebuildVSchemaGraph(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			_, err := vtctld.RebuildVSchemaGraph(ctx, req)
 			if tt.shouldErr {
@@ -7999,7 +8208,7 @@ func TestRefreshState(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			_, err := vtctld.RefreshState(ctx, tt.req)
 			if tt.shouldErr {
@@ -8184,7 +8393,7 @@ func TestRefreshStateByShard(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.RefreshStateByShard(ctx, tt.req)
 			if tt.shouldErr {
@@ -8288,7 +8497,7 @@ func TestReloadSchema(t *testing.T) {
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			_, err := vtctld.ReloadSchema(ctx, tt.req)
 			if tt.shouldErr {
@@ -8386,7 +8595,7 @@ func TestReloadSchemaKeyspace(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.ReloadSchemaKeyspace(ctx, tt.req)
 			if tt.shouldErr {
@@ -8544,7 +8753,7 @@ func TestReloadSchemaShard(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.ReloadSchemaShard(ctx, tt.req)
 			if tt.shouldErr {
@@ -8563,7 +8772,7 @@ func TestRemoveBackup(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx)
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	setup := func() {
@@ -8754,7 +8963,7 @@ func TestRemoveKeyspaceCell(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			// Setup topo
@@ -9043,7 +9252,7 @@ func TestRemoveShardCell(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			// Setup shard topos and replication graphs.
@@ -9653,7 +9862,7 @@ func TestReparentTablet(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -9786,7 +9995,7 @@ func TestRestoreFromBackup(t *testing.T) {
 				}, tt.tablets...,
 			)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			client := localvtctldclient.New(vtctld)
 			stream, err := client.RestoreFromBackup(ctx, tt.req)
@@ -10004,7 +10213,7 @@ func TestRetrySchemaMigration(t *testing.T) {
 			}, test.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			resp, err := vtctld.RetrySchemaMigration(ctx, test.req)
@@ -10111,7 +10320,7 @@ func TestRunHealthCheck(t *testing.T) {
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			_, err := vtctld.RunHealthCheck(ctx, tt.req)
 			if tt.shouldErr {
@@ -10191,7 +10400,7 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.SetKeyspaceDurabilityPolicy(ctx, tt.req)
 			if tt.expectedErr != "" {
@@ -10250,7 +10459,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 			name: "lock error",
 			setup: func(t *testing.T, tt *testcase) context.Context {
 				var cancel func()
-				tt.ctx, cancel = context.WithTimeout(ctx, time.Millisecond*50)
+				tt.ctx, cancel = context.WithCancel(ctx)
 				tt.ts = memorytopo.NewServer(ctx, "zone1")
 				testutil.AddShards(tt.ctx, t, tt.ts, &vtctldatapb.Shard{
 					Keyspace: "testkeyspace",
@@ -10288,7 +10497,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.SetShardIsPrimaryServing(tt.ctx, tt.req)
 			if tt.shouldErr {
@@ -10502,7 +10711,7 @@ func TestSetShardTabletControl(t *testing.T) {
 			name: "keyspace lock error",
 			setup: func(t *testing.T, tt *testcase) {
 				var cancel func()
-				tt.ctx, cancel = context.WithTimeout(ctx, time.Millisecond*50)
+				tt.ctx, cancel = context.WithCancel(ctx)
 				tt.ts = memorytopo.NewServer(ctx, "zone1")
 				testutil.AddShards(tt.ctx, t, tt.ts, &vtctldatapb.Shard{
 					Keyspace: "testkeyspace",
@@ -10538,7 +10747,7 @@ func TestSetShardTabletControl(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.SetShardTabletControl(tt.ctx, tt.req)
 			if tt.shouldErr {
@@ -10742,7 +10951,7 @@ func TestSetWritable(t *testing.T) {
 
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			_, err := vtctld.SetWritable(ctx, tt.req)
@@ -10763,7 +10972,7 @@ func TestShardReplicationAdd(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	tablets := []*topodatapb.Tablet{
@@ -10931,7 +11140,7 @@ func TestShardReplicationPositions(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionDelays: map[string]time.Duration{
-					"zone1-0000000100": time.Millisecond * 100,
+					"zone1-0000000100": time.Second * 2,
 				},
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -10942,7 +11151,7 @@ func TestShardReplicationPositions(t *testing.T) {
 					},
 				},
 				ReplicationStatusDelays: map[string]time.Duration{
-					"zone1-0000000101": time.Millisecond * 100,
+					"zone1-0000000101": time.Second * 2,
 				},
 				ReplicationStatusResults: map[string]struct {
 					Position *replicationdatapb.Status
@@ -10955,7 +11164,7 @@ func TestShardReplicationPositions(t *testing.T) {
 					},
 				},
 			},
-			ctxTimeout: time.Millisecond * 10,
+			ctxTimeout: time.Second,
 			req: &vtctldatapb.ShardReplicationPositionsRequest{
 				Keyspace: "testkeyspace",
 				Shard:    "-",
@@ -11058,7 +11267,7 @@ func TestShardReplicationPositions(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			requestCtx := ctx
@@ -11089,7 +11298,7 @@ func TestShardReplicationRemove(t *testing.T) {
 
 	ts := memorytopo.NewServer(ctx, "zone1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	tablets := []*topodatapb.Tablet{
@@ -11249,7 +11458,7 @@ func TestSourceShardAdd(t *testing.T) {
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			testutil.AddShards(ctx, t, ts, tt.shards...)
@@ -11384,7 +11593,7 @@ func TestSourceShardDelete(t *testing.T) {
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			testutil.AddShards(ctx, t, ts, tt.shards...)
@@ -11576,7 +11785,7 @@ func TestStartReplication(t *testing.T) {
 				AlsoSetShardPrimary: true,
 			}, tt.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			_, err := vtctld.StartReplication(ctx, tt.req)
@@ -11713,7 +11922,7 @@ func TestStopReplication(t *testing.T) {
 
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			_, err := vtctld.StopReplication(ctx, tt.req)
@@ -12100,7 +12309,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 				TopoServer: ts,
 			}
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 
 			if tt.tmcHasNoTopo {
@@ -12285,7 +12494,7 @@ func TestUpdateCellInfo(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.UpdateCellInfo(ctx, tt.req)
 			if tt.shouldErr {
@@ -12435,7 +12644,7 @@ func TestUpdateCellsAlias(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.UpdateCellsAlias(ctx, tt.req)
 			if tt.shouldErr {
@@ -12543,7 +12752,7 @@ func TestValidate(t *testing.T) {
 		SkipShardCreation:    false,
 	}, tablets...)
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	resp, err := vtctld.Validate(ctx, &vtctldatapb.ValidateRequest{
@@ -12660,7 +12869,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 	}, tablets...)
 
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	schema1 := &tabletmanagerdatapb.SchemaDefinition{
@@ -12846,7 +13055,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 	}, tablets...)
 
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	tests := []*struct {
@@ -12961,7 +13170,7 @@ func TestValidateVersionShard(t *testing.T) {
 	}, tablets...)
 
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+		return NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	tests := []*struct {
@@ -13553,7 +13762,7 @@ func TestValidateShard(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
+				return NewVtctldServer(ts, sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.ValidateShard(ctx, tt.req)
 			if tt.shouldErr {

@@ -322,6 +322,6 @@ func TestSysInfo(t *testing.T) {
 }
 
 func getDefaultCollationID() collations.ID {
-	collationHandler := collations.Local()
+	collationHandler := collations.MySQL8()
 	return collationHandler.DefaultCollationForCharset(charsetName)
 }

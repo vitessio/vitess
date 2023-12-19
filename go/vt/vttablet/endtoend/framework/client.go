@@ -57,6 +57,19 @@ func NewClient() *QueryClient {
 	}
 }
 
+// NewClientWithServer creates a new client for a given server.
+func NewClientWithServer(server *tabletserver.TabletServer) *QueryClient {
+	return &QueryClient{
+		ctx: callerid.NewContext(
+			context.Background(),
+			&vtrpcpb.CallerID{},
+			&querypb.VTGateCallerID{Username: "dev"},
+		),
+		target: Target,
+		server: server,
+	}
+}
+
 // NewClientWithTabletType creates a new client for Server with the provided tablet type.
 func NewClientWithTabletType(tabletType topodatapb.TabletType) *QueryClient {
 	targetCopy := Target.CloneVT()

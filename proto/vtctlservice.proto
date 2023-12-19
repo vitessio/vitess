@@ -103,6 +103,8 @@ service Vtctld {
   // FindAllShardsInKeyspace returns a map of shard names to shard references
   // for a given keyspace.
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
+  // ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
+  rpc ForceCutOverSchemaMigration(vtctldata.ForceCutOverSchemaMigrationRequest) returns (vtctldata.ForceCutOverSchemaMigrationResponse) {};
   // GetBackups returns all the backups for a shard.
   rpc GetBackups(vtctldata.GetBackupsRequest) returns (vtctldata.GetBackupsResponse) {};
   // GetCellInfo returns the information for a cell.

@@ -53,7 +53,6 @@ type PlanningContext struct {
 
 func CreatePlanningContext(stmt sqlparser.Statement,
 	reservedVars *sqlparser.ReservedVars,
-
 	vschema VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
 ) (*PlanningContext, error) {

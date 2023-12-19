@@ -88,7 +88,7 @@ func (v *RevertMigration) TryExecute(ctx context.Context, vcursor VCursor, bindV
 		return nil, err
 	}
 	ddlStrategySetting.Strategy = schema.DDLStrategyOnline // and we keep the options as they were
-	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), "", sql, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()), "")
+	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), "", sql, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()), "", vcursor.SQLParser())
 	if err != nil {
 		return result, err
 	}

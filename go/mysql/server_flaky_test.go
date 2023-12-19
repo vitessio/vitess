@@ -32,14 +32,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	vtenv "vitess.io/vitess/go/vt/env"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
@@ -81,6 +81,7 @@ type testHandler struct {
 	result   *sqltypes.Result
 	err      error
 	warnings uint16
+	parser   *sqlparser.Parser
 }
 
 func (th *testHandler) LastConn() *Conn {
@@ -146,7 +147,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 				{
 					Name:    "schema_name",
 					Type:    querypb.Type_VARCHAR,
-					Charset: uint32(collations.Default()),
+					Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 				},
 			},
 			Rows: [][]sqltypes.Value{
@@ -165,7 +166,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 				{
 					Name:    "ssl_flag",
 					Type:    querypb.Type_VARCHAR,
-					Charset: uint32(collations.Default()),
+					Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 				},
 			},
 			Rows: [][]sqltypes.Value{
@@ -180,12 +181,12 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 				{
 					Name:    "user",
 					Type:    querypb.Type_VARCHAR,
-					Charset: uint32(collations.Default()),
+					Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 				},
 				{
 					Name:    "user_data",
 					Type:    querypb.Type_VARCHAR,
-					Charset: uint32(collations.Default()),
+					Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 				},
 			},
 			Rows: [][]sqltypes.Value{
@@ -200,7 +201,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 			Fields: []*querypb.Field{{
 				Name:    "result",
 				Type:    querypb.Type_VARCHAR,
-				Charset: uint32(collations.Default()),
+				Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 			}},
 		})
 		time.Sleep(50 * time.Millisecond)
@@ -216,7 +217,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 					{
 						Name:    "result",
 						Type:    querypb.Type_VARCHAR,
-						Charset: uint32(collations.Default()),
+						Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 					},
 				},
 				Rows: [][]sqltypes.Value{
@@ -256,12 +257,18 @@ func (th *testHandler) WarningCount(c *Conn) uint16 {
 	return th.warnings
 }
 
+func (th *testHandler) SQLParser() *sqlparser.Parser {
+	return th.parser
+}
+
 func getHostPort(t *testing.T, a net.Addr) (string, int) {
 	host := a.(*net.TCPAddr).IP.String()
 	port := a.(*net.TCPAddr).Port
 	t.Logf("listening on address '%v' port %v", host, port)
 	return host, port
 }
+
+var mysqlVersion = fmt.Sprintf("%s-Vitess", config.DefaultMySQLVersion)
 
 func TestConnectionFromListener(t *testing.T) {
 	th := &testHandler{}
@@ -277,7 +284,7 @@ func TestConnectionFromListener(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:")
 	require.NoError(t, err, "net.Listener failed")
 
-	l, err := NewFromListener(listener, authServer, th, 0, 0, false, 0)
+	l, err := NewFromListener(listener, authServer, th, 0, 0, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -306,7 +313,7 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -339,7 +346,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 	}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -372,7 +379,7 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 	}
 	defer authServer.close()
 
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -410,7 +417,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 
 	os.Remove(unixSocket.Name())
 
-	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -436,7 +443,7 @@ func TestClientFoundRows(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -485,7 +492,7 @@ func TestConnCounts(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err, "NewListener failed")
 	defer l.Close()
 	go l.Accept()
@@ -542,7 +549,7 @@ func TestServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err)
 	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
 	defer l.Close()
@@ -642,7 +649,7 @@ func TestServerStats(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err)
 	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
 	defer l.Close()
@@ -716,7 +723,7 @@ func TestClearTextServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -789,7 +796,7 @@ func TestDialogServer(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err)
 	l.AllowClearTextWithoutTLS.Store(true)
 	defer l.Close()
@@ -832,7 +839,7 @@ func TestTLSServer(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -930,7 +937,7 @@ func TestTLSRequired(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -1019,7 +1026,7 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
@@ -1113,7 +1120,7 @@ func TestCachingSha2PasswordAuthWithMoreData(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
@@ -1182,7 +1189,7 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
@@ -1224,7 +1231,7 @@ func TestErrorCodes(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -1402,7 +1409,7 @@ func TestListenerShutdown(t *testing.T) {
 		UserData: "userData1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -1470,12 +1477,10 @@ func TestParseConnAttrs(t *testing.T) {
 }
 
 func TestServerFlush(t *testing.T) {
-	defer func(saved time.Duration) { mysqlServerFlushDelay = saved }(mysqlServerFlushDelay)
-	mysqlServerFlushDelay = 10 * time.Millisecond
-
+	mysqlServerFlushDelay := 10 * time.Millisecond
 	th := &testHandler{}
 
-	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0, mysqlServerFlushDelay, mysqlVersion, 0)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
@@ -1502,7 +1507,7 @@ func TestServerFlush(t *testing.T) {
 	want1 := []*querypb.Field{{
 		Name:    "result",
 		Type:    querypb.Type_VARCHAR,
-		Charset: uint32(collations.Default()),
+		Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 	}}
 	assert.Equal(t, want1, flds)
 
@@ -1521,7 +1526,7 @@ func TestServerFlush(t *testing.T) {
 
 func TestTcpKeepAlive(t *testing.T) {
 	th := &testHandler{}
-	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0, 0, mysqlVersion, 0)
 	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()

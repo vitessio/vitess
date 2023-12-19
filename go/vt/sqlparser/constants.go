@@ -928,6 +928,8 @@ const (
 	ThrottleAllMigrationType
 	UnthrottleMigrationType
 	UnthrottleAllMigrationType
+	ForceCutOverMigrationType
+	ForceCutOverAllMigrationType
 )
 
 // ColumnStorage constants

@@ -54,7 +54,7 @@ type testConcat struct {
 }
 
 func (tc *testConcat) Expression() string {
-	env := collations.Local()
+	env := collations.MySQL8()
 	return fmt.Sprintf("CONCAT((_%s X'%x' COLLATE %q), (_%s X'%x' COLLATE %q))",
 		colldata.Lookup(tc.left.Collation).Charset().Name(), tc.left.Text, env.LookupName(tc.left.Collation),
 		colldata.Lookup(tc.right.Collation).Charset().Name(), tc.right.Text, env.LookupName(tc.right.Collation),
@@ -63,7 +63,7 @@ func (tc *testConcat) Expression() string {
 
 func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coercion1, coercion2 colldata.Coercion) {
 	localCollation := colldata.Lookup(local.Collation)
-	remoteName := collations.Local().LookupName(remote.Collation)
+	remoteName := collations.MySQL8().LookupName(remote.Collation)
 	assert.Equal(t, remoteName, localCollation.Name(), "bad collation resolved: local is %s, remote is %s", localCollation.Name(), remoteName)
 	assert.Equal(t, remote.Coercibility, local.Coercibility, "bad coercibility resolved: local is %d, remote is %d", local.Coercibility, remote.Coercibility)
 
@@ -85,8 +85,8 @@ func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local col
 
 	rEBytes, err := remote.Expr.ToBytes()
 	require.NoError(t, err)
-	assert.True(t, bytes.Equal(concat.Bytes(), rEBytes), "failed to concatenate text;\n\tCONCAT(%v COLLATE %s, %v COLLATE %s) = \n\tCONCAT(%v, %v) COLLATE %s = \n\t\t%v\n\n\texpected: %v", tc.left.Text, collations.Local().LookupName(tc.left.Collation),
-		tc.right.Text, collations.Local().LookupName(tc.right.Collation), leftText, rightText, localCollation.Name(),
+	assert.True(t, bytes.Equal(concat.Bytes(), rEBytes), "failed to concatenate text;\n\tCONCAT(%v COLLATE %s, %v COLLATE %s) = \n\tCONCAT(%v, %v) COLLATE %s = \n\t\t%v\n\n\texpected: %v", tc.left.Text, collations.MySQL8().LookupName(tc.left.Collation),
+		tc.right.Text, collations.MySQL8().LookupName(tc.right.Collation), leftText, rightText, localCollation.Name(),
 		concat.Bytes(), rEBytes)
 
 }
@@ -96,7 +96,7 @@ type testComparison struct {
 }
 
 func (tc *testComparison) Expression() string {
-	env := collations.Local()
+	env := collations.MySQL8()
 	return fmt.Sprintf("(_%s X'%x' COLLATE %q) = (_%s X'%x' COLLATE %q)",
 		env.LookupCharsetName(tc.left.Collation), tc.left.Text, env.LookupName(tc.left.Collation),
 		env.LookupCharsetName(tc.right.Collation), tc.right.Text, env.LookupName(tc.right.Collation),
@@ -135,7 +135,7 @@ func TestComparisonSemantics(t *testing.T) {
 		t.Skipf("The behavior of Coercion Semantics is not correct before 8.0.31")
 	}
 
-	for _, coll := range colldata.All(collations.Local()) {
+	for _, coll := range colldata.All(collations.MySQL8()) {
 		text := verifyTranscoding(t, coll, remote.NewCollation(conn, coll.Name()), []byte(BaseString))
 		testInputs = append(testInputs, &TextWithCollation{Text: text, Collation: coll.ID()})
 	}
@@ -175,7 +175,7 @@ func TestComparisonSemantics(t *testing.T) {
 						Coercibility: 0,
 						Repertoire:   collations.RepertoireASCII,
 					}
-					resultLocal, coercionLocal1, coercionLocal2, errLocal := colldata.Merge(collations.Local(), left, right,
+					resultLocal, coercionLocal1, coercionLocal2, errLocal := colldata.Merge(collations.MySQL8(), left, right,
 						colldata.CoercionOptions{
 							ConvertToSuperset:   true,
 							ConvertWithCoercion: true,
@@ -194,7 +194,7 @@ func TestComparisonSemantics(t *testing.T) {
 					query := fmt.Sprintf("SELECT CAST((%s) AS BINARY), COLLATION(%s), COERCIBILITY(%s)", expr, expr, expr)
 
 					resultRemote, errRemote := conn.ExecuteFetch(query, 1, false)
-					env := collations.Local()
+					env := collations.MySQL8()
 					if errRemote != nil {
 						require.True(t, strings.Contains(errRemote.Error(), "Illegal mix of collations"), "query %s failed: %v", query, errRemote)
 
@@ -212,7 +212,7 @@ func TestComparisonSemantics(t *testing.T) {
 						continue
 					}
 
-					remoteCollation := collations.Local().LookupByName(resultRemote.Rows[0][1].ToString())
+					remoteCollation := collations.MySQL8().LookupByName(resultRemote.Rows[0][1].ToString())
 					remoteCI, _ := resultRemote.Rows[0][2].ToInt64()
 					remoteTest.Test(t, &RemoteCoercionResult{
 						Expr:         resultRemote.Rows[0][0],

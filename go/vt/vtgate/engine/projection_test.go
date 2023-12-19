@@ -38,7 +38,10 @@ func TestMultiply(t *testing.T) {
 		Left:     &sqlparser.Offset{V: 0},
 		Right:    &sqlparser.Offset{V: 1},
 	}
-	evalExpr, err := evalengine.Translate(expr, nil)
+	evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
+		CollationEnv: collations.MySQL8(),
+		Collation:    collations.MySQL8().DefaultConnectionCharset(),
+	})
 	require.NoError(t, err)
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
@@ -78,7 +81,10 @@ func TestProjectionStreaming(t *testing.T) {
 		Left:     &sqlparser.Offset{V: 0},
 		Right:    &sqlparser.Offset{V: 1},
 	}
-	evalExpr, err := evalengine.Translate(expr, nil)
+	evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
+		CollationEnv: collations.MySQL8(),
+		Collation:    collations.MySQL8().DefaultConnectionCharset(),
+	})
 	require.NoError(t, err)
 	fp := &fakePrimitive{
 		results: sqltypes.MakeTestStreamingResults(
@@ -121,7 +127,10 @@ func TestEmptyInput(t *testing.T) {
 		Left:     &sqlparser.Offset{V: 0},
 		Right:    &sqlparser.Offset{V: 1},
 	}
-	evalExpr, err := evalengine.Translate(expr, nil)
+	evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
+		CollationEnv: collations.MySQL8(),
+		Collation:    collations.MySQL8().DefaultConnectionCharset(),
+	})
 	require.NoError(t, err)
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("a|b", "uint64|uint64"))},
@@ -151,7 +160,10 @@ func TestEmptyInput(t *testing.T) {
 }
 
 func TestHexAndBinaryArgument(t *testing.T) {
-	hexExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), nil)
+	hexExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), &evalengine.Config{
+		CollationEnv: collations.MySQL8(),
+		Collation:    collations.MySQL8().DefaultConnectionCharset(),
+	})
 	require.NoError(t, err)
 	proj := &Projection{
 		Cols:       []string{"hex"},
@@ -183,7 +195,7 @@ func TestFields(t *testing.T) {
 			name:      `string`,
 			bindVar:   sqltypes.StringBindVariable("test"),
 			typ:       querypb.Type_VARCHAR,
-			collation: collations.Default(),
+			collation: collations.MySQL8().DefaultConnectionCharset(),
 		},
 		{
 			name:      `binary`,
@@ -195,7 +207,10 @@ func TestFields(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			bindExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), nil)
+			bindExpr, err := evalengine.Translate(sqlparser.NewArgument("vtg1"), &evalengine.Config{
+				CollationEnv: collations.MySQL8(),
+				Collation:    collations.MySQL8().DefaultConnectionCharset(),
+			})
 			require.NoError(t, err)
 			proj := &Projection{
 				Cols:       []string{"col"},

@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -27,7 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/errors"
+	vterrors "vitess.io/vitess/go/errors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -83,7 +84,7 @@ var schemaTestExpectSortedViewNames = []string{
 var schemaTestToSQL = "CREATE TABLE `t1` (\n\t`id` int\n);\nCREATE TABLE `t2` (\n\t`id` int\n);\nCREATE TABLE `t3` (\n\t`id` int,\n\t`type` enum('foo', 'bar') NOT NULL DEFAULT 'foo'\n);\nCREATE TABLE `t5` (\n\t`id` int\n);\nCREATE VIEW `v0` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v3` AS SELECT *, `id` + 1 AS `id_plus`, `id` + 2 FROM `t3` AS `t3`;\nCREATE VIEW `v9` AS SELECT 1 FROM `dual`;\nCREATE VIEW `v1` AS SELECT * FROM `v3`;\nCREATE VIEW `v2` AS SELECT * FROM `v3`, `t2`;\nCREATE VIEW `v4` AS SELECT * FROM `t2` AS `something_else`, `v3`;\nCREATE VIEW `v5` AS SELECT * FROM `t1`, (SELECT * FROM `v3`) AS `some_alias`;\nCREATE VIEW `v6` AS SELECT * FROM `v4`;\n"
 
 func TestNewSchemaFromQueries(t *testing.T) {
-	schema, err := NewSchemaFromQueries(schemaTestCreateQueries)
+	schema, err := NewSchemaFromQueries(schemaTestCreateQueries, sqlparser.NewTestParser())
 	assert.NoError(t, err)
 	require.NotNil(t, schema)
 
@@ -93,7 +94,7 @@ func TestNewSchemaFromQueries(t *testing.T) {
 }
 
 func TestNewSchemaFromSQL(t *testing.T) {
-	schema, err := NewSchemaFromSQL(strings.Join(schemaTestCreateQueries, ";"))
+	schema, err := NewSchemaFromSQL(strings.Join(schemaTestCreateQueries, ";"), sqlparser.NewTestParser())
 	assert.NoError(t, err)
 	require.NotNil(t, schema)
 
@@ -107,7 +108,7 @@ func TestNewSchemaFromQueriesWithDuplicate(t *testing.T) {
 	queries := append(schemaTestCreateQueries,
 		"create view v2 as select * from v1, t2",
 	)
-	_, err := NewSchemaFromQueries(queries)
+	_, err := NewSchemaFromQueries(queries, sqlparser.NewTestParser())
 	assert.Error(t, err)
 	assert.EqualError(t, err, (&ApplyDuplicateEntityError{Entity: "v2"}).Error())
 }
@@ -117,7 +118,7 @@ func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
 	queries := append(schemaTestCreateQueries,
 		"create view v7 as select * from v8, t2",
 	)
-	schema, err := NewSchemaFromQueries(queries)
+	schema, err := NewSchemaFromQueries(queries, sqlparser.NewTestParser())
 	assert.Error(t, err)
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 	v := schema.sorted[len(schema.sorted)-1]
@@ -130,7 +131,7 @@ func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 	queries := append(schemaTestCreateQueries,
 		"create view v7 as select * from something_else as t1, t2",
 	)
-	_, err := NewSchemaFromQueries(queries)
+	_, err := NewSchemaFromQueries(queries, sqlparser.NewTestParser())
 	assert.Error(t, err)
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
@@ -140,7 +141,7 @@ func TestNewSchemaFromQueriesViewFromDual(t *testing.T) {
 	queries := []string{
 		"create view v20 as select 1 from dual",
 	}
-	_, err := NewSchemaFromQueries(queries)
+	_, err := NewSchemaFromQueries(queries, sqlparser.NewTestParser())
 	assert.NoError(t, err)
 }
 
@@ -149,7 +150,7 @@ func TestNewSchemaFromQueriesViewFromDualImplicit(t *testing.T) {
 	queries := []string{
 		"create view v20 as select 1",
 	}
-	_, err := NewSchemaFromQueries(queries)
+	_, err := NewSchemaFromQueries(queries, sqlparser.NewTestParser())
 	assert.NoError(t, err)
 }
 
@@ -159,14 +160,14 @@ func TestNewSchemaFromQueriesLoop(t *testing.T) {
 		"create view v7 as select * from v8, t2",
 		"create view v8 as select * from t1, v7",
 	)
-	_, err := NewSchemaFromQueries(queries)
+	_, err := NewSchemaFromQueries(queries, sqlparser.NewTestParser())
 	require.Error(t, err)
-	err = errors.UnwrapFirst(err)
+	err = vterrors.UnwrapFirst(err)
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
 func TestToSQL(t *testing.T) {
-	schema, err := NewSchemaFromQueries(schemaTestCreateQueries)
+	schema, err := NewSchemaFromQueries(schemaTestCreateQueries, sqlparser.NewTestParser())
 	assert.NoError(t, err)
 	require.NotNil(t, schema)
 
@@ -175,7 +176,7 @@ func TestToSQL(t *testing.T) {
 }
 
 func TestCopy(t *testing.T) {
-	schema, err := NewSchemaFromQueries(schemaTestCreateQueries)
+	schema, err := NewSchemaFromQueries(schemaTestCreateQueries, sqlparser.NewTestParser())
 	assert.NoError(t, err)
 	require.NotNil(t, schema)
 
@@ -222,7 +223,7 @@ func TestGetViewDependentTableNames(t *testing.T) {
 	}
 	for _, ts := range tt {
 		t.Run(ts.view, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(ts.view)
+			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.view)
 			require.NoError(t, err)
 			createView, ok := stmt.(*sqlparser.CreateView)
 			require.True(t, ok)
@@ -262,7 +263,7 @@ func TestGetForeignKeyParentTableNames(t *testing.T) {
 	}
 	for _, ts := range tt {
 		t.Run(ts.table, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(ts.table)
+			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.table)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -298,7 +299,7 @@ func TestTableForeignKeyOrdering(t *testing.T) {
 		"v13",
 		"v09",
 	}
-	schema, err := NewSchemaFromQueries(fkQueries)
+	schema, err := NewSchemaFromQueries(fkQueries, sqlparser.NewTestParser())
 	require.NoError(t, err)
 	assert.NotNil(t, schema)
 
@@ -339,8 +340,11 @@ func TestInvalidSchema(t *testing.T) {
 			expectErr: &ForeignKeyReferencesViewError{Table: "t11", ReferencedView: "v"},
 		},
 		{
-			schema:    "create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t12 (id) on delete restrict); create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id) on delete restrict)",
-			expectErr: &ForeignKeyDependencyUnresolvedError{Table: "t11"},
+			schema: "create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t12 (id) on delete restrict); create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id) on delete restrict)",
+			expectErr: errors.Join(
+				&ForeignKeyDependencyUnresolvedError{Table: "t11"},
+				&ForeignKeyDependencyUnresolvedError{Table: "t12"},
+			),
 		},
 		{
 			schema:    "create table t11 (id int primary key, i int, key ix(i), constraint f11 foreign key (i) references t11(id2) on delete restrict)",
@@ -375,14 +379,35 @@ func TestInvalidSchema(t *testing.T) {
 			schema: "create table t10(id varchar(50) primary key); create table t11 (id int primary key, i varchar(100), key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 		},
 		{
+			// explicit charset/collation
+			schema: "create table t10(id varchar(50) charset utf8mb4 collate utf8mb4_0900_ai_ci primary key); create table t11 (id int primary key, i varchar(100) charset utf8mb4 collate utf8mb4_0900_ai_ci, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
+		},
+		{
+			// weirdly allowed: varchar->char
+			schema: "create table t10(id varchar(50) charset utf8mb4 collate utf8mb4_0900_ai_ci primary key); create table t11 (id int primary key, i char(100) charset utf8mb4 collate utf8mb4_0900_ai_ci, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
+		},
+		{
+			// but weirdly not allowed: char->varchar
+			schema:    "create table t10(id char(50) charset utf8mb4 collate utf8mb4_0900_ai_ci primary key); create table t11 (id int primary key, i varchar(50) charset utf8mb4 collate utf8mb4_0900_ai_ci, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
+			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
+		},
+		{
 			schema:    "create table t10(id varchar(50) charset utf8mb3 primary key); create table t11 (id int primary key, i varchar(100) charset utf8mb4, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
+			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
+		},
+		{
+			schema:    "create table t10(id varchar(50) charset utf8mb4 collate utf8mb4_0900_ai_ci primary key); create table t11 (id int primary key, i varchar(100) charset utf8mb4 collate utf8mb4_general_ci, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
+			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
+		},
+		{
+			schema:    "create table t10(id VARCHAR(50) charset utf8mb4 collate utf8mb4_0900_ai_ci primary key); create table t11 (id int primary key, i VARCHAR(100) charset utf8mb4 collate utf8mb4_general_ci, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
 		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.schema, func(t *testing.T) {
 
-			_, err := NewSchemaFromSQL(ts.schema)
+			_, err := NewSchemaFromSQL(ts.schema, sqlparser.NewTestParser())
 			if ts.expectErr == nil {
 				assert.NoError(t, err)
 			} else {
@@ -396,11 +421,20 @@ func TestInvalidSchema(t *testing.T) {
 func TestInvalidTableForeignKeyReference(t *testing.T) {
 	{
 		fkQueries := []string{
+			"create table t10 (id int primary key)",
 			"create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12(id) on delete restrict)",
 			"create table t15(id int, primary key(id))",
 		}
-		_, err := NewSchemaFromQueries(fkQueries)
+		s, err := NewSchemaFromQueries(fkQueries, sqlparser.NewTestParser())
 		assert.Error(t, err)
+		// Even though there's errors, we still expect the schema to have been created.
+		assert.NotNil(t, s)
+		// Even though t11 caused an error, we still expect the schema to have parsed all tables.
+		assert.Equal(t, 3, len(s.Entities()))
+		t11 := s.Table("t11")
+		assert.NotNil(t, t11)
+		// validate t11 table definition is complete, even though it was invalid.
+		assert.Equal(t, "create table t11 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f12 (i),\n\tconstraint f12 foreign key (i) references t12 (id) on delete restrict\n)", t11.Create().StatementString())
 		assert.EqualError(t, err, (&ForeignKeyNonexistentReferencedTableError{Table: "t11", ReferencedTable: "t12"}).Error())
 	}
 	{
@@ -409,9 +443,11 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 			"create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12(id) on delete restrict)",
 			"create table t12 (id int primary key, i int, constraint f13 foreign key (i) references t13(id) on delete restrict)",
 		}
-		_, err := NewSchemaFromQueries(fkQueries)
+		_, err := NewSchemaFromQueries(fkQueries, sqlparser.NewTestParser())
 		assert.Error(t, err)
-		assert.EqualError(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t11"}).Error())
+		assert.ErrorContains(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t11"}).Error())
+		assert.ErrorContains(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t12"}).Error())
+		assert.ErrorContains(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t13"}).Error())
 	}
 }
 
@@ -432,7 +468,7 @@ func TestGetEntityColumnNames(t *testing.T) {
 		"create view vb as select *, now() from v8",
 	}
 
-	schema, err := NewSchemaFromQueries(queries)
+	schema, err := NewSchemaFromQueries(queries, sqlparser.NewTestParser())
 	require.NoError(t, err)
 	require.NotNil(t, schema)
 
@@ -710,13 +746,13 @@ func TestViewReferences(t *testing.T) {
 	}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			schema, err := NewSchemaFromQueries(ts.queries)
+			schema, err := NewSchemaFromQueries(ts.queries, sqlparser.NewTestParser())
 			if ts.expectErr == nil {
 				require.NoError(t, err)
 				require.NotNil(t, schema)
 			} else {
 				require.Error(t, err)
-				err = errors.UnwrapFirst(err)
+				err = vterrors.UnwrapFirst(err)
 				require.Equal(t, ts.expectErr, err, "received error: %v", err)
 			}
 		})
@@ -802,9 +838,9 @@ func TestMassiveSchema(t *testing.T) {
 			queries1 = append(queries1, query)
 			tableNames[tableName] = true
 		}
-		schema0, err = NewSchemaFromQueries(queries0)
+		schema0, err = NewSchemaFromQueries(queries0, sqlparser.NewTestParser())
 		require.NoError(t, err)
-		schema1, err = NewSchemaFromQueries(queries1)
+		schema1, err = NewSchemaFromQueries(queries1, sqlparser.NewTestParser())
 		require.NoError(t, err)
 
 		require.Equal(t, countModifiedTables, modifyTables)
