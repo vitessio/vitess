@@ -36,7 +36,7 @@ func TestNewParsedQuery(t *testing.T) {
 	pq := NewParsedQuery(stmt)
 	want := &ParsedQuery{
 		Query:         "select * from a where id = :id",
-		bindLocations: []bindLocation{{offset: 27, length: 3}},
+		bindLocations: []BindLocation{{Offset: 27, Length: 3}},
 	}
 	if !reflect.DeepEqual(pq, want) {
 		t.Errorf("GenerateParsedQuery: %+v, want %+v", pq, want)

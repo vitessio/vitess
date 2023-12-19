@@ -764,7 +764,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, error) {
 	var fields []*querypb.Field
 	for i, typ := range tm.Types {
-		t, err := sqltypes.MySQLToType(int64(typ), 0)
+		t, err := sqltypes.MySQLToType(typ, 0)
 		if err != nil {
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
