@@ -126,6 +126,9 @@ func TestControllerPlan(t *testing.T) {
 		in:  "update _vt.vreplication set state='Running', message='' where id >= 1",
 		err: "unsafe WHERE clause in update:  where id >= 1; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
+		in:  "update _vt.vreplication set state = 'Running' where state in ('Stopped', 'Error')",
+		err: "unsafe WHERE clause in update:  where state in ('Stopped', 'Error'); should be using = or in with at least one of the following columns: id, workflow",
+	}, {
 		in:  "update _vt.vreplication set state='Running', message='' where state='Stopped'",
 		err: "unsafe WHERE clause in update:  where state = 'Stopped'; should be using = or in with at least one of the following columns: id, workflow",
 	}, {

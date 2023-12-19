@@ -84,8 +84,8 @@ var isSelective = func(where *sqlparser.Where, columns ...*sqlparser.ColName) bo
 			// equality operator with = rather than != OR an in clause, logically
 			// being equal to any of N things.
 			if wantedColumn &&
-				(node.Operator == sqlparser.EqualOp && node.Operator.ToString() == sqlparser.EqualStr) ||
-				node.Operator == sqlparser.InOp {
+				((node.Operator == sqlparser.EqualOp && node.Operator.ToString() == sqlparser.EqualStr) ||
+					node.Operator == sqlparser.InOp) {
 				selective = true  // This is a safe statement
 				return false, nil // We can stop walking
 			}
