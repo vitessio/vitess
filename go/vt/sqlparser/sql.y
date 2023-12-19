@@ -389,7 +389,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SENSITIVE SPECIFIC SQL_BIG_RESULT SQL_SMALL_RESULT
 
 %token <bytes> UNUSED DESCRIPTION LATERAL MEMBER RECURSIVE
-%token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED NOT_ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <bytes> INACTIVE INVISIBLE MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_LOAD SECONDARY_UNLOAD
@@ -2801,20 +2801,9 @@ table_column_list:
     $$ = &TableSpec{}
     $$.AddConstraint($1)
   }
-| column_definition_for_create check_constraint_definition
-  {
-    $$ = &TableSpec{}
-    $$.AddColumn($1)
-    $$.AddConstraint($2)
-  }
 | table_column_list ',' column_definition_for_create
   {
     $$.AddColumn($3)
-  }
-| table_column_list ',' column_definition_for_create check_constraint_definition
-  {
-    $$.AddColumn($3)
-    $$.AddConstraint($4)
   }
 | table_column_list ',' index_definition
   {
@@ -3031,6 +3020,15 @@ column_type_options:
   // TODO: This still needs support for "ON DELETE" and "ON UPDATE"
   {
     opt := ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3, ReferencedColumns: $5}}
+    if err := $1.merge(opt); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = $1
+  }
+| column_type_options check_constraint_definition
+  {
+    opt := ColumnType{Constraint: $2}
     if err := $1.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
@@ -4093,6 +4091,14 @@ check_constraint_info:
   {
     $$ = &CheckConstraintDefinition{Expr: $3, Enforced: $5}
   }
+//|  CHECK '(' expression ')' NOT_ENFORCED
+//  {
+//    $$ = &CheckConstraintDefinition{Expr: $3, Enforced: false}
+//  }
+//|  CHECK '(' expression ')' ENFORCED
+//  {
+//    $$ = &CheckConstraintDefinition{Expr: $3, Enforced: true}
+//  }
 
 from_or_in:
   FROM
@@ -4159,7 +4165,7 @@ enforced_opt:
   {
     $$ = true
   }
-| NOT ENFORCED
+| NOT_ENFORCED
   {
     $$ = false
   }

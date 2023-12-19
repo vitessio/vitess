@@ -40,6 +40,10 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input: "create table t123 (c1 varchar(5) check (c1 in ('v1', 'v2')) NOT NULL);",
+			output: "create table t123 (\n\tc1 varchar(5) not null,\n\tcheck (c1 in ('v1', 'v2'))\n)",
+		},
+		{
 			input:  "INSERT INTO hourly_logins (applications_id, count, hour) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE count = count + VALUES(count)",
 			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update count = `count` + values(`count`)",
 		},

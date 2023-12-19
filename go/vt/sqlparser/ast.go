@@ -2525,6 +2525,10 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 // AddColumn appends the given column to the list in the spec
 func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
 	ts.Columns = append(ts.Columns, cd)
+
+	if cd.Type.Constraint != nil {
+		ts.Constraints = append(ts.Constraints, cd.Type.Constraint)
+	}
 }
 
 // AddIndex appends the given index to the list in the spec
@@ -2621,6 +2625,9 @@ type ColumnType struct {
 	// Foreign key specification
 	ForeignKeyDef *ForeignKeyDefinition
 
+	// Check constraint specification
+	Constraint *ConstraintDefinition
+
 	// Generated columns
 	GeneratedExpr Expr    // The expression used to generate this column
 	Stored        BoolVal // Default is Virtual (not stored)
@@ -2670,6 +2677,13 @@ func (ct *ColumnType) merge(other ColumnType) error {
 			return errors.New("cannot include more than one foreign key definition in a column definition")
 		}
 		ct.ForeignKeyDef = other.ForeignKeyDef
+	}
+
+	if other.Constraint != nil {
+		if ct.Constraint != nil {
+			return errors.New("cannot include more than one check constraint in a column definition")
+		}
+		ct.Constraint = other.Constraint
 	}
 
 	if other.Comment != nil {
@@ -2803,6 +2817,11 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 			opts = append(opts, "on update", fmt.Sprintf("%v", ct.ForeignKeyDef.OnUpdate))
 		}
 	}
+	//if ct.Constraint != nil {
+	//	constraintBuffer := NewTrackedBuffer(nil)
+	//	ct.Constraint.Format(constraintBuffer)
+	//	opts = append(opts, constraintBuffer.String())
+	//}
 
 	if ct.GeneratedExpr != nil {
 		opts = append(opts, keywordStrings[GENERATED], keywordStrings[ALWAYS], keywordStrings[AS], String(ct.GeneratedExpr))
