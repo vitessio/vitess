@@ -477,7 +477,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos replicati
 			gtidsChan <- []string{"", ""}
 		}
 	}()
-	defer vsClient.Close(ctx)
+	defer vsClient.Close()
 	select {
 	case val := <-gtidsChan:
 		return val[0], val[1], nil

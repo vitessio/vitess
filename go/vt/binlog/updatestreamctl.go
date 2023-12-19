@@ -70,47 +70,6 @@ type UpdateStreamControl interface {
 	IsEnabled() bool
 }
 
-// UpdateStreamControlMock is an implementation of UpdateStreamControl
-// to be used in tests
-type UpdateStreamControlMock struct {
-	enabled bool
-	sync.Mutex
-}
-
-// NewUpdateStreamControlMock creates a new UpdateStreamControlMock
-func NewUpdateStreamControlMock() *UpdateStreamControlMock {
-	return &UpdateStreamControlMock{}
-}
-
-// InitDBConfig is part of UpdateStreamControl
-func (m *UpdateStreamControlMock) InitDBConfig(*dbconfigs.DBConfigs) {
-}
-
-// RegisterService is part of UpdateStreamControl
-func (m *UpdateStreamControlMock) RegisterService() {
-}
-
-// Enable is part of UpdateStreamControl
-func (m *UpdateStreamControlMock) Enable() {
-	m.Lock()
-	m.enabled = true
-	m.Unlock()
-}
-
-// Disable is part of UpdateStreamControl
-func (m *UpdateStreamControlMock) Disable() {
-	m.Lock()
-	m.enabled = false
-	m.Unlock()
-}
-
-// IsEnabled is part of UpdateStreamControl
-func (m *UpdateStreamControlMock) IsEnabled() bool {
-	m.Lock()
-	defer m.Unlock()
-	return m.enabled
-}
-
 // UpdateStreamImpl is the real implementation of UpdateStream
 // and UpdateStreamControl
 type UpdateStreamImpl struct {

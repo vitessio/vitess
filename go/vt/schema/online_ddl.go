@@ -108,13 +108,6 @@ type OnlineDDL struct {
 	WasReadyToComplete int64           `json:"was_ready_to_complete,omitempty"`
 }
 
-// FromJSON creates an OnlineDDL from json
-func FromJSON(bytes []byte) (*OnlineDDL, error) {
-	onlineDDL := &OnlineDDL{}
-	err := json.Unmarshal(bytes, onlineDDL)
-	return onlineDDL, err
-}
-
 // ParseOnlineDDLStatement parses the given SQL into a statement and returns the action type of the DDL statement, or error
 // if the statement is not a DDL
 func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action sqlparser.DDLAction, err error) {
