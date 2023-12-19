@@ -155,40 +155,6 @@ func processExactKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb
 }
 
 //
-// DestinationExactKeyRanges
-//
-
-// DestinationExactKeyRanges is the destination for multiple KeyRanges.
-// The KeyRanges must map exactly to one or more shards, and cannot
-// start or end in the middle of a shard.
-// It implements the Destination interface.
-type DestinationExactKeyRanges []*topodatapb.KeyRange
-
-// Resolve is part of the Destination interface.
-func (d DestinationExactKeyRanges) Resolve(allShards []*topodatapb.ShardReference, addShard func(shard string) error) error {
-	for _, kr := range d {
-		if err := processExactKeyRange(allShards, kr, addShard); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// String is part of the Destination interface.
-func (d DestinationExactKeyRanges) String() string {
-	var buffer strings.Builder
-	buffer.WriteString("DestinationExactKeyRanges(")
-	for i, kr := range d {
-		if i > 0 {
-			buffer.WriteByte(',')
-		}
-		buffer.WriteString(KeyRangeString(kr))
-	}
-	buffer.WriteByte(')')
-	return buffer.String()
-}
-
-//
 // DestinationKeyRange
 //
 
@@ -223,38 +189,6 @@ func processKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb.KeyR
 		}
 	}
 	return nil
-}
-
-//
-// DestinationKeyRanges
-//
-
-// DestinationKeyRanges is the destination for multiple KeyRanges.
-// It implements the Destination interface.
-type DestinationKeyRanges []*topodatapb.KeyRange
-
-// Resolve is part of the Destination interface.
-func (d DestinationKeyRanges) Resolve(allShards []*topodatapb.ShardReference, addShard func(shard string) error) error {
-	for _, kr := range d {
-		if err := processKeyRange(allShards, kr, addShard); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// String is part of the Destination interface.
-func (d DestinationKeyRanges) String() string {
-	var buffer strings.Builder
-	buffer.WriteString("DestinationKeyRanges(")
-	for i, kr := range d {
-		if i > 0 {
-			buffer.WriteByte(',')
-		}
-		buffer.WriteString(KeyRangeString(kr))
-	}
-	buffer.WriteByte(')')
-	return buffer.String()
 }
 
 //

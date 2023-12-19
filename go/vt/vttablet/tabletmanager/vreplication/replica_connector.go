@@ -25,11 +25,7 @@ import (
 
 	"context"
 
-	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
@@ -71,33 +67,12 @@ type ReplicaConnector struct {
 	vstreamer *vstreamer.Engine
 }
 
-func (c *ReplicaConnector) shutdown() {
+func (c *ReplicaConnector) Close() error {
 	c.vstreamer.Close()
 	c.se.Close()
-}
-
-func (c *ReplicaConnector) Open(ctx context.Context) error {
-	return nil
-}
-
-func (c *ReplicaConnector) Close(ctx context.Context) error {
-	c.shutdown()
 	return nil
 }
 
 func (c *ReplicaConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	return c.vstreamer.Stream(ctx, startPos, nil, filter, throttlerapp.ReplicaConnectorName, send)
-}
-
-// VStreamRows streams rows from query result
-func (c *ReplicaConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	var row []sqltypes.Value
-	if lastpk != nil {
-		r := sqltypes.Proto3ToResult(lastpk)
-		if len(r.Rows) != 1 {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", lastpk)
-		}
-		row = r.Rows[0]
-	}
-	return c.vstreamer.StreamRows(ctx, query, row, send)
 }

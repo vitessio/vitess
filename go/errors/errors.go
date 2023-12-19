@@ -32,7 +32,7 @@ func Unwrap(err error) []error {
 	return nil
 }
 
-// Unwrap unwraps an error created by errors.Join() in Go 1.20, into its components, recursively
+// UnwrapAll unwraps an error created by errors.Join() in Go 1.20, into its components, recursively
 func UnwrapAll(err error) (errs []error) {
 	if err == nil {
 		return nil
@@ -46,7 +46,7 @@ func UnwrapAll(err error) (errs []error) {
 	return []error{err}
 }
 
-// Unwrap unwraps an error created by errors.Join() in Go 1.20, into its components, recursively,
+// UnwrapFirst unwraps an error created by errors.Join() in Go 1.20, into its components, recursively,
 // and returns one (the first) unwrapped error
 func UnwrapFirst(err error) error {
 	if err == nil {
