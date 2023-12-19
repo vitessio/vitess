@@ -123,7 +123,11 @@ func (vw *VSchemaWrapper) GetSrvVschema() *vschemapb.SrvVSchema {
 }
 
 func (vw *VSchemaWrapper) ConnCollation() collations.ID {
-	return collations.CollationUtf8mb3ID
+	return collations.CollationUtf8mb4ID
+}
+
+func (vw *VSchemaWrapper) CollationEnv() *collations.Environment {
+	return collations.MySQL8()
 }
 
 func (vw *VSchemaWrapper) PlannerWarning(_ string) {

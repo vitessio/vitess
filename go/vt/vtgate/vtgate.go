@@ -30,6 +30,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -246,6 +248,7 @@ func Init(
 	cell string,
 	tabletTypesToWait []topodatapb.TabletType,
 	pv plancontext.PlannerVersion,
+	collationEnv *collations.Environment,
 ) *VTGate {
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
@@ -319,6 +322,7 @@ func Init(
 		noScatter,
 		pv,
 		warmingReadsPercent,
+		collationEnv,
 	)
 
 	if err := executor.defaultQueryLogger(); err != nil {

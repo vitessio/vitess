@@ -43,7 +43,7 @@ func (err UnsupportedCollationError) Error() string {
 // UnsupportedCollationHashError is returned when we try to get the hash value and are missing the collation to use
 var UnsupportedCollationHashError = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
 
-func compare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
+func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collationID collations.ID) (int, error) {
 	v1t := v1.Type()
 
 	// We have a fast path here for the case where both values are
@@ -129,7 +129,7 @@ func compare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
 		return 0, err
 	}
 
-	out, err := evalCompare(v1eval, v2eval)
+	out, err := evalCompare(v1eval, v2eval, collationEnv)
 	if err != nil {
 		return 0, err
 	}
@@ -147,7 +147,7 @@ func compare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
 // numeric, then a numeric comparison is performed after
 // necessary conversions. If none are numeric, then it's
 // a simple binary comparison. Uncomparable values return an error.
-func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
+func NullsafeCompare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collationID collations.ID) (int, error) {
 	// Based on the categorization defined for the types,
 	// we're going to allow comparison of the following:
 	// Null, isNumber, IsBinary. This will exclude IsQuoted
@@ -161,7 +161,7 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	if v2.IsNull() {
 		return 1, nil
 	}
-	return compare(v1, v2, collationID)
+	return compare(v1, v2, collationEnv, collationID)
 }
 
 // OrderByParams specifies the parameters for ordering.
@@ -176,6 +176,8 @@ type (
 
 		// Type for knowing if the collation is relevant
 		Type Type
+
+		CollationEnv *collations.Environment
 	}
 
 	Comparison []OrderByParams
@@ -199,7 +201,7 @@ func (obp *OrderByParams) String() string {
 	}
 
 	if sqltypes.IsText(obp.Type.Type()) && obp.Type.Collation() != collations.Unknown {
-		val += " COLLATE " + collations.Local().LookupName(obp.Type.Collation())
+		val += " COLLATE " + obp.CollationEnv.LookupName(obp.Type.Collation())
 	}
 	return val
 }
@@ -211,7 +213,7 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 
 	if cmp == 0 {
 		var err error
-		cmp, err = NullsafeCompare(v1, v2, obp.Type.Collation())
+		cmp, err = NullsafeCompare(v1, v2, obp.CollationEnv, obp.Type.Collation())
 		if err != nil {
 			_, isCollationErr := err.(UnsupportedCollationError)
 			if !isCollationErr || obp.WeightStringCol == -1 {
@@ -220,7 +222,7 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 			// in case of a comparison or collation error switch to using the weight string column for ordering
 			obp.Col = obp.WeightStringCol
 			obp.WeightStringCol = -1
-			cmp, err = NullsafeCompare(r1[obp.Col], r2[obp.Col], obp.Type.Collation())
+			cmp, err = NullsafeCompare(r1[obp.Col], r2[obp.Col], obp.CollationEnv, obp.Type.Collation())
 			if err != nil {
 				panic(err)
 			}

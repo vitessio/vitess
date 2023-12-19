@@ -23,12 +23,13 @@ package mysqlctl
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 )
 
 // CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
 // installation that hasn't been set up yet.
-func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (*Mysqld, *Mycnf, error) {
+func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int, collationEnv *collations.Environment) (*Mysqld, *Mycnf, error) {
 	mycnf := NewMycnf(tabletUID, mysqlPort)
 	// Choose a random MySQL server-id, since this is a fresh data dir.
 	// We don't want to use the tablet UID as the MySQL server-id,
@@ -46,20 +47,20 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 		mycnf.SocketFile = mysqlSocket
 	}
 
-	dbconfigs.GlobalDBConfigs.InitWithSocket(mycnf.SocketFile)
+	dbconfigs.GlobalDBConfigs.InitWithSocket(mycnf.SocketFile, collationEnv)
 	return NewMysqld(&dbconfigs.GlobalDBConfigs), mycnf, nil
 }
 
 // OpenMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
 // installation that already exists. The Mycnf will be built based on the my.cnf file
 // of the MySQL instance.
-func OpenMysqldAndMycnf(tabletUID uint32) (*Mysqld, *Mycnf, error) {
+func OpenMysqldAndMycnf(tabletUID uint32, collationEnv *collations.Environment) (*Mysqld, *Mycnf, error) {
 	// We pass a port of 0, this will be read and overwritten from the path on disk
 	mycnf, err := ReadMycnf(NewMycnf(tabletUID, 0), 0)
 	if err != nil {
 		return nil, nil, fmt.Errorf("couldn't read my.cnf file: %v", err)
 	}
 
-	dbconfigs.GlobalDBConfigs.InitWithSocket(mycnf.SocketFile)
+	dbconfigs.GlobalDBConfigs.InitWithSocket(mycnf.SocketFile, collationEnv)
 	return NewMysqld(&dbconfigs.GlobalDBConfigs), mycnf, nil
 }

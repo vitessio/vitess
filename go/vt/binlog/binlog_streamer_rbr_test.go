@@ -53,7 +53,7 @@ func TestStreamerParseRBREvents(t *testing.T) {
 		}, {
 			Name:    "message",
 			Type:    querypb.Type_VARCHAR,
-			Charset: uint32(collations.Default()),
+			Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 		}},
 	})
 
@@ -302,7 +302,7 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 		}, {
 			Name:    "delete",
 			Type:    querypb.Type_VARCHAR,
-			Charset: uint32(collations.Default()),
+			Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 		}},
 	})
 

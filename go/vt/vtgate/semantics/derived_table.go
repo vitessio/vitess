@@ -107,6 +107,10 @@ func (dt *DerivedTable) dependencies(colName string, org originable) (dependenci
 		if !strings.EqualFold(name, colName) {
 			continue
 		}
+		if len(dt.recursive) == 0 {
+			// we have unexpanded columns and can't figure this out
+			return nil, ShardedError{Inner: vterrors.VT09015()}
+		}
 		recursiveDeps, qt := dt.recursive[i], dt.types[i]
 
 		return createCertain(directDeps, recursiveDeps, qt), nil

@@ -71,7 +71,7 @@ func newHeartbeatReader(env tabletenv.Env) *heartbeatReader {
 		return &heartbeatReader{}
 	}
 
-	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
+	heartbeatInterval := config.ReplicationTracker.HeartbeatInterval
 	return &heartbeatReader{
 		env:      env,
 		enabled:  true,
@@ -80,8 +80,8 @@ func newHeartbeatReader(env tabletenv.Env) *heartbeatReader {
 		ticks:    timer.NewTimer(heartbeatInterval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
 		pool: connpool.NewPool(env, "HeartbeatReadPool", tabletenv.ConnPoolConfig{
-			Size:               1,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+			Size:        1,
+			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
 	}
 }

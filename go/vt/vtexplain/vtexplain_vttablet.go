@@ -98,11 +98,13 @@ type explainTablet struct {
 	mysqlQueries  []*MysqlQuery
 	currentTime   int
 	vte           *VTExplain
+
+	collationEnv *collations.Environment
 }
 
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
-func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatapb.Tablet) *explainTablet {
+func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatapb.Tablet, collationEnv *collations.Environment) *explainTablet {
 	db := fakesqldb.New(nil)
 	sidecardb.AddSchemaInitQueries(db, true)
 
@@ -117,9 +119,9 @@ func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatap
 	config.EnableTableGC = false
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(ctx, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias)
+	tsv := tabletserver.NewTabletServer(ctx, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias, collationEnv)
 
-	tablet := explainTablet{db: db, tsv: tsv, vte: vte}
+	tablet := explainTablet{db: db, tsv: tsv, vte: vte, collationEnv: collationEnv}
 	db.Handler = &tablet
 
 	tablet.QueryService = queryservice.Wrap(
@@ -129,7 +131,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatap
 		},
 	)
 
-	params, _ := db.ConnParams().MysqlParams()
+	params := db.ConnParams()
 	cp := *params
 	dbcfgs := dbconfigs.NewTestDBConfigs(cp, cp, "")
 	cnf := mysqlctl.NewMycnf(22222, 6802)
@@ -280,7 +282,7 @@ func (t *explainTablet) Close(ctx context.Context) error {
 	return t.tsv.Close(ctx)
 }
 
-func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tabletEnv, error) {
+func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collationEnv *collations.Environment) (*tabletEnv, error) {
 	tEnv := newTabletEnv()
 	schemaQueries := map[string]*sqltypes.Result{
 		"select unix_timestamp()": {
@@ -479,7 +481,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		colType := &querypb.Field{
 			Name:    "column_type",
 			Type:    sqltypes.VarChar,
-			Charset: uint32(collations.Default()),
+			Charset: uint32(collationEnv.DefaultConnectionCharset()),
 		}
 		colTypes = append(colTypes, colType)
 		for _, col := range ddl.GetTableSpec().Columns {
@@ -646,7 +648,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 	rows := make([][]sqltypes.Value, 0, rowCount)
 	for i, col := range colNames {
 		colType := colTypes[i]
-		cs := collations.DefaultCollationForType(colType)
+		cs := collations.CollationForType(colType, t.collationEnv.DefaultConnectionCharset())
 		fields[i] = &querypb.Field{
 			Name:    col,
 			Type:    colType,
@@ -734,7 +736,7 @@ func (t *explainTablet) analyzeWhere(selStmt *sqlparser.Select, tableColumnMap m
 		// Check if we have a duplicate value
 		isNewValue := true
 		for _, v := range inVal {
-			result, err := evalengine.NullsafeCompare(v, value, collations.Default())
+			result, err := evalengine.NullsafeCompare(v, value, t.collationEnv, t.collationEnv.DefaultConnectionCharset())
 			if err != nil {
 				return "", nil, 0, nil, err
 			}

@@ -136,6 +136,8 @@ type VRepl struct {
 	parser *vrepl.AlterTableParser
 
 	convertCharset map[string](*binlogdatapb.CharsetConversion)
+
+	collationEnv *collations.Environment
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
@@ -149,6 +151,7 @@ func NewVRepl(workflow string,
 	vreplShowCreateTable string,
 	alterQuery string,
 	analyzeTable bool,
+	collationEnv *collations.Environment,
 ) *VRepl {
 	return &VRepl{
 		workflow:                workflow,
@@ -165,6 +168,7 @@ func NewVRepl(workflow string,
 		enumToTextMap:           map[string]string{},
 		intToEnumMap:            map[string]bool{},
 		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
+		collationEnv:            collationEnv,
 	}
 }
 
@@ -553,11 +557,11 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		case sourceCol.Type == vrepl.StringColumnType:
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
-			fromCollation := collations.Local().DefaultCollationForCharset(sourceCol.Charset)
+			fromCollation := v.collationEnv.DefaultCollationForCharset(sourceCol.Charset)
 			if fromCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
 			}
-			toCollation := collations.Local().DefaultCollationForCharset(targetCol.Charset)
+			toCollation := v.collationEnv.DefaultCollationForCharset(targetCol.Charset)
 			// Let's see if target col is at all textual
 			if targetCol.Type == vrepl.StringColumnType && toCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)

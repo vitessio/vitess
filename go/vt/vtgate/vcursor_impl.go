@@ -104,6 +104,7 @@ type vcursorImpl struct {
 	topoServer     *topo.Server
 	logStats       *logstats.LogStats
 	collation      collations.ID
+	collationEnv   *collations.Environment
 
 	// fkChecksState stores the state of foreign key checks variable.
 	// This state is meant to be the final fk checks state after consulting the
@@ -138,6 +139,7 @@ func newVCursorImpl(
 	serv srvtopo.Server,
 	warnShardedOnly bool,
 	pv plancontext.PlannerVersion,
+	collationEnv *collations.Environment,
 ) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
@@ -162,7 +164,7 @@ func newVCursorImpl(
 		}
 	}
 	if connCollation == collations.Unknown {
-		connCollation = collations.Default()
+		connCollation = collationEnv.DefaultConnectionCharset()
 	}
 
 	warmingReadsPct := 0
@@ -188,6 +190,7 @@ func newVCursorImpl(
 		pv:                  pv,
 		warmingReadsPercent: warmingReadsPct,
 		warmingReadsChannel: warmingReadsChan,
+		collationEnv:        collationEnv,
 	}, nil
 }
 
@@ -204,6 +207,11 @@ func (vc *vcursorImpl) GetSystemVariables(f func(k string, v string)) {
 // ConnCollation returns the collation of this session
 func (vc *vcursorImpl) ConnCollation() collations.ID {
 	return vc.collation
+}
+
+// ConnCollation returns the collation of this session
+func (vc *vcursorImpl) CollationEnv() *collations.Environment {
+	return vc.collationEnv
 }
 
 func (vc *vcursorImpl) TimeZone() *time.Location {
@@ -1082,7 +1090,7 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	_, _ = buf.WriteString(vc.keyspace)
 	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
 	_, _ = buf.WriteString("+Collate:")
-	_, _ = buf.WriteString(collations.Local().LookupName(vc.collation))
+	_, _ = buf.WriteString(vc.collationEnv.LookupName(vc.collation))
 
 	if vc.destination != nil {
 		switch vc.destination.(type) {

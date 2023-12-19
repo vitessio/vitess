@@ -217,9 +217,6 @@ type Conn struct {
 	closing bool
 }
 
-// splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
-var splitStatementFunction = sqlparser.SplitStatementToPieces
-
 // PrepareData is a buffer used for store prepare statement meta data
 type PrepareData struct {
 	ParamsType  []int32
@@ -1235,7 +1232,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		var err error
-		queries, err = splitStatementFunction(query)
+		queries, err = sqlparser.SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1363,7 +1360,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	var err error
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err = splitStatementFunction(query)
+		queries, err = sqlparser.SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)

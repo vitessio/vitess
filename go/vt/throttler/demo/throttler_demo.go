@@ -26,6 +26,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -114,9 +116,9 @@ type replica struct {
 	wg       sync.WaitGroup
 }
 
-func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Duration, ts *topo.Server) *replica {
+func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Duration, ts *topo.Server, collationEnv *collations.Environment) *replica {
 	t := &testing.T{}
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv)
 	fakeTablet := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topodatapb.TabletType_REPLICA, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	fakeTablet.StartActionLoop(t, wr)
@@ -308,7 +310,8 @@ func main() {
 
 	log.Infof("start rate set to: %v", rate)
 	ts := memorytopo.NewServer(context.Background(), "cell1")
-	replica := newReplica(lagUpdateInterval, replicaDegrationInterval, replicaDegrationDuration, ts)
+	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
+	replica := newReplica(lagUpdateInterval, replicaDegrationInterval, replicaDegrationDuration, ts, collationEnv)
 	primary := &primary{replica: replica}
 	client := newClient(context.Background(), primary, replica, ts)
 	client.run()

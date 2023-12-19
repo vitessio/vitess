@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	"github.com/stretchr/testify/assert"
@@ -733,7 +734,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 	}
 
 	for _, tcase := range testcases {
-		plan, err := buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats())
+		plan, err := buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8())
 		gotPlan, _ := json.Marshal(plan)
 		wantPlan, _ := json.Marshal(tcase.plan)
 		if string(gotPlan) != string(wantPlan) {
@@ -747,7 +748,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 			t.Errorf("Filter err(%v): %s, want %v", tcase.input, gotErr, tcase.err)
 		}
 
-		plan, err = buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, copyState, binlogplayer.NewStats())
+		plan, err = buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, copyState, binlogplayer.NewStats(), collations.MySQL8())
 		if err != nil {
 			continue
 		}
@@ -777,7 +778,7 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 			Filter: "select * from t",
 		}},
 	}
-	_, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats())
+	_, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8())
 	want := "more than one target for source table t"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("buildReplicatorPlan err: %v, must contain: %v", err, want)
@@ -798,7 +799,7 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 			Filter: "",
 		}},
 	}
-	plan, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats())
+	plan, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8())
 	assert.NoError(t, err)
 
 	want := &TestReplicatorPlan{

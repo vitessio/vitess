@@ -146,7 +146,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 				{
 					Name:    "schema_name",
 					Type:    querypb.Type_VARCHAR,
-					Charset: uint32(collations.Default()),
+					Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 				},
 			},
 			Rows: [][]sqltypes.Value{
@@ -165,7 +165,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 				{
 					Name:    "ssl_flag",
 					Type:    querypb.Type_VARCHAR,
-					Charset: uint32(collations.Default()),
+					Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 				},
 			},
 			Rows: [][]sqltypes.Value{
@@ -180,12 +180,12 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 				{
 					Name:    "user",
 					Type:    querypb.Type_VARCHAR,
-					Charset: uint32(collations.Default()),
+					Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 				},
 				{
 					Name:    "user_data",
 					Type:    querypb.Type_VARCHAR,
-					Charset: uint32(collations.Default()),
+					Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 				},
 			},
 			Rows: [][]sqltypes.Value{
@@ -200,7 +200,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 			Fields: []*querypb.Field{{
 				Name:    "result",
 				Type:    querypb.Type_VARCHAR,
-				Charset: uint32(collations.Default()),
+				Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 			}},
 		})
 		time.Sleep(50 * time.Millisecond)
@@ -216,7 +216,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 					{
 						Name:    "result",
 						Type:    querypb.Type_VARCHAR,
-						Charset: uint32(collations.Default()),
+						Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 					},
 				},
 				Rows: [][]sqltypes.Value{
@@ -1502,7 +1502,7 @@ func TestServerFlush(t *testing.T) {
 	want1 := []*querypb.Field{{
 		Name:    "result",
 		Type:    querypb.Type_VARCHAR,
-		Charset: uint32(collations.Default()),
+		Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 	}}
 	assert.Equal(t, want1, flds)
 

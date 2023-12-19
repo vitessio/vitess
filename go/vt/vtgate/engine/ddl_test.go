@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -33,7 +34,9 @@ func TestDDL(t *testing.T) {
 			Table: sqlparser.NewTableName("a"),
 		},
 		DirectDDLEnabled: true,
-		OnlineDDL:        &OnlineDDL{},
+		OnlineDDL: &OnlineDDL{
+			CollationEnv: collations.MySQL8(),
+		},
 		NormalDDL: &Send{
 			Keyspace: &vindexes.Keyspace{
 				Name:    "ks",

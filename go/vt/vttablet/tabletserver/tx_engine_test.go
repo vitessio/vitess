@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/assert"
@@ -46,9 +47,9 @@ func TestTxEngineClose(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
 	config.TxPool.Size = 10
-	_ = config.Oltp.TxTimeoutSeconds.Set("100ms")
-	_ = config.GracePeriods.ShutdownSeconds.Set("0s")
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	config.Oltp.TxTimeout = 100 * time.Millisecond
+	config.GracePeriods.Shutdown = 0
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8()))
 
 	// Normal close.
 	te.AcceptReadWrite()
@@ -151,7 +152,7 @@ func TestTxEngineBegin(t *testing.T) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8()))
 
 	for _, exec := range []func() (int64, string, error){
 		func() (int64, string, error) {
@@ -197,7 +198,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8()))
 	te.AcceptReadOnly()
 	options := &querypb.ExecuteOptions{}
 	connID, _, err := te.ReserveBegin(ctx, options, nil, nil)
@@ -533,9 +534,9 @@ func setupTxEngine(db *fakesqldb.DB) *TxEngine {
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
 	config.TxPool.Size = 10
-	config.Oltp.TxTimeoutSeconds.Set("100ms")
-	_ = config.GracePeriods.ShutdownSeconds.Set("0s")
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	config.Oltp.TxTimeout = 100 * time.Millisecond
+	config.GracePeriods.Shutdown = 0
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8()))
 	return te
 }
 
@@ -567,7 +568,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8()))
 
 	options := &querypb.ExecuteOptions{}
 	_, err := te.Reserve(ctx, options, 0, nil)

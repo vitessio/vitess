@@ -97,7 +97,7 @@ func (e *Executor) newExecute(
 			}
 		}
 
-		vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+		vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv, e.collationEnv)
 		if err != nil {
 			return err
 		}

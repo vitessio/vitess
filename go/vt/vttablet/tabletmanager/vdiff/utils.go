@@ -33,7 +33,7 @@ import (
 )
 
 // newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns
-func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compareColInfo) *engine.MergeSort {
+func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compareColInfo, collationEnv *collations.Environment) *engine.MergeSort {
 	prims := make([]engine.StreamExecutor, 0, len(participants))
 	for _, participant := range participants {
 		prims = append(prims, participant)
@@ -46,7 +46,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 		if cpk.collation != collations.Unknown {
 			collation = cpk.collation
 		}
-		ob[i] = evalengine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: evalengine.NewType(sqltypes.Unknown, collation)}
+		ob[i] = evalengine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: evalengine.NewType(sqltypes.Unknown, collation), CollationEnv: collationEnv}
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
@@ -63,10 +63,10 @@ func encodeString(in string) string {
 	return buf.String()
 }
 
-func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
+func pkColsToGroupByParams(pkCols []int, collationEnv *collations.Environment) []*engine.GroupByParams {
 	var res []*engine.GroupByParams
 	for _, col := range pkCols {
-		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1})
+		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, CollationEnv: collationEnv})
 	}
 	return res
 }

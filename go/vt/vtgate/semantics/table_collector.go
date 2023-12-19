@@ -231,10 +231,11 @@ func (tc *tableCollector) createTable(
 	vindex vindexes.Vindex,
 ) TableInfo {
 	table := &RealTable{
-		tableName:   alias.As.String(),
-		ASTNode:     alias,
-		Table:       tbl,
-		isInfSchema: isInfSchema,
+		tableName:    alias.As.String(),
+		ASTNode:      alias,
+		Table:        tbl,
+		isInfSchema:  isInfSchema,
+		collationEnv: tc.si.CollationEnv(),
 	}
 
 	if alias.As.IsEmpty() {

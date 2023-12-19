@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/remote"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -46,9 +45,7 @@ var collationEnv *collations.Environment
 
 func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.SetMySQLServerVersionForTest(mySQLVersion)
-	collationEnv = collations.NewEnvironment(mySQLVersion)
+	collationEnv = collations.NewEnvironment("8.0.30")
 }
 
 func getSQLQueries(t *testing.T, testfile string) []string {

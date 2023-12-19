@@ -29,11 +29,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -92,6 +92,8 @@ var (
 	detachedMode         bool
 	keepAliveTimeout     time.Duration
 	disableRedoLog       bool
+
+	collationEnv *collations.Environment
 
 	// Deprecated, use "Phase" instead.
 	deprecatedDurationByPhase = stats.NewGaugesWithSingleLabel(
@@ -215,6 +217,8 @@ func init() {
 	Main.Flags().BoolVar(&disableRedoLog, "disable-redo-log", disableRedoLog, "Disable InnoDB redo log during replication-from-primary phase of backup.")
 
 	acl.RegisterFlags(Main.Flags())
+
+	collationEnv = collations.NewEnvironment(servenv.MySQLServerVersion())
 }
 
 func run(_ *cobra.Command, args []string) error {
@@ -327,7 +331,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}()
 
 	// Start up mysqld as if we are mysqlctld provisioning a fresh tablet.
-	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, mysqlSocket, mysqlPort)
+	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, mysqlSocket, mysqlPort, collationEnv)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
