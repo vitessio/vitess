@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -89,21 +90,20 @@ func testClientServer(t *testing.T, combineCerts bool) {
 	dialer := new(net.Dialer)
 	dialer.Timeout = 10 * time.Second
 
-	wg := sync.WaitGroup{}
-
 	//
 	// Positive case: accept on server side, connect a client, send data.
 	//
-	var clientErr error
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		clientConn, clientErr := tls.DialWithDialer(dialer, "tcp", addr, clientConfig)
-		if clientErr == nil {
-			_, _ = clientConn.Write([]byte{42})
-			clientConn.Close()
+	var clientEG errgroup.Group
+	clientEG.Go(func() error {
+		conn, err := tls.DialWithDialer(dialer, "tcp", addr, clientConfig)
+		if err != nil {
+			return err
 		}
-	}()
+
+		_, _ = conn.Write([]byte{42})
+		_ = conn.Close()
+		return nil
+	})
 
 	serverConn, err := listener.Accept()
 	if err != nil {
@@ -119,10 +119,8 @@ func testClientServer(t *testing.T, combineCerts bool) {
 	}
 	serverConn.Close()
 
-	wg.Wait()
-
-	if clientErr != nil {
-		t.Fatalf("Dial failed: %v", clientErr)
+	if err := clientEG.Wait(); err != nil {
+		t.Fatalf("client dial failed: %v", err)
 	}
 
 	//
@@ -142,21 +140,23 @@ func testClientServer(t *testing.T, combineCerts bool) {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}
 
-	var serverErr error
-	wg.Add(1)
-	go func() {
+	var serverEG errgroup.Group
+	serverEG.Go(func() error {
 		// We expect the Accept to work, but the first read to fail.
-		defer wg.Done()
-		serverConn, serverErr := listener.Accept()
-		// This will fail.
-		if serverErr == nil {
-			result := make([]byte, 1)
-			if n, err := serverConn.Read(result); err == nil {
-				fmt.Printf("Was able to read from server: %v\n", n)
-			}
-			serverConn.Close()
+		conn, err := listener.Accept()
+		if err != nil {
+			return err
 		}
-	}()
+
+		// This will fail.
+		result := make([]byte, 1)
+		if n, err := conn.Read(result); err == nil {
+			return fmt.Errorf("unexpectedly able to read %d bytes from server", n)
+		}
+
+		_ = conn.Close()
+		return nil
+	})
 
 	// When using TLS 1.2, the Dial will fail.
 	// With TLS 1.3, the Dial will succeed and the first Read will fail.
@@ -167,9 +167,9 @@ func testClientServer(t *testing.T, combineCerts bool) {
 		}
 		return
 	}
-	wg.Wait()
-	if serverErr != nil {
-		t.Fatalf("Connection failed: %v", serverErr)
+
+	if err := serverEG.Wait(); err != nil {
+		t.Fatalf("server read failed: %v", err)
 	}
 
 	data := make([]byte, 1)
