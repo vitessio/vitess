@@ -933,8 +933,8 @@ func (wr *Wrangler) getCopyStates(ctx context.Context, tablet *topo.TabletInfo, 
 		return nil, err
 	}
 
-	cs := make(map[int64][]copyState)
 	result := sqltypes.Proto3ToResult(qr)
+	cs := make(map[int64][]copyState, 0, len(result.Rows))
 	if result != nil {
 		for _, row := range result.Rows {
 			vreplID, err := row[0].ToInt64()
