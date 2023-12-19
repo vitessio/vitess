@@ -452,7 +452,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	for tablet, result := range results {
 		qr := sqltypes.Proto3ToResult(result)
 
-		var streamIds []int64
+		streamIds := make([]int64, 0, len(qr.Rows))
 		for _, row := range qr.Named().Rows {
 			streamId, err := row.ToInt64("id")
 			if err != nil {
