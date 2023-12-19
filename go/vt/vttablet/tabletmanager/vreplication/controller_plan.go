@@ -57,7 +57,9 @@ const (
 // multiple workflows.
 // The engine's exec function -- used by the VReplicationExec RPC -- should
 // provide guardrails for data changing statements and if the user wants get
-// around them they can e.g. use the ExecuteAsDba RPC.
+// around them they can e.g. use the ExecuteFetchAsDba RPC.
+// If you truly do want to affect multiple workflows, you can be explicit
+// and intentional by e.g. adding an id != id+1 predicate to your WHERE clause.
 var isSelective = func(where *sqlparser.Where, columns ...*sqlparser.ColName) bool {
 	if where == nil {
 		return false
@@ -81,11 +83,11 @@ var isSelective = func(where *sqlparser.Where, columns ...*sqlparser.ColName) bo
 				}
 			}
 			// If we found a desired column, check that it is being used with an
-			// equality operator with = rather than != OR an in clause, logically
-			// being equal to any of N things.
+			// equality operator OR an in clause, logically being equal (or not) to
+			// any of N things.
 			if wantedColumn &&
-				((node.Operator == sqlparser.EqualOp && node.Operator.ToString() == sqlparser.EqualStr) ||
-					node.Operator == sqlparser.InOp) {
+				((node.Operator == sqlparser.EqualOp || node.Operator == sqlparser.NotEqualOp) ||
+					(node.Operator == sqlparser.InOp || node.Operator == sqlparser.NotInOp)) {
 				selective = true  // This is a safe statement
 				return false, nil // We can stop walking
 			}

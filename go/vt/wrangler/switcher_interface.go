@@ -27,7 +27,7 @@ import (
 
 type iswitcher interface {
 	lockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error)
-	cancelMigration(ctx context.Context, sm *workflow.StreamMigrator)
+	cancelStreamMigrations(ctx context.Context, sm *workflow.StreamMigrator)
 	stopStreams(ctx context.Context, sm *workflow.StreamMigrator) ([]string, error)
 	stopSourceWrites(ctx context.Context) error
 	waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error

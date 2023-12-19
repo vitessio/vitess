@@ -164,10 +164,13 @@ func (wr *Wrangler) buildResharder(ctx context.Context, keyspace, workflow strin
 	return rs, nil
 }
 
+// validateTargets ensures that the target shards have no existing
+// VReplication workflow streams as that is an invalid state for the
+// non-serving shards involved in a Reshard.
 func (rs *resharder) validateTargets(ctx context.Context) error {
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary := rs.targetPrimaries[target.ShardName()]
-		query := fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(targetPrimary.DbName()), encodeString(rs.workflow))
+		query := fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s", encodeString(targetPrimary.DbName()))
 		p3qr, err := rs.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query)
 		if err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
@@ -298,6 +301,8 @@ func (rs *resharder) copySchema(ctx context.Context) error {
 	return err
 }
 
+// createStreams creates all of the VReplication streams that
+// need to now exist on the new shards.
 func (rs *resharder) createStreams(ctx context.Context) error {
 	var excludeRules []*binlogdatapb.Rule
 	for tableName, table := range rs.vschema.Tables {
@@ -359,8 +364,13 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 func (rs *resharder) startStreams(ctx context.Context) error {
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary := rs.targetPrimaries[target.ShardName()]
-		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow=%s",
-			encodeString(targetPrimary.DbName()), encodeString(rs.workflow))
+		// This is the rare case where we truly want to update every stream/record
+		// because we've already confirmed that there were no existing workflows
+		// on the shards when we started, and we want to start all of the ones
+		// that we've created on the new shards as we're migrating them.
+		// We use the id != id+1 predicate to indicate that this is intentional
+		// and safe.
+		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and id != id+1", encodeString(targetPrimary.DbName()))
 		if _, err := rs.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
 		}

@@ -290,7 +290,6 @@ func TestEngineExec(t *testing.T) {
 	unsafeQueries := []string{
 		"delete from _vt.vreplication",
 		"delete from _vt.vreplication where id > 1",
-		"delete from _vt.vreplication where workflow != 'good'",
 		"delete from _vt.vreplication where message != 'FROZEN'",
 		"update _vt.vreplication set workflow = 'bad'",
 		"update _vt.vreplication set state = 'Stopped' where id > 1",

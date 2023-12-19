@@ -112,9 +112,9 @@ func (r *switcher) stopStreams(ctx context.Context, sm *workflow.StreamMigrator)
 	return sm.StopStreams(ctx)
 }
 
-func (r *switcher) cancelMigration(ctx context.Context, sm *workflow.StreamMigrator) {
+func (r *switcher) cancelStreamMigrations(ctx context.Context, sm *workflow.StreamMigrator) {
 	r.ts.Logger().Infof("Cancel was requested.")
-	r.ts.cancelMigration(ctx, sm)
+	r.ts.cancelStreamMigrations(ctx, sm)
 }
 
 func (r *switcher) lockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {

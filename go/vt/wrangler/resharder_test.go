@@ -104,8 +104,8 @@ func TestResharderOneToMany(t *testing.T) {
 					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks', 4, 0, false\)`+eol,
 				&sqltypes.Result{},
 			)
-			env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
-			env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
+			env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
 
 			err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, tc.cells, tc.tabletTypes, defaultOnDDL, true, false, false)
 			require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestResharderManyToOne(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -185,8 +185,8 @@ func TestResharderManyToMany(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -240,8 +240,8 @@ func TestResharderOneRefTable(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -363,8 +363,8 @@ func TestResharderOneRefStream(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -442,8 +442,8 @@ func TestResharderNoRefStream(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -484,8 +484,8 @@ func TestResharderCopySchema(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and workflow='resharderTest'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks' and id != id+1", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, false, "", "", defaultOnDDL, true, false, false)
 	assert.NoError(t, err)
@@ -596,8 +596,8 @@ func TestResharderTargetAlreadyResharding(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(200, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, rsSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), result)
-	env.tmc.expectVRQuery(210, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", env.keyspace), result)
+	env.tmc.expectVRQuery(210, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
 	env.tmc.expectVRQuery(100, rsSelectFrozenQuery, &sqltypes.Result{})
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false, false)
 	assert.EqualError(t, err, "buildResharder: validateTargets: some streams already exist in the target shards, please clean them up and retry the command")

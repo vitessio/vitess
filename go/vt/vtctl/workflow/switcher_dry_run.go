@@ -213,7 +213,7 @@ func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *StreamMigrator) (
 	return nil, nil
 }
 
-func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *StreamMigrator) {
+func (dr *switcherDryRun) cancelStreamMigrations(ctx context.Context, sm *StreamMigrator) {
 	dr.drLog.Log("Cancel stream migrations as requested")
 }
 
