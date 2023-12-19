@@ -61,7 +61,7 @@ type tablePlan struct {
 	aggregates []*engine.AggregateParams
 }
 
-func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName string) (*tablePlan, error) {
+func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName string, collationEnv *collations.Environment) (*tablePlan, error) {
 	tp := &tablePlan{
 		table:  td.table,
 		dbName: dbName,
@@ -114,7 +114,8 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 					aggregates = append(aggregates, engine.NewAggregateParam(
 						/*opcode*/ opcode.AggregateSum,
 						/*offset*/ len(sourceSelect.SelectExprs)-1,
-						/*alias*/ ""))
+						/*alias*/ "", collationEnv),
+					)
 				}
 			}
 		default:
@@ -168,7 +169,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 		}
 	}
 
-	err = tp.findPKs(dbClient, targetSelect)
+	err = tp.findPKs(dbClient, targetSelect, collationEnv)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +194,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 }
 
 // findPKs identifies PKs and removes them from the columns to do data comparison.
-func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlparser.Select) error {
+func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlparser.Select, collationEnv *collations.Environment) error {
 	if len(tp.table.PrimaryKeyColumns) == 0 {
 		return nil
 	}
@@ -230,7 +231,7 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 			Direction: sqlparser.AscOrder,
 		})
 	}
-	if err := tp.getPKColumnCollations(dbClient); err != nil {
+	if err := tp.getPKColumnCollations(dbClient, collationEnv); err != nil {
 		return vterrors.Wrapf(err, "error getting PK column collations for table %s", tp.table.Name)
 	}
 	tp.orderBy = orderby
@@ -242,7 +243,7 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 // sorting when we do the merge sort and for the comparisons. It then
 // saves the collations in the tablePlan's comparePKs column info
 // structs for those subsequent operations.
-func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient) error {
+func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient, collationEnv *collations.Environment) error {
 	if len(tp.comparePKs) == 0 {
 		return nil
 	}
@@ -269,7 +270,6 @@ func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient) error
 	if qr == nil || len(qr.Rows) != len(tp.comparePKs) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected result for query %s: %+v", query, qr)
 	}
-	collationEnv := collations.Local()
 	for _, row := range qr.Named().Rows {
 		columnName := row["column_name"].ToString()
 		collateName := strings.ToLower(row["collation_name"].ToString())

@@ -52,7 +52,7 @@ func testRemoteWeights(t *testing.T, golden io.Writer, cases []testweight) {
 
 	for _, tc := range cases {
 		t.Run(tc.collation, func(t *testing.T) {
-			local := collations.Local().LookupByName(tc.collation)
+			local := collations.MySQL8().LookupByName(tc.collation)
 			remote := remote.NewCollation(conn, tc.collation)
 			localResult := colldata.Lookup(local).WeightString(nil, tc.input, 0)
 			remoteResult := remote.WeightString(nil, tc.input, 0)
@@ -85,7 +85,7 @@ func testRemoteComparison(t *testing.T, golden io.Writer, cases []testcmp) {
 
 	for _, tc := range cases {
 		t.Run(tc.collation, func(t *testing.T) {
-			local := collations.Local().LookupByName(tc.collation)
+			local := collations.MySQL8().LookupByName(tc.collation)
 			remote := remote.NewCollation(conn, tc.collation)
 			localResult := normalizecmp(colldata.Lookup(local).Collate(tc.left, tc.right, false))
 			remoteResult := remote.Collate(tc.left, tc.right, false)

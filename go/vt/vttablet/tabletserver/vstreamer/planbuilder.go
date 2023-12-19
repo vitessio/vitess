@@ -56,6 +56,8 @@ type Plan struct {
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
 	Filters []Filter
+
+	collationEnv *collations.Environment
 }
 
 // Opcode enumerates the operators supported in a where clause
@@ -162,14 +164,14 @@ func getOpcode(comparison *sqlparser.ComparisonExpr) (Opcode, error) {
 }
 
 // compare returns true after applying the comparison specified in the Filter to the actual data in the column
-func compare(comparison Opcode, columnValue, filterValue sqltypes.Value, charset collations.ID) (bool, error) {
+func compare(comparison Opcode, columnValue, filterValue sqltypes.Value, collationEnv *collations.Environment, charset collations.ID) (bool, error) {
 	// use null semantics: return false if either value is null
 	if columnValue.IsNull() || filterValue.IsNull() {
 		return false, nil
 	}
 	// at this point neither values can be null
 	// NullsafeCompare returns 0 if values match, -1 if columnValue < filterValue, 1 if columnValue > filterValue
-	result, err := evalengine.NullsafeCompare(columnValue, filterValue, charset)
+	result, err := evalengine.NullsafeCompare(columnValue, filterValue, collationEnv, charset)
 	if err != nil {
 		return false, err
 	}
@@ -228,7 +230,7 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 				return false, nil
 			}
 		default:
-			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value, charsets[filter.ColNum])
+			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value, plan.collationEnv, charsets[filter.ColNum])
 			if err != nil {
 				return false, err
 			}
@@ -344,7 +346,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 	return ruleMatches(table.Name.String(), filter)
 }
 
-func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*Plan, error) {
+func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter, collationEnv *collations.Environment) (*Plan, error) {
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):
@@ -356,9 +358,9 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*
 			if !result {
 				continue
 			}
-			return buildREPlan(ti, vschema, rule.Filter)
+			return buildREPlan(ti, vschema, rule.Filter, collationEnv)
 		case rule.Match == ti.Name:
-			return buildTablePlan(ti, vschema, rule.Filter)
+			return buildTablePlan(ti, vschema, rule.Filter, collationEnv)
 		}
 	}
 	return nil, nil
@@ -366,9 +368,10 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*
 
 // buildREPlan handles cases where Match has a regular expression.
 // If so, the Filter can be an empty string or a keyrange, like "-80".
-func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error) {
+func buildREPlan(ti *Table, vschema *localVSchema, filter string, collationEnv *collations.Environment) (*Plan, error) {
 	plan := &Plan{
-		Table: ti,
+		Table:        ti,
+		collationEnv: collationEnv,
 	}
 	plan.ColExprs = make([]ColExpr, len(ti.Fields))
 	for i, col := range ti.Fields {
@@ -409,7 +412,7 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 
 // BuildTablePlan handles cases where a specific table name is specified.
 // The filter must be a select statement.
-func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, error) {
+func buildTablePlan(ti *Table, vschema *localVSchema, query string, collationEnv *collations.Environment) (*Plan, error) {
 	sel, fromTable, err := analyzeSelect(query)
 	if err != nil {
 		log.Errorf("%s", err.Error())
@@ -421,7 +424,8 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, erro
 	}
 
 	plan := &Plan{
-		Table: ti,
+		Table:        ti,
+		collationEnv: collationEnv,
 	}
 	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
 		log.Errorf("%s", err.Error())
@@ -532,11 +536,14 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			pv, err := evalengine.Translate(val, nil)
+			pv, err := evalengine.Translate(val, &evalengine.Config{
+				Collation:    plan.collationEnv.DefaultConnectionCharset(),
+				CollationEnv: plan.collationEnv,
+			})
 			if err != nil {
 				return err
 			}
-			env := evalengine.EmptyExpressionEnv()
+			env := evalengine.EmptyExpressionEnv(plan.collationEnv)
 			resolved, err := env.Evaluate(pv)
 			if err != nil {
 				return err
@@ -544,7 +551,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			plan.Filters = append(plan.Filters, Filter{
 				Opcode: opcode,
 				ColNum: colnum,
-				Value:  resolved.Value(collations.Default()),
+				Value:  resolved.Value(plan.collationEnv.DefaultConnectionCharset()),
 			})
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {

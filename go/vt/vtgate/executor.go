@@ -122,6 +122,8 @@ type Executor struct {
 
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
+
+	collationEnv *collations.Environment
 }
 
 var executorOnce sync.Once
@@ -152,6 +154,7 @@ func NewExecutor(
 	noScatter bool,
 	pv plancontext.PlannerVersion,
 	warmingReadsPercent int,
+	collationEnv *collations.Environment,
 ) *Executor {
 	e := &Executor{
 		serv:                serv,
@@ -168,6 +171,7 @@ func NewExecutor(
 		plans:               plans,
 		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
+		collationEnv:        collationEnv,
 	}
 
 	vschemaacl.Init()
@@ -504,11 +508,15 @@ func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlpars
 					return err
 				}
 
-				evalExpr, err := evalengine.Translate(expr, nil)
+				evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
+					Collation:    vcursor.collation,
+					CollationEnv: vcursor.collationEnv,
+					SQLMode:      evalengine.ParseSQLMode(vcursor.SQLMode()),
+				})
 				if err != nil {
 					return err
 				}
-				evaluated, err := evalengine.EmptyExpressionEnv().Evaluate(evalExpr)
+				evaluated, err := evalengine.NewExpressionEnv(context.Background(), nil, vcursor).Evaluate(evalExpr)
 				if err != nil {
 					return err
 				}
@@ -1335,7 +1343,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv, e.collationEnv)
 
 	stmt, reservedVars, err := parseAndValidateQuery(query)
 	if err != nil {

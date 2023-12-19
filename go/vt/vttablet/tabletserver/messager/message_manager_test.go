@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -833,7 +834,7 @@ type fakeTabletServer struct {
 func newFakeTabletServer() *fakeTabletServer {
 	config := tabletenv.NewDefaultConfig()
 	return &fakeTabletServer{
-		Env: tabletenv.NewEnv(config, "MessagerTest"),
+		Env: tabletenv.NewEnv(config, "MessagerTest", collations.MySQL8()),
 	}
 }
 

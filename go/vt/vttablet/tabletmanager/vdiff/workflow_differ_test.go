@@ -67,8 +67,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -87,8 +87,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -107,8 +107,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -127,8 +127,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c2, c1 from t1 order by c1 asc",
 			targetQuery: "select c2, c1 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
-			comparePKs:  []compareColInfo{{1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			comparePKs:  []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{1},
 			selectPks:   []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -147,8 +147,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c0 as c1, c2 from t2 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -168,8 +168,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["nonpktext"]],
 			sourceQuery: "select c1, textcol from nonpktext order by c1 asc",
 			targetQuery: "select c1, textcol from nonpktext order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "textcol"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "textcol"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -189,8 +189,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["nonpktext"]],
 			sourceQuery: "select textcol, c1 from nonpktext order by c1 asc",
 			targetQuery: "select textcol, c1 from nonpktext order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "textcol"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
-			comparePKs:  []compareColInfo{{1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "textcol"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			comparePKs:  []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{1},
 			selectPks:   []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -210,8 +210,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["pktext"]],
 			sourceQuery: "select textcol, c2 from pktext order by textcol asc",
 			targetQuery: "select textcol, c2 from pktext order by textcol asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -231,8 +231,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["pktext"]],
 			sourceQuery: "select c2, textcol from pktext order by textcol asc",
 			targetQuery: "select c2, textcol from pktext order by textcol asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
-			comparePKs:  []compareColInfo{{1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
+			comparePKs:  []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			pkCols:      []int{1},
 			selectPks:   []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -252,8 +252,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["nopk"]],
 			sourceQuery: "select c1, c2, c3 from nopk order by c1 asc, c2 asc, c3 asc",
 			targetQuery: "select c1, c2, c3 from nopk order by c1 asc, c2 asc, c3 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c3"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			pkCols:      []int{0, 1, 2},
 			selectPks:   []int{0, 1, 2},
 			orderBy: sqlparser.OrderBy{
@@ -283,8 +283,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["nopkwithpke"]],
 			sourceQuery: "select c1, c2, c3 from nopkwithpke order by c3 asc",
 			targetQuery: "select c1, c2, c3 from nopkwithpke order by c3 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}, {2, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c3"}},
-			comparePKs:  []compareColInfo{{2, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			comparePKs:  []compareColInfo{{2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			pkCols:      []int{2},
 			selectPks:   []int{2},
 			orderBy: sqlparser.OrderBy{
@@ -306,8 +306,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["pktext"]],
 			sourceQuery: "select c2, a + b as textcol from pktext order by textcol asc",
 			targetQuery: "select c2, textcol from pktext order by textcol asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
-			comparePKs:  []compareColInfo{{1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
+			comparePKs:  []compareColInfo{{1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "textcol"}},
 			pkCols:      []int{1},
 			selectPks:   []int{1},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -326,8 +326,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["multipk"]],
 			sourceQuery: "select c1, c2 from multipk order by c1 asc, c2 asc",
 			targetQuery: "select c1, c2 from multipk order by c1 asc, c2 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c2"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}},
 			pkCols:      []int{0, 1},
 			selectPks:   []int{0, 1},
 			orderBy: sqlparser.OrderBy{
@@ -353,8 +353,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -375,8 +375,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -397,8 +397,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where in_keyrange('-80') and c2 = 2 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -419,8 +419,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and c1 = 1 and in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -441,8 +441,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 where c2 = 2 and in_keyrange('-80') order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -462,8 +462,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["t1"]],
 			sourceQuery: "select c1, c2 from t1 group by c1 order by c1 asc",
 			targetQuery: "select c1, c2 from t1 order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -483,8 +483,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["aggr"]],
 			sourceQuery: "select c1, c2, count(*) as c3, sum(c4) as c4 from t1 group by c1 order by c1 asc",
 			targetQuery: "select c1, c2, c3, c4 from aggr order by c1 asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c2"}, {2, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c3"}, {3, collations.Local().LookupByName(sqltypes.NULL.String()), false, "c4"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "c1"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c3"}, {3, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c4"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -492,8 +492,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 				Direction: sqlparser.AscOrder,
 			}},
 			aggregates: []*engine.AggregateParams{
-				engine.NewAggregateParam(opcode.AggregateSum, 2, ""),
-				engine.NewAggregateParam(opcode.AggregateSum, 3, ""),
+				engine.NewAggregateParam(opcode.AggregateSum, 2, "", collations.MySQL8()),
+				engine.NewAggregateParam(opcode.AggregateSum, 3, "", collations.MySQL8()),
 			},
 		},
 	}, {
@@ -508,8 +508,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			table:       testSchema.TableDefinitions[tableDefMap["datze"]],
 			sourceQuery: "select id, dt from datze order by id asc",
 			targetQuery: "select id, convert_tz(dt, 'UTC', 'US/Pacific') as dt from datze order by id asc",
-			compareCols: []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "id"}, {1, collations.Local().LookupByName(sqltypes.NULL.String()), false, "dt"}},
-			comparePKs:  []compareColInfo{{0, collations.Local().LookupByName(sqltypes.NULL.String()), true, "id"}},
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "id"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "dt"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "id"}},
 			pkCols:      []int{0},
 			selectPks:   []int{0},
 			orderBy: sqlparser.OrderBy{&sqlparser.Order{
@@ -532,7 +532,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			dbc := binlogplayer.NewMockDBClient(t)
 			filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
 			vdiffenv.opts.CoreOptions.Tables = tcase.table
-			wd, err := newWorkflowDiffer(ct, vdiffenv.opts)
+			wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
 			require.NoError(t, err)
 			dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 			if len(tcase.tablePlan.table.PrimaryKeyColumns) == 0 {
@@ -551,7 +551,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			if len(tcase.tablePlan.comparePKs) > 0 {
 				columnList := make([]string, len(tcase.tablePlan.comparePKs))
 				collationList := make([]string, len(tcase.tablePlan.comparePKs))
-				env := collations.Local()
+				env := collations.MySQL8()
 				for i := range tcase.tablePlan.comparePKs {
 					columnList[i] = tcase.tablePlan.comparePKs[i].colName
 					if tcase.tablePlan.comparePKs[i].collation != collations.Unknown {
@@ -646,7 +646,7 @@ func TestBuildPlanInclude(t *testing.T) {
 	for _, tcase := range testcases {
 		dbc := binlogplayer.NewMockDBClient(t)
 		vdiffenv.opts.CoreOptions.Tables = strings.Join(tcase.tables, ",")
-		wd, err := newWorkflowDiffer(ct, vdiffenv.opts)
+		wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
 		require.NoError(t, err)
 		for _, table := range tcase.tables {
 			query := fmt.Sprintf(`select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
@@ -719,7 +719,7 @@ func TestBuildPlanFailure(t *testing.T) {
 		dbc := binlogplayer.NewMockDBClient(t)
 		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
 		vdiffenv.opts.CoreOptions.Tables = tcase.input.Match
-		wd, err := newWorkflowDiffer(ct, vdiffenv.opts)
+		wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
 		require.NoError(t, err)
 		dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 		err = wd.buildPlan(dbc, filter, testSchema)

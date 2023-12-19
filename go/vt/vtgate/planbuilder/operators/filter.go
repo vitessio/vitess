@@ -119,8 +119,9 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (Operator, *ApplyResult) 
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	cfg := &evalengine.Config{
-		ResolveType: ctx.SemTable.TypeForExpr,
-		Collation:   ctx.SemTable.Collation,
+		ResolveType:  ctx.SemTable.TypeForExpr,
+		Collation:    ctx.SemTable.Collation,
+		CollationEnv: ctx.VSchema.CollationEnv(),
 	}
 
 	predicate := sqlparser.AndExpressions(f.Predicates...)

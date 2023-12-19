@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/require"
@@ -46,7 +47,7 @@ func TestInitErrors(t *testing.T) {
 	ddlErrorCount.Set(0)
 	ddlCount.Set(0)
 
-	cp := db.ConnParams()
+	cp := dbconfigs.New(db.ConnParams())
 	conn, err := cp.Connect(ctx)
 	require.NoError(t, err)
 
@@ -128,7 +129,7 @@ func TestMiscSidecarDB(t *testing.T) {
 	db.AddQuery("use dbname", &sqltypes.Result{})
 	db.AddQueryPattern("set @@session.sql_mode=.*", &sqltypes.Result{})
 
-	cp := db.ConnParams()
+	cp := dbconfigs.New(db.ConnParams())
 	conn, err := cp.Connect(ctx)
 	require.NoError(t, err)
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {

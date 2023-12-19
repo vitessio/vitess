@@ -23,6 +23,7 @@ import (
 
 	fuzz "github.com/AdaLogics/go-fuzz-headers"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -57,7 +58,7 @@ func FuzzGetPlan(data []byte) int {
 	// Set up the environment
 	config := tabletenv.NewDefaultConfig()
 	config.DB = newDBConfigs(db)
-	env := tabletenv.NewEnv(config, "TabletServerTest")
+	env := tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8())
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 	defer qe.Close()

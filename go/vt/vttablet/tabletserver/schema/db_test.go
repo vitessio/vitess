@@ -26,9 +26,9 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/maps2"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -96,7 +96,7 @@ func TestGenerateFullQuery(t *testing.T) {
 
 func TestGetCreateStatement(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
 	require.NoError(t, err)
 
 	// Success view
@@ -131,7 +131,7 @@ func TestGetCreateStatement(t *testing.T) {
 
 func TestGetChangedViewNames(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
 	require.NoError(t, err)
 
 	// Success
@@ -164,7 +164,7 @@ func TestGetChangedViewNames(t *testing.T) {
 
 func TestGetViewDefinition(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
 	require.NoError(t, err)
 
 	viewsBV, err := sqltypes.BuildBindVariable([]string{"v1", "lead"})
@@ -336,7 +336,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
 			require.NoError(t, err)
 
 			if tc.dbError != "" {
@@ -456,7 +456,7 @@ func TestReloadTablesInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -588,7 +588,7 @@ func TestReloadViewsInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -878,7 +878,7 @@ func TestReloadDataInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.

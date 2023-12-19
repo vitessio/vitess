@@ -55,7 +55,10 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 	var setOps []engine.SetOp
 	var err error
 
-	ec := new(expressionConverter)
+	ec := &expressionConverter{
+		collationEnv: vschema.CollationEnv(),
+		collation:    vschema.ConnCollation(),
+	}
 
 	for _, expr := range stmt.Exprs {
 		// AST struct has been prepared before getting here, so no scope here means that
@@ -80,7 +83,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 			}
 			setOps = append(setOps, setOp)
 		case sqlparser.NextTxScope, sqlparser.SessionScope:
-			planFunc, err := sysvarPlanningFuncs.Get(expr)
+			planFunc, err := sysvarPlanningFuncs.Get(expr, vschema.CollationEnv())
 			if err != nil {
 				return nil, err
 			}

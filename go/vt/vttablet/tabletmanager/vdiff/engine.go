@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -69,14 +70,17 @@ type Engine struct {
 	// modified behavior for that env, e.g. not starting the retry goroutine. This should
 	// NOT be set in production.
 	fortests bool
+
+	collationEnv *collations.Environment
 }
 
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, tablet *topodata.Tablet) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, tablet *topodata.Tablet, collationEnv *collations.Environment) *Engine {
 	vde := &Engine{
 		controllers:     make(map[int64]*controller),
 		ts:              ts,
 		thisTablet:      tablet,
 		tmClientFactory: func() tmclient.TabletManagerClient { return tmclient.NewTabletManagerClient() },
+		collationEnv:    collationEnv,
 	}
 	return vde
 }
@@ -94,6 +98,7 @@ func NewTestEngine(ts *topo.Server, tablet *topodata.Tablet, dbn string, dbcf fu
 		dbClientFactoryDba:      dbcf,
 		tmClientFactory:         tmcf,
 		fortests:                true,
+		collationEnv:            collations.MySQL8(),
 	}
 	return vde
 }

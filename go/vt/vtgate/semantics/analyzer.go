@@ -50,7 +50,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	a := &analyzer{
 		scoper: s,
 		tables: newTableCollector(s, si, dbName),
-		typer:  newTyper(),
+		typer:  newTyper(si.CollationEnv()),
 	}
 	s.org = a
 	a.tables.org = a
@@ -61,6 +61,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 		scoper:          s,
 		binder:          b,
 		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
+		collationEnv:    si.CollationEnv(),
 	}
 	s.binder = b
 	return a

@@ -41,7 +41,7 @@ func TestGenerateInfoSchemaMap(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	collationName := collations.Local().LookupName(collations.SystemCollation.Collation)
+	collationName := collations.MySQL8().LookupName(collations.SystemCollation.Collation)
 
 	for _, tbl := range informationSchemaTables80 {
 		result, err := db.Query(fmt.Sprintf("show columns from information_schema.`%s`", tbl))

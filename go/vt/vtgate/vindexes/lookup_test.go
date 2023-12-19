@@ -115,7 +115,11 @@ func (vc *vcursor) execute(query string, bindvars map[string]*querypb.BindVariab
 }
 
 func (vc *vcursor) ConnCollation() collations.ID {
-	return collations.Default()
+	return vc.CollationEnv().DefaultConnectionCharset()
+}
+
+func (vc *vcursor) CollationEnv() *collations.Environment {
+	return collations.MySQL8()
 }
 
 func lookupCreateVindexTestCase(

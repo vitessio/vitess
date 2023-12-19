@@ -667,7 +667,7 @@ func TestExecutorShow(t *testing.T) {
 				append(buildVarCharRow(
 					"utf8mb4",
 					"UTF-8 Unicode",
-					collations.Local().LookupName(collations.Default())),
+					collations.MySQL8().LookupName(collations.MySQL8().DefaultConnectionCharset())),
 					sqltypes.NewUint32(4)),
 			},
 		}
@@ -712,7 +712,7 @@ func TestExecutorShow(t *testing.T) {
 				append(buildVarCharRow(
 					"utf8mb4",
 					"UTF-8 Unicode",
-					collations.Local().LookupName(collations.Default())),
+					collations.MySQL8().LookupName(collations.MySQL8().DefaultConnectionCharset())),
 					sqltypes.NewUint32(4)),
 			},
 		}
@@ -763,7 +763,7 @@ func TestExecutorShow(t *testing.T) {
 		wantqr = &sqltypes.Result{
 			Fields: []*querypb.Field{
 				{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-				{Name: "value", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+				{Name: "value", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt32(1), sqltypes.NewVarChar("foo")},
@@ -1627,8 +1627,8 @@ var pv = querypb.ExecuteOptions_Gen4
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnv(t)
 
-	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
-	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
+	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
 
 	query1 := "select * from music_user_map where id = 1"
 	plan1, logStats1 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1711,7 +1711,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	t.Run("Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnv(t)
 
-		emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
 		query1 := "select * from music_user_map where id = 1"
 
 		_, logStats1 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true)
@@ -1735,7 +1735,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 		// Skip cache using directive
 		r, _, _, _, ctx := createExecutorEnv(t)
 
-		unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
 
 		query1 := "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 		getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1746,12 +1746,12 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 		assertCacheSize(t, r.plans, 1)
 
 		// the target string will be resolved and become part of the plan cache key, which adds a new entry
-		ksIDVc1, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		ksIDVc1, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
 		getPlanCached(t, ctx, r, ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 
 		// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
-		ksIDVc2, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		ksIDVc2, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
 		getPlanCached(t, ctx, r, ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 	})
@@ -1761,7 +1761,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	t.Run("Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnv(t)
 		r.normalize = true
-		emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
 
 		query1 := "select * from music_user_map where id = 1"
 		_, logStats1 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
@@ -1778,7 +1778,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 		// Skip cache using directive
 		r, _, _, _, ctx := createExecutorEnv(t)
 		r.normalize = true
-		unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
 
 		query1 := "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 		getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1789,12 +1789,12 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 		assertCacheSize(t, r.plans, 1)
 
 		// the target string will be resolved and become part of the plan cache key, which adds a new entry
-		ksIDVc1, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		ksIDVc1, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
 		getPlanCached(t, ctx, r, ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 
 		// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
-		ksIDVc2, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		ksIDVc2, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
 		getPlanCached(t, ctx, r, ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 	})
@@ -1804,8 +1804,8 @@ func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnv(t)
 
 	r.normalize = true
-	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
-	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
+	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
@@ -1862,7 +1862,7 @@ func TestGetPlanPriority(t *testing.T) {
 
 			r.normalize = true
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
-			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv, collations.MySQL8())
 			assert.NoError(t, err)
 
 			stmt, err := sqlparser.Parse(testCase.sql)

@@ -4256,5 +4256,28 @@
         "user.user",
         "user.user_extra"
       ]
-    }  }
+    }
+  },
+  {
+    "comment": "unexpanded columns are fine if we can push down into single route",
+    "query": "select x from (select t.*, 1 as x from unsharded t union select t.*, 1 as x from unsharded t) as x",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select x from (select t.*, 1 as x from unsharded t union select t.*, 1 as x from unsharded t) as x",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select x from (select t.*, 1 as x from unsharded as t where 1 != 1 union select t.*, 1 as x from unsharded as t where 1 != 1) as x where 1 != 1",
+        "Query": "select x from (select t.*, 1 as x from unsharded as t union select t.*, 1 as x from unsharded as t) as x",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  }
 ]

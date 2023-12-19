@@ -47,7 +47,7 @@ var teardownArgs = struct {
 
 func commandTeardown(cmd *cobra.Command, args []string) error {
 	// There ought to be an existing my.cnf, so use it to find mysqld.
-	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(tabletUID)
+	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(tabletUID, collationEnv)
 	if err != nil {
 		return fmt.Errorf("failed to find mysql config: %v", err)
 	}

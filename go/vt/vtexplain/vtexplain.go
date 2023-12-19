@@ -28,6 +28,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate"
@@ -144,6 +146,8 @@ type (
 		// time simulator
 		batchTime       *sync2.Batcher
 		globalTabletEnv *tabletEnv
+
+		collationEnv *collations.Environment
 	}
 )
 
@@ -179,7 +183,7 @@ type TabletActions struct {
 }
 
 // Init sets up the fake execution environment
-func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) (*VTExplain, error) {
+func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options, collationEnv *collations.Environment) (*VTExplain, error) {
 	// Verify options
 	if opts.ReplicationMode != "ROW" && opts.ReplicationMode != "STATEMENT" {
 		return nil, fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
@@ -190,14 +194,17 @@ func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts
 		return nil, fmt.Errorf("parseSchema: %v", err)
 	}
 
-	tabletEnv, err := newTabletEnvironment(parsedDDLs, opts)
+	tabletEnv, err := newTabletEnvironment(parsedDDLs, opts, collationEnv)
 	if err != nil {
 		return nil, fmt.Errorf("initTabletEnvironment: %v", err)
 	}
-	vte := &VTExplain{vtgateSession: &vtgatepb.Session{
-		TargetString: "",
-		Autocommit:   true,
-	}}
+	vte := &VTExplain{
+		vtgateSession: &vtgatepb.Session{
+			TargetString: "",
+			Autocommit:   true,
+		},
+		collationEnv: collationEnv,
+	}
 	vte.setGlobalTabletEnv(tabletEnv)
 	err = vte.initVtgateExecutor(ctx, vSchemaStr, ksShardMapStr, opts)
 	if err != nil {

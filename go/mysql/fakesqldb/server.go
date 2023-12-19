@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
-	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -291,23 +290,23 @@ func (db *DB) WaitForClose(timeout time.Duration) error {
 }
 
 // ConnParams returns the ConnParams to connect to the DB.
-func (db *DB) ConnParams() dbconfigs.Connector {
-	return dbconfigs.New(&mysql.ConnParams{
+func (db *DB) ConnParams() *mysql.ConnParams {
+	return &mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
 		DbName:     "fakesqldb",
-	})
+	}
 }
 
 // ConnParamsWithUname returns  ConnParams to connect to the DB with the Uname set to the provided value.
-func (db *DB) ConnParamsWithUname(uname string) dbconfigs.Connector {
-	return dbconfigs.New(&mysql.ConnParams{
+func (db *DB) ConnParamsWithUname(uname string) *mysql.ConnParams {
+	return &mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      uname,
 		Pass:       "password1",
 		DbName:     "fakesqldb",
-	})
+	}
 }
 
 //
