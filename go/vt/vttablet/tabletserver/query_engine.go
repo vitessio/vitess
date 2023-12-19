@@ -359,7 +359,7 @@ func (qe *QueryEngine) Close() {
 var errNoCache = errors.New("plan should not be cached")
 
 func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPlan, error) {
-	statement, err := sqlparser.Parse(sql)
+	statement, err := qe.env.SQLParser().Parse(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +402,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 }
 
 func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*TabletPlan, error) {
-	statement, err := sqlparser.Parse(sql)
+	statement, err := qe.env.SQLParser().Parse(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +479,7 @@ func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*
 	cacheKey := SettingsCacheKey(buf.String())
 	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*smartconnpool.Setting, error) {
 		// build the setting queries
-		query, resetQuery, err := planbuilder.BuildSettingQuery(settings)
+		query, resetQuery, err := planbuilder.BuildSettingQuery(settings, qe.env.SQLParser())
 		if err != nil {
 			return nil, err
 		}
@@ -609,7 +609,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 
 	response.Header().Set("Content-Type", "text/plain")
 	qe.ForEachPlan(func(plan *TabletPlan) bool {
-		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(plan.Original))))
+		response.Write([]byte(fmt.Sprintf("%#v\n", qe.env.SQLParser().TruncateForUI(plan.Original))))
 		if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 			response.Write([]byte(err.Error()))
 		} else {
@@ -629,7 +629,7 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 	var qstats []perQueryStats
 	qe.ForEachPlan(func(plan *TabletPlan) bool {
 		var pqstats perQueryStats
-		pqstats.Query = unicoded(sqlparser.TruncateForUI(plan.Original))
+		pqstats.Query = unicoded(qe.env.SQLParser().TruncateForUI(plan.Original))
 		pqstats.Table = plan.TableName().String()
 		pqstats.Plan = plan.PlanID
 		pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowsAffected, pqstats.RowsReturned, pqstats.ErrorCount = plan.Stats()
@@ -697,7 +697,7 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 	for _, v := range items {
 		var query string
 		if streamlog.GetRedactDebugUIQueries() {
-			query, _ = sqlparser.RedactSQLQuery(v.Query)
+			query, _ = qe.env.SQLParser().RedactSQLQuery(v.Query)
 		} else {
 			query = v.Query
 		}

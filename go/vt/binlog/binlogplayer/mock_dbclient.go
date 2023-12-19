@@ -42,6 +42,7 @@ type MockDBClient struct {
 	done          chan struct{}
 	invariants    map[string]*sqltypes.Result
 	Tag           string
+	parser        *sqlparser.Parser
 }
 
 type mockExpect struct {
@@ -84,15 +85,17 @@ func NewMockDBClient(t *testing.T) *MockDBClient {
 			"set @@session.sql_mode": {},
 			"set sql_mode":           {},
 		},
+		parser: sqlparser.NewTestParser(),
 	}
 }
 
 // NewMockDbaClient returns a new DBClientMock with the default "Dba" UName.
 func NewMockDbaClient(t *testing.T) *MockDBClient {
 	return &MockDBClient{
-		t:     t,
-		UName: mockClientUNameDba,
-		done:  make(chan struct{}),
+		t:      t,
+		UName:  mockClientUNameDba,
+		done:   make(chan struct{}),
+		parser: sqlparser.NewTestParser(),
 	}
 }
 
@@ -227,7 +230,7 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 }
 
 func (dc *MockDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
-	queries, err := sqlparser.SplitStatementToPieces(query)
+	queries, err := dc.parser.SplitStatementToPieces(query)
 	if err != nil {
 		return nil, err
 	}

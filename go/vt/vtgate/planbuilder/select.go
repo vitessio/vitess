@@ -130,7 +130,7 @@ func buildSQLCalcFoundRowsPlan(
 		return nil, nil, err
 	}
 
-	statement2, reserved2, err := sqlparser.Parse2(originalQuery)
+	statement2, reserved2, err := vschema.SQLParser().Parse2(originalQuery)
 	if err != nil {
 		return nil, nil, err
 	}

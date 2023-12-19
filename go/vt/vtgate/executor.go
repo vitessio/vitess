@@ -123,7 +123,8 @@ type Executor struct {
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
 
-	collationEnv *collations.Environment
+	collEnv *collations.Environment
+	parser  *sqlparser.Parser
 }
 
 var executorOnce sync.Once
@@ -155,6 +156,7 @@ func NewExecutor(
 	pv plancontext.PlannerVersion,
 	warmingReadsPercent int,
 	collationEnv *collations.Environment,
+	parser *sqlparser.Parser,
 ) *Executor {
 	e := &Executor{
 		serv:                serv,
@@ -171,7 +173,8 @@ func NewExecutor(
 		plans:               plans,
 		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
-		collationEnv:        collationEnv,
+		collEnv:             collationEnv,
+		parser:              parser,
 	}
 
 	vschemaacl.Init()
@@ -181,6 +184,7 @@ func NewExecutor(
 		serv:       serv,
 		cell:       cell,
 		schema:     e.schemaTracker,
+		parser:     parser,
 	}
 	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
@@ -227,7 +231,7 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	}
 	if result != nil && len(result.Rows) > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
+		piiSafeSQL, err := e.parser.RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -361,7 +365,7 @@ func (e *Executor) StreamExecute(
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.insertID, srr.rowsReturned, err)
 	if srr.rowsReturned > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
+		piiSafeSQL, err := e.parser.RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -503,14 +507,14 @@ func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlpars
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		default:
 			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
-				expr, err := sqlparser.ParseExpr(value)
+				expr, err := e.parser.ParseExpr(value)
 				if err != nil {
 					return err
 				}
 
 				evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
 					Collation:    vcursor.collation,
-					CollationEnv: vcursor.collationEnv,
+					CollationEnv: e.collEnv,
 					SQLMode:      evalengine.ParseSQLMode(vcursor.SQLMode()),
 				})
 				if err != nil {
@@ -1343,9 +1347,9 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv, e.collationEnv)
+	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 
-	stmt, reservedVars, err := parseAndValidateQuery(query)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.parser)
 	if err != nil {
 		return nil, err
 	}
@@ -1380,8 +1384,8 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	return qr.Fields, err
 }
 
-func parseAndValidateQuery(query string) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
-	stmt, reserved, err := sqlparser.Parse2(query)
+func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
+	stmt, reserved, err := parser.Parse2(query)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1516,7 +1520,7 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *SafeSession) error 
 
 // planPrepareStmt implements the IExecutor interface
 func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.parser)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1548,4 +1552,12 @@ func (e *Executor) Close() {
 	}
 	topo.Close()
 	e.plans.Close()
+}
+
+func (e *Executor) collationEnv() *collations.Environment {
+	return e.collEnv
+}
+
+func (e *Executor) sqlparser() *sqlparser.Parser {
+	return e.parser
 }

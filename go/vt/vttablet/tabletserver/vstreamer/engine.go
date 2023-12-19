@@ -432,7 +432,7 @@ func (vse *Engine) setWatch() {
 		}
 		var vschema *vindexes.VSchema
 		if v != nil {
-			vschema = vindexes.BuildVSchema(v)
+			vschema = vindexes.BuildVSchema(v, vse.env.SQLParser())
 			if err != nil {
 				log.Errorf("Error building vschema: %v", err)
 				vse.vschemaErrors.Add(1)

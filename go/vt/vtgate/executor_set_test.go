@@ -21,8 +21,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/test/utils"
@@ -507,14 +505,9 @@ func createMap(keys []string, values []any) map[string]*querypb.BindVariable {
 }
 
 func TestSetVar(t *testing.T) {
-	executor, _, _, sbc, ctx := createExecutorEnv(t)
+	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
 	executor.normalize = true
 
-	oldVersion := sqlparser.GetParserVersion()
-	sqlparser.SetParserVersion("80000")
-	defer func() {
-		sqlparser.SetParserVersion(oldVersion)
-	}()
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
 	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
@@ -551,14 +544,9 @@ func TestSetVar(t *testing.T) {
 }
 
 func TestSetVarShowVariables(t *testing.T) {
-	executor, _, _, sbc, ctx := createExecutorEnv(t)
+	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
 	executor.normalize = true
 
-	oldVersion := sqlparser.GetParserVersion()
-	sqlparser.SetParserVersion("80000")
-	defer func() {
-		sqlparser.SetParserVersion(oldVersion)
-	}()
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
 	sbc.SetResults([]*sqltypes.Result{

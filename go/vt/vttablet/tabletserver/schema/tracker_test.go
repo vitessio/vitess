@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
@@ -78,7 +79,7 @@ func TestTracker(t *testing.T) {
 	}
 	config := se.env.Config()
 	config.TrackSchemaVersions = true
-	env := tabletenv.NewEnv(config, "TrackerTest", collations.MySQL8())
+	env := tabletenv.NewEnv(config, "TrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
 	initial := env.Stats().ErrorCounters.Counts()["INTERNAL"]
 	tracker := NewTracker(env, vs, se)
 	tracker.Open()
@@ -122,7 +123,7 @@ func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 	}
 	config := se.env.Config()
 	config.TrackSchemaVersions = true
-	env := tabletenv.NewEnv(config, "TrackerTest", collations.MySQL8())
+	env := tabletenv.NewEnv(config, "TrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
 	tracker := NewTracker(env, vs, se)
 	tracker.Open()
 	<-vs.done
@@ -170,7 +171,7 @@ func TestMustReloadSchemaOnDDL(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run("", func(t *testing.T) {
-			require.Equal(t, tc.want, MustReloadSchemaOnDDL(tc.query, tc.dbname))
+			require.Equal(t, tc.want, MustReloadSchemaOnDDL(tc.query, tc.dbname, sqlparser.NewTestParser()))
 		})
 	}
 }

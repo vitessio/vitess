@@ -195,7 +195,7 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn
 			}
 		}
 	}
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		t.Error(err)
 		return err

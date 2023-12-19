@@ -23,29 +23,27 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -191,7 +189,6 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 	ft.Tablet.PortMap["vt"] = vtPort
 	ft.Tablet.PortMap["grpc"] = gRPCPort
 	ft.Tablet.Hostname = "127.0.0.1"
-	config := &tabletenv.TabletConfig{}
 	// Create a test tm on that port, and re-read the record
 	// (it has new ports and IP).
 	ft.TM = &tabletmanager.TabletManager{
@@ -200,8 +197,9 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		MysqlDaemon:         ft.FakeMysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
-		VDiffEngine:         vdiff2.NewEngine(config, wr.TopoServer(), ft.Tablet, collations.MySQL8()),
+		VDiffEngine:         vdiff2.NewEngine(wr.TopoServer(), ft.Tablet, collations.MySQL8(), sqlparser.NewTestParser()),
 		CollationEnv:        collations.MySQL8(),
+		SQLParser:           sqlparser.NewTestParser(),
 	}
 	if err := ft.TM.Start(ft.Tablet, nil); err != nil {
 		t.Fatal(err)

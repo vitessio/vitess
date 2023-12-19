@@ -115,8 +115,8 @@ func columnsStrForErr(columns []*sqlparser.ColName) string {
 }
 
 // buildControllerPlan parses the input query and returns an appropriate plan.
-func buildControllerPlan(query string) (*controllerPlan, error) {
-	stmt, err := sqlparser.Parse(query)
+func buildControllerPlan(query string, parser *sqlparser.Parser) (*controllerPlan, error) {
+	stmt, err := parser.Parse(query)
 	if err != nil {
 		return nil, err
 	}

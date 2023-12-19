@@ -194,7 +194,7 @@ func TestInsertShardedSimple(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	// A single row insert should be autocommitted
@@ -336,7 +336,7 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	// A single row insert should be autocommitted
@@ -489,7 +489,7 @@ func TestInsertShardedFail(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -539,7 +539,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -658,7 +658,7 @@ func TestInsertShardedOwned(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -768,7 +768,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -845,7 +845,7 @@ func TestInsertShardedGeo(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -951,7 +951,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -1107,7 +1107,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -1205,7 +1205,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -1333,7 +1333,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -1439,7 +1439,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -1516,7 +1516,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -1630,7 +1630,7 @@ func TestInsertShardedUnownedReverseMapSuccess(t *testing.T) {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	ins := newInsert(
@@ -1677,7 +1677,7 @@ func TestInsertSelectSimple(t *testing.T) {
 							Name:    "hash",
 							Columns: []string{"id"}}}}}}}}
 
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	// A single row insert should be autocommitted
@@ -1760,7 +1760,7 @@ func TestInsertSelectOwned(t *testing.T) {
 							Name:    "onecol",
 							Columns: []string{"c3"}}}}}}}}
 
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	rb := &Route{
@@ -1861,7 +1861,7 @@ func TestInsertSelectGenerate(t *testing.T) {
 							Name:    "hash",
 							Columns: []string{"id"}}}}}}}}
 
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	rb := &Route{
@@ -1953,7 +1953,7 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 							Name:    "hash",
 							Columns: []string{"id"}}}}}}}}
 
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	rb := &Route{
@@ -2050,7 +2050,7 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 							Name:    "hash",
 							Columns: []string{"id"}}}}}}}}
 
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	rb := &Route{
@@ -2137,7 +2137,7 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 							Name:    "hash",
 							Columns: []string{"id"}}}}}}}}
 
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	rb := &Route{
@@ -2234,7 +2234,7 @@ func TestInsertSelectUnowned(t *testing.T) {
 							Name:    "onecol",
 							Columns: []string{"id"}}}}}}}}
 
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	ks := vs.Keyspaces["sharded"]
 
 	rb := &Route{
@@ -2338,7 +2338,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 			"uks2": {Tables: map[string]*vschemapb.Table{"u2": {}}},
 		}}
 
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	sks1 := vs.Keyspaces["sks1"]
 	sks2 := vs.Keyspaces["sks2"]
 	uks1 := vs.Keyspaces["uks1"]

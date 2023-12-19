@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schemadiff"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -549,7 +550,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 				// order in the table schema.
 				if !tcase.expectFinalSchemaDiff {
 					currentDDL := getCurrentDDL(tcase.tableName)
-					sdiff, err := schemadiff.DiffCreateTablesQueries(currentDDL, tcase.initialDDL, diffHints)
+					sdiff, err := schemadiff.DiffCreateTablesQueries(currentDDL, tcase.initialDDL, diffHints, sqlparser.NewTestParser())
 					require.NoError(t, err)
 					require.Nil(t, sdiff, "Expected no schema difference but got: %s", sdiff.CanonicalStatementString())
 				}

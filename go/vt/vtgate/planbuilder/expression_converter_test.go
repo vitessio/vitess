@@ -46,7 +46,7 @@ func TestConversion(t *testing.T) {
 
 	for _, tc := range queries {
 		t.Run(tc.expressionsIn, func(t *testing.T) {
-			statement, err := sqlparser.Parse("select " + tc.expressionsIn)
+			statement, err := sqlparser.NewTestParser().Parse("select " + tc.expressionsIn)
 			require.NoError(t, err)
 			slct := statement.(*sqlparser.Select)
 			exprs := extract(slct.SelectExprs)

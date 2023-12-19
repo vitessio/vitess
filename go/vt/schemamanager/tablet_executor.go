@@ -53,10 +53,11 @@ type TabletExecutor struct {
 	ddlStrategySetting  *schema.DDLStrategySetting
 	uuids               []string
 	batchSize           int64
+	parser              *sqlparser.Parser
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
-func NewTabletExecutor(migrationContext string, ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, waitReplicasTimeout time.Duration, batchSize int64) *TabletExecutor {
+func NewTabletExecutor(migrationContext string, ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, waitReplicasTimeout time.Duration, batchSize int64, parser *sqlparser.Parser) *TabletExecutor {
 	return &TabletExecutor{
 		ts:                  ts,
 		tmc:                 tmc,
@@ -65,6 +66,7 @@ func NewTabletExecutor(migrationContext string, ts *topo.Server, tmc tmclient.Ta
 		waitReplicasTimeout: waitReplicasTimeout,
 		migrationContext:    migrationContext,
 		batchSize:           batchSize,
+		parser:              parser,
 	}
 }
 
@@ -146,7 +148,7 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 
 func (exec *TabletExecutor) parseDDLs(sqls []string) error {
 	for _, sql := range sqls {
-		stmt, err := sqlparser.Parse(sql)
+		stmt, err := exec.parser.Parse(sql)
 		if err != nil {
 			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "failed to parse sql: %s, got error: %v", sql, err)
 		}
@@ -204,14 +206,14 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 		return executeViaFetch()
 	}
 	// Analyze what type of query this is:
-	stmt, err := sqlparser.Parse(sql)
+	stmt, err := exec.parser.Parse(sql)
 	if err != nil {
 		return false, err
 	}
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
 		if exec.isOnlineSchemaDDL(stmt) {
-			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.migrationContext, providedUUID)
+			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.migrationContext, providedUUID, exec.parser)
 			if err != nil {
 				execResult.ExecutorErr = err.Error()
 				return false, err
@@ -227,7 +229,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 		}
 	case *sqlparser.RevertMigration:
 		strategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, exec.ddlStrategySetting.Options)
-		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.migrationContext, providedUUID)
+		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.migrationContext, providedUUID, exec.parser)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return false, err
@@ -265,9 +267,9 @@ func batchSQLs(sqls []string, batchSize int) (batchedSQLs []string) {
 // allSQLsAreCreateQueries returns 'true' when all given queries are CREATE TABLE|VIEW
 // This function runs pretty fast even for thousands of tables (its overhead is insignificant compared with
 // the time it would take to apply the changes).
-func allSQLsAreCreateQueries(sqls []string) (bool, error) {
+func allSQLsAreCreateQueries(sqls []string, parser *sqlparser.Parser) (bool, error) {
 	for _, sql := range sqls {
-		stmt, err := sqlparser.Parse(sql)
+		stmt, err := parser.Parse(sql)
 		if err != nil {
 			return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "failed to parse sql: %s, got error: %v", sql, err)
 		}
@@ -377,7 +379,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		if exec.hasProvidedUUIDs() {
 			return errorExecResult(fmt.Errorf("--batch-size conflicts with --uuid-list. Batching does not support UUIDs."))
 		}
-		allSQLsAreCreate, err := allSQLsAreCreateQueries(sqls)
+		allSQLsAreCreate, err := allSQLsAreCreateQueries(sqls, exec.parser)
 		if err != nil {
 			return errorExecResult(err)
 		}
@@ -444,16 +446,16 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 // applyAllowZeroInDate takes a SQL string which may contain one or more statements,
 // and, assuming those are DDLs, adds a /*vt+ allowZeroInDate=true */ directive to all of them,
 // returning the result again as one long SQL.
-func applyAllowZeroInDate(sql string) (string, error) {
+func applyAllowZeroInDate(sql string, parser *sqlparser.Parser) (string, error) {
 	// sql may be a batch of multiple statements
-	sqls, err := sqlparser.SplitStatementToPieces(sql)
+	sqls, err := parser.SplitStatementToPieces(sql)
 	if err != nil {
 		return sql, err
 	}
 	var modifiedSqls []string
 	for _, singleSQL := range sqls {
 		// --allow-zero-in-date Applies to DDLs
-		stmt, err := sqlparser.Parse(singleSQL)
+		stmt, err := parser.Parse(singleSQL)
 		if err != nil {
 			return sql, err
 		}
@@ -486,7 +488,7 @@ func (exec *TabletExecutor) executeOneTablet(
 	} else {
 		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
 			// --allow-zero-in-date Applies to DDLs
-			sql, err = applyAllowZeroInDate(sql)
+			sql, err = applyAllowZeroInDate(sql, exec.parser)
 			if err != nil {
 				errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
 				return

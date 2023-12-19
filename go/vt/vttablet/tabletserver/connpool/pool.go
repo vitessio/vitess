@@ -126,7 +126,7 @@ func (cp *Pool) Get(ctx context.Context, setting *smartconnpool.Setting) (*Poole
 	defer span.Finish()
 
 	if cp.isCallerIDAppDebug(ctx) {
-		conn, err := NewConn(ctx, cp.appDebugParams, cp.dbaPool, setting)
+		conn, err := NewConn(ctx, cp.appDebugParams, cp.dbaPool, setting, cp.env)
 		if err != nil {
 			return nil, err
 		}

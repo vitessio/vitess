@@ -44,6 +44,7 @@ type VSchemaManager struct {
 	cell              string
 	subscriber        func(vschema *vindexes.VSchema, stats *VSchemaStats)
 	schema            SchemaInfo
+	parser            *sqlparser.Parser
 }
 
 // SchemaInfo is an interface to schema tracker.
@@ -71,7 +72,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 
 	ks := vschema.Keyspaces[ksName]
 
-	_, err = vindexes.BuildKeyspace(ks)
+	_, err = vindexes.BuildKeyspace(ks, vm.parser)
 	if err != nil {
 		return err
 	}
@@ -132,7 +133,7 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) bool
 	if v == nil {
 		// We encountered an error, build an empty vschema.
 		if vm.currentVschema == nil {
-			vschema = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+			vschema = vindexes.BuildVSchema(&vschemapb.SrvVSchema{}, vm.parser)
 		}
 	} else {
 		vschema = vm.buildAndEnhanceVSchema(v)
@@ -187,7 +188,7 @@ func (vm *VSchemaManager) Rebuild() {
 
 // buildAndEnhanceVSchema builds a new VSchema and uses information from the schema tracker to update it
 func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vindexes.VSchema {
-	vschema := vindexes.BuildVSchema(v)
+	vschema := vindexes.BuildVSchema(v, vm.parser)
 	if vm.schema != nil {
 		vm.updateFromSchema(vschema)
 		// We mark the keyspaces that have foreign key management in Vitess and have cyclic foreign keys

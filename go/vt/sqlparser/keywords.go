@@ -818,14 +818,6 @@ func (cit *caseInsensitiveTable) LookupString(name string) (int, bool) {
 	return 0, false
 }
 
-func (cit *caseInsensitiveTable) Lookup(name []byte) (int, bool) {
-	hash := fnv1aI(offset64, name)
-	if candidate, ok := cit.h[hash]; ok {
-		return candidate.id, candidate.match(name)
-	}
-	return 0, false
-}
-
 func init() {
 	for _, kw := range keywords {
 		if kw.id == UNUSED {
@@ -852,16 +844,6 @@ func KeywordString(id int) string {
 
 const offset64 = uint64(14695981039346656037)
 const prime64 = uint64(1099511628211)
-
-func fnv1aI(h uint64, s []byte) uint64 {
-	for _, c := range s {
-		if 'A' <= c && c <= 'Z' {
-			c += 'a' - 'A'
-		}
-		h = (h ^ uint64(c)) * prime64
-	}
-	return h
-}
 
 func fnv1aIstr(h uint64, s string) uint64 {
 	for i := 0; i < len(s); i++ {

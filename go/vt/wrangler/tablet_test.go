@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
@@ -37,7 +38,7 @@ func TestInitTabletShardConversion(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8())
+	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8(), sqlparser.NewTestParser())
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -71,7 +72,7 @@ func TestDeleteTabletBasic(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8())
+	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8(), sqlparser.NewTestParser())
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -103,7 +104,7 @@ func TestDeleteTabletTruePrimary(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8())
+	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8(), sqlparser.NewTestParser())
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -150,7 +151,7 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8())
+	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8(), sqlparser.NewTestParser())
 
 	tablet1 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -202,7 +203,7 @@ func TestDeleteTabletShardNonExisting(t *testing.T) {
 
 	cell := "cell1"
 	ts := memorytopo.NewServer(ctx, cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8())
+	wr := New(logutil.NewConsoleLogger(), ts, nil, collations.MySQL8(), sqlparser.NewTestParser())
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{

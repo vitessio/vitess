@@ -83,24 +83,6 @@ type ResolvedShard struct {
 	Gateway Gateway
 }
 
-// ResolvedShardEqual is an equality check on *ResolvedShard.
-func ResolvedShardEqual(rs1, rs2 *ResolvedShard) bool {
-	return proto.Equal(rs1.Target, rs2.Target)
-}
-
-// ResolvedShardsEqual is an equality check on []*ResolvedShard.
-func ResolvedShardsEqual(rss1, rss2 []*ResolvedShard) bool {
-	if len(rss1) != len(rss2) {
-		return false
-	}
-	for i, rs1 := range rss1 {
-		if !ResolvedShardEqual(rs1, rss2[i]) {
-			return false
-		}
-	}
-	return true
-}
-
 // WithKeyspace returns a ResolvedShard with a new keyspace keeping other parameters the same
 func (rs *ResolvedShard) WithKeyspace(newKeyspace string) *ResolvedShard {
 	return &ResolvedShard{
