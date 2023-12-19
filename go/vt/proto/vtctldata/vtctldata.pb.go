@@ -2001,7 +2001,15 @@ type ApplyVSchemaResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	VSchema             *vschema.Keyspace                          `protobuf:"bytes,1,opt,name=v_schema,json=vSchema,proto3" json:"v_schema,omitempty"`
+	VSchema *vschema.Keyspace `protobuf:"bytes,1,opt,name=v_schema,json=vSchema,proto3" json:"v_schema,omitempty"`
+	// A map of vindex name to params that were not recognized by the vindex
+	// type. E.g.:
+	//
+	//	{
+	//	  "lookup_vdx": {
+	//	    "params": ["raed_lock", "not_verify"]
+	//	  }
+	//	}
 	UnknownVindexParams map[string]*ApplyVSchemaResponse_ParamList `protobuf:"bytes,2,rep,name=unknown_vindex_params,json=unknownVindexParams,proto3" json:"unknown_vindex_params,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 

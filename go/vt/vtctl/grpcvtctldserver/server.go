@@ -365,10 +365,6 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 	}
 
 	ksVs, err := vindexes.BuildKeyspace(vs, s.ws.SQLParser())
-	if req.DryRun { // we return what was passed in and parsed, rather than current
-		return &vtctldatapb.ApplyVSchemaResponse{VSchema: vs}, nil
-	}
-
 	if err != nil {
 		err = vterrors.Wrapf(err, "BuildKeyspace(%s)", req.Keyspace)
 		return nil, err
@@ -392,7 +388,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		}
 	}
 
-	if req.DryRun { // we return what was passed in and parsed, rather than current
+	if req.DryRun { // we return what was passed in and parsed, plus unknown vindex params
 		return &vtctldatapb.ApplyVSchemaResponse{
 			VSchema:             vs,
 			UnknownVindexParams: unknownVindexParams,

@@ -120,7 +120,7 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 	fmt.Printf("New VSchema object:\n%s\nIf this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).\n", vsData)
 	for vdxName, ups := range res.UnknownVindexParams {
 		for _, param := range ups.Params {
-			fmt.Printf("Unknown param in vindex %s: %s\n", vdxName, param)
+			fmt.Printf("Unknown parameter in vindex %s: %s\n", vdxName, param)
 		}
 	}
 	return nil
