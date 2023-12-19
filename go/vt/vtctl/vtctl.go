@@ -2921,7 +2921,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		*migrationContext = *requestContext
 	}
 
-	parts, err := sqlparser.SplitStatementToPieces(change)
+	parts, err := wr.SQLParser().SplitStatementToPieces(change)
 	if err != nil {
 		return err
 	}
@@ -3341,7 +3341,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 			*sql = string(sqlBytes)
 		}
 
-		stmt, err := sqlparser.Parse(*sql)
+		stmt, err := wr.SQLParser().Parse(*sql)
 		if err != nil {
 			return fmt.Errorf("error parsing vschema statement `%s`: %v", *sql, err)
 		}
@@ -3392,7 +3392,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 	}
 
 	// Validate the VSchema.
-	ksVs, err := vindexes.BuildKeyspace(vs)
+	ksVs, err := vindexes.BuildKeyspace(vs, wr.SQLParser())
 	if err != nil {
 		return err
 	}
@@ -3424,7 +3424,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		return err
 	}
 
-	if _, err := vindexes.BuildKeyspace(vs); err != nil {
+	if _, err := vindexes.BuildKeyspace(vs, wr.SQLParser()); err != nil {
 		return err
 	}
 

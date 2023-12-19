@@ -162,7 +162,7 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 }
 
 func (dc *fakeDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
-	queries, err := sqlparser.SplitStatementToPieces(query)
+	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(query)
 	if err != nil {
 		return nil, err
 	}

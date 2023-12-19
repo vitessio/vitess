@@ -81,7 +81,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, false)
+	tracker := NewTracker(ch, false, sqlparser.NewTestParser())
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()
@@ -396,7 +396,7 @@ type testCases struct {
 
 func testTracker(t *testing.T, schemaDefResult []map[string]string, tcases []testCases) {
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, true)
+	tracker := NewTracker(ch, true, sqlparser.NewTestParser())
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()

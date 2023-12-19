@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -313,7 +314,7 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
-				sqlerr.Query = query
+				sqlerr.Query = sqlparser.TruncateQuery(query, c.truncateErrLen)
 			}
 		}
 	}()
@@ -337,7 +338,7 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
-				sqlerr.Query = query
+				sqlerr.Query = sqlparser.TruncateQuery(query, c.truncateErrLen)
 			}
 		}
 	}()

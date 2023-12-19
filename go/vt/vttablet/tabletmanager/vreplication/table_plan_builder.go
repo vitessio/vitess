@@ -132,7 +132,7 @@ const (
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment, parser *sqlparser.Parser) (*ReplicatorPlan, error) {
 	filter := source.Filter
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
@@ -160,7 +160,7 @@ func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[strin
 		if !ok {
 			return nil, fmt.Errorf("table %s not found in schema", tableName)
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser)
 		if err != nil {
 			return nil, err
 		}
@@ -200,7 +200,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 }
 
 func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
-	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment) (*TablePlan, error) {
+	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment, parser *sqlparser.Parser) (*TablePlan, error) {
 
 	filter := rule.Filter
 	query := filter
@@ -217,7 +217,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	case filter == ExcludeStr:
 		return nil, nil
 	}
-	sel, fromTable, err := analyzeSelectFrom(query)
+	sel, fromTable, err := analyzeSelectFrom(query, parser)
 	if err != nil {
 		return nil, err
 	}
@@ -381,8 +381,8 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 	}
 }
 
-func analyzeSelectFrom(query string) (sel *sqlparser.Select, from string, err error) {
-	statement, err := sqlparser.Parse(query)
+func analyzeSelectFrom(query string, parser *sqlparser.Parser) (sel *sqlparser.Select, from string, err error) {
+	statement, err := parser.Parse(query)
 	if err != nil {
 		return nil, "", err
 	}

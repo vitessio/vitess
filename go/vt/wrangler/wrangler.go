@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -60,17 +61,19 @@ type Wrangler struct {
 	sem *semaphore.Weighted
 
 	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
 // New creates a new Wrangler object.
-func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient, collationEnv *collations.Environment) *Wrangler {
+func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient, collationEnv *collations.Environment, parser *sqlparser.Parser) *Wrangler {
 	return &Wrangler{
 		logger:       logger,
 		ts:           ts,
 		tmc:          tmc,
-		vtctld:       grpcvtctldserver.NewVtctldServer(ts),
+		vtctld:       grpcvtctldserver.NewVtctldServer(ts, parser),
 		sourceTs:     ts,
 		collationEnv: collationEnv,
+		parser:       parser,
 	}
 }
 
@@ -84,6 +87,7 @@ func NewTestWrangler(logger logutil.Logger, ts *topo.Server, tmc tmclient.Tablet
 		vtctld:       grpcvtctldserver.NewTestVtctldServer(ts, tmc),
 		sourceTs:     ts,
 		collationEnv: collations.MySQL8(),
+		parser:       sqlparser.NewTestParser(),
 	}
 }
 
@@ -113,4 +117,9 @@ func (wr *Wrangler) SetLogger(logger logutil.Logger) {
 // Logger returns the logger associated with this wrangler.
 func (wr *Wrangler) Logger() logutil.Logger {
 	return wr.logger
+}
+
+// SQLParser returns the parser this wrangler is using.
+func (wr *Wrangler) SQLParser() *sqlparser.Parser {
+	return wr.parser
 }

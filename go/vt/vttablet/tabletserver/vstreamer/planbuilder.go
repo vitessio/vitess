@@ -286,11 +286,11 @@ func mustSendStmt(query mysql.Query, dbname string) bool {
 	return true
 }
 
-func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) bool {
+func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter, parser *sqlparser.Parser) bool {
 	if query.Database != "" && query.Database != dbname {
 		return false
 	}
-	ast, err := sqlparser.Parse(query.SQL)
+	ast, err := parser.Parse(query.SQL)
 	// If there was a parsing error, we send it through. Hopefully,
 	// recipient can handle it.
 	if err != nil {
@@ -346,7 +346,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 	return ruleMatches(table.Name.String(), filter)
 }
 
-func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter, collationEnv *collations.Environment) (*Plan, error) {
+func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter, collationEnv *collations.Environment, parser *sqlparser.Parser) (*Plan, error) {
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):
@@ -360,7 +360,7 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter, co
 			}
 			return buildREPlan(ti, vschema, rule.Filter, collationEnv)
 		case rule.Match == ti.Name:
-			return buildTablePlan(ti, vschema, rule.Filter, collationEnv)
+			return buildTablePlan(ti, vschema, rule.Filter, collationEnv, parser)
 		}
 	}
 	return nil, nil
@@ -412,8 +412,8 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string, collationEnv *
 
 // BuildTablePlan handles cases where a specific table name is specified.
 // The filter must be a select statement.
-func buildTablePlan(ti *Table, vschema *localVSchema, query string, collationEnv *collations.Environment) (*Plan, error) {
-	sel, fromTable, err := analyzeSelect(query)
+func buildTablePlan(ti *Table, vschema *localVSchema, query string, collationEnv *collations.Environment, parser *sqlparser.Parser) (*Plan, error) {
+	sel, fromTable, err := analyzeSelect(query, parser)
 	if err != nil {
 		log.Errorf("%s", err.Error())
 		return nil, err
@@ -443,8 +443,8 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string, collationEnv
 	return plan, nil
 }
 
-func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.IdentifierCS, err error) {
-	statement, err := sqlparser.Parse(query)
+func analyzeSelect(query string, parser *sqlparser.Parser) (sel *sqlparser.Select, fromTable sqlparser.IdentifierCS, err error) {
+	statement, err := parser.Parse(query)
 	if err != nil {
 		return nil, fromTable, err
 	}

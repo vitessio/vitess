@@ -363,7 +363,7 @@ func TestSetTable(t *testing.T) {
 		)},
 	}, {
 		testName:     "sql_mode change - changed additional - MySQL57",
-		mysqlVersion: "50709",
+		mysqlVersion: "5.7.9",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -383,7 +383,7 @@ func TestSetTable(t *testing.T) {
 		)},
 	}, {
 		testName:     "sql_mode change - changed less - MySQL57",
-		mysqlVersion: "50709",
+		mysqlVersion: "5.7.9",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -420,7 +420,7 @@ func TestSetTable(t *testing.T) {
 		)},
 	}, {
 		testName:     "sql_mode change - empty orig - MySQL57",
-		mysqlVersion: "50709",
+		mysqlVersion: "5.7.9",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -459,7 +459,7 @@ func TestSetTable(t *testing.T) {
 		)},
 	}, {
 		testName:     "sql_mode change - empty orig - MySQL80",
-		mysqlVersion: "80000",
+		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -479,7 +479,7 @@ func TestSetTable(t *testing.T) {
 		)},
 	}, {
 		testName:     "sql_mode change to empty - non empty orig - MySQL80 - should use reserved conn",
-		mysqlVersion: "80000",
+		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -499,7 +499,7 @@ func TestSetTable(t *testing.T) {
 		)},
 	}, {
 		testName:     "sql_mode change - empty orig - MySQL80 - SET_VAR disabled",
-		mysqlVersion: "80000",
+		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -520,7 +520,7 @@ func TestSetTable(t *testing.T) {
 		disableSetVar: true,
 	}, {
 		testName:     "sql_mode set an unsupported mode",
-		mysqlVersion: "80000",
+		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -540,7 +540,7 @@ func TestSetTable(t *testing.T) {
 		disableSetVar: true,
 	}, {
 		testName:     "default_week_format change - empty orig - MySQL80",
-		mysqlVersion: "80000",
+		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:     "default_week_format",
@@ -565,23 +565,22 @@ func TestSetTable(t *testing.T) {
 				tc.input = &SingleRow{}
 			}
 
-			oldMySQLVersion := sqlparser.GetParserVersion()
-			defer func() { sqlparser.SetParserVersion(oldMySQLVersion) }()
-			if tc.mysqlVersion != "" {
-				sqlparser.SetParserVersion(tc.mysqlVersion)
-			}
-
 			set := &Set{
 				Ops:   tc.setOps,
 				Input: tc.input,
 			}
+			parser, err := sqlparser.New(sqlparser.Options{
+				MySQLServerVersion: tc.mysqlVersion,
+			})
+			require.NoError(t, err)
 			vc := &loggingVCursor{
 				shards:         []string{"-20", "20-"},
 				results:        tc.qr,
 				multiShardErrs: []error{tc.execErr},
 				disableSetVar:  tc.disableSetVar,
+				parser:         parser,
 			}
-			_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+			_, err = set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 			} else {

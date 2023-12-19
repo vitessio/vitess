@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -140,12 +141,20 @@ func run(cmd *cobra.Command, args []string) {
 	cache.SetCacheRefreshKey(cacheRefreshKey)
 	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
 
+	parser, err := sqlparser.New(sqlparser.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		fatal(err)
+	}
 	s := vtadmin.NewAPI(clusters, vtadmin.Options{
 		GRPCOpts:              opts,
 		HTTPOpts:              httpOpts,
 		RBAC:                  rbacConfig,
 		EnableDynamicClusters: enableDynamicClusters,
-	}, collationEnv)
+	}, collationEnv, parser)
 	bootSpan.Finish()
 
 	if err := s.ListenAndServe(); err != nil {

@@ -130,7 +130,7 @@ func (tp *TxPool) Shutdown(ctx context.Context) {
 func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
 	for _, conn := range tp.scp.GetElapsedTimeout(vterrors.TxKillerRollback) {
-		log.Warningf("killing transaction (exceeded timeout: %v): %s", conn.timeout, conn.String(tp.env.Config().SanitizeLogMessages))
+		log.Warningf("killing transaction (exceeded timeout: %v): %s", conn.timeout, conn.String(tp.env.Config().SanitizeLogMessages, tp.env.SQLParser()))
 		switch {
 		case conn.IsTainted():
 			conn.Close()

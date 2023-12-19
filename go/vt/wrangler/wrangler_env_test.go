@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -69,7 +70,7 @@ func newWranglerTestEnv(t testing.TB, ctx context.Context, sourceShards, targetS
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestWranglerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.MySQL8())
+	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.MySQL8(), sqlparser.NewTestParser())
 	env.tmc.tablets = make(map[int]*testWranglerTablet)
 
 	// Generate a unique dialer name.

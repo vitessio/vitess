@@ -215,6 +215,8 @@ type Conn struct {
 	// this is used to mark the connection to be closed so that the command phase for the connection can be stopped and
 	// the connection gets closed.
 	closing bool
+
+	truncateErrLen int
 }
 
 // PrepareData is a buffer used for store prepare statement meta data
@@ -246,7 +248,7 @@ var readersPool = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, co
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
-func newConn(conn net.Conn, flushDelay time.Duration) *Conn {
+func newConn(conn net.Conn, flushDelay time.Duration, truncateErrLen int) *Conn {
 	if flushDelay == 0 {
 		flushDelay = DefaultFlushDelay
 	}
@@ -254,6 +256,7 @@ func newConn(conn net.Conn, flushDelay time.Duration) *Conn {
 		conn:           conn,
 		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
 		flushDelay:     flushDelay,
+		truncateErrLen: truncateErrLen,
 	}
 }
 
@@ -274,11 +277,12 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	}
 
 	c := &Conn{
-		conn:        conn,
-		listener:    listener,
-		PrepareData: make(map[uint32]*PrepareData),
-		keepAliveOn: enabledKeepAlive,
-		flushDelay:  listener.flushDelay,
+		conn:           conn,
+		listener:       listener,
+		PrepareData:    make(map[uint32]*PrepareData),
+		keepAliveOn:    enabledKeepAlive,
+		flushDelay:     listener.flushDelay,
+		truncateErrLen: listener.truncateErrLen,
 	}
 
 	if listener.connReadBufferSize > 0 {
@@ -1232,7 +1236,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		var err error
-		queries, err = sqlparser.SplitStatementToPieces(query)
+		queries, err = handler.SQLParser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1245,14 +1249,14 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		queries = []string{query}
 	}
 
-	// Popoulate PrepareData
+	// Populate PrepareData
 	c.StatementID++
 	prepare := &PrepareData{
 		StatementID: c.StatementID,
 		PrepareStmt: queries[0],
 	}
 
-	statement, err := sqlparser.ParseStrictDDL(query)
+	statement, err := handler.SQLParser().ParseStrictDDL(query)
 	if err != nil {
 		log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
 		if !c.writeErrorPacketFromErrorAndLog(err) {
@@ -1360,7 +1364,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	var err error
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err = sqlparser.SplitStatementToPieces(query)
+		queries, err = handler.SQLParser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)

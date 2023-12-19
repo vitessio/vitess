@@ -148,12 +148,12 @@ func TestCreateViewDiff(t *testing.T) {
 	hints := &DiffHints{}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
+			fromStmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.from)
 			assert.NoError(t, err)
 			fromCreateView, ok := fromStmt.(*sqlparser.CreateView)
 			assert.True(t, ok)
 
-			toStmt, err := sqlparser.ParseStrictDDL(ts.to)
+			toStmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.to)
 			assert.NoError(t, err)
 			toCreateView, ok := toStmt.(*sqlparser.CreateView)
 			assert.True(t, ok)
@@ -177,7 +177,7 @@ func TestCreateViewDiff(t *testing.T) {
 					diff := alter.StatementString()
 					assert.Equal(t, ts.diff, diff)
 					// validate we can parse back the statement
-					_, err := sqlparser.ParseStrictDDL(diff)
+					_, err := sqlparser.NewTestParser().ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := alter.Entities()
@@ -199,7 +199,7 @@ func TestCreateViewDiff(t *testing.T) {
 				{
 					cdiff := alter.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, cdiff)
-					_, err := sqlparser.ParseStrictDDL(cdiff)
+					_, err := sqlparser.NewTestParser().ParseStrictDDL(cdiff)
 					assert.NoError(t, err)
 				}
 			}
@@ -241,7 +241,7 @@ func TestNormalizeView(t *testing.T) {
 	}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(ts.from)
+			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateView, ok := stmt.(*sqlparser.CreateView)
 			require.True(t, ok)

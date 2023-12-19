@@ -27,7 +27,8 @@ import (
 )
 
 func TestNewParsedQuery(t *testing.T) {
-	stmt, err := Parse("select * from a where id =:id")
+	parser := NewTestParser()
+	stmt, err := parser.Parse("select * from a where id =:id")
 	if err != nil {
 		t.Error(err)
 		return
@@ -135,8 +136,9 @@ func TestGenerateQuery(t *testing.T) {
 		},
 	}
 
+	parser := NewTestParser()
 	for _, tcase := range tcases {
-		tree, err := Parse(tcase.query)
+		tree, err := parser.Parse(tcase.query)
 		if err != nil {
 			t.Errorf("parse failed for %s: %v", tcase.desc, err)
 			continue

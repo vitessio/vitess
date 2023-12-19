@@ -63,6 +63,8 @@ type ConnParams struct {
 
 	// FlushDelay is the delay after which buffered response will be flushed to the client.
 	FlushDelay time.Duration
+
+	TruncateErrLen int
 }
 
 // EnableSSL will set the right flag on the parameters.

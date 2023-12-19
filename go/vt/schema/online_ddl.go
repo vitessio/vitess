@@ -110,8 +110,8 @@ type OnlineDDL struct {
 
 // ParseOnlineDDLStatement parses the given SQL into a statement and returns the action type of the DDL statement, or error
 // if the statement is not a DDL
-func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action sqlparser.DDLAction, err error) {
-	stmt, err := sqlparser.Parse(sql)
+func ParseOnlineDDLStatement(sql string, parser *sqlparser.Parser) (ddlStmt sqlparser.DDLStatement, action sqlparser.DDLAction, err error) {
+	stmt, err := parser.Parse(sql)
 	if err != nil {
 		return nil, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error parsing statement: SQL=%s, error=%+v", sql, err)
 	}
@@ -122,10 +122,10 @@ func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action
 	return ddlStmt, action, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported query type: %s", sql)
 }
 
-func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting) error {
+func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, parser *sqlparser.Parser) error {
 	// SQL statement sanity checks:
 	if !ddlStmt.IsFullyParsed() {
-		if _, err := sqlparser.ParseStrictDDL(sql); err != nil {
+		if _, err := parser.ParseStrictDDL(sql); err != nil {
 			// More information about the reason why the statement is not fully parsed:
 			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "%v", err)
 		}
@@ -147,12 +147,12 @@ func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement, ddlStr
 }
 
 // NewOnlineDDLs takes a single DDL statement, normalizes it (potentially break down into multiple statements), and generates one or more OnlineDDL instances, one for each normalized statement
-func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, migrationContext string, providedUUID string) (onlineDDLs [](*OnlineDDL), err error) {
+func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, migrationContext string, providedUUID string, parser *sqlparser.Parser) (onlineDDLs []*OnlineDDL, err error) {
 	appendOnlineDDL := func(tableName string, ddlStmt sqlparser.DDLStatement) error {
-		if err := onlineDDLStatementSanity(sql, ddlStmt, ddlStrategySetting); err != nil {
+		if err := onlineDDLStatementSanity(sql, ddlStmt, ddlStrategySetting, parser); err != nil {
 			return err
 		}
-		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, migrationContext, providedUUID)
+		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, migrationContext, providedUUID, parser)
 		if err != nil {
 			return err
 		}
@@ -183,7 +183,7 @@ func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, 
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
-func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, migrationContext string, providedUUID string) (onlineDDL *OnlineDDL, err error) {
+func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, migrationContext string, providedUUID string, parser *sqlparser.Parser) (onlineDDL *OnlineDDL, err error) {
 	if ddlStrategySetting == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "NewOnlineDDL: found nil DDLStrategySetting")
 	}
@@ -217,7 +217,7 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 			sql = fmt.Sprintf("revert vitess_migration '%s'", uuid)
 		}
 
-		stmt, err := sqlparser.Parse(sql)
+		stmt, err := parser.Parse(sql)
 		if err != nil {
 			isLegacyRevertStatement := false
 			// query validation and rebuilding
@@ -340,9 +340,9 @@ func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 }
 
 // sqlWithoutComments returns the SQL statement without comment directives. Useful for tests
-func (onlineDDL *OnlineDDL) sqlWithoutComments() (sql string, err error) {
+func (onlineDDL *OnlineDDL) sqlWithoutComments(parser *sqlparser.Parser) (sql string, err error) {
 	sql = onlineDDL.SQL
-	stmt, err := sqlparser.Parse(sql)
+	stmt, err := parser.Parse(sql)
 	if err != nil {
 		// query validation and rebuilding
 		if _, err := legacyParseRevertUUID(sql); err == nil {
@@ -366,18 +366,18 @@ func (onlineDDL *OnlineDDL) sqlWithoutComments() (sql string, err error) {
 }
 
 // GetAction extracts the DDL action type from the online DDL statement
-func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) {
-	if _, err := onlineDDL.GetRevertUUID(); err == nil {
+func (onlineDDL *OnlineDDL) GetAction(parser *sqlparser.Parser) (action sqlparser.DDLAction, err error) {
+	if _, err := onlineDDL.GetRevertUUID(parser); err == nil {
 		return sqlparser.RevertDDLAction, nil
 	}
 
-	_, action, err = ParseOnlineDDLStatement(onlineDDL.SQL)
+	_, action, err = ParseOnlineDDLStatement(onlineDDL.SQL, parser)
 	return action, err
 }
 
 // IsView returns 'true' when the statement affects a VIEW
-func (onlineDDL *OnlineDDL) IsView() bool {
-	stmt, _, err := ParseOnlineDDLStatement(onlineDDL.SQL)
+func (onlineDDL *OnlineDDL) IsView(parser *sqlparser.Parser) bool {
+	stmt, _, err := ParseOnlineDDLStatement(onlineDDL.SQL, parser)
 	if err != nil {
 		return false
 	}
@@ -389,8 +389,8 @@ func (onlineDDL *OnlineDDL) IsView() bool {
 }
 
 // GetActionStr returns a string representation of the DDL action
-func (onlineDDL *OnlineDDL) GetActionStr() (action sqlparser.DDLAction, actionStr string, err error) {
-	action, err = onlineDDL.GetAction()
+func (onlineDDL *OnlineDDL) GetActionStr(parser *sqlparser.Parser) (action sqlparser.DDLAction, actionStr string, err error) {
+	action, err = onlineDDL.GetAction(parser)
 	if err != nil {
 		return action, actionStr, err
 	}
@@ -410,11 +410,11 @@ func (onlineDDL *OnlineDDL) GetActionStr() (action sqlparser.DDLAction, actionSt
 // GetRevertUUID works when this migration is a revert for another migration. It returns the UUID
 // fo the reverted migration.
 // The function returns error when this is not a revert migration.
-func (onlineDDL *OnlineDDL) GetRevertUUID() (uuid string, err error) {
+func (onlineDDL *OnlineDDL) GetRevertUUID(parser *sqlparser.Parser) (uuid string, err error) {
 	if uuid, err := legacyParseRevertUUID(onlineDDL.SQL); err == nil {
 		return uuid, nil
 	}
-	if stmt, err := sqlparser.Parse(onlineDDL.SQL); err == nil {
+	if stmt, err := parser.Parse(onlineDDL.SQL); err == nil {
 		if revert, ok := stmt.(*sqlparser.RevertMigration); ok {
 			return revert.UUID, nil
 		}

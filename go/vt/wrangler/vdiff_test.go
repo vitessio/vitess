@@ -1100,7 +1100,7 @@ func TestVDiffFindPKs(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := findPKs(tc.table, tc.targetSelect, tc.tdIn, collations.MySQL8())
+			_, err := findPKs(tc.table, tc.targetSelect, tc.tdIn, collations.MySQL8(), sqlparser.NewTestParser())
 			require.NoError(t, err)
 			require.EqualValues(t, tc.tdOut, tc.tdIn)
 		})
@@ -1258,7 +1258,7 @@ func TestGetColumnCollations(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getColumnCollations(tt.table, collationEnv)
+			got, err := getColumnCollations(tt.table, collationEnv, sqlparser.NewTestParser())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("getColumnCollations() error = %v, wantErr = %t", err, tt.wantErr)
 				return

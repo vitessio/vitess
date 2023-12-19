@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
@@ -157,7 +156,7 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			return true
 		}
 		Value := &queryzRow{
-			Query: logz.Wrappable(sqlparser.TruncateForUI(plan.Original)),
+			Query: logz.Wrappable(qe.env.SQLParser().TruncateForUI(plan.Original)),
 			Table: plan.TableName().String(),
 			Plan:  plan.PlanID,
 		}

@@ -35,6 +35,7 @@ import (
 type ParsedQuery struct {
 	Query         string
 	bindLocations []bindLocation
+	truncateUILen int
 }
 
 type bindLocation struct {
@@ -155,9 +156,8 @@ func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field
 }
 
 // MarshalJSON is a custom JSON marshaler for ParsedQuery.
-// Note that any queries longer that 512 bytes will be truncated.
 func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
-	return json.Marshal(TruncateForUI(pq.Query))
+	return json.Marshal(pq.Query)
 }
 
 // EncodeValue encodes one bind variable value into the query.

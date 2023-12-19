@@ -46,6 +46,7 @@ type DBClient interface {
 type dbClientImpl struct {
 	dbConfig dbconfigs.Connector
 	dbConn   *mysql.Conn
+	parser   *sqlparser.Parser
 }
 
 // dbClientImplWithSidecarDBReplacement is a DBClient implementation
@@ -57,14 +58,15 @@ type dbClientImplWithSidecarDBReplacement struct {
 }
 
 // NewDBClient creates a DBClient instance
-func NewDBClient(params dbconfigs.Connector) DBClient {
+func NewDBClient(params dbconfigs.Connector, parser *sqlparser.Parser) DBClient {
 	if sidecar.GetName() != sidecar.DefaultName {
 		return &dbClientImplWithSidecarDBReplacement{
-			dbClientImpl{dbConfig: params},
+			dbClientImpl{dbConfig: params, parser: parser},
 		}
 	}
 	return &dbClientImpl{
 		dbConfig: params,
+		parser:   parser,
 	}
 }
 
@@ -163,7 +165,7 @@ func (dc *dbClientImpl) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 
 func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
+	uq, err := dcr.parser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -172,12 +174,12 @@ func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetch(query string, maxr
 
 func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
 	// Replace any provided sidecar database qualifiers with the correct one.
-	qps, err := sqlparser.SplitStatementToPieces(query)
+	qps, err := dcr.parser.SplitStatementToPieces(query)
 	if err != nil {
 		return nil, err
 	}
 	for i, qp := range qps {
-		uq, err := sqlparser.ReplaceTableQualifiers(qp, sidecar.DefaultName, sidecar.GetName())
+		uq, err := dcr.parser.ReplaceTableQualifiers(qp, sidecar.DefaultName, sidecar.GetName())
 		if err != nil {
 			return nil, err
 		}

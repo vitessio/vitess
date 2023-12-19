@@ -253,16 +253,6 @@ func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)))
 }
 
-// Connect returns a new connection to the underlying MySQL server
-func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (*mysql.Conn, error) {
-	params := mysql.ConnParams{
-		Uname:      username,
-		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctl.TabletUID), "/mysql.sock"),
-	}
-
-	return mysql.Connect(ctx, &params)
-}
-
 // MysqlCtlProcessInstanceOptionalInit returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
 func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) (*MysqlctlProcess, error) {

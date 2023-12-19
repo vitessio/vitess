@@ -28,20 +28,17 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
@@ -626,66 +623,6 @@ func (tl *testLogger) getLog(i int) string {
 		return tl.logs[i]
 	}
 	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.logs))
-}
-
-func TestLogTruncation(t *testing.T) {
-	client := framework.NewClient()
-	tl := newTestLogger()
-	defer tl.Close()
-
-	// Test that a long error string is not truncated by default
-	_, err := client.Execute(
-		"insert into vitess_test values(123, null, :data, null)",
-		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
-	)
-	wantLog := `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
-	wantErr := wantLog
-	if err == nil {
-		t.Errorf("query unexpectedly succeeded")
-	}
-	if tl.getLog(0) != wantLog {
-		t.Errorf("log was unexpectedly truncated: got\n'%s', want\n'%s'", tl.getLog(0), wantLog)
-	}
-
-	if err.Error() != wantErr {
-		t.Errorf("error was unexpectedly truncated: got\n'%s', want\n'%s'", err.Error(), wantErr)
-	}
-
-	// Test that the data too long error is truncated once the option is set
-	sqlparser.SetTruncateErrLen(30)
-	_, err = client.Execute(
-		"insert into vitess_test values(123, null, :data, null)",
-		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
-	)
-	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED]", BindVars: {data: " [TRUNCATED]`
-	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null)", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
-	if err == nil {
-		t.Errorf("query unexpectedly succeeded")
-	}
-	if tl.getLog(1) != wantLog {
-		t.Errorf("log was not truncated properly: got\n'%s', want\n'%s'", tl.getLog(1), wantLog)
-	}
-	if err.Error() != wantErr {
-		t.Errorf("error was unexpectedly truncated: got\n'%s', want\n'%s'", err.Error(), wantErr)
-	}
-
-	// Test that trailing comments are preserved data too long error is truncated once the option is set
-	sqlparser.SetTruncateErrLen(30)
-	_, err = client.Execute(
-		"insert into vitess_test values(123, null, :data, null) /* KEEP ME */",
-		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
-	)
-	wantLog = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess [TRUNCATED] /* KEEP ME */", BindVars: {data: " [TRUNCATED]`
-	wantErr = `Data too long for column 'charval' at row 1 (errno 1406) (sqlstate 22001) (CallerID: dev): Sql: "insert into vitess_test values(123, null, :data, null) /* KEEP ME */", BindVars: {data: "type:VARCHAR value:\"THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\""}`
-	if err == nil {
-		t.Errorf("query unexpectedly succeeded")
-	}
-	if tl.getLog(2) != wantLog {
-		t.Errorf("log was not truncated properly: got\n'%s', want\n'%s'", tl.getLog(2), wantLog)
-	}
-	if err.Error() != wantErr {
-		t.Errorf("error was unexpectedly truncated: got\n'%s', want\n'%s'", err.Error(), wantErr)
-	}
 }
 
 func TestClientFoundRows(t *testing.T) {
