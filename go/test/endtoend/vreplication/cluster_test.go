@@ -89,14 +89,18 @@ type ClusterConfig struct {
 	vreplicationCompressGTID bool
 }
 
-func (cc *ClusterConfig) compressGTID() func() {
+// enableGTIDCompression enables GTID compression for the cluster and returns a function
+// that can be used to disable it in a defer.
+func (cc *ClusterConfig) enableGTIDCompression() func() {
 	cc.vreplicationCompressGTID = true
 	return func() {
 		cc.vreplicationCompressGTID = false
 	}
 }
 
-func setVTTabletExperimentalFlags() func() {
+// setAllVTTabletExperimentalFlags sets all the experimental flags for vttablet and returns a function
+// that can be used to reset them in a defer.
+func setAllVTTabletExperimentalFlags() func() {
 	experimentalArgs := fmt.Sprintf("--vreplication_experimental_flags=%d",
 		vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching)
 	oldArgs := extraVTTabletArgs

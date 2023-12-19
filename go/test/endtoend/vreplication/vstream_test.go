@@ -215,6 +215,7 @@ const vschemaSharded = `
 
 func insertRow(keyspace, table string, id int) {
 	vtgateConn := getConnectionNoError(vc.t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	// Due to race conditions this call is sometimes made after vtgates have shutdown. In that case just return.
 	if vtgateConn == nil {
 		return
 	}

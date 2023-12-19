@@ -269,7 +269,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	defer setVTTabletExperimentalFlags()
+	defer setAllVTTabletExperimentalFlags()
 	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t, "noblob")
@@ -563,8 +563,8 @@ func testVStreamCellFlag(t *testing.T) {
 // We also reuse the setup of this test to validate that the "vstream * from" vtgate query functionality is functional
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
-	defer mainClusterConfig.compressGTID()
-	defer setVTTabletExperimentalFlags()
+	defer mainClusterConfig.enableGTIDCompression()
+	defer setAllVTTabletExperimentalFlags()
 	vc = NewVitessCluster(t, &clusterOptions{cells: cells})
 	defer vc.TearDown()
 
