@@ -99,14 +99,7 @@ type Handler interface {
 	// the first call to callback. So the Handler should not
 	// hang on to the byte slice.
 	ComQuery(c *Conn, query string, callback func(res *sqltypes.Result, more bool) error) error
-
-	// ComParsedQuery is called when a connection receives a
-	// query that has already been parsed. Note the contents
-	// of the query slice may change after the first call to
-	// callback. So the Handler should not hang on to the byte
-	// slice.
-	ComParsedQuery(c *Conn, query string, parsed sqlparser.Statement, callback func(res *sqltypes.Result, more bool) error) error
-
+	
 	// ComMultiQuery is called when a connection receives a query and the
 	// client supports MULTI_STATEMENT. It should process the first
 	// statement in |query| and return the remainder. It will be called
@@ -136,6 +129,17 @@ type Handler interface {
 	// and the Vitess layer needs to parse the query to identify the query parameters so that the correct response
 	// packets can be sent.
 	ParserOptionsForConnection(c *Conn) (sqlparser.ParserOptions, error)
+}
+
+// ExtendedHandler is an extension to Handler to support additional protocols on top of MySQL.
+type ExtendedHandler interface {
+	// ComParsedQuery is called when a connection receives a query that has already been parsed. Note the contents 
+	// of the query slice may change after the first call to callback. So the Handler should not hang on to the byte 
+	// slice.
+	ComParsedQuery(c *Conn, query string, parsed sqlparser.Statement, callback func(res *sqltypes.Result, more bool) error) error
+
+	// ComPrepareParsed is called when a connection receives a prepared statement query that has already been parsed.
+	ComPrepareParsed(c *Conn, query string, parsed sqlparser.Statement, prepare *PrepareData) ([]*querypb.Field, error)
 }
 
 // Listener is the MySQL server protocol listener.
