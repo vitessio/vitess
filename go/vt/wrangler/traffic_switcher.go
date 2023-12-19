@@ -487,11 +487,11 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	_ = ws
 	if err != nil {
-		handleError("failed to get the current workflow state", err)
+		return handleError("failed to get the current workflow state", err)
 	}
 	if ts == nil {
 		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflowName, targetKeyspace)
-		handleError("failed to get the current workflow state", fmt.Errorf(errorMsg))
+		return handleError("failed to get the current workflow state", fmt.Errorf(errorMsg))
 	}
 
 	var sw iswitcher
@@ -508,7 +508,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 
 	ts.Logger().Infof("Built switching metadata: %+v", ts)
 	if err := ts.validate(ctx); err != nil {
-		handleError("workflow validation failed", err)
+		return handleError("workflow validation failed", err)
 	}
 
 	if reverseReplication {
@@ -655,7 +655,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		return handleError("failed to update the routing rules", err)
 	}
 	if err := sw.streamMigraterfinalize(ctx, ts, sourceWorkflows); err != nil {
-		handleError("failed to finalize the traffic switch", err)
+		return handleError("failed to finalize the traffic switch", err)
 	}
 	if reverseReplication {
 		if err := sw.startReverseVReplication(ctx); err != nil {
