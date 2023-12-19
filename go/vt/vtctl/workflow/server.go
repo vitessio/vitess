@@ -1144,7 +1144,7 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 
 	copyStates := make([]*vtctldatapb.Workflow_Stream_CopyState, len(result.Rows))
 	for i, row := range result.Rows {
-		streamId, err := row[0].ToCastInt64()
+		streamId, err := row[0].ToInt64()
 		if err != nil {
 			return nil, fmt.Errorf("failed to cast vrepl_id to int64: %v", err)
 		}

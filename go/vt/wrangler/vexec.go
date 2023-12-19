@@ -931,22 +931,25 @@ func (wr *Wrangler) getCopyStates(ctx context.Context, tablet *topo.TabletInfo, 
 	}
 
 	result := sqltypes.Proto3ToResult(qr)
-	cs := make(map[int64][]copyState, 0, len(result.Rows))
-	if result != nil {
-		for _, row := range result.Rows {
-			vreplID, err := row[0].ToInt64()
-			if err != nil {
-				return nil, fmt.Errorf("failed to cast vrepl_id to int64: %v", err)
-			}
-			// These fields are varbinary, but close enough
-			table := row[1].ToString()
-			lastPK := row[2].ToString()
-			copyState := copyState{
-				Table:  table,
-				LastPK: lastPK,
-			}
-			cs[vreplID] = append(cs[vreplID], copyState)
+	if result == nil {
+		cs := make(map[int64][]copyState)
+		return cs, nil
+	}
+
+	cs := make(map[int64][]copyState, len(result.Rows))
+	for _, row := range result.Rows {
+		vreplID, err := row[0].ToInt64()
+		if err != nil {
+			return nil, fmt.Errorf("failed to cast vrepl_id to int64: %v", err)
 		}
+		// These fields are varbinary, but close enough
+		table := row[1].ToString()
+		lastPK := row[2].ToString()
+		copyState := copyState{
+			Table:  table,
+			LastPK: lastPK,
+		}
+		cs[vreplID] = append(cs[vreplID], copyState)
 	}
 
 	return cs, nil
