@@ -506,8 +506,9 @@ func insertRowsPlan(ctx *plancontext.PlanningContext, insOp *Insert, ins *sqlpar
 			colNum, _ := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
 				innerpv, err := evalengine.Translate(row[colNum], &evalengine.Config{
-					ResolveType: ctx.SemTable.TypeForExpr,
-					Collation:   ctx.SemTable.Collation,
+					ResolveType:  ctx.SemTable.TypeForExpr,
+					Collation:    ctx.SemTable.Collation,
+					CollationEnv: ctx.VSchema.CollationEnv(),
 				})
 				if err != nil {
 					panic(err)
@@ -636,8 +637,9 @@ func modifyForAutoinc(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, v
 		}
 		var err error
 		gen.Values, err = evalengine.Translate(autoIncValues, &evalengine.Config{
-			ResolveType: ctx.SemTable.TypeForExpr,
-			Collation:   ctx.SemTable.Collation,
+			ResolveType:  ctx.SemTable.TypeForExpr,
+			Collation:    ctx.SemTable.Collation,
+			CollationEnv: ctx.VSchema.CollationEnv(),
 		})
 		if err != nil {
 			panic(err)

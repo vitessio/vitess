@@ -65,6 +65,8 @@ type (
 		// collation and type are used to hash the incoming values correctly
 		Collation      collations.ID
 		ComparisonType querypb.Type
+
+		CollationEnv *collations.Environment
 	}
 
 	hashJoinProbeTable struct {
@@ -249,7 +251,7 @@ func (hj *HashJoin) description() PrimitiveDescription {
 	}
 	coll := hj.Collation
 	if coll != collations.Unknown {
-		other["Collation"] = collations.Local().LookupName(coll)
+		other["Collation"] = hj.CollationEnv.LookupName(coll)
 	}
 	return PrimitiveDescription{
 		OperatorType: "Join",

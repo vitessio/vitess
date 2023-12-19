@@ -24,6 +24,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -35,8 +37,6 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
-
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -138,13 +138,14 @@ func run(cmd *cobra.Command, args []string) {
 		log.Warningf("no cache-refresh-key set; forcing cache refreshes will not be possible")
 	}
 	cache.SetCacheRefreshKey(cacheRefreshKey)
+	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
 
 	s := vtadmin.NewAPI(clusters, vtadmin.Options{
 		GRPCOpts:              opts,
 		HTTPOpts:              httpOpts,
 		RBAC:                  rbacConfig,
 		EnableDynamicClusters: enableDynamicClusters,
-	})
+	}, collationEnv)
 	bootSpan.Finish()
 
 	if err := s.ListenAndServe(); err != nil {
@@ -207,6 +208,8 @@ func main() {
 	rootCmd.Flags().AddGoFlag(flag.Lookup("alsologtostderr"))
 	rootCmd.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
 	rootCmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
+
+	servenv.RegisterMySQLServerFlags(rootCmd.Flags())
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)

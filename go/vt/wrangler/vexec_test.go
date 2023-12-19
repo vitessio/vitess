@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/logutil"
@@ -44,7 +45,7 @@ func TestVExec(t *testing.T) {
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, time.Now().Unix())
 	defer env.close()
 	var logger = logutil.NewMemoryLogger()
-	wr := New(logger, env.topoServ, env.tmc)
+	wr := New(logger, env.topoServ, env.tmc, collations.MySQL8())
 
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 	err := vx.getPrimaries()
@@ -189,7 +190,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
-	wr := New(logger, env.topoServ, env.tmc)
+	wr := New(logger, env.topoServ, env.tmc, collations.MySQL8())
 
 	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false, nil)
 	require.NoError(t, err)
@@ -365,7 +366,7 @@ func TestWorkflowListAll(t *testing.T) {
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
-	wr := New(logger, env.topoServ, env.tmc)
+	wr := New(logger, env.topoServ, env.tmc, collations.MySQL8())
 
 	workflows, err := wr.ListAllWorkflows(ctx, keyspace, true)
 	require.Nil(t, err)
@@ -386,7 +387,7 @@ func TestVExecValidations(t *testing.T) {
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
 	defer env.close()
 
-	wr := New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	wr := New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.MySQL8())
 
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
@@ -472,7 +473,7 @@ func TestWorkflowUpdate(t *testing.T) {
 	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
-	wr := New(logger, env.topoServ, env.tmc)
+	wr := New(logger, env.topoServ, env.tmc, collations.MySQL8())
 	nullSlice := textutil.SimulatedNullStringSlice                   // Used to represent a non-provided value
 	nullOnDDL := binlogdatapb.OnDDLAction(textutil.SimulatedNullInt) // Used to represent a non-provided value
 	tests := []struct {

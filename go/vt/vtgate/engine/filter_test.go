@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -70,6 +71,7 @@ func TestFilterPass(t *testing.T) {
 			pred, err := evalengine.Translate(predicate, &evalengine.Config{
 				Collation:     utf8mb4Bin,
 				ResolveColumn: evalengine.FieldResolver(tc.res.Fields).Column,
+				CollationEnv:  collations.MySQL8(),
 			})
 			require.NoError(t, err)
 
@@ -126,6 +128,7 @@ func TestFilterStreaming(t *testing.T) {
 			pred, err := evalengine.Translate(predicate, &evalengine.Config{
 				Collation:     utf8mb4Bin,
 				ResolveColumn: evalengine.FieldResolver(tc.res[0].Fields).Column,
+				CollationEnv:  collations.MySQL8(),
 			})
 			require.NoError(t, err)
 

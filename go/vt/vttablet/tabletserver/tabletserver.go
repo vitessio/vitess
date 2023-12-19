@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -128,6 +129,8 @@ type TabletServer struct {
 
 	// This field is only stored for testing
 	checkMysqlGaugeFunc *stats.GaugeFunc
+
+	collationEnv *collations.Environment
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -138,8 +141,8 @@ var _ queryservice.QueryService = (*TabletServer)(nil)
 var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(ctx context.Context, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
-	return NewTabletServer(ctx, name, tabletenv.NewCurrentConfig(), topoServer, alias)
+func NewServer(ctx context.Context, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment) *TabletServer {
+	return NewTabletServer(ctx, name, tabletenv.NewCurrentConfig(), topoServer, alias, collationEnv)
 }
 
 var (
@@ -149,7 +152,7 @@ var (
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment) *TabletServer {
 	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
 		exporter:               exporter,
@@ -160,6 +163,7 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
 		alias:                  alias.CloneVT(),
+		collationEnv:           collationEnv,
 	}
 	tsv.QueryTimeout.Store(config.Oltp.QueryTimeout.Nanoseconds())
 
@@ -334,6 +338,11 @@ func (tsv *TabletServer) Config() *tabletenv.TabletConfig {
 // Stats satisfies tabletenv.Env.
 func (tsv *TabletServer) Stats() *tabletenv.Stats {
 	return tsv.stats
+}
+
+// Stats satisfies tabletenv.Env.
+func (tsv *TabletServer) CollationEnv() *collations.Environment {
+	return tsv.collationEnv
 }
 
 // LogError satisfies tabletenv.Env.

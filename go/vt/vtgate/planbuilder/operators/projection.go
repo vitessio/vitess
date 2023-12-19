@@ -554,8 +554,9 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) Operator {
 
 		// for everything else, we'll turn to the evalengine
 		eexpr, err := evalengine.Translate(rewritten, &evalengine.Config{
-			ResolveType: ctx.SemTable.TypeForExpr,
-			Collation:   ctx.SemTable.Collation,
+			ResolveType:  ctx.SemTable.TypeForExpr,
+			Collation:    ctx.SemTable.Collation,
+			CollationEnv: ctx.VSchema.CollationEnv(),
 		})
 		if err != nil {
 			panic(err)

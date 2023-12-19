@@ -17,10 +17,10 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"sync"
 
-	"context"
-
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -58,15 +58,17 @@ type VStreamerClient interface {
 }
 
 type externalConnector struct {
-	mu         sync.Mutex
-	dbconfigs  map[string]*dbconfigs.DBConfigs
-	connectors map[string]*mysqlConnector
+	mu           sync.Mutex
+	dbconfigs    map[string]*dbconfigs.DBConfigs
+	connectors   map[string]*mysqlConnector
+	collationEnv *collations.Environment
 }
 
-func newExternalConnector(dbcfgs map[string]*dbconfigs.DBConfigs) *externalConnector {
+func newExternalConnector(dbcfgs map[string]*dbconfigs.DBConfigs, collationEnv *collations.Environment) *externalConnector {
 	return &externalConnector{
-		dbconfigs:  dbcfgs,
-		connectors: make(map[string]*mysqlConnector),
+		dbconfigs:    dbcfgs,
+		connectors:   make(map[string]*mysqlConnector),
+		collationEnv: collationEnv,
 	}
 }
 
@@ -91,7 +93,7 @@ func (ec *externalConnector) Get(name string) (*mysqlConnector, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "external mysqlConnector %v not found", name)
 	}
 	c := &mysqlConnector{}
-	c.env = tabletenv.NewEnv(config, name)
+	c.env = tabletenv.NewEnv(config, name, ec.collationEnv)
 	c.se = schema.NewEngine(c.env)
 	c.vstreamer = vstreamer.NewEngine(c.env, nil, c.se, nil, "")
 	c.vstreamer.InitDBConfig("", "")

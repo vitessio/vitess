@@ -45,7 +45,7 @@ func TestLocalEncodings(t *testing.T) {
 	defer conn.Close()
 
 	for _, tc := range cases {
-		local := collations.Local().LookupByName(tc.collation)
+		local := collations.MySQL8().LookupByName(tc.collation)
 		remote := remote.NewCollation(conn, tc.collation)
 		verifyTranscoding(t, colldata.Lookup(local), remote, tc.input)
 	}

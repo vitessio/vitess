@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -70,6 +69,7 @@ func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 
 	cfg := &Config{
 		Collation:         collations.CollationUtf8mb4ID,
+		CollationEnv:      collations.MySQL8(),
 		NoConstantFolding: !simplify,
 	}
 
@@ -89,7 +89,7 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	return NewExpressionEnv(context.Background(), nil, nil).Evaluate(converted)
+	return EmptyExpressionEnv(collations.MySQL8()).Evaluate(converted)
 }
 
 func TestMySQLGolden(t *testing.T) {
@@ -141,11 +141,11 @@ func TestMySQLGolden(t *testing.T) {
 					continue
 				}
 				if tc.Error != "" {
-					t.Errorf("query %d: %s\nmysql err:  %s\nvitess val: %s", testcount, tc.Query, tc.Error, eval.Value(collations.Default()))
+					t.Errorf("query %d: %s\nmysql err:  %s\nvitess val: %s", testcount, tc.Query, tc.Error, eval.Value(collations.MySQL8().DefaultConnectionCharset()))
 					continue
 				}
 				if eval.String() != tc.Value {
-					t.Errorf("query %d: %s\nmysql val:  %s\nvitess val: %s", testcount, tc.Query, tc.Value, eval.Value(collations.Default()))
+					t.Errorf("query %d: %s\nmysql val:  %s\nvitess val: %s", testcount, tc.Query, tc.Value, eval.Value(collations.MySQL8().DefaultConnectionCharset()))
 					continue
 				}
 				ok++
@@ -159,5 +159,5 @@ func TestMySQLGolden(t *testing.T) {
 func TestDebug1(t *testing.T) {
 	// Debug
 	eval, err := testSingle(t, `SELECT  _latin1 0xFF regexp _latin1 '[[:lower:]]' COLLATE latin1_bin`)
-	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.Local().LookupName(eval.Collation()))
+	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.MySQL8().LookupName(eval.Collation()))
 }

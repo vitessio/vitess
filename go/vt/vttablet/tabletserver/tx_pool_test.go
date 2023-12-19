@@ -23,7 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -215,7 +217,8 @@ func primeTxPoolWithConnection(t *testing.T, ctx context.Context) (*fakesqldb.DB
 	txPool, _ := newTxPool()
 	// Set the capacity to 1 to ensure that the db connection is reused.
 	txPool.scp.conns.SetCapacity(1)
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	txPool.Open(params, params, params)
 
 	// Run a query to trigger a database connection. That connection will be
 	// reused by subsequent transactions.
@@ -374,7 +377,8 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	assertErrorMatch(id, "pool closed")
 
 	txPool, _ = newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	txPool.Open(params, params, params)
 
 	conn1, _, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	id = conn1.ReservedID()
@@ -389,7 +393,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLTP)
 	env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLAP)
 	txPool, _ = newTxPoolWithEnv(env)
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	txPool.Open(params, params, params)
 	defer txPool.Close()
 
 	conn1, _, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
@@ -820,7 +824,7 @@ func newEnv(exporterName string) tabletenv.Env {
 	config.OltpReadPool.IdleTimeout = 30 * time.Second
 	config.OlapReadPool.IdleTimeout = 30 * time.Second
 	config.TxPool.IdleTimeout = 30 * time.Second
-	env := tabletenv.NewEnv(config, exporterName)
+	env := tabletenv.NewEnv(config, exporterName, collations.MySQL8())
 	return env
 }
 
@@ -869,7 +873,8 @@ func setup(t *testing.T) (*fakesqldb.DB, *TxPool, *fakeLimiter, func()) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
 	txPool, limiter := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	txPool.Open(params, params, params)
 
 	return db, txPool, limiter, func() {
 		txPool.Close()
@@ -882,7 +887,8 @@ func setupWithEnv(t *testing.T, env tabletenv.Env) (*fakesqldb.DB, *TxPool, *fak
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
 	txPool, limiter := newTxPoolWithEnv(env)
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	txPool.Open(params, params, params)
 
 	return db, txPool, limiter, func() {
 		txPool.Close()

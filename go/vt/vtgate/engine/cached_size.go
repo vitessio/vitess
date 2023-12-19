@@ -35,7 +35,7 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(112)
 	}
 	// field Alias string
 	size += hack.RuntimeAllocSize(int64(len(cached.Alias)))
@@ -45,6 +45,8 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	}
 	// field Original *vitess.io/vitess/go/vt/sqlparser.AliasedExpr
 	size += cached.Original.CachedSize(true)
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *AlterVSchema) CachedSize(alloc bool) int64 {
@@ -67,10 +69,12 @@ func (cached *CheckCol) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field WsCol *int
 	size += hack.RuntimeAllocSize(int64(8))
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 
@@ -199,7 +203,7 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	}
 	// field CheckCols []vitess.io/vitess/go/vt/vtgate/engine.CheckCol
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.CheckCols)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.CheckCols)) * int64(40))
 		for _, elem := range cached.CheckCols {
 			size += elem.CachedSize(false)
 		}
@@ -352,6 +356,8 @@ func (cached *GroupByParams) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *HashJoin) CachedSize(alloc bool) int64 {
@@ -378,6 +384,8 @@ func (cached *HashJoin) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.ASTPred.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *Insert) CachedSize(alloc bool) int64 {
@@ -617,7 +625,10 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(48))
+		for _, elem := range cached.OrderBy {
+			size += elem.CachedSize(false)
+		}
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
@@ -644,7 +655,10 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(48))
+		for _, elem := range cached.OrderBy {
+			size += elem.CachedSize(false)
+		}
 	}
 	return size
 }
@@ -666,7 +680,7 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -682,6 +696,8 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
@@ -710,6 +726,8 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *Plan) CachedSize(alloc bool) int64 {
@@ -849,7 +867,10 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(48))
+		for _, elem := range cached.OrderBy {
+			size += elem.CachedSize(false)
+		}
 	}
 	// field RoutingParameters *vitess.io/vitess/go/vt/vtgate/engine.RoutingParameters
 	size += cached.RoutingParameters.CachedSize(true)

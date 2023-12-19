@@ -59,6 +59,7 @@ type ReplicatorPlan struct {
 	ColInfoMap    map[string][]*ColumnInfo
 	stats         *binlogplayer.Stats
 	Source        *binlogdatapb.BinlogSource
+	collationEnv  *collations.Environment
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -98,11 +99,12 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name:     sqlparser.NewIdentifierCS(tableName),
-		lastpk:   lastpk,
-		colInfos: rp.ColInfoMap[tableName],
-		stats:    rp.stats,
-		source:   rp.Source,
+		name:         sqlparser.NewIdentifierCS(tableName),
+		lastpk:       lastpk,
+		colInfos:     rp.ColInfoMap[tableName],
+		stats:        rp.stats,
+		source:       rp.Source,
+		collationEnv: rp.collationEnv,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewIdentifierCI(field.Name)
@@ -217,6 +219,8 @@ type TablePlan struct {
 	PartialInserts map[string]*sqlparser.ParsedQuery
 	// PartialUpdates are same as PartialInserts, but for update statements
 	PartialUpdates map[string]*sqlparser.ParsedQuery
+
+	CollationEnv *collations.Environment
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -299,7 +303,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 
 		rowVal, _ := sqltypes.BindVariableToValue(bindvar)
 		// TODO(king-11) make collation aware
-		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0], collations.Unknown)
+		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0], tp.CollationEnv, collations.Unknown)
 		// If rowVal is > last pk, transaction will be a noop, so don't apply this statement
 		if err == nil && result > 0 {
 			tp.Stats.NoopQueryCount.Add(stmtType, 1)
@@ -317,7 +321,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
 	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
 		// Non-null string value, for which we have a charset conversion instruction
-		fromCollation := collations.Local().DefaultCollationForCharset(conversion.FromCharset)
+		fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
 		if fromCollation == collations.Unknown {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
 		}

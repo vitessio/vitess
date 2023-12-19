@@ -22,9 +22,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func TestJoinPredicates(t *testing.T) {
@@ -59,7 +61,13 @@ func TestJoinPredicates(t *testing.T) {
 func TestOffsetPlanning(t *testing.T) {
 	lcol1, lcol2 := sqlparser.NewColName("lhs1"), sqlparser.NewColName("lhs2")
 	rcol1, rcol2 := sqlparser.NewColName("rhs1"), sqlparser.NewColName("rhs2")
-	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
+	ctx := &plancontext.PlanningContext{
+		SemTable: semantics.EmptySemTable(),
+		VSchema: &vschemawrapper.VSchemaWrapper{
+			V:             &vindexes.VSchema{},
+			SysVarEnabled: true,
+		},
+	}
 	lid := semantics.SingleTableSet(0)
 	rid := semantics.SingleTableSet(1)
 	ctx.SemTable.Recursive[lcol1] = lid

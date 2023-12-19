@@ -28,6 +28,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/key"
@@ -65,7 +67,7 @@ func initTest(ctx context.Context, mode string, opts *Options, topts *testopts, 
 	}
 
 	opts.ExecutionMode = mode
-	vte, err := Init(ctx, string(vSchema), string(schema), shardmap, opts)
+	vte, err := Init(ctx, string(vSchema), string(schema), shardmap, opts, collations.MySQL8())
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 	return vte
 }
@@ -344,7 +346,7 @@ func TestInit(t *testing.T) {
   }
 }`
 	schema := "create table table_missing_primary_vindex (id int primary key)"
-	_, err := Init(ctx, vschema, schema, "", defaultTestOpts())
+	_, err := Init(ctx, vschema, schema, "", defaultTestOpts(), collations.MySQL8())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing primary col vindex")
 }

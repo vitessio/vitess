@@ -53,7 +53,11 @@ func (si *declarativeSchemaInformation) FindTableOrVindex(tablename sqlparser.Ta
 }
 
 func (si *declarativeSchemaInformation) ConnCollation() collations.ID {
-	return 45
+	return collations.CollationUtf8mb4ID
+}
+
+func (si *declarativeSchemaInformation) CollationEnv() *collations.Environment {
+	return collations.MySQL8()
 }
 
 func (si *declarativeSchemaInformation) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {

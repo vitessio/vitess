@@ -26,6 +26,7 @@ import (
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
@@ -93,7 +94,7 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 	config := env.TabletEnv.Config().Clone()
 	config.DB = dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
 
-	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
+	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest", collations.MySQL8()), env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
 	engine.InitDBConfig(env.KeyspaceName, env.ShardName)
 	engine.Open()
 	return engine

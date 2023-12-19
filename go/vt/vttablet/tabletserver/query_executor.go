@@ -28,8 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -616,13 +614,13 @@ func (*QueryExecutor) BeginAgain(ctx context.Context, dc *StatefulConnection) er
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
-	env := evalengine.NewExpressionEnv(qre.ctx, qre.bindVars, nil)
+	env := evalengine.NewExpressionEnv(qre.ctx, qre.bindVars, evalengine.NewEmptyVCursor(qre.tsv.collationEnv, time.Local))
 	result, err := env.Evaluate(qre.plan.NextCount)
 	if err != nil {
 		return nil, err
 	}
 	tableName := qre.plan.TableName()
-	v := result.Value(collations.Default())
+	v := result.Value(qre.tsv.collationEnv.DefaultConnectionCharset())
 	inc, err := v.ToInt64()
 	if err != nil || inc < 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid increment for sequence %s: %s", tableName, v.String())

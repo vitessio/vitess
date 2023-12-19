@@ -206,12 +206,12 @@ func (tuple TupleExpr) format(buf *sqlparser.TrackedBuffer) {
 func (c *CollateExpr) format(buf *sqlparser.TrackedBuffer) {
 	formatExpr(buf, c, c.Inner, true)
 	buf.WriteLiteral(" COLLATE ")
-	buf.WriteString(collations.Local().LookupName(c.TypedCollation.Collation))
+	buf.WriteString(c.CollationEnv.LookupName(c.TypedCollation.Collation))
 }
 
 func (i *IntroducerExpr) format(buf *sqlparser.TrackedBuffer) {
 	buf.WriteString("_")
-	buf.WriteString(collations.Local().LookupName(i.TypedCollation.Collation))
+	buf.WriteString(i.CollationEnv.LookupName(i.TypedCollation.Collation))
 	formatExpr(buf, i, i.Inner, true)
 }
 
@@ -294,7 +294,7 @@ func (c *ConvertExpr) format(buf *sqlparser.TrackedBuffer) {
 	}
 	if c.Collation != collations.Unknown {
 		buf.WriteLiteral(" character set ")
-		buf.WriteString(collations.Local().LookupName(c.Collation))
+		buf.WriteString(c.CollationEnv.LookupName(c.Collation))
 	}
 	buf.WriteByte(')')
 }
@@ -303,7 +303,7 @@ func (c *ConvertUsingExpr) format(buf *sqlparser.TrackedBuffer) {
 	buf.WriteLiteral("convert(")
 	formatExpr(buf, c, c.Inner, true)
 	buf.WriteLiteral(" using ")
-	buf.WriteString(collations.Local().LookupName(c.Collation))
+	buf.WriteString(c.CollationEnv.LookupName(c.Collation))
 	buf.WriteByte(')')
 }
 
