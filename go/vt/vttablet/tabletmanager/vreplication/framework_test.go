@@ -523,7 +523,7 @@ func expectDeleteQueries(t *testing.T) {
 	))
 }
 
-func deleteVReplicationStreams(t *testing.T) {
+func deleteAllVReplicationStreams(t *testing.T) {
 	t.Helper()
 	res, err := playerEngine.Exec("select id from _vt.vreplication")
 	require.NoError(t, err, "could not select ids from _vt.vreplication: %v", err)

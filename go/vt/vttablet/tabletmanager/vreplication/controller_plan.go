@@ -228,7 +228,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 		}, nil
 	case vreplicationTableName:
 		if safe := isSelective(upd.Where, tableSelectiveColumns[vreplicationTableName]...); !safe {
-			return nil, fmt.Errorf("unsafe WHERE clause in update: %s; should be using = or in with at least one of the following columns: %v",
+			return nil, fmt.Errorf("unsafe WHERE clause in update: %s; should be using = or in with at least one of the following columns: %s",
 				sqlparser.String(upd.Where), columnsStrForErr(tableSelectiveColumns[vreplicationTableName]))
 		}
 	default:
@@ -288,7 +288,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 		}, nil
 	case vreplicationTableName:
 		if safe := isSelective(del.Where, tableSelectiveColumns[vreplicationTableName]...); !safe {
-			return nil, fmt.Errorf("unsafe WHERE clause in delete: %s; should be using = or in with at least one of the following columns: %v",
+			return nil, fmt.Errorf("unsafe WHERE clause in delete: %s; should be using = or in with at least one of the following columns: %s",
 				sqlparser.String(del.Where), columnsStrForErr(tableSelectiveColumns[vreplicationTableName]))
 		}
 	default:
