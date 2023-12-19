@@ -126,6 +126,8 @@ func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
 			r.Alternates = nil
 		}
 		return Swap(in, src, "pushed delete under route")
+	case *ApplyJoin:
+		panic(vterrors.VT12001("multi shard DELETE with join table references"))
 	}
 
 	return in, nil

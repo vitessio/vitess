@@ -175,6 +175,9 @@ func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator
 		if !ok {
 			return op, NoRewrite
 		}
+		if len(qg.Tables) > 1 {
+			panic(vterrors.VT12001("DELETE on reference table with join"))
+		}
 		for _, tbl := range qg.Tables {
 			if tbl.ID != tblID {
 				continue
