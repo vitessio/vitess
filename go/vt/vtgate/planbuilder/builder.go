@@ -70,7 +70,7 @@ func singleTable(ks, tbl string) string {
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
 func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error) {
-	stmt, reserved, err := sqlparser.Parse2(query)
+	stmt, reserved, err := vschema.SQLParser().Parse2(query)
 	if err != nil {
 		return nil, err
 	}

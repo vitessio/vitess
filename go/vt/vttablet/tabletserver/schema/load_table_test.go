@@ -235,7 +235,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 		Size:        2,
 		IdleTimeout: 10 * time.Second,
 	}
-	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest", collations.MySQL8()), "", cfg)
+	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest", collations.MySQL8(), sqlparser.NewTestParser()), "", cfg)
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx, nil)
 	if err != nil {

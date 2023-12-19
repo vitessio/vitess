@@ -20,18 +20,16 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/proto/topodata"
-
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -86,7 +84,7 @@ func init() {
 			"ks": &kspb,
 		},
 	}
-	vschema := vindexes.BuildVSchema(srvVSchema)
+	vschema := vindexes.BuildVSchema(srvVSchema, sqlparser.NewTestParser())
 	testLocalVSchema = &localVSchema{
 		keyspace: "ks",
 		vschema:  vschema,
@@ -167,7 +165,7 @@ func TestMustSendDDL(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		q := mysql.Query{SQL: tcase.sql, Database: tcase.db}
-		got := mustSendDDL(q, "mydb", filter)
+		got := mustSendDDL(q, "mydb", filter, sqlparser.NewTestParser())
 		if got != tcase.output {
 			t.Errorf("%v: %v, want %v", q, got, tcase.output)
 		}
@@ -647,7 +645,7 @@ func TestPlanBuilder(t *testing.T) {
 		t.Run(tcase.inRule.String(), func(t *testing.T) {
 			plan, err := buildPlan(tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{tcase.inRule},
-			}, collations.MySQL8())
+			}, collations.MySQL8(), sqlparser.NewTestParser())
 
 			if tcase.outErr != "" {
 				assert.Nil(t, plan)
@@ -744,7 +742,7 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			plan, err := buildPlan(t1, testLocalVSchema, &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: tcase.inFilter}},
-			}, collations.MySQL8())
+			}, collations.MySQL8(), sqlparser.NewTestParser())
 
 			if tcase.outErr != "" {
 				assert.Nil(t, plan)

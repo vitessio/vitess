@@ -167,8 +167,8 @@ func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.Materia
 	return nil
 }
 
-func stripTableConstraints(ddl string) (string, error) {
-	ast, err := sqlparser.ParseStrictDDL(ddl)
+func stripTableConstraints(ddl string, parser *sqlparser.Parser) (string, error) {
+	ast, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}
@@ -189,8 +189,8 @@ func stripTableConstraints(ddl string) (string, error) {
 	return newDDL, nil
 }
 
-func stripTableForeignKeys(ddl string) (string, error) {
-	ast, err := sqlparser.ParseStrictDDL(ddl)
+func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error) {
+	ast, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}

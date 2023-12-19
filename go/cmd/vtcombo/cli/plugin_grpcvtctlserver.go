@@ -24,7 +24,7 @@ import (
 func init() {
 	servenv.OnRun(func() {
 		if servenv.GRPCCheckServiceMap("vtctl") {
-			grpcvtctlserver.StartServer(servenv.GRPCServer, ts, collationEnv)
+			grpcvtctlserver.StartServer(servenv.GRPCServer, ts, collationEnv, parser)
 		}
 	})
 }

@@ -46,7 +46,7 @@ func TestHealthStreamerClosed(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	config := newConfig(db)
-	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8())
+	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -73,7 +73,7 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 	config := newConfig(db)
 	config.SignalWhenSchemaChange = true
 
-	env := tabletenv.NewEnv(config, "TestNotServingPrimary", collations.MySQL8())
+	env := tabletenv.NewEnv(config, "TestNotServingPrimary", collations.MySQL8(), sqlparser.NewTestParser())
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -104,7 +104,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	config := newConfig(db)
 	config.SignalWhenSchemaChange = false
 
-	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8())
+	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -219,7 +219,7 @@ func TestReloadSchema(t *testing.T) {
 			config.SignalWhenSchemaChange = testcase.enableSchemaChange
 			config.SchemaReloadInterval = 100 * time.Millisecond
 
-			env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8())
+			env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
 			alias := &topodatapb.TabletAlias{
 				Cell: "cell",
 				Uid:  1,
@@ -337,7 +337,7 @@ func TestReloadView(t *testing.T) {
 	config.SchemaReloadInterval = 100 * time.Millisecond
 	config.EnableViews = true
 
-	env := tabletenv.NewEnv(config, "TestReloadView", collations.MySQL8())
+	env := tabletenv.NewEnv(config, "TestReloadView", collations.MySQL8(), sqlparser.NewTestParser())
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
 	se := schema.NewEngine(env)
 	hs := newHealthStreamer(env, alias, se)

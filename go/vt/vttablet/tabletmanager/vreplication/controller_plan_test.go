@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type testControllerPlan struct {
@@ -240,7 +242,7 @@ func TestControllerPlan(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			pl, err := buildControllerPlan(tcase.in)
+			pl, err := buildControllerPlan(tcase.in, sqlparser.NewTestParser())
 			if tcase.err != "" {
 				require.EqualError(t, err, tcase.err)
 				return

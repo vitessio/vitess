@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -241,7 +242,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 					PKReferences: []string{"c1"},
 					InsertFront:  "insert into t1(c1,c2,c3)",
 					InsertValues: "(:a_c1,:a_c2,:a_c3)",
-					InsertOnDup:  "on duplicate key update c2=values(c2)",
+					InsertOnDup:  " on duplicate key update c2=values(c2)",
 					Insert:       "insert into t1(c1,c2,c3) values (:a_c1,:a_c2,:a_c3) on duplicate key update c2=values(c2)",
 					Update:       "update t1 set c2=:a_c2 where c1=:b_c1",
 					Delete:       "update t1 set c2=null where c1=:b_c1",
@@ -263,7 +264,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 					PKReferences: []string{"c1", "pk1", "pk2"},
 					InsertFront:  "insert into t1(c1,c2,c3)",
 					InsertValues: "(:a_c1,:a_c2,:a_c3)",
-					InsertOnDup:  "on duplicate key update c2=values(c2)",
+					InsertOnDup:  " on duplicate key update c2=values(c2)",
 					Insert:       "insert into t1(c1,c2,c3) select :a_c1, :a_c2, :a_c3 from dual where (:a_pk1,:a_pk2) <= (1,'aaa') on duplicate key update c2=values(c2)",
 					Update:       "update t1 set c2=:a_c2 where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
 					Delete:       "update t1 set c2=null where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
@@ -735,7 +736,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 	}
 
 	for _, tcase := range testcases {
-		plan, err := buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8())
+		plan, err := buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 		gotErr := ""
 		if err != nil {
 			gotErr = err.Error()
@@ -745,7 +746,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 		wantPlan, _ := json.Marshal(tcase.plan)
 		require.Equal(t, string(wantPlan), string(gotPlan), "Filter(%v):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
 
-		plan, err = buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, copyState, binlogplayer.NewStats(), collations.MySQL8())
+		plan, err = buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, copyState, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 		if err != nil {
 			continue
 		}
@@ -773,7 +774,7 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 			Filter: "select * from t",
 		}},
 	}
-	_, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8())
+	_, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	want := "more than one target for source table t"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("buildReplicatorPlan err: %v, must contain: %v", err, want)
@@ -794,7 +795,7 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 			Filter: "",
 		}},
 	}
-	plan, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8())
+	plan, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	assert.NoError(t, err)
 
 	want := &TestReplicatorPlan{

@@ -154,7 +154,7 @@ func TestEngineGenerate(t *testing.T) {
 func newTestEngine() *Engine {
 	config := tabletenv.NewDefaultConfig()
 	tsv := &fakeTabletServer{
-		Env: tabletenv.NewEnv(config, "MessagerTest", collations.MySQL8()),
+		Env: tabletenv.NewEnv(config, "MessagerTest", collations.MySQL8(), sqlparser.NewTestParser()),
 	}
 	se := schema.NewEngine(tsv)
 	te := NewEngine(tsv, se, newFakeVStreamer())

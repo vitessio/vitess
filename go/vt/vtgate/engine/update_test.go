@@ -21,6 +21,7 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -1023,7 +1024,7 @@ func buildTestVSchema() *vindexes.VSchema {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	return vs
 }
 

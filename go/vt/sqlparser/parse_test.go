@@ -3697,12 +3697,13 @@ var (
 )
 
 func TestValid(t *testing.T) {
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
 			}
-			tree, err := Parse(tcase.input)
+			tree, err := parser.Parse(tcase.input)
 			require.NoError(t, err, tcase.input)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
@@ -3734,6 +3735,7 @@ func TestParallelValid(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(parallelism)
+	parser := NewTestParser()
 	for i := 0; i < parallelism; i++ {
 		go func() {
 			defer wg.Done()
@@ -3742,7 +3744,7 @@ func TestParallelValid(t *testing.T) {
 				if tcase.output == "" {
 					tcase.output = tcase.input
 				}
-				tree, err := Parse(tcase.input)
+				tree, err := parser.Parse(tcase.input)
 				if err != nil {
 					t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
 					continue
@@ -3941,9 +3943,10 @@ func TestInvalid(t *testing.T) {
 	},
 	}
 
+	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := Parse(tcase.input)
+			_, err := parser.Parse(tcase.input)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tcase.err)
 		})
@@ -4081,12 +4084,13 @@ func TestIntroducers(t *testing.T) {
 		input:  "select _utf8mb3 'x'",
 		output: "select _utf8mb3 'x' from dual",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
 			}
-			tree, err := Parse(tcase.input)
+			tree, err := parser.Parse(tcase.input)
 			assert.NoError(t, err)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
@@ -4175,11 +4179,12 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "select /* use */ 1 from t1 use index (A) where b = 1",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4274,11 +4279,12 @@ func TestKeywords(t *testing.T) {
 		output: "select current_user(), current_user() from dual",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4351,11 +4357,12 @@ func TestConvert(t *testing.T) {
 		input: "select cast(json_keys(c) as char(64) array) from t",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4399,7 +4406,7 @@ func TestConvert(t *testing.T) {
 	}}
 
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
+		_, err := parser.Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
 		}
@@ -4437,12 +4444,13 @@ func TestSelectInto(t *testing.T) {
 		output: "alter vschema create vindex my_vdx using `hash`",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
 			}
-			tree, err := Parse(tcase.input)
+			tree, err := parser.Parse(tcase.input)
 			require.NoError(t, err)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
@@ -4461,7 +4469,7 @@ func TestSelectInto(t *testing.T) {
 	}}
 
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
+		_, err := parser.Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
 		}
@@ -4498,8 +4506,9 @@ func TestPositionedErr(t *testing.T) {
 		output: PositionedErr{"syntax error", 34, ""},
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
-		tkn := NewStringTokenizer(tcase.input)
+		tkn := parser.NewStringTokenizer(tcase.input)
 		_, err := ParseNext(tkn)
 
 		if posErr, ok := err.(PositionedErr); !ok {
@@ -4548,11 +4557,12 @@ func TestSubStr(t *testing.T) {
 		output: `select substr(substr('foo', 1), 2) from t`,
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4572,8 +4582,9 @@ func TestLoadData(t *testing.T) {
 		"load data infile 'x.txt' into table 'c'",
 		"load data from s3 'x.txt' into table x"}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
-		_, err := Parse(tcase)
+		_, err := parser.Parse(tcase)
 		require.NoError(t, err)
 	}
 }
@@ -5750,10 +5761,11 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tkey zips ((cast(info -> '$.field' as unsigned array)))\n)",
 		},
 	}
+	parser := NewTestParser()
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)
 		t.Run(sql, func(t *testing.T) {
-			tree, err := ParseStrictDDL(sql)
+			tree, err := parser.ParseStrictDDL(sql)
 			require.NoError(t, err)
 			got := String(tree)
 			expected := test.output
@@ -5776,7 +5788,8 @@ func TestOne(t *testing.T) {
 		return
 	}
 	sql := strings.TrimSpace(testOne.input)
-	tree, err := Parse(sql)
+	parser := NewTestParser()
+	tree, err := parser.Parse(sql)
 	require.NoError(t, err)
 	got := String(tree)
 	expected := testOne.output
@@ -5805,8 +5818,9 @@ func TestCreateTableLike(t *testing.T) {
 			"create table ks.a like unsharded_ks.b",
 		},
 	}
+	parser := NewTestParser()
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -5835,8 +5849,9 @@ func TestCreateTableEscaped(t *testing.T) {
 			"\tprimary key (`delete`)\n" +
 			")",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -5981,9 +5996,10 @@ var (
 )
 
 func TestErrors(t *testing.T) {
+	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := ParseStrictDDL(tcase.input)
+			_, err := parser.ParseStrictDDL(tcase.input)
 			require.Error(t, err, tcase.output)
 			require.Equal(t, tcase.output, err.Error())
 		})
@@ -6016,8 +6032,9 @@ func TestSkipToEnd(t *testing.T) {
 		input:  "create table a bb 'a;'; select * from t",
 		output: "extra characters encountered after end of DDL: 'select'",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range testcases {
-		_, err := Parse(tcase.input)
+		_, err := parser.Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
 		}
@@ -6049,8 +6066,9 @@ func loadQueries(t testing.TB, filename string) (queries []string) {
 }
 
 func TestParseDjangoQueries(t *testing.T) {
+	parser := NewTestParser()
 	for _, query := range loadQueries(t, "django_queries.txt") {
-		_, err := Parse(query)
+		_, err := parser.Parse(query)
 		if err != nil {
 			t.Errorf("failed to parse %q: %v", query, err)
 		}
@@ -6058,8 +6076,9 @@ func TestParseDjangoQueries(t *testing.T) {
 }
 
 func TestParseLobstersQueries(t *testing.T) {
+	parser := NewTestParser()
 	for _, query := range loadQueries(t, "lobsters.sql.gz") {
-		_, err := Parse(query)
+		_, err := parser.Parse(query)
 		if err != nil {
 			t.Errorf("failed to parse %q: %v", query, err)
 		}
@@ -6074,14 +6093,14 @@ func TestParseVersionedComments(t *testing.T) {
 	}{
 		{
 			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
-			mysqlVersion: "50401",
+			mysqlVersion: "5.4.1",
 			output: `create table table1 (
 	id int
 ) ENGINE InnoDB,
   CHARSET utf8mb4`,
 		}, {
 			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
-			mysqlVersion: "80001",
+			mysqlVersion: "8.0.1",
 			output: `create table table1 (
 	id int
 ) ENGINE InnoDB,
@@ -6094,10 +6113,9 @@ partition by range (id)
 
 	for _, testcase := range testcases {
 		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
-			oldMySQLVersion := mySQLParserVersion
-			defer func() { mySQLParserVersion = oldMySQLVersion }()
-			mySQLParserVersion = testcase.mysqlVersion
-			tree, err := Parse(testcase.input)
+			parser, err := New(Options{MySQLServerVersion: testcase.mysqlVersion})
+			require.NoError(t, err)
+			tree, err := parser.Parse(testcase.input)
 			require.NoError(t, err, testcase.input)
 			out := String(tree)
 			require.Equal(t, testcase.output, out)
@@ -6106,6 +6124,7 @@ partition by range (id)
 }
 
 func BenchmarkParseTraces(b *testing.B) {
+	parser := NewTestParser()
 	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
 		b.Run(trace, func(b *testing.B) {
 			queries := loadQueries(b, trace)
@@ -6117,7 +6136,7 @@ func BenchmarkParseTraces(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				for _, query := range queries {
-					_, err := Parse(query)
+					_, err := parser.Parse(query)
 					if err != nil {
 						b.Fatal(err)
 					}
@@ -6134,6 +6153,7 @@ func BenchmarkParseStress(b *testing.B) {
 		sql2 = "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
 	)
 
+	parser := NewTestParser()
 	for i, sql := range []string{sql1, sql2} {
 		b.Run(fmt.Sprintf("sql%d", i), func(b *testing.B) {
 			var buf strings.Builder
@@ -6143,7 +6163,7 @@ func BenchmarkParseStress(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				_, err := Parse(querySQL)
+				_, err := parser.Parse(querySQL)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -6182,8 +6202,9 @@ func BenchmarkParse3(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
+		parser := NewTestParser()
 		for i := 0; i < b.N; i++ {
-			if _, err := Parse(benchQuery); err != nil {
+			if _, err := parser.Parse(benchQuery); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -6234,6 +6255,7 @@ func escapeNewLines(in string) string {
 }
 
 func testFile(t *testing.T, filename, tempDir string) {
+	parser := NewTestParser()
 	t.Run(filename, func(t *testing.T) {
 		fail := false
 		expected := strings.Builder{}
@@ -6243,7 +6265,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 					tcase.output = tcase.input
 				}
 				expected.WriteString(fmt.Sprintf("%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input)))
-				tree, err := Parse(tcase.input)
+				tree, err := parser.Parse(tcase.input)
 				if tcase.errStr != "" {
 					errPresent := ""
 					if err != nil {

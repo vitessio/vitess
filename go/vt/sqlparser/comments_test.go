@@ -322,6 +322,7 @@ func TestExtractCommentDirectives(t *testing.T) {
 		},
 	}}
 
+	parser := NewTestParser()
 	for _, testCase := range testCases {
 		t.Run(testCase.input, func(t *testing.T) {
 			sqls := []string{
@@ -339,7 +340,7 @@ func TestExtractCommentDirectives(t *testing.T) {
 			for _, sql := range sqls {
 				t.Run(sql, func(t *testing.T) {
 					var comments *ParsedComments
-					stmt, _ := Parse(sql)
+					stmt, _ := parser.Parse(sql)
 					switch s := stmt.(type) {
 					case *Select:
 						comments = s.Comments
@@ -394,19 +395,20 @@ func TestExtractCommentDirectives(t *testing.T) {
 }
 
 func TestSkipQueryPlanCacheDirective(t *testing.T) {
-	stmt, _ := Parse("insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)")
+	parser := NewTestParser()
+	stmt, _ := parser.Parse("insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)")
 	assert.False(t, CachePlan(stmt))
 
-	stmt, _ = Parse("insert into user(id) values (1), (2)")
+	stmt, _ = parser.Parse("insert into user(id) values (1), (2)")
 	assert.True(t, CachePlan(stmt))
 
-	stmt, _ = Parse("update /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ users set name=1")
+	stmt, _ = parser.Parse("update /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ users set name=1")
 	assert.False(t, CachePlan(stmt))
 
-	stmt, _ = Parse("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from users")
+	stmt, _ = parser.Parse("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from users")
 	assert.False(t, CachePlan(stmt))
 
-	stmt, _ = Parse("delete /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ from users")
+	stmt, _ = parser.Parse("delete /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ from users")
 	assert.False(t, CachePlan(stmt))
 }
 
@@ -427,9 +429,10 @@ func TestIgnoreMaxPayloadSizeDirective(t *testing.T) {
 		{"show create table users", false},
 	}
 
+	parser := NewTestParser()
 	for _, test := range testCases {
 		t.Run(test.query, func(t *testing.T) {
-			stmt, _ := Parse(test.query)
+			stmt, _ := parser.Parse(test.query)
 			got := IgnoreMaxPayloadSizeDirective(stmt)
 			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
 		})
@@ -453,9 +456,10 @@ func TestIgnoreMaxMaxMemoryRowsDirective(t *testing.T) {
 		{"show create table users", false},
 	}
 
+	parser := NewTestParser()
 	for _, test := range testCases {
 		t.Run(test.query, func(t *testing.T) {
-			stmt, _ := Parse(test.query)
+			stmt, _ := parser.Parse(test.query)
 			got := IgnoreMaxMaxMemoryRowsDirective(stmt)
 			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
 		})
@@ -479,9 +483,10 @@ func TestConsolidator(t *testing.T) {
 		{"select /*vt+ CONSOLIDATOR=enabled_replicas */ * from users", querypb.ExecuteOptions_CONSOLIDATOR_ENABLED_REPLICAS},
 	}
 
+	parser := NewTestParser()
 	for _, test := range testCases {
 		t.Run(test.query, func(t *testing.T) {
-			stmt, _ := Parse(test.query)
+			stmt, _ := parser.Parse(test.query)
 			got := Consolidator(stmt)
 			assert.Equalf(t, test.expected, got, fmt.Sprintf("Consolidator(stmt) returned %v but expected %v", got, test.expected))
 		})
@@ -536,11 +541,12 @@ func TestGetPriorityFromStatement(t *testing.T) {
 		},
 	}
 
+	parser := NewTestParser()
 	for _, testCase := range testCases {
 		theThestCase := testCase
 		t.Run(theThestCase.query, func(t *testing.T) {
 			t.Parallel()
-			stmt, err := Parse(theThestCase.query)
+			stmt, err := parser.Parse(theThestCase.query)
 			assert.NoError(t, err)
 			actualPriority, actualError := GetPriorityFromStatement(stmt)
 			if theThestCase.expectedError != nil {

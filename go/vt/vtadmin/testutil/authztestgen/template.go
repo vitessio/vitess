@@ -46,6 +46,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -89,7 +90,7 @@ func Test{{ .Method }}(t *testing.T) {
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
 	{{ if not .SerializeCases }}
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -102,7 +103,7 @@ func Test{{ .Method }}(t *testing.T) {
 	t.Run("{{ .Name }}", func(t *testing.T) {
 		t.Parallel()
 		{{ if $test.SerializeCases }}
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())

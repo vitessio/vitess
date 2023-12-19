@@ -92,6 +92,9 @@ type VSchema interface {
 
 	// StorePrepareData stores the prepared data in the session.
 	StorePrepareData(name string, v *vtgatepb.PrepareData)
+
+	// SQLParser returns the proper sqlparser instance with the right version.
+	SQLParser() *sqlparser.Parser
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

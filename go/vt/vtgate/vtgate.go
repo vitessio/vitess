@@ -299,10 +299,19 @@ func Init(
 		log.Fatal("Failed to create a new sidecar database identifier cache during init as one already existed!")
 	}
 
+	parser, err := sqlparser.New(sqlparser.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		log.Fatalf("unable to initialize sql parser: %v", err)
+	}
+
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews)
+		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews, parser)
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -323,6 +332,7 @@ func Init(
 		pv,
 		warmingReadsPercent,
 		collationEnv,
+		parser,
 	)
 
 	if err := executor.defaultQueryLogger(); err != nil {
@@ -464,7 +474,7 @@ func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 		"BindVariables": bindVariables,
 		"Session":       session,
 	}
-	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute, vtg.executor.vm.parser)
 	return session, nil, err
 }
 
@@ -530,7 +540,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 			"BindVariables": bindVariables,
 			"Session":       session,
 		}
-		return safeSession.Session, recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
+		return safeSession.Session, recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute, vtg.executor.vm.parser)
 	}
 	return safeSession.Session, nil
 }
@@ -570,7 +580,7 @@ handleError:
 		"BindVariables": bindVariables,
 		"Session":       session,
 	}
-	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare, vtg.executor.vm.parser)
 	return session, nil, err
 }
 
@@ -589,7 +599,7 @@ func (vtg *VTGate) VSchemaStats() *VSchemaStats {
 	return vtg.executor.VSchemaStats()
 }
 
-func truncateErrorStrings(data map[string]any) map[string]any {
+func truncateErrorStrings(data map[string]any, parser *sqlparser.Parser) map[string]any {
 	ret := map[string]any{}
 	if terseErrors {
 		// request might have PII information. Return an empty map
@@ -598,16 +608,16 @@ func truncateErrorStrings(data map[string]any) map[string]any {
 	for key, val := range data {
 		mapVal, ok := val.(map[string]any)
 		if ok {
-			ret[key] = truncateErrorStrings(mapVal)
+			ret[key] = truncateErrorStrings(mapVal, parser)
 		} else {
 			strVal := fmt.Sprintf("%v", val)
-			ret[key] = sqlparser.TruncateForLog(strVal)
+			ret[key] = parser.TruncateForLog(strVal)
 		}
 	}
 	return ret
 }
 
-func recordAndAnnotateError(err error, statsKey []string, request map[string]any, logger *logutil.ThrottledLogger) error {
+func recordAndAnnotateError(err error, statsKey []string, request map[string]any, logger *logutil.ThrottledLogger, parser *sqlparser.Parser) error {
 	ec := vterrors.Code(err)
 	fullKey := []string{
 		statsKey[0],
@@ -623,7 +633,7 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]any
 	}
 
 	// Traverse the request structure and truncate any long values
-	request = truncateErrorStrings(request)
+	request = truncateErrorStrings(request, parser)
 
 	errorCounts.Add(fullKey, 1)
 
@@ -638,7 +648,7 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]any
 		if !exists {
 			return err
 		}
-		piiSafeSQL, err2 := sqlparser.RedactSQLQuery(sql.(string))
+		piiSafeSQL, err2 := parser.RedactSQLQuery(sql.(string))
 		if err2 != nil {
 			return err
 		}

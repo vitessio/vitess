@@ -10,6 +10,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
@@ -18,7 +19,7 @@ func TestVitessCluster(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	tmc := newTestWranglerTMClient()
-	wr := New(logutil.NewConsoleLogger(), ts, tmc, collations.MySQL8())
+	wr := New(logutil.NewConsoleLogger(), ts, tmc, collations.MySQL8(), sqlparser.NewTestParser())
 	name, topoType, topoServer, topoRoot := "c1", "x", "y", "z"
 
 	t.Run("Zero clusters to start", func(t *testing.T) {
