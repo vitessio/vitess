@@ -223,7 +223,7 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	var pkColumns = make([]int, 0)
 	if len(st.PKColumns) == 0 {
 		// Use a PK equivalent if one exists.
-		pkColumns, err := rs.vse.mapPKEquivalentCols(rs.ctx, st)
+		pkColumns, err := rs.vse.mapPKEquivalentCols(rs.ctx, rs.cp, st)
 		if err == nil && len(pkColumns) != 0 {
 			return pkColumns, nil
 		}

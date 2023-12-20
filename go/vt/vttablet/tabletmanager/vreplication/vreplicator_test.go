@@ -184,7 +184,10 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, tt.ddl))
-			cols, indexName, err := env.Mysqld.GetPrimaryKeyEquivalentColumns(ctx, env.Dbcfgs.DBName, tt.table)
+			conn, err := env.Mysqld.GetDbaConnection(ctx)
+			require.NoError(t, err, "could not connect to mysqld: %v", err)
+			defer conn.Close()
+			cols, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, env.Dbcfgs.DBName, tt.table)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Mysqld.GetPrimaryKeyEquivalentColumns() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -568,6 +568,9 @@ func shouldIgnoreQuery(query string) bool {
 		", component_throttled=", // update of last throttle time, can happen out-of-band, so can't test for it
 		"context cancel",
 		"SELECT rows_copied FROM _vt.vreplication WHERE id=",
+		// This is only executed if the table has no defined Primary Key, which we don't know in the lower level
+		// code.
+		"SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS",
 	}
 	if sidecardb.MatchesInitQuery(query) {
 		return true

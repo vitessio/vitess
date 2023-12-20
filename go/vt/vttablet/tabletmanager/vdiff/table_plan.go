@@ -17,21 +17,23 @@ limitations under the License.
 package vdiff
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const sqlSelectColumnCollations = "select column_name as column_name, collation_name as collation_name from information_schema.columns where table_schema=%a and table_name=%a and column_name in %a"
@@ -75,7 +77,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 	sourceSelect := &sqlparser.Select{}
 	targetSelect := &sqlparser.Select{}
-	// aggregates is the list of Aggregate functions, if any.
+	// Aggregates is the list of Aggregate functions, if any.
 	var aggregates []*engine.AggregateParams
 	for _, selExpr := range sel.SelectExprs {
 		switch selExpr := selExpr.(type) {
@@ -153,10 +155,25 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 		},
 	}
 
+	if len(tp.table.PrimaryKeyColumns) == 0 {
+		// We use the columns from a PKE if there is one.
+		pkeCols, err := tp.getPKEquivalentColumns(dbClient)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "error getting PK equivalent columns for table %s", tp.table.Name)
+		}
+		if len(pkeCols) > 0 {
+			tp.table.PrimaryKeyColumns = append(tp.table.PrimaryKeyColumns, pkeCols...)
+		} else {
+			// We use every column together as a substitute PK.
+			tp.table.PrimaryKeyColumns = append(tp.table.PrimaryKeyColumns, tp.table.Columns...)
+		}
+	}
+
 	err = tp.findPKs(dbClient, targetSelect, collationEnv)
 	if err != nil {
 		return nil, err
 	}
+
 	// Remove in_keyrange. It's not understood by mysql.
 	sourceSelect.Where = sel.Where // removeKeyrange(sel.Where)
 	// The source should also perform the group by.
@@ -178,6 +195,9 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 // findPKs identifies PKs and removes them from the columns to do data comparison.
 func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlparser.Select, collationEnv *collations.Environment) error {
+	if len(tp.table.PrimaryKeyColumns) == 0 {
+		return nil
+	}
 	var orderby sqlparser.OrderBy
 	for _, pk := range tp.table.PrimaryKeyColumns {
 		found := false
@@ -196,7 +216,7 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 				tp.compareCols[i].isPK = true
 				tp.comparePKs = append(tp.comparePKs, tp.compareCols[i])
 				tp.selectPks = append(tp.selectPks, i)
-				// We'll be comparing pks separately. So, remove them from compareCols.
+				// We'll be comparing PKs separately. So, remove them from compareCols.
 				tp.pkCols = append(tp.pkCols, i)
 				found = true
 				break
@@ -224,6 +244,9 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 // saves the collations in the tablePlan's comparePKs column info
 // structs for those subsequent operations.
 func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient, collationEnv *collations.Environment) error {
+	if len(tp.comparePKs) == 0 {
+		return nil
+	}
 	columnList := make([]string, len(tp.comparePKs))
 	for i := range tp.comparePKs {
 		columnList[i] = tp.comparePKs[i].colName
@@ -258,4 +281,18 @@ func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient, colla
 		}
 	}
 	return nil
+}
+
+func (tp *tablePlan) getPKEquivalentColumns(dbClient binlogplayer.DBClient) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout/2)
+	defer cancel()
+	executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+		// This sets wantfields to true.
+		return dbClient.ExecuteFetch(query, maxrows)
+	}
+	pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, tp.dbName, tp.table.Name)
+	if err != nil {
+		return nil, err
+	}
+	return pkeCols, nil
 }
