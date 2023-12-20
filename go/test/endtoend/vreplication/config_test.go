@@ -60,6 +60,7 @@ create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, m
 create table  ` + "`blüb_tbl`" + ` (id int, val1 varchar(20), ` + "`blöb1`" + ` blob, val2 varbinary(20), ` + "`bl@b2`" + ` longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
 create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
 create table loadtest (id int, name varchar(256), primary key(id), key(name));
+create table nopk (name varchar(128), age int unsigned);
 `
 	// These should always be ignored in vreplication
 	internalSchema = `
@@ -94,6 +95,7 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
     "db_order_test": {},
     "vdiff_order": {},
     "datze": {},
+    "nopk": {},
     "reftable": {
       "type": "reference"
     }
@@ -213,6 +215,14 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
         {
           "column": "id",
           "name": "reverse_bits"
+        }
+      ]
+    },
+    "nopk": {
+      "column_vindexes": [
+        {
+          "columns": ["name"],
+          "name": "unicode_loose_md5"
         }
       ]
     },

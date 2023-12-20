@@ -144,16 +144,7 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 		return semTable.NotUnshardedErr
 	}
 
-	// Delete is only supported for a single TableExpr which is supposed to be an aliased expression
-	multiShardErr := vterrors.VT12001("multi-shard or vindex write statement")
-	if len(del.TableExprs) != 1 {
-		return multiShardErr
-	}
-	_, isAliasedExpr := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !isAliasedExpr {
-		return multiShardErr
-	}
-
+	// Delete is only supported for single Target.
 	if len(del.Targets) > 1 {
 		return vterrors.VT12001("multi-table DELETE statement in a sharded keyspace")
 	}

@@ -50,7 +50,7 @@ type (
 		authoritative() bool
 
 		// getAliasedTableExpr returns the AST struct behind this table
-		getAliasedTableExpr() *sqlparser.AliasedTableExpr
+		GetAliasedTableExpr() *sqlparser.AliasedTableExpr
 
 		// canShortCut will return nil when the keyspace needs to be checked,
 		// and a true/false if the decision has been made already
@@ -117,6 +117,8 @@ type (
 		// It doesn't recurse inside derived tables to find the original dependencies.
 		Direct ExprDependencies
 
+		Targets map[sqlparser.IdentifierCS]TableSet
+
 		// ColumnEqualities is used for transitive closures (e.g., if a == b and b == c, then a == c).
 		ColumnEqualities map[columnName][]sqlparser.Expr
 
@@ -150,6 +152,7 @@ type (
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 		ConnCollation() collations.ID
+		CollationEnv() *collations.Environment
 		// ForeignKeyMode returns the foreign_key flag value
 		ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 		GetForeignKeyChecksState() *bool
@@ -516,7 +519,7 @@ func EmptySemTable() *SemTable {
 // TableSetFor returns the bitmask for this particular table
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2.getAliasedTableExpr() {
+		if t == t2.GetAliasedTableExpr() {
 			return SingleTableSet(idx)
 		}
 	}

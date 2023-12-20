@@ -24,10 +24,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -35,7 +38,8 @@ func TestConnPoolGet(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	dbConn, err := connPool.Get(context.Background(), nil)
 	if err != nil {
@@ -56,8 +60,9 @@ func TestConnPoolTimeout(t *testing.T) {
 	}
 	cfg.Timeout = time.Second
 	cfg.IdleTimeout = 10 * time.Second
-	connPool := NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", cfg)
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	connPool := NewPool(tabletenv.NewEnv(nil, "PoolTest", collations.MySQL8(), sqlparser.NewTestParser()), "TestPool", cfg)
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	dbConn, err := connPool.Get(context.Background(), nil)
 	require.NoError(t, err)
@@ -68,10 +73,11 @@ func TestConnPoolTimeout(t *testing.T) {
 
 func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
 	db := fakesqldb.New(t)
-	debugConn := db.ConnParamsWithUname("")
+	debugConn := dbconfigs.New(db.ConnParamsWithUname(""))
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), debugConn)
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, debugConn)
 	im := callerid.NewImmediateCallerID("")
 	ecid := callerid.NewEffectiveCallerID("p", "c", "sc")
 	ctx := context.Background()
@@ -89,14 +95,15 @@ func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
 
 func TestConnPoolGetAppDebug(t *testing.T) {
 	db := fakesqldb.New(t)
-	debugConn := db.ConnParamsWithUname("debugUsername")
+	debugConn := dbconfigs.New(db.ConnParamsWithUname("debugUsername"))
 	ctx := context.Background()
 	im := callerid.NewImmediateCallerID("debugUsername")
 	ecid := callerid.NewEffectiveCallerID("p", "c", "sc")
 	ctx = callerid.NewContext(ctx, ecid, im)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), debugConn)
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, debugConn)
 	defer connPool.Close()
 	dbConn, err := connPool.Get(ctx, nil)
 	if err != nil {
@@ -115,7 +122,8 @@ func TestConnPoolSetCapacity(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 
 	assert.Panics(t, func() {
@@ -134,7 +142,8 @@ func TestConnPoolStatJSON(t *testing.T) {
 	if connPool.StatsJSON() != "{}" {
 		t.Fatalf("pool is closed, stats json should be empty; was: %q", connPool.StatsJSON())
 	}
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	statsJSON := connPool.StatsJSON()
 	if statsJSON == "" || statsJSON == "{}" {
@@ -153,7 +162,8 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	defer db.Close()
 	idleTimeout := 10 * time.Second
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	assert.EqualValues(t, 100, connPool.Capacity(), "pool capacity should be 100")
 	assert.EqualValues(t, 0, connPool.Metrics.WaitTime(), "pool wait time should be 0")
@@ -179,7 +189,8 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	defer db.Close()
 	capacity := 5
 	connPool := newPoolWithCapacity(capacity)
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	assert.EqualValues(t, 5, connPool.Available(), "pool available connections should be 5")
 	assert.EqualValues(t, 0, connPool.Active(), "pool active connections should be 0")
@@ -294,7 +305,8 @@ func TestPoolGetConnTime(t *testing.T) {
 	defer db.Close()
 
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
 	connPool.getConnTime.Reset()
 
@@ -325,7 +337,7 @@ func newPool() *Pool {
 }
 
 func newPoolWithCapacity(capacity int) *Pool {
-	return NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
+	return NewPool(tabletenv.NewEnv(nil, "PoolTest", collations.MySQL8(), sqlparser.NewTestParser()), "TestPool", tabletenv.ConnPoolConfig{
 		Size:        capacity,
 		IdleTimeout: 10 * time.Second,
 	})

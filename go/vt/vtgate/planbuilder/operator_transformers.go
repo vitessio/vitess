@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -254,13 +255,14 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 
 	oa := &orderedAggregate{
 		resultsBuilder: newResultsBuilder(plan, nil),
+		collationEnv:   ctx.VSchema.CollationEnv(),
 	}
 
 	for _, aggr := range op.Aggregations {
 		if aggr.OpCode == opcode.AggregateUnassigned {
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 		}
-		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias)
+		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias, ctx.VSchema.CollationEnv())
 		aggrParam.Expr = aggr.Func
 		aggrParam.Original = aggr.Original
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
@@ -275,6 +277,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			WeightStringCol: groupBy.WSOffset,
 			Expr:            groupBy.SimplifiedExpr,
 			Type:            typ,
+			CollationEnv:    ctx.VSchema.CollationEnv(),
 		})
 	}
 
@@ -315,6 +318,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 			WeightStringCol: ordering.WOffset[idx],
 			Desc:            order.Inner.Direction == sqlparser.DescOrder,
 			Type:            typ,
+			CollationEnv:    ctx.VSchema.CollationEnv(),
 		})
 	}
 
@@ -523,7 +527,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	case *sqlparser.Update:
 		return buildUpdateLogicalPlan(ctx, op, dmlOp, stmt, hints)
 	case *sqlparser.Delete:
-		return buildDeleteLogicalPlan(ctx, op, dmlOp, hints)
+		return buildDeleteLogicalPlan(ctx, op, dmlOp, stmt, hints)
 	case *sqlparser.Insert:
 		return buildInsertLogicalPlan(op, dmlOp, stmt, hints)
 	default:
@@ -542,6 +546,7 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 			WeightStringCol: order.WOffset,
 			Desc:            order.Direction == sqlparser.DescOrder,
 			Type:            typ,
+			CollationEnv:    ctx.VSchema.CollationEnv(),
 		})
 	}
 	if err != nil {
@@ -684,24 +689,20 @@ func buildUpdateLogicalPlan(
 	return &primitiveWrapper{prim: e}, nil
 }
 
-func buildDeleteLogicalPlan(
-	ctx *plancontext.PlanningContext,
-	rb *operators.Route,
-	dmlOp operators.Operator,
-	hints *queryHints,
-) (logicalPlan, error) {
+func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Route, dmlOp operators.Operator, stmt *sqlparser.Delete, hints *queryHints) (logicalPlan, error) {
 	del := dmlOp.(*operators.Delete)
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
 	rb.Routing.UpdateRoutingParams(ctx, rp)
+	vtable := del.Target.VTable
 	edml := &engine.DML{
-		Query:             generateQuery(del.AST),
-		TableNames:        []string{del.VTable.Name.String()},
-		Vindexes:          del.VTable.Owned,
+		Query:             generateQuery(stmt),
+		TableNames:        []string{vtable.Name.String()},
+		Vindexes:          vtable.Owned,
 		OwnedVindexQuery:  del.OwnedVindexQuery,
 		RoutingParameters: rp,
 	}
 
-	transformDMLPlan(del.VTable, edml, rb.Routing, del.OwnedVindexQuery != "")
+	transformDMLPlan(vtable, edml, rb.Routing, del.OwnedVindexQuery != "")
 
 	e := &engine.Delete{
 		DML: edml,
@@ -805,19 +806,23 @@ func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logi
 		return nil, err
 	}
 
-	return createLimit(plan, op.AST)
+	return createLimit(plan, op.AST, ctx.VSchema.CollationEnv())
 }
 
-func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error) {
+func createLimit(input logicalPlan, limit *sqlparser.Limit, collationEnv *collations.Environment) (logicalPlan, error) {
 	plan := newLimit(input)
-	pv, err := evalengine.Translate(limit.Rowcount, nil)
+	cfg := &evalengine.Config{
+		Collation:    collationEnv.DefaultConnectionCharset(),
+		CollationEnv: collationEnv,
+	}
+	pv, err := evalengine.Translate(limit.Rowcount, cfg)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unexpected expression in LIMIT")
 	}
 	plan.elimit.Count = pv
 
 	if limit.Offset != nil {
-		pv, err = evalengine.Translate(limit.Offset, nil)
+		pv, err = evalengine.Translate(limit.Offset, cfg)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "unexpected expression in OFFSET")
 		}
@@ -862,7 +867,7 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")))
 	}
 
-	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp)
+	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp, ctx.VSchema.CollationEnv())
 	if err != nil {
 		return nil, err
 	}
@@ -878,6 +883,7 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			ASTPred:        op.JoinPredicate(),
 			Collation:      comparisonType.Collation(),
 			ComparisonType: comparisonType.Type(),
+			CollationEnv:   ctx.VSchema.CollationEnv(),
 		},
 	}, nil
 }

@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -184,11 +185,11 @@ func (sc *StatefulConnection) Renew() error {
 }
 
 // String returns a printable version of the connection info.
-func (sc *StatefulConnection) String(sanitize bool) string {
+func (sc *StatefulConnection) String(sanitize bool, parser *sqlparser.Parser) string {
 	return fmt.Sprintf(
 		"%v\t%s",
 		sc.ConnID,
-		sc.txProps.String(sanitize),
+		sc.txProps.String(sanitize, parser),
 	)
 }
 

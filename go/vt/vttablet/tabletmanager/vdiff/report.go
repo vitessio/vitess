@@ -66,7 +66,7 @@ type RowDiff struct {
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {
 	drp := &RowDiff{}
 	drp.Row = make(map[string]string)
-	statement, err := sqlparser.Parse(queryStmt)
+	statement, err := td.wd.ct.vde.parser.Parse(queryStmt)
 	if err != nil {
 		return nil, err
 	}

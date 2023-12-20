@@ -23,8 +23,8 @@ import (
 
 // ParseTable parses the input as a qualified table name.
 // It handles all valid literal escaping.
-func ParseTable(input string) (keyspace, table string, err error) {
-	tokenizer := NewStringTokenizer(input)
+func (p *Parser) ParseTable(input string) (keyspace, table string, err error) {
+	tokenizer := p.NewStringTokenizer(input)
 
 	// Start, want ID
 	token, value := tokenizer.Scan()

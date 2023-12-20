@@ -197,7 +197,7 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 		if isParentSelectStatement(cursor) {
 			s.popScope()
 		}
-	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert, *sqlparser.Union:
+	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Insert, *sqlparser.Union:
 		id := EmptyTableSet()
 		for _, tableInfo := range s.currentScope().tables {
 			set := tableInfo.getTableSet(s.org)

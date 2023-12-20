@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -79,7 +78,7 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 			{
 				Name:    "uuid",
 				Type:    sqltypes.VarChar,
-				Charset: uint32(collations.Default()),
+				Charset: uint32(vcursor.CollationEnv().DefaultConnectionCharset()),
 			},
 		},
 		Rows: [][]sqltypes.Value{},
@@ -90,7 +89,7 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		migrationContext = fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID())
 	}
 	onlineDDLs, err := schema.NewOnlineDDLs(v.GetKeyspaceName(), v.SQL, v.DDL,
-		v.DDLStrategySetting, migrationContext, "",
+		v.DDLStrategySetting, migrationContext, "", vcursor.SQLParser(),
 	)
 	if err != nil {
 		return result, err

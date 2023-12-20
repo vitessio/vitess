@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schemadiff"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -183,7 +184,10 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, tt.ddl))
-			cols, indexName, err := env.Mysqld.GetPrimaryKeyEquivalentColumns(ctx, env.Dbcfgs.DBName, tt.table)
+			conn, err := env.Mysqld.GetDbaConnection(ctx)
+			require.NoError(t, err, "could not connect to mysqld: %v", err)
+			defer conn.Close()
+			cols, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, env.Dbcfgs.DBName, tt.table)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Mysqld.GetPrimaryKeyEquivalentColumns() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -549,7 +553,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 				// order in the table schema.
 				if !tcase.expectFinalSchemaDiff {
 					currentDDL := getCurrentDDL(tcase.tableName)
-					sdiff, err := schemadiff.DiffCreateTablesQueries(currentDDL, tcase.initialDDL, diffHints)
+					sdiff, err := schemadiff.DiffCreateTablesQueries(currentDDL, tcase.initialDDL, diffHints, sqlparser.NewTestParser())
 					require.NoError(t, err)
 					require.Nil(t, sdiff, "Expected no schema difference but got: %s", sdiff.CanonicalStatementString())
 				}

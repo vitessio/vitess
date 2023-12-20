@@ -93,7 +93,7 @@ func (sf *StatefulConnectionPool) Close() {
 		if conn.IsInTransaction() {
 			thing = "transaction"
 		}
-		log.Warningf("killing %s for shutdown: %s", thing, conn.String(sf.env.Config().SanitizeLogMessages))
+		log.Warningf("killing %s for shutdown: %s", thing, conn.String(sf.env.Config().SanitizeLogMessages, sf.env.SQLParser()))
 		sf.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.Releasef("pool closed")

@@ -92,6 +92,7 @@ func TestDerivedTableColumns(t *testing.T) {
 // We do this by not using the apply join we usually use, and instead use the hash join engine primitive
 // These tests exercise these situations
 func TestDerivedTablesWithLimit(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	// We need full type info before planning this, so we wait for the schema tracker
 	require.NoError(t,
 		utils.WaitForAuthoritative(t, keyspaceName, "user", clusterInstance.VtgateProcess.ReadVSchema))

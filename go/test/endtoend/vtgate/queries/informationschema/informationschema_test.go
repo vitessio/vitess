@@ -223,6 +223,7 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 }
 
 func TestTypeORMQuery(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	// This test checks that we can run queries similar to the ones that the TypeORM framework uses
 
 	require.NoError(t,
@@ -259,6 +260,7 @@ FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
 }
 
 func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	// This test checks that we can run queries like this, where the RHS is a single shard query
 	mcmp, closer := start(t)
 	defer closer()

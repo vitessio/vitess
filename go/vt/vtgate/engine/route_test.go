@@ -1073,7 +1073,7 @@ func TestRouteSortCollation(t *testing.T) {
 		"dummy_select_field",
 	)
 
-	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
+	collationID, _ := collations.MySQL8().LookupID("utf8mb4_hu_0900_ai_ci")
 
 	sel.OrderBy = []evalengine.OrderByParams{{
 		Col:  0,

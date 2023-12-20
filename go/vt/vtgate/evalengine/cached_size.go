@@ -145,10 +145,12 @@ func (cached *CollateExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(32)
 	}
 	// field UnaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.UnaryExpr
 	size += cached.UnaryExpr.CachedSize(false)
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *Column) CachedSize(alloc bool) int64 {
@@ -211,6 +213,8 @@ func (cached *ConvertExpr) CachedSize(alloc bool) int64 {
 	size += cached.UnaryExpr.CachedSize(false)
 	// field Type string
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *ConvertUsingExpr) CachedSize(alloc bool) int64 {
@@ -219,10 +223,12 @@ func (cached *ConvertUsingExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(32)
 	}
 	// field UnaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.UnaryExpr
 	size += cached.UnaryExpr.CachedSize(false)
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *InExpr) CachedSize(alloc bool) int64 {
@@ -255,10 +261,12 @@ func (cached *IntroducerExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(32)
 	}
 	// field UnaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.UnaryExpr
 	size += cached.UnaryExpr.CachedSize(false)
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *IsExpr) CachedSize(alloc bool) int64 {
@@ -343,6 +351,18 @@ func (cached *NotExpr) CachedSize(alloc bool) int64 {
 	size += cached.UnaryExpr.CachedSize(false)
 	return size
 }
+func (cached *OrderByParams) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.CollationEnv.CachedSize(true)
+	return size
+}
 func (cached *UnaryExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -363,12 +383,14 @@ func (cached *UntypedExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
 	// field ir vitess.io/vitess/go/vt/vtgate/evalengine.IR
 	if cc, ok := cached.ir.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field collationEnv *vitess.io/vitess/go/mysql/collations.Environment
+	size += cached.collationEnv.CachedSize(true)
 	// field needTypes []vitess.io/vitess/go/vt/vtgate/evalengine.typedIR
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.needTypes)) * int64(16))

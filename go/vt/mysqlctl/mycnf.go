@@ -178,9 +178,7 @@ func ReadMycnf(mycnf *Mycnf, waitTime time.Duration) (*Mycnf, error) {
 	defer f.Close()
 
 	buf := bufio.NewReader(f)
-	if err != nil {
-		return nil, err
-	}
+
 	mycnf.mycnfMap = make(map[string]string)
 	var lval, rval string
 	var parts [][]byte

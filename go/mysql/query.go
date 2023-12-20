@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -147,7 +148,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	}
 
 	// Convert MySQL type to Vitess type.
-	field.Type, err = sqltypes.MySQLToType(int64(t), int64(flags))
+	field.Type, err = sqltypes.MySQLToType(t, int64(flags))
 	if err != nil {
 		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "MySQLToType(%v,%v) failed for column %v: %v", t, flags, index, err)
 	}
@@ -243,7 +244,7 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	}
 
 	// Convert MySQL type to Vitess type.
-	field.Type, err = sqltypes.MySQLToType(int64(t), int64(flags))
+	field.Type, err = sqltypes.MySQLToType(t, int64(flags))
 	if err != nil {
 		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "MySQLToType(%v,%v) failed for column %v: %v", t, flags, index, err)
 	}
@@ -313,7 +314,7 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
-				sqlerr.Query = query
+				sqlerr.Query = sqlparser.TruncateQuery(query, c.truncateErrLen)
 			}
 		}
 	}()
@@ -337,7 +338,7 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
-				sqlerr.Query = query
+				sqlerr.Query = sqlparser.TruncateQuery(query, c.truncateErrLen)
 			}
 		}
 	}()
@@ -596,7 +597,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 			}
 
 			// convert MySQL type to internal type.
-			valType, err := sqltypes.MySQLToType(int64(mysqlType), int64(flags))
+			valType, err := sqltypes.MySQLToType(mysqlType, int64(flags))
 			if err != nil {
 				return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "MySQLToType(%v,%v) failed: %v", mysqlType, flags, err)
 			}
@@ -930,7 +931,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 	pos = writeByte(data, pos, 0x0c)
 	pos = writeUint16(data, pos, uint16(field.Charset))
 	pos = writeUint32(data, pos, field.ColumnLength)
-	pos = writeByte(data, pos, byte(typ))
+	pos = writeByte(data, pos, typ)
 	pos = writeUint16(data, pos, uint16(flags))
 	pos = writeByte(data, pos, byte(field.Decimals))
 	pos = writeUint16(data, pos, uint16(0x0000))

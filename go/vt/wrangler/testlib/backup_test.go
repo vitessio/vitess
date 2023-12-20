@@ -27,17 +27,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/replication"
-
-	"vitess.io/vitess/go/vt/discovery"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -92,7 +92,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
@@ -344,7 +344,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
@@ -563,7 +563,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
@@ -738,7 +738,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 

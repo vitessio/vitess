@@ -332,8 +332,9 @@ func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Exp
 
 	rewrittenExpr := sqlparser.CopyOnRewrite(in, pre, r.post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
 	cfg := &evalengine.Config{
-		ResolveType: ctx.SemTable.TypeForExpr,
-		Collation:   ctx.SemTable.Collation,
+		ResolveType:  ctx.SemTable.TypeForExpr,
+		Collation:    ctx.SemTable.Collation,
+		CollationEnv: ctx.VSchema.CollationEnv(),
 	}
 	eexpr, err := evalengine.Translate(rewrittenExpr, cfg)
 	if err != nil {

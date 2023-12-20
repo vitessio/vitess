@@ -84,7 +84,7 @@ var _ net.Addr = (*mockAddress)(nil)
 
 // GetTestConn returns a conn for testing purpose only.
 func GetTestConn() *Conn {
-	return newConn(testConn{}, DefaultFlushDelay)
+	return newConn(testConn{}, DefaultFlushDelay, 0)
 }
 
 // GetTestServerConn is only meant to be used for testing.
