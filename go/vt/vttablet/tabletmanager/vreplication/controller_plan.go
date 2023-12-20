@@ -51,9 +51,9 @@ const (
 	reshardingJournalQuery
 )
 
-// A comment that you can include in your VReplication write statements if
-// you want to bypass the safety checks that ensure you are being selective.
-// The full comment directive looks like this:
+// A comment directive that you can include in your VReplication write
+// statements if you want to bypass the safety checks that ensure you are
+// being selective. The full comment directive looks like this:
 // delete /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ from _vt.vreplication
 const AllowUnsafeWriteCommentDirective = "ALLOW_UNSAFE_VREPLICATION_WRITE"
 
