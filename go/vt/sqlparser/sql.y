@@ -4091,14 +4091,6 @@ check_constraint_info:
   {
     $$ = &CheckConstraintDefinition{Expr: $3, Enforced: $5}
   }
-//|  CHECK '(' expression ')' NOT_ENFORCED
-//  {
-//    $$ = &CheckConstraintDefinition{Expr: $3, Enforced: false}
-//  }
-//|  CHECK '(' expression ')' ENFORCED
-//  {
-//    $$ = &CheckConstraintDefinition{Expr: $3, Enforced: true}
-//  }
 
 from_or_in:
   FROM

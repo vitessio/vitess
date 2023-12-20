@@ -2526,6 +2526,7 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
 	ts.Columns = append(ts.Columns, cd)
 
+	// Move any inline check constraints up from the column definition to the table spec
 	if cd.Type.Constraint != nil {
 		ts.Constraints = append(ts.Constraints, cd.Type.Constraint)
 	}
@@ -2817,11 +2818,6 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 			opts = append(opts, "on update", fmt.Sprintf("%v", ct.ForeignKeyDef.OnUpdate))
 		}
 	}
-	//if ct.Constraint != nil {
-	//	constraintBuffer := NewTrackedBuffer(nil)
-	//	ct.Constraint.Format(constraintBuffer)
-	//	opts = append(opts, constraintBuffer.String())
-	//}
 
 	if ct.GeneratedExpr != nil {
 		opts = append(opts, keywordStrings[GENERATED], keywordStrings[ALWAYS], keywordStrings[AS], String(ct.GeneratedExpr))
