@@ -1360,7 +1360,7 @@ var (
 		input: "delete /* limit */ from a limit b",
 	}, {
 		input:  "delete /* alias where */ t.* from a as t where t.id = 2",
-		output: "delete /* alias where */ t from a as t where t.id = 2",
+		output: "delete /* alias where */ from a as t where t.id = 2",
 	}, {
 		input:  "delete t.* from t, t1",
 		output: "delete t from t, t1",

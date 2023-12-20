@@ -365,8 +365,8 @@ type (
 		With       *With
 		Ignore     Ignore
 		Comments   *ParsedComments
-		Targets    TableNames
 		TableExprs TableExprs
+		Targets    TableNames
 		Partitions Partitions
 		Where      *Where
 		OrderBy    OrderBy

@@ -55,11 +55,6 @@
     "plan": "VT12001: unsupported: multi shard UPDATE with LIMIT"
   },
   {
-    "comment": "multi delete multi table",
-    "query": "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'",
-    "plan": "VT12001: unsupported: multi-shard or vindex write statement"
-  },
-  {
     "comment": "update changes primary vindex column",
     "query": "update user set id = 1 where id = 1",
     "plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: user_index"
@@ -162,7 +157,7 @@
   {
     "comment": "delete with multi-table targets",
     "query": "delete music,user from music inner join user where music.id = user.id",
-    "plan": "VT12001: unsupported: multi-shard or vindex write statement"
+    "plan": "VT12001: unsupported: multi-table DELETE statement in a sharded keyspace"
   },
   {
     "comment": "select get_lock with non-dual table",
@@ -388,5 +383,35 @@
     "comment": "We need schema tracking to allow unexpanded columns inside UNION",
     "query": "select x from (select t.*, 0 as x from user t union select t.*, 1 as x from user_extra t) AS t",
     "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "multi table delete with 2 sharded tables join on vindex column",
+    "query": "delete u, m from user u join music m on u.id = m.user_id",
+    "plan": "VT12001: unsupported: multi-table DELETE statement in a sharded keyspace"
+  },
+  {
+    "comment": "multi table delete with 2 sharded tables join on non-vindex column",
+    "query": "delete u, m from user u join music m on u.col = m.col",
+    "plan": "VT12001: unsupported: multi-table DELETE statement in a sharded keyspace"
+  },
+  {
+    "comment": "multi table delete with 1 sharded and 1 reference table",
+    "query": "delete u, r from user u join ref_with_source r on u.col = r.col",
+    "plan": "VT12001: unsupported: multi-table DELETE statement in a sharded keyspace"
+  },
+  {
+    "comment": "multi delete multi table",
+    "query": "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'",
+    "plan": "VT12001: unsupported: multi shard DELETE with join table references"
+  },
+  {
+    "comment": "multi delete multi table with alias",
+    "query": "delete u from user u join music m on u.col = m.col",
+    "plan": "VT12001: unsupported: multi shard DELETE with join table references"
+  },
+  {
+    "comment": "reference table delete with join",
+    "query": "delete r from user u join ref_with_source r on u.col = r.col",
+    "plan": "VT12001: unsupported: DELETE on reference table with join"
   }
 ]
