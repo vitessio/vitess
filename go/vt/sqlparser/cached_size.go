@@ -1106,13 +1106,6 @@ func (cached *Delete) CachedSize(alloc bool) int64 {
 	size += cached.With.CachedSize(true)
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
-	// field Targets vitess.io/vitess/go/vt/sqlparser.TableNames
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Targets)) * int64(32))
-		for _, elem := range cached.Targets {
-			size += elem.CachedSize(false)
-		}
-	}
 	// field TableExprs vitess.io/vitess/go/vt/sqlparser.TableExprs
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.TableExprs)) * int64(16))
@@ -1120,6 +1113,13 @@ func (cached *Delete) CachedSize(alloc bool) int64 {
 			if cc, ok := elem.(cachedObject); ok {
 				size += cc.CachedSize(true)
 			}
+		}
+	}
+	// field Targets vitess.io/vitess/go/vt/sqlparser.TableNames
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Targets)) * int64(32))
+		for _, elem := range cached.Targets {
+			size += elem.CachedSize(false)
 		}
 	}
 	// field Partitions vitess.io/vitess/go/vt/sqlparser.Partitions

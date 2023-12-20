@@ -72,7 +72,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 	outerID := TableID(op)
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, expr := range exprs {
-		sqlparser.RemoveKeyspaceFromColName(expr)
+		sqlparser.RemoveKeyspace(expr)
 		subq := sqc.handleSubquery(ctx, expr, outerID)
 		if subq != nil {
 			continue

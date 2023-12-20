@@ -172,7 +172,7 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 	if node.Ignore {
 		buf.literal("ignore ")
 	}
-	if node.Targets != nil {
+	if node.Targets != nil && !node.isSingleAliasExpr() {
 		buf.astPrintf(node, "%v ", node.Targets)
 	}
 	buf.astPrintf(node, "from %v%v%v%v%v", node.TableExprs, node.Partitions, node.Where, node.OrderBy, node.Limit)

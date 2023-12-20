@@ -73,7 +73,7 @@ func (r *RealTable) getColumns() []ColumnInfo {
 }
 
 // GetExpr implements the TableInfo interface
-func (r *RealTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
+func (r *RealTable) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
 }
 

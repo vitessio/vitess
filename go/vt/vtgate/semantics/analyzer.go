@@ -119,6 +119,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		Direct:                    a.binder.direct,
 		ExprTypes:                 a.typer.m,
 		Tables:                    a.tables.Tables,
+		Targets:                   a.binder.targets,
 		NotSingleRouteErr:         a.projErr,
 		NotUnshardedErr:           a.unshardedErr,
 		Warning:                   a.warning,
