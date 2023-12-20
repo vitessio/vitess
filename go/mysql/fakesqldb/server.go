@@ -419,7 +419,11 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		if pat.expr.MatchString(query) {
 			userCallback, ok := db.queryPatternUserCallback[pat.expr]
 			if ok {
+				// Since the user call back can be indefinitely stuck, we shouldn't hold the lock indefinitely.
+				// This is only test code, so no actual cause for concern.
+				db.mu.Unlock()
 				userCallback(query)
+				db.mu.Lock()
 			}
 			if pat.err != "" {
 				return fmt.Errorf(pat.err)

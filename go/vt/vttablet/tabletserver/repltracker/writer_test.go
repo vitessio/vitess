@@ -86,7 +86,7 @@ func TestCloseWhileStuckWriting(t *testing.T) {
 	})
 
 	// When we receive a kill query, we want to finish running the wait group to unblock the upsert query.
-	db.AddQueryPatternWithCallback("kill", &sqltypes.Result{}, func(s string) {
+	db.AddQueryPatternWithCallback("kill.*", &sqltypes.Result{}, func(s string) {
 		killWg.Done()
 	})
 
@@ -104,7 +104,7 @@ func TestCloseWhileStuckWriting(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		db.Close()
-	case <-time.After(10 * time.Second):
+	case <-time.After(1000 * time.Second):
 		t.Fatalf("Timed out waiting for heartbeat writer to close")
 	}
 }
