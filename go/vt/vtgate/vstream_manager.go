@@ -726,7 +726,8 @@ func (vs *vstream) shouldRetry(err error) (bool, bool) {
 
 	// If there is a GTIDSet Mismatch on the tablet, omit it from the candidate
 	// list in the TabletPicker on retry.
-	if errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch") {
+	if (errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch")) ||
+		errCode == vtrpc.Code_NOT_FOUND {
 		return true, true
 	}
 

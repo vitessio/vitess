@@ -428,6 +428,13 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			shouldRetry:  false,
 			ignoreTablet: false,
 		},
+		{
+			name:         "not found",
+			code:         vtrpcpb.Code_NOT_FOUND,
+			msg:          "",
+			shouldRetry:  true,
+			ignoreTablet: true,
+		},
 	}
 
 	commit := []*binlogdatapb.VEvent{
