@@ -1,4 +1,4 @@
-name: Upgrade Downgrade Testing Reparent New Vtctl
+name: Reparent New Vtctl - Upgrade Downgrade Testing
 on:
   push:
   pull_request:
@@ -7,36 +7,16 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Reparent New Vtctl')
   cancel-in-progress: true
 
+permissions: read-all
+
 # This test ensures that our end-to-end tests work using Vitess components
 # (vtctl, vttablet, etc) built on different versions.
 
 jobs:
-  get_next_release:
-    if: always()
-    name: Get Latest Release - Reparent New Vtctl
-    runs-on: ubuntu-22.04
-    outputs:
-      next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
-
-    steps:
-      - name: Check out to HEAD
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Set output with latest release branch
-        id: output-next-release-ref
-        run: |
-          next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
-          echo $next_release_ref
-          echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
   upgrade_downgrade_test:
-    if: always() && (needs.get_next_release.result == 'success')
     name: Run Upgrade Downgrade Test - Reparent New Vtctl
     runs-on: ubuntu-22.04
-    needs:
-      - get_next_release
 
     steps:
     - name: Skip CI
@@ -46,6 +26,18 @@ jobs:
           exit 1
         fi
 
+    - name: Check out commit's code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Set output with latest release branch
+      id: output-next-release-ref
+      run: |
+        next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
+        echo $next_release_ref
+        echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
+
     - name: Check if workflow needs to be skipped
       id: skip-workflow
       run: |
@@ -53,15 +45,11 @@ jobs:
         if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
           skip='true'
         fi
-        if [[ "${{needs.get_next_release.outputs.next_release}}" == "" ]]; then
+        if [[ "${{steps.output-next-release-ref.outputs.next_release_ref}}" == "" ]]; then
           skip='true'
         fi
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-
-    - name: Check out commit's code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v3
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -86,9 +74,9 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.20.12
+        go-version: 1.21.5
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -133,14 +121,14 @@ jobs:
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+        sudo apt-get install -y percona-xtrabackup-24
 
     # Checkout to the next release of Vitess
-    - name: Check out other version's code (${{ needs.get_next_release.outputs.next_release }})
+    - name: Check out other version's code (${{ steps.output-next-release-ref.outputs.next_release_ref }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v3
       with:
-        ref: ${{ needs.get_next_release.outputs.next_release }}
+        ref: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
 
     - name: Get dependencies for the next release
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -152,7 +140,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-other/
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
@@ -172,7 +160,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
