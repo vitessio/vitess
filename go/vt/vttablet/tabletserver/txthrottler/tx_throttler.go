@@ -360,7 +360,7 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 
 	var maxLag uint32
 
-	for tabletType, _ := range ts.tabletTypes {
+	for tabletType := range ts.tabletTypes {
 		maxLagPerTabletType := ts.throttler.LastMaxLagNotIgnoredForTabletType(tabletType)
 		if maxLagPerTabletType > maxLag {
 			maxLag = maxLagPerTabletType
