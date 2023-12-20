@@ -595,7 +595,7 @@ func TestDeleteTargetTableRewrite(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tcase.sql)
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			_, err = Analyze(ast, cDB, fakeSchemaInfo())
 			require.NoError(t, err)
