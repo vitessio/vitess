@@ -579,13 +579,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 // defined PRIMARY KEY then it may return the columns for
 // that index if it is likely the most efficient one amongst
 // the available PKE indexes on the table.
-func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, string, error) {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
-	if err != nil {
-		return nil, "", err
-	}
-	defer conn.Recycle()
-
+func GetPrimaryKeyEquivalentColumns(ctx context.Context, exec func(string, int, bool) (*sqltypes.Result, error), dbName, table string) ([]string, string, error) {
 	// We use column name aliases to guarantee lower case for our named results.
 	sql := `
             SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS AS index_cols INNER JOIN
@@ -629,7 +623,7 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
 	encodedDbName := encodeEntityName(dbName)
 	encodedTable := encodeEntityName(table)
 	sql = fmt.Sprintf(sql, encodedDbName, encodedTable, encodedDbName, encodedTable, encodedDbName, encodedTable)
-	qr, err := conn.Conn.ExecuteFetch(sql, 1000, true)
+	qr, err := exec(sql, 1000, true)
 	if err != nil {
 		return nil, "", err
 	}

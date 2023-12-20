@@ -157,7 +157,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// non-pk text column.
+		// Non-PK text column.
 		input: &binlogdatapb.Rule{
 			Match:  "nonpktext",
 			Filter: "select c1, textcol from nonpktext",
@@ -178,7 +178,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// non-pk text column, different order.
+		// Non-PK text column, different order.
 		input: &binlogdatapb.Rule{
 			Match:  "nonpktext",
 			Filter: "select textcol, c1 from nonpktext",
@@ -199,7 +199,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// pk text column.
+		// PK text column.
 		input: &binlogdatapb.Rule{
 			Match:  "pktext",
 			Filter: "select textcol, c2 from pktext",
@@ -220,7 +220,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// pk text column, different order.
+		// PK text column, different order.
 		input: &binlogdatapb.Rule{
 			Match:  "pktext",
 			Filter: "select c2, textcol from pktext",
@@ -241,7 +241,61 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// text column as expression.
+		// No PK. Use all columns as a substitute.
+		input: &binlogdatapb.Rule{
+			Match:  "nopk",
+			Filter: "select * from nopk",
+		},
+		table: "nopk",
+		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
+			table:       testSchema.TableDefinitions[tableDefMap["nopk"]],
+			sourceQuery: "select c1, c2, c3 from nopk order by c1 asc, c2 asc, c3 asc",
+			targetQuery: "select c1, c2, c3 from nopk order by c1 asc, c2 asc, c3 asc",
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			comparePKs:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			pkCols:      []int{0, 1, 2},
+			selectPks:   []int{0, 1, 2},
+			orderBy: sqlparser.OrderBy{
+				&sqlparser.Order{
+					Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")},
+					Direction: sqlparser.AscOrder,
+				},
+				&sqlparser.Order{
+					Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")},
+					Direction: sqlparser.AscOrder,
+				},
+				&sqlparser.Order{
+					Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c3")},
+					Direction: sqlparser.AscOrder,
+				},
+			},
+		},
+	}, {
+		// No PK, but a PKE on c3.
+		input: &binlogdatapb.Rule{
+			Match:  "nopkwithpke",
+			Filter: "select * from nopkwithpke",
+		},
+		table: "nopkwithpke",
+		tablePlan: &tablePlan{
+			dbName:      vdiffDBName,
+			table:       testSchema.TableDefinitions[tableDefMap["nopkwithpke"]],
+			sourceQuery: "select c1, c2, c3 from nopkwithpke order by c3 asc",
+			targetQuery: "select c1, c2, c3 from nopkwithpke order by c3 asc",
+			compareCols: []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			comparePKs:  []compareColInfo{{2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
+			pkCols:      []int{2},
+			selectPks:   []int{2},
+			orderBy: sqlparser.OrderBy{
+				&sqlparser.Order{
+					Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c3")},
+					Direction: sqlparser.AscOrder,
+				},
+			},
+		},
+	}, {
+		// Text column as expression.
 		input: &binlogdatapb.Rule{
 			Match:  "pktext",
 			Filter: "select c2, a+b as textcol from pktext",
@@ -262,7 +316,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// multiple pk columns.
+		// Multiple PK columns.
 		input: &binlogdatapb.Rule{
 			Match: "multipk",
 		},
@@ -397,7 +451,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// group by
+		// Group by.
 		input: &binlogdatapb.Rule{
 			Match:  "t1",
 			Filter: "select * from t1 group by c1",
@@ -418,7 +472,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// aggregations
+		// Aggregations.
 		input: &binlogdatapb.Rule{
 			Match:  "aggr",
 			Filter: "select c1, c2, count(*) as c3, sum(c4) as c4 from t1 group by c1",
@@ -443,7 +497,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			},
 		},
 	}, {
-		// date conversion on import.
+		// Date conversion on import.
 		input: &binlogdatapb.Rule{
 			Match: "datze",
 		},
@@ -481,31 +535,46 @@ func TestBuildPlanSuccess(t *testing.T) {
 			wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
 			require.NoError(t, err)
 			dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
-			columnList := make([]string, len(tcase.tablePlan.comparePKs))
-			collationList := make([]string, len(tcase.tablePlan.comparePKs))
-			env := collations.MySQL8()
-			for i := range tcase.tablePlan.comparePKs {
-				columnList[i] = tcase.tablePlan.comparePKs[i].colName
-				if tcase.tablePlan.comparePKs[i].collation != collations.Unknown {
-					collationList[i] = env.LookupName(tcase.tablePlan.comparePKs[i].collation)
-				} else {
-					collationList[i] = sqltypes.NULL.String()
+			if len(tcase.tablePlan.table.PrimaryKeyColumns) == 0 {
+				result := noResults
+				if tcase.table == "nopkwithpke" { // This has a PKE column: c3
+					result = sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields(
+							"column_name|index_name",
+							"varchar|varchar",
+						),
+						"c3|c3",
+					)
 				}
+				dbc.ExpectRequestRE("SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS", result, nil)
 			}
-			columnBV, err := sqltypes.BuildBindVariable(columnList)
-			require.NoError(t, err)
-			query, err := sqlparser.ParseAndBind(sqlSelectColumnCollations,
-				sqltypes.StringBindVariable(vdiffDBName),
-				sqltypes.StringBindVariable(tcase.tablePlan.table.Name),
-				columnBV,
-			)
-			require.NoError(t, err)
-			dbc.ExpectRequest(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"collation_name",
-				"varchar",
-			),
-				collationList...,
-			), nil)
+			if len(tcase.tablePlan.comparePKs) > 0 {
+				columnList := make([]string, len(tcase.tablePlan.comparePKs))
+				collationList := make([]string, len(tcase.tablePlan.comparePKs))
+				env := collations.MySQL8()
+				for i := range tcase.tablePlan.comparePKs {
+					columnList[i] = tcase.tablePlan.comparePKs[i].colName
+					if tcase.tablePlan.comparePKs[i].collation != collations.Unknown {
+						collationList[i] = env.LookupName(tcase.tablePlan.comparePKs[i].collation)
+					} else {
+						collationList[i] = sqltypes.NULL.String()
+					}
+				}
+				columnBV, err := sqltypes.BuildBindVariable(columnList)
+				require.NoError(t, err)
+				query, err := sqlparser.ParseAndBind(sqlSelectColumnCollations,
+					sqltypes.StringBindVariable(vdiffDBName),
+					sqltypes.StringBindVariable(tcase.tablePlan.table.Name),
+					columnBV,
+				)
+				require.NoError(t, err)
+				dbc.ExpectRequest(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+					"collation_name",
+					"varchar",
+				),
+					collationList...,
+				), nil)
+			}
 			err = wd.buildPlan(dbc, filter, testSchema)
 			require.NoError(t, err, tcase.input)
 			require.Equal(t, 1, len(wd.tableDiffers), tcase.input)
