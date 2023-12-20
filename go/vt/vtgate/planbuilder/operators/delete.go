@@ -110,7 +110,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		panic(vterrors.VT12001("foreign keys management at vitess with limit"))
 	}
 
-	return createFkCascadeOpForDelete(ctx, delOp, delClone, childFks)
+	return createFkCascadeOpForDelete(ctx, delOp, delClone, childFks, vindexTable)
 }
 
 func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) Operator {
@@ -193,7 +193,7 @@ func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator
 	return vTbl
 }
 
-func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo) Operator {
+func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo, deletedTbl *vindexes.Table) Operator {
 	var fkChildren []*FkChild
 	var selectExprs []sqlparser.SelectExpr
 	for _, fk := range childFks {
@@ -210,7 +210,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Opera
 		fkChildren = append(fkChildren,
 			createFkChildForDelete(ctx, fk, offsets))
 	}
-	selectionOp := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, nil, sqlparser.ForUpdateLockNoWait)
+	selectionOp := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, nil, getUpdateLock(deletedTbl))
 
 	return &FkCascade{
 		Selection: selectionOp,
