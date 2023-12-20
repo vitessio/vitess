@@ -386,13 +386,16 @@ func buildQuery(op Operator, qb *queryBuilder) {
 
 func buildDelete(op *Delete, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
-	qb.dmlOperator = op
-
+	// currently the qb builds a select query underneath.
+	// Will take the `From` and `Where` from this select
+	// and create a delete statement.
+	// TODO: change it to directly produce `delete` statement.
 	sel, ok := qb.stmt.(*sqlparser.Select)
 	if !ok {
 		panic(vterrors.VT13001("expected a select here"))
 	}
 
+	qb.dmlOperator = op
 	qb.stmt = &sqlparser.Delete{
 		Ignore:     sqlparser.Ignore(op.Ignore),
 		Targets:    sqlparser.TableNames{op.Target.Name},
