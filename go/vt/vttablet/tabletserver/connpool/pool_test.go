@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -59,7 +60,7 @@ func TestConnPoolTimeout(t *testing.T) {
 	}
 	cfg.Timeout = time.Second
 	cfg.IdleTimeout = 10 * time.Second
-	connPool := NewPool(tabletenv.NewEnv(nil, "PoolTest", collations.MySQL8()), "TestPool", cfg)
+	connPool := NewPool(tabletenv.NewEnv(nil, "PoolTest", collations.MySQL8(), sqlparser.NewTestParser()), "TestPool", cfg)
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
@@ -336,7 +337,7 @@ func newPool() *Pool {
 }
 
 func newPoolWithCapacity(capacity int) *Pool {
-	return NewPool(tabletenv.NewEnv(nil, "PoolTest", collations.MySQL8()), "TestPool", tabletenv.ConnPoolConfig{
+	return NewPool(tabletenv.NewEnv(nil, "PoolTest", collations.MySQL8(), sqlparser.NewTestParser()), "TestPool", tabletenv.ConnPoolConfig{
 		Size:        capacity,
 		IdleTimeout: 10 * time.Second,
 	})

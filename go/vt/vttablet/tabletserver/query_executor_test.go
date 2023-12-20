@@ -28,6 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -1488,7 +1490,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	}
 	dbconfigs := newDBConfigs(db)
 	config.DB = dbconfigs
-	tsv := NewTabletServer(ctx, "TabletServerTest", config, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8())
+	tsv := NewTabletServer(ctx, "TabletServerTest", config, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser())
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
 	if config.TwoPCEnable {
@@ -1566,7 +1568,7 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 		"varchar|int64"),
 		"Innodb_rows_read|0",
 	))
-	sidecardb.AddSchemaInitQueries(db, true)
+	sidecardb.AddSchemaInitQueries(db, true, sqlparser.NewTestParser())
 }
 
 func getTestTableFields() []*querypb.Field {
@@ -1659,7 +1661,7 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
 
-	sidecardb.AddSchemaInitQueries(db, true)
+	sidecardb.AddSchemaInitQueries(db, true, sqlparser.NewTestParser())
 	for query, result := range queryResultMap {
 		db.AddQuery(query, result)
 	}

@@ -50,7 +50,7 @@ func TestBuildDBPlan(t *testing.T) {
 
 	for _, s := range testCases {
 		t.Run(s.query, func(t *testing.T) {
-			parserOut, err := sqlparser.Parse(s.query)
+			parserOut, err := sqlparser.NewTestParser().Parse(s.query)
 			require.NoError(t, err)
 
 			show := parserOut.(*sqlparser.Show)
@@ -110,7 +110,7 @@ func TestGenerateCharsetRows(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.input, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(tc.input)
+			stmt, err := sqlparser.NewTestParser().Parse(tc.input)
 			require.NoError(t, err)
 			match := stmt.(*sqlparser.Show).Internal.(*sqlparser.ShowBasic)
 			filter := match.Filter

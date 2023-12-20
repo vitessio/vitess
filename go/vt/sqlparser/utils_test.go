@@ -47,8 +47,9 @@ func TestNormalizeAlphabetically(t *testing.T) {
 		out: "select * from tbl where b = 4 or a = 3",
 	}}
 
+	parser := NewTestParser()
 	for _, tc := range testcases {
-		normalized, err := NormalizeAlphabetically(tc.in)
+		normalized, err := parser.NormalizeAlphabetically(tc.in)
 		assert.NoError(t, err)
 		assert.Equal(t, tc.out, normalized)
 	}
@@ -173,9 +174,10 @@ func TestQueryMatchesTemplates(t *testing.T) {
 			out: true,
 		},
 	}
+	parser := NewTestParser()
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			match, err := QueryMatchesTemplates(tc.q, tc.tmpl)
+			match, err := parser.QueryMatchesTemplates(tc.q, tc.tmpl)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.out, match)
 		})
@@ -263,9 +265,10 @@ func TestReplaceTableQualifiers(t *testing.T) {
 			out:  "set names 'binary'",
 		},
 	}
+	parser := NewTestParser()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ReplaceTableQualifiers(tt.in, origDB, tt.newdb)
+			got, err := parser.ReplaceTableQualifiers(tt.in, origDB, tt.newdb)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {

@@ -58,7 +58,7 @@ func TestBindingSubquery(t *testing.T) {
 	}
 	for _, testcase := range testcases {
 		t.Run(testcase.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(testcase.query)
+			parse, err := sqlparser.NewTestParser().Parse(testcase.query)
 			require.NoError(t, err)
 			selStmt := parse.(*sqlparser.Select)
 			semTable, err := semantics.Analyze(selStmt, "d", &semantics.FakeSI{

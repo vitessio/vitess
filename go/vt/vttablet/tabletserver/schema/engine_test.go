@@ -580,7 +580,7 @@ func newEngine(reloadTime time.Duration, idleTimeout time.Duration, schemaMaxAge
 	config.OlapReadPool.IdleTimeout = idleTimeout
 	config.TxPool.IdleTimeout = idleTimeout
 	config.SchemaVersionMaxAgeSeconds = schemaMaxAgeSeconds
-	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest", collations.MySQL8()))
+	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest", collations.MySQL8(), sqlparser.NewTestParser()))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }
@@ -764,7 +764,8 @@ func TestEngineMysqlTime(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			se := &Engine{}
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			if tt.timeStampErr != nil {
@@ -870,7 +871,8 @@ func TestEnginePopulatePrimaryKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
 
@@ -931,7 +933,8 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
 			se.innoDbReadRowsCounter = stats.NewCounter("TestEngineUpdateInnoDBRowsRead-"+tt.name, "")
@@ -958,7 +961,8 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 // TestEngineGetTableData tests the functionality of getTableData function
 func TestEngineGetTableData(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+	env := tabletenv.NewEnv(nil, "TestEngineGetTableData", collations.MySQL8(), sqlparser.NewTestParser())
+	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -1132,7 +1136,8 @@ func TestEngineReload(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	cfg.SignalWhenSchemaChange = true
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil)
+	env := tabletenv.NewEnv(nil, "TestEngineReload", collations.MySQL8(), sqlparser.NewTestParser())
+	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	se := newEngine(10*time.Second, 10*time.Second, 0, db)

@@ -357,7 +357,7 @@ func TestVReplicationLogQueryPlanner(t *testing.T) {
 				t.Parallel()
 
 				planner := NewVReplicationLogQueryPlanner(nil, tt.targetStreamIDs)
-				stmt, err := sqlparser.Parse(tt.query)
+				stmt, err := sqlparser.NewTestParser().Parse(tt.query)
 				require.NoError(t, err, "could not parse query %q", tt.query)
 				qp, err := planner.planSelect(stmt.(*sqlparser.Select))
 				if tt.shouldErr {

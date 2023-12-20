@@ -94,7 +94,6 @@ type MysqlDaemon interface {
 	GetSchema(ctx context.Context, dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
 	GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error)
 	GetPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error)
-	GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, string, error)
 	PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
 	ApplySchemaChange(ctx context.Context, dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 

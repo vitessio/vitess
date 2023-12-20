@@ -60,7 +60,7 @@ func getSQLQueries(t *testing.T, testfile string) []string {
 
 	addchunk := func() {
 		if curchunk.Len() > 0 {
-			stmts, err := sqlparser.SplitStatementToPieces(curchunk.String())
+			stmts, err := sqlparser.NewTestParser().SplitStatementToPieces(curchunk.String())
 			if err != nil {
 				t.Fatal(err)
 			}

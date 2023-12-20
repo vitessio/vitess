@@ -61,14 +61,16 @@ type StreamMigrator struct {
 	templates []*VReplicationStream
 	ts        ITrafficSwitcher
 	logger    logutil.Logger
+	parser    *sqlparser.Parser
 }
 
 // BuildStreamMigrator creates a new StreamMigrator based on the given
 // TrafficSwitcher.
-func BuildStreamMigrator(ctx context.Context, ts ITrafficSwitcher, cancelMigrate bool) (*StreamMigrator, error) {
+func BuildStreamMigrator(ctx context.Context, ts ITrafficSwitcher, cancelMigrate bool, parser *sqlparser.Parser) (*StreamMigrator, error) {
 	sm := &StreamMigrator{
 		ts:     ts,
 		logger: ts.Logger(),
+		parser: parser,
 	}
 
 	if sm.ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
@@ -674,7 +676,7 @@ func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb
 }
 
 func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogdatapb.Rule) error {
-	statement, err := sqlparser.Parse(rule.Filter)
+	statement, err := sm.parser.Parse(rule.Filter)
 	if err != nil {
 		return err
 	}

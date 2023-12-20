@@ -131,7 +131,7 @@ func errorsMatch(remote, local error) bool {
 }
 
 func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields []*querypb.Field) (evalengine.EvalResult, error) {
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		return evalengine.EvalResult{}, err
 	}
@@ -233,7 +233,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 	var start = time.Now()
 	for len(failures) < fuzzMaxFailures {
 		query := "SELECT " + gen.expr()
-		stmt, err := sqlparser.Parse(query)
+		stmt, err := sqlparser.NewTestParser().Parse(query)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -41,7 +42,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
+		return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
@@ -88,7 +89,7 @@ func TestGetKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
+		return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
@@ -117,7 +118,7 @@ func TestGetKeyspaces(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
+		return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {

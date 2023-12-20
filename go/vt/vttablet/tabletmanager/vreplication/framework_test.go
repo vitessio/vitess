@@ -32,6 +32,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -44,7 +46,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -495,7 +496,7 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 }
 
 func (dc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
-	queries, err := sqlparser.SplitStatementToPieces(query)
+	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(query)
 	if err != nil {
 		return nil, err
 	}
@@ -567,6 +568,9 @@ func shouldIgnoreQuery(query string) bool {
 		", component_throttled=", // update of last throttle time, can happen out-of-band, so can't test for it
 		"context cancel",
 		"SELECT rows_copied FROM _vt.vreplication WHERE id=",
+		// This is only executed if the table has no defined Primary Key, which we don't know in the lower level
+		// code.
+		"SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS",
 	}
 	if sidecardb.MatchesInitQuery(query) {
 		return true

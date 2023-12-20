@@ -42,7 +42,7 @@ func FuzzNormalizer(data []byte) int {
 }
 
 func FuzzParser(data []byte) int {
-	_, err := sqlparser.Parse(string(data))
+	_, err := sqlparser.NewTestParser().Parse(string(data))
 	if err != nil {
 		return 0
 	}
@@ -55,7 +55,7 @@ func FuzzNodeFormat(data []byte) int {
 	if err != nil {
 		return 0
 	}
-	node, err := sqlparser.Parse(query)
+	node, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		return 0
 	}
@@ -69,6 +69,6 @@ func FuzzNodeFormat(data []byte) int {
 }
 
 func FuzzSplitStatementToPieces(data []byte) int {
-	_, _ = sqlparser.SplitStatementToPieces(string(data))
+	_, _ = sqlparser.NewTestParser().SplitStatementToPieces(string(data))
 	return 1
 }

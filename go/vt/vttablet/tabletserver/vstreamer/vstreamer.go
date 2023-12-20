@@ -503,7 +503,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
-			if mustSendDDL(q, vs.cp.DBName(), vs.filter) {
+			if mustSendDDL(q, vs.cp.DBName(), vs.filter, vs.vse.env.SQLParser()) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: replication.EncodePosition(vs.pos),
@@ -520,7 +520,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
-			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName()) {
+			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.SQLParser()) {
 				vs.se.ReloadAt(context.Background(), vs.pos)
 			}
 		case sqlparser.StmtSavepoint:
@@ -738,7 +738,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		Name:   tm.Name,
 		Fields: cols,
 	}
-	plan, err := buildPlan(table, vs.vschema, vs.filter, vs.se.CollationEnv())
+	plan, err := buildPlan(table, vs.vschema, vs.filter, vs.se.CollationEnv(), vs.se.SQLParser())
 	if err != nil {
 		return nil, err
 	}
@@ -764,7 +764,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, error) {
 	var fields []*querypb.Field
 	for i, typ := range tm.Types {
-		t, err := sqltypes.MySQLToType(int64(typ), 0)
+		t, err := sqltypes.MySQLToType(typ, 0)
 		if err != nil {
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
@@ -957,7 +957,7 @@ func (vs *vstreamer) rebuildPlans() error {
 			// cause that to change.
 			continue
 		}
-		newPlan, err := buildPlan(plan.Table, vs.vschema, vs.filter, vs.se.CollationEnv())
+		newPlan, err := buildPlan(plan.Table, vs.vschema, vs.filter, vs.se.CollationEnv(), vs.se.SQLParser())
 		if err != nil {
 			return err
 		}

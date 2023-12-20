@@ -95,6 +95,8 @@ type VExec struct {
 	// to support running in modes like:
 	// - Execute serially rather than concurrently.
 	// - Only return error if greater than some percentage of the targets fail.
+
+	parser *sqlparser.Parser
 }
 
 // NewVExec returns a new instance suitable for making vexec queries to a given
@@ -102,12 +104,13 @@ type VExec struct {
 // string). The provided topo server is used to look up target tablets for
 // queries. A given instance will discover targets exactly once for its
 // lifetime, so to force a refresh, create another instance.
-func NewVExec(keyspace string, workflow string, ts *topo.Server, tmc tmclient.TabletManagerClient) *VExec {
+func NewVExec(keyspace string, workflow string, ts *topo.Server, tmc tmclient.TabletManagerClient, parser *sqlparser.Parser) *VExec {
 	return &VExec{
 		ts:       ts,
 		tmc:      tmc,
 		keyspace: keyspace,
 		workflow: workflow,
+		parser:   parser,
 	}
 }
 
@@ -127,7 +130,7 @@ func (vx *VExec) QueryContext(ctx context.Context, query string) (map[*topo.Tabl
 		}
 	}
 
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := vx.parser.Parse(query)
 	if err != nil {
 		return nil, err
 	}
@@ -299,6 +302,7 @@ func (vx *VExec) WithWorkflow(workflow string) *VExec {
 		ts:        vx.ts,
 		tmc:       vx.tmc,
 		primaries: vx.primaries,
+		parser:    vx.parser,
 		workflow:  workflow,
 	}
 }

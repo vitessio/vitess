@@ -112,6 +112,7 @@ type vdiff struct {
 	targetTimeZone string
 
 	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
 // compareColInfo contains the metadata for a column of the table being diffed
@@ -146,6 +147,7 @@ type tableDiffer struct {
 	targetPrimitive engine.Primitive
 
 	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
 // shardStreamer streams rows from one shard. This works for
@@ -223,6 +225,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		sourceTimeZone: ts.sourceTimeZone,
 		targetTimeZone: ts.targetTimeZone,
 		collationEnv:   wr.collationEnv,
+		parser:         wr.parser,
 	}
 	for shard, source := range ts.Sources() {
 		df.sources[shard] = &shardStreamer{
@@ -490,8 +493,8 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 
 // findPKs identifies PKs, determines any collations to be used for
 // them, and removes them from the columns used for data comparison.
-func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer, collationEnv *collations.Environment) (sqlparser.OrderBy, error) {
-	columnCollations, err := getColumnCollations(table, collationEnv)
+func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer, collationEnv *collations.Environment, parser *sqlparser.Parser) (sqlparser.OrderBy, error) {
+	columnCollations, err := getColumnCollations(table, collationEnv, parser)
 	if err != nil {
 		return nil, err
 	}
@@ -535,8 +538,8 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 // getColumnCollations determines the proper collation to use for each
 // column in the table definition leveraging MySQL's collation inheritance
 // rules.
-func getColumnCollations(table *tabletmanagerdatapb.TableDefinition, collationEnv *collations.Environment) (map[string]collations.ID, error) {
-	createstmt, err := sqlparser.Parse(table.Schema)
+func getColumnCollations(table *tabletmanagerdatapb.TableDefinition, collationEnv *collations.Environment, parser *sqlparser.Parser) (map[string]collations.ID, error) {
+	createstmt, err := parser.Parse(table.Schema)
 	if err != nil {
 		return nil, err
 	}
@@ -650,7 +653,7 @@ func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, 
 
 // buildTablePlan builds one tableDiffer.
 func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, query string) (*tableDiffer, error) {
-	statement, err := sqlparser.Parse(query)
+	statement, err := df.parser.Parse(query)
 	if err != nil {
 		return nil, err
 	}
@@ -661,6 +664,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	td := &tableDiffer{
 		targetTable:  table.Name,
 		collationEnv: df.collationEnv,
+		parser:       df.parser,
 	}
 	sourceSelect := &sqlparser.Select{}
 	targetSelect := &sqlparser.Select{}
@@ -740,7 +744,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		},
 	}
 
-	orderby, err := findPKs(table, targetSelect, td, df.collationEnv)
+	orderby, err := findPKs(table, targetSelect, td, df.collationEnv, df.parser)
 	if err != nil {
 		return nil, err
 	}
@@ -1329,7 +1333,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {
 	drp := &RowDiff{}
 	drp.Row = make(map[string]sqltypes.Value)
-	statement, err := sqlparser.Parse(queryStmt)
+	statement, err := td.parser.Parse(queryStmt)
 	if err != nil {
 		return nil, err
 	}

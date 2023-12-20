@@ -73,6 +73,7 @@ type (
 		mu      sync.Mutex
 		entries []engine.ExecuteEntry
 		lastID  int
+		parser  *sqlparser.Parser
 	}
 
 	// autocommitState keeps track of whether a single round-trip
@@ -941,11 +942,13 @@ func (session *SafeSession) ClearAdvisoryLock() {
 	session.AdvisoryLock = nil
 }
 
-func (session *SafeSession) EnableLogging() {
+func (session *SafeSession) EnableLogging(parser *sqlparser.Parser) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	session.logging = &executeLogger{}
+	session.logging = &executeLogger{
+		parser: parser,
+	}
 }
 
 // GetUDV returns the bind variable value for the user defined variable.
@@ -998,7 +1001,7 @@ func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, 
 			FiredFrom: primitive,
 		})
 	}
-	ast, err := sqlparser.Parse(query)
+	ast, err := l.parser.Parse(query)
 	if err != nil {
 		panic("query not able to parse. this should not happen")
 	}

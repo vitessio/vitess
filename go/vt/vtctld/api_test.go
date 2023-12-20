@@ -27,6 +27,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/vt/servenv/testutils"
@@ -49,7 +51,7 @@ func TestAPI(t *testing.T) {
 	cells := []string{"cell1", "cell2"}
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
-	actionRepo := NewActionRepository(ts, collations.MySQL8())
+	actionRepo := NewActionRepository(ts, collations.MySQL8(), sqlparser.NewTestParser())
 	server := testutils.HTTPTestServer()
 	defer server.Close()
 
@@ -124,7 +126,7 @@ func TestAPI(t *testing.T) {
 			return "TestTabletAction Result", nil
 		})
 
-	initAPI(ctx, ts, actionRepo, collations.MySQL8())
+	initAPI(ctx, ts, actionRepo)
 
 	// all-tablets response for keyspace/ks1/tablets/ endpoints
 	keyspaceKs1AllTablets := `[

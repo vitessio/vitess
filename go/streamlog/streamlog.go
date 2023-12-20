@@ -61,16 +61,8 @@ func SetRedactDebugUIQueries(newRedactDebugUIQueries bool) {
 	redactDebugUIQueries = newRedactDebugUIQueries
 }
 
-func GetQueryLogFilterTag() string {
-	return queryLogFilterTag
-}
-
 func SetQueryLogFilterTag(newQueryLogFilterTag string) {
 	queryLogFilterTag = newQueryLogFilterTag
-}
-
-func GetQueryLogRowThreshold() uint64 {
-	return queryLogRowThreshold
 }
 
 func SetQueryLogRowThreshold(newQueryLogRowThreshold uint64) {

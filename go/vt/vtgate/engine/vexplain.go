@@ -122,7 +122,7 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 		explainQuery := fmt.Sprintf("explain format = json %v", entry.Query)
 		// We rely on the parser to see if the query we have is explainable or not
 		// If we get an error in parsing then we can't execute explain on the given query, and we skip it
-		_, err := sqlparser.Parse(explainQuery)
+		_, err := vcursor.SQLParser().Parse(explainQuery)
 		if err != nil {
 			continue
 		}

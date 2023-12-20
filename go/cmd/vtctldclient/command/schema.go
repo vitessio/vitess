@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 
@@ -123,7 +122,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 		allSQL = strings.Join(applySchemaOptions.SQL, ";")
 	}
 
-	parts, err := sqlparser.SplitStatementToPieces(allSQL)
+	parts, err := parser.SplitStatementToPieces(allSQL)
 	if err != nil {
 		return err
 	}

@@ -25,18 +25,18 @@ import (
 
 // QueryMatchesTemplates sees if the given query has the same fingerprint as one of the given templates
 // (one is enough)
-func QueryMatchesTemplates(query string, queryTemplates []string) (match bool, err error) {
+func (p *Parser) QueryMatchesTemplates(query string, queryTemplates []string) (match bool, err error) {
 	if len(queryTemplates) == 0 {
 		return false, fmt.Errorf("No templates found")
 	}
 	bv := make(map[string]*querypb.BindVariable)
 
 	normalize := func(q string) (string, error) {
-		q, err := NormalizeAlphabetically(q)
+		q, err := p.NormalizeAlphabetically(q)
 		if err != nil {
 			return "", err
 		}
-		stmt, reservedVars, err := Parse2(q)
+		stmt, reservedVars, err := p.Parse2(q)
 		if err != nil {
 			return "", err
 		}
@@ -69,8 +69,8 @@ func QueryMatchesTemplates(query string, queryTemplates []string) (match bool, e
 
 // NormalizeAlphabetically rewrites given query such that:
 // - WHERE 'AND' expressions are reordered alphabetically
-func NormalizeAlphabetically(query string) (normalized string, err error) {
-	stmt, err := Parse(query)
+func (p *Parser) NormalizeAlphabetically(query string) (normalized string, err error) {
+	stmt, err := p.Parse(query)
 	if err != nil {
 		return normalized, err
 	}
@@ -118,12 +118,12 @@ func NormalizeAlphabetically(query string) (normalized string, err error) {
 // replaces any cases of the provided database name with the
 // specified replacement name.
 // Note: both database names provided should be unescaped strings.
-func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
+func (p *Parser) ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
 	if newdb == olddb {
 		// Nothing to do here.
 		return query, nil
 	}
-	in, err := Parse(query)
+	in, err := p.Parse(query)
 	if err != nil {
 		return "", err
 	}

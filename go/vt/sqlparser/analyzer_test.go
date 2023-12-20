@@ -145,8 +145,9 @@ func TestSplitAndExpression(t *testing.T) {
 		sql: "select * from t where (a = 1 and ((b = 1 and c = 1)))",
 		out: []string{"a = 1", "b = 1", "c = 1"},
 	}}
+	parser := NewTestParser()
 	for _, tcase := range testcases {
-		stmt, err := Parse(tcase.sql)
+		stmt, err := parser.Parse(tcase.sql)
 		assert.NoError(t, err)
 		var expr Expr
 		if where := stmt.(*Select).Where; where != nil {
@@ -259,9 +260,9 @@ func TestTableFromStatement(t *testing.T) {
 		in:  "bad query",
 		out: "syntax error at position 4 near 'bad'",
 	}}
-
+	parser := NewTestParser()
 	for _, tc := range testcases {
-		name, err := TableFromStatement(tc.in)
+		name, err := parser.TableFromStatement(tc.in)
 		var got string
 		if err != nil {
 			got = err.Error()
@@ -288,8 +289,9 @@ func TestGetTableName(t *testing.T) {
 		out: "",
 	}}
 
+	parser := NewTestParser()
 	for _, tc := range testcases {
-		tree, err := Parse(tc.in)
+		tree, err := parser.Parse(tc.in)
 		if err != nil {
 			t.Error(err)
 			continue

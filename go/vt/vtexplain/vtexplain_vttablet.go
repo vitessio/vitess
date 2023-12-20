@@ -104,9 +104,9 @@ type explainTablet struct {
 
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
-func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatapb.Tablet, collationEnv *collations.Environment) *explainTablet {
+func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatapb.Tablet, collationEnv *collations.Environment, parser *sqlparser.Parser) *explainTablet {
 	db := fakesqldb.New(nil)
-	sidecardb.AddSchemaInitQueries(db, true)
+	sidecardb.AddSchemaInitQueries(db, true, vte.parser)
 
 	config := tabletenv.NewCurrentConfig()
 	config.TrackSchemaVersions = false
@@ -119,7 +119,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatap
 	config.EnableTableGC = false
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(ctx, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias, collationEnv)
+	tsv := tabletserver.NewTabletServer(ctx, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias, collationEnv, parser)
 
 	tablet := explainTablet{db: db, tsv: tsv, vte: vte, collationEnv: collationEnv}
 	db.Handler = &tablet
@@ -583,7 +583,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 	// Parse the select statement to figure out the table and columns
 	// that were referenced so that the synthetic response has the
 	// expected field names and types.
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := t.vte.parser.Parse(query)
 	if err != nil {
 		return nil, err
 	}

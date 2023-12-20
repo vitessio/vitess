@@ -680,7 +680,7 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(64)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -696,8 +696,6 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
-	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {

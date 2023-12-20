@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 type Engine struct {
@@ -72,15 +71,17 @@ type Engine struct {
 	fortests bool
 
 	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, tablet *topodata.Tablet, collationEnv *collations.Environment) *Engine {
+func NewEngine(ts *topo.Server, tablet *topodata.Tablet, collationEnv *collations.Environment, parser *sqlparser.Parser) *Engine {
 	vde := &Engine{
 		controllers:     make(map[int64]*controller),
 		ts:              ts,
 		thisTablet:      tablet,
 		tmClientFactory: func() tmclient.TabletManagerClient { return tmclient.NewTabletManagerClient() },
 		collationEnv:    collationEnv,
+		parser:          parser,
 	}
 	return vde
 }
@@ -99,6 +100,7 @@ func NewTestEngine(ts *topo.Server, tablet *topodata.Tablet, dbn string, dbcf fu
 		tmClientFactory:         tmcf,
 		fortests:                true,
 		collationEnv:            collations.MySQL8(),
+		parser:                  sqlparser.NewTestParser(),
 	}
 	return vde
 }
@@ -109,10 +111,10 @@ func (vde *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 		return
 	}
 	vde.dbClientFactoryFiltered = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB())
+		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB(), vde.parser)
 	}
 	vde.dbClientFactoryDba = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB())
+		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB(), vde.parser)
 	}
 	vde.dbName = dbcfgs.DBName
 }

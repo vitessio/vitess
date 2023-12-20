@@ -187,7 +187,7 @@ func TestExpandStar(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tcase.sql)
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
@@ -288,7 +288,7 @@ func TestRewriteJoinUsingColumns(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tcase.sql)
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
@@ -346,7 +346,7 @@ func TestOrderByGroupByLiteral(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tcase.sql)
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement := ast.(*sqlparser.Select)
 			_, err = Analyze(selectStatement, cDB, schemaInfo)
@@ -381,7 +381,7 @@ func TestHavingAndOrderByColumnName(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tcase.sql)
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement := ast.(*sqlparser.Select)
 			_, err = Analyze(selectStatement, cDB, schemaInfo)
@@ -426,7 +426,7 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tcase.sql)
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
@@ -486,7 +486,7 @@ func TestRewriteNot(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tcase.sql)
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
@@ -538,7 +538,7 @@ func TestConstantFolding(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tcase.sql)
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			_, err = Analyze(ast, cDB, schemaInfo)
 			require.NoError(t, err)
@@ -565,7 +565,7 @@ func TestCTEToDerivedTableRewrite(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tcase.sql)
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			_, err = Analyze(ast, cDB, fakeSchemaInfo())
 			require.NoError(t, err)
