@@ -15,12 +15,16 @@
 #### VReplication
  * [release-18.0] VReplication TableStreamer: Only stream tables in tablestreamer (ignore views) (#14646) [#14649](https://github.com/vitessio/vitess/pull/14649)
  * [release-18.0] VDiff: Fix vtctldclient limit bug (#14778) [#14780](https://github.com/vitessio/vitess/pull/14780)
+ * [release-18.0] Backport: VReplication SwitchWrites: Properly return errors in SwitchWrites #14800 [#14824](https://github.com/vitessio/vitess/pull/14824)
+ * [release-18.0] VReplication: Update singular workflow in traffic switcher (#14826) [#14829](https://github.com/vitessio/vitess/pull/14829)
 ### CI/Build 
 #### Build/CI
  * [release-18.0] Update MySQL apt package and GPG signature (#14785) [#14792](https://github.com/vitessio/vitess/pull/14792) 
 #### General
  * [release-18.0] Upgrade the Golang version to `go1.21.5` [#14690](https://github.com/vitessio/vitess/pull/14690)
 ### Dependabot 
+#### General
+ * [release-18.0] build(deps): bump golang.org/x/crypto from 0.16.0 to 0.17.0 (#14814) [#14817](https://github.com/vitessio/vitess/pull/14817) 
 #### VTAdmin
  * [release-18.0] Bump @adobe/css-tools from 4.3.1 to 4.3.2 in /web/vtadmin (#14654) [#14668](https://github.com/vitessio/vitess/pull/14668)
 ### Enhancement 
