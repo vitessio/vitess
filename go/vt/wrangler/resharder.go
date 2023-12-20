@@ -165,8 +165,8 @@ func (wr *Wrangler) buildResharder(ctx context.Context, keyspace, workflow strin
 }
 
 // validateTargets ensures that the target shards have no existing
-// VReplication workflow streams as that is an invalid state for the
-// non-serving shards involved in a Reshard.
+// VReplication workflow streams as that is an invalid starting
+// state for the non-serving shards involved in a Reshard.
 func (rs *resharder) validateTargets(ctx context.Context) error {
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary := rs.targetPrimaries[target.ShardName()]

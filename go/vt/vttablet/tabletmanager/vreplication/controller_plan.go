@@ -89,8 +89,8 @@ var isSelective = func(where *sqlparser.Where, columns ...*sqlparser.ColName) bo
 				}
 			}
 			// If we found a desired column, check that it is being used with an
-			// equality operator OR an in clause, logically being equal (or not) to
-			// any of N things.
+			// equality operator OR an in clause, logically being equal to any
+			// of N things.
 			if wantedColumn &&
 				(node.Operator == sqlparser.EqualOp || node.Operator == sqlparser.InOp) {
 				selective = true  // This is a safe statement
@@ -103,6 +103,9 @@ var isSelective = func(where *sqlparser.Where, columns ...*sqlparser.ColName) bo
 	return selective
 }
 
+// tableSelectiveColumns is a map that can be used to declare
+// what selective columns should be used (one or more) in queries
+// against a table.
 var tableSelectiveColumns = map[string][]*sqlparser.ColName{
 	vreplicationTableName: {
 		{Name: sqlparser.NewIdentifierCI("id")},
@@ -110,7 +113,8 @@ var tableSelectiveColumns = map[string][]*sqlparser.ColName{
 	},
 }
 
-func columnsStrForErr(columns []*sqlparser.ColName) string {
+// columnsAsCSV returns a comma-separated list of column names.
+func columnsAsCSV(columns []*sqlparser.ColName) string {
 	if len(columns) == 0 {
 		return ""
 	}
@@ -237,7 +241,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 		if upd.Comments == nil || upd.Comments.Directives() == nil || !upd.Comments.Directives().IsSet(AllowUnsafeWriteCommentDirective) {
 			if safe := isSelective(upd.Where, tableSelectiveColumns[vreplicationTableName]...); !safe {
 				return nil, fmt.Errorf("unsafe WHERE clause in update: %s; should be using = or in with at least one of the following columns: %s",
-					sqlparser.String(upd.Where), columnsStrForErr(tableSelectiveColumns[vreplicationTableName]))
+					sqlparser.String(upd.Where), columnsAsCSV(tableSelectiveColumns[vreplicationTableName]))
 			}
 		}
 	default:
@@ -299,7 +303,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 		if del.Comments == nil || del.Comments.Directives() == nil || !del.Comments.Directives().IsSet(AllowUnsafeWriteCommentDirective) {
 			if safe := isSelective(del.Where, tableSelectiveColumns[vreplicationTableName]...); !safe {
 				return nil, fmt.Errorf("unsafe WHERE clause in delete: %s; should be using = or in with at least one of the following columns: %s",
-					sqlparser.String(del.Where), columnsStrForErr(tableSelectiveColumns[vreplicationTableName]))
+					sqlparser.String(del.Where), columnsAsCSV(tableSelectiveColumns[vreplicationTableName]))
 			}
 		}
 	default:
