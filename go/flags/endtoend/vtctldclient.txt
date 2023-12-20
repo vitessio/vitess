@@ -106,6 +106,7 @@ Available Commands:
 Flags:
       --action_timeout duration                timeout to use for the command (default 1h0m0s)
       --alsologtostderr                        log to standard error as well as files
+      --andrew-is-testing                      nothing to see here
       --compact                                use compact format for otherwise verbose outputs
       --grpc_auth_static_client_creds string   When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy

@@ -228,6 +228,7 @@ func init() {
 	Root.PersistentFlags().StringVar(&topoOptions.implementation, "topo-implementation", topoOptions.implementation, "the topology implementation to use")
 	Root.PersistentFlags().StringSliceVar(&topoOptions.globalServerAddresses, "topo-global-server-address", topoOptions.globalServerAddresses, "the address of the global topology server(s)")
 	Root.PersistentFlags().StringVar(&topoOptions.globalRoot, "topo-global-root", topoOptions.globalRoot, "the path of the global topology data in the global topology server")
+	Root.PersistentFlags().Bool("andrew-is-testing", false, "nothing to see here")
 	vreplcommon.RegisterCommands(Root)
 
 	var err error
