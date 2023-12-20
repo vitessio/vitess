@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 
 	"github.com/buger/jsonparser"
@@ -497,4 +498,48 @@ func DialVTGate(ctx context.Context, name, addr, username, password string) (*vt
 	dialerName := name
 	vtgateconn.RegisterDialer(dialerName, dialerFunc)
 	return vtgateconn.DialProtocol(ctx, dialerName, addr)
+}
+
+// PrintFiles prints the files that are asked for. If no file is specified, all the files are printed.
+func PrintFiles(t *testing.T, dir string, files ...string) {
+	var directories []string
+	directories = append(directories, dir)
+
+	// Go over the remaining directories to check
+	for len(directories) > 0 {
+		// Get one of the directories, and read its contents.
+		dir = directories[0]
+		directories = directories[1:]
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			log.Errorf("Couldn't read directory - %v", dir)
+			continue
+		}
+		for _, entry := range entries {
+			name := path.Join(dir, entry.Name())
+			// For a directory, we add it to our list of directories to check.
+			if entry.IsDir() {
+				directories = append(directories, name)
+				continue
+			}
+			// Check if this file should be printed or not.
+			if len(files) != 0 {
+				fileFound := false
+				for _, file := range files {
+					if strings.EqualFold(entry.Name(), file) {
+						fileFound = true
+						break
+					}
+				}
+				if !fileFound {
+					continue
+				}
+			}
+			// Read and print the file.
+			res, err := os.ReadFile(name)
+			require.NoError(t, err)
+			log.Errorf("READING FILE - %v", name)
+			log.Errorf("%v", string(res))
+		}
+	}
 }
