@@ -260,19 +260,19 @@ func (w *heartbeatWriter) enableWrites(enable bool) {
 
 // killWritesUntilStopped tries to kill the write in progress until the ticks have stopped.
 func (w *heartbeatWriter) killWritesUntilStopped(ctx context.Context) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	for {
+		// Actually try to kill the query.
+		err := w.killWrite()
+		w.recordError(err)
 		select {
 		case <-ctx.Done():
 			// If the context has been cancelled, then we know that the ticks have stopped.
 			// This guarantees that there are no writes in progress, so there is nothing to kill.
 			return
-		default:
+		case <-ticker.C:
 		}
-		// Actually try to kill the query.
-		err := w.killWrite()
-		w.recordError(err)
-		// We sleep for 100 millisecond, to prevent killing the query over and over very quickly.
-		time.Sleep(100 * time.Millisecond)
 	}
 }
 
