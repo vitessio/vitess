@@ -863,7 +863,7 @@ func (tme *testShardMigraterEnv) expectStartReverseVReplication() {
 	// NOTE: this is not a faithful reproduction of what should happen.
 	// The ids returned are not accurate.
 	for _, dbclient := range tme.dbSourceClients {
-		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks'", resultid34, nil)
+		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid34, nil)
 		dbclient.addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (3, 4)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("select * from _vt.vreplication where id = 3", runningResult(3), nil)
 		dbclient.addQuery("select * from _vt.vreplication where id = 4", runningResult(4), nil)
