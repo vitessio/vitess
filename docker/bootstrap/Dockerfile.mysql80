@@ -5,7 +5,7 @@ FROM --platform=linux/amd64 "${image}"
 
 # Install MySQL 8.0
 RUN for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 && break; done && \
-    for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 467B942D3A79BD29 && break; done && \
+    for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com A8D3785C && break; done && \
     add-apt-repository 'deb http://repo.mysql.com/apt/debian/ buster mysql-8.0' && \
     for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 9334A25F8507EFA5 && break; done && \
     echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list && \

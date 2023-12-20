@@ -146,7 +146,7 @@ case "${FLAVOR}" in
 mysql57|mysql80)
     # repo.mysql.com
     add_apt_key 8C718D3B5072E1F5
-    add_apt_key 467B942D3A79BD29
+    add_apt_key A8D3785C
     ;;
 mariadb|mariadb103)
     # digitalocean.com
