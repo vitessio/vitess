@@ -342,6 +342,11 @@ func TestEmptyTableAggr(t *testing.T) {
 			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
+			t.Run("Average in sharded query", func(t *testing.T) {
+				utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+				mcmp.AssertMatches(" select count(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
+				mcmp.AssertMatches(" select avg(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[NULL]]")
+			})
 		})
 	}
 
@@ -479,6 +484,10 @@ func TestComplexAggregation(t *testing.T) {
 	mcmp.Exec(`SELECT shardkey + MIN(t1_id)+MAX(t1_id) FROM t1 GROUP BY shardkey`)
 	mcmp.Exec(`SELECT name+COUNT(t1_id)+1 FROM t1 GROUP BY name`)
 	mcmp.Exec(`SELECT COUNT(*)+shardkey+MIN(t1_id)+1+MAX(t1_id)*SUM(t1_id)+1+name FROM t1 GROUP BY shardkey, name`)
+	t.Run("Average in sharded query", func(t *testing.T) {
+		utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+		mcmp.Exec(`SELECT COUNT(t1_id)+MAX(shardkey)+AVG(t1_id) FROM t1`)
+	})
 }
 
 // TestGroupConcatAggregation tests the group_concat function with vitess doing the aggregation.

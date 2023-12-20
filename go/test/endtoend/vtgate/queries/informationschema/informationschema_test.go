@@ -204,6 +204,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 }
 
 func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	// This test checks that we can run queries like this, where the RHS is a single shard query
 	mcmp, closer := start(t)
 	defer closer()
