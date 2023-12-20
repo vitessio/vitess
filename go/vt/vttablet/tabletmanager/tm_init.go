@@ -838,9 +838,13 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 }
 
 // waitForDBAGrants waits for DBA user to have the required privileges to function properly.
-func (tm *TabletManager) waitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) error {
+func (tm *TabletManager) waitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) (err error) {
 	// We should close the _waitForGrantsComplete channel in the end to signify that the wait for dba grants has completed.
-	defer close(tm._waitForGrantsComplete)
+	defer func() {
+		if err == nil {
+			close(tm._waitForGrantsComplete)
+		}
+	}()
 	// We don't wait for grants if the tablet is externally managed. Permissions
 	// are then the responsibility of the DBA.
 	if config == nil || config.DB.HasGlobalSettings() || waitTime == 0 {
@@ -850,8 +854,8 @@ func (tm *TabletManager) waitForDBAGrants(config *tabletenv.TabletConfig, waitTi
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	defer cancel()
 	for {
-		conn, err := dbconnpool.NewDBConnection(ctx, config.DB.DbaConnector())
-		if err == nil {
+		conn, connErr := dbconnpool.NewDBConnection(ctx, config.DB.DbaConnector())
+		if connErr == nil {
 			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
 			if fetchErr != nil {
 				log.Errorf("Error running SHOW GRANTS - %v", fetchErr)
