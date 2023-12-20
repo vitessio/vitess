@@ -20,7 +20,7 @@ package colldata
 
 import (
 	_ "embed"
-	unsafe "unsafe"
+	"unsafe"
 )
 
 var weightTable_uca900_page000 = weightsUCA_embed(0, 2560)
@@ -1417,5 +1417,5 @@ var weightTable_uca520 = []*[]uint16{
 var weightsUCA_embed_data string
 
 func weightsUCA_embed(pos, length int) []uint16 {
-	return (*[0x7fff0000]uint16)(unsafe.Pointer(unsafe.StringData(weightsUCA_embed_data)))[pos : pos+length]
+	return (*[0x3fffffff]uint16)(unsafe.Pointer(unsafe.StringData(weightsUCA_embed_data)))[pos : pos+length]
 }
