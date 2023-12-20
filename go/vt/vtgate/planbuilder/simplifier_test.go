@@ -41,7 +41,7 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 		V:       loadSchema(t, "vschemas/schema.json", true),
 		Version: Gen4,
 	}
-	stmt, reserved, err := sqlparser.Parse2(query)
+	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
 	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
@@ -63,7 +63,7 @@ func TestSimplifyPanic(t *testing.T) {
 		V:       loadSchema(t, "vschemas/schema.json", true),
 		Version: Gen4,
 	}
-	stmt, reserved, err := sqlparser.Parse2(query)
+	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
 	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
@@ -88,7 +88,7 @@ func TestUnsupportedFile(t *testing.T) {
 	for _, tcase := range readJSONTests("unsupported_cases.txt") {
 		t.Run(tcase.Query, func(t *testing.T) {
 			log.Errorf("unsupported_cases.txt - %s", tcase.Query)
-			stmt, reserved, err := sqlparser.Parse2(tcase.Query)
+			stmt, reserved, err := sqlparser.NewTestParser().Parse2(tcase.Query)
 			require.NoError(t, err)
 			_, ok := stmt.(sqlparser.SelectStatement)
 			if !ok {
@@ -104,7 +104,7 @@ func TestUnsupportedFile(t *testing.T) {
 			reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 			ast := rewritten.AST
 			origQuery := sqlparser.String(ast)
-			stmt, _, _ = sqlparser.Parse2(tcase.Query)
+			stmt, _, _ = sqlparser.NewTestParser().Parse2(tcase.Query)
 			simplified := simplifier.SimplifyStatement(
 				stmt.(sqlparser.SelectStatement),
 				vschema.CurrentDb(),
@@ -125,7 +125,7 @@ func TestUnsupportedFile(t *testing.T) {
 }
 
 func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
-	stmt, _, err := sqlparser.Parse2(query)
+	stmt, _, err := sqlparser.NewTestParser().Parse2(query)
 	if err != nil {
 		panic(err)
 	}
@@ -164,7 +164,7 @@ func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *
 		return false
 	}
 
-	stmt, _, err := sqlparser.Parse2(query)
+	stmt, _, err := sqlparser.NewTestParser().Parse2(query)
 	if err != nil {
 		panic(err.Error())
 	}

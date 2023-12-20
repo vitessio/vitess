@@ -59,6 +59,7 @@ type ReplicatorPlan struct {
 	ColInfoMap    map[string][]*ColumnInfo
 	stats         *binlogplayer.Stats
 	Source        *binlogdatapb.BinlogSource
+	collationEnv  *collations.Environment
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -98,11 +99,12 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name:     sqlparser.NewIdentifierCS(tableName),
-		lastpk:   lastpk,
-		colInfos: rp.ColInfoMap[tableName],
-		stats:    rp.stats,
-		source:   rp.Source,
+		name:         sqlparser.NewIdentifierCS(tableName),
+		lastpk:       lastpk,
+		colInfos:     rp.ColInfoMap[tableName],
+		stats:        rp.stats,
+		source:       rp.Source,
+		collationEnv: rp.collationEnv,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewIdentifierCI(field.Name)
@@ -217,6 +219,8 @@ type TablePlan struct {
 	PartialInserts map[string]*sqlparser.ParsedQuery
 	// PartialUpdates are same as PartialInserts, but for update statements
 	PartialUpdates map[string]*sqlparser.ParsedQuery
+
+	CollationEnv *collations.Environment
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -254,7 +258,7 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
 		if i > 0 {
 			sqlbuffer.WriteString(", ")
 		}
-		if err := tp.BulkInsertValues.AppendFromRow(sqlbuffer, tp.Fields, row, tp.FieldsToSkip); err != nil {
+		if err := appendFromRow(tp.BulkInsertValues, sqlbuffer, tp.Fields, row, tp.FieldsToSkip); err != nil {
 			return nil, err
 		}
 	}
@@ -299,7 +303,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 
 		rowVal, _ := sqltypes.BindVariableToValue(bindvar)
 		// TODO(king-11) make collation aware
-		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0], collations.Unknown)
+		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0], tp.CollationEnv, collations.Unknown)
 		// If rowVal is > last pk, transaction will be a noop, so don't apply this statement
 		if err == nil && result > 0 {
 			tp.Stats.NoopQueryCount.Add(stmtType, 1)
@@ -317,7 +321,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
 	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
 		// Non-null string value, for which we have a charset conversion instruction
-		fromCollation := collations.Local().DefaultCollationForCharset(conversion.FromCharset)
+		fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
 		if fromCollation == collations.Unknown {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
 		}
@@ -602,4 +606,75 @@ func valsEqual(v1, v2 sqltypes.Value) bool {
 	}
 	// Compare content only if none are null.
 	return v1.ToString() == v2.ToString()
+}
+
+// AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that
+// the fields in the row are in the same order as the placeholders in this query. The fields might include generated
+// columns which are dropped, by checking against skipFields, before binding the variables
+// note: there can be more fields than bind locations since extra columns might be requested from the source if not all
+// primary keys columns are present in the target table, for example. Also some values in the row may not correspond for
+// values from the database on the source: sum/count for aggregation queries, for example
+func appendFromRow(pq *sqlparser.ParsedQuery, buf *bytes2.Buffer, fields []*querypb.Field, row *querypb.Row, skipFields map[string]bool) error {
+	bindLocations := pq.BindLocations()
+	if len(fields) < len(bindLocations) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ",
+			len(fields), len(bindLocations))
+	}
+
+	type colInfo struct {
+		typ    querypb.Type
+		length int64
+		offset int64
+	}
+	rowInfo := make([]*colInfo, 0)
+
+	offset := int64(0)
+	for i, field := range fields { // collect info required for fields to be bound
+		length := row.Lengths[i]
+		if !skipFields[strings.ToLower(field.Name)] {
+			rowInfo = append(rowInfo, &colInfo{
+				typ:    field.Type,
+				length: length,
+				offset: offset,
+			})
+		}
+		if length > 0 {
+			offset += row.Lengths[i]
+		}
+	}
+
+	// bind field values to locations
+	var offsetQuery int
+	for i, loc := range bindLocations {
+		col := rowInfo[i]
+		buf.WriteString(pq.Query[offsetQuery:loc.Offset])
+		typ := col.typ
+
+		switch typ {
+		case querypb.Type_TUPLE:
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
+		case querypb.Type_JSON:
+			if col.length < 0 { // An SQL NULL and not an actual JSON value
+				buf.WriteString(sqltypes.NullStr)
+			} else { // A JSON value (which may be a JSON null literal value)
+				buf2 := row.Values[col.offset : col.offset+col.length]
+				vv, err := vjson.MarshalSQLValue(buf2)
+				if err != nil {
+					return err
+				}
+				buf.WriteString(vv.RawStr())
+			}
+		default:
+			if col.length < 0 {
+				// -1 means a null variable; serialize it directly
+				buf.WriteString(sqltypes.NullStr)
+			} else {
+				vv := sqltypes.MakeTrusted(typ, row.Values[col.offset:col.offset+col.length])
+				vv.EncodeSQLBytes2(buf)
+			}
+		}
+		offsetQuery = loc.Offset + loc.Length
+	}
+	buf.WriteString(pq.Query[offsetQuery:])
+	return nil
 }

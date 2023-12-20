@@ -82,7 +82,7 @@
               "Sharded": true
             },
             "FieldQuery": "select colb, cola, y, colc, x from multicol_tbl1 where 1 != 1",
-            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update nowait",
+            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
             "Table": "multicol_tbl1",
             "Values": [
               "1",
@@ -155,7 +155,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col5, t5col5 from tbl5 where 1 != 1",
-            "Query": "select col5, t5col5 from tbl5 for update nowait",
+            "Query": "select col5, t5col5 from tbl5 for update",
             "Table": "tbl5"
           },
           {
@@ -312,7 +312,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-            "Query": "select col2 from u_tbl2 where id = 1 for update nowait",
+            "Query": "select col2 from u_tbl2 where id = 1 for update",
             "Table": "u_tbl2"
           },
           {
@@ -423,7 +423,7 @@
               "Sharded": true
             },
             "FieldQuery": "select t5col5 from tbl5 where 1 != 1",
-            "Query": "select t5col5 from tbl5 for update nowait",
+            "Query": "select t5col5 from tbl5 for update",
             "Table": "tbl5"
           },
           {
@@ -527,7 +527,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select 1 from tbl10 where 1 != 1",
-                            "Query": "select 1 from tbl10 where not (tbl10.col) <=> ('foo') for share nowait",
+                            "Query": "select 1 from tbl10 where not (tbl10.col) <=> ('foo') for share",
                             "Table": "tbl10"
                           },
                           {
@@ -538,7 +538,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select tbl3.col from tbl3 where 1 != 1",
-                            "Query": "select tbl3.col from tbl3 where tbl3.col = 'foo' for share nowait",
+                            "Query": "select tbl3.col from tbl3 where tbl3.col = 'foo' for share",
                             "Table": "tbl3"
                           }
                         ]
@@ -592,7 +592,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col9 from tbl9 where 1 != 1",
-            "Query": "select col9 from tbl9 where col9 = 34 for update nowait",
+            "Query": "select col9 from tbl9 where col9 = 34 for update",
             "Table": "tbl9",
             "Values": [
               "34"
@@ -657,7 +657,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-            "Query": "select col1 from u_tbl1 for update nowait",
+            "Query": "select col1 from u_tbl1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -677,7 +677,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update nowait",
+                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -806,7 +806,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where 1 != 1",
-            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where cast(u_tbl2.col1 + 'bar' as CHAR) is not null and not (u_tbl2.col2) <=> (cast(u_tbl2.col1 + 'bar' as CHAR)) and u_tbl2.id = 1 and u_tbl1.col1 is null limit 1 for share nowait",
+            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where cast(u_tbl2.col1 + 'bar' as CHAR) is not null and not (u_tbl2.col2) <=> (cast(u_tbl2.col1 + 'bar' as CHAR)) and u_tbl2.id = 1 and u_tbl1.col1 is null limit 1 for share",
             "Table": "u_tbl1, u_tbl2"
           },
           {
@@ -822,7 +822,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where 1 != 1",
-                "Query": "select col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where id = 1 for update nowait",
+                "Query": "select col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where id = 1 for update",
                 "Table": "u_tbl2"
               },
               {
@@ -889,7 +889,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where 1 != 1",
-            "Query": "select col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where id = 1 for update nowait",
+            "Query": "select col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where id = 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -916,7 +916,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update nowait",
+                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -1047,7 +1047,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-            "Query": "select col2 from u_tbl2 where id = 1 for update nowait",
+            "Query": "select col2 from u_tbl2 where id = 1 for update",
             "Table": "u_tbl2"
           },
           {
@@ -1104,7 +1104,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-            "Query": "select col1 from u_tbl1 where id = 1 for update nowait",
+            "Query": "select col1 from u_tbl1 where id = 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -1124,7 +1124,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update nowait",
+                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -1281,7 +1281,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select tbl3.colx from tbl3 where 1 != 1",
-                            "Query": "select tbl3.colx from tbl3 where tbl3.colx + 10 is not null and not (tbl3.coly) <=> (tbl3.colx + 10) and tbl3.coly = 10 for share nowait",
+                            "Query": "select tbl3.colx from tbl3 where tbl3.colx + 10 is not null and not (tbl3.coly) <=> (tbl3.colx + 10) and tbl3.coly = 10 for share",
                             "Table": "tbl3"
                           },
                           {
@@ -1292,7 +1292,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select tbl1.t1col1 from tbl1 where 1 != 1",
-                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = :tbl3_colx + 10 for share nowait",
+                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = :tbl3_colx + 10 for share",
                             "Table": "tbl1"
                           }
                         ]
@@ -1361,7 +1361,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select 1 from tbl3 where 1 != 1",
-                            "Query": "select 1 from tbl3 where not (tbl3.coly) <=> (20) and tbl3.coly = 10 for share nowait",
+                            "Query": "select 1 from tbl3 where not (tbl3.coly) <=> (20) and tbl3.coly = 10 for share",
                             "Table": "tbl3"
                           },
                           {
@@ -1372,7 +1372,7 @@
                               "Sharded": true
                             },
                             "FieldQuery": "select tbl1.t1col1 from tbl1 where 1 != 1",
-                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = 20 for share nowait",
+                            "Query": "select tbl1.t1col1 from tbl1 where tbl1.t1col1 = 20 for share",
                             "Table": "tbl1"
                           }
                         ]
@@ -1421,7 +1421,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col6 from u_tbl6 where 1 != 1",
-            "Query": "select col6 from u_tbl6 for update nowait",
+            "Query": "select col6 from u_tbl6 for update",
             "Table": "u_tbl6"
           },
           {
@@ -1497,7 +1497,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col7 from u_tbl7 where 1 != 1",
-            "Query": "select col7 from u_tbl7 for update nowait",
+            "Query": "select col7 from u_tbl7 for update",
             "Table": "u_tbl7"
           },
           {
@@ -1517,7 +1517,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where not (u_tbl4.col4) <=> (cast('foo' as CHAR)) and (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1 for share nowait",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where not (u_tbl4.col4) <=> (cast('foo' as CHAR)) and (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1 for share",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -1529,7 +1529,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (u_tbl9.col9) not in ((cast('foo' as CHAR))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share nowait",
+                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (u_tbl9.col9) not in ((cast('foo' as CHAR))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share",
                 "Table": "u_tbl4, u_tbl9"
               },
               {
@@ -1586,7 +1586,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col7 from u_tbl7 where 1 != 1",
-            "Query": "select col7 from u_tbl7 for update nowait",
+            "Query": "select col7 from u_tbl7 for update",
             "Table": "u_tbl7"
           },
           {
@@ -1606,7 +1606,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where not (u_tbl4.col4) <=> (cast(:v1 as CHAR)) and (u_tbl4.col4) in ::fkc_vals and cast(:v1 as CHAR) is not null and u_tbl3.col3 is null limit 1 for share nowait",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where not (u_tbl4.col4) <=> (cast(:v1 as CHAR)) and (u_tbl4.col4) in ::fkc_vals and cast(:v1 as CHAR) is not null and u_tbl3.col3 is null limit 1 for share",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -1618,7 +1618,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (cast(:v1 as CHAR) is null or (u_tbl9.col9) not in ((cast(:v1 as CHAR)))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share nowait",
+                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (cast(:v1 as CHAR) is null or (u_tbl9.col9) not in ((cast(:v1 as CHAR)))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share",
                 "Table": "u_tbl4, u_tbl9"
               },
               {
@@ -1693,7 +1693,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-                "Query": "select col1 from u_tbl1 where id = 1 for update nowait",
+                "Query": "select col1 from u_tbl1 where id = 1 for update",
                 "Table": "u_tbl1"
               },
               {
@@ -1713,7 +1713,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update nowait",
+                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                     "Table": "u_tbl2"
                   },
                   {
@@ -1869,7 +1869,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-                "Query": "select col1 from u_tbl1 where (id) in ((1)) for update nowait",
+                "Query": "select col1 from u_tbl1 where (id) in ((1)) for update",
                 "Table": "u_tbl1"
               },
               {
@@ -1889,7 +1889,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update nowait",
+                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                     "Table": "u_tbl2"
                   },
                   {
@@ -1975,7 +1975,7 @@
               "Sharded": false
             },
             "FieldQuery": "select cola, colb from u_multicol_tbl1 where 1 != 1",
-            "Query": "select cola, colb from u_multicol_tbl1 where id = 3 for update nowait",
+            "Query": "select cola, colb from u_multicol_tbl1 where id = 3 for update",
             "Table": "u_multicol_tbl1"
           },
           {
@@ -1996,7 +1996,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2)) for update nowait",
+                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2)) for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -2069,7 +2069,7 @@
               "Sharded": false
             },
             "FieldQuery": "select cola, colb from u_multicol_tbl1 where 1 != 1",
-            "Query": "select cola, colb from u_multicol_tbl1 where id = :v3 for update nowait",
+            "Query": "select cola, colb from u_multicol_tbl1 where id = :v3 for update",
             "Table": "u_multicol_tbl1"
           },
           {
@@ -2090,7 +2090,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2)))) for update nowait",
+                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2)))) for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -2169,7 +2169,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select col5, t5col5 from tbl5 where 1 != 1",
-                "Query": "select col5, t5col5 from tbl5 where id = :v1 for update nowait",
+                "Query": "select col5, t5col5 from tbl5 where id = :v1 for update",
                 "Table": "tbl5"
               },
               {
@@ -2249,7 +2249,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where 1 != 1",
-            "Query": "select col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where bar = 42 for update nowait",
+            "Query": "select col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where bar = 42 for update",
             "Table": "u_tbl7"
           },
           {
@@ -2276,7 +2276,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:fkc_upd as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:fkc_upd as CHAR) where not (u_tbl4.col4) <=> (cast(:fkc_upd as CHAR)) and (u_tbl4.col4) in ::fkc_vals and cast(:fkc_upd as CHAR) is not null and u_tbl3.col3 is null limit 1 for share nowait",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:fkc_upd as CHAR) where not (u_tbl4.col4) <=> (cast(:fkc_upd as CHAR)) and (u_tbl4.col4) in ::fkc_vals and cast(:fkc_upd as CHAR) is not null and u_tbl3.col3 is null limit 1 for share",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -2288,7 +2288,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (cast(:fkc_upd as CHAR) is null or (u_tbl9.col9) not in ((cast(:fkc_upd as CHAR)))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share nowait",
+                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (cast(:fkc_upd as CHAR) is null or (u_tbl9.col9) not in ((cast(:fkc_upd as CHAR)))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share",
                 "Table": "u_tbl4, u_tbl9"
               },
               {
@@ -2345,7 +2345,7 @@
               "Sharded": false
             },
             "FieldQuery": "select cola, colb, cola <=> cola + 3, cola + 3 from u_multicol_tbl1 where 1 != 1",
-            "Query": "select cola, colb, cola <=> cola + 3, cola + 3 from u_multicol_tbl1 where id = 3 for update nowait",
+            "Query": "select cola, colb, cola <=> cola + 3, cola + 3 from u_multicol_tbl1 where id = 3 for update",
             "Table": "u_multicol_tbl1"
           },
           {
@@ -2373,7 +2373,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:fkc_upd is null or (cola) not in ((:fkc_upd))) for update nowait",
+                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:fkc_upd is null or (cola) not in ((:fkc_upd))) for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -2451,7 +2451,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where 1 != 1",
-            "Query": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.colc - 2 is not null and not (u_multicol_tbl2.cola, u_multicol_tbl2.colb) <=> (2, u_multicol_tbl2.colc - 2) and u_multicol_tbl2.id = 7 and u_multicol_tbl1.cola is null and u_multicol_tbl1.colb is null limit 1 for share nowait",
+            "Query": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.colc - 2 is not null and not (u_multicol_tbl2.cola, u_multicol_tbl2.colb) <=> (2, u_multicol_tbl2.colc - 2) and u_multicol_tbl2.id = 7 and u_multicol_tbl1.cola is null and u_multicol_tbl1.colb is null limit 1 for share",
             "Table": "u_multicol_tbl1, u_multicol_tbl2"
           },
           {
@@ -2467,7 +2467,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select cola, colb, cola <=> 2, 2, colb <=> colc - 2, colc - 2 from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb, cola <=> 2, 2, colb <=> colc - 2, colc - 2 from u_multicol_tbl2 where id = 7 for update nowait",
+                "Query": "select cola, colb, cola <=> 2, 2, colb <=> colc - 2, colc - 2 from u_multicol_tbl2 where id = 7 for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -2707,7 +2707,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-                "Query": "select col1 from u_tbl1 where id = 1 for update nowait",
+                "Query": "select col1 from u_tbl1 where id = 1 for update",
                 "Table": "u_tbl1"
               },
               {
@@ -2727,7 +2727,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update nowait",
+                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                     "Table": "u_tbl2"
                   },
                   {
@@ -2871,7 +2871,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where id = :v1 for update nowait",
+                "Query": "select col2 from u_tbl2 where id = :v1 for update",
                 "Table": "u_tbl2"
               },
               {
@@ -2930,7 +2930,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where id = :v3 for update nowait",
+                "Query": "select col2 from u_tbl2 where id = :v3 for update",
                 "Table": "u_tbl2"
               },
               {
@@ -2989,7 +2989,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where id = :v5 for update nowait",
+                "Query": "select col2 from u_tbl2 where id = :v5 for update",
                 "Table": "u_tbl2"
               },
               {

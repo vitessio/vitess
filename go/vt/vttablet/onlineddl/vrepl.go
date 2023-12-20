@@ -136,6 +136,9 @@ type VRepl struct {
 	parser *vrepl.AlterTableParser
 
 	convertCharset map[string](*binlogdatapb.CharsetConversion)
+
+	collationEnv *collations.Environment
+	sqlparser    *sqlparser.Parser
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
@@ -149,6 +152,8 @@ func NewVRepl(workflow string,
 	vreplShowCreateTable string,
 	alterQuery string,
 	analyzeTable bool,
+	collationEnv *collations.Environment,
+	parser *sqlparser.Parser,
 ) *VRepl {
 	return &VRepl{
 		workflow:                workflow,
@@ -165,6 +170,8 @@ func NewVRepl(workflow string,
 		enumToTextMap:           map[string]string{},
 		intToEnumMap:            map[string]bool{},
 		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
+		collationEnv:            collationEnv,
+		sqlparser:               parser,
 	}
 }
 
@@ -384,7 +391,7 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 		// Happens for REVERT
 		return nil
 	}
-	if err := v.parser.ParseAlterStatement(v.alterQuery); err != nil {
+	if err := v.parser.ParseAlterStatement(v.alterQuery, v.sqlparser); err != nil {
 		return err
 	}
 	if v.parser.IsRenameTable() {
@@ -455,7 +462,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.originalShowCreateTable, v.vreplShowCreateTable)
+	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.sqlparser, v.originalShowCreateTable, v.vreplShowCreateTable)
 	if err != nil {
 		return err
 	}
@@ -553,11 +560,11 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		case sourceCol.Type == vrepl.StringColumnType:
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
-			fromCollation := collations.Local().DefaultCollationForCharset(sourceCol.Charset)
+			fromCollation := v.collationEnv.DefaultCollationForCharset(sourceCol.Charset)
 			if fromCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
 			}
-			toCollation := collations.Local().DefaultCollationForCharset(targetCol.Charset)
+			toCollation := v.collationEnv.DefaultCollationForCharset(targetCol.Charset)
 			// Let's see if target col is at all textual
 			if targetCol.Type == vrepl.StringColumnType && toCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)

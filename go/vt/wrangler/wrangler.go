@@ -23,8 +23,10 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -57,16 +59,21 @@ type Wrangler struct {
 	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
 	// Limt the number of concurrent background goroutines if needed.
 	sem *semaphore.Weighted
+
+	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
 // New creates a new Wrangler object.
-func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
+func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient, collationEnv *collations.Environment, parser *sqlparser.Parser) *Wrangler {
 	return &Wrangler{
-		logger:   logger,
-		ts:       ts,
-		tmc:      tmc,
-		vtctld:   grpcvtctldserver.NewVtctldServer(ts),
-		sourceTs: ts,
+		logger:       logger,
+		ts:           ts,
+		tmc:          tmc,
+		vtctld:       grpcvtctldserver.NewVtctldServer(ts, parser),
+		sourceTs:     ts,
+		collationEnv: collationEnv,
+		parser:       parser,
 	}
 }
 
@@ -74,11 +81,13 @@ func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClien
 // in production.
 func NewTestWrangler(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
 	return &Wrangler{
-		logger:   logger,
-		ts:       ts,
-		tmc:      tmc,
-		vtctld:   grpcvtctldserver.NewTestVtctldServer(ts, tmc),
-		sourceTs: ts,
+		logger:       logger,
+		ts:           ts,
+		tmc:          tmc,
+		vtctld:       grpcvtctldserver.NewTestVtctldServer(ts, tmc),
+		sourceTs:     ts,
+		collationEnv: collations.MySQL8(),
+		parser:       sqlparser.NewTestParser(),
 	}
 }
 
@@ -108,4 +117,9 @@ func (wr *Wrangler) SetLogger(logger logutil.Logger) {
 // Logger returns the logger associated with this wrangler.
 func (wr *Wrangler) Logger() logutil.Logger {
 	return wr.logger
+}
+
+// SQLParser returns the parser this wrangler is using.
+func (wr *Wrangler) SQLParser() *sqlparser.Parser {
+	return wr.parser
 }

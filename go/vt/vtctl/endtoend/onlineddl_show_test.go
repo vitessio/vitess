@@ -9,6 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl"
@@ -119,7 +123,7 @@ func onlineDDLTest(t *testing.T, args []string, expectedQuery string) {
 	tmclienttest.SetProtocol("go.vt.vtctl.endtoend", t.Name())
 
 	logger := logutil.NewMemoryLogger()
-	wr := wrangler.New(logger, fakeTopo, &tmc)
+	wr := wrangler.New(logger, fakeTopo, &tmc, collations.MySQL8(), sqlparser.NewTestParser())
 
 	err := vtctl.RunCommand(ctx, wr, args)
 	assert.Error(t, err)

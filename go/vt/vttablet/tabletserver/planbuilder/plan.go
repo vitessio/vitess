@@ -20,11 +20,11 @@ import (
 	"encoding/json"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -202,7 +202,7 @@ func (plan *Plan) TableNames() (names []string) {
 }
 
 // Build builds a plan based on the schema.
-func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, viewsEnabled bool) (plan *Plan, err error) {
+func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, viewsEnabled bool, collationEnv *collations.Environment) (plan *Plan, err error) {
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan, err = &Plan{
@@ -210,7 +210,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 			FullQuery: GenerateLimitQuery(stmt),
 		}, nil
 	case *sqlparser.Select:
-		plan, err = analyzeSelect(stmt, tables)
+		plan, err = analyzeSelect(stmt, tables, collationEnv)
 	case *sqlparser.Insert:
 		plan, err = analyzeInsert(stmt, tables)
 	case *sqlparser.Update:
@@ -323,7 +323,7 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 }
 
 // BuildSettingQuery builds a query for system settings.
-func BuildSettingQuery(settings []string) (query string, resetQuery string, err error) {
+func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query string, resetQuery string, err error) {
 	if len(settings) == 0 {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
 	}
@@ -331,7 +331,7 @@ func BuildSettingQuery(settings []string) (query string, resetQuery string, err 
 	var resetSetExprs sqlparser.SetExprs
 	lDefault := sqlparser.NewStrLiteral("default")
 	for _, setting := range settings {
-		stmt, err := sqlparser.Parse(setting)
+		stmt, err := parser.Parse(setting)
 		if err != nil {
 			return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
 		}

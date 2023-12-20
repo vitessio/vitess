@@ -70,7 +70,7 @@ var testCases = []*testCase{
 		sourceShards:        "0",
 		targetShards:        "-80,80-",
 		tabletBaseID:        200,
-		tables:              "customer,Lead,Lead-1",
+		tables:              "customer,Lead,Lead-1,nopk",
 		autoRetryError:      true,
 		retryInsert:         `insert into customer(cid, name, typ) values(1991234, 'Testy McTester', 'soho')`,
 		resume:              true,
@@ -117,7 +117,7 @@ func TestVDiff2(t *testing.T) {
 	sourceShards := []string{"0"}
 	targetKs := "customer"
 	targetShards := []string{"-80", "80-"}
-	// This forces us to use multiple vstream packets even with small test tables
+	// This forces us to use multiple vstream packets even with small test tables.
 	extraVTTabletArgs = []string{"--vstream_packet_size=1"}
 
 	vc = NewVitessCluster(t, "TestVDiff2", strings.Split(allCellNames, ","), mainClusterConfig)
@@ -150,7 +150,11 @@ func TestVDiff2(t *testing.T) {
 	query := `insert into customer(cid, name, typ, sport) values(1001, null, 'soho','')`
 	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
 
-	generateMoreCustomers(t, sourceKs, 100)
+	generateMoreCustomers(t, sourceKs, 1000)
+
+	// Create rows in the nopk table using the customer names and random ages between 20 and 100.
+	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s.nopk(name, age) select name, floor(rand()*80)+20 from %s.customer", sourceKs, sourceKs), -1, false)
+	require.NoError(t, err, "failed to insert rows into nopk table: %v", err)
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.

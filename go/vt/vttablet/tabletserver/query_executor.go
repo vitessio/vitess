@@ -28,8 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -616,13 +614,13 @@ func (*QueryExecutor) BeginAgain(ctx context.Context, dc *StatefulConnection) er
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
-	env := evalengine.NewExpressionEnv(qre.ctx, qre.bindVars, nil)
+	env := evalengine.NewExpressionEnv(qre.ctx, qre.bindVars, evalengine.NewEmptyVCursor(qre.tsv.collationEnv, time.Local))
 	result, err := env.Evaluate(qre.plan.NextCount)
 	if err != nil {
 		return nil, err
 	}
 	tableName := qre.plan.TableName()
-	v := result.Value(collations.Default())
+	v := result.Value(qre.tsv.collationEnv.DefaultConnectionCharset())
 	inc, err := v.ToInt64()
 	if err != nil || inc < 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid increment for sequence %s: %s", tableName, v.String())
@@ -759,7 +757,7 @@ func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
-		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true))
+		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.SQLParser()))
 	}
 	return nil
 }
@@ -1148,7 +1146,7 @@ func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType
 }
 
 func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query, err := eschema.GetFetchViewQuery(viewNames)
+	query, err := eschema.GetFetchViewQuery(viewNames, qre.tsv.SQLParser())
 	if err != nil {
 		return err
 	}
@@ -1156,7 +1154,7 @@ func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(s
 }
 
 func (qre *QueryExecutor) getTableDefinitions(tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query, err := eschema.GetFetchTableQuery(tableNames)
+	query, err := eschema.GetFetchTableQuery(tableNames, qre.tsv.SQLParser())
 	if err != nil {
 		return err
 	}
@@ -1164,7 +1162,7 @@ func (qre *QueryExecutor) getTableDefinitions(tableNames []string, callback func
 }
 
 func (qre *QueryExecutor) getAllDefinitions(tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query, err := eschema.GetFetchTableAndViewsQuery(tableNames)
+	query, err := eschema.GetFetchTableAndViewsQuery(tableNames, qre.tsv.SQLParser())
 	if err != nil {
 		return err
 	}

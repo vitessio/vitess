@@ -53,8 +53,9 @@ func TestAndOrPrecedence(t *testing.T) {
 		input:  "select * from a where a=b or c=d and e=f",
 		output: "(a = b or (c = d and e = f))",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -77,8 +78,9 @@ func TestPlusStarPrecedence(t *testing.T) {
 		input:  "select 1*2+3 from a",
 		output: "((1 * 2) + 3)",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -104,8 +106,9 @@ func TestIsPrecedence(t *testing.T) {
 		input:  "select * from a where (a=1 and b=2) is true",
 		output: "((a = 1 and b = 2) is true)",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -158,9 +161,10 @@ func TestParens(t *testing.T) {
 		{in: "0 <=> (1 and 0)", expected: "0 <=> (1 and 0)"},
 	}
 
+	parser := NewTestParser()
 	for _, tc := range tests {
 		t.Run(tc.in, func(t *testing.T) {
-			stmt, err := Parse("select " + tc.in)
+			stmt, err := parser.Parse("select " + tc.in)
 			require.NoError(t, err)
 			out := String(stmt)
 			require.Equal(t, "select "+tc.expected+" from dual", out)
@@ -177,6 +181,7 @@ func TestRandom(t *testing.T) {
 	g := NewGenerator(r, 5)
 	endBy := time.Now().Add(1 * time.Second)
 
+	parser := NewTestParser()
 	for {
 		if time.Now().After(endBy) {
 			break
@@ -186,7 +191,7 @@ func TestRandom(t *testing.T) {
 		inputQ := "select " + String(randomExpr) + " from t"
 
 		// When it's parsed and unparsed
-		parsedInput, err := Parse(inputQ)
+		parsedInput, err := parser.Parse(inputQ)
 		require.NoError(t, err, inputQ)
 
 		// Then the unparsing should be the same as the input query

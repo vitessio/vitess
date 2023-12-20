@@ -31,10 +31,12 @@ import (
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -126,9 +128,17 @@ func main() {
 
 	ts := topo.Open()
 	defer ts.Close()
-
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	installSignalHandlers(cancel)
+
+	parser, err := sqlparser.New(sqlparser.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		log.Fatalf("cannot initialize sql parser: %v", err)
+	}
 
 	// (TODO:ajm188) <Begin backwards compatibility support>.
 	//
@@ -154,7 +164,7 @@ func main() {
 		// New behavior. Strip off the prefix, and set things up to run through
 		// the vtctldclient command tree, using the localvtctldclient (in-process)
 		// client.
-		vtctld := grpcvtctldserver.NewVtctldServer(ts)
+		vtctld := grpcvtctldserver.NewVtctldServer(ts, parser)
 		localvtctldclient.SetServer(vtctld)
 		command.VtctldClientProtocol = "local"
 
@@ -170,8 +180,8 @@ func main() {
 		fallthrough
 	default:
 		log.Warningf("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
-
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+		collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
+		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv, parser)
 
 		if args[0] == "--" {
 			vtctl.PrintDoubleDashDeprecationNotice(wr)
@@ -179,7 +189,7 @@ func main() {
 		}
 
 		action = args[0]
-		err := vtctl.RunCommand(ctx, wr, args)
+		err = vtctl.RunCommand(ctx, wr, args)
 		cancel()
 		switch err {
 		case vtctl.ErrUnknownCommand:

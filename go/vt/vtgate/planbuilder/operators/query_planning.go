@@ -21,6 +21,7 @@ import (
 	"io"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -96,12 +97,40 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return optimizeQueryGraph(ctx, in)
 		case *LockAndComment:
 			return pushLockAndComment(in)
+		case *Delete:
+			return tryPushDelete(in)
 		default:
 			return in, NoRewrite
 		}
 	}
 
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
+	switch src := in.Source.(type) {
+	case *Route:
+		if in.Limit != nil && !src.IsSingleShardOrByDestination() {
+			panic(vterrors.VT12001("multi shard DELETE with LIMIT"))
+		}
+
+		switch r := src.Routing.(type) {
+		case *SequenceRouting:
+			// Sequences are just unsharded routes
+			src.Routing = &AnyShardRouting{
+				keyspace: r.keyspace,
+			}
+		case *AnyShardRouting:
+			// References would have an unsharded source
+			// Alternates are not required.
+			r.Alternates = nil
+		}
+		return Swap(in, src, "pushed delete under route")
+	case *ApplyJoin:
+		panic(vterrors.VT12001("multi shard DELETE with join table references"))
+	}
+
+	return in, nil
 }
 
 func pushLockAndComment(l *LockAndComment) (Operator, *ApplyResult) {

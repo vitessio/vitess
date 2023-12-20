@@ -27,6 +27,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/servenv/testutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -47,7 +51,7 @@ func TestAPI(t *testing.T) {
 	cells := []string{"cell1", "cell2"}
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
-	actionRepo := NewActionRepository(ts)
+	actionRepo := NewActionRepository(ts, collations.MySQL8(), sqlparser.NewTestParser())
 	server := testutils.HTTPTestServer()
 	defer server.Close()
 

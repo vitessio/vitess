@@ -63,11 +63,13 @@ type (
 	CollateExpr struct {
 		UnaryExpr
 		TypedCollation collations.TypedCollation
+		CollationEnv   *collations.Environment
 	}
 
 	IntroducerExpr struct {
 		UnaryExpr
 		TypedCollation collations.TypedCollation
+		CollationEnv   *collations.Environment
 	}
 )
 
@@ -84,7 +86,7 @@ func (c *CollateExpr) eval(env *ExpressionEnv) (eval, error) {
 	case nil:
 		return nil, nil
 	case *evalBytes:
-		if err := collations.Local().EnsureCollate(e.col.Collation, c.TypedCollation.Collation); err != nil {
+		if err := env.collationEnv.EnsureCollate(e.col.Collation, c.TypedCollation.Collation); err != nil {
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 		}
 		b = e.withCollation(c.TypedCollation)
@@ -109,7 +111,7 @@ func (expr *CollateExpr) compile(c *compiler) (ctype, error) {
 
 	switch ct.Type {
 	case sqltypes.VarChar:
-		if err := collations.Local().EnsureCollate(ct.Col.Collation, expr.TypedCollation.Collation); err != nil {
+		if err := c.collationEnv.EnsureCollate(ct.Col.Collation, expr.TypedCollation.Collation); err != nil {
 			return ctype{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 		}
 		fallthrough

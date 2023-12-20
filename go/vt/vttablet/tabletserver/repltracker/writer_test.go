@@ -23,10 +23,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -68,11 +70,11 @@ func newTestWriter(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatWriter {
 	config.ReplicationTracker.Mode = tabletenv.Heartbeat
 	config.ReplicationTracker.HeartbeatInterval = time.Second
 
-	params, _ := db.ConnParams().MysqlParams()
+	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tw := newHeartbeatWriter(tabletenv.NewEnv(config, "WriterTest"), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
+	tw := newHeartbeatWriter(tabletenv.NewEnv(config, "WriterTest", collations.MySQL8(), sqlparser.NewTestParser()), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
 	tw.keyspaceShard = "test:0"
 
 	if frozenTime != nil {

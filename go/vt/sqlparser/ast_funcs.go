@@ -24,13 +24,11 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // Walk calls postVisit on every node.
@@ -2156,23 +2154,29 @@ func (s SelectExprs) AllAggregation() bool {
 	return true
 }
 
-// RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
-func RemoveKeyspaceFromColName(expr Expr) {
-	RemoveKeyspace(expr)
-}
-
 // RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
 func RemoveKeyspace(in SQLNode) {
 	// Walk will only return an error if we return an error from the inner func. safe to ignore here
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-		switch col := node.(type) {
-		case *ColName:
-			if col.Qualifier.Qualifier.NotEmpty() {
-				col.Qualifier.Qualifier = NewIdentifierCS("")
-			}
+		if col, ok := node.(*ColName); ok && col.Qualifier.Qualifier.NotEmpty() {
+			col.Qualifier.Qualifier = NewIdentifierCS("")
 		}
+
 		return true, nil
 	}, in)
+}
+
+// RemoveKeyspaceInTables removes the Qualifier on all TableNames in the AST
+func RemoveKeyspaceInTables(in SQLNode) {
+	// Walk will only return an error if we return an error from the inner func. safe to ignore here
+	Rewrite(in, nil, func(cursor *Cursor) bool {
+		if tbl, ok := cursor.Node().(TableName); ok && tbl.Qualifier.NotEmpty() {
+			tbl.Qualifier = NewIdentifierCS("")
+			cursor.Replace(tbl)
+		}
+
+		return true
+	})
 }
 
 func convertStringToInt(integer string) int {
@@ -2535,4 +2539,15 @@ func IsLiteral(expr Expr) bool {
 
 func (ct *ColumnType) Invisible() bool {
 	return ct.Options.Invisible != nil && *ct.Options.Invisible
+}
+
+func (node *Delete) isSingleAliasExpr() bool {
+	if len(node.Targets) > 1 {
+		return false
+	}
+	if len(node.TableExprs) != 1 {
+		return false
+	}
+	_, isAliasExpr := node.TableExprs[0].(*AliasedTableExpr)
+	return isAliasExpr
 }

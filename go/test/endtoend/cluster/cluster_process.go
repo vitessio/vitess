@@ -765,19 +765,18 @@ func (cluster *LocalProcessCluster) populateVersionInfo() error {
 	return err
 }
 
+var versionRegex = regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+
 func GetMajorVersion(binaryName string) (int, error) {
 	version, err := exec.Command(binaryName, "--version").Output()
 	if err != nil {
 		return 0, err
 	}
-	versionRegex := regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 	v := versionRegex.FindStringSubmatch(string(version))
 	if len(v) != 4 {
 		return 0, fmt.Errorf("could not parse server version from: %s", version)
 	}
-	if err != nil {
-		return 0, fmt.Errorf("could not parse server version from: %s", version)
-	}
+
 	return strconv.Atoi(v[1])
 }
 

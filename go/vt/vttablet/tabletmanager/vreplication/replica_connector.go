@@ -18,17 +18,15 @@ package vreplication
 
 import (
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"context"
 
-	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
@@ -38,7 +36,7 @@ import (
 // This is used by binlog server to make vstream connection
 // using the vstream connection, it will parse the events from binglog
 // to fetch the corresponding GTID for required recovery time
-func NewReplicaConnector(connParams *mysql.ConnParams) *ReplicaConnector {
+func NewReplicaConnector(connParams *mysql.ConnParams, collationEnv *collations.Environment, parser *sqlparser.Parser) *ReplicaConnector {
 
 	// Construct
 	config := tabletenv.NewDefaultConfig()
@@ -49,7 +47,7 @@ func NewReplicaConnector(connParams *mysql.ConnParams) *ReplicaConnector {
 	dbCfg.SetDbParams(*connParams, *connParams, *connParams)
 	config.DB = dbCfg
 	c := &ReplicaConnector{conn: connParams}
-	env := tabletenv.NewEnv(config, "source")
+	env := tabletenv.NewEnv(config, "source", collationEnv, parser)
 	c.se = schema.NewEngine(env)
 	c.se.SkipMetaCheck = true
 	c.vstreamer = vstreamer.NewEngine(env, nil, c.se, nil, "")
@@ -70,33 +68,12 @@ type ReplicaConnector struct {
 	vstreamer *vstreamer.Engine
 }
 
-func (c *ReplicaConnector) shutdown() {
+func (c *ReplicaConnector) Close() error {
 	c.vstreamer.Close()
 	c.se.Close()
-}
-
-func (c *ReplicaConnector) Open(ctx context.Context) error {
-	return nil
-}
-
-func (c *ReplicaConnector) Close(ctx context.Context) error {
-	c.shutdown()
 	return nil
 }
 
 func (c *ReplicaConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	return c.vstreamer.Stream(ctx, startPos, nil, filter, throttlerapp.ReplicaConnectorName, send)
-}
-
-// VStreamRows streams rows from query result
-func (c *ReplicaConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	var row []sqltypes.Value
-	if lastpk != nil {
-		r := sqltypes.Proto3ToResult(lastpk)
-		if len(r.Rows) != 1 {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", lastpk)
-		}
-		row = r.Rows[0]
-	}
-	return c.vstreamer.StreamRows(ctx, query, row, send)
 }

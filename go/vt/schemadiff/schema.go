@@ -98,10 +98,10 @@ func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) 
 }
 
 // NewSchemaFromQueries creates a valid and normalized schema based on list of queries
-func NewSchemaFromQueries(queries []string) (*Schema, error) {
+func NewSchemaFromQueries(queries []string, parser *sqlparser.Parser) (*Schema, error) {
 	statements := make([]sqlparser.Statement, 0, len(queries))
 	for _, q := range queries {
-		stmt, err := sqlparser.ParseStrictDDL(q)
+		stmt, err := parser.ParseStrictDDL(q)
 		if err != nil {
 			return nil, err
 		}
@@ -112,9 +112,9 @@ func NewSchemaFromQueries(queries []string) (*Schema, error) {
 
 // NewSchemaFromSQL creates a valid and normalized schema based on a SQL blob that contains
 // CREATE statements for various objects (tables, views)
-func NewSchemaFromSQL(sql string) (*Schema, error) {
+func NewSchemaFromSQL(sql string, parser *sqlparser.Parser) (*Schema, error) {
 	var statements []sqlparser.Statement
-	tokenizer := sqlparser.NewStringTokenizer(sql)
+	tokenizer := parser.NewStringTokenizer(sql)
 	for {
 		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
 		if err != nil {
@@ -1041,10 +1041,8 @@ func (s *Schema) getTableColumnNames(t *CreateTableEntity) (columnNames []*sqlpa
 }
 
 // getViewColumnNames returns the names of aliased columns returned by a given view.
-func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *declarativeSchemaInformation) (
-	columnNames []*sqlparser.IdentifierCI,
-	err error,
-) {
+func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *declarativeSchemaInformation) ([]*sqlparser.IdentifierCI, error) {
+	var columnNames []*sqlparser.IdentifierCI
 	for _, node := range v.Select.GetColumns() {
 		switch node := node.(type) {
 		case *sqlparser.StarExpr:
@@ -1074,8 +1072,5 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 		}
 	}
 
-	if err != nil {
-		return nil, err
-	}
 	return columnNames, nil
 }

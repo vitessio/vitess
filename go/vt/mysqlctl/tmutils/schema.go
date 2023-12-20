@@ -40,31 +40,6 @@ const (
 	TableView = "VIEW"
 )
 
-// TableDefinitionGetColumn returns the index of a column inside a
-// TableDefinition.
-func TableDefinitionGetColumn(td *tabletmanagerdatapb.TableDefinition, name string) (index int, ok bool) {
-	lowered := strings.ToLower(name)
-	for i, n := range td.Columns {
-		if lowered == strings.ToLower(n) {
-			return i, true
-		}
-	}
-	return -1, false
-}
-
-// TableDefinitions is a list of TableDefinition, for sorting
-type TableDefinitions []*tabletmanagerdatapb.TableDefinition
-
-// Len returns TableDefinitions length.
-func (tds TableDefinitions) Len() int {
-	return len(tds)
-}
-
-// Swap used for sorting TableDefinitions.
-func (tds TableDefinitions) Swap(i, j int) {
-	tds[i], tds[j] = tds[j], tds[i]
-}
-
 // TableFilter is a filter for table names and types.
 type TableFilter struct {
 	includeViews bool

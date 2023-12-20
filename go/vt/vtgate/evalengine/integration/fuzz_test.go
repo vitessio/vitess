@@ -19,7 +19,6 @@ limitations under the License.
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -132,7 +131,7 @@ func errorsMatch(remote, local error) bool {
 }
 
 func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields []*querypb.Field) (evalengine.EvalResult, error) {
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		return evalengine.EvalResult{}, err
 	}
@@ -147,6 +146,7 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 		cfg := &evalengine.Config{
 			ResolveColumn:     evalengine.FieldResolver(fields).Column,
 			Collation:         collations.CollationUtf8mb4ID,
+			CollationEnv:      collations.MySQL8(),
 			NoConstantFolding: !debugSimplify,
 		}
 		expr, err = evalengine.Translate(astExpr, cfg)
@@ -200,7 +200,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 	compareWithMySQL := func(expr sqlparser.Expr) *mismatch {
 		query := "SELECT " + sqlparser.String(expr)
 
-		env := evalengine.NewExpressionEnv(context.Background(), nil, nil)
+		env := evalengine.EmptyExpressionEnv(collations.MySQL8())
 		eval, localErr := evaluateLocalEvalengine(env, query, nil)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
@@ -218,7 +218,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 			remoteErr: remoteErr,
 		}
 		if localErr == nil {
-			res.localVal = eval.Value(collations.Default())
+			res.localVal = eval.Value(collations.MySQL8().DefaultConnectionCharset())
 		}
 		if remoteErr == nil {
 			res.remoteVal = remote.Rows[0][0]
@@ -233,7 +233,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 	var start = time.Now()
 	for len(failures) < fuzzMaxFailures {
 		query := "SELECT " + gen.expr()
-		stmt, err := sqlparser.Parse(query)
+		stmt, err := sqlparser.NewTestParser().Parse(query)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -333,7 +333,7 @@ func compareResult(local, remote Result, cmp *testcases.Comparison) error {
 
 	var localCollationName string
 	var remoteCollationName string
-	env := collations.Local()
+	env := collations.MySQL8()
 	if coll := local.Collation; coll != collations.Unknown {
 		localCollationName = env.LookupName(coll)
 	}

@@ -86,9 +86,10 @@ func TestSimplifyExpression(in *testing.T) {
 		expected: "A and (B or C)",
 	}}
 
+	parser := NewTestParser()
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
-			expr, err := ParseExpr(tc.in)
+			expr, err := parser.ParseExpr(tc.in)
 			require.NoError(t, err)
 
 			expr, changed := simplifyExpression(expr)
@@ -157,9 +158,10 @@ func TestRewritePredicate(in *testing.T) {
 		expected: "not n0 xor not (n2 and n3) xor (not n2 and (n1 xor n1) xor (n0 xor n0 xor n2))",
 	}}
 
+	parser := NewTestParser()
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
-			expr, err := ParseExpr(tc.in)
+			expr, err := parser.ParseExpr(tc.in)
 			require.NoError(t, err)
 
 			output := RewritePredicate(expr)
@@ -180,9 +182,10 @@ func TestExtractINFromOR(in *testing.T) {
 		expected: "(a) in ((1), (2), (3), (4), (5), (6))",
 	}}
 
+	parser := NewTestParser()
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
-			expr, err := ParseExpr(tc.in)
+			expr, err := parser.ParseExpr(tc.in)
 			require.NoError(t, err)
 
 			output := ExtractINFromOR(expr.(*OrExpr))

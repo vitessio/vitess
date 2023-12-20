@@ -28,6 +28,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/sqlescape"
@@ -136,6 +138,7 @@ type trafficSwitcher struct {
 
 func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.wr.ts }
 func (ts *trafficSwitcher) TabletManagerClient() tmclient.TabletManagerClient { return ts.wr.tmc }
+func (ts *trafficSwitcher) CollationEnv() *collations.Environment             { return ts.wr.collationEnv }
 func (ts *trafficSwitcher) Logger() logutil.Logger                            { return ts.wr.logger }
 func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
 	return ts.wr.VReplicationExec(ctx, alias, query)
@@ -221,7 +224,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		return nil, nil, err
 	}
 
-	ws := workflow.NewServer(wr.ts, wr.tmc)
+	ws := workflow.NewServer(wr.ts, wr.tmc, wr.parser)
 	state := &workflow.State{
 		Workflow:           workflowName,
 		SourceKeyspace:     ts.SourceKeyspaceName(),
@@ -484,11 +487,11 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	_ = ws
 	if err != nil {
-		handleError("failed to get the current workflow state", err)
+		return handleError("failed to get the current workflow state", err)
 	}
 	if ts == nil {
 		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflowName, targetKeyspace)
-		handleError("failed to get the current workflow state", fmt.Errorf(errorMsg))
+		return handleError("failed to get the current workflow state", fmt.Errorf(errorMsg))
 	}
 
 	var sw iswitcher
@@ -505,7 +508,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 
 	ts.Logger().Infof("Built switching metadata: %+v", ts)
 	if err := ts.validate(ctx); err != nil {
-		handleError("workflow validation failed", err)
+		return handleError("workflow validation failed", err)
 	}
 
 	if reverseReplication {
@@ -553,7 +556,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	}
 	if !journalsExist {
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm, err := workflow.BuildStreamMigrator(ctx, ts, cancel)
+		sm, err := workflow.BuildStreamMigrator(ctx, ts, cancel, wr.parser)
 		if err != nil {
 			return handleError("failed to migrate the workflow streams", err)
 		}
@@ -652,7 +655,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		return handleError("failed to update the routing rules", err)
 	}
 	if err := sw.streamMigraterfinalize(ctx, ts, sourceWorkflows); err != nil {
-		handleError("failed to finalize the traffic switch", err)
+		return handleError("failed to finalize the traffic switch", err)
 	}
 	if reverseReplication {
 		if err := sw.startReverseVReplication(ctx); err != nil {
@@ -953,7 +956,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 	if err != nil {
 		return nil, err
 	}
-	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace)
+	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace, wr.parser)
 	if err != nil {
 		return nil, err
 	}
@@ -1147,7 +1150,7 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
 	var (
-		ws = workflow.NewServer(ts.TopoServer(), ts.TabletManagerClient())
+		ws = workflow.NewServer(ts.TopoServer(), ts.TabletManagerClient(), ts.wr.parser)
 		mu sync.Mutex
 	)
 
@@ -1612,7 +1615,8 @@ func (ts *trafficSwitcher) deleteShardRoutingRules(ctx context.Context) error {
 
 func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
 	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s", encodeString(source.GetPrimary().DbName()))
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",
+			encodeString(source.GetPrimary().DbName()), encodeString(ts.ReverseWorkflowName()))
 		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})

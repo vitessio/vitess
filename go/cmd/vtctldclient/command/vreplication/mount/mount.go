@@ -143,9 +143,7 @@ func commandList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err != nil {
-		return err
-	}
+
 	data, err := json.Marshal(resp)
 	if err != nil {
 		return err

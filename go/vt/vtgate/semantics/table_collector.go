@@ -207,7 +207,7 @@ func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
 // The code lives in this file since it is only touching tableCollector data
 func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for i, t2 := range tc.Tables {
-		if t == t2.getAliasedTableExpr() {
+		if t == t2.GetAliasedTableExpr() {
 			return SingleTableSet(i)
 		}
 	}
@@ -231,10 +231,11 @@ func (tc *tableCollector) createTable(
 	vindex vindexes.Vindex,
 ) TableInfo {
 	table := &RealTable{
-		tableName:   alias.As.String(),
-		ASTNode:     alias,
-		Table:       tbl,
-		isInfSchema: isInfSchema,
+		tableName:    alias.As.String(),
+		ASTNode:      alias,
+		Table:        tbl,
+		isInfSchema:  isInfSchema,
+		collationEnv: tc.si.CollationEnv(),
 	}
 
 	if alias.As.IsEmpty() {

@@ -63,6 +63,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -155,6 +156,8 @@ type TabletManager struct {
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
 	VDiffEngine         *vdiff.Engine
+	CollationEnv        *collations.Environment
+	SQLParser           *sqlparser.Parser
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
@@ -206,7 +209,7 @@ type TabletManager struct {
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
-func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs) (*topodatapb.Tablet, error) {
+func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs, collationEnv *collations.Environment) (*topodatapb.Tablet, error) {
 	hostname := tabletHostname
 	if hostname == "" {
 		var err error
@@ -244,14 +247,14 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		return nil, err
 	}
 
-	var charset uint8
+	var charset collations.ID
 	if db != nil && db.Charset != "" {
-		charset, err = collations.Local().ParseConnectionCharset(db.Charset)
+		charset, err = collationEnv.ParseConnectionCharset(db.Charset)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		charset = collations.Local().DefaultConnectionCharset()
+		charset = collationEnv.DefaultConnectionCharset()
 	}
 
 	return &topodatapb.Tablet{

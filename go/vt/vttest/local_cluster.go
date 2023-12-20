@@ -35,14 +35,15 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/constants/sidecar"
-
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/logutil"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -280,7 +281,11 @@ type LocalCluster struct {
 // cluster access should be performed through the vtgate port.
 func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
 	connParams := db.mysql.Params(db.DbName())
-	connParams.Charset = db.Config.Charset
+	ch, err := collations.MySQL8().ParseConnectionCharset(db.Config.Charset)
+	if err != nil {
+		panic(err)
+	}
+	connParams.Charset = ch
 	return connParams
 }
 
@@ -301,7 +306,11 @@ func (db *LocalCluster) MySQLCleanConnParams() mysql.ConnParams {
 		mysqlctl = toxiproxy.mysqlctl
 	}
 	connParams := mysqlctl.Params(db.DbName())
-	connParams.Charset = db.Config.Charset
+	ch, err := collations.MySQL8().ParseConnectionCharset(db.Config.Charset)
+	if err != nil {
+		panic(err)
+	}
+	connParams.Charset = ch
 	return connParams
 }
 
@@ -547,7 +556,7 @@ func (db *LocalCluster) createVTSchema() error {
 		return db.ExecuteFetch(query, "")
 	}
 
-	if err := sidecardb.Init(context.Background(), sidecardbExec); err != nil {
+	if err := sidecardb.Init(context.Background(), sidecardbExec, sqlparser.NewTestParser()); err != nil {
 		return err
 	}
 	return nil

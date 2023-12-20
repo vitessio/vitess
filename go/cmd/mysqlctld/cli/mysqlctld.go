@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -40,9 +41,10 @@ var (
 	mysqld *mysqlctl.Mysqld
 	cnf    *mysqlctl.Mycnf
 
-	mysqlPort   = 3306
-	tabletUID   = uint32(41983)
-	mysqlSocket string
+	mysqlPort    = 3306
+	tabletUID    = uint32(41983)
+	mysqlSocket  string
+	collationEnv *collations.Environment
 
 	// mysqlctl init flags
 	waitTime         = 5 * time.Minute
@@ -90,6 +92,8 @@ func init() {
 	Main.Flags().DurationVar(&shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "How long to wait for mysqld shutdown")
 
 	acl.RegisterFlags(Main.Flags())
+
+	collationEnv = collations.NewEnvironment(servenv.MySQLServerVersion())
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -110,7 +114,7 @@ func run(cmd *cobra.Command, args []string) error {
 		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
 
 		var err error
-		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(tabletUID, mysqlSocket, mysqlPort)
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(tabletUID, mysqlSocket, mysqlPort, collationEnv)
 		if err != nil {
 			cancel()
 			return fmt.Errorf("failed to initialize mysql config: %w", err)
@@ -126,7 +130,7 @@ func run(cmd *cobra.Command, args []string) error {
 		log.Infof("mycnf file (%s) already exists, starting without init", mycnfFile)
 
 		var err error
-		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(tabletUID)
+		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(tabletUID, collationEnv)
 		if err != nil {
 			cancel()
 			return fmt.Errorf("failed to find mysql config: %w", err)
