@@ -374,7 +374,7 @@ message ApplyVSchemaRequest {
 
 message ApplyVSchemaResponse {
   vschema.Keyspace v_schema = 1;
-  // A map of vindex name to params that were not recognized by the vindex
+  // UnknownVindexParams is a map of vindex name to params that were not recognized by the vindex
   // type. E.g.:
   //
   // {
