@@ -400,6 +400,14 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.exportStats()
 	servenv.OnRun(tm.registerTabletManager)
 
+	// Make sure we have the correct privileges for the DBA user before we start the state manager.
+	// We want to ensure that the users have the correct privileges before we create any connections.
+	// Calling WaitForDBAGrants here will mean that we call it once more if MySQL is restoring from backup, but it should be safe to do so.
+	err = tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
+	if err != nil {
+		return err
+	}
+
 	restoring, err := tm.handleRestore(tm.BatchCtx, config)
 	if err != nil {
 		return err
@@ -417,11 +425,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		return err
 	}
 
-	// Make sure we have the correct privileges for the DBA user before we start the state manager.
-	err = tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
-	if err != nil {
-		return err
-	}
 	tm.tmState.Open()
 	return nil
 }
