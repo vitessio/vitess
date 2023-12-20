@@ -111,7 +111,7 @@
               "Sharded": true
             },
             "FieldQuery": "select colb, cola, y, colc, x from multicol_tbl1 where 1 != 1",
-            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update nowait",
+            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
             "Table": "multicol_tbl1",
             "Values": [
               "1",
@@ -258,7 +258,7 @@
               "Sharded": true
             },
             "FieldQuery": "select t5col5 from tbl5 where 1 != 1",
-            "Query": "select t5col5 from tbl5 for update nowait",
+            "Query": "select t5col5 from tbl5 for update",
             "Table": "tbl5"
           },
           {
@@ -366,7 +366,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col9 from tbl9 where 1 != 1",
-            "Query": "select col9 from tbl9 where col9 = 34 for update nowait",
+            "Query": "select col9 from tbl9 where col9 = 34 for update",
             "Table": "tbl9",
             "Values": [
               "34"
