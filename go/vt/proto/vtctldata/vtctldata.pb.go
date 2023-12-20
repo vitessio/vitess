@@ -2002,7 +2002,7 @@ type ApplyVSchemaResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	VSchema *vschema.Keyspace `protobuf:"bytes,1,opt,name=v_schema,json=vSchema,proto3" json:"v_schema,omitempty"`
-	// A map of vindex name to params that were not recognized by the vindex
+	// UnknownVindexParams is a map of vindex name to params that were not recognized by the vindex
 	// type. E.g.:
 	//
 	//	{
