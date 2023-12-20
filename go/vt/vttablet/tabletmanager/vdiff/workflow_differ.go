@@ -31,16 +31,17 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // workflowDiffer has metadata and state for the vdiff of a single workflow on this tablet
@@ -156,7 +157,12 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	)
 	defer func() {
 		if diffTimer != nil {
-			diffTimer.Stop()
+			if !diffTimer.Stop() {
+				select {
+				case <-diffTimer.C:
+				default:
+				}
+			}
 		}
 	}()
 
@@ -181,24 +187,28 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		}
 
 		if diffTimer != nil { // We're restarting the diff
-			diffTimer.Stop()
+			if !diffTimer.Stop() {
+				select {
+				case <-diffTimer.C:
+				default:
+				}
+			}
 			diffTimer = nil
 			cancelShardStreams()
 			// Give the underlying resources (mainly MySQL) a moment to catch up
-			// before we pick up where we left off (but with a new database snapshot).
+			// before we pick up where we left off (but with new database snapshots).
 			time.Sleep(30 * time.Second)
 		}
-		diffTimer = time.NewTimer(maxDiffRuntime)
-
-		if err := td.initialize(ctx); err != nil {
+		if err := td.initialize(ctx); err != nil { // Setup the consistent snapshots
 			return err
 		}
 		log.Infof("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
+		diffTimer = time.NewTimer(maxDiffRuntime)
 		diffReport, diffErr = td.diff(ctx, wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, wd.opts.ReportOptions.OnlyPks, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows, diffTimer.C)
-		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr)
 		if diffErr == nil { // We finished the diff successfully
 			break
 		}
+		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr)
 		if !errors.Is(diffErr, ErrMaxDiffDurationExceeded) { // We only want to retry if we hit the max-diff-duration
 			return diffErr
 		}

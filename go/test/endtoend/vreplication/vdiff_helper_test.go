@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	vdiffTimeout             = 90 * time.Second // we can leverage auto retry on error with this longer-than-usual timeout
+	vdiffTimeout             = 120 * time.Second // We can leverage auto retry on error with this longer-than-usual timeout
 	vdiffRetryTimeout        = 30 * time.Second
 	vdiffStatusCheckInterval = 1 * time.Second
 	vdiffRetryInterval       = 5 * time.Second
@@ -159,7 +159,9 @@ func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *e
 	t.Run(fmt.Sprintf("vtctldclient vdiff %s", ksWorkflow), func(t *testing.T) {
 		// update-table-stats is needed in order to test progress reports.
 		flags := []string{"--auto-retry", "--update-table-stats"}
-		flags = append(flags, extraFlags...)
+		if len(extraFlags) > 0 {
+			flags = append(flags, extraFlags...)
+		}
 		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false, flags...)
 		info := waitForVDiff2ToComplete(t, false, ksWorkflow, cells, uuid, time.Time{})
 		require.NotNil(t, info)
