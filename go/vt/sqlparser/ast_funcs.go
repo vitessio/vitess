@@ -2541,10 +2541,13 @@ func (ct *ColumnType) Invisible() bool {
 	return ct.Options.Invisible != nil && *ct.Options.Invisible
 }
 
-func (node TableExprs) isSingleAliasExpr() bool {
-	if len(node) != 1 {
+func (node *Delete) isSingleAliasExpr() bool {
+	if len(node.Targets) > 1 {
 		return false
 	}
-	_, isAliasExpr := node[0].(*AliasedTableExpr)
+	if len(node.TableExprs) != 1 {
+		return false
+	}
+	_, isAliasExpr := node.TableExprs[0].(*AliasedTableExpr)
 	return isAliasExpr
 }
