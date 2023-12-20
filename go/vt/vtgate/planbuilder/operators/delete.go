@@ -88,14 +88,15 @@ func (d *Delete) ShortDescription() string {
 	return fmt.Sprintf("%s.%s%s%s", d.Target.VTable.Keyspace.Name, d.Target.VTable.Name.String(), orderBy, limit)
 }
 
-func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) Operator {
+func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (op Operator) {
 	delClone := sqlparser.CloneRefOfDelete(deleteStmt)
 
 	delOp := createDeleteOperator(ctx, deleteStmt)
+	op = delOp
 
 	if deleteStmt.Comments != nil {
-		delOp = &LockAndComment{
-			Source:   delOp,
+		op = &LockAndComment{
+			Source:   op,
 			Comments: deleteStmt.Comments,
 		}
 	}
@@ -103,17 +104,17 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	childFks := ctx.SemTable.GetChildForeignKeysList()
 	// If there are no foreign key constraints, then we don't need to do anything.
 	if len(childFks) == 0 {
-		return delOp
+		return
 	}
 	// If the delete statement has a limit, we don't support it yet.
 	if delClone.Limit != nil {
 		panic(vterrors.VT12001("foreign keys management at vitess with limit"))
 	}
 
-	return createFkCascadeOpForDelete(ctx, delOp, delClone, childFks, vindexTable)
+	return createFkCascadeOpForDelete(ctx, op, delClone, childFks, delOp.Target.VTable)
 }
 
-func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) Operator {
+func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) *Delete {
 	op := crossJoin(ctx, del.TableExprs)
 
 	if del.Where != nil {
