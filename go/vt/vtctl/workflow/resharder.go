@@ -322,8 +322,10 @@ func (rs *resharder) startStreams(ctx context.Context) error {
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary := rs.targetPrimaries[target.ShardName()]
 		// We want to start ALL streams so we demonstrate this intention and
-		// declaration that it's safe with the id != id+1 predicate
-		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and id != id+1", encodeString(targetPrimary.DbName()))
+		// declaration that it's OK in this case that we're affecting N
+		// records using the comment directive.
+		query := fmt.Sprintf("update /*vt+ %s */ _vt.vreplication set state='Running' where db_name=%s",
+			vreplication.AllowUnsafeWriteCommentDirective, encodeString(targetPrimary.DbName()))
 		if _, err := rs.s.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
 		}

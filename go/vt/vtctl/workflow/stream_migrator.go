@@ -168,7 +168,10 @@ func (sm *StreamMigrator) CancelStreamMigrations(ctx context.Context) {
 	// Restart the source streams, but leave the Reshard workflow's reverse
 	// variant stopped.
 	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow != %s", encodeString(source.GetPrimary().DbName()), encodeString(sm.ts.ReverseWorkflowName()))
+		// We intend to update all but our workflow's reverse streams, so we
+		// indicate that it's safe in this case using the comment diretive.
+		query := fmt.Sprintf("update /*vt+ %s */ _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow != %s",
+			vreplication.AllowUnsafeWriteCommentDirective, encodeString(source.GetPrimary().DbName()), encodeString(sm.ts.ReverseWorkflowName()))
 		_, err := sm.ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})

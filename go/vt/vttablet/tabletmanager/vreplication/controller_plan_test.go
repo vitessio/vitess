@@ -113,14 +113,16 @@ func TestControllerPlan(t *testing.T) {
 			applier:  "update _vt.vreplication set state = 'Running' where id in ::ids",
 		},
 	}, {
-		in: "update _vt.vreplication set state='Running'",
+		in:  "update _vt.vreplication set state='Running'",
+		err: "unsafe WHERE clause in update: ; should be using = or in with at least one of the following columns: id, workflow",
+	}, {
+		in: "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running'",
 		plan: &testControllerPlan{
-			query:    "update _vt.vreplication set state='Running'",
+			query:    "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running'",
 			opcode:   updateQuery,
 			selector: "select id from _vt.vreplication",
-			applier:  "update _vt.vreplication set state = 'Running' where id in ::ids",
+			applier:  "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running' where id in ::ids",
 		},
-		err: "unsafe WHERE clause in update: ; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in:  "update _vt.vreplication set state='Running', message='' where id >= 1",
 		err: "unsafe WHERE clause in update:  where id >= 1; should be using = or in with at least one of the following columns: id, workflow",
@@ -170,16 +172,18 @@ func TestControllerPlan(t *testing.T) {
 			delPostCopyAction: "delete from _vt.post_copy_action where vrepl_id in ::ids",
 		},
 	}, {
-		in: "delete from _vt.vreplication",
+		in:  "delete from _vt.vreplication",
+		err: "unsafe WHERE clause in delete: ; should be using = or in with at least one of the following columns: id, workflow",
+	}, {
+		in: "delete /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ from _vt.vreplication",
 		plan: &testControllerPlan{
-			query:             "delete from _vt.vreplication",
+			query:             "delete /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ from _vt.vreplication",
 			opcode:            deleteQuery,
 			selector:          "select id from _vt.vreplication",
-			applier:           "delete from _vt.vreplication where id in ::ids",
+			applier:           "delete /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ from _vt.vreplication where id in ::ids",
 			delCopyState:      "delete from _vt.copy_state where vrepl_id in ::ids",
 			delPostCopyAction: "delete from _vt.post_copy_action where vrepl_id in ::ids",
 		},
-		err: "unsafe WHERE clause in delete: ; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in:  "delete from _vt.vreplication where state='Stopped'",
 		err: "unsafe WHERE clause in delete:  where state = 'Stopped'; should be using = or in with at least one of the following columns: id, workflow",

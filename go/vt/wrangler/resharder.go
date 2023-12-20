@@ -368,9 +368,10 @@ func (rs *resharder) startStreams(ctx context.Context) error {
 		// because we've already confirmed that there were no existing workflows
 		// on the shards when we started, and we want to start all of the ones
 		// that we've created on the new shards as we're migrating them.
-		// We use the id != id+1 predicate to indicate that this is intentional
-		// and safe.
-		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and id != id+1", encodeString(targetPrimary.DbName()))
+		// We use the comment directive to indicate that this is intentional
+		// and OK.
+		query := fmt.Sprintf("update /*vt+ %s */ _vt.vreplication set state='Running' where db_name=%s",
+			vreplication.AllowUnsafeWriteCommentDirective, encodeString(targetPrimary.DbName()))
 		if _, err := rs.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
 		}
