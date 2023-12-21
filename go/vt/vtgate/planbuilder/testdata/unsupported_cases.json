@@ -518,5 +518,10 @@
     "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
     "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+    "query": "select group_concat(col1, col2) from user",
+    "plan": "VT03001: aggregate functions take a single argument 'group_concat(col1, col2)'"
   }
 ]

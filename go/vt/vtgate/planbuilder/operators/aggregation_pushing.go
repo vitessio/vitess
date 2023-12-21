@@ -107,6 +107,10 @@ func pushAggregationThroughSubquery(
 
 	src.Outer = pushedAggr
 
+	for _, aggregation := range pushedAggr.Aggregations {
+		aggregation.Original.Expr = rewriteColNameToArgument(ctx, aggregation.Original.Expr, aggregation.SubQueryExpression, src.Inner...)
+	}
+
 	if !rootAggr.Original {
 		return src, rewrite.NewTree("push Aggregation under subquery - keep original", rootAggr), nil
 	}

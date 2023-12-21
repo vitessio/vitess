@@ -101,6 +101,8 @@ type (
 		// the offsets point to columns on the same aggregator
 		ColOffset int
 		WSOffset  int
+
+		SubQueryExpression []*SubQuery
 	}
 
 	AggrRewriter struct {
@@ -287,10 +289,6 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 	for _, selExp := range sel.SelectExprs {
 		switch selExp := selExp.(type) {
 		case *sqlparser.AliasedExpr:
-			err := checkForInvalidAggregations(selExp)
-			if err != nil {
-				return err
-			}
 			col := SelectExpr{
 				Col: selExp,
 			}
@@ -462,21 +460,6 @@ func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy 
 // GetGrouping returns a copy of the grouping parameters of the QP
 func (qp *QueryProjection) GetGrouping() []GroupBy {
 	return slices.Clone(qp.groupByExprs)
-}
-
-func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		aggrFunc, isAggregate := node.(sqlparser.AggrFunc)
-		if !isAggregate {
-			return true, nil
-		}
-		args := aggrFunc.GetArgs()
-		if args != nil && len(args) != 1 {
-			return false, vterrors.VT03001(sqlparser.String(node))
-		}
-		return true, nil
-
-	}, exp.Expr)
 }
 
 func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
