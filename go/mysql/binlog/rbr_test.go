@@ -78,7 +78,7 @@ func TestCellLengthAndData(t *testing.T) {
 		styp: querypb.Type_UINT32,
 		data: []byte{0x84, 0x83, 0x82, 0x81},
 		out: sqltypes.MakeTrusted(querypb.Type_UINT32,
-			[]byte(fmt.Sprintf("%v", 0x81828384))),
+			[]byte(fmt.Sprintf("%v", uint32(0x81828384)))),
 	}, {
 		typ:  TypeLong,
 		styp: querypb.Type_INT32,
