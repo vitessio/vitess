@@ -51,9 +51,14 @@ func TestNormalizeAllFields(t *testing.T) {
 	qr := utils.Exec(t, conn, selectQuery)
 	assert.Equal(t, 1, len(qr.Rows), "wrong number of table rows, expected 1 but had %d. Results: %v", len(qr.Rows), qr.Rows)
 
-	// Now need to figure out the best way to check the normalized query in the planner cache...
-	results := getPlanCache(t, fmt.Sprintf("%s:%d", vtParams.Host, clusterInstance.VtgateProcess.Port))
-	assert.Contains(t, results, normalizedInsertQuery)
+	t.Run("Check Plan Cache", func(t *testing.T) {
+		// We are skipping the test in binaries below 18 because we changed how the output of the query_plans endpoint,
+		// so the code need to read the plan cache is different in older versions.
+		utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
+		// Now need to figure out the best way to check the normalized query in the planner cache...
+		results := getPlanCache(t, fmt.Sprintf("%s:%d", vtParams.Host, clusterInstance.VtgateProcess.Port))
+		assert.Contains(t, results, normalizedInsertQuery)
+	})
 }
 
 func getPlanCache(t *testing.T, vtgateHostPort string) map[string]any {

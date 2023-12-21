@@ -320,7 +320,13 @@ func TestAggOnTopOfLimit(t *testing.T) {
 			mcmp.AssertMatchesNoOrder(" select val1, count(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)]]`)
 
 			// mysql returns FLOAT64(0), vitess returns DECIMAL(0)
-			mcmp.AssertMatchesNoCompare(" select count(*), sum(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0)]]", "[[INT64(2) FLOAT64(0)]]")
+			vtgateVersion, err := cluster.GetMajorVersion("vtgate")
+			require.NoError(t, err)
+			if vtgateVersion >= 18 {
+				mcmp.AssertMatchesNoCompare(" select count(*), sum(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0)]]", "[[INT64(2) FLOAT64(0)]]")
+			} else {
+				mcmp.AssertMatchesNoCompare(" select count(*), sum(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0)]]", "[[INT64(2) DECIMAL(0)]]")
+			}
 			mcmp.AssertMatches(" select count(val1), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) DECIMAL(7)]]")
 			mcmp.AssertMatches(" select count(*), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(2) DECIMAL(14)]]")
 			mcmp.AssertMatches(" select count(val1), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(1) DECIMAL(14)]]")
@@ -436,6 +442,7 @@ func TestAggregationRandomOnAnAggregatedValue(t *testing.T) {
 }
 
 func TestBuggyQueries(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
 	// These queries have been found to be producing the wrong results by the query fuzzer
 	// Adding them as end2end tests to make sure we never get them wrong again
 	mcmp, closer := start(t)
@@ -467,6 +474,7 @@ func TestMinMaxAcrossJoins(t *testing.T) {
 }
 
 func TestComplexAggregation(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493)")
@@ -483,6 +491,7 @@ func TestComplexAggregation(t *testing.T) {
 
 // TestGroupConcatAggregation tests the group_concat function with vitess doing the aggregation.
 func TestGroupConcatAggregation(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1',null,100), (2,'b1','foo',20), (3,'c1','foo',10), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1',null,893), (10,'a1','titi',2380), (20,'b1','tete',12833), (9,'e1','yoyo',783493)")
@@ -530,6 +539,7 @@ func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grp
 }
 
 func TestDistinctAggregation(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493)")

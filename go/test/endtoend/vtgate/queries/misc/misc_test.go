@@ -262,6 +262,7 @@ func TestLeftJoinUsingUnsharded(t *testing.T) {
 
 // TestAnalyze executes different analyze statement and validates that they run successfully.
 func TestAnalyze(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
