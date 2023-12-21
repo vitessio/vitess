@@ -258,13 +258,13 @@ func (itv *Interval) inRange() bool {
 	if itv.day > maxDay {
 		return false
 	}
-	if itv.hour > maxDay*24 {
+	if itv.hour/24 > maxDay {
 		return false
 	}
-	if itv.min > maxDay*24*60 {
+	if itv.min/24/60 > maxDay {
 		return false
 	}
-	if itv.sec > maxDay*24*60*60 {
+	if itv.sec/24/60/60 > maxDay {
 		return false
 	}
 	return true
