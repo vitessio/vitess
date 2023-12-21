@@ -21,13 +21,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -573,16 +574,16 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "bad query",
 			}},
 		},
-		err: "syntax error at position 4 near 'bad'",
+		err: "syntax error at position 4 near 'bad' in query: bad query",
 	}, {
 		// not a select
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
 				Match:  "t1",
-				Filter: "update t1 set val=1",
+				Filter: "update t1 set val = 1",
 			}},
 		},
-		err: "unexpected: update t1 set val = 1",
+		err: "unsupported non-select statement in query: update t1 set val = 1",
 	}, {
 		// no distinct
 		input: &binlogdatapb.Filter{
@@ -591,7 +592,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select distinct c1 from t1",
 			}},
 		},
-		err: "unexpected: select distinct c1 from t1",
+		err: "unsupported distinct clause in query: select distinct c1 from t1",
 	}, {
 		// no ',' join
 		input: &binlogdatapb.Filter{
@@ -600,7 +601,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select * from t1, t2",
 			}},
 		},
-		err: "unexpected: select * from t1, t2",
+		err: "unsupported multi-table usage in query: select * from t1, t2",
 	}, {
 		// no join
 		input: &binlogdatapb.Filter{
@@ -609,7 +610,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select * from t1 join t2",
 			}},
 		},
-		err: "unexpected: select * from t1 join t2",
+		err: "unsupported from expression (*sqlparser.JoinTableExpr) in query: select * from t1 join t2",
 	}, {
 		// no subqueries
 		input: &binlogdatapb.Filter{
@@ -618,7 +619,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select * from (select * from t2) as a",
 			}},
 		},
-		err: "unexpected: select * from (select * from t2) as a",
+		err: "unsupported from source (*sqlparser.DerivedTable) in query: select * from (select * from t2) as a",
 	}, {
 		// cannot combine '*' with other
 		input: &binlogdatapb.Filter{
@@ -627,7 +628,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select *, c1 from t1",
 			}},
 		},
-		err: "unexpected: select *, c1 from t1",
+		err: "unsupported mix of '*' and columns in query: select *, c1 from t1",
 	}, {
 		// cannot combine '*' with other (different code path)
 		input: &binlogdatapb.Filter{
@@ -636,7 +637,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select c1, * from t1",
 			}},
 		},
-		err: "unexpected: *",
+		err: "invalid expression: * in query: select c1, * from t1",
 	}, {
 		// no distinct in func
 		input: &binlogdatapb.Filter{
@@ -645,7 +646,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select hour(distinct c1) as a from t1",
 			}},
 		},
-		err: "syntax error at position 21 near 'distinct'",
+		err: "syntax error at position 21 near 'distinct' in query: select hour(distinct c1) as a from t1",
 	}, {
 		// funcs need alias
 		input: &binlogdatapb.Filter{
@@ -654,7 +655,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select hour(c1) from t1",
 			}},
 		},
-		err: "expression needs an alias: hour(c1)",
+		err: "expression needs an alias: hour(c1) in query: select hour(c1) from t1",
 	}, {
 		// only count(*)
 		input: &binlogdatapb.Filter{
@@ -663,7 +664,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select count(c1) as c from t1",
 			}},
 		},
-		err: "only count(*) is supported: count(c1)",
+		err: "only count(*) is supported: count(c1) in query: select count(c1) as c from t1",
 	}, {
 		// no sum(*)
 		input: &binlogdatapb.Filter{
@@ -672,7 +673,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select sum(*) as c from t1",
 			}},
 		},
-		err: "syntax error at position 13",
+		err: "syntax error at position 13 in query: select sum(*) as c from t1",
 	}, {
 		// sum should have only one argument
 		input: &binlogdatapb.Filter{
@@ -681,7 +682,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select sum(a, b) as c from t1",
 			}},
 		},
-		err: "syntax error at position 14",
+		err: "syntax error at position 14 in query: select sum(a, b) as c from t1",
 	}, {
 		// no complex expr in sum
 		input: &binlogdatapb.Filter{
@@ -690,7 +691,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select sum(a + b) as c from t1",
 			}},
 		},
-		err: "unexpected: sum(a + b)",
+		err: "unsupported non-column name in sum clause: sum(a + b) in query: select sum(a + b) as c from t1",
 	}, {
 		// no complex expr in group by
 		input: &binlogdatapb.Filter{
@@ -699,7 +700,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select a from t1 group by a + 1",
 			}},
 		},
-		err: "unexpected: a + 1",
+		err: "unsupported non-column name or alias in group by clause: a + 1 in query: select a from t1 group by a + 1",
 	}, {
 		// group by does not reference alias
 		input: &binlogdatapb.Filter{
@@ -708,7 +709,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select a as b from t1 group by a",
 			}},
 		},
-		err: "group by expression does not reference an alias in the select list: a",
+		err: "group by expression does not reference an alias in the select list: a in query: select a as b from t1 group by a",
 	}, {
 		// cannot group by aggr
 		input: &binlogdatapb.Filter{
@@ -717,7 +718,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select count(*) as a from t1 group by a",
 			}},
 		},
-		err: "group by expression is not allowed to reference an aggregate expression: a",
+		err: "group by expression is not allowed to reference an aggregate expression: a in query: select count(*) as a from t1 group by a",
 	}}
 
 	PrimaryKeyInfos := map[string][]*ColumnInfo{
@@ -736,18 +737,14 @@ func TestBuildPlayerPlan(t *testing.T) {
 
 	for _, tcase := range testcases {
 		plan, err := buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
-		gotPlan, _ := json.Marshal(plan)
-		wantPlan, _ := json.Marshal(tcase.plan)
-		if string(gotPlan) != string(wantPlan) {
-			t.Errorf("Filter(%v):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
-		}
 		gotErr := ""
 		if err != nil {
 			gotErr = err.Error()
 		}
-		if gotErr != tcase.err {
-			t.Errorf("Filter err(%v): %s, want %v", tcase.input, gotErr, tcase.err)
-		}
+		require.Equal(t, tcase.err, gotErr, "Filter err(%v): %s, want %v", tcase.input, gotErr, tcase.err)
+		gotPlan, _ := json.Marshal(plan)
+		wantPlan, _ := json.Marshal(tcase.plan)
+		require.Equal(t, string(wantPlan), string(gotPlan), "Filter(%v):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
 
 		plan, err = buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, copyState, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 		if err != nil {
@@ -755,9 +752,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 		}
 		gotPlan, _ = json.Marshal(plan)
 		wantPlan, _ = json.Marshal(tcase.planpk)
-		if string(gotPlan) != string(wantPlan) {
-			t.Errorf("Filter(%v,copyState):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
-		}
+		require.Equal(t, string(wantPlan), string(gotPlan), "Filter(%v,copyState):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
 	}
 }
 

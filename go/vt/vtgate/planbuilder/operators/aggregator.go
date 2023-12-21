@@ -255,6 +255,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	if a.offsetPlanned {
 		return nil
 	}
+	a.checkForInvalidAggregations()
 	defer func() {
 		a.offsetPlanned = true
 	}()
@@ -411,6 +412,23 @@ func (a *Aggregator) SplitAggregatorBelowRoute(input []Operator) *Aggregator {
 
 func (a *Aggregator) introducesTableID() semantics.TableSet {
 	return a.DT.introducesTableID()
+}
+
+func (a *Aggregator) checkForInvalidAggregations() {
+	for _, aggr := range a.Aggregations {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			aggrFunc, isAggregate := node.(sqlparser.AggrFunc)
+			if !isAggregate {
+				return true, nil
+			}
+			args := aggrFunc.GetArgs()
+			if args != nil && len(args) != 1 {
+				panic(vterrors.VT03001(sqlparser.String(node)))
+			}
+			return true, nil
+
+		}, aggr.Original.Expr)
+	}
 }
 
 var _ Operator = (*Aggregator)(nil)
