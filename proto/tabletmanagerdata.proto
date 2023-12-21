@@ -615,7 +615,7 @@ message VDiffReportOptions {
 message VDiffCoreOptions {
   string tables = 1;
   bool auto_retry = 2;
-  int64  max_rows = 3;
+  int64 max_rows = 3;
   bool checksum = 4;
   int64 sample_pct = 5;
   int64 timeout_seconds = 6;
