@@ -287,6 +287,10 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 	if a.offsetPlanned {
 		return nil
 	}
+	err := a.checkForInvalidAggregations()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		a.offsetPlanned = true
 	}()
@@ -478,6 +482,29 @@ func (a *Aggregator) SplitAggregatorBelowRoute(input []ops.Operator) *Aggregator
 
 func (a *Aggregator) introducesTableID() semantics.TableSet {
 	return a.DT.introducesTableID()
+}
+
+// checkForInvalidAggregations validates that any aggregation functions evaluated at VTGate
+// is supported with correct number for arguments.
+func (a *Aggregator) checkForInvalidAggregations() error {
+	for _, aggr := range a.Aggregations {
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			aggrFunc, isAggregate := node.(sqlparser.AggrFunc)
+			if !isAggregate {
+				return true, nil
+			}
+			args := aggrFunc.GetArgs()
+			if args != nil && len(args) != 1 {
+				return false, vterrors.VT03001(sqlparser.String(node))
+			}
+			return true, nil
+
+		}, aggr.Original.Expr)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 var _ ops.Operator = (*Aggregator)(nil)
