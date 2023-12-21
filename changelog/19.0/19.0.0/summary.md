@@ -13,6 +13,7 @@
     - [Build Version in `/debug/vars`](#build-version-in-debug-vars)
   - **[VTGate](#vtgate)**
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
+    - [Partial Multi-shard Commit Warnings](#partial-multi-shard-commit-warnings)
   - **[Vttestserver](#vttestserver)**
     - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
   - **[Query Compatibility](#query-compatibility)**
@@ -63,6 +64,24 @@ The build version (e.g., `19.0.0-SNAPSHOT`) has been added to `/debug/vars`, all
 #### <a id="fk-checks-vitess-aware"/>`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable
 
 When VTGate receives a query to change the `FOREIGN_KEY_CHECKS` value for a session, instead of sending the value down to MySQL, VTGate now keeps track of the value and changes the queries by adding `SET_VAR(FOREIGN_KEY_CHECKS=On/Off)` style query optimizer hints wherever required. 
+
+#### <a id="partial-multi-shard-commit-warnings"/>Partial Multi-shard Commit Warnings
+
+When using `multi` transaction mode (the default), it is possible for Vitess to successfully commit to one shard, but fail to commit to a subsequent shard, thus breaking the atomicity of a multi-shard transaction.
+
+In `v19.0`, VTGate reports partial-success commits in warnings, e.g.:
+
+```mysql
+mysql> commit;
+ERROR 1317 (70100): target: customer.-80.primary: vttablet: rpc error: code = Aborted desc = transaction 1703182545849001001: ended at 2023-12-21 14:07:41.515 EST (exceeded timeout: 30s) (CallerID: userData1)
+mysql> show warnings;
++---------+------+-----------------------------------------------------+
+| Level   | Code | Message                                             |
++---------+------+-----------------------------------------------------+
+| Warning |  301 | multi-db commit failed after committing to 1 shards |
++---------+------+-----------------------------------------------------+
+1 row in set, 1 warning (0.00 sec)
+```
 
 ### <a id="vttestserver"/>Vttestserver
 
