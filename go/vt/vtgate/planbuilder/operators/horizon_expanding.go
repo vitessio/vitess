@@ -138,14 +138,26 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 
 	aggregations, complexAggr := qp.AggregationExpressions(ctx, true)
 
+	src := horizon.src()
 	a := &Aggregator{
-		Source:       horizon.src(),
+		Source:       src,
 		Original:     true,
 		QP:           qp,
 		Grouping:     qp.GetGrouping(),
 		Aggregations: aggregations,
 		DT:           dt,
 	}
+
+	sqc := &SubQueryBuilder{}
+	outerID := TableID(src)
+	for idx, aggr := range aggregations {
+		expr := aggr.Original.Expr
+		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
+		if newExpr != nil {
+			aggregations[idx].SubQueryExpression = subqs
+		}
+	}
+	a.Source = sqc.getRootOperator(src, nil)
 
 	if complexAggr {
 		return createProjectionForComplexAggregation(a, qp)
