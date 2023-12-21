@@ -383,13 +383,12 @@ func TestInvalidSchema(t *testing.T) {
 			schema: "create table t10(id varchar(50) charset utf8mb4 collate utf8mb4_0900_ai_ci primary key); create table t11 (id int primary key, i varchar(100) charset utf8mb4 collate utf8mb4_0900_ai_ci, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 		},
 		{
-			// weirdly allowed: varchar->char
+			// allowed: varchar->char
 			schema: "create table t10(id varchar(50) charset utf8mb4 collate utf8mb4_0900_ai_ci primary key); create table t11 (id int primary key, i char(100) charset utf8mb4 collate utf8mb4_0900_ai_ci, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 		},
 		{
-			// but weirdly not allowed: char->varchar
-			schema:    "create table t10(id char(50) charset utf8mb4 collate utf8mb4_0900_ai_ci primary key); create table t11 (id int primary key, i varchar(50) charset utf8mb4 collate utf8mb4_0900_ai_ci, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
-			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
+			// allowed: char->varchar
+			schema: "create table t10(id char(50) charset utf8mb4 collate utf8mb4_0900_ai_ci primary key); create table t11 (id int primary key, i varchar(50) charset utf8mb4 collate utf8mb4_0900_ai_ci, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 		},
 		{
 			schema:    "create table t10(id varchar(50) charset utf8mb3 primary key); create table t11 (id int primary key, i varchar(100) charset utf8mb4, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
