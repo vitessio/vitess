@@ -865,12 +865,12 @@ func TestWaitForDBAGrants(t *testing.T) {
 			err := tm.waitForDBAGrants(config, tt.waitTime)
 			if tt.errWanted == "" {
 				require.NoError(t, err)
+				// Verify the channel has been closed.
+				_, isOpen := <-tm._waitForGrantsComplete
+				require.False(t, isOpen)
 			} else {
 				require.EqualError(t, err, tt.errWanted)
 			}
-			// Verify the channel has been closed.
-			_, isOpen := <-tm._waitForGrantsComplete
-			require.False(t, isOpen)
 		})
 	}
 }
