@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
@@ -132,9 +133,15 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 	}
 
 	// Retain backward compatibility on commit order for the normal session.
-	for _, shardSession := range session.ShardSessions {
+	for i, shardSession := range session.ShardSessions {
 		if err := txc.commitShard(ctx, shardSession, session.logging); err != nil {
 			_ = txc.Release(ctx, session)
+			if i > 0 {
+				session.RecordWarning(&querypb.QueryWarning{
+					Code:    uint32(sqlerror.ERNonAtomicCommit),
+					Message: fmt.Sprintf("multi-db commit failed after committing to %d shards", i),
+				})
+			}
 			return err
 		}
 	}

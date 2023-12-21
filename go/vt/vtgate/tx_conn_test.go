@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -117,7 +118,14 @@ func TestTxConnCommitFailure(t *testing.T) {
 		rss1[0].Target)
 
 	require.ErrorContains(t, sc.txConn.Commit(ctx, session), expectErr.Error())
-	wantSession = vtgatepb.Session{}
+	wantSession = vtgatepb.Session{
+		Warnings: []*querypb.QueryWarning{
+			{
+				Code:    uint32(sqlerror.ERNonAtomicCommit),
+				Message: "multi-db commit failed after committing to 1 shards",
+			},
+		},
+	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
 	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
