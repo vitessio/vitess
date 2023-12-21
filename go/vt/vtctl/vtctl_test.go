@@ -89,9 +89,9 @@ func TestApplyVSchema(t *testing.T) {
 }
 If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
 
-.*W.* .* vtctl.go:.* Unknown param in vindex binary_vdx: hello
-W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: foo
-W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello`,
+.*W.* .* vtctl.go:.* Unknown parameter in vindex binary_vdx: hello
+W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: foo
+W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: hello`,
 		},
 		{
 			name: "UnknownParamsLoggedWithDryRun",
@@ -117,9 +117,9 @@ W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello`,
 }
 If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
 
-.*W.* .* vtctl.go:.* Unknown param in vindex binary_vdx: hello
-W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: foo
-W.* .* vtctl.go:.* Unknown param in vindex hash_vdx: hello
+.*W.* .* vtctl.go:.* Unknown parameter in vindex binary_vdx: hello
+W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: foo
+W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: hello
 Dry run: Skipping update of VSchema`,
 		},
 	}
