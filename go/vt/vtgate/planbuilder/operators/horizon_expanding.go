@@ -116,7 +116,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	return op, Rewrote(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")))
 }
 
-func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out Operator) {
+func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) Operator {
 	qp := horizon.getQP(ctx)
 
 	var dt *DerivedTable
@@ -131,15 +131,15 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 	if !qp.NeedsAggregation() {
 		projX := createProjectionWithoutAggr(ctx, qp, horizon.src())
 		projX.DT = dt
-		out = projX
-
-		return out
+		return projX
 	}
 
-	aggregations, complexAggr := qp.AggregationExpressions(ctx, true)
+	return createProjectionWithAggr(ctx, qp, dt, horizon.src())
+}
 
-	src := horizon.src()
-	a := &Aggregator{
+func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, dt *DerivedTable, src Operator) Operator {
+	aggregations, complexAggr := qp.AggregationExpressions(ctx, true)
+	aggrOp := &Aggregator{
 		Source:       src,
 		Original:     true,
 		QP:           qp,
@@ -148,6 +148,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 		DT:           dt,
 	}
 
+	// Go through all aggregations and check for any subquery.
 	sqc := &SubQueryBuilder{}
 	outerID := TableID(src)
 	for idx, aggr := range aggregations {
@@ -157,12 +158,13 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 			aggregations[idx].SubQueryExpression = subqs
 		}
 	}
-	a.Source = sqc.getRootOperator(src, nil)
+	aggrOp.Source = sqc.getRootOperator(src, nil)
 
+	// create the projection columns from aggregator.
 	if complexAggr {
-		return createProjectionForComplexAggregation(a, qp)
+		return createProjectionForComplexAggregation(aggrOp, qp)
 	}
-	return createProjectionForSimpleAggregation(ctx, a, qp)
+	return createProjectionForSimpleAggregation(ctx, aggrOp, qp)
 }
 
 func createProjectionForSimpleAggregation(ctx *plancontext.PlanningContext, a *Aggregator, qp *QueryProjection) Operator {
