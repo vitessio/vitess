@@ -31,8 +31,7 @@ import (
 
 // LRUCache is a typical LRU cache implementation.  If the cache
 // reaches the capacity, the least recently used item is deleted from
-// the cache. Note the capacity is not the number of items, but the
-// total sum of the CachedSize() of each item.
+// the cache.
 type LRUCache[T any] struct {
 	mu sync.Mutex
 
