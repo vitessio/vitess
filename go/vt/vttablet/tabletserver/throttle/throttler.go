@@ -159,6 +159,7 @@ type Throttler struct {
 	mysqlAggregateInterval        time.Duration
 	throttledAppsSnapshotInterval time.Duration
 
+	configSettings   *config.ConfigurationSettings
 	env              tabletenv.Env
 	pool             *connpool.Pool
 	tabletTypeFunc   func() topodatapb.TabletType
@@ -308,7 +309,7 @@ func (throttler *Throttler) GetMetricsThreshold() float64 {
 func (throttler *Throttler) initConfig() {
 	log.Infof("Throttler: initializing config")
 
-	config.Instance = &config.ConfigurationSettings{
+	throttler.configSettings = &config.ConfigurationSettings{
 		Stores: config.StoresSettings{
 			MySQL: config.MySQLConfigurationSettings{
 				IgnoreDialTCPErrors: true,
@@ -316,12 +317,12 @@ func (throttler *Throttler) initConfig() {
 			},
 		},
 	}
-	config.Instance.Stores.MySQL.Clusters[selfStoreName] = &config.MySQLClusterConfigurationSettings{
+	throttler.configSettings.Stores.MySQL.Clusters[selfStoreName] = &config.MySQLClusterConfigurationSettings{
 		MetricQuery:       throttler.GetMetricsQuery(),
 		ThrottleThreshold: &throttler.MetricsThreshold,
 		IgnoreHostsCount:  0,
 	}
-	config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
+	throttler.configSettings.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
 		MetricQuery:       throttler.GetMetricsQuery(),
 		ThrottleThreshold: &throttler.MetricsThreshold,
 		IgnoreHostsCount:  0,
@@ -857,7 +858,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		}
 	}
 
-	for clusterName, clusterSettings := range config.Settings().Stores.MySQL.Clusters {
+	for clusterName, clusterSettings := range throttler.configSettings.Stores.MySQL.Clusters {
 		clusterName := clusterName
 		clusterSettings.MetricQuery = metricsQuery
 		clusterSettings.ThrottleThreshold.Store(metricsThreshold)
@@ -931,7 +932,7 @@ func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
 		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold[clusterName]
-		aggregatedMetric := aggregateMySQLProbes(ctx, probes, clusterName, throttler.mysqlInventory.TabletMetrics, ignoreHostsCount, config.Settings().Stores.MySQL.IgnoreDialTCPErrors, ignoreHostsThreshold)
+		aggregatedMetric := aggregateMySQLProbes(ctx, probes, clusterName, throttler.mysqlInventory.TabletMetrics, ignoreHostsCount, throttler.configSettings.Stores.MySQL.IgnoreDialTCPErrors, ignoreHostsThreshold)
 		throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 	}
 	return nil
