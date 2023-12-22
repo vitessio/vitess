@@ -6564,7 +6564,7 @@
     }
   },
   {
-    "comment": "select max((select min(col) from user where id = 1))",
+    "comment": "sharded subquery inside aggregation function on a dual table",
     "query": "select max((select min(col) from user where id = 1))",
     "plan": {
       "QueryType": "SELECT",
@@ -6591,7 +6591,7 @@
     }
   },
   {
-    "comment": "select max((select min(col) from unsharded)) from user where id = 1",
+    "comment": "unsharded subquery inside aggregation function on a sharded table",
     "query": "select max((select min(col) from unsharded)) from user where id = 1",
     "plan": {
       "QueryType": "SELECT",
@@ -6648,7 +6648,7 @@
     }
   },
   {
-    "comment": "select max((select min(col) from user where id = 1)) from user where id = 2",
+    "comment": "sharded subquery inside aggregation function on a sharded table on different vindex value",
     "query": "select max((select min(col) from user where id = 1)) from user where id = 2",
     "plan": {
       "QueryType": "SELECT",
@@ -6708,7 +6708,7 @@
     }
   },
   {
-    "comment": "select max((select group_concat(col1, col2) from user where id = 1))",
+    "comment": "sharded subquery inside group_concat multi-column aggregation function on a dual table",
     "query": "select max((select group_concat(col1, col2) from user where id = 1))",
     "plan": {
       "QueryType": "SELECT",
@@ -6735,7 +6735,7 @@
     }
   },
   {
-    "comment": "select max((select group_concat(col1, col2) from user where id = 1)) from user where id = 1",
+    "comment": "sharded subquery inside group_concat multi-column aggregation function on a sharded table on same vindex value",
     "query": "select max((select group_concat(col1, col2) from user where id = 1)) from user where id = 1",
     "plan": {
       "QueryType": "SELECT",
@@ -6761,7 +6761,7 @@
     }
   },
   {
-    "comment": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+    "comment": "sharded subquery inside group_concat multi-column aggregation function on a sharded table",
     "query": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
     "plan": {
       "QueryType": "SELECT",
@@ -6817,7 +6817,7 @@
     }
   },
   {
-    "comment": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+    "comment": "sharded correlated subquery inside aggregation function on a sharded table on same vindex",
     "query": "select max((select max(col2) from user u1 where u1.id = u2.id)) from user u2",
     "plan": {
       "QueryType": "SELECT",
@@ -6837,6 +6837,69 @@
             },
             "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)), weight_string((select max(col2) from `user` as u1 where 1 != 1)) from `user` as u2 where 1 != 1 group by weight_string((select max(col2) from `user` as u1 where 1 != 1))",
             "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)), weight_string((select max(col2) from `user` as u1 where u1.id = u2.id)) from `user` as u2 group by weight_string((select max(col2) from `user` as u1 where u1.id = u2.id))",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "count aggregation function having multiple column",
+    "query": "select count(distinct user_id, name) from user",
+    "plan": "VT03001: aggregate functions take a single argument 'count(distinct user_id, `name`)'"
+  },
+  {
+    "comment": "Multi-value aggregates pushed as function without splitting",
+    "query": "select count(a,b) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(a,b) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count(0) AS count(a, b)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(a, b) from `user` where 1 != 1",
+            "Query": "select count(a, b) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "group_concat with multi column - pushed without splitting",
+    "query": "select group_concat(col1, col2) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select group_concat(col1, col2) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "group_concat(0) AS group_concat(col1, col2)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select group_concat(col1, col2) from `user` where 1 != 1",
+            "Query": "select group_concat(col1, col2) from `user`",
             "Table": "`user`"
           }
         ]

@@ -204,7 +204,7 @@ func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) 
 			continue
 		}
 
-		innerExpr := aggr.Func.GetArg()
+		innerExpr := aggr.getPushColumn()
 		if !exprHasUniqueVindex(ctx, innerExpr) {
 			canPush = false
 		}

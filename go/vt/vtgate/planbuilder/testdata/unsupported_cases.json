@@ -15,11 +15,6 @@
     "plan": "VT12001: unsupported: natural right join"
   },
   {
-    "comment": "Multi-value aggregates not supported",
-    "query": "select count(a,b) from user",
-    "plan": "VT03001: aggregate functions take a single argument 'count(a, b)'"
-  },
-  {
     "comment": "subqueries not supported in group by",
     "query": "select id from user group by id, (select id from user_extra)",
     "plan": "VT12001: unsupported: subqueries in GROUP BY"
@@ -415,8 +410,8 @@
     "plan": "VT12001: unsupported: DELETE on reference table with join"
   },
   {
-    "comment": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
-    "query": "select group_concat(col1, col2) from user",
-    "plan": "VT03001: aggregate functions take a single argument 'group_concat(col1, col2)'"
+    "comment": "group_concat unsupported when needs full evaluation at vtgate with more than 1 column",
+    "query": "select group_concat(user.col1, music.col2) x from user join music on user.col = music.col order by x",
+    "plan": "VT12001: unsupported: group_concat with more than 1 column"
   }
 ]

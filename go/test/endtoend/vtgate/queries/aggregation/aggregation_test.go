@@ -574,6 +574,8 @@ func TestGroupConcatAggregation(t *testing.T) {
 	compareRow(t, mQr, vtQr, nil, []int{0})
 	mQr, vtQr = mcmp.ExecNoCompare(`SELECT group_concat(value), t1.name FROM t1, t2 group by t1.name`)
 	compareRow(t, mQr, vtQr, []int{1}, []int{0})
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT group_concat(name, value) FROM t1`)
+	compareRow(t, mQr, vtQr, nil, []int{0})
 }
 
 func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grpCols []int, fCols []int) {
