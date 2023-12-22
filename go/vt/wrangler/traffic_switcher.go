@@ -561,7 +561,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			return handleError("failed to migrate the workflow streams", err)
 		}
 		if cancel {
-			sw.cancelStreamMigrations(ctx, sm)
+			sw.cancelMigration(ctx, sm)
 			return 0, sw.logs(), nil
 		}
 
@@ -573,13 +573,13 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 					ts.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.BinlogSource.Shard, stream.BinlogSource)
 				}
 			}
-			sw.cancelStreamMigrations(ctx, sm)
+			sw.cancelMigration(ctx, sm)
 			return handleError("failed to stop the workflow streams", err)
 		}
 
 		ts.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
-			sw.cancelStreamMigrations(ctx, sm)
+			sw.cancelMigration(ctx, sm)
 			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
@@ -589,7 +589,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			// the tablet's deny list check and the first mysqld side table lock.
 			for cnt := 1; cnt <= lockTablesCycles; cnt++ {
 				if err := ts.executeLockTablesOnSource(ctx); err != nil {
-					sw.cancelStreamMigrations(ctx, sm)
+					sw.cancelMigration(ctx, sm)
 					return handleError(fmt.Sprintf("failed to execute LOCK TABLES (attempt %d of %d) on sources", cnt, lockTablesCycles), err)
 				}
 				// No need to UNLOCK the tables as the connection was closed once the locks were acquired
@@ -600,25 +600,25 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 
 		ts.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, timeout); err != nil {
-			sw.cancelStreamMigrations(ctx, sm)
+			sw.cancelMigration(ctx, sm)
 			return handleError("failed to sync up replication between the source and target", err)
 		}
 
 		ts.Logger().Infof("Migrating streams")
 		if err := sw.migrateStreams(ctx, sm); err != nil {
-			sw.cancelStreamMigrations(ctx, sm)
+			sw.cancelMigration(ctx, sm)
 			return handleError("failed to migrate the workflow streams", err)
 		}
 
 		ts.Logger().Infof("Resetting sequences")
 		if err := sw.resetSequences(ctx); err != nil {
-			sw.cancelStreamMigrations(ctx, sm)
+			sw.cancelMigration(ctx, sm)
 			return handleError("failed to reset the sequences", err)
 		}
 
 		ts.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
-			sw.cancelStreamMigrations(ctx, sm)
+			sw.cancelMigration(ctx, sm)
 			return handleError("failed to create the reverse vreplication streams", err)
 		}
 	} else {
@@ -1289,7 +1289,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	})
 }
 
-func (ts *trafficSwitcher) cancelStreamMigrations(ctx context.Context, sm *workflow.StreamMigrator) {
+func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *workflow.StreamMigrator) {
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		err = ts.changeTableSourceWrites(ctx, allowWrites)

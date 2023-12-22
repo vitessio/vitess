@@ -989,7 +989,7 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
 }
 
-func (ts *trafficSwitcher) cancelStreamMigrations(ctx context.Context, sm *StreamMigrator) {
+func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrator) {
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		err = ts.changeTableSourceWrites(ctx, allowWrites)
