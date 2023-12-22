@@ -570,7 +570,11 @@ func (dt DateTime) Round(p int) (r DateTime) {
 }
 
 func (dt DateTime) toDuration() time.Duration {
-	return time.Duration(dt.Date.Day()-1)*durationPerDay + dt.Time.toDuration()
+	dur := dt.Time.toDuration()
+	if !dt.Date.IsZero() {
+		dur += time.Duration(dt.Date.Day()-1) * durationPerDay
+	}
+	return dur
 }
 
 func (dt *DateTime) addInterval(itv *Interval) bool {
@@ -580,13 +584,17 @@ func (dt *DateTime) addInterval(itv *Interval) bool {
 			return false
 		}
 
-		dur := dt.toDuration() + itv.toDuration()
-		days := dur / durationPerDay
-		dur -= days * durationPerDay
+		dur := dt.toDuration()
+		dur += itv.toDuration()
+		days := time.Duration(0)
+		if !dt.Date.IsZero() {
+			days = dur / durationPerDay
+			dur -= days * durationPerDay
 
-		if dur < 0 {
-			dur += durationPerDay
-			days--
+			if dur < 0 {
+				dur += durationPerDay
+				days--
+			}
 		}
 
 		dt.Time.nanosecond = uint32((dur % time.Second) / time.Nanosecond)
