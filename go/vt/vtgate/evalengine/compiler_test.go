@@ -574,6 +574,14 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `DAYOFMONTH(0)`,
 			result:     `INT64(0)`,
 		},
+		{
+			expression: `FROM_UNIXTIME(time '10:04:58.5')`,
+			result:     `DATETIME("1970-01-02 04:54:18.5")`,
+		},
+		{
+			expression: `0 = time '10:04:58.1'`,
+			result:     `INT64(0)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
