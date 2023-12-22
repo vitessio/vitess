@@ -114,7 +114,7 @@ func TestControllerPlan(t *testing.T) {
 		},
 	}, {
 		in:  "update _vt.vreplication set state='Running'",
-		err: "unsafe WHERE clause in update: ; should be using = or in with at least one of the following columns: id, workflow",
+		err: "unsafe WHERE clause in update without the /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ comment directive: ; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in: "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running'",
 		plan: &testControllerPlan{
@@ -125,13 +125,13 @@ func TestControllerPlan(t *testing.T) {
 		},
 	}, {
 		in:  "update _vt.vreplication set state='Running', message='' where id >= 1",
-		err: "unsafe WHERE clause in update:  where id >= 1; should be using = or in with at least one of the following columns: id, workflow",
+		err: "unsafe WHERE clause in update without the /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ comment directive:  where id >= 1; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in:  "update _vt.vreplication set state = 'Running' where state in ('Stopped', 'Error')",
-		err: "unsafe WHERE clause in update:  where state in ('Stopped', 'Error'); should be using = or in with at least one of the following columns: id, workflow",
+		err: "unsafe WHERE clause in update without the /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ comment directive:  where state in ('Stopped', 'Error'); should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in:  "update _vt.vreplication set state='Running', message='' where state='Stopped'",
-		err: "unsafe WHERE clause in update:  where state = 'Stopped'; should be using = or in with at least one of the following columns: id, workflow",
+		err: "unsafe WHERE clause in update without the /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ comment directive:  where state = 'Stopped'; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in: "update _vt.vreplication set state='Running' where a = 1",
 		plan: &testControllerPlan{
@@ -140,7 +140,7 @@ func TestControllerPlan(t *testing.T) {
 			selector: "select id from _vt.vreplication where a = 1",
 			applier:  "update _vt.vreplication set state = 'Running' where id in ::ids",
 		},
-		err: "unsafe WHERE clause in update:  where a = 1; should be using = or in with at least one of the following columns: id, workflow",
+		err: "unsafe WHERE clause in update without the /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ comment directive:  where a = 1; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in: "update _vt.resharding_journal set col = 1",
 		plan: &testControllerPlan{
@@ -173,7 +173,7 @@ func TestControllerPlan(t *testing.T) {
 		},
 	}, {
 		in:  "delete from _vt.vreplication",
-		err: "unsafe WHERE clause in delete: ; should be using = or in with at least one of the following columns: id, workflow",
+		err: "unsafe WHERE clause in delete without the /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ comment directive: ; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in: "delete /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ from _vt.vreplication",
 		plan: &testControllerPlan{
@@ -186,7 +186,7 @@ func TestControllerPlan(t *testing.T) {
 		},
 	}, {
 		in:  "delete from _vt.vreplication where state='Stopped'",
-		err: "unsafe WHERE clause in delete:  where state = 'Stopped'; should be using = or in with at least one of the following columns: id, workflow",
+		err: "unsafe WHERE clause in delete without the /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ comment directive:  where state = 'Stopped'; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in: "delete from _vt.vreplication where a = 1",
 		plan: &testControllerPlan{
@@ -197,7 +197,7 @@ func TestControllerPlan(t *testing.T) {
 			delCopyState:      "delete from _vt.copy_state where vrepl_id in ::ids",
 			delPostCopyAction: "delete from _vt.post_copy_action where vrepl_id in ::ids",
 		},
-		err: "unsafe WHERE clause in delete:  where a = 1; should be using = or in with at least one of the following columns: id, workflow",
+		err: "unsafe WHERE clause in delete without the /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ comment directive:  where a = 1; should be using = or in with at least one of the following columns: id, workflow",
 	}, {
 		in: "delete from _vt.resharding_journal where id = 1",
 		plan: &testControllerPlan{

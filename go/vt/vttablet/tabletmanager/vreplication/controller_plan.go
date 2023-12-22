@@ -240,8 +240,8 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	case vreplicationTableName:
 		if upd.Comments == nil || upd.Comments.Directives() == nil || !upd.Comments.Directives().IsSet(AllowUnsafeWriteCommentDirective) {
 			if safe := isSelective(upd.Where, tableSelectiveColumns[vreplicationTableName]...); !safe {
-				return nil, fmt.Errorf("unsafe WHERE clause in update: %s; should be using = or in with at least one of the following columns: %s",
-					sqlparser.String(upd.Where), columnsAsCSV(tableSelectiveColumns[vreplicationTableName]))
+				return nil, fmt.Errorf("unsafe WHERE clause in update without the /*vt+ %s */ comment directive: %s; should be using = or in with at least one of the following columns: %s",
+					AllowUnsafeWriteCommentDirective, sqlparser.String(upd.Where), columnsAsCSV(tableSelectiveColumns[vreplicationTableName]))
 			}
 		}
 	default:
@@ -302,8 +302,8 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	case vreplicationTableName:
 		if del.Comments == nil || del.Comments.Directives() == nil || !del.Comments.Directives().IsSet(AllowUnsafeWriteCommentDirective) {
 			if safe := isSelective(del.Where, tableSelectiveColumns[vreplicationTableName]...); !safe {
-				return nil, fmt.Errorf("unsafe WHERE clause in delete: %s; should be using = or in with at least one of the following columns: %s",
-					sqlparser.String(del.Where), columnsAsCSV(tableSelectiveColumns[vreplicationTableName]))
+				return nil, fmt.Errorf("unsafe WHERE clause in delete without the /*vt+ %s */ comment directive: %s; should be using = or in with at least one of the following columns: %s",
+					AllowUnsafeWriteCommentDirective, sqlparser.String(del.Where), columnsAsCSV(tableSelectiveColumns[vreplicationTableName]))
 			}
 		}
 	default:
