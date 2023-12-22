@@ -480,7 +480,9 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 
 // WorkflowTagAction sets or clears the tags for a workflow in a keyspace.
 func (wr *Wrangler) WorkflowTagAction(ctx context.Context, keyspace string, workflow string, tags string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
-	query := fmt.Sprintf("update _vt.vreplication set tags = %s where workflow = %s", encodeString(tags), encodeString(workflow))
+	// A WHERE clause with the correct workflow name is automatically added
+	// to the query later on in vexec.addDefaultWheres().
+	query := fmt.Sprintf("update _vt.vreplication set tags = %s", encodeString(tags))
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false)
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }
