@@ -413,5 +413,15 @@
     "comment": "group_concat unsupported when needs full evaluation at vtgate with more than 1 column",
     "query": "select group_concat(user.col1, music.col2) x from user join music on user.col = music.col order by x",
     "plan": "VT12001: unsupported: group_concat with more than 1 column"
+  },
+  {
+    "comment": "count aggregation function having multiple column",
+    "query": "select count(distinct user_id, name) from user",
+    "plan": "VT12001: unsupported: distinct aggregation function with multiple expressions 'count(distinct user_id, `name`)'"
+  },
+  {
+    "comment": "count and sum distinct on different columns",
+    "query": "SELECT COUNT(DISTINCT col), SUM(DISTINCT id) FROM user",
+    "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct id)"
   }
 ]

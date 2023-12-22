@@ -2844,11 +2844,6 @@
     }
   },
   {
-    "comment": "select count(distinct user_id, name) from user",
-    "query": "select count(distinct user_id, name) from user",
-    "plan": "VT03001: aggregate functions take a single argument 'count(distinct user_id, `name`)'"
-  },
-  {
     "comment": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
     "query": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
     "plan": {
@@ -6847,11 +6842,6 @@
     }
   },
   {
-    "comment": "count aggregation function having multiple column",
-    "query": "select count(distinct user_id, name) from user",
-    "plan": "VT03001: aggregate functions take a single argument 'count(distinct user_id, `name`)'"
-  },
-  {
     "comment": "Multi-value aggregates pushed as function without splitting",
     "query": "select count(a,b) from user",
     "plan": {
@@ -6900,6 +6890,35 @@
             },
             "FieldQuery": "select group_concat(col1, col2) from `user` where 1 != 1",
             "Query": "select group_concat(col1, col2) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "",
+    "query": "select count(distinct name, id) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(distinct name, id) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct `name`, id)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(distinct `name`, id) from `user` where 1 != 1",
+            "Query": "select count(distinct `name`, id) from `user`",
             "Table": "`user`"
           }
         ]

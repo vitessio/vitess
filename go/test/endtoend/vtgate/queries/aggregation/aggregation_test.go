@@ -628,7 +628,7 @@ func TestDistinctAggregation(t *testing.T) {
 	}, {
 		query: `SELECT a.value, SUM(DISTINCT b.t1_id), min(DISTINCT a.t1_id) FROM t1 a, t1 b group by a.value`,
 	}, {
-		query: `SELECT distinct count(*) from t1, (select distinct count(*) from t1) as t2`,
+		query: `SELECT count(distinct name, shardkey) from t1`,
 	}}
 
 	for _, tc := range tcases {
