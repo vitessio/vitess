@@ -124,23 +124,25 @@ func buildVindexTableForDML(
 	return vindexTable, routing
 }
 
-func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) string {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	for idx, col := range ksidCols {
-		if idx == 0 {
-			buf.Myprintf("select %v", col)
-		} else {
-			buf.Myprintf(", %v", col)
-		}
+func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
+	var selExprs sqlparser.SelectExprs
+	for _, col := range ksidCols {
+		selExprs = append(selExprs, sqlparser.NewAliasedExpr(sqlparser.NewColName(col.String()), ""))
 	}
 	for _, cv := range table.Owned {
-		for _, column := range cv.Columns {
-			buf.Myprintf(", %v", column)
+		for _, col := range cv.Columns {
+			selExprs = append(selExprs, sqlparser.NewAliasedExpr(sqlparser.NewColName(col.String()), ""))
 		}
 	}
 	sqlparser.RemoveKeyspaceInTables(tblExpr)
-	buf.Myprintf(" from %v%v%v%v for update", tblExpr, del.Where, del.OrderBy, del.Limit)
-	return buf.String()
+	return &sqlparser.Select{
+		SelectExprs: selExprs,
+		From:        sqlparser.TableExprs{tblExpr},
+		Where:       del.Where,
+		OrderBy:     del.OrderBy,
+		Limit:       del.Limit,
+		Lock:        sqlparser.ForUpdateLock,
+	}
 }
 
 func getUpdateVindexInformation(

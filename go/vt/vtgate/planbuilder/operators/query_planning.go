@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -127,7 +128,56 @@ func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
 		}
 		return Swap(in, src, "pushed delete under route")
 	case *ApplyJoin:
-		panic(vterrors.VT12001("multi shard DELETE with join table references"))
+		if len(in.Target.VTable.PrimaryKey) == 0 {
+			panic(vterrors.VT09015())
+		}
+		dm := &DeleteMulti{}
+		var selExprs sqlparser.SelectExprs
+		var leftComp sqlparser.ValTuple
+		for _, col := range in.Target.VTable.PrimaryKey {
+			colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
+			selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
+			leftComp = append(leftComp, colName)
+		}
+
+		sel := &sqlparser.Select{
+			From:        nil,
+			SelectExprs: selExprs,
+			OrderBy:     in.OrderBy,
+			Limit:       in.Limit,
+			Lock:        sqlparser.ForUpdateLock,
+		}
+		dm.Source = newHorizon(src, sel)
+
+		var targetTable *Table
+		_ = Visit(src, func(operator Operator) error {
+			if tbl, ok := operator.(*Table); ok && tbl.QTable.ID == in.Target.ID {
+				targetTable = tbl
+				return io.EOF
+			}
+			return nil
+		})
+		if targetTable == nil {
+			panic(vterrors.VT13001("target DELETE table not "))
+		}
+		compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, leftComp, sqlparser.ListArg(engine.DM_VALS), nil)
+		targetQT := targetTable.QTable
+		qt := &QueryTable{
+			ID:         targetQT.ID,
+			Alias:      sqlparser.CloneRefOfAliasedTableExpr(targetQT.Alias),
+			Table:      sqlparser.CloneTableName(targetQT.Table),
+			Predicates: []sqlparser.Expr{compExpr},
+		}
+
+		qg := &QueryGraph{Tables: []*QueryTable{qt}}
+		in.Source = qg
+
+		if in.OwnedVindexQuery != nil {
+			in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
+		}
+		dm.Delete = in
+
+		return dm, Rewrote("Delete Multi on top of Delete and ApplyJoin")
 	}
 
 	return in, nil

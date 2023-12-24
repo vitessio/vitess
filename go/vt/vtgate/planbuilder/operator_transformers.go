@@ -73,9 +73,27 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformHashJoin(ctx, op)
 	case *operators.Sequential:
 		return transformSequential(ctx, op)
+	case *operators.DeleteMulti:
+		return transformDeleteMulti(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformDeleteMulti(ctx *plancontext.PlanningContext, op *operators.DeleteMulti) (logicalPlan, error) {
+	input, err := transformToLogicalPlan(ctx, op.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	del, err := transformToLogicalPlan(ctx, op.Delete)
+	if err != nil {
+		return nil, err
+	}
+	return &deleteMulti{
+		input:  input,
+		delete: del,
+	}, nil
 }
 
 func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (logicalPlan, error) {
@@ -698,11 +716,15 @@ func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Rout
 		Query:             generateQuery(stmt),
 		TableNames:        []string{vtable.Name.String()},
 		Vindexes:          vtable.Owned,
-		OwnedVindexQuery:  del.OwnedVindexQuery,
 		RoutingParameters: rp,
 	}
 
-	transformDMLPlan(vtable, edml, rb.Routing, del.OwnedVindexQuery != "")
+	hasLookupVindex := del.OwnedVindexQuery != nil
+	if hasLookupVindex {
+		edml.OwnedVindexQuery = sqlparser.String(del.OwnedVindexQuery)
+	}
+
+	transformDMLPlan(vtable, edml, rb.Routing, hasLookupVindex)
 
 	e := &engine.Delete{
 		DML: edml,
