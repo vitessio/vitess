@@ -160,3 +160,19 @@ func TestSubqueryInReference(t *testing.T) {
 	mcmp.AssertMatches(`select (select id1 from t1 where id2 = 30)`, `[[INT64(3)]]`)
 	mcmp.AssertMatches(`select (select id1 from t1 where id2 = 9)`, `[[NULL]]`)
 }
+
+// TestSubqueryInAggregation validates that subquery work inside aggregation functions.
+func TestSubqueryInAggregation(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values(0,0),(1,1)")
+	mcmp.Exec("insert into t2(id3, id4) values(1,2),(5,7)")
+	mcmp.Exec(`SELECT max((select min(id2) from t1)) FROM t2`)
+	mcmp.Exec(`SELECT max((select group_concat(id1, id2) from t1 where id1 = 1)) FROM t1 where id1 = 1`)
+	mcmp.Exec(`SELECT max((select min(id2) from t1 where id2 = 1)) FROM dual`)
+	mcmp.Exec(`SELECT max((select min(id2) from t1)) FROM t2 where id4 = 7`)
+
+	// This fails as the planner adds `weight_string` method which make the query fail on MySQL.
+	// mcmp.Exec(`SELECT max((select min(id2) from t1 where t1.id1 = t.id1)) FROM t1 t`)
+}

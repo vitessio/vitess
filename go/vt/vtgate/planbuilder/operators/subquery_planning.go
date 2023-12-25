@@ -98,6 +98,13 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 			for _, setExpr := range op.Assignments {
 				mergeSubqueryExpr(ctx, setExpr.Expr)
 			}
+		case *Aggregator:
+			for _, aggr := range op.Aggregations {
+				newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, aggr.SubQueryExpression, aggr.Original.Expr)
+				if rewritten {
+					aggr.Original.Expr = newExpr
+				}
+			}
 		}
 		return op, rewrite.SameTree, nil
 	}

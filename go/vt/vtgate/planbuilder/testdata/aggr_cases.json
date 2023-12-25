@@ -6088,5 +6088,288 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "select max((select min(col) from user where id = 1))",
+    "query": "select max((select min(col) from user where id = 1))",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select min(col) from user where id = 1))",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select max((select min(col) from `user` where 1 != 1)) from dual where 1 != 1",
+        "Query": "select max((select min(col) from `user` where id = 1)) from dual",
+        "Table": "dual",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "select max((select min(col) from unsharded)) from user where id = 1",
+    "query": "select max((select min(col) from unsharded)) from user where id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select min(col) from unsharded)) from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select min(col) from unsharded))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select min(col) from unsharded where 1 != 1",
+                "Query": "select min(col) from unsharded",
+                "Table": "unsharded"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
+                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` where id = 1 group by weight_string(:__sq1)",
+                "Table": "`user`",
+                "Values": [
+                  "INT64(1)"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "select max((select min(col) from user where id = 1)) from user where id = 2",
+    "query": "select max((select min(col) from user where id = 1)) from user where id = 2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select min(col) from user where id = 1)) from user where id = 2",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select min(col) from `user` where id = 1))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select min(col) from `user` where 1 != 1",
+                "Query": "select min(col) from `user` where id = 1",
+                "Table": "`user`",
+                "Values": [
+                  "INT64(1)"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
+                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` where id = 2 group by weight_string(:__sq1)",
+                "Table": "`user`",
+                "Values": [
+                  "INT64(2)"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "select max((select group_concat(col1, col2) from user where id = 1))",
+    "query": "select max((select group_concat(col1, col2) from user where id = 1))",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select group_concat(col1, col2) from user where id = 1))",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) from dual where 1 != 1",
+        "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) from dual",
+        "Table": "dual",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "select max((select group_concat(col1, col2) from user where id = 1)) from user where id = 1",
+    "query": "select max((select group_concat(col1, col2) from user where id = 1)) from user where id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select group_concat(col1, col2) from user where id = 1)) from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) from `user` where 1 != 1",
+        "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) from `user` where id = 1",
+        "Table": "`user`",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+    "query": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select group_concat(col1, col2) from `user` where id = 1))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select group_concat(col1, col2) from `user` where 1 != 1",
+                "Query": "select group_concat(col1, col2) from `user` where id = 1",
+                "Table": "`user`",
+                "Values": [
+                  "INT64(1)"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
+                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` group by weight_string(:__sq1)",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+    "query": "select max((select max(col2) from user u1 where u1.id = u2.id)) from user u2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select max(col2) from user u1 where u1.id = u2.id)) from user u2",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select max(col2) from `user` as u1 where u1.id = u2.id))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)), weight_string((select max(col2) from `user` as u1 where 1 != 1)) from `user` as u2 where 1 != 1 group by weight_string((select max(col2) from `user` as u1 where 1 != 1))",
+            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)), weight_string((select max(col2) from `user` as u1 where u1.id = u2.id)) from `user` as u2 group by weight_string((select max(col2) from `user` as u1 where u1.id = u2.id))",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
