@@ -25,6 +25,7 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -40,6 +41,7 @@ type (
 )
 
 func TestFuzzAggregations(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 17, "vtgate")
 	// This test randomizes values and queries, and checks that mysql returns the same values that Vitess does
 	mcmp, closer := start(t)
 	defer closer()
@@ -51,7 +53,7 @@ func TestFuzzAggregations(t *testing.T) {
 	}
 	t1Insert := fmt.Sprintf("insert into t1 (t1_id, name, value, shardKey) values %s;", strings.Join(values, ","))
 	values = nil
-	noOfRows = rand.Intn(20)
+	noOfRows = rand.Intn(20) + 1
 	for i := 0; i < noOfRows; i++ {
 		values = append(values, fmt.Sprintf("(%d, %d)", i, i))
 	}
