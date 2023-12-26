@@ -100,12 +100,12 @@ func (w FakeHeartbeatWriter) RequestHeartbeats() {
 
 func newTestThrottler() *Throttler {
 	metricsQuery := "select 1"
-	config.Settings().Stores.MySQL.Clusters = map[string]*config.MySQLClusterConfigurationSettings{
+	configSettings := config.NewConfigurationSettings()
+	configSettings.Stores.MySQL.Clusters = map[string]*config.MySQLClusterConfigurationSettings{
 		selfStoreName:  {},
 		shardStoreName: {},
 	}
-	clusters := config.Settings().Stores.MySQL.Clusters
-	for _, s := range clusters {
+	for _, s := range configSettings.Stores.MySQL.Clusters {
 		s.MetricQuery = metricsQuery
 		s.ThrottleThreshold = &atomic.Uint64{}
 		s.ThrottleThreshold.Store(1)
@@ -121,6 +121,7 @@ func newTestThrottler() *Throttler {
 		tabletTypeFunc:         func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY },
 		overrideTmClient:       &fakeTMClient{},
 	}
+	throttler.configSettings = configSettings
 	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
 	throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
 	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
@@ -222,17 +223,18 @@ func TestIsAppExempted(t *testing.T) {
 // `PRIMARY` tablet, probes other tablets). On the leader, the list is expected to be non-empty.
 func TestRefreshMySQLInventory(t *testing.T) {
 	metricsQuery := "select 1"
-	config.Settings().Stores.MySQL.Clusters = map[string]*config.MySQLClusterConfigurationSettings{
+	configSettings := config.NewConfigurationSettings()
+	clusters := map[string]*config.MySQLClusterConfigurationSettings{
 		selfStoreName: {},
 		"ks1":         {},
 		"ks2":         {},
 	}
-	clusters := config.Settings().Stores.MySQL.Clusters
 	for _, s := range clusters {
 		s.MetricQuery = metricsQuery
 		s.ThrottleThreshold = &atomic.Uint64{}
 		s.ThrottleThreshold.Store(1)
 	}
+	configSettings.Stores.MySQL.Clusters = clusters
 
 	throttler := &Throttler{
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
@@ -240,6 +242,7 @@ func TestRefreshMySQLInventory(t *testing.T) {
 		ts:                     &FakeTopoServer{},
 		mysqlInventory:         mysql.NewInventory(),
 	}
+	throttler.configSettings = configSettings
 	throttler.metricsQuery.Store(metricsQuery)
 	throttler.initThrottleTabletTypes()
 
