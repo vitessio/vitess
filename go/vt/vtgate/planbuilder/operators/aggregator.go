@@ -255,7 +255,6 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	if a.offsetPlanned {
 		return nil
 	}
-	a.checkForInvalidAggregations()
 	defer func() {
 		a.offsetPlanned = true
 	}()
@@ -281,7 +280,8 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		if !aggr.NeedsWeightString(ctx) {
 			continue
 		}
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), true)
+		arg := aggr.getPushColumn()
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(arg)), true)
 		a.Aggregations[idx].WSOffset = offset
 	}
 	return nil
@@ -295,10 +295,13 @@ func (aggr Aggr) getPushColumn() sqlparser.Expr {
 		return sqlparser.NewIntLiteral("1")
 	case opcode.AggregateGroupConcat:
 		if len(aggr.Func.GetArgs()) > 1 {
-			panic("more than 1 column")
+			panic(vterrors.VT12001("group_concat with more than 1 column"))
 		}
-		fallthrough
+		return aggr.Func.GetArg()
 	default:
+		if len(aggr.Func.GetArgs()) > 1 {
+			panic(vterrors.VT03001(sqlparser.String(aggr.Func)))
+		}
 		return aggr.Func.GetArg()
 	}
 }
@@ -380,7 +383,8 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			continue
 		}
 
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), false)
+		arg := aggr.getPushColumn()
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(arg)), false)
 		a.Aggregations[idx].WSOffset = offset
 	}
 }

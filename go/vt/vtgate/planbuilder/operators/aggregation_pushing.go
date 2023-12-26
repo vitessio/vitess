@@ -27,6 +27,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
+func errDistinctAggrWithMultiExpr(f sqlparser.AggrFunc) {
+	if f == nil {
+		panic(vterrors.VT12001("distinct aggregation function with multiple expressions"))
+	}
+	panic(vterrors.VT12001(fmt.Sprintf("distinct aggregation function with multiple expressions '%s'", sqlparser.String(f))))
+}
+
 func tryPushAggregator(ctx *plancontext.PlanningContext, aggregator *Aggregator) (output Operator, applyResult *ApplyResult) {
 	if aggregator.Pushed {
 		return aggregator, NoRewrite
@@ -162,7 +169,7 @@ func pushAggregationThroughRoute(
 
 // pushAggregations splits aggregations between the original aggregator and the one we are pushing down
 func pushAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, aggrBelowRoute *Aggregator) {
-	canPushDistinctAggr, distinctExpr := checkIfWeCanPush(ctx, aggregator)
+	canPushDistinctAggr, distinctExprs := checkIfWeCanPush(ctx, aggregator)
 
 	distinctAggrGroupByAdded := false
 
@@ -173,16 +180,20 @@ func pushAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, 
 			continue
 		}
 
+		if len(distinctExprs) != 1 {
+			errDistinctAggrWithMultiExpr(aggr.Func)
+		}
+
 		// We handle a distinct aggregation by turning it into a group by and
 		// doing the aggregating on the vtgate level instead
-		aeDistinctExpr := aeWrap(distinctExpr)
+		aeDistinctExpr := aeWrap(distinctExprs[0])
 		aggrBelowRoute.Columns[aggr.ColOffset] = aeDistinctExpr
 
 		// We handle a distinct aggregation by turning it into a group by and
 		// doing the aggregating on the vtgate level instead
 		// Adding to group by can be done only once even though there are multiple distinct aggregation with same expression.
 		if !distinctAggrGroupByAdded {
-			groupBy := NewGroupBy(distinctExpr, distinctExpr)
+			groupBy := NewGroupBy(distinctExprs[0], distinctExprs[0])
 			groupBy.ColOffset = aggr.ColOffset
 			aggrBelowRoute.Grouping = append(aggrBelowRoute.Grouping, groupBy)
 			distinctAggrGroupByAdded = true
@@ -190,13 +201,13 @@ func pushAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, 
 	}
 
 	if !canPushDistinctAggr {
-		aggregator.DistinctExpr = distinctExpr
+		aggregator.DistinctExpr = distinctExprs[0]
 	}
 }
 
-func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) (bool, sqlparser.Expr) {
+func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) (bool, sqlparser.Exprs) {
 	canPush := true
-	var distinctExpr sqlparser.Expr
+	var distinctExprs sqlparser.Exprs
 	var differentExpr *sqlparser.AliasedExpr
 
 	for _, aggr := range aggregator.Aggregations {
@@ -204,15 +215,25 @@ func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) 
 			continue
 		}
 
-		innerExpr := aggr.Func.GetArg()
-		if !exprHasUniqueVindex(ctx, innerExpr) {
+		args := aggr.Func.GetArgs()
+		hasUniqVindex := false
+		for _, arg := range args {
+			if exprHasUniqueVindex(ctx, arg) {
+				hasUniqVindex = true
+				break
+			}
+		}
+		if !hasUniqVindex {
 			canPush = false
 		}
-		if distinctExpr == nil {
-			distinctExpr = innerExpr
+		if len(distinctExprs) == 0 {
+			distinctExprs = args
 		}
-		if !ctx.SemTable.EqualsExpr(distinctExpr, innerExpr) {
-			differentExpr = aggr.Original
+		for idx, expr := range distinctExprs {
+			if !ctx.SemTable.EqualsExpr(expr, args[idx]) {
+				differentExpr = aggr.Original
+				break
+			}
 		}
 	}
 
@@ -220,7 +241,7 @@ func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) 
 		panic(vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation is allowed in a SELECT: %s", sqlparser.String(differentExpr))))
 	}
 
-	return canPush, distinctExpr
+	return canPush, distinctExprs
 }
 
 func pushAggregationThroughFilter(
@@ -530,12 +551,15 @@ func splitAggrColumnsToLeftAndRight(
 		outerJoin:   leftJoin,
 	}
 
-	canPushDistinctAggr, distinctExpr := checkIfWeCanPush(ctx, aggregator)
+	canPushDistinctAggr, distinctExprs := checkIfWeCanPush(ctx, aggregator)
 
 	// Distinct aggregation cannot be pushed down in the join.
 	// We keep node of the distinct aggregation expression to be used later for ordering.
 	if !canPushDistinctAggr {
-		aggregator.DistinctExpr = distinctExpr
+		if len(distinctExprs) != 1 {
+			errDistinctAggrWithMultiExpr(nil)
+		}
+		aggregator.DistinctExpr = distinctExprs[0]
 		return nil, errAbortAggrPushing
 	}
 
