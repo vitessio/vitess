@@ -83,7 +83,7 @@ func (t *Optional[T]) Type() string {
 
 // Get returns the underlying float64 value of this flag. If the flag was not
 // explicitly set, this will be the initial value passed to the constructor.
-func (t *Optional[T]) Get() any {
+func (t *Optional[T]) Get() T {
 	return t.val
 }
 
