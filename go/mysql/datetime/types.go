@@ -314,12 +314,16 @@ func (d Date) Week(mode int) int {
 		year, week := d.SundayWeek()
 		if year < d.Year() {
 			return 0
+		} else if year > d.Year() {
+			return 53
 		}
 		return week
 	case 1:
 		year, week := d.ISOWeek()
 		if year < d.Year() {
 			return 0
+		} else if year > d.Year() {
+			return 53
 		}
 		return week
 	case 2:
@@ -332,12 +336,16 @@ func (d Date) Week(mode int) int {
 		year, week := d.Sunday4DayWeek()
 		if year < d.Year() {
 			return 0
+		} else if year > d.Year() {
+			return 53
 		}
 		return week
 	case 5:
 		year, week := d.MondayWeek()
 		if year < d.Year() {
 			return 0
+		} else if year > d.Year() {
+			return 53
 		}
 		return week
 	case 6:
