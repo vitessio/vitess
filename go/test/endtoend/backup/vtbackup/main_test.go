@@ -129,6 +129,7 @@ func TestMain(m *testing.M) {
 			if err != nil {
 				return 1, err
 			}
+			log.Errorf("Testing")
 			mysqlProcs = append(mysqlProcs, proc)
 		}
 		for _, proc := range mysqlProcs {
