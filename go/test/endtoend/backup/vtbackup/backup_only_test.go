@@ -258,15 +258,17 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	log.Infof("restoring tablet %s", time.Now())
 	resetTabletDirectory(t, *tablet, true)
 
-	err := tablet.VttabletProcess.CreateDB(keyspaceName)
-	require.Nil(t, err)
+	if localCluster.VtTabletMajorVersion <= 16 {
+		err := tablet.VttabletProcess.CreateDB(keyspaceName)
+		require.Nil(t, err)
+	}
 
 	// Start tablets
 	tablet.VttabletProcess.ExtraArgs = []string{"--db-credentials-file", dbCredentialFile}
 	tablet.VttabletProcess.TabletType = tabletType
 	tablet.VttabletProcess.ServingStatus = waitForState
 	tablet.VttabletProcess.SupportsBackup = true
-	err = tablet.VttabletProcess.Setup()
+	err := tablet.VttabletProcess.Setup()
 	require.Nil(t, err)
 }
 
