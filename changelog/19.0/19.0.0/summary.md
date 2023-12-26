@@ -19,6 +19,8 @@
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
   - **[Planned Reparent Shard](#planned-reparent-shard)**
     - [`--tolerable-replication-lag` Sub-flag](#tolerable-repl-lag)
+  - **[Apply VSchema](#apply-vschema)**
+    - [`--strict` sub-flag and `strict` gRPC field](#strict-flag-and-field)
 
 ## <a id="major-changes"/>Major Changes
 
@@ -99,3 +101,8 @@ This feature is opt-in and not specifying this sub-flag makes Vitess ignore the 
 
 A new flag in VTOrc with the same name has been added to control the behaviour of the PlannedReparentShard calls that VTOrc issues.
 
+### <a id="apply-vschema"/>Apply VSchema
+
+#### <a id="strict-flag-and-field"/>`--strict` sub-flag and `strict` gRPC field
+
+A new sub-flag `--strict` has been added to the command `ApplyVSchema` `vtctl` command that produces an error if unknown params are found in any Vindexes. An equivalent `strict` field has been added to the `ApplyVSchema` gRPC `vtctld` command.
