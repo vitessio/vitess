@@ -158,6 +158,7 @@ func init() {
 	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.DryRun, "dry-run", false, "If set, do not save the altered vschema, simply echo to console.")
 	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.SkipRebuild, "skip-rebuild", false, "Skip rebuilding the SrvSchema objects.")
 	ApplyVSchema.Flags().StringSliceVar(&applyVSchemaOptions.Cells, "cells", nil, "Limits the rebuild to the specified cells, after application. Ignored if --skip-rebuild is set.")
+	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.Strict, "strict", false, "If set, treat unknown vindex params as errors.")
 	Root.AddCommand(ApplyVSchema)
 
 	Root.AddCommand(GetVSchema)
