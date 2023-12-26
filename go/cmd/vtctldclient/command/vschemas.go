@@ -40,7 +40,7 @@ var (
 	}
 	// ApplyVSchema makes an ApplyVSchema gRPC call to a vtctld.
 	ApplyVSchema = &cobra.Command{
-		Use:                   "ApplyVSchema {--vschema=<vschema> || --vschema-file=<vschema file> || --sql=<sql> || --sql-file=<sql file>} [--cells=c1,c2,...] [--skip-rebuild] [--dry-run] <keyspace>",
+		Use:                   "ApplyVSchema {--vschema=<vschema> || --vschema-file=<vschema file> || --sql=<sql> || --sql-file=<sql file>} [--cells=c1,c2,...] [--skip-rebuild] [--dry-run] [--strict] <keyspace>",
 		Short:                 "Applies the VTGate routing schema to the provided keyspace. Shows the result after application.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -56,6 +56,7 @@ var applyVSchemaOptions = struct {
 	DryRun      bool
 	SkipRebuild bool
 	Cells       []string
+	Strict      bool
 }{}
 
 func commandApplyVSchema(cmd *cobra.Command, args []string) error {
@@ -75,6 +76,7 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 		SkipRebuild: applyVSchemaOptions.SkipRebuild,
 		Cells:       applyVSchemaOptions.Cells,
 		DryRun:      applyVSchemaOptions.DryRun,
+		Strict:      applyVSchemaOptions.Strict,
 	}
 
 	var err error
