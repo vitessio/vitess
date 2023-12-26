@@ -133,9 +133,12 @@ func TestMain(m *testing.M) {
 		}
 
 		// Create database
-		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
-			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
-				return 1, err
+		vttabletVersion, _ := cluster.GetMajorVersion("vttablet")
+		if vttabletVersion <= 16 {
+			for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
+				if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
+					return 1, err
+				}
 			}
 		}
 
