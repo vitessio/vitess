@@ -41,12 +41,9 @@ limitations under the License.
 
 package config
 
-// Instance is the one configuration for the throttler
-var Instance = &ConfigurationSettings{}
-
-// Settings returns the settings of the global instance of Configuration
-func Settings() *ConfigurationSettings {
-	return Instance
+// NewConfigurationSettings creates new throttler configuration settings.
+func NewConfigurationSettings() *ConfigurationSettings {
+	return &ConfigurationSettings{}
 }
 
 // ConfigurationSettings models a set of configurable values, that can be
