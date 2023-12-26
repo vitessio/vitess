@@ -55,10 +55,10 @@ func TestApplyVSchema(t *testing.T) {
 	_ = env.addTablet(100, ks, shard, &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
 
 	tests := []struct {
-		name          string
-		args          []string
-		expectResults func()
-		want          string
+		name string
+		args []string
+		want string
+		err  string
 	}{
 		{
 			name: "EmptyVSchema",
@@ -89,9 +89,34 @@ func TestApplyVSchema(t *testing.T) {
 }
 If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
 
-.*W.* .* vtctl.go:.* Unknown parameter in vindex binary_vdx: hello
-W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: foo
-W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: hello`,
+.*W.* .* vtctl.go:.* Unknown parameter\(s\) in vindex\(es\): binary_vdx \(hello\); hash_vdx \(foo, hello\)`,
+		},
+		{
+			name: "StrictUnknownParamsLogged",
+			args: []string{"--vschema", unknownParamsLoggedVSchema, "--strict", ks},
+			err:  "unknown parameters found in vindexes: binary_vdx (hello); hash_vdx (foo, hello)",
+			want: `/New VSchema object:
+{
+  "sharded": true,
+  "vindexes": {
+    "binary_vdx": {
+      "type": "binary",
+      "params": {
+        "hello": "world"
+      }
+    },
+    "hash_vdx": {
+      "type": "hash",
+      "params": {
+        "foo": "bar",
+        "hello": "world"
+      }
+    }
+  }
+}
+If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
+
+.*W.* .* vtctl.go:.* Unknown parameter\(s\) in vindex\(es\): binary_vdx \(hello\); hash_vdx \(foo, hello\)`,
 		},
 		{
 			name: "UnknownParamsLoggedWithDryRun",
@@ -117,9 +142,35 @@ W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: hello`,
 }
 If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
 
-.*W.* .* vtctl.go:.* Unknown parameter in vindex binary_vdx: hello
-W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: foo
-W.* .* vtctl.go:.* Unknown parameter in vindex hash_vdx: hello
+.*W.* .* vtctl.go:.* Unknown parameter\(s\) in vindex\(es\): binary_vdx \(hello\); hash_vdx \(foo, hello\)
+Dry run: Skipping update of VSchema`,
+		},
+		{
+			name: "StrictUnknownParamsLoggedWithDryRun",
+			args: []string{"--vschema", unknownParamsLoggedDryRunVSchema, "--dry-run", "--strict", ks},
+			err:  "unknown parameters found in vindexes: binary_vdx (hello); hash_vdx (foo, hello)",
+			want: `/New VSchema object:
+{
+  "sharded": true,
+  "vindexes": {
+    "binary_vdx": {
+      "type": "binary",
+      "params": {
+        "hello": "world"
+      }
+    },
+    "hash_vdx": {
+      "type": "hash",
+      "params": {
+        "foo": "bar",
+        "hello": "world"
+      }
+    }
+  }
+}
+If this is not what you expected, check the input data \(as JSON parsing will skip unexpected fields\)\.
+
+.*W.* .* vtctl.go:.* Unknown parameter\(s\) in vindex\(es\): binary_vdx \(hello\); hash_vdx \(foo, hello\)
 Dry run: Skipping update of VSchema`,
 		},
 	}
@@ -127,7 +178,11 @@ Dry run: Skipping update of VSchema`,
 		t.Run(tt.name, func(t *testing.T) {
 			subFlags := pflag.NewFlagSet("test", pflag.ContinueOnError)
 			err := commandApplyVSchema(ctx, env.wr, subFlags, tt.args)
-			require.NoError(t, err)
+			if tt.err == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.err)
+			}
 			if strings.HasPrefix(tt.want, "/") {
 				require.Regexp(t, regexp.MustCompile(tt.want[1:]), env.cmdlog.String())
 			} else {
