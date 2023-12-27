@@ -19,6 +19,7 @@
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
   - **[Planned Reparent Shard](#planned-reparent-shard)**
     - [`--tolerable-replication-lag` Sub-flag](#tolerable-repl-lag)
+- **[Minor Changes](#minor-changes)**
   - **[Apply VSchema](#apply-vschema)**
     - [`--strict` sub-flag and `strict` gRPC field](#strict-flag-and-field)
 
@@ -100,6 +101,8 @@ A new sub-flag `--tolerable-replication-lag` has been added to the command `Plan
 This feature is opt-in and not specifying this sub-flag makes Vitess ignore the replication lag entirely.
 
 A new flag in VTOrc with the same name has been added to control the behaviour of the PlannedReparentShard calls that VTOrc issues.
+
+## <a id="minor-changes"/>Minor Changes
 
 ### <a id="apply-vschema"/>Apply VSchema
 

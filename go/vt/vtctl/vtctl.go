@@ -666,7 +666,7 @@ var commands = []commandGroup{
 			{
 				name:   "ApplyVSchema",
 				method: commandApplyVSchema,
-				params: "{--vschema=<vschema> || --vschema_file=<vschema file> || --sql=<sql> || --sql_file=<sql file>} [--cells=c1,c2,...] [--skip_rebuild] [--dry-run] [--strict] <keyspace>",
+				params: "{--vschema=<vschema> || --vschema_file=<vschema file> || --sql=<sql> || --sql_file=<sql file>} [--cells=c1,c2,...] [--skip_rebuild] [--dry-run] <keyspace>",
 				help:   "Applies the VTGate routing schema to the provided keyspace. Shows the result after application.",
 			},
 			{
@@ -3307,7 +3307,6 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 	sqlFile := subFlags.String("sql_file", "", "A vschema ddl SQL statement (e.g. `add vindex`, `alter table t add vindex hash(id)`, etc)")
 	dryRun := subFlags.Bool("dry-run", false, "If set, do not save the altered vschema, simply echo to console.")
 	skipRebuild := subFlags.Bool("skip_rebuild", false, "If set, do not rebuild the SrvSchema objects.")
-	strict := subFlags.Bool("strict", false, "If set, treat unknown vindex params as errors.")
 	var cells []string
 	subFlags.StringSliceVar(&cells, "cells", cells, "If specified, limits the rebuild to the cells, after upload. Ignored if --skip_rebuild is set.")
 
@@ -3400,7 +3399,6 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 
 	// Log unknown Vindex params as warnings.
 	var vdxNames []string
-	var unknownParams []string
 	for name := range ksVs.Vindexes {
 		vdxNames = append(vdxNames, name)
 	}
@@ -3408,18 +3406,14 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 	for _, name := range vdxNames {
 		vdx := ksVs.Vindexes[name]
 		if val, ok := vdx.(vindexes.ParamValidating); ok {
-			unknownParams = append(unknownParams, fmt.Sprintf("%s (%s)", name, strings.Join(val.UnknownParams(), ", ")))
+			for _, param := range val.UnknownParams() {
+				wr.Logger().Warningf("Unknown parameter in vindex %s: %s", name, param)
+			}
 		}
-	}
-	if len(unknownParams) > 0 {
-		wr.Logger().Warningf("Unknown parameter(s) in vindex(es): %s", strings.Join(unknownParams, "; "))
 	}
 
-	if *dryRun || (*strict && len(unknownParams) > 0) {
+	if *dryRun {
 		wr.Logger().Printf("Dry run: Skipping update of VSchema\n")
-		if *strict && len(unknownParams) > 0 {
-			return fmt.Errorf("unknown parameters found in vindexes: %s", strings.Join(unknownParams, "; "))
-		}
 		return nil
 	}
 

@@ -393,11 +393,12 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		}
 	}
 
-	if req.DryRun || (req.Strict && len(unknownVindexParams) > 0) { // return early if dry run or unknown params in strict mode
-		var err error
-		if req.Strict && len(unknownVindexParams) > 0 {
-			err = fmt.Errorf("unknown vindex params: %s", strings.Join(unknownVindexParams, "; "))
-		}
+	if req.Strict && len(unknownVindexParams) > 0 { // return early if unknown params found in strict mode
+		err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "unknown vindex params: %s", strings.Join(unknownVindexParams, "; "))
+		return response, err
+	}
+
+	if req.DryRun { // return early if dry run
 		return response, err
 	}
 
