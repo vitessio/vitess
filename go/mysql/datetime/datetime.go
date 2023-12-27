@@ -440,12 +440,12 @@ func (t Time) AddInterval(itv *Interval, stradd bool) (Time, uint8, bool) {
 	return dt.Time, itv.precision(stradd), ok
 }
 
-func (t Time) toSeconds() int {
-	tsecs := t.Hour()*secondsPerHour + t.Minute()*secondsPerMinute + t.Second()
+func (t Time) toDuration() time.Duration {
+	dur := time.Duration(t.hour)*time.Hour + time.Duration(t.minute)*time.Minute + time.Duration(t.second)*time.Second + time.Duration(t.nanosecond)*time.Nanosecond
 	if t.Neg() {
-		return -tsecs
+		return -dur
 	}
-	return tsecs
+	return dur
 }
 
 func (d Date) ToStdTime(loc *time.Location) (out time.Time) {
@@ -577,8 +577,12 @@ func (dt DateTime) Round(p int) (r DateTime) {
 	return r
 }
 
-func (dt DateTime) toSeconds() int {
-	return (dt.Date.Day()-1)*secondsPerDay + dt.Time.toSeconds()
+func (dt DateTime) toDuration() time.Duration {
+	dur := dt.Time.toDuration()
+	if !dt.Date.IsZero() {
+		dur += time.Duration(dt.Date.Day()-1) * durationPerDay
+	}
+	return dur
 }
 
 func (dt *DateTime) addInterval(itv *Interval) bool {
@@ -588,29 +592,25 @@ func (dt *DateTime) addInterval(itv *Interval) bool {
 			return false
 		}
 
-		nsec := dt.Time.Nanosecond() + itv.nsec
-		sec := dt.toSeconds() + itv.toSeconds() + (nsec / int(time.Second))
-		nsec = nsec % int(time.Second)
+		dur := dt.toDuration()
+		dur += itv.toDuration()
+		days := time.Duration(0)
+		if !dt.Date.IsZero() {
+			days = dur / durationPerDay
+			dur -= days * durationPerDay
 
-		if nsec < 0 {
-			nsec += int(time.Second)
-			sec--
+			if dur < 0 {
+				dur += durationPerDay
+				days--
+			}
 		}
 
-		days := sec / secondsPerDay
-		sec -= days * secondsPerDay
+		dt.Time.nanosecond = uint32((dur % time.Second) / time.Nanosecond)
+		dt.Time.second = uint8((dur % time.Minute) / time.Second)
+		dt.Time.minute = uint8((dur % time.Hour) / time.Minute)
+		dt.Time.hour = uint16(dur / time.Hour)
 
-		if sec < 0 {
-			sec += secondsPerDay
-			days--
-		}
-
-		dt.Time.nanosecond = uint32(nsec)
-		dt.Time.second = uint8(sec % secondsPerMinute)
-		dt.Time.minute = uint8((sec / secondsPerMinute) % secondsPerMinute)
-		dt.Time.hour = uint16(sec / secondsPerHour)
-
-		daynum := mysqlDayNumber(dt.Date.Year(), dt.Date.Month(), 1) + days
+		daynum := mysqlDayNumber(dt.Date.Year(), dt.Date.Month(), 1) + int(days)
 		if daynum < 0 || daynum > maxDay {
 			return false
 		}

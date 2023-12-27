@@ -285,7 +285,5 @@ func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, l
 }
 
 const (
-	secondsPerMinute = 60
-	secondsPerHour   = 60 * secondsPerMinute
-	secondsPerDay    = 24 * secondsPerHour
+	durationPerDay = 24 * time.Hour
 )
