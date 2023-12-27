@@ -144,8 +144,8 @@ func TestVDiff2(t *testing.T) {
 	generateMoreCustomers(t, sourceKs, 1000)
 
 	// Create rows in the nopk table using the customer names and random ages between 20 and 100.
-	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s.nopk(name, age) select name, floor(rand()*80)+20 from %s.customer", sourceKs, sourceKs), -1, false)
-	require.NoError(t, err, "failed to insert rows into nopk table: %v", err)
+	query = "insert into nopk(name, age) select name, floor(rand()*80)+20 from customer"
+	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
