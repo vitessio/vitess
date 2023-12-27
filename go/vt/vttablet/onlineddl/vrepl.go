@@ -185,7 +185,7 @@ func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnec
 		return 0, err
 	}
 
-	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(query, math.MaxInt, true)
 	if err != nil {
 		return 0, err
 	}
@@ -199,7 +199,7 @@ func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnec
 // readTableColumns reads column list from given table
 func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (columns *vrepl.ColumnList, virtualColumns *vrepl.ColumnList, pkColumns *vrepl.ColumnList, err error) {
 	parsed := sqlparser.BuildParsedQuery(sqlShowColumnsFrom, tableName)
-	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt, true)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -237,7 +237,7 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 	if err != nil {
 		return nil, err
 	}
-	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(query, math.MaxInt, true)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 // When `fast_analyze_table=1`, an `ANALYZE TABLE` command only analyzes the clustering index (normally the `PRIMARY KEY`).
 // This is useful when you want to get a better estimate of the number of table rows, as fast as possible.
 func (v *VRepl) isFastAnalyzeTableSupported(ctx context.Context, conn *dbconnpool.DBConnection) (isSupported bool, err error) {
-	rs, err := conn.ExecuteFetch(sqlShowVariablesLikeFastAnalyzeTable, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(sqlShowVariablesLikeFastAnalyzeTable, math.MaxInt, true)
 	if err != nil {
 		return false, err
 	}
@@ -295,7 +295,7 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 // readTableStatus reads table status information
 func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (tableRows int64, err error) {
 	parsed := sqlparser.BuildParsedQuery(sqlShowTableStatus, tableName)
-	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt, true)
 	if err != nil {
 		return 0, err
 	}
@@ -316,7 +316,7 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 	if err != nil {
 		return err
 	}
-	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(query, math.MaxInt, true)
 	if err != nil {
 		return err
 	}
