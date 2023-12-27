@@ -29,7 +29,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -112,7 +111,7 @@ var testCases = []*testCase{
 }
 
 func TestVDiff2(t *testing.T) {
-	allCellNames = "zone5,zone1,zone2,zone3,zone4"
+	cellNames := "zone5,zone1,zone2,zone3,zone4"
 	sourceKs := "product"
 	sourceShards := []string{"0"}
 	targetKs := "customer"
@@ -120,27 +119,19 @@ func TestVDiff2(t *testing.T) {
 	// This forces us to use multiple vstream packets even with small test tables.
 	extraVTTabletArgs = []string{"--vstream_packet_size=1"}
 
-	vc = NewVitessCluster(t, "TestVDiff2", strings.Split(allCellNames, ","), mainClusterConfig)
-	require.NotNil(t, vc)
+	vc = NewVitessCluster(t, &clusterOptions{cells: strings.Split(cellNames, ",")})
+	defer vc.TearDown()
+
 	zone1 := vc.Cells["zone1"]
 	zone2 := vc.Cells["zone2"]
 	zone3 := vc.Cells["zone3"]
-	defaultCell = zone1
-
-	defer vc.TearDown(t)
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
 	_, err := vc.AddKeyspace(t, []*Cell{zone2, zone1, zone3}, sourceKs, strings.Join(sourceShards, ","), initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
 	require.NoError(t, err)
 
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	for _, shard := range sourceShards {
-		require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard))
-	}
-
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
@@ -153,16 +144,13 @@ func TestVDiff2(t *testing.T) {
 	generateMoreCustomers(t, sourceKs, 1000)
 
 	// Create rows in the nopk table using the customer names and random ages between 20 and 100.
-	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s.nopk(name, age) select name, floor(rand()*80)+20 from %s.customer", sourceKs, sourceKs), -1, false)
-	require.NoError(t, err, "failed to insert rows into nopk table: %v", err)
+	query = "insert into nopk(name, age) select name, floor(rand()*80)+20 from customer"
+	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
 	tks, err := vc.AddKeyspace(t, []*Cell{zone3, zone1, zone2}, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
 	require.NoError(t, err)
-	for _, shard := range targetShards {
-		require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard))
-	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -176,9 +164,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	arrTargetShards := strings.Split(tc.targetShards, ",")
 	if tc.typ == "Reshard" {
 		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID, targetKsOpts))
-		for _, shard := range arrTargetShards {
-			require.NoError(t, cluster.WaitForHealthyShard(vc.VtctldClient, tc.targetKs, shard))
-		}
+
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 	var args []string
@@ -187,6 +173,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	if tc.typ == "Reshard" {
 		args = append(args, "--source_shards", tc.sourceShards, "--target_shards", tc.targetShards)
 	}
+	allCellNames := getCellNames(nil)
 	args = append(args, "--cells", allCellNames)
 	args = append(args, "--tables", tc.tables)
 	args = append(args, "Create")
@@ -379,6 +366,8 @@ func testNoOrphanedData(t *testing.T, keyspace, workflow string, shards []string
 
 func testResume(t *testing.T, tc *testCase, cells string) {
 	t.Run("Resume", func(t *testing.T) {
+		vtgateConn, closeConn := getVTGateConn()
+		defer closeConn()
 		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 
 		// confirm the last VDiff is in the expected completed state
@@ -422,6 +411,8 @@ func testStop(t *testing.T, ksWorkflow, cells string) {
 
 func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 	t.Run("Auto retry on error", func(t *testing.T) {
+		vtgateConn, closeConn := getVTGateConn()
+		defer closeConn()
 		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 
 		// confirm the last VDiff is in the expected completed state

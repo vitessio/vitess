@@ -34,7 +34,7 @@ import (
 const (
 	vdiffTimeout             = 90 * time.Second // we can leverage auto retry on error with this longer-than-usual timeout
 	vdiffRetryTimeout        = 30 * time.Second
-	vdiffStatusCheckInterval = 1 * time.Second
+	vdiffStatusCheckInterval = 5 * time.Second
 	vdiffRetryInterval       = 5 * time.Second
 )
 
@@ -341,6 +341,8 @@ func encodeString(in string) string {
 // generateMoreCustomers creates additional test data for better tests
 // when needed.
 func generateMoreCustomers(t *testing.T, keyspace string, numCustomers int64) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	log.Infof("Generating more test data with an additional %d customers", numCustomers)
 	res := execVtgateQuery(t, vtgateConn, keyspace, "select max(cid) from customer")
 	startingID, _ := res.Rows[0][0].ToInt64()
