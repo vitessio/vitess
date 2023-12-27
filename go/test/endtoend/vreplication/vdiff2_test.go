@@ -205,12 +205,16 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	err := vc.VtctlClient.ExecuteCommand(args...)
 	require.NoError(t, err)
 
+	waitForShardsToCatchup := func() {
+		for _, shard := range arrTargetShards {
+			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
+			catchup(t, tab, tc.workflow, tc.typ)
+		}
+	}
+
 	// Wait for the workflow to finish the copy phase and initially catch up.
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-	for _, shard := range arrTargetShards {
-		tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
-		catchup(t, tab, tc.workflow, tc.typ)
-	}
+	waitForShardsToCatchup()
 
 	if diffDuration, ok := tc.extraVDiffFlags["--max-diff-duration"]; ok {
 		if !strings.Contains(tc.tables, "customer") {
@@ -228,10 +232,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		}
 
 		// Wait for the workflow to catch up after all the inserts.
-		for _, shard := range arrTargetShards {
-			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
-			catchup(t, tab, tc.workflow, tc.typ)
-		}
+		waitForShardsToCatchup()
 
 		// This flag is only implemented in vtctldclient.
 		doVtctldclientVDiff(t, tc.targetKs, tc.workflow, allCellNames, nil, "--max-diff-duration", diffDuration)
@@ -252,10 +253,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 			require.NoError(t, err, "failed to cleanup added customer records: %v", err)
 		}
 		// Wait for the workflow to catch up again on the deletes.
-		for _, shard := range arrTargetShards {
-			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
-			catchup(t, tab, tc.workflow, tc.typ)
-		}
+		waitForShardsToCatchup()
 	} else {
 		vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
 	}
