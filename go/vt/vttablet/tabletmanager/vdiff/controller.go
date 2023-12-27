@@ -39,10 +39,8 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-/*
-vdiff operation states: pending/started/stopped/completed/error/unknown
-vdiff table states: pending/started/stopped/completed/error/unknown
-*/
+// VDiff operation and table states:
+// pending/started/stopped/completed/error/unknown
 type VDiffState string //nolint
 const (
 	PendingState    VDiffState = "pending"
@@ -55,28 +53,28 @@ const (
 )
 
 type controller struct {
-	id              int64 // id from row in _vt.vdiff
+	id              int64 // id from the row in _vt.vdiff
 	uuid            string
 	workflow        string
 	workflowType    binlogdatapb.VReplicationWorkflowType
 	cancel          context.CancelFunc
 	dbClientFactory func() binlogplayer.DBClient
 	ts              *topo.Server
-	vde             *Engine // the singleton vdiff engine
+	vde             *Engine // The singleton vdiff engine
 	done            chan struct{}
 
-	sources        map[string]*migrationSource // currently picked source tablets for this shard's data
+	sources        map[string]*migrationSource // Currently picked source tablets for this shard's data
 	workflowFilter string
 	sourceKeyspace string
 	tmc            tmclient.TabletManagerClient
 
 	targetShardStreamer *shardStreamer
-	filter              *binlogdatapb.Filter            // vreplication row filter
-	options             *tabletmanagerdata.VDiffOptions // options initially from vtctld command and later from _vt.vdiff
+	filter              *binlogdatapb.Filter            // VReplication row filter
+	options             *tabletmanagerdata.VDiffOptions // Options initially from vtctld command and later from _vt.vdiff
 
-	sourceTimeZone, targetTimeZone string // named time zones if conversions are necessary for datetime values
+	sourceTimeZone, targetTimeZone string // Named time zones if conversions are necessary for datetime values
 
-	externalCluster string // for Mount+Migrate
+	externalCluster string // For Mount+Migrate
 }
 
 func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
@@ -185,7 +183,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 	case <-ctx.Done():
 		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 	case <-ct.done:
-		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+		return ErrVDiffStoppedByUser
 	default:
 	}
 	ct.workflowFilter = fmt.Sprintf("where workflow = %s and db_name = %s", encodeString(ct.workflow),
@@ -201,7 +199,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		case <-ct.done:
-			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+			return ErrVDiffStoppedByUser
 		default:
 		}
 		source := newMigrationSource()
@@ -328,7 +326,7 @@ func (ct *controller) saveErrorState(ctx context.Context, saveErr error) error {
 			case <-ctx.Done():
 				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "engine is shutting down")
 			case <-ct.done:
-				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+				return ErrVDiffStoppedByUser
 			case <-time.After(retryDelay):
 				if retryDelay < maxRetryDelay {
 					retryDelay = time.Duration(float64(retryDelay) * 1.5)
