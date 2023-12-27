@@ -575,6 +575,22 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `INT64(0)`,
 		},
 		{
+			expression: `week('2023-12-31', 4)`,
+			result:     `INT64(53)`,
+		},
+		{
+			expression: `week('2023-12-31', 2)`,
+			result:     `INT64(53)`,
+		},
+		{
+			expression: `week('2024-12-31', 1)`,
+			result:     `INT64(53)`,
+		},
+		{
+			expression: `week('2024-12-31', 5)`,
+			result:     `INT64(53)`,
+		},
+		{
 			expression: `FROM_UNIXTIME(time '10:04:58.5')`,
 			result:     `DATETIME("1970-01-02 04:54:18.5")`,
 		},
