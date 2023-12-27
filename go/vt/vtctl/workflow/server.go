@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -450,13 +451,11 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		return nil
 	}
 
-	var (
-		fetchCopyStatesWg     sync.WaitGroup
-		fetchCopyStatesErrors concurrency.FirstErrorRecorder
-	)
+	fetchCopyStatesEg, fetchCopyStatesCtx := errgroup.WithContext(ctx)
 
 	for tablet, result := range results {
 		qr := sqltypes.Proto3ToResult(result)
+		tablet := tablet // loop closure
 
 		streamIds := make([]int64, 0, len(qr.Rows))
 		for _, row := range qr.Named().Rows {
@@ -471,18 +470,13 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			continue
 		}
 
-		fetchCopyStatesWg.Add(1)
-		go func(ctx context.Context, tablet *topo.TabletInfo, streamIds []int64) {
-			defer fetchCopyStatesWg.Done()
-			if err := fetchCopyStates(ctx, tablet, streamIds); err != nil {
-				fetchCopyStatesErrors.RecordError(err)
-			}
-		}(ctx, tablet, streamIds)
+		fetchCopyStatesEg.Go(func() error {
+			return fetchCopyStates(fetchCopyStatesCtx, tablet, streamIds)
+		})
 	}
 
-	fetchCopyStatesWg.Wait()
-	if fetchCopyStatesErrors.HasErrors() {
-		return nil, fetchCopyStatesErrors.Error()
+	if err := fetchCopyStatesEg.Wait(); err != nil {
+		return nil, err
 	}
 
 	workflowsMap := make(map[string]*vtctldatapb.Workflow, len(results))
