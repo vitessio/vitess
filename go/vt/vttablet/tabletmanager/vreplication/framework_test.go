@@ -524,6 +524,19 @@ func expectDeleteQueries(t *testing.T) {
 	))
 }
 
+func deleteAllVReplicationStreams(t *testing.T) {
+	t.Helper()
+	res, err := playerEngine.Exec("select id from _vt.vreplication")
+	require.NoError(t, err, "could not select ids from _vt.vreplication: %v", err)
+	ids := make([]string, len(res.Rows))
+	for i, row := range res.Rows {
+		id := row[0].ToString()
+		ids[i] = id
+	}
+	_, err = playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id in (%s)", strings.Join(ids, ",")))
+	require.NoError(t, err, "failed to delete vreplication rows: %v", err)
+}
+
 func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *VrLogStats) {
 	t.Helper()
 	defer vrLogStatsLogger.Unsubscribe(logCh)
@@ -568,6 +581,9 @@ func shouldIgnoreQuery(query string) bool {
 		", component_throttled=", // update of last throttle time, can happen out-of-band, so can't test for it
 		"context cancel",
 		"SELECT rows_copied FROM _vt.vreplication WHERE id=",
+		// This is only executed if the table has no defined Primary Key, which we don't know in the lower level
+		// code.
+		"SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS",
 	}
 	if sidecardb.MatchesInitQuery(query) {
 		return true

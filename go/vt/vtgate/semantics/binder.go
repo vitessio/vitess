@@ -20,6 +20,8 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // binder is responsible for finding all the column references in
@@ -29,6 +31,7 @@ import (
 type binder struct {
 	recursive ExprDependencies
 	direct    ExprDependencies
+	targets   map[sqlparser.IdentifierCS]TableSet
 	scoper    *scoper
 	tc        *tableCollector
 	org       originable
@@ -44,6 +47,7 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 	return &binder{
 		recursive:     map[sqlparser.Expr]TableSet{},
 		direct:        map[sqlparser.Expr]TableSet{},
+		targets:       map[sqlparser.IdentifierCS]TableSet{},
 		scoper:        scoper,
 		org:           org,
 		tc:            tc,
@@ -106,8 +110,45 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 				b.typer.m[ae.Expr] = t
 			}
 		}
+	case sqlparser.TableNames:
+		_, isDelete := cursor.Parent().(*sqlparser.Delete)
+		if !isDelete {
+			return nil
+		}
+		current := b.scoper.currentScope()
+		for _, target := range node {
+			finalDep, err := b.findDependentTableSet(current, target)
+			if err != nil {
+				return err
+			}
+			b.targets[target.Name] = finalDep.direct
+		}
 	}
 	return nil
+}
+
+func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableName) (dependency, error) {
+	var deps dependencies = &nothing{}
+	for _, table := range current.tables {
+		tblName, err := table.Name()
+		if err != nil {
+			continue
+		}
+		if tblName.Name.String() != target.Name.String() {
+			continue
+		}
+		ts := b.org.tableSetFor(table.GetAliasedTableExpr())
+		c := createCertain(ts, ts, evalengine.Type{})
+		deps = deps.merge(c, false)
+	}
+	finalDep, err := deps.get()
+	if err != nil {
+		return dependency{}, err
+	}
+	if finalDep.direct != finalDep.recursive {
+		return dependency{}, vterrors.VT03004(target.Name.String())
+	}
+	return finalDep, nil
 }
 
 func (b *binder) bindCountStar(node *sqlparser.CountStar) {

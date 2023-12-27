@@ -201,7 +201,7 @@ func (sqb *SubQueryBuilder) inspectWhere(
 		outerID: sqb.outerID,
 	}
 	for _, predicate := range sqlparser.SplitAndExpression(nil, in.Expr) {
-		sqlparser.RemoveKeyspaceFromColName(predicate)
+		sqlparser.RemoveKeyspace(predicate)
 		subq := sqb.handleSubquery(ctx, predicate, sqb.totalID)
 		if subq != nil {
 			continue

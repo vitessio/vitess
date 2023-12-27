@@ -375,6 +375,19 @@ message ApplyVSchemaRequest {
 
 message ApplyVSchemaResponse {
   vschema.Keyspace v_schema = 1;
+  // UnknownVindexParams is a map of vindex name to params that were not recognized by the vindex
+  // type. E.g.:
+  //
+  // {
+  //   "lookup_vdx": {
+  //     "params": ["raed_lock", "not_verify"]
+  //   }
+  // }
+  map<string, ParamList> unknown_vindex_params = 2;
+
+  message ParamList {
+    repeated string params = 1;
+  }
 }
 
 message BackupRequest {
@@ -1725,6 +1738,7 @@ message VDiffCreateRequest {
   bool auto_retry = 17;
   bool verbose = 18;
   int64 max_report_sample_rows = 19;
+  vttime.Duration max_diff_duration = 20;
 }
 
 message VDiffCreateResponse {

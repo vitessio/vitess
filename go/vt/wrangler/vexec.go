@@ -44,6 +44,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	workflow2 "vitess.io/vitess/go/vt/vtctl/workflow"
 	vtctldvexec "vitess.io/vitess/go/vt/vtctl/workflow/vexec" // renamed to avoid a collision with the vexec struct in this package
 )
@@ -478,8 +479,10 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 	return wr.runVexec(ctx, workflow, keyspace, query, callback, dryRun)
 }
 
-// WorkflowTagAction sets or clears the tags for a workflow in a keyspace
+// WorkflowTagAction sets or clears the tags for a workflow in a keyspace.
 func (wr *Wrangler) WorkflowTagAction(ctx context.Context, keyspace string, workflow string, tags string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+	// A WHERE clause with the correct workflow name is automatically added
+	// to the query later on in vexec.addDefaultWheres().
 	query := fmt.Sprintf("update _vt.vreplication set tags = %s", encodeString(tags))
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false)
 	return wr.convertQueryResultToSQLTypesResult(results), err
@@ -734,13 +737,13 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			continue
 		}
 		// Get all copy states for the shard.
-		var vreplIDs []int64
-		for _, row := range nqr.Rows {
+		vreplIDs := make([]int64, 0, len(nqr.Rows))
+		for i, row := range nqr.Rows {
 			vreplID, err := row.ToInt64("id")
 			if err != nil {
 				return nil, err
 			}
-			vreplIDs = append(vreplIDs, vreplID)
+			vreplIDs[i] = vreplID
 		}
 		copyStatesByVReplID, err := wr.getCopyStates(ctx, primary, vreplIDs)
 		if err != nil {
@@ -940,7 +943,7 @@ func (wr *Wrangler) getCopyStates(ctx context.Context, tablet *topo.TabletInfo, 
 	for _, row := range result.Rows {
 		vreplID, err := row[0].ToInt64()
 		if err != nil {
-			return nil, fmt.Errorf("failed to cast vrepl_id to int64: %v", err)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to cast vrepl_id to int64: %v", err)
 		}
 		// These fields are varbinary, but close enough
 		table := row[1].ToString()

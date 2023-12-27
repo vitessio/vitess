@@ -24,7 +24,6 @@ import (
 	"reflect"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -1122,11 +1121,7 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 	span.Annotate("keyspace", tablet.Keyspace)
 	span.Annotate("shard", tablet.Shard)
 	span.Annotate("tablet_alias", tablet.AliasString())
-	var strStreamIds []string
-	for _, streamId := range streamIds {
-		strStreamIds = append(strStreamIds, strconv.FormatInt(streamId, 10))
-	}
-	span.Annotate("stream_ids", strings.Join(strStreamIds, ","))
+	span.Annotate("stream_ids", fmt.Sprintf("%#v", streamIds))
 
 	idsBV, err := sqltypes.BuildBindVariable(streamIds)
 	if err != nil {
@@ -1151,7 +1146,7 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 	for i, row := range result.Rows {
 		streamId, err := row[0].ToInt64()
 		if err != nil {
-			return nil, fmt.Errorf("failed to cast vrepl_id to int64: %v", err)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to cast vrepl_id to int64: %v", err)
 		}
 		// These string fields are technically varbinary, but this is close enough.
 		copyStates[i] = &vtctldatapb.Workflow_Stream_CopyState{
@@ -1704,6 +1699,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("tables", req.Tables)
 	span.Annotate("auto_retry", req.AutoRetry)
+	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 
 	tabletTypesStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
 	if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
@@ -1723,6 +1719,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 			TimeoutSeconds:        req.FilteredReplicationWaitTime.Seconds,
 			MaxExtraRowsToCompare: req.MaxExtraRowsToCompare,
 			UpdateTableStats:      req.UpdateTableStats,
+			MaxDiffSeconds:        req.MaxDiffDuration.Seconds,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
 			OnlyPks:       req.OnlyPKs,

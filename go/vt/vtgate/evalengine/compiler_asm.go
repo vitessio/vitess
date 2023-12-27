@@ -288,13 +288,13 @@ func (asm *assembler) BitShiftLeft_bu() {
 		r := env.vm.stack[env.vm.sp-1].(*evalUint64)
 
 		var (
-			bits   = int(r.u & 7)
-			bytes  = int(r.u >> 3)
-			length = len(l.bytes)
+			bits   = int64(r.u & 7)
+			bytes  = int64(r.u >> 3)
+			length = int64(len(l.bytes))
 			out    = make([]byte, length)
 		)
 
-		for i := 0; i < length; i++ {
+		for i := int64(0); i < length; i++ {
 			pos := i + bytes + 1
 			switch {
 			case pos < length:
@@ -332,9 +332,9 @@ func (asm *assembler) BitShiftRight_bu() {
 		r := env.vm.stack[env.vm.sp-1].(*evalUint64)
 
 		var (
-			bits   = int(r.u & 7)
-			bytes  = int(r.u >> 3)
-			length = len(l.bytes)
+			bits   = int64(r.u & 7)
+			bytes  = int64(r.u >> 3)
+			length = int64(len(l.bytes))
 			out    = make([]byte, length)
 		)
 
@@ -904,7 +904,7 @@ func (asm *assembler) Convert_Ti(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
 		if v.prec != 0 {
-			env.vm.err = errDeoptimize
+			env.vm.err = vterrors.NewErrorf(vtrpc.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "temporal type with non-zero precision")
 			return 1
 		}
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(v.toInt64())
@@ -918,6 +918,18 @@ func (asm *assembler) Convert_Tf(offset int) {
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalFloat(v.toFloat())
 		return 1
 	}, "CONV SQLTIME(SP-%d), FLOAT64", offset)
+}
+
+func (asm *assembler) Convert_Td(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
+		if v.prec == 0 {
+			env.vm.err = vterrors.NewErrorf(vtrpc.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "temporal type with zero precision")
+			return 1
+		}
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalDecimalWithPrec(v.toDecimal(), int32(v.prec))
+		return 1
+	}, "CONV SQLTIME(SP-%d), DECIMAL", offset)
 }
 
 func (asm *assembler) Convert_iB(offset int) {

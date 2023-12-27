@@ -559,35 +559,65 @@ func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
 
 	switch ts := ts.(type) {
 	case *evalInt64:
+		if ts.i < 0 || ts.i >= maxUnixtime {
+			return nil, nil
+		}
 		sec = ts.i
 	case *evalUint64:
+		if ts.u >= maxUnixtime {
+			return nil, nil
+		}
 		sec = int64(ts.u)
 	case *evalFloat:
+		if ts.f < 0 || ts.f >= maxUnixtime {
+			return nil, nil
+		}
 		sf, ff := math.Modf(ts.f)
 		sec = int64(sf)
 		frac = int64(ff * 1e9)
 		prec = maxTimePrec
 	case *evalDecimal:
+		if ts.dec.Sign() < 0 {
+			return nil, nil
+		}
 		sd, fd := ts.dec.QuoRem(decimal.New(1, 0), 0)
 		sec, _ = sd.Int64()
+		if sec >= maxUnixtime {
+			return nil, nil
+		}
 		frac, _ = fd.Mul(decimal.New(1, 9)).Int64()
 		prec = int(ts.length)
 	case *evalTemporal:
 		if ts.prec == 0 {
 			sec = ts.toInt64()
+			if sec < 0 || sec >= maxUnixtime {
+				return nil, nil
+			}
 		} else {
 			dec := ts.toDecimal()
+			if dec.Sign() < 0 {
+				return nil, nil
+			}
 			sd, fd := dec.QuoRem(decimal.New(1, 0), 0)
 			sec, _ = sd.Int64()
+			if sec >= maxUnixtime {
+				return nil, nil
+			}
 			frac, _ = fd.Mul(decimal.New(1, 9)).Int64()
 			prec = int(ts.prec)
 		}
 	case *evalBytes:
 		if ts.isHexOrBitLiteral() {
 			u, _ := ts.toNumericHex()
+			if u.u >= maxUnixtime {
+				return nil, nil
+			}
 			sec = int64(u.u)
 		} else {
 			f, _ := evalToFloat(ts)
+			if f.f < 0 || f.f >= maxUnixtime {
+				return nil, nil
+			}
 			sf, ff := math.Modf(f.f)
 			sec = int64(sf)
 			frac = int64(ff * 1e9)
@@ -595,14 +625,13 @@ func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
 		}
 	default:
 		f, _ := evalToFloat(ts)
+		if f.f < 0 || f.f >= maxUnixtime {
+			return nil, nil
+		}
 		sf, ff := math.Modf(f.f)
 		sec = int64(sf)
 		frac = int64(ff * 1e9)
 		prec = maxTimePrec
-	}
-
-	if sec < 0 || sec >= maxUnixtime {
-		return nil, nil
 	}
 
 	t := time.Unix(sec, frac)
@@ -645,8 +674,13 @@ func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
 	case sqltypes.Decimal:
 		c.asm.Fn_FROM_UNIXTIME_d()
 	case sqltypes.Datetime, sqltypes.Date, sqltypes.Time:
-		c.asm.Convert_Ti(1)
-		c.asm.Fn_FROM_UNIXTIME_i()
+		if arg.Size == 0 {
+			c.asm.Convert_Ti(1)
+			c.asm.Fn_FROM_UNIXTIME_i()
+		} else {
+			c.asm.Convert_Td(1)
+			c.asm.Fn_FROM_UNIXTIME_d()
+		}
 	case sqltypes.VarChar, sqltypes.VarBinary:
 		if arg.isHexOrBitLiteral() {
 			c.asm.Convert_xu(1)

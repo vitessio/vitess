@@ -64,6 +64,21 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		return r.handleWith(node)
 	case *sqlparser.AliasedTableExpr:
 		return r.handleAliasedTable(node)
+	case *sqlparser.Delete:
+		// When we do not have any target, it is a single table delete.
+		// In a single table delete, the table references is always a single aliased table expression.
+		if len(node.Targets) != 0 {
+			return nil
+		}
+		tblExpr, ok := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
+		if !ok {
+			return nil
+		}
+		tblName, err := tblExpr.TableName()
+		if err != nil {
+			return err
+		}
+		node.Targets = append(node.Targets, tblName)
 	}
 	return nil
 }

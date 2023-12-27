@@ -2362,8 +2362,8 @@ func (cmp *Comparator) RefOfDelete(a, b *Delete) bool {
 	return cmp.RefOfWith(a.With, b.With) &&
 		a.Ignore == b.Ignore &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
-		cmp.TableNames(a.Targets, b.Targets) &&
 		cmp.TableExprs(a.TableExprs, b.TableExprs) &&
+		cmp.TableNames(a.Targets, b.Targets) &&
 		cmp.Partitions(a.Partitions, b.Partitions) &&
 		cmp.RefOfWhere(a.Where, b.Where) &&
 		cmp.OrderBy(a.OrderBy, b.OrderBy) &&

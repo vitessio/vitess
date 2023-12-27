@@ -364,14 +364,35 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		vs = req.VSchema
 	}
 
-	if req.DryRun { // we return what was passed in and parsed, rather than current
-		return &vtctldatapb.ApplyVSchemaResponse{VSchema: vs}, nil
-	}
-
-	_, err = vindexes.BuildKeyspace(vs, s.ws.SQLParser())
+	ksVs, err := vindexes.BuildKeyspace(vs, s.ws.SQLParser())
 	if err != nil {
 		err = vterrors.Wrapf(err, "BuildKeyspace(%s)", req.Keyspace)
 		return nil, err
+	}
+
+	// Attach unknown Vindex params to the response.
+	unknownVindexParams := make(map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList)
+	var vdxNames []string
+	for name := range ksVs.Vindexes {
+		vdxNames = append(vdxNames, name)
+	}
+	sort.Strings(vdxNames)
+	for _, name := range vdxNames {
+		vdx := ksVs.Vindexes[name]
+		if val, ok := vdx.(vindexes.ParamValidating); ok {
+			ups := val.UnknownParams()
+			if len(ups) == 0 {
+				continue
+			}
+			unknownVindexParams[name] = &vtctldatapb.ApplyVSchemaResponse_ParamList{Params: ups}
+		}
+	}
+
+	if req.DryRun { // we return what was passed in and parsed, plus unknown vindex params
+		return &vtctldatapb.ApplyVSchemaResponse{
+			VSchema:             vs,
+			UnknownVindexParams: unknownVindexParams,
+		}, nil
 	}
 
 	if err = s.ts.SaveVSchema(ctx, req.Keyspace, vs); err != nil {
@@ -390,7 +411,10 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		err = vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
 		return nil, err
 	}
-	return &vtctldatapb.ApplyVSchemaResponse{VSchema: updatedVS}, nil
+	return &vtctldatapb.ApplyVSchemaResponse{
+		VSchema:             updatedVS,
+		UnknownVindexParams: unknownVindexParams,
+	}, nil
 }
 
 // Backup is part of the vtctlservicepb.VtctldServer interface.
@@ -4830,6 +4854,7 @@ func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCr
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("tables", req.Tables)
 	span.Annotate("auto_retry", req.AutoRetry)
+	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 
 	resp, err = s.ws.VDiffCreate(ctx, req)
 	return resp, err

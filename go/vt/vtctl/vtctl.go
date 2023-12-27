@@ -3407,7 +3407,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		vdx := ksVs.Vindexes[name]
 		if val, ok := vdx.(vindexes.ParamValidating); ok {
 			for _, param := range val.UnknownParams() {
-				wr.Logger().Warningf("Unknown param in vindex %s: %s", name, param)
+				wr.Logger().Warningf("Unknown parameter in vindex %s: %s", name, param)
 			}
 		}
 	}
