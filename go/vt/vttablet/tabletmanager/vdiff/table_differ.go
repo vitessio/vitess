@@ -52,6 +52,9 @@ import (
 // how long to wait for background operations to complete
 var BackgroundOperationTimeout = topo.RemoteOperationTimeout * 4
 
+var ErrMaxDiffDurationExceeded = vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "table diff was stopped due to exceeding the max-diff-duration time")
+var ErrVDiffStoppedByUser = vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped by user")
+
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
 	colIndex  int           // index of the column in the filter's select
@@ -431,7 +434,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			case <-ctx.Done():
 				return vterrors.Wrap(ctx.Err(), "VStreamRows")
 			case <-td.wd.ct.done:
-				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+				return ErrVDiffStoppedByUser
 			}
 			return nil
 		})
@@ -463,7 +466,7 @@ func (td *tableDiffer) setupRowSorters() {
 	}
 }
 
-func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows int64) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows int64, stop <-chan time.Time) (*DiffReport, error) {
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -507,7 +510,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 	advanceSource := true
 	advanceTarget := true
 
-	// Save our progress when we finish the run
+	// Save our progress when we finish the run.
 	defer func() {
 		if err := td.updateTableProgress(dbClient, dr, lastProcessedRow); err != nil {
 			log.Errorf("Failed to update vdiff progress on %s table: %v", td.table.Name, err)
@@ -521,7 +524,10 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		case <-ctx.Done():
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		case <-td.wd.ct.done:
-			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "vdiff was stopped")
+			return nil, ErrVDiffStoppedByUser
+		case <-stop:
+			globalStats.RestartedTableDiffs.Add(td.table.Name, 1)
+			return nil, ErrMaxDiffDurationExceeded
 		default:
 		}
 
@@ -534,7 +540,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		}
 		rowsToCompare--
 		if rowsToCompare < 0 {
-			log.Infof("Stopping vdiff, specified limit reached")
+			log.Infof("Stopping vdiff, specified row limit reached")
 			return dr, nil
 		}
 		if advanceSource {
@@ -565,7 +571,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 			}
 			dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
 
-			// drain target, update count
+			// Drain target, update count.
 			count, err := targetExecutor.drain(ctx)
 			if err != nil {
 				return nil, err
@@ -575,8 +581,8 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 			return dr, nil
 		}
 		if targetRow == nil {
-			// no more rows from the target
-			// we know we have rows from source, drain, update count
+			// No more rows from the target but we know we have more rows from
+			// source, so drain them and update the counts.
 			diffRow, err := td.genRowDiff(td.tablePlan.sourceQuery, sourceRow, debug, onlyPks)
 			if err != nil {
 				return nil, vterrors.Wrap(err, "unexpected error generating diff")
@@ -629,7 +635,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		case err != nil:
 			return nil, err
 		case c != 0:
-			// We don't do a second pass to compare mismatched rows so we can cap the slice here
+			// We don't do a second pass to compare mismatched rows so we can cap the slice here.
 			if maxReportSampleRows == 0 || dr.MismatchedRows < maxReportSampleRows {
 				sourceDiffRow, err := td.genRowDiff(td.tablePlan.targetQuery, sourceRow, debug, onlyPks)
 				if err != nil {
@@ -699,6 +705,16 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		lastPK, err = td.lastPKFromRow(lastRow)
 		if err != nil {
 			return err
+		}
+
+		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
+			// Update the in-memory lastPK as well so that we can restart the table
+			// diff if needed.
+			lastpkpb := &querypb.QueryResult{}
+			if err := prototext.Unmarshal(lastPK, lastpkpb); err != nil {
+				return err
+			}
+			td.lastPK = lastpkpb
 		}
 
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,

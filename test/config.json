@@ -1004,21 +1004,12 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vreplication_multicell": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "MultiCell"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vreplication_multicell",
-			"RetryMax": 2,
-			"Tags": []
-		},
 		"vreplication_materialize": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMaterialize"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_multicell",
+			"Shard": "vreplication_partial_movetables_and_materialize",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -1027,7 +1018,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMaterializeVtctldClient"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_multicell",
+			"Shard": "vreplication_partial_movetables_and_materialize",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -1045,7 +1036,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTablesBasic"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_partial_movetables_basic",
+			"Shard": "vreplication_partial_movetables_and_materialize",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -1054,7 +1045,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMultipleConcurrentVDiffs"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_partial_movetables_basic",
+			"Shard": "vreplication_partial_movetables_and_materialize",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -1108,7 +1099,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestPartialMoveTablesWithSequences"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_partial_movetables_sequences",
+			"Shard": "vreplication_partial_movetables_and_materialize",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1126,7 +1117,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamFailover"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vstream_failover",
+			"Shard": "vstream",
 			"RetryMax": 3,
 			"Tags": []
 		},
@@ -1135,7 +1126,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamStopOnReshardTrue"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vstream_stoponreshard_true",
+			"Shard": "vstream",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1144,7 +1135,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamStopOnReshardFalse"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vstream_stoponreshard_false",
+			"Shard": "vstream",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1153,7 +1144,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamWithKeyspacesToWatch"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vstream_with_keyspaces_to_watch",
+			"Shard": "vstream",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1267,7 +1258,7 @@
 		},
 		"vdiff2": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2", "-timeout", "20m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate_vdiff2_convert_tz",

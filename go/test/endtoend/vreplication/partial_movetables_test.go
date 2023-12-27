@@ -103,8 +103,7 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 		extraVTGateArgs = origExtraVTGateArgs
 	}()
 	vc = setupMinimalCluster(t)
-	defer vtgateConn.Close()
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 	setupMinimalCustomerKeyspace(t)
 
 	// Move customer table from unsharded product keyspace to
@@ -159,6 +158,8 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	catchup(t, targetTab1, wfName, "Partial MoveTables Customer to Customer2")
 	vdiffSideBySide(t, ksWf, "")
 
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	waitForRowCount(t, vtgateConn, "customer", "customer", 3)      // customer: all shards
 	waitForRowCount(t, vtgateConn, "customer2", "customer", 3)     // customer2: all shards
 	waitForRowCount(t, vtgateConn, "customer2:80-", "customer", 2) // customer2: 80-
@@ -182,9 +183,9 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	}
 
 	// This query uses an ID that should always get routed to shard 80-
-	shard80MinusRoutedQuery := "select name from customer where cid = 1 and noexistcol = 'foo'"
+	shard80DashRoutedQuery := "select name from customer where cid = 1 and noexistcol = 'foo'"
 	// This query uses an ID that should always get routed to shard -80
-	shardMinus80RoutedQuery := "select name from customer where cid = 2 and noexistcol = 'foo'"
+	shardDash80RoutedQuery := "select name from customer where cid = 2 and noexistcol = 'foo'"
 
 	// reset any existing vtgate connection state
 	vtgateConn.Close()
@@ -205,14 +206,14 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	log.Infof("Testing reverse route (target->source) for shard being switched")
 	_, err = vtgateConn.ExecuteFetch("use `customer2:80-`", 0, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer.80-.primary", "Query was routed to the target before any SwitchTraffic")
 
 	log.Infof("Testing reverse route (target->source) for shard NOT being switched")
 	_, err = vtgateConn.ExecuteFetch("use `customer2:-80`", 0, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch(shardMinus80RoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer.-80.primary", "Query was routed to the target before any SwitchTraffic")
 
@@ -236,40 +237,40 @@ func TestPartialMoveTablesBasic(t *testing.T) {
 	defer vtgateConn.Close()
 
 	// No shard targeting
-	_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer2.80-.primary", "Query was routed to the source after partial SwitchTraffic")
-	_, err = vtgateConn.ExecuteFetch(shardMinus80RoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer.-80.primary", "Query was routed to the target before partial SwitchTraffic")
 
 	// Shard targeting
 	_, err = vtgateConn.ExecuteFetch("use `customer2:80-`", 0, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer2.80-.primary", "Query was routed to the source after partial SwitchTraffic")
 	_, err = vtgateConn.ExecuteFetch("use `customer:80-`", 0, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer2.80-.primary", "Query was routed to the source after partial SwitchTraffic")
 
 	// Tablet type targeting
 	_, err = vtgateConn.ExecuteFetch("use `customer2@replica`", 0, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer2.80-.replica", "Query was routed to the source after partial SwitchTraffic")
-	_, err = vtgateConn.ExecuteFetch(shardMinus80RoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
 	_, err = vtgateConn.ExecuteFetch("use `customer@replica`", 0, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch(shard80MinusRoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer2.80-.replica", "Query was routed to the source after partial SwitchTraffic")
-	_, err = vtgateConn.ExecuteFetch(shardMinus80RoutedQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(shardDash80RoutedQuery, 0, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
 
