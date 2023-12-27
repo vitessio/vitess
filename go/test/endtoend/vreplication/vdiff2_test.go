@@ -81,7 +81,6 @@ var testCases = []*testCase{
 		testCLIErrors:       true, // test for errors in the simplest workflow
 		testCLICreateWait:   true, // test wait on create feature against simplest workflow
 		testCLIFlagHandling: true, // test flag handling end-to-end against simplest workflow
-		// Uncomment this to test the max-diff-duration flag.
 		extraVDiffFlags: map[string]string{
 			"--max-diff-duration": "1s",
 		},
@@ -215,7 +214,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		require.NoError(t, err, "could not parse --max-diff-duration %q: %v", diffDuration, err)
 		seconds := int64(dur.Seconds())
 		chunkSize := int64(100000)
-		perSecondCount := int64(500000)
+		perSecondCount := int64(1000000)
 		totalRowsToCreate := seconds * perSecondCount
 		for i := int64(0); i < totalRowsToCreate; i += chunkSize {
 			generateMoreCustomers(t, sourceKs, chunkSize)
