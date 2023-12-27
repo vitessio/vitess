@@ -337,6 +337,7 @@ func TestRandom(t *testing.T) {
 
 // these queries were previously failing and have now been fixed
 func TestBuggyQueries(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 

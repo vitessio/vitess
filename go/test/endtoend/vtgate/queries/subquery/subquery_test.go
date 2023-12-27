@@ -163,6 +163,8 @@ func TestSubqueryInReference(t *testing.T) {
 
 // TestSubqueryInAggregation validates that subquery work inside aggregation functions.
 func TestSubqueryInAggregation(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vttablet")
 	mcmp, closer := start(t)
 	defer closer()
 

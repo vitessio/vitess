@@ -54,6 +54,10 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
+		vtgateVersion, _ := cluster.GetMajorVersion("vtgate")
+		if vtgateVersion < 18 {
+			return 0
+		}
 		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
