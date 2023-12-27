@@ -2105,6 +2105,7 @@ func (m *VDiffCoreOptions) CloneVT() *VDiffCoreOptions {
 		TimeoutSeconds:        m.TimeoutSeconds,
 		MaxExtraRowsToCompare: m.MaxExtraRowsToCompare,
 		UpdateTableStats:      m.UpdateTableStats,
+		MaxDiffSeconds:        m.MaxDiffSeconds,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -7260,6 +7261,11 @@ func (m *VDiffCoreOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.MaxDiffSeconds != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.MaxDiffSeconds))
+		i--
+		dAtA[i] = 0x48
+	}
 	if m.UpdateTableStats {
 		i--
 		if m.UpdateTableStats {
@@ -9491,6 +9497,9 @@ func (m *VDiffCoreOptions) SizeVT() (n int) {
 	}
 	if m.UpdateTableStats {
 		n += 2
+	}
+	if m.MaxDiffSeconds != 0 {
+		n += 1 + sov(uint64(m.MaxDiffSeconds))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -20623,6 +20632,25 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.UpdateTableStats = bool(v != 0)
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxDiffSeconds", wireType)
+			}
+			m.MaxDiffSeconds = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxDiffSeconds |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

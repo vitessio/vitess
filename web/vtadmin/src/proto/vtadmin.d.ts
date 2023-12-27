@@ -27505,6 +27505,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffCoreOptions update_table_stats */
         update_table_stats?: (boolean|null);
+
+        /** VDiffCoreOptions max_diff_seconds */
+        max_diff_seconds?: (number|Long|null);
     }
 
     /** Represents a VDiffCoreOptions. */
@@ -27539,6 +27542,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffCoreOptions update_table_stats. */
         public update_table_stats: boolean;
+
+        /** VDiffCoreOptions max_diff_seconds. */
+        public max_diff_seconds: (number|Long);
 
         /**
          * Creates a new VDiffCoreOptions instance using the specified properties.
@@ -65719,6 +65725,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest max_report_sample_rows */
         max_report_sample_rows?: (number|Long|null);
+
+        /** VDiffCreateRequest max_diff_duration */
+        max_diff_duration?: (vttime.IDuration|null);
     }
 
     /** Represents a VDiffCreateRequest. */
@@ -65786,6 +65795,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest max_report_sample_rows. */
         public max_report_sample_rows: (number|Long);
+
+        /** VDiffCreateRequest max_diff_duration. */
+        public max_diff_duration?: (vttime.IDuration|null);
 
         /**
          * Creates a new VDiffCreateRequest instance using the specified properties.
