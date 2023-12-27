@@ -385,8 +385,19 @@ func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
 		return
 	}
 	dir := vc.ClusterConfig.vtdataroot
-	log.Infof("Deleting vtdataroot %s", dir)
-	err := os.RemoveAll(dir)
+	// The directory cleanup sometimes fails with a "directory not empty" error as
+	// everything in the test is shutting down and cleaning up. So we retry a few
+	// times to deal with that non-problematic and ephemeral issue.
+	var err error
+	retries := 3
+	for i := 1; i <= retries; i++ {
+		if err = os.RemoveAll(dir); err == nil {
+			log.Infof("Deleted vtdataroot %q", dir)
+			break
+		}
+		log.Errorf("Failed to delete vtdataroot (attempt %d of %d) %q: %v", i, retries, dir, err)
+		time.Sleep(1 * time.Second)
+	}
 	require.NoError(t, err)
 	if recreate {
 		err = os.Mkdir(dir, 0700)
