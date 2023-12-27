@@ -75,14 +75,14 @@ var testCases = []*testCase{
 		tabletBaseID:        200,
 		tables:              "customer,Lead,Lead-1,nopk",
 		autoRetryError:      true,
-		retryInsert:         `insert into customer(cid, name, typ) values(1991234, 'Testy McTester', 'soho')`,
+		retryInsert:         `insert into customer(cid, name, typ) values(2005149100, 'Testy McTester', 'soho')`,
 		resume:              true,
-		resumeInsert:        `insert into customer(cid, name, typ) values(1992234, 'Testy McTester (redux)', 'enterprise')`,
+		resumeInsert:        `insert into customer(cid, name, typ) values(2005149200, 'Testy McTester (redux)', 'enterprise')`,
 		testCLIErrors:       true, // test for errors in the simplest workflow
 		testCLICreateWait:   true, // test wait on create feature against simplest workflow
 		testCLIFlagHandling: true, // test flag handling end-to-end against simplest workflow
 		extraVDiffFlags: map[string]string{
-			"--max-diff-duration": "1s",
+			"--max-diff-duration": "2s",
 		},
 	},
 	{
@@ -95,9 +95,9 @@ var testCases = []*testCase{
 		targetShards:   "-40,40-a0,a0-",
 		tabletBaseID:   400,
 		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(1993234, 'Testy McTester Jr', 'enterprise'), (1993235, 'Testy McTester II', 'enterprise')`,
+		retryInsert:    `insert into customer(cid, name, typ) values(2005149300, 'Testy McTester Jr', 'enterprise'), (2005149350, 'Testy McTester II', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(1994234, 'Testy McTester III', 'enterprise')`,
+		resumeInsert:   `insert into customer(cid, name, typ) values(2005149400, 'Testy McTester III', 'enterprise')`,
 		stop:           true,
 	},
 	{
@@ -110,9 +110,9 @@ var testCases = []*testCase{
 		targetShards:   "0",
 		tabletBaseID:   700,
 		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(1995234, 'Testy McTester IV', 'enterprise')`,
+		retryInsert:    `insert into customer(cid, name, typ) values(2005149500, 'Testy McTester IV', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(1996234, 'Testy McTester V', 'enterprise'), (1996235, 'Testy McTester VI', 'enterprise')`,
+		resumeInsert:   `insert into customer(cid, name, typ) values(2005149600, 'Testy McTester V', 'enterprise'), (2005149650, 'Testy McTester VI', 'enterprise')`,
 		stop:           true,
 	},
 }
@@ -205,6 +205,13 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	err := vc.VtctlClient.ExecuteCommand(args...)
 	require.NoError(t, err)
 
+	// Wait for the workflow to finish the copy phase and initially catch up.
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	for _, shard := range arrTargetShards {
+		tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
+		catchup(t, tab, tc.workflow, tc.typ)
+	}
+
 	if diffDuration, ok := tc.extraVDiffFlags["--max-diff-duration"]; ok {
 		if !strings.Contains(tc.tables, "customer") {
 			require.Fail(t, "customer table must be included in the table list to test --max-diff-duration")
@@ -220,8 +227,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 			generateMoreCustomers(t, sourceKs, chunkSize)
 		}
 
-		// Wait for the workflow to finish the copy phase and catch up.
-		waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+		// Wait for the workflow to catch up after all the inserts.
 		for _, shard := range arrTargetShards {
 			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
 			catchup(t, tab, tc.workflow, tc.typ)
@@ -240,14 +246,17 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		require.Equal(t, int64(0), leadRestarts, "expected VDiffRestartedTableDiffsCount stat to be 0 for the Lead table, got %d", leadRestarts)
 
 		// Cleanup the created customer records so as not to slow down the rest of the test.
-		_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("delete from %s.customer order by cid desc limit %d", sourceKs, totalRowsToCreate), -1, false)
-		require.NoError(t, err, "failed to cleanup added customer records: %v", err)
-	} else {
-		waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+		delstmt := fmt.Sprintf("delete from %s.customer order by cid desc limit %d", sourceKs, chunkSize)
+		for i := int64(0); i < totalRowsToCreate; i += chunkSize {
+			_, err := vtgateConn.ExecuteFetch(delstmt, int(chunkSize), false)
+			require.NoError(t, err, "failed to cleanup added customer records: %v", err)
+		}
+		// Wait for the workflow to catch up again on the deletes.
 		for _, shard := range arrTargetShards {
 			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
 			catchup(t, tab, tc.workflow, tc.typ)
 		}
+	} else {
 		vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
 	}
 
@@ -433,13 +442,13 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 	t.Run("Resume", func(t *testing.T) {
 		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 
-		// confirm the last VDiff is in the expected completed state
+		// Confirm the last VDiff is in the expected completed state.
 		uuid, output := performVDiff2Action(t, false, ksWorkflow, cells, "show", "last", false)
 		jsonOutput := getVDiffInfo(output)
 		require.Equal(t, "completed", jsonOutput.State)
-		// save the number of rows compared in previous runs
+		// Save the number of rows compared in previous runs.
 		rowsCompared := jsonOutput.RowsCompared
-		ogTime := time.Now() // the completed_at should be later than this after resuming
+		ogTime := time.Now() // The completed_at should be later than this after resuming
 
 		expectedNewRows := int64(0)
 		if tc.resumeInsert != "" {
@@ -476,16 +485,16 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 	t.Run("Auto retry on error", func(t *testing.T) {
 		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 
-		// confirm the last VDiff is in the expected completed state
+		// Confirm the last VDiff is in the expected completed state.
 		uuid, output := performVDiff2Action(t, false, ksWorkflow, cells, "show", "last", false)
 		jsonOutput := getVDiffInfo(output)
 		require.Equal(t, "completed", jsonOutput.State)
-		// save the number of rows compared in the first run
+		// Save the number of rows compared in the first run.
 		rowsCompared := jsonOutput.RowsCompared
-		ogTime := time.Now() // the completed_at should be later than this upon retry
+		ogTime := time.Now() // The completed_at should be later than this upon retry
 
-		// create new data since original VDiff run -- if requested -- to confirm that the rows
-		// compared is cumulative
+		// Create new data since original VDiff run -- if requested -- to confirm that the rows
+		// compared is cumulative.
 		expectedNewRows := int64(0)
 		if tc.retryInsert != "" {
 			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.retryInsert)
@@ -493,17 +502,17 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		}
 		expectedRows := rowsCompared + expectedNewRows
 
-		// update the VDiff to simulate an ephemeral error having occurred
+		// Update the VDiff to simulate an ephemeral error having occurred.
 		for _, shard := range strings.Split(tc.targetShards, ",") {
 			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
 			res, err := tab.QueryTabletWithDB(sqlparser.BuildParsedQuery(sqlSimulateError, sidecarDBIdentifier, sidecarDBIdentifier, encodeString(uuid)).Query, "vt_"+tc.targetKs)
 			require.NoError(t, err)
-			// should have updated the vdiff record and at least one vdiff_table record
+			// Should have updated the vdiff record and at least one vdiff_table record.
 			require.GreaterOrEqual(t, int(res.RowsAffected), 2)
 		}
 
-		// confirm that the VDiff was retried, able to complete, and we compared the expected
-		// number of rows in total (original run and retry)
+		// Confirm that the VDiff was retried, able to complete, and we compared the expected
+		// number of rows in total (original run and retry).
 		info := waitForVDiff2ToComplete(t, false, ksWorkflow, cells, uuid, ogTime)
 		require.NotNil(t, info)
 		require.False(t, info.HasMismatch)
