@@ -52,6 +52,7 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func TestVtGateVExplain(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
 	conn, closer := start(t)
 	defer closer()
 
@@ -119,6 +120,7 @@ func TestVtGateVExplain(t *testing.T) {
 }
 
 func TestVExplainPlan(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
 	conn, closer := start(t)
 	defer closer()
 
@@ -128,6 +130,7 @@ func TestVExplainPlan(t *testing.T) {
 }
 
 func TestVExplainAll(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
 	conn, closer := start(t)
 	defer closer()
 

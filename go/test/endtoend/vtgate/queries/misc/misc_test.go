@@ -120,6 +120,7 @@ func TestCast(t *testing.T) {
 }
 
 func TestOuterJoinWithPredicate(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -187,6 +188,7 @@ func TestBuggyOuterJoin(t *testing.T) {
 }
 
 func TestLeftJoinUsingUnsharded(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
