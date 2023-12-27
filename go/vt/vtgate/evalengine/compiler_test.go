@@ -487,6 +487,22 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `case when null is null then 23 else null end`,
 			result:     `INT64(23)`,
 		},
+		{
+			expression: `week('2023-12-31', 4)`,
+			result:     `INT64(53)`,
+		},
+		{
+			expression: `week('2023-12-31', 2)`,
+			result:     `INT64(53)`,
+		},
+		{
+			expression: `week('2024-12-31', 1)`,
+			result:     `INT64(53)`,
+		},
+		{
+			expression: `week('2024-12-31', 5)`,
+			result:     `INT64(53)`,
+		},
 	}
 
 	for _, tc := range testCases {
