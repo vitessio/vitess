@@ -60,10 +60,16 @@ func (del *DeleteMulti) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 	if err != nil {
 		return nil, err
 	}
-	// TODO: range over select rows to create delete where condition bind variable.
-	for range inputRes.Rows {
+
+	bv := &querypb.BindVariable{
+		Type: querypb.Type_TUPLE,
 	}
-	return vcursor.ExecutePrimitive(ctx, del.Delete, bindVars, false)
+	for _, row := range inputRes.Rows {
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(row))
+	}
+	return vcursor.ExecutePrimitive(ctx, del.Delete, map[string]*querypb.BindVariable{
+		DM_VALS: bv,
+	}, false)
 }
 
 // TryStreamExecute performs a streaming exec.
