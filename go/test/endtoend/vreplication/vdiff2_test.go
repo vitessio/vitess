@@ -172,6 +172,8 @@ func TestVDiff2(t *testing.T) {
 }
 
 func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, cells []*Cell) {
+	vtgateConn := vc.GetVTGateConn(t)
+	defer vtgateConn.Close()
 	arrTargetShards := strings.Split(tc.targetShards, ",")
 	if tc.typ == "Reshard" {
 		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID, targetKsOpts))
