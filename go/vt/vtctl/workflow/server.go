@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -419,7 +420,65 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		return nil, err
 	}
 
-	m := sync.Mutex{} // guards access to the following maps during concurrent calls to scanWorkflow
+	m := sync.Mutex{} // guards access to the following maps during concurrent calls to fetchCopyStates and scanWorkflow
+
+	copyStatesByShardStreamId := make(map[string][]*vtctldatapb.Workflow_Stream_CopyState, len(results))
+
+	fetchCopyStates := func(ctx context.Context, tablet *topo.TabletInfo, streamIds []int64) error {
+		span, ctx := trace.NewSpan(ctx, "workflow.Server.fetchCopyStates")
+		defer span.Finish()
+
+		span.Annotate("keyspace", req.Keyspace)
+		span.Annotate("shard", tablet.Shard)
+		span.Annotate("tablet_alias", tablet.AliasString())
+
+		copyStates, err := s.getWorkflowCopyStates(ctx, tablet, streamIds)
+		if err != nil {
+			return err
+		}
+
+		m.Lock()
+		defer m.Unlock()
+
+		for _, copyState := range copyStates {
+			shardStreamId := fmt.Sprintf("%s/%d", tablet.Shard, copyState.StreamId)
+			copyStatesByShardStreamId[shardStreamId] = append(
+				copyStatesByShardStreamId[shardStreamId],
+				copyState,
+			)
+		}
+
+		return nil
+	}
+
+	fetchCopyStatesEg, fetchCopyStatesCtx := errgroup.WithContext(ctx)
+
+	for tablet, result := range results {
+		qr := sqltypes.Proto3ToResult(result)
+		tablet := tablet // loop closure
+
+		streamIds := make([]int64, 0, len(qr.Rows))
+		for _, row := range qr.Named().Rows {
+			streamId, err := row.ToInt64("id")
+			if err != nil {
+				return nil, err
+			}
+			streamIds = append(streamIds, streamId)
+		}
+
+		if len(streamIds) == 0 {
+			continue
+		}
+
+		fetchCopyStatesEg.Go(func() error {
+			return fetchCopyStates(fetchCopyStatesCtx, tablet, streamIds)
+		})
+	}
+
+	if err := fetchCopyStatesEg.Wait(); err != nil {
+		return nil, err
+	}
+
 	workflowsMap := make(map[string]*vtctldatapb.Workflow, len(results))
 	sourceKeyspaceByWorkflow := make(map[string]string, len(results))
 	sourceShardsByWorkflow := make(map[string]sets.Set[string], len(results))
@@ -547,19 +606,15 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			},
 		}
 
-		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
-		if err != nil {
-			return err
+		// Merge in copy states, which we've already fetched.
+		shardStreamId := fmt.Sprintf("%s/%d", tablet.Shard, id)
+		if copyState, ok := copyStatesByShardStreamId[shardStreamId]; ok {
+			stream.CopyStates = copyState
 		}
-
-		span.Annotate("num_copy_states", len(stream.CopyStates))
 
 		// At this point, we're going to start modifying the maps defined
 		// outside this function, as well as fields on the passed-in Workflow
 		// pointer. Since we're running concurrently, take the lock.
-		//
-		// We've already made the remote call to getCopyStates, so synchronizing
-		// here shouldn't hurt too badly, performance-wise.
 		m.Lock()
 		defer m.Unlock()
 
@@ -1053,16 +1108,24 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	return ts, state, nil
 }
 
-func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]*vtctldatapb.Workflow_Stream_CopyState, error) {
+func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, streamIds []int64) ([]*vtctldatapb.Workflow_Stream_CopyState, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.getWorkflowCopyStates")
 	defer span.Finish()
 
 	span.Annotate("keyspace", tablet.Keyspace)
 	span.Annotate("shard", tablet.Shard)
 	span.Annotate("tablet_alias", tablet.AliasString())
-	span.Annotate("vrepl_id", id)
+	span.Annotate("stream_ids", fmt.Sprintf("%#v", streamIds))
 
-	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)", id, id)
+	idsBV, err := sqltypes.BuildBindVariable(streamIds)
+	if err != nil {
+		return nil, err
+	}
+	query, err := sqlparser.ParseAndBind("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in %a and id in (select max(id) from _vt.copy_state where vrepl_id in %a group by vrepl_id, table_name)",
+		idsBV, idsBV)
+	if err != nil {
+		return nil, err
+	}
 	qr, err := s.tmc.VReplicationExec(ctx, tablet.Tablet, query)
 	if err != nil {
 		return nil, err
@@ -1075,10 +1138,15 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 
 	copyStates := make([]*vtctldatapb.Workflow_Stream_CopyState, len(result.Rows))
 	for i, row := range result.Rows {
-		// These fields are technically varbinary, but this is close enough.
+		streamId, err := row[0].ToInt64()
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to cast vrepl_id to int64: %v", err)
+		}
+		// These string fields are technically varbinary, but this is close enough.
 		copyStates[i] = &vtctldatapb.Workflow_Stream_CopyState{
-			Table:  row[0].ToString(),
-			LastPk: row[1].ToString(),
+			StreamId: streamId,
+			Table:    row[1].ToString(),
+			LastPk:   row[2].ToString(),
 		}
 	}
 
