@@ -18,6 +18,8 @@ package vreplication
 
 import (
 	"fmt"
+	"math"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +31,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet"
 
@@ -214,8 +217,13 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		require.NoError(t, err, "could not parse --max-diff-duration %q: %v", diffDuration, err)
 		seconds := int64(dur.Seconds())
 		chunkSize := int64(100000)
-		perSecondCount := int64(1000000)
+		// Take the test host/runner vCPU count into account when generating rows.
+		perVCpuCount := int64(100000)
+		// Cap it at 1M rows per second so that we will create betweeen 100,000 and 1,000,000
+		// rows for each second in the diff duration, depending on the test host vCPU count.
+		perSecondCount := int64(math.Min(float64(perVCpuCount*int64(runtime.NumCPU())), 1000000))
 		totalRowsToCreate := seconds * perSecondCount
+		log.Infof("Test host has %d vCPUs. Generating %d rows in the customer table to test --max-diff-duration", runtime.NumCPU(), totalRowsToCreate)
 		for i := int64(0); i < totalRowsToCreate; i += chunkSize {
 			generateMoreCustomers(t, sourceKs, chunkSize)
 		}
