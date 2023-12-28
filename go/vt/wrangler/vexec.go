@@ -737,7 +737,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			continue
 		}
 		// Get all copy states for the shard.
-		vreplIDs := make([]int64, 0, len(nqr.Rows))
+		vreplIDs := make([]int64, len(nqr.Rows))
 		for i, row := range nqr.Rows {
 			vreplID, err := row.ToInt64("id")
 			if err != nil {
