@@ -857,6 +857,7 @@ func (tm *TabletManager) waitForDBAGrants(config *tabletenv.TabletConfig, waitTi
 		conn, connErr := dbconnpool.NewDBConnection(ctx, config.DB.DbaConnector())
 		if connErr == nil {
 			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
+			conn.Close()
 			if fetchErr != nil {
 				log.Errorf("Error running SHOW GRANTS - %v", fetchErr)
 			}
@@ -871,7 +872,7 @@ func (tm *TabletManager) waitForDBAGrants(config *tabletenv.TabletConfig, waitTi
 		}
 		select {
 		case <-timer.C:
-			return fmt.Errorf("waited %v for dba user to have the required permissions", waitTime)
+			return fmt.Errorf("timed out after %v waiting for the dba user to have the required permissions", waitTime)
 		default:
 			time.Sleep(100 * time.Millisecond)
 		}
