@@ -43,7 +43,7 @@ func TestVExec(t *testing.T) {
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	query := "update _vt.vreplication set state = 'Running'"
-	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, time.Now().Unix())
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, time.Now().Unix())
 	defer env.close()
 	var logger = logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc, collations.MySQL8(), sqlparser.NewTestParser())
@@ -96,7 +96,7 @@ func TestVExec(t *testing.T) {
 	result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
 		"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
-		"1|keyspace:\"source\" shard:\"0\" filter:{rules:{match:\"t1\"}}||||0|0|0",
+		"1|keyspace:\"source\" shard:\"0\" filter:{rules:{match:\"t1\"} rules:{match:\"t2\"}}||||0|0|0",
 	)
 	testCases = append(testCases, &TestCase{
 		name:   "select",
@@ -165,10 +165,12 @@ func TestVExec(t *testing.T) {
 |        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
+|                      |    | rules:{match:"t2"}}            |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
+|                      |    | rules:{match:"t2"}}            |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+`,
 	}
 	require.Equal(t, strings.Join(dryRunResults, "\n")+"\n\n\n\n\n", logger.String())
@@ -188,7 +190,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	defer cancel()
 	workflow := "wrWorkflow"
 	keyspace := "target"
-	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 1234)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc, collations.MySQL8(), sqlparser.NewTestParser())
@@ -236,6 +238,9 @@ func TestWorkflowListStreams(t *testing.T) {
 							"rules": [
 								{
 									"match": "t1"
+								},
+								{
+									"match": "t2"
 								}
 							]
 						}
@@ -257,6 +262,10 @@ func TestWorkflowListStreams(t *testing.T) {
 						{
 							"Table": "t1",
 							"LastPK": "pk1"
+						},
+						{
+							"Table": "t2",
+							"LastPK": "pk2"
 						}
 					],
 					"RowsCopied": 1000
@@ -278,6 +287,9 @@ func TestWorkflowListStreams(t *testing.T) {
 							"rules": [
 								{
 									"match": "t1"
+								},
+								{
+									"match": "t2"
 								}
 							]
 						}
@@ -299,6 +311,10 @@ func TestWorkflowListStreams(t *testing.T) {
 						{
 							"Table": "t1",
 							"LastPK": "pk1"
+						},
+						{
+							"Table": "t2",
+							"LastPK": "pk2"
 						}
 					],
 					"RowsCopied": 1000
@@ -346,10 +362,12 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 |        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
+|                      |    | rules:{match:"t2"}}            |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
+|                      |    | rules:{match:"t2"}}            |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 
 
@@ -364,7 +382,7 @@ func TestWorkflowListAll(t *testing.T) {
 	defer cancel()
 	keyspace := "target"
 	workflow := "wrWorkflow"
-	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 0)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc, collations.MySQL8(), sqlparser.NewTestParser())
@@ -385,7 +403,7 @@ func TestVExecValidations(t *testing.T) {
 	workflow := "wf"
 	keyspace := "ks"
 	query := ""
-	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 0)
 	defer env.close()
 
 	wr := New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.MySQL8(), sqlparser.NewTestParser())
@@ -471,7 +489,7 @@ func TestWorkflowUpdate(t *testing.T) {
 	defer cancel()
 	workflow := "wrWorkflow"
 	keyspace := "target"
-	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 1234)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc, collations.MySQL8(), sqlparser.NewTestParser())
