@@ -692,8 +692,8 @@ func TestPlayerFilters(t *testing.T) {
 		fmt.Sprintf("create table %s.dst4(id1 int, val varbinary(128), primary key(id1))", vrepldb),
 		"create table src5(id1 int, id2 int, val varbinary(128), primary key(id1))",
 		fmt.Sprintf("create table %s.dst5(id1 int, val varbinary(128), primary key(id1))", vrepldb),
-		"create table srcCharset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))",
-		fmt.Sprintf("create table %s.dstCharset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, val2 varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))", vrepldb),
+		"create table src_charset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))",
+		fmt.Sprintf("create table %s.dst_charset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, val2 varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -711,8 +711,8 @@ func TestPlayerFilters(t *testing.T) {
 		fmt.Sprintf("drop table %s.dst4", vrepldb),
 		"drop table src5",
 		fmt.Sprintf("drop table %s.dst5", vrepldb),
-		"drop table srcCharset",
-		fmt.Sprintf("drop table %s.dstCharset", vrepldb),
+		"drop table src_charset",
+		fmt.Sprintf("drop table %s.dst_charset", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -737,8 +737,8 @@ func TestPlayerFilters(t *testing.T) {
 			Match:  "dst5",
 			Filter: "select id1, val from src5 where val = 'abc'",
 		}, {
-			Match:  "dstCharset",
-			Filter: "select id1, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val2 from srcCharset",
+			Match:  "dst_charset",
+			Filter: "select id1, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val2 from src_charset",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -986,14 +986,14 @@ func TestPlayerFilters(t *testing.T) {
 		data:  [][]string{{"1", "abc"}, {"4", "abc"}},
 	}, {
 		// test collation + filter
-		input: "insert into srcCharset values (1,'木元')",
+		input: "insert into src_charset values (1,'木元')",
 		output: qh.Expect(
 			"begin",
-			"insert into dstCharset(id1,val,val2) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
+			"insert into dst_charset(id1,val,val2) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
-		table: "dstCharset",
+		table: "dst_charset",
 		data:  [][]string{{"1", "木abcxyz", "木abcxyz"}},
 	}}
 

@@ -185,8 +185,8 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 	tp.sourceQuery = sqlparser.String(sourceSelect)
 	tp.targetQuery = sqlparser.String(targetSelect)
-	log.Info("VDiff query on source: %v", tp.sourceQuery)
-	log.Info("VDiff query on target: %v", tp.targetQuery)
+	log.Infof("VDiff query on source: %v", tp.sourceQuery)
+	log.Infof("VDiff query on target: %v", tp.targetQuery)
 
 	tp.aggregates = aggregates
 	td.tablePlan = tp

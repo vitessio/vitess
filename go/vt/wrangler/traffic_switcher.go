@@ -1300,7 +1300,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *workflow.Str
 		ts.Logger().Errorf("Cancel migration failed:", err)
 	}
 
-	sm.CancelMigration(ctx)
+	sm.CancelStreamMigrations(ctx)
 
 	err = ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s", encodeString(target.GetPrimary().DbName()), encodeString(ts.WorkflowName()))

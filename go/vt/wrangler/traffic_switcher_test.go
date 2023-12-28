@@ -1411,7 +1411,7 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 	want := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
-		"Cancel stream migrations as requested",
+		"Cancel migration as requested",
 		"Unlock keyspace ks2",
 		"Unlock keyspace ks1",
 	}
