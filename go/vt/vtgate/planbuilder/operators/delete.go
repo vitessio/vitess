@@ -137,26 +137,28 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 		vTbl = updateQueryGraphWithSource(ctx, op, tblID, vTbl)
 	}
 
-	var ovq *sqlparser.Select
-	if vTbl.Keyspace.Sharded && vTbl.Type == vindexes.TypeTable {
-		primaryVindex, _ := getVindexInformation(tblID, vTbl)
-		ate := tblInfo.GetAliasedTableExpr()
-		if len(vTbl.Owned) > 0 {
-			ovq = generateOwnedVindexQuery(ate, del, vTbl, primaryVindex.Columns)
-		}
-	}
-
 	name, err := tblInfo.Name()
 	if err != nil {
 		panic(err)
 	}
 
+	targetTbl := TargetTable{
+		ID:     tblID,
+		VTable: vTbl,
+		Name:   name,
+	}
+
+	var ovq *sqlparser.Select
+	if vTbl.Keyspace.Sharded && vTbl.Type == vindexes.TypeTable {
+		primaryVindex, _ := getVindexInformation(tblID, vTbl)
+		ate := tblInfo.GetAliasedTableExpr()
+		if len(vTbl.Owned) > 0 {
+			ovq = generateOwnedVindexQuery(ate, del, targetTbl, primaryVindex.Columns)
+		}
+	}
+
 	return &Delete{
-		Target: TargetTable{
-			ID:     tblID,
-			VTable: vTbl,
-			Name:   name,
-		},
+		Target:           targetTbl,
 		Source:           op,
 		Ignore:           bool(del.Ignore),
 		Limit:            del.Limit,

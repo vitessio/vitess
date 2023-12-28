@@ -124,25 +124,34 @@ func buildVindexTableForDML(
 	return vindexTable, routing
 }
 
-func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
+func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table TargetTable, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
 	var selExprs sqlparser.SelectExprs
 	for _, col := range ksidCols {
-		selExprs = append(selExprs, sqlparser.NewAliasedExpr(sqlparser.NewColName(col.String()), ""))
+		colName := makeColName(col, table, del.TableExprs.MultiTable())
+		selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
 	}
-	for _, cv := range table.Owned {
+	for _, cv := range table.VTable.Owned {
 		for _, col := range cv.Columns {
-			selExprs = append(selExprs, sqlparser.NewAliasedExpr(sqlparser.NewColName(col.String()), ""))
+			colName := makeColName(col, table, del.TableExprs.MultiTable())
+			selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
 		}
 	}
 	sqlparser.RemoveKeyspaceInTables(tblExpr)
 	return &sqlparser.Select{
 		SelectExprs: selExprs,
-		From:        sqlparser.TableExprs{tblExpr},
+		From:        del.TableExprs,
 		Where:       del.Where,
 		OrderBy:     del.OrderBy,
 		Limit:       del.Limit,
 		Lock:        sqlparser.ForUpdateLock,
 	}
+}
+
+func makeColName(col sqlparser.IdentifierCI, table TargetTable, isMultiTbl bool) *sqlparser.ColName {
+	if isMultiTbl {
+		return sqlparser.NewColNameWithQualifier(col.String(), table.Name)
+	}
+	return sqlparser.NewColName(col.String())
 }
 
 func getUpdateVindexInformation(

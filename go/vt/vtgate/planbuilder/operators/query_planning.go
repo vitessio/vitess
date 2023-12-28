@@ -142,7 +142,6 @@ func tryPushDelete(ctx *plancontext.PlanningContext, in *Delete) (Operator, *App
 		}
 
 		sel := &sqlparser.Select{
-			From:        nil,
 			SelectExprs: selExprs,
 			OrderBy:     in.OrderBy,
 			Limit:       in.Limit,
@@ -174,6 +173,7 @@ func tryPushDelete(ctx *plancontext.PlanningContext, in *Delete) (Operator, *App
 		in.Source = qg
 
 		if in.OwnedVindexQuery != nil {
+			in.OwnedVindexQuery.From = sqlparser.TableExprs{targetQT.Alias}
 			in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
 		}
 		dm.Delete = in

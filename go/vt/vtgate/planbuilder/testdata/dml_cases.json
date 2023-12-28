@@ -5012,7 +5012,7 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u for update",
+        "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u join ref_with_source as r on u.col = r.col for update",
         "Query": "delete u from `user` as u, ref_with_source as r where u.col = r.col",
         "Table": "user"
       },
@@ -5038,7 +5038,7 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u for update",
+        "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u join music as m on u.id = m.user_id for update",
         "Query": "delete u from `user` as u, music as m where u.id = m.user_id",
         "Table": "user"
       },
@@ -5105,7 +5105,7 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`user`.id) in ::dm_vals for update",
+            "OwnedVindexQuery": "select `user`.Id, `user`.`Name`, `user`.Costly from `user` where (`user`.id) in ::dm_vals for update",
             "Query": "delete from `user` where (`user`.id) in ::dm_vals",
             "Table": "user"
           }
@@ -5170,7 +5170,7 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where (u.id) in ::dm_vals for update",
+            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where (u.id) in ::dm_vals for update",
             "Query": "delete from `user` as u where (u.id) in ::dm_vals",
             "Table": "user"
           }
@@ -5235,11 +5235,37 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where (u.id) in ::dm_vals for update",
+            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where (u.id) in ::dm_vals for update",
             "Query": "delete from `user` as u where (u.id) in ::dm_vals",
             "Table": "user"
           }
         ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "multi table delete with join on vindex column",
+    "query": "delete u from user u join music m where u.id = m.user_id and m.foo = 42",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u from user u join music m where u.id = m.user_id and m.foo = 42",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u join music as m where u.id = m.user_id and m.foo = 42 for update",
+        "Query": "delete u from `user` as u, music as m where m.foo = 42 and u.id = m.user_id",
+        "Table": "user"
       },
       "TablesUsed": [
         "user.music",
