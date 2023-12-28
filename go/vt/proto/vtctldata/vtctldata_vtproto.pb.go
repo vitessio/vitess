@@ -305,8 +305,9 @@ func (m *Workflow_Stream_CopyState) CloneVT() *Workflow_Stream_CopyState {
 		return (*Workflow_Stream_CopyState)(nil)
 	}
 	r := &Workflow_Stream_CopyState{
-		Table:  m.Table,
-		LastPk: m.LastPk,
+		Table:    m.Table,
+		LastPk:   m.LastPk,
+		StreamId: m.StreamId,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -6410,6 +6411,11 @@ func (m *Workflow_Stream_CopyState) MarshalToSizedBufferVT(dAtA []byte) (int, er
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.StreamId != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.StreamId))
+		i--
+		dAtA[i] = 0x18
 	}
 	if len(m.LastPk) > 0 {
 		i -= len(m.LastPk)
@@ -19872,6 +19878,9 @@ func (m *Workflow_Stream_CopyState) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.StreamId != 0 {
+		n += 1 + sov(uint64(m.StreamId))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -27761,6 +27770,25 @@ func (m *Workflow_Stream_CopyState) UnmarshalVT(dAtA []byte) error {
 			}
 			m.LastPk = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StreamId", wireType)
+			}
+			m.StreamId = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StreamId |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
