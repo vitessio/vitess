@@ -99,7 +99,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		case *LockAndComment:
 			return pushLockAndComment(in)
 		case *Delete:
-			return tryPushDelete(in)
+			return tryPushDelete(ctx, in)
 		default:
 			return in, NoRewrite
 		}
@@ -108,7 +108,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
+func tryPushDelete(ctx *plancontext.PlanningContext, in *Delete) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Route:
 		if in.Limit != nil && !src.IsSingleShardOrByDestination() {
@@ -138,6 +138,7 @@ func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
 			colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
 			selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
 			leftComp = append(leftComp, colName)
+			ctx.SemTable.Recursive[colName] = in.Target.ID
 		}
 
 		sel := &sqlparser.Select{
