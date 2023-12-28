@@ -40691,6 +40691,12 @@ export namespace vschema {
 
         /** RoutingRule to_tables */
         to_tables?: (string[]|null);
+
+        /** RoutingRule action */
+        action?: (vschema.RoutingRule.Action|null);
+
+        /** RoutingRule mirror */
+        mirror?: (vschema.RoutingRule.IMirror|null);
     }
 
     /** Represents a RoutingRule. */
@@ -40707,6 +40713,18 @@ export namespace vschema {
 
         /** RoutingRule to_tables. */
         public to_tables: string[];
+
+        /** RoutingRule action. */
+        public action?: (vschema.RoutingRule.Action|null);
+
+        /** RoutingRule mirror. */
+        public mirror?: (vschema.RoutingRule.IMirror|null);
+
+        /** RoutingRule _action. */
+        public _action?: "action";
+
+        /** RoutingRule _mirror. */
+        public _mirror?: "mirror";
 
         /**
          * Creates a new RoutingRule instance using the specified properties.
@@ -40784,6 +40802,113 @@ export namespace vschema {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace RoutingRule {
+
+        /** Action enum. */
+        enum Action {
+            ACTION_UNSPECIFIED = 0,
+            ACTION_REDIRECT = 1,
+            ACTION_MIRROR = 2
+        }
+
+        /** Properties of a Mirror. */
+        interface IMirror {
+
+            /** Mirror percent */
+            percent?: (number|null);
+        }
+
+        /** Represents a Mirror. */
+        class Mirror implements IMirror {
+
+            /**
+             * Constructs a new Mirror.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vschema.RoutingRule.IMirror);
+
+            /** Mirror percent. */
+            public percent: number;
+
+            /**
+             * Creates a new Mirror instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns Mirror instance
+             */
+            public static create(properties?: vschema.RoutingRule.IMirror): vschema.RoutingRule.Mirror;
+
+            /**
+             * Encodes the specified Mirror message. Does not implicitly {@link vschema.RoutingRule.Mirror.verify|verify} messages.
+             * @param message Mirror message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vschema.RoutingRule.IMirror, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified Mirror message, length delimited. Does not implicitly {@link vschema.RoutingRule.Mirror.verify|verify} messages.
+             * @param message Mirror message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vschema.RoutingRule.IMirror, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a Mirror message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns Mirror
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.RoutingRule.Mirror;
+
+            /**
+             * Decodes a Mirror message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns Mirror
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.RoutingRule.Mirror;
+
+            /**
+             * Verifies a Mirror message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a Mirror message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns Mirror
+             */
+            public static fromObject(object: { [k: string]: any }): vschema.RoutingRule.Mirror;
+
+            /**
+             * Creates a plain object from a Mirror message. Also converts values to other types if specified.
+             * @param message Mirror
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vschema.RoutingRule.Mirror, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this Mirror to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Mirror
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of a Keyspace. */

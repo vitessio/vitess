@@ -33,8 +33,20 @@ message RoutingRules {
 
 // RoutingRule specifies a routing rule.
 message RoutingRule {
+  enum Action {
+    ACTION_UNSPECIFIED = 0;
+    ACTION_REDIRECT = 1;
+    ACTION_MIRROR = 2;
+  }
+
+  message Mirror {
+    float percent = 1;
+  }
+
   string from_table = 1;
   repeated string to_tables = 2;
+  optional Action action = 3;
+  optional Mirror mirror = 4;
 }
 
 // Keyspace is the vschema for a keyspace.
