@@ -3041,13 +3041,13 @@ func TestDeleteMulti(t *testing.T) {
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
 		bq, bq, bq, bq, bq, bq, bq, bq,
-		{Sql: "select Id, `name` from `user` where (`user`.id) in ::dm_vals for update", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+		{Sql: "select `user`.Id, `user`.`name` from `user` where (`user`.id) in ::dm_vals for update", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
 		{Sql: "delete from `user` where (`user`.id) in ::dm_vals", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}}}
 	assertQueries(t, sbc1, wantQueries)
 
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
-		{Sql: "select Id, `name` from `user` where (`user`.id) in ::dm_vals for update", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+		{Sql: "select `user`.Id, `user`.`name` from `user` where (`user`.id) in ::dm_vals for update", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
 		{Sql: "delete from `user` where (`user`.id) in ::dm_vals", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
 	}
 	assertQueries(t, sbc2, wantQueries)
