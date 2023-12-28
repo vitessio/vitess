@@ -19,8 +19,7 @@ since 2011, and has grown to encompass tens of thousands of MySQL nodes.
 
 For more about Vitess, please visit [vitess.io](https://vitess.io).
 
-Vitess has a growing community. You can view the list of adopters
-[here](https://github.com/vitessio/vitess/blob/main/ADOPTERS.md).
+Vitess has a growing community. [View the list of adopters](https://github.com/vitessio/vitess/blob/main/ADOPTERS.md).
 
 ## Reporting a Problem, Issue, or Bug
 To report a problem, the best way to get attention is to create a GitHub [issue](.https://github.com/vitessio/vitess/issues ) using proper severity level based on this [guide](https://github.com/vitessio/vitess/blob/main/SEVERITY.md). 
@@ -40,7 +39,7 @@ See [Security](SECURITY.md) for a full outline of the security process.
 
 ### Security Audit
 
-A third party security audit was performed by Cure53. You can see the full report [here](doc/VIT-01-report.pdf).
+A third party security audit was performed by Cure53. [Read the full report](doc/VIT-01-report.pdf).
 
 ## License
 
