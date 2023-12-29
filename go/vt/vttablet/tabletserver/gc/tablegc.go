@@ -19,7 +19,6 @@ package gc
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -420,7 +419,7 @@ func (collector *TableGC) readTables(ctx context.Context) (gcTables []*gcTable, 
 	}
 	defer conn.Recycle()
 
-	res, err := conn.Conn.Exec(ctx, sqlShowVtTables, math.MaxInt32, true)
+	res, err := conn.Conn.Exec(ctx, sqlShowVtTables, -1, true)
 	if err != nil {
 		return nil, err
 	}
