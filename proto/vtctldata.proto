@@ -371,6 +371,8 @@ message ApplyVSchemaRequest {
   repeated string cells = 4;
   vschema.Keyspace v_schema = 5;
   string sql = 6;
+  // Strict returns an error if there are unknown vindex params.
+  bool strict = 7;
 }
 
 message ApplyVSchemaResponse {

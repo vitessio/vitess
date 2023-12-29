@@ -352,6 +352,7 @@ func TestApplyVSchema(t *testing.T) {
 		req       *vtctldatapb.ApplyVSchemaRequest
 		exp       *vtctldatapb.ApplyVSchemaResponse
 		shouldErr bool
+		err       string
 	}{
 		{
 			name: "normal",
@@ -437,6 +438,46 @@ func TestApplyVSchema(t *testing.T) {
 			},
 			shouldErr: false,
 		}, {
+			name: "strict unknown params",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspacesharded",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"lookup1": {
+							Type: "lookup",
+							Params: map[string]string{
+								"hello":   "world",
+								"goodbye": "world",
+							},
+						},
+					},
+				},
+				SkipRebuild: true,
+				Strict:      true,
+			},
+			exp: &vtctldatapb.ApplyVSchemaResponse{
+				VSchema: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"lookup1": {
+							Type: "lookup",
+							Params: map[string]string{
+								"hello":   "world",
+								"goodbye": "world",
+							},
+						},
+					},
+				},
+				UnknownVindexParams: map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList{
+					"lookup1": {
+						Params: []string{"goodbye", "hello"},
+					},
+				},
+			},
+			shouldErr: true,
+			err:       "unknown vindex params: lookup1 (goodbye, hello)",
+		}, {
 			name: "dry run",
 			req: &vtctldatapb.ApplyVSchemaRequest{
 				Keyspace: "testkeyspace",
@@ -451,8 +492,7 @@ func TestApplyVSchema(t *testing.T) {
 				},
 			},
 			shouldErr: false,
-		},
-		{
+		}, {
 			name: "dry run with invalid params",
 			req: &vtctldatapb.ApplyVSchemaRequest{
 				Keyspace: "testkeyspacesharded",
@@ -468,8 +508,7 @@ func TestApplyVSchema(t *testing.T) {
 			},
 			exp:       &vtctldatapb.ApplyVSchemaResponse{},
 			shouldErr: true,
-		},
-		{
+		}, {
 			name: "dry run with unknown params",
 			req: &vtctldatapb.ApplyVSchemaRequest{
 				Keyspace: "testkeyspacesharded",
@@ -507,6 +546,46 @@ func TestApplyVSchema(t *testing.T) {
 				},
 			},
 			shouldErr: false,
+		}, {
+			name: "strict dry run with unknown params",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspacesharded",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"lookup1": {
+							Type: "lookup",
+							Params: map[string]string{
+								"hello":   "world",
+								"goodbye": "world",
+							},
+						},
+					},
+				},
+				DryRun: true,
+				Strict: true,
+			},
+			exp: &vtctldatapb.ApplyVSchemaResponse{
+				VSchema: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"lookup1": {
+							Type: "lookup",
+							Params: map[string]string{
+								"hello":   "world",
+								"goodbye": "world",
+							},
+						},
+					},
+				},
+				UnknownVindexParams: map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList{
+					"lookup1": {
+						Params: []string{"goodbye", "hello"},
+					},
+				},
+			},
+			shouldErr: true,
+			err:       "unknown vindex params: lookup1 (goodbye, hello)",
 		},
 	}
 
@@ -558,6 +637,9 @@ func TestApplyVSchema(t *testing.T) {
 			res, err := vtctld.ApplyVSchema(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
+				if tt.err != "" {
+					assert.ErrorContains(t, err, tt.err)
+				}
 				return
 			}
 
