@@ -18,16 +18,70 @@ package operators
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// mergeJoinInputs checks whether two operators can be merged into a single one.
+// mergeJoinMirrors checks whether two mirrors can be merged into a single one.
+// If they can be merged, a new operator with the merged mirror is returned
+// If they cannot be merged, nil is returned.
+func mergeJoinMirrors(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m merger) *Mirror {
+	lhsMirror, rhsMirror, _ := prepareInputMirrors(lhs, rhs)
+	if lhsMirror == nil {
+		return nil
+	}
+
+	joinedRoute := mergeJoinRoutes(ctx, lhsMirror.Operator, rhsMirror.Operator, joinPredicates, m)
+	if joinedRoute == nil {
+		return nil
+	}
+
+	// We were able to join the primary routes of the mirror.
+	// Now we'll try to join the mirror targets.
+
+	lhsTargets := lhsMirror.Targets
+	rhsTargets := rhsMirror.Targets
+
+	if len(lhsTargets) != len(rhsTargets) {
+		return nil
+	}
+
+	joinedTargets := make([]MirrorTarget, len(lhsTargets))
+	for i, lhsTarget := range lhsTargets {
+		rhsTarget := rhsTargets[i]
+		switch lv := lhsTarget.(type) {
+		case *PercentMirrorTarget:
+			switch rv := rhsTarget.(type) {
+			case *PercentMirrorTarget:
+				joinedRoute := mergeJoinRoutes(ctx, lv.Operator, rv.Operator, joinPredicates, m)
+				if joinedRoute == nil {
+					return nil
+				}
+				joinedTargets[i] = &PercentMirrorTarget{
+					Operator: joinedRoute,
+					Percent:  float32(math.Min(float64(lv.Percent), float64(rv.Percent))),
+				}
+			default:
+				return nil
+			}
+		default:
+			panic("non-exhaustive switch")
+		}
+	}
+
+	return &Mirror{
+		Operator: joinedRoute,
+		Targets:  joinedTargets,
+	}
+}
+
+// mergeJoinRoutes checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m merger) *Route {
+func mergeJoinRoutes(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m merger) *Route {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
 		return nil
@@ -63,6 +117,15 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 	default:
 		return nil
 	}
+}
+
+func prepareInputMirrors(lhs Operator, rhs Operator) (*Mirror, *Mirror, bool) {
+	lhsMirror, rhsMirror := operatorsToMirrors(lhs, rhs)
+	if lhsMirror == nil || rhsMirror == nil {
+		return nil, nil, false
+	}
+
+	return lhsMirror, rhsMirror, true
 }
 
 func prepareInputRoutes(lhs Operator, rhs Operator) (*Route, *Route, Routing, Routing, routingType, routingType, bool) {
@@ -139,14 +202,14 @@ func getRoutesOrAlternates(lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, 
 		return lhsRoute, rhsRoute, routingA, routingB, sameKeyspace
 	}
 
-	if refA, ok := routingA.(*AnyShardRouting); ok {
-		if altARoute := refA.AlternateInKeyspace(routingB.Keyspace()); altARoute != nil {
+	if refA, ok := routingA.(*ReferenceRouting); ok {
+		if altARoute := refA.ReferenceRoute(routingB.Keyspace()); altARoute != nil {
 			return altARoute, rhsRoute, altARoute.Routing, routingB, true
 		}
 	}
 
-	if refB, ok := routingB.(*AnyShardRouting); ok {
-		if altBRoute := refB.AlternateInKeyspace(routingA.Keyspace()); altBRoute != nil {
+	if refB, ok := routingB.(*ReferenceRouting); ok {
+		if altBRoute := refB.ReferenceRoute(routingA.Keyspace()); altBRoute != nil {
 			return lhsRoute, altBRoute, routingA, altBRoute.Routing, true
 		}
 	}
@@ -159,7 +222,7 @@ func getTypeName(myvar interface{}) string {
 }
 
 func getRoutingType(r Routing) routingType {
-	switch r.(type) {
+	switch t := r.(type) {
 	case *InfoSchemaRouting:
 		return infoSchema
 	case *AnyShardRouting:
@@ -172,6 +235,8 @@ func getRoutingType(r Routing) routingType {
 		return none
 	case *TargetedRouting:
 		return targeted
+	case *ReferenceRouting:
+		return getRoutingType(t.InnerRouting())
 	}
 	panic(fmt.Sprintf("switch should be exhaustive, got %T", r))
 }

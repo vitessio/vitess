@@ -39,6 +39,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 	switch op := op.(type) {
 	case *operators.Route:
 		return transformRoutePlan(ctx, op)
+	case *operators.Mirror:
+		return transformMirrorPlan(ctx, op)
 	case *operators.ApplyJoin:
 		return transformApplyJoinPlan(ctx, op)
 	case *operators.Union:
@@ -886,4 +888,42 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			CollationEnv:   ctx.VSchema.CollationEnv(),
 		},
 	}, nil
+}
+
+func transformMirrorPlan(ctx *plancontext.PlanningContext, op *operators.Mirror) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, op.Operator)
+	if err != nil {
+		return nil, err
+	}
+
+	targetPlans := make([]mirrorTarget, len(op.Targets))
+	for i, targetOp := range op.Targets {
+		targetPlan, err := transformMirrorTargetPlan(ctx, targetOp)
+		if err != nil {
+			return nil, err
+		}
+
+		targetPlans[i] = targetPlan
+	}
+
+	return &mirror{
+		plan:    plan,
+		targets: targetPlans,
+	}, nil
+}
+
+func transformMirrorTargetPlan(ctx *plancontext.PlanningContext, op operators.MirrorTarget) (mirrorTarget, error) {
+	switch v := op.(type) {
+	case *operators.PercentMirrorTarget:
+		plan, err := transformToLogicalPlan(ctx, v.Operator)
+		if err != nil {
+			return nil, err
+		}
+		return &percentMirrorTarget{
+			percent: v.Percent,
+			plan:    plan,
+		}, nil
+	default:
+		panic("non-exhaustive switch")
+	}
 }

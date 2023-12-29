@@ -43,8 +43,7 @@ type (
 	// AnyShardRouting is used for routing logic where any shard in the keyspace can be used.
 	// Shared by unsharded and reference routing
 	AnyShardRouting struct {
-		keyspace   *vindexes.Keyspace
-		Alternates map[*vindexes.Keyspace]*Route
+		keyspace *vindexes.Keyspace
 	}
 
 	// DualRouting represents the dual-table.
@@ -54,6 +53,11 @@ type (
 	SequenceRouting struct {
 		keyspace *vindexes.Keyspace
 	}
+
+	ReferenceRouting struct {
+		innerRouting    Routing
+		referenceRoutes map[*vindexes.Keyspace]*Route
+	}
 )
 
 var (
@@ -62,6 +66,7 @@ var (
 	_ Routing = (*AnyShardRouting)(nil)
 	_ Routing = (*DualRouting)(nil)
 	_ Routing = (*SequenceRouting)(nil)
+	_ Routing = (*ReferenceRouting)(nil)
 )
 
 func (tr *TargetedRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) {
@@ -120,8 +125,7 @@ func (rr *AnyShardRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, r
 
 func (rr *AnyShardRouting) Clone() Routing {
 	return &AnyShardRouting{
-		keyspace:   rr.keyspace,
-		Alternates: rr.Alternates,
+		keyspace: rr.keyspace,
 	}
 }
 
@@ -142,18 +146,6 @@ func (rr *AnyShardRouting) OpCode() engine.Opcode {
 
 func (rr *AnyShardRouting) Keyspace() *vindexes.Keyspace {
 	return rr.keyspace
-}
-
-func (rr *AnyShardRouting) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Route {
-	if keyspace.Name == rr.keyspace.Name {
-		return nil
-	}
-
-	if route, ok := rr.Alternates[keyspace]; ok {
-		return route
-	}
-
-	return nil
 }
 
 func (dr *DualRouting) UpdateRoutingParams(*plancontext.PlanningContext, *engine.RoutingParameters) {}
@@ -201,4 +193,51 @@ func (sr *SequenceRouting) OpCode() engine.Opcode {
 
 func (sr *SequenceRouting) Keyspace() *vindexes.Keyspace {
 	return nil
+}
+
+func (rr *ReferenceRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) {
+	rp.Keyspace = rr.Keyspace()
+}
+
+func (rr *ReferenceRouting) Clone() Routing {
+	return &ReferenceRouting{
+		innerRouting:    rr.innerRouting.Clone(),
+		referenceRoutes: rr.referenceRoutes,
+	}
+}
+
+func (rr *ReferenceRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
+	return rr.innerRouting.updateRoutingLogic(ctx, expr)
+}
+
+func (rr *ReferenceRouting) Cost() int {
+	return rr.innerRouting.Cost() + len(rr.referenceRoutes)
+}
+
+func (rr *ReferenceRouting) OpCode() engine.Opcode {
+	return rr.innerRouting.OpCode()
+}
+
+func (rr *ReferenceRouting) Keyspace() *vindexes.Keyspace {
+	return rr.innerRouting.Keyspace()
+}
+
+func (rr *ReferenceRouting) ReferenceRoute(keyspace *vindexes.Keyspace) *Route {
+	if keyspace.Name == rr.Keyspace().Name {
+		return nil
+	}
+
+	if route, ok := rr.referenceRoutes[keyspace]; ok {
+		return route
+	}
+
+	return nil
+}
+
+func (rr *ReferenceRouting) SetReferenceRoutes(referenceRoutes map[*vindexes.Keyspace]*Route) {
+	rr.referenceRoutes = referenceRoutes
+}
+
+func (rr *ReferenceRouting) InnerRouting() Routing {
+	return rr.innerRouting
 }

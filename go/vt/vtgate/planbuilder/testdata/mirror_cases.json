@@ -1,0 +1,154 @@
+[
+  {
+    "comment": "select column from one unsharded, qualified, mirrored table",
+    "query": "select m1.foo from main.another_mirror m1 where m1.id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select m1.foo from main.another_mirror m1 where m1.id = 1",
+      "Instructions": {
+        "OperatorType": "Mirror",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select m1.foo from another_mirror as m1 where 1 != 1",
+            "Query": "select m1.foo from another_mirror as m1 where m1.id = 1",
+            "Table": "another_mirror"
+          },
+          {
+            "OperatorType": "MirrorTarget",
+            "Variant": "Percent",
+            "Percent": 50,
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select m1.foo from another_mirror as m1 where 1 != 1",
+                "Query": "select m1.foo from another_mirror as m1 where m1.id = 1",
+                "Table": "another_mirror",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "shard_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.another_mirror",
+        "user.another_mirror"
+      ]
+    }
+  },
+  {
+    "comment": "select column from one sharded, qualified, mirrored table",
+    "query": "select m1.foo from user.mirror m1 where m1.id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select m1.foo from user.mirror m1 where m1.id = 1",
+      "Instructions": {
+        "OperatorType": "Mirror",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select m1.foo from mirror as m1 where 1 != 1",
+            "Query": "select m1.foo from mirror as m1 where m1.id = 1",
+            "Table": "mirror",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "shard_index"
+          },
+          {
+            "OperatorType": "MirrorTarget",
+            "Variant": "Percent",
+            "Percent": 50,
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select m1.foo from mirror as m1 where 1 != 1",
+                "Query": "select m1.foo from mirror as m1 where m1.id = 1",
+                "Table": "mirror"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.mirror",
+        "user.mirror"
+      ]
+    }
+  },
+  {
+    "comment": "select column from multiple sharded, qualified, mirrored tables",
+    "query": "select m1.foo, m2.bar from user.mirror m1, user.mirror_fragment m2 where m1.id = m2.mirror_id and m1.id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select m1.foo, m2.bar from user.mirror m1, user.mirror_fragment m2 where m1.id = m2.mirror_id and m1.id = 1",
+      "Instructions": {
+        "OperatorType": "Mirror",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select m1.foo, m2.bar from mirror as m1, mirror_fragment as m2 where 1 != 1",
+            "Query": "select m1.foo, m2.bar from mirror as m1, mirror_fragment as m2 where m1.id = 1 and m1.id = m2.mirror_id",
+            "Table": "mirror, mirror_fragment",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "shard_index"
+          },
+          {
+            "OperatorType": "MirrorTarget",
+            "Variant": "Percent",
+            "Percent": 50,
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select m1.foo, m2.bar from mirror as m1, mirror_fragment as m2 where 1 != 1",
+                "Query": "select m1.foo, m2.bar from mirror as m1, mirror_fragment as m2 where m1.id = 1 and m1.id = m2.mirror_id",
+                "Table": "mirror, mirror_fragment"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.mirror",
+        "main.mirror_fragment",
+        "user.mirror",
+        "user.mirror_fragment"
+      ]
+    }
+  }
+]

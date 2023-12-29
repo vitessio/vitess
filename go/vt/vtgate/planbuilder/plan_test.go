@@ -97,6 +97,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "misc_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "cte_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "mirror_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.

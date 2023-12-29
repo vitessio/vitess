@@ -63,7 +63,7 @@ const (
 // VSchema represents the denormalized version of SrvVSchema,
 // used for building routing plans.
 type VSchema struct {
-	RoutingRules map[string]*RoutingRule `json:"routing_rules"`
+	RoutingRules map[string]*RoutingRulesByAction `json:"routing_rules"`
 
 	// globalTables contains the name of all tables in all keyspaces. If the
 	// table is uniquely named, the value will be the qualified Table object
@@ -78,23 +78,48 @@ type VSchema struct {
 	created time.Time
 }
 
-// RoutingRule represents one routing rule.
-type RoutingRule struct {
-	Tables []*Table
-	Error  error
+type RoutingRuleAction int
+
+const (
+	RedirectRoutingRuleAction RoutingRuleAction = iota
+	MirrorRoutingRuleAction
+)
+
+type Mirror struct {
+	Percent float32
 }
 
-// MarshalJSON returns a JSON representation of Column.
-func (rr *RoutingRule) MarshalJSON() ([]byte, error) {
-	if rr.Error != nil {
-		return json.Marshal(rr.Error.Error())
-	}
-	tables := make([]string, 0, len(rr.Tables))
-	for _, t := range rr.Tables {
-		tables = append(tables, t.String())
-	}
+type RoutingRulesByAction struct {
+	Mirror   *MirrorRoutingRule
+	Redirect *RoutingRule
+}
 
+// MarshalJSON returns a JSON representation of routing rules.
+// TODO(maxeng): figure how how this is used, and make it good.
+func (rr *RoutingRulesByAction) MarshalJSON() ([]byte, error) {
+	tables := make([]string, 0)
+	redirect := rr.Redirect
+	if redirect != nil {
+		if redirect.Error != nil {
+			return json.Marshal(redirect.Error.Error())
+		}
+		for _, t := range redirect.ToTables {
+			tables = append(tables, t.String())
+		}
+	}
 	return json.Marshal(tables)
+}
+
+// MirrorRoutingRule represents a mirror routing rule.
+type MirrorRoutingRule struct {
+	RoutingRule
+	Mirror
+}
+
+// RedirectRoutingRule represents a redirect routing rule.
+type RoutingRule struct {
+	ToTables []*Table
+	Error    error
 }
 
 // Table represents a table in VSchema.
@@ -312,7 +337,7 @@ func (source *Source) String() string {
 // BuildVSchema builds a VSchema from a SrvVSchema.
 func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vschema *VSchema) {
 	vschema = &VSchema{
-		RoutingRules:   make(map[string]*RoutingRule),
+		RoutingRules:   make(map[string]*RoutingRulesByAction),
 		globalTables:   make(map[string]*Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
@@ -323,7 +348,9 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 	// resolve sources which reference global tables.
 	buildGlobalTables(source, vschema)
 	buildReferences(source, vschema)
-	buildRoutingRule(source, vschema, parser)
+	if source.RoutingRules != nil {
+		buildRoutingRules(source.RoutingRules.Rules, vschema, parser)
+	}
 	buildShardRoutingRule(source, vschema)
 	// Resolve auto-increments after routing rules are built since sequence tables also obey routing rules.
 	resolveAutoIncrement(source, vschema, parser)
@@ -894,77 +921,147 @@ func parseTable(tableName string) (sqlparser.TableName, error) {
 	}, nil
 }
 
-func buildRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlparser.Parser) {
-	var err error
-	if source.RoutingRules == nil {
-		return
+func buildMirrorRoutingRule(sourceRule *vschemapb.RoutingRule, vschema *VSchema, parser *sqlparser.Parser) *MirrorRoutingRule {
+	newRule := &MirrorRoutingRule{
+		RoutingRule: *buildRoutingRule(sourceRule, vschema, parser),
 	}
-outer:
-	for _, rule := range source.RoutingRules.Rules {
-		rr := &RoutingRule{}
-		if len(rule.ToTables) > 1 {
-			vschema.RoutingRules[rule.FromTable] = &RoutingRule{
-				Error: vterrors.Errorf(
-					vtrpcpb.Code_INVALID_ARGUMENT,
-					"table %v has more than one target: %v",
-					rule.FromTable,
-					rule.ToTables,
-				),
-			}
-			continue
+
+	if newRule.Error != nil {
+		return newRule
+	}
+
+	if sourceRule.Mirror == nil {
+		newRule.Error = vterrors.Errorf(
+			vtrpcpb.Code_INVALID_ARGUMENT,
+			"mirror rule is missing mirror configuration",
+		)
+		return newRule
+	}
+
+	sourceMirror := sourceRule.Mirror
+	if sourceMirror.Percent <= 0 || sourceMirror.Percent > 100 {
+		newRule.Error = vterrors.Errorf(
+			vtrpcpb.Code_INVALID_ARGUMENT,
+			"mirror rule mirror percentage must be greater than 0 and less than or equal to 100",
+		)
+		return newRule
+	}
+
+	newRule.Mirror.Percent = sourceMirror.Percent
+
+	return newRule
+}
+
+func buildRedirectRoutingRule(sourceRule *vschemapb.RoutingRule, vschema *VSchema, parser *sqlparser.Parser) *RoutingRule {
+	newRule := buildRoutingRule(sourceRule, vschema, parser)
+
+	if newRule.Error != nil {
+		return newRule
+	}
+
+	if sourceRule.Mirror != nil {
+		newRule.Error = vterrors.Errorf(
+			vtrpcpb.Code_INVALID_ARGUMENT,
+			"redirect rule can not have mirror configuration",
+		)
+		return newRule
+	}
+
+	return newRule
+}
+
+func buildRoutingRule(sourceRule *vschemapb.RoutingRule, vschema *VSchema, parser *sqlparser.Parser) *RoutingRule {
+	newRule := &RoutingRule{}
+
+	if len(sourceRule.ToTables) == 0 {
+		return newRule
+	}
+
+	if len(sourceRule.ToTables) > 1 {
+		newRule.Error = vterrors.Errorf(
+			vtrpcpb.Code_INVALID_ARGUMENT,
+			"table %v has more than one target: %v",
+			sourceRule.FromTable,
+			sourceRule.ToTables,
+		)
+		return newRule
+	}
+
+	toTable := sourceRule.ToTables[0]
+
+	// we need to backtick the keyspace and table name before calling ParseTable
+	toTable, err := escapeQualifiedTable(toTable)
+	if err != nil {
+		newRule.Error = vterrors.Errorf(
+			vtrpcpb.Code_INVALID_ARGUMENT,
+			err.Error(),
+		)
+		return newRule
+	}
+
+	toKeyspace, toTableName, err := parser.ParseTable(toTable)
+	if err != nil {
+		newRule.Error = err
+		return newRule
+	}
+	if toKeyspace == "" {
+		newRule.Error = vterrors.Errorf(
+			vtrpcpb.Code_INVALID_ARGUMENT,
+			"table %s must be qualified",
+			toTable,
+		)
+		return newRule
+	}
+
+	t, err := vschema.FindTable(toKeyspace, toTableName)
+	if err != nil {
+		newRule.Error = err
+		return newRule
+	}
+
+	newRule.ToTables = append(newRule.ToTables, t)
+
+	return newRule
+}
+
+func buildRoutingRules(sourceRules []*vschemapb.RoutingRule, vschema *VSchema, parser *sqlparser.Parser) {
+	for _, sourceRule := range sourceRules {
+		rules, ok := vschema.RoutingRules[sourceRule.FromTable]
+		if !ok {
+			rules = &RoutingRulesByAction{}
+			vschema.RoutingRules[sourceRule.FromTable] = rules
 		}
-		for _, toTable := range rule.ToTables {
-			if _, ok := vschema.RoutingRules[rule.FromTable]; ok {
-				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
-					Error: vterrors.Errorf(
-						vtrpcpb.Code_ALREADY_EXISTS,
-						"duplicate rule for entry %s",
-						rule.FromTable,
-					),
-				}
-				continue outer
-			}
 
-			// we need to backtick the keyspace and table name before calling ParseTable
-			toTable, err = escapeQualifiedTable(toTable)
-			if err != nil {
-				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
-					Error: vterrors.Errorf(
-						vtrpcpb.Code_INVALID_ARGUMENT,
-						err.Error(),
-					),
-				}
-				continue outer
+		action := RedirectRoutingRuleAction
+		if sourceAction := sourceRule.Action; sourceAction != nil {
+			switch *sourceAction {
+			case vschemapb.RoutingRule_ACTION_MIRROR:
+				action = MirrorRoutingRuleAction
 			}
-
-			toKeyspace, toTableName, err := parser.ParseTable(toTable)
-
-			if err != nil {
-				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
-					Error: err,
-				}
-				continue outer
-			}
-			if toKeyspace == "" {
-				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
-					Error: vterrors.Errorf(
-						vtrpcpb.Code_INVALID_ARGUMENT,
-						"table %s must be qualified",
-						toTable,
-					),
-				}
-				continue outer
-			}
-			t, err := vschema.FindTable(toKeyspace, toTableName)
-			if err != nil {
-				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
-					Error: err,
-				}
-				continue outer
-			}
-			rr.Tables = append(rr.Tables, t)
 		}
-		vschema.RoutingRules[rule.FromTable] = rr
+
+		switch action {
+		case MirrorRoutingRuleAction:
+			if mirror := rules.Mirror; mirror != nil {
+				mirror.Error = vterrors.Errorf(
+					vtrpcpb.Code_ALREADY_EXISTS,
+					"duplicate mirror rule for entry %s",
+					sourceRule.FromTable,
+				)
+			} else {
+				rules.Mirror = buildMirrorRoutingRule(sourceRule, vschema, parser)
+			}
+		default:
+			if redirect := rules.Redirect; redirect != nil {
+				redirect.Error = vterrors.Errorf(
+					vtrpcpb.Code_ALREADY_EXISTS,
+					"duplicate redirect rule for entry %s",
+					sourceRule.FromTable,
+				)
+			} else {
+				rules.Redirect = buildRedirectRoutingRule(sourceRule, vschema, parser)
+			}
+		}
 	}
 }
 
@@ -1088,6 +1185,36 @@ func (vschema *VSchema) FirstKeyspace() *Keyspace {
 	return ks.Keyspace
 }
 
+// FindMirroredTables finds tables that mirror an authoritative table.
+func (vschema *VSchema) FindMirroredTables(keyspace, tablename string, tabletType topodatapb.TabletType) (map[*Table]*Mirror, error) {
+	qualified := tablename
+	if keyspace != "" {
+		qualified = keyspace + "." + tablename
+	}
+	fqtn := qualified + TabletTypeSuffix[tabletType]
+	// First look for a fully qualified table name: keyspace.table@tablet_type.
+	// Then look for one without tablet type: keyspace.table.
+	mirroredTables := make(map[*Table]*Mirror)
+	for _, name := range []string{fqtn, qualified} {
+		rules, ok := vschema.RoutingRules[name]
+		if !ok {
+			continue
+		}
+		mirrorRule := rules.Mirror
+		if mirrorRule == nil {
+			continue
+		}
+		if mirrorRule.Error != nil {
+			return nil, mirrorRule.Error
+		}
+		if len(mirrorRule.ToTables) == 0 {
+			continue
+		}
+		mirroredTables[mirrorRule.ToTables[0]] = &mirrorRule.Mirror
+	}
+	return mirroredTables, nil
+}
+
 // FindRoutedTable finds a table checking the routing rules.
 func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
 	qualified := tablename
@@ -1098,20 +1225,25 @@ func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType t
 	// First look for a fully qualified table name: keyspace.table@tablet_type.
 	// Then look for one without tablet type: keyspace.table.
 	for _, name := range []string{fqtn, qualified} {
-		rr, ok := vschema.RoutingRules[name]
-		if ok {
-			if rr.Error != nil {
-				return nil, rr.Error
-			}
-			if len(rr.Tables) == 0 {
-				return nil, vterrors.Errorf(
-					vtrpcpb.Code_FAILED_PRECONDITION,
-					"table %s has been disabled",
-					tablename,
-				)
-			}
-			return rr.Tables[0], nil
+		rules, ok := vschema.RoutingRules[name]
+		if !ok {
+			continue
 		}
+		redirectRule := rules.Redirect
+		if redirectRule == nil {
+			continue
+		}
+		if redirectRule.Error != nil {
+			return nil, redirectRule.Error
+		}
+		if len(redirectRule.ToTables) == 0 {
+			return nil, vterrors.Errorf(
+				vtrpcpb.Code_FAILED_PRECONDITION,
+				"table %s has been disabled",
+				tablename,
+			)
+		}
+		return redirectRule.ToTables[0], nil
 	}
 	return vschema.findTable(
 		keyspace,
@@ -1122,12 +1254,12 @@ func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType t
 
 // FindTableOrVindex finds a table or a Vindex by name using Find and FindVindex.
 func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topodatapb.TabletType) (*Table, Vindex, error) {
-	tables, err := vschema.FindRoutedTable(keyspace, name, tabletType)
+	table, err := vschema.FindRoutedTable(keyspace, name, tabletType)
 	if err != nil {
 		return nil, nil, err
 	}
-	if tables != nil {
-		return tables, nil, nil
+	if table != nil {
+		return table, nil, nil
 	}
 	v, err := vschema.FindVindex(keyspace, name)
 	if err != nil {

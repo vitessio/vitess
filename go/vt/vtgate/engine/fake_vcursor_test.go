@@ -110,6 +110,10 @@ func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	panic("implement me")
 }
 
+func (t *noopVCursor) CloneForMirroring(ctx context.Context) VCursor {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }
@@ -424,6 +428,8 @@ type loggingVCursor struct {
 	shardSession []*srvtopo.ResolvedShard
 
 	parser *sqlparser.Parser
+
+	mirrorClonesFn func(context.Context) VCursor
 }
 
 func (f *loggingVCursor) HasCreatedTempTable() {
@@ -537,6 +543,13 @@ func (f *loggingVCursor) GetWarmingReadsChannel() chan bool {
 
 func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	return f
+}
+
+func (f *loggingVCursor) CloneForMirroring(ctx context.Context) VCursor {
+	if f.mirrorClonesFn != nil {
+		return f.mirrorClonesFn(ctx)
+	}
+	panic("no mirror clones available")
 }
 
 func (f *loggingVCursor) Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {

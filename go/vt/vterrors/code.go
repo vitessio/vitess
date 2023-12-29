@@ -94,6 +94,7 @@ var (
 
 	VT12001 = errorWithoutState("VT12001", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", "This statement is unsupported by Vitess. Please rewrite your query to use supported syntax.")
 	VT12002 = errorWithoutState("VT12002", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard foreign keys", "Vitess does not support cross shard foreign keys.")
+	VT12003 = errorWithoutState("VT12003", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: non-committal statement wrapping is not supported for this statement.", "Vitess does not support non-committal statement wrapping for this statement.")
 
 	// VT13001 General Error
 	VT13001 = errorWithoutState("VT13001", vtrpcpb.Code_INTERNAL, "[BUG] %s", "This error should not happen and is a bug. Please file an issue on GitHub: https://github.com/vitessio/vitess/issues/new/choose.")

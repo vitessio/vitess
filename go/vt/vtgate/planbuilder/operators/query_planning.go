@@ -120,10 +120,10 @@ func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
 			src.Routing = &AnyShardRouting{
 				keyspace: r.keyspace,
 			}
-		case *AnyShardRouting:
+		case *ReferenceRouting:
 			// References would have an unsharded source
 			// Alternates are not required.
-			r.Alternates = nil
+			r.SetReferenceRoutes(nil)
 		}
 		return Swap(in, src, "pushed delete under route")
 	case *ApplyJoin:
@@ -175,7 +175,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 
 	rb, isRoute := in.src().(*Route)
 	if isRoute && rb.IsSingleShard() {
-		return Swap(in, rb, "push horizon into route")
+		return Swap(in, rb, "push horizon into single-shard route")
 	}
 
 	sel, isSel := in.selectStatement().(*sqlparser.Select)
@@ -193,7 +193,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 		in.selectStatement().GetLimit() == nil
 
 	if canPush {
-		return Swap(in, rb, "push horizon into route")
+		return Swap(in, rb, "push horizon into simple select route")
 	}
 
 	return expandHorizon(ctx, in)

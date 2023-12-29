@@ -320,9 +320,14 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op Operator) (requ
 }
 
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, inner bool) (Operator, *ApplyResult) {
-	newPlan := mergeJoinInputs(ctx, lhs, rhs, joinPredicates, newJoinMerge(joinPredicates, inner))
-	if newPlan != nil {
-		return newPlan, Rewrote("merge routes into single operator")
+	newMirror := mergeJoinMirrors(ctx, lhs, rhs, joinPredicates, newJoinMerge(joinPredicates, inner))
+	if newMirror != nil {
+		return newMirror, Rewrote("merge mirrors into single operator")
+	}
+
+	newRoute := mergeJoinRoutes(ctx, lhs, rhs, joinPredicates, newJoinMerge(joinPredicates, inner))
+	if newRoute != nil {
+		return newRoute, Rewrote("merge routes into single operator")
 	}
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
@@ -343,7 +348,19 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 
 	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
 	newOp := pushJoinPredicates(ctx, joinPredicates, join)
-	return newOp, Rewrote("logical join to applyJoin ")
+	return newOp, Rewrote("logical join to applyJoin")
+}
+
+func operatorsToMirrors(a, b Operator) (*Mirror, *Mirror) {
+	aMirror, ok := a.(*Mirror)
+	if !ok {
+		return nil, nil
+	}
+	bMirror, ok := b.(*Mirror)
+	if !ok {
+		return nil, nil
+	}
+	return aMirror, bMirror
 }
 
 func operatorsToRoutes(a, b Operator) (*Route, *Route) {

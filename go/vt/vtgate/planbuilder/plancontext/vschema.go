@@ -26,6 +26,7 @@ type VSchema interface {
 	FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
 	FindView(name sqlparser.TableName) sqlparser.SelectStatement
 	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
+	FindMirrorTables(tablename sqlparser.TableName) (map[*vindexes.Table]*vindexes.Mirror, string, topodatapb.TabletType, key.Destination, error)
 	DefaultKeyspace() (*vindexes.Keyspace, error)
 	TargetString() string
 	Destination() key.Destination

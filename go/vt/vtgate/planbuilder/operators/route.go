@@ -370,21 +370,66 @@ func createRoute(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	solves semantics.TableSet,
-) Operator {
+) (operator Operator) {
 	if queryTable.IsInfSchema {
 		return createInfSchemaRoute(ctx, queryTable)
 	}
-	return findVSchemaTableAndCreateRoute(ctx, queryTable, queryTable.Table, solves, true /*planAlternates*/)
+
+	operator = findTableOrVindexAndCreateRoute(
+		ctx,
+		queryTable,
+		queryTable.Table,
+		solves,
+		true, /*planReferences*/
+	)
+
+	mirrorTargets := findMirrorTablesAndCreateTargetRoutes(ctx, queryTable, solves)
+	if len(mirrorTargets) > 0 {
+		operator = &Mirror{
+			Operator: operator,
+			Targets:  mirrorTargets,
+		}
+	}
+
+	return operator
 }
 
-// findVSchemaTableAndCreateRoute consults the VSchema to find a suitable
+func findMirrorTablesAndCreateTargetRoutes(
+	ctx *plancontext.PlanningContext,
+	queryTable *QueryTable,
+	solves semantics.TableSet,
+) []MirrorTarget {
+	mirrorTables, _, tabletType, target, err := ctx.VSchema.FindMirrorTables(queryTable.Table)
+	if err != nil {
+		panic(err)
+	}
+
+	mirrorTargets := make([]MirrorTarget, 0, len(mirrorTables))
+	for vschemaTable, mirror := range mirrorTables {
+		mirrorTargets = append(mirrorTargets, &PercentMirrorTarget{
+			Percent: mirror.Percent,
+			Operator: createRouteFromVSchemaTable(
+				ctx,
+				queryTable,
+				vschemaTable,
+				solves,
+				true,
+				createTargetedRouting(ctx, target, tabletType, vschemaTable),
+			),
+		})
+	}
+
+	return mirrorTargets
+}
+
+// findTableOrVindexAndCreateRoute consults the VSchema to find a suitable
 // table, and then creates a route from that.
-func findVSchemaTableAndCreateRoute(
+func findTableOrVindexAndCreateRoute(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	tableName sqlparser.TableName,
 	solves semantics.TableSet,
-	planAlternates bool,
+	planReferences bool,
 ) *Route {
 	vschemaTable, _, _, tabletType, target, err := ctx.VSchema.FindTableOrVindex(tableName)
 	if err != nil {
@@ -398,7 +443,7 @@ func findVSchemaTableAndCreateRoute(
 		queryTable,
 		vschemaTable,
 		solves,
-		planAlternates,
+		planReferences,
 		targeted,
 	)
 }
@@ -441,7 +486,7 @@ func createRouteFromVSchemaTable(
 	queryTable *QueryTable,
 	vschemaTable *vindexes.Table,
 	solves semantics.TableSet,
-	planAlternates bool,
+	planReferences bool,
 	targeted Routing,
 ) *Route {
 	if vschemaTable.Name.String() != queryTable.Table.Name.String() {
@@ -488,8 +533,11 @@ func createRouteFromVSchemaTable(
 			plan.Routing = routing.tryImprove(ctx, queryTable)
 		}
 	case *AnyShardRouting:
-		if planAlternates {
-			routing.Alternates = createAlternateRoutesFromVSchemaTable(ctx, queryTable, vschemaTable, solves)
+		if planReferences {
+			plan.Routing = &ReferenceRouting{
+				innerRouting:    routing,
+				referenceRoutes: createReferenceRoutesFromVSchemaTable(ctx, queryTable, vschemaTable, solves),
+			}
 		}
 	}
 
@@ -509,7 +557,7 @@ func createRoutingForVTable(vschemaTable *vindexes.Table, id semantics.TableSet)
 	}
 }
 
-func createAlternateRoutesFromVSchemaTable(
+func createReferenceRoutesFromVSchemaTable(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	vschemaTable *vindexes.Table,
@@ -520,7 +568,7 @@ func createAlternateRoutesFromVSchemaTable(
 	switch vschemaTable.Type {
 	case "", vindexes.TypeReference:
 		for ksName, referenceTable := range vschemaTable.ReferencedBy {
-			route := findVSchemaTableAndCreateRoute(
+			route := findTableOrVindexAndCreateRoute(
 				ctx,
 				queryTable,
 				sqlparser.TableName{
@@ -528,18 +576,18 @@ func createAlternateRoutesFromVSchemaTable(
 					Qualifier: sqlparser.NewIdentifierCS(ksName),
 				},
 				solves,
-				false, /*planAlternates*/
+				false, /*planReferences*/
 			)
 			routes[referenceTable.Keyspace] = route
 		}
 
 		if vschemaTable.Source != nil {
-			route := findVSchemaTableAndCreateRoute(
+			route := findTableOrVindexAndCreateRoute(
 				ctx,
 				queryTable,
 				vschemaTable.Source.TableName,
 				solves,
-				false, /*planAlternates*/
+				false, /*planReferences*/
 			)
 			keyspace := route.Routing.Keyspace()
 			if keyspace != nil {

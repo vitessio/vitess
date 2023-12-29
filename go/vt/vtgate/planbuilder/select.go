@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func gen4SelectStmtPlanner(
@@ -197,7 +198,25 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	if ks, _ := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
+	// Don't shortcut if tables are mirrored.
+	mirrored := false
+	for _, table := range ctx.SemTable.Tables {
+		tableName, ok := table.GetAliasedTableExpr().Expr.(sqlparser.TableName)
+		if !ok {
+			continue
+		}
+		mirroredTables, _, _, _, _ := ctx.VSchema.FindMirrorTables(tableName)
+		if len(mirroredTables) > 0 {
+			mirrored = true
+			break
+		}
+	}
+
+	// Only use shortcut if all tables are in the same, unsharded keyspace.
+	var ks *vindexes.Keyspace
+	ks, _ = ctx.SemTable.SingleUnshardedKeyspace()
+
+	if !mirrored && ks != nil {
 		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
 		if err != nil {
 			return nil, nil, err

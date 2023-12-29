@@ -44,6 +44,30 @@
       {
         "from_table": "user.rerouted_ref",
         "to_tables": ["user.ref"]
+      },
+      {
+        "from_table": "user.mirror",
+        "to_tables": ["main.mirror"],
+        "action": "ACTION_MIRROR",
+        "mirror": {
+          "percent": 50.0
+        }
+      },
+      {
+        "from_table": "user.mirror_fragment",
+        "to_tables": ["main.mirror_fragment"],
+        "action": "ACTION_MIRROR",
+        "mirror": {
+          "percent": 50.0
+        }
+      },
+      {
+        "from_table": "main.another_mirror",
+        "to_tables": ["user.another_mirror"],
+        "action": "ACTION_MIRROR",
+        "mirror": {
+          "percent": 50.0
+        }
       }
     ]
   },
@@ -486,6 +510,30 @@
               "name": "shard_index"
             }
           ]
+        },
+        "mirror": {
+          "column_vindexes": [
+            {
+              "column": "id",
+              "name": "shard_index"
+            }
+          ]
+        },
+        "mirror_fragment": {
+          "column_vindexes": [
+            {
+              "column": "mirror_id",
+              "name": "shard_index"
+            }
+          ]
+        },
+        "another_mirror": {
+          "column_vindexes": [
+            {
+              "column": "id",
+              "name": "shard_index"
+            }
+          ]
         }
       }
     },
@@ -590,7 +638,10 @@
         "global_ref": {},
         "rerouted_ref": {},
         "source_of_ref": {},
-        "unsharded_ref": {}
+        "unsharded_ref": {},
+        "mirror": {},
+        "mirror_fragment": {},
+        "another_mirror": {}
       }
     },
     "main_2": {
