@@ -1549,3 +1549,79 @@ func (ts *trafficSwitcher) resetSequences(ctx context.Context) error {
 		return ts.TabletManagerClient().ResetSequences(ctx, source.GetPrimary().Tablet, ts.Tables())
 	})
 }
+
+func (ts *trafficSwitcher) mirrorTableTraffic(ctx context.Context, percent float32, servedTypes []topodatapb.TabletType) error {
+	log.Infof("mirrorTableTraffic: servedTypes: %+v", servedTypes)
+
+	// We assume that the following rules were setup when the targets were created:
+	// table -> sourceKeyspace.table
+	// targetKeyspace.table -> sourceKeyspace.table
+	for _, servedType := range servedTypes {
+		if servedType != topodatapb.TabletType_PRIMARY &&
+			servedType != topodatapb.TabletType_REPLICA &&
+			servedType != topodatapb.TabletType_RDONLY {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid tablet type specified when switching reads: %v", servedType)
+		}
+	}
+
+	rrs, err := ts.TopoServer().GetRoutingRules(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Prepare rules to add or modify.
+	newRules := make(map[string]*vschemapb.RoutingRule)
+	action := vschemapb.RoutingRule_ACTION_MIRROR
+
+	for _, servedType := range servedTypes {
+		log.Infof("mirrorTableTraffic: servedType: %v", servedType)
+		tt := strings.ToLower(servedType.String())
+		for _, table := range ts.Tables() {
+			toTarget := []string{ts.TargetKeyspaceName() + "." + table}
+			newRules[table+"@"+tt] = &vschemapb.RoutingRule{
+				FromTable: table + "@" + tt,
+				ToTables:  toTarget,
+				Action:    &action,
+				Mirror: &vschemapb.RoutingRule_Mirror{
+					Percent: percent,
+				},
+			}
+			newRules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = &vschemapb.RoutingRule{
+				FromTable: ts.SourceKeyspaceName() + "." + table + "@" + tt,
+				ToTables:  toTarget,
+				Action:    &action,
+				Mirror: &vschemapb.RoutingRule_Mirror{
+					Percent: percent,
+				},
+			}
+		}
+	}
+
+	for _, rule := range rrs.Rules {
+		if action := rule.Action; action == nil || *action != vschemapb.RoutingRule_ACTION_MIRROR {
+			continue
+		}
+
+		newRule, ok := newRules[rule.FromTable]
+		if !ok {
+			continue
+		}
+
+		delete(newRules, rule.FromTable)
+
+		if rule.Mirror == nil {
+			rule.Mirror = newRule.Mirror
+		} else {
+			rule.Mirror.Percent = newRule.Mirror.Percent
+		}
+	}
+
+	for _, newRule := range newRules {
+		rrs.Rules = append(rrs.Rules, newRule)
+	}
+
+	if err := ts.TopoServer().SaveRoutingRules(ctx, rrs); err != nil {
+		return err
+	}
+	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
+}

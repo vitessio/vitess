@@ -1001,6 +1001,15 @@ func (client *gRPCVtctldClient) WorkflowDelete(ctx context.Context, in *vtctldat
 	return client.c.WorkflowDelete(ctx, in, opts...)
 }
 
+// WorkflowMirrorTraffic is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) WorkflowMirrorTraffic(ctx context.Context, in *vtctldatapb.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowMirrorTrafficResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.WorkflowMirrorTraffic(ctx, in, opts...)
+}
+
 // WorkflowStatus is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) WorkflowStatus(ctx context.Context, in *vtctldatapb.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
 	if client.c == nil {

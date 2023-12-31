@@ -68384,4 +68384,228 @@ export namespace vtctldata {
             public static getTypeUrl(typeUrlPrefix?: string): string;
         }
     }
+
+    /** Properties of a WorkflowMirrorTrafficRequest. */
+    interface IWorkflowMirrorTrafficRequest {
+
+        /** WorkflowMirrorTrafficRequest keyspace */
+        keyspace?: (string|null);
+
+        /** WorkflowMirrorTrafficRequest workflow */
+        workflow?: (string|null);
+
+        /** WorkflowMirrorTrafficRequest percent */
+        percent?: (number|null);
+
+        /** WorkflowMirrorTrafficRequest tablet_types */
+        tablet_types?: (topodata.TabletType[]|null);
+    }
+
+    /** Represents a WorkflowMirrorTrafficRequest. */
+    class WorkflowMirrorTrafficRequest implements IWorkflowMirrorTrafficRequest {
+
+        /**
+         * Constructs a new WorkflowMirrorTrafficRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowMirrorTrafficRequest);
+
+        /** WorkflowMirrorTrafficRequest keyspace. */
+        public keyspace: string;
+
+        /** WorkflowMirrorTrafficRequest workflow. */
+        public workflow: string;
+
+        /** WorkflowMirrorTrafficRequest percent. */
+        public percent: number;
+
+        /** WorkflowMirrorTrafficRequest tablet_types. */
+        public tablet_types: topodata.TabletType[];
+
+        /**
+         * Creates a new WorkflowMirrorTrafficRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowMirrorTrafficRequest instance
+         */
+        public static create(properties?: vtctldata.IWorkflowMirrorTrafficRequest): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficRequest message. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficRequest.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowMirrorTrafficRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficRequest.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowMirrorTrafficRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowMirrorTrafficRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowMirrorTrafficRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Verifies a WorkflowMirrorTrafficRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowMirrorTrafficRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowMirrorTrafficRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowMirrorTrafficRequest;
+
+        /**
+         * Creates a plain object from a WorkflowMirrorTrafficRequest message. Also converts values to other types if specified.
+         * @param message WorkflowMirrorTrafficRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowMirrorTrafficRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowMirrorTrafficRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowMirrorTrafficRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a WorkflowMirrorTrafficResponse. */
+    interface IWorkflowMirrorTrafficResponse {
+
+        /** WorkflowMirrorTrafficResponse summary */
+        summary?: (string|null);
+
+        /** WorkflowMirrorTrafficResponse start_state */
+        start_state?: (string|null);
+
+        /** WorkflowMirrorTrafficResponse current_state */
+        current_state?: (string|null);
+    }
+
+    /** Represents a WorkflowMirrorTrafficResponse. */
+    class WorkflowMirrorTrafficResponse implements IWorkflowMirrorTrafficResponse {
+
+        /**
+         * Constructs a new WorkflowMirrorTrafficResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowMirrorTrafficResponse);
+
+        /** WorkflowMirrorTrafficResponse summary. */
+        public summary: string;
+
+        /** WorkflowMirrorTrafficResponse start_state. */
+        public start_state: string;
+
+        /** WorkflowMirrorTrafficResponse current_state. */
+        public current_state: string;
+
+        /**
+         * Creates a new WorkflowMirrorTrafficResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowMirrorTrafficResponse instance
+         */
+        public static create(properties?: vtctldata.IWorkflowMirrorTrafficResponse): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficResponse message. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficResponse.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowMirrorTrafficResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowMirrorTrafficResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowMirrorTrafficResponse.verify|verify} messages.
+         * @param message WorkflowMirrorTrafficResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowMirrorTrafficResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowMirrorTrafficResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Decodes a WorkflowMirrorTrafficResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowMirrorTrafficResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Verifies a WorkflowMirrorTrafficResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowMirrorTrafficResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowMirrorTrafficResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowMirrorTrafficResponse;
+
+        /**
+         * Creates a plain object from a WorkflowMirrorTrafficResponse message. Also converts values to other types if specified.
+         * @param message WorkflowMirrorTrafficResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowMirrorTrafficResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowMirrorTrafficResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowMirrorTrafficResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }

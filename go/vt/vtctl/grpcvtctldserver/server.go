@@ -4988,6 +4988,22 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 	return resp, err
 }
 
+// WorkflowMirrorTraffic is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMirrorTrafficRequest) (resp *vtctldatapb.WorkflowMirrorTrafficResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowMirrorTraffic")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("percent", req.Percent)
+	span.Annotate("tablet-types", req.TabletTypes)
+
+	resp, err = s.ws.WorkflowMirrorTraffic(ctx, req)
+	return resp, err
+}
+
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
 func StartServer(s *grpc.Server, ts *topo.Server, parser *sqlparser.Parser) {
 	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts, parser))

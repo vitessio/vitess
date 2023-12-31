@@ -106,6 +106,7 @@ type vdiffOutput struct {
 }
 
 const (
+	cannotMirrorSwitched            = "cannot mirror traffic after workflow traffic is switched"
 	cannotSwitchError               = "workflow has errors"
 	cannotSwitchCopyIncomplete      = "copy is still in progress"
 	cannotSwitchHighLag             = "replication lag %ds is higher than allowed lag %ds"
@@ -3850,4 +3851,88 @@ func (s *Server) MigrateCreate(ctx context.Context, req *vtctldatapb.MigrateCrea
 		NoRoutingRules:            req.NoRoutingRules,
 	}
 	return s.moveTablesCreate(ctx, moveTablesCreateRequest, binlogdatapb.VReplicationWorkflowType_Migrate)
+}
+
+// WorkflowMirrorTraffic mirrors traffic from the source keyspace to the target keyspace.
+func (s *Server) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMirrorTrafficRequest) (*vtctldatapb.WorkflowMirrorTrafficResponse, error) {
+	ts, startState, err := s.getWorkflowState(ctx, req.Keyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+
+	if startState.WorkflowType == TypeMigrate {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: MirrorTraffic")
+	}
+
+	reason, err := s.canMirror(startState)
+	if err != nil {
+		return nil, err
+	}
+	if reason != "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot mirror traffic for workflow %s at this time: %s", startState.Workflow, reason)
+	}
+	if err := s.mirrorTraffic(ctx, req, ts, startState); err != nil {
+		return nil, err
+	}
+	cmd := "MirrorTraffic"
+	resp := &vtctldatapb.WorkflowMirrorTrafficResponse{}
+	log.Infof("Mirror Traffic done for workflow %s.%s", req.Keyspace, req.Workflow)
+	resp.Summary = fmt.Sprintf("%s was successful for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
+	// Reload the state after the MirrorTraffic operation
+	// and return that as a string.
+	keyspace := req.Keyspace
+	workflow := req.Workflow
+	resp.StartState = startState.String()
+	log.Infof("Before reloading workflow state after mirror traffic: %+v\n", resp.StartState)
+	_, currentState, err := s.getWorkflowState(ctx, keyspace, workflow)
+	if err != nil {
+		resp.CurrentState = fmt.Sprintf("Error reloading workflow state after mirror traffic: %v", err)
+	} else {
+		resp.CurrentState = currentState.String()
+	}
+	return resp, nil
+}
+
+func (s *Server) canMirror(state *State) (reason string, err error) {
+	if len(state.RdonlyCellsSwitched) > 0 || len(state.ReplicaCellsSwitched) > 0 ||
+		len(state.ShardsAlreadySwitched) > 0 || state.WritesSwitched {
+		return cannotMirrorSwitched, nil
+	}
+
+	return "", nil
+}
+
+// mirrorTraffic manages mirror routing rules for tables in the workflow.
+func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMirrorTrafficRequest, ts *trafficSwitcher, state *State) (err error) {
+	// Consistently handle errors by logging and returning them.
+	handleError := func(message string, err error) error {
+		ts.Logger().Error(err)
+		return err
+	}
+
+	log.Infof("Mirroring traffic: %s.%s tablet types: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, req.TabletTypes, state.String())
+
+	sw := &switcher{ts: ts, s: s}
+
+	if err := ts.validate(ctx); err != nil {
+		return handleError("workflow validation failed", err)
+	}
+
+	// For reads, locking the source keyspace is sufficient.
+	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "MirrorTraffic")
+	if lockErr != nil {
+		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
+	}
+	defer unlock(&err)
+
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+		if ts.isPartialMigration {
+			ts.Logger().Infof("Partial migration, mirror traffic is not currently supported.")
+		} else if err := sw.mirrorTableTraffic(ctx, req.Percent, req.TabletTypes); err != nil {
+			return handleError("failed to mirror traffic for the tables", err)
+		}
+		return nil
+	}
+
+	return nil
 }

@@ -224,6 +224,11 @@ func AddCommonCreateFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&CreateOptions.StopAfterCopy, "stop-after-copy", false, "Stop the workflow after it's finished copying the existing rows and before it starts replicating changes.")
 }
 
+var MirrorTrafficOptions = struct {
+	Percent     float32
+	TabletTypes []topodatapb.TabletType
+}{}
+
 var SwitchTrafficOptions = struct {
 	Cells                     []string
 	TabletTypes               []topodatapb.TabletType

@@ -707,6 +707,11 @@ func (client *localVtctldClient) WorkflowDelete(ctx context.Context, in *vtctlda
 	return client.s.WorkflowDelete(ctx, in)
 }
 
+// WorkflowMirrorTraffic is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) WorkflowMirrorTraffic(ctx context.Context, in *vtctldatapb.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowMirrorTrafficResponse, error) {
+	return client.s.WorkflowMirrorTraffic(ctx, in)
+}
+
 // WorkflowStatus is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) WorkflowStatus(ctx context.Context, in *vtctldatapb.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
 	return client.s.WorkflowStatus(ctx, in)
