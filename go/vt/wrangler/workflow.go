@@ -260,15 +260,18 @@ func NewWorkflowError(tablet string, id int32, description string) *WorkflowErro
 }
 
 func (vrw *VReplicationWorkflow) IsPartialMigration() bool {
+	if vrw.ws == nil {
+		return false
+	}
 	return vrw.ws.IsPartialMigration
 }
 
 // GetStreamCount returns a count of total streams and of streams that have started processing
-func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowError, error) {
+func (vrw *VReplicationWorkflow) GetStreamCount(shards []string) (int64, int64, []*WorkflowError, error) {
 	var err error
 	var workflowErrors []*WorkflowError
 	var total, started int64
-	res, err := vrw.wr.ShowWorkflow(vrw.ctx, vrw.params.Workflow, vrw.params.TargetKeyspace, nil)
+	res, err := vrw.wr.ShowWorkflow(vrw.ctx, vrw.params.Workflow, vrw.params.TargetKeyspace, shards)
 	if err != nil {
 		return 0, 0, nil, err
 	}

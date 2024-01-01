@@ -2149,10 +2149,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		StopAfterCopy:  *stopAfterCopy,
 		AtomicCopy:     *atomicCopy,
 	}
+	var shardsWithStreams []string
 
 	printDetails := func() error {
 		s := ""
-		res, err := wr.ShowWorkflow(ctx, workflowName, target, nil)
+		res, err := wr.ShowWorkflow(ctx, workflowName, target, shardsWithStreams)
 		if err != nil {
 			return err
 		}
@@ -2327,11 +2328,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	}
 
 	if len(vrwp.ShardSubset) > 0 {
-		if workflowType == wrangler.MoveTablesWorkflow && wf.IsPartialMigration() && action != vReplicationWorkflowActionCreate {
+		if workflowType == wrangler.MoveTablesWorkflow && action != vReplicationWorkflowActionCreate && wf.IsPartialMigration() {
 			log.Infof("Subset of shards: %s have been specified for keyspace %s, workflow %s, for action %s",
 				vrwp.ShardSubset, target, workflowName, action)
 		} else {
-			return fmt.Errorf("shards can only be specified for existing Partial MoveTables workflows")
+			return fmt.Errorf("The --shards option can only be specified for existing Partial MoveTables workflows")
 		}
 	}
 
@@ -2377,6 +2378,16 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 
 	wr.WorkflowParams = vrwp
 
+	switch vrwp.WorkflowType {
+	case wrangler.MoveTablesWorkflow:
+		// If this is not a partial MoveTables, SourceShards is nil and all shards will be polled.
+		shardsWithStreams = vrwp.SourceShards
+	case wrangler.ReshardWorkflow:
+		shardsWithStreams = vrwp.TargetShards
+	default:
+	}
+
+	wr.WorkflowParams = vrwp
 	var dryRunResults *[]string
 	startState := wf.CachedState()
 	switch action {
@@ -2412,7 +2423,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					totalStreams, startedStreams, workflowErrors, err := wf.GetStreamCount()
+					totalStreams, startedStreams, workflowErrors, err := wf.GetStreamCount(shardsWithStreams)
 					if err != nil {
 						errCh <- err
 						close(errCh)
