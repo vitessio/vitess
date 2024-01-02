@@ -62,6 +62,7 @@ var (
 type workflowExecOptions struct {
 	deferSecondaryKeys bool
 	atomicCopy         bool
+	shardSubset        string
 }
 
 var defaultWorkflowExecOptions = &workflowExecOptions{
@@ -139,6 +140,10 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 				args = append(args, "--defer-secondary-keys")
 			}
 			args = append(args, "--initialize-target-sequences") // Only used for MoveTables
+		}
+	default:
+		if options.shardSubset != "" {
+			args = append(args, "--shards", options.shardSubset)
 		}
 	}
 	if cells != "" {
