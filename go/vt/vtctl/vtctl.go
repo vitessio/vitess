@@ -2350,7 +2350,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 			sort.Strings(tables)
 			s := ""
 			var progress wrangler.TableCopyProgress
-			for table := range *copyProgress {
+			for _, table := range tables {
 				var rowCountPct, tableSizePct int64
 				progress = *(*copyProgress)[table]
 				if progress.SourceRowCount > 0 {
