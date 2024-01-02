@@ -27753,6 +27753,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state */
         state?: (binlogdata.VReplicationWorkflowState|null);
+
+        /** UpdateVReplicationWorkflowRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents an UpdateVReplicationWorkflowRequest. */
@@ -27781,6 +27784,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state. */
         public state: binlogdata.VReplicationWorkflowState;
+
+        /** UpdateVReplicationWorkflowRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
@@ -54207,6 +54213,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest include_logs */
         include_logs?: (boolean|null);
+
+        /** GetWorkflowsRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a GetWorkflowsRequest. */
@@ -54232,6 +54241,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest include_logs. */
         public include_logs: boolean;
+
+        /** GetWorkflowsRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
@@ -57095,6 +57107,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest dry_run */
         dry_run?: (boolean|null);
+
+        /** MoveTablesCompleteRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a MoveTablesCompleteRequest. */
@@ -57123,6 +57138,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest dry_run. */
         public dry_run: boolean;
+
+        /** MoveTablesCompleteRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new MoveTablesCompleteRequest instance using the specified properties.
@@ -66806,6 +66824,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest keep_routing_rules */
         keep_routing_rules?: (boolean|null);
+
+        /** WorkflowDeleteRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a WorkflowDeleteRequest. */
@@ -66828,6 +66849,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest keep_routing_rules. */
         public keep_routing_rules: boolean;
+
+        /** WorkflowDeleteRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new WorkflowDeleteRequest instance using the specified properties.
@@ -67124,6 +67148,9 @@ export namespace vtctldata {
 
         /** WorkflowStatusRequest workflow */
         workflow?: (string|null);
+
+        /** WorkflowStatusRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a WorkflowStatusRequest. */
@@ -67140,6 +67167,9 @@ export namespace vtctldata {
 
         /** WorkflowStatusRequest workflow. */
         public workflow: string;
+
+        /** WorkflowStatusRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new WorkflowStatusRequest instance using the specified properties.
@@ -67714,6 +67744,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest initialize_target_sequences */
         initialize_target_sequences?: (boolean|null);
+
+        /** WorkflowSwitchTrafficRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a WorkflowSwitchTrafficRequest. */
@@ -67754,6 +67787,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest initialize_target_sequences. */
         public initialize_target_sequences: boolean;
+
+        /** WorkflowSwitchTrafficRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new WorkflowSwitchTrafficRequest instance using the specified properties.
