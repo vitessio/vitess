@@ -22,7 +22,7 @@ For more about Vitess, please visit [vitess.io](https://vitess.io).
 Vitess has a growing community. [View the list of adopters](https://github.com/vitessio/vitess/blob/main/ADOPTERS.md).
 
 ## Reporting a Problem, Issue, or Bug
-To report a problem, create a [GitHub issue](https://github.com/vitessio/vitess/issues) using proper severity level based on [this guide](https://github.com/vitessio/vitess/blob/main/SEVERITY.md). 
+To report a problem, create a [GitHub issue](https://github.com/vitessio/vitess/issues). 
 
 For topics that are better discussed live, please join the [Vitess Slack](https://vitess.io/slack) workspace.
 You may post any questions on the #general channel or join some of the special-interest channels.
