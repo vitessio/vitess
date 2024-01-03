@@ -1,15 +1,16 @@
 package schemadiff
 
 import (
-	"errors"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
-	ErrUnexpectedDiffType = errors.New("unexpected diff type")
+	ErrUnexpectedDiffType = vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected diff type")
 )
 
 // alterOptionAvailableViaInstantDDL checks if the specific alter option is eligible to run via ALGORITHM=INSTANT
@@ -89,7 +90,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		// Adding a *last* column is supported in 8.0
 		return capableOf(capabilities.InstantAddLastColumnFlavorCapability)
 	case *sqlparser.DropColumn:
-		// not supported in COMPRESSED tables
+		// Not supported in COMPRESSED tables
 		if opt := findTableOption("ROW_FORMAT"); opt != nil {
 			if strings.EqualFold(opt.String, "COMPRESSED") {
 				return false, nil
