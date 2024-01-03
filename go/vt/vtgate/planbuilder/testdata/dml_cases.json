@@ -5272,5 +5272,137 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "delete 3 way join with sharding key and primary key same",
+    "query": "delete u from user u join music m on u.col = m.col join user_extra ue on m.user_id = ue.user_id where ue.foo = 20 and u.col = 30 and m.bar = 40",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u from user u join music m on u.col = m.col join user_extra ue on m.user_id = ue.user_id where ue.foo = 20 and u.col = 30 and m.bar = 40",
+      "Instructions": {
+        "OperatorType": "DeleteMulti",
+        "TargetTabletType": "PRIMARY",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "u_col": 1
+            },
+            "TableName": "`user`_music, user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+                "Query": "select u.id, u.col from `user` as u where u.col = 30",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from music as m, user_extra as ue where 1 != 1",
+                "Query": "select 1 from music as m, user_extra as ue where m.bar = 40 and m.col = :u_col and ue.foo = 20 and m.user_id = ue.user_id",
+                "Table": "music, user_extra"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Delete",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where (u.id) in ::dm_vals for update",
+            "Query": "delete from `user` as u where (u.id) in ::dm_vals",
+            "Table": "user"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "delete 3 way join with sharding key and primary key different",
+    "query": "delete m from user u join music m on u.col = m.col join user_extra ue on m.user_id = ue.user_id where ue.foo = 20 and u.col = 30 and m.bar = 40",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete m from user u join music m on u.col = m.col join user_extra ue on m.user_id = ue.user_id where ue.foo = 20 and u.col = 30 and m.bar = 40",
+      "Instructions": {
+        "OperatorType": "DeleteMulti",
+        "TargetTabletType": "PRIMARY",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "u_col": 0
+            },
+            "TableName": "`user`_music, user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.col from `user` as u where 1 != 1",
+                "Query": "select u.col from `user` as u where u.col = 30",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select m.id from music as m, user_extra as ue where 1 != 1",
+                "Query": "select m.id from music as m, user_extra as ue where m.bar = 40 and m.col = :u_col and ue.foo = 20 and m.user_id = ue.user_id",
+                "Table": "music, user_extra"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Delete",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select m.user_id, m.id from music as m where (m.id) in ::dm_vals for update",
+            "Query": "delete from music as m where (m.id) in ::dm_vals",
+            "Table": "music"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]

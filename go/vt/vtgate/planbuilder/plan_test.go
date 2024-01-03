@@ -62,7 +62,7 @@ func TestPlan(t *testing.T) {
 		TestBuilder:   TestBuilder,
 	}
 	testOutputTempDir := makeTestOutput(t)
-	addPKs(t, vschemaWrapper.V, "user", []string{"user"})
+	addPKs(t, vschemaWrapper.V, "user", []string{"user", "music"})
 
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
@@ -267,7 +267,7 @@ func TestOne(t *testing.T) {
 
 	lv := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, lv)
-	addPKs(t, lv, "user", []string{"user"})
+	addPKs(t, lv, "user", []string{"user", "music"})
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:           lv,
 		TestBuilder: TestBuilder,
