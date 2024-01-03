@@ -369,10 +369,14 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		err = vterrors.Wrapf(err, "BuildKeyspace(%s)", req.Keyspace)
 		return nil, err
 	}
+	response := &vtctldatapb.ApplyVSchemaResponse{
+		VSchema:             vs,
+		UnknownVindexParams: make(map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList),
+	}
 
 	// Attach unknown Vindex params to the response.
-	unknownVindexParams := make(map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList)
 	var vdxNames []string
+	var unknownVindexParams []string
 	for name := range ksVs.Vindexes {
 		vdxNames = append(vdxNames, name)
 	}
@@ -384,15 +388,18 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 			if len(ups) == 0 {
 				continue
 			}
-			unknownVindexParams[name] = &vtctldatapb.ApplyVSchemaResponse_ParamList{Params: ups}
+			response.UnknownVindexParams[name] = &vtctldatapb.ApplyVSchemaResponse_ParamList{Params: ups}
+			unknownVindexParams = append(unknownVindexParams, fmt.Sprintf("%s (%s)", name, strings.Join(ups, ", ")))
 		}
 	}
 
-	if req.DryRun { // we return what was passed in and parsed, plus unknown vindex params
-		return &vtctldatapb.ApplyVSchemaResponse{
-			VSchema:             vs,
-			UnknownVindexParams: unknownVindexParams,
-		}, nil
+	if req.Strict && len(unknownVindexParams) > 0 { // return early if unknown params found in strict mode
+		err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "unknown vindex params: %s", strings.Join(unknownVindexParams, "; "))
+		return response, err
+	}
+
+	if req.DryRun { // return early if dry run
+		return response, err
 	}
 
 	if err = s.ts.SaveVSchema(ctx, req.Keyspace, vs); err != nil {
@@ -411,10 +418,8 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		err = vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
 		return nil, err
 	}
-	return &vtctldatapb.ApplyVSchemaResponse{
-		VSchema:             updatedVS,
-		UnknownVindexParams: unknownVindexParams,
-	}, nil
+	response.VSchema = updatedVS
+	return response, nil
 }
 
 // Backup is part of the vtctlservicepb.VtctldServer interface.

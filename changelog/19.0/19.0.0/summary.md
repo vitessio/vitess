@@ -19,6 +19,9 @@
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
   - **[Vttestserver](#vttestserver)**
     - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
+- **[Minor Changes](#minor-changes)**
+    - **[Apply VSchema](#apply-vschema)**
+        - [`--strict` sub-flag and `strict` gRPC field](#strict-flag-and-field)
 
 ## <a id="major-changes"/>Major Changes
 
@@ -109,3 +112,12 @@ When VTGate receives a query to change the `FOREIGN_KEY_CHECKS` value for a sess
 #### <a id="vtcombo-bind-host"/>`--vtcombo-bind-host` flag
 
 A new flag `--vtcombo-bind-host` has been added to vttestserver that allows the users to configure the bind host that vtcombo uses. This is especially useful when running vttestserver as a docker image and you want to run vtctld commands and look at the vtcombo `/debug/status` dashboard.
+
+
+## <a id="minor-changes"/>Minor Changes
+
+### <a id="apply-vschema"/>Apply VSchema
+
+#### <a id="strict-flag-and-field"/>`--strict` sub-flag and `strict` gRPC field
+
+A new sub-flag `--strict` has been added to the command `ApplyVSchema` `vtctl` command that produces an error if unknown params are found in any Vindexes. An equivalent `strict` field has been added to the `ApplyVSchema` gRPC `vtctld` command.

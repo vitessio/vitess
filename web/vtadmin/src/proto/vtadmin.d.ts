@@ -43563,6 +43563,9 @@ export namespace vtctldata {
 
                 /** CopyState last_pk */
                 last_pk?: (string|null);
+
+                /** CopyState stream_id */
+                stream_id?: (number|Long|null);
             }
 
             /** Represents a CopyState. */
@@ -43579,6 +43582,9 @@ export namespace vtctldata {
 
                 /** CopyState last_pk. */
                 public last_pk: string;
+
+                /** CopyState stream_id. */
+                public stream_id: (number|Long);
 
                 /**
                  * Creates a new CopyState instance using the specified properties.
@@ -44952,6 +44958,9 @@ export namespace vtctldata {
 
         /** ApplyVSchemaRequest sql */
         sql?: (string|null);
+
+        /** ApplyVSchemaRequest strict */
+        strict?: (boolean|null);
     }
 
     /** Represents an ApplyVSchemaRequest. */
@@ -44980,6 +44989,9 @@ export namespace vtctldata {
 
         /** ApplyVSchemaRequest sql. */
         public sql: string;
+
+        /** ApplyVSchemaRequest strict. */
+        public strict: boolean;
 
         /**
          * Creates a new ApplyVSchemaRequest instance using the specified properties.
