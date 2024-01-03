@@ -28,7 +28,7 @@ import (
 
 type Delete struct {
 	Target           TargetTable
-	OwnedVindexQuery string
+	OwnedVindexQuery *sqlparser.Select
 	OrderBy          sqlparser.OrderBy
 	Limit            *sqlparser.Limit
 	Ignore           bool
@@ -62,7 +62,7 @@ func (d *Delete) Inputs() []Operator {
 
 func (d *Delete) SetInputs(inputs []Operator) {
 	if len(inputs) != 1 {
-		panic(vterrors.VT13001("unexpected number of inputs to Delete operator"))
+		panic(vterrors.VT13001("unexpected number of inputs for Delete operator"))
 	}
 	d.Source = inputs[0]
 }
@@ -104,7 +104,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	childFks := ctx.SemTable.GetChildForeignKeysList()
 	// If there are no foreign key constraints, then we don't need to do anything.
 	if len(childFks) == 0 {
-		return
+		return op
 	}
 	// If the delete statement has a limit, we don't support it yet.
 	if delClone.Limit != nil {
@@ -137,26 +137,28 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 		vTbl = updateQueryGraphWithSource(ctx, op, tblID, vTbl)
 	}
 
-	var ovq string
-	if vTbl.Keyspace.Sharded && vTbl.Type == vindexes.TypeTable {
-		primaryVindex, _ := getVindexInformation(tblID, vTbl)
-		ate := tblInfo.GetAliasedTableExpr()
-		if len(vTbl.Owned) > 0 {
-			ovq = generateOwnedVindexQuery(ate, del, vTbl, primaryVindex.Columns)
-		}
-	}
-
 	name, err := tblInfo.Name()
 	if err != nil {
 		panic(err)
 	}
 
+	targetTbl := TargetTable{
+		ID:     tblID,
+		VTable: vTbl,
+		Name:   name,
+	}
+
+	var ovq *sqlparser.Select
+	if vTbl.Keyspace.Sharded && vTbl.Type == vindexes.TypeTable {
+		primaryVindex, _ := getVindexInformation(tblID, vTbl)
+		ate := tblInfo.GetAliasedTableExpr()
+		if len(vTbl.Owned) > 0 {
+			ovq = generateOwnedVindexQuery(ate, del, targetTbl, primaryVindex.Columns)
+		}
+	}
+
 	return &Delete{
-		Target: TargetTable{
-			ID:     tblID,
-			VTable: vTbl,
-			Name:   name,
-		},
+		Target:           targetTbl,
 		Source:           op,
 		Ignore:           bool(del.Ignore),
 		Limit:            del.Limit,

@@ -368,8 +368,8 @@ func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*qu
 		}
 		got := query.Sql
 		expected := wantQueries[idx].Sql
-		utils.MustMatch(t, expected, got)
-		utils.MustMatch(t, wantQueries[idx].BindVariables, query.BindVariables)
+		utils.MustMatch(t, expected, got, fmt.Sprintf("query did not match on index: %d", idx))
+		utils.MustMatch(t, wantQueries[idx].BindVariables, query.BindVariables, fmt.Sprintf("bind variables did not match on index: %d", idx))
 		idx++
 	}
 }
