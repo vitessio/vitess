@@ -249,7 +249,8 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlGRFlavor) supportsCapability(serverVersion string, capability capabilities.FlavorCapability) (bool, error) {
+func (f mysqlGRFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	serverVersion := f.serverVersion
 	switch capability {
 	case capabilities.InstantDDLFlavorCapability,
 		capabilities.InstantExpandEnumCapability,

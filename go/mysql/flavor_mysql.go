@@ -31,7 +31,9 @@ import (
 )
 
 // mysqlFlavor implements the Flavor interface for Mysql.
-type mysqlFlavor struct{}
+type mysqlFlavor struct {
+	serverVersion string
+}
 type mysqlFlavor56 struct {
 	mysqlFlavor
 }
@@ -372,7 +374,7 @@ func (mysqlFlavor56) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlFlavor56) supportsCapability(serverVersion string, capability capabilities.FlavorCapability) (bool, error) {
+func (mysqlFlavor56) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {
 	default:
 		return false, nil
@@ -385,7 +387,7 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlFlavor57) supportsCapability(serverVersion string, capability capabilities.FlavorCapability) (bool, error) {
+func (mysqlFlavor57) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {
 	case capabilities.MySQLJSONFlavorCapability:
 		return true, nil
@@ -400,7 +402,8 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlFlavor80) supportsCapability(serverVersion string, capability capabilities.FlavorCapability) (bool, error) {
+func (f mysqlFlavor80) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	serverVersion := f.serverVersion
 	switch capability {
 	case capabilities.InstantDDLFlavorCapability,
 		capabilities.InstantExpandEnumCapability,
