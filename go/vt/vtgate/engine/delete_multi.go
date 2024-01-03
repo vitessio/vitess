@@ -83,7 +83,7 @@ func (del *DeleteMulti) TryStreamExecute(ctx context.Context, vcursor VCursor, b
 
 // GetFields fetches the field info.
 func (del *DeleteMulti) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT13001("BUG: unreachable code for MULTI DELETE")
+	return nil, vterrors.VT13001("unreachable code for MULTI DELETE")
 }
 
 func (del *DeleteMulti) description() PrimitiveDescription {
