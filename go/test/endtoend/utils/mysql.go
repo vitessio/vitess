@@ -23,8 +23,11 @@ import (
 	"os"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -34,6 +37,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
+
+const mysqlShutdownTimeout = 1 * time.Minute
 
 // NewMySQL creates a new MySQL server using the local mysqld binary. The name of the database
 // will be set to `dbName`. SQL queries that need to be executed on the new MySQL instance
@@ -58,7 +63,7 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 	var cfg dbconfigs.DBConfigs
 	// ensure the DBA username is 'root' instead of the system's default username so that mysqladmin can shutdown
 	cfg.Dba.User = "root"
-	cfg.InitWithSocket(mycnf.SocketFile)
+	cfg.InitWithSocket(mycnf.SocketFile, collations.MySQL8())
 	return mysqlctl.NewMysqld(&cfg), mycnf, nil
 }
 
@@ -96,7 +101,7 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 	}
 	return params, mysqld, func() {
 		ctx := context.Background()
-		_ = mysqld.Teardown(ctx, mycnf, true)
+		_ = mysqld.Teardown(ctx, mycnf, true, mysqlShutdownTimeout)
 	}, nil
 }
 
@@ -190,7 +195,7 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn
 			}
 		}
 	}
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		t.Error(err)
 		return err

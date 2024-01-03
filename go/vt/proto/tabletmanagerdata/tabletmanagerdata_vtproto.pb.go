@@ -2076,9 +2076,10 @@ func (m *VDiffReportOptions) CloneVT() *VDiffReportOptions {
 		return (*VDiffReportOptions)(nil)
 	}
 	r := &VDiffReportOptions{
-		OnlyPks:    m.OnlyPks,
-		DebugQuery: m.DebugQuery,
-		Format:     m.Format,
+		OnlyPks:       m.OnlyPks,
+		DebugQuery:    m.DebugQuery,
+		Format:        m.Format,
+		MaxSampleRows: m.MaxSampleRows,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2104,6 +2105,7 @@ func (m *VDiffCoreOptions) CloneVT() *VDiffCoreOptions {
 		TimeoutSeconds:        m.TimeoutSeconds,
 		MaxExtraRowsToCompare: m.MaxExtraRowsToCompare,
 		UpdateTableStats:      m.UpdateTableStats,
+		MaxDiffSeconds:        m.MaxDiffSeconds,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -7194,6 +7196,11 @@ func (m *VDiffReportOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.MaxSampleRows != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.MaxSampleRows))
+		i--
+		dAtA[i] = 0x20
+	}
 	if len(m.Format) > 0 {
 		i -= len(m.Format)
 		copy(dAtA[i:], m.Format)
@@ -7253,6 +7260,11 @@ func (m *VDiffCoreOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.MaxDiffSeconds != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.MaxDiffSeconds))
+		i--
+		dAtA[i] = 0x48
 	}
 	if m.UpdateTableStats {
 		i--
@@ -9448,6 +9460,9 @@ func (m *VDiffReportOptions) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.MaxSampleRows != 0 {
+		n += 1 + sov(uint64(m.MaxSampleRows))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9482,6 +9497,9 @@ func (m *VDiffCoreOptions) SizeVT() (n int) {
 	}
 	if m.UpdateTableStats {
 		n += 2
+	}
+	if m.MaxDiffSeconds != 0 {
+		n += 1 + sov(uint64(m.MaxDiffSeconds))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -20376,6 +20394,25 @@ func (m *VDiffReportOptions) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Format = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxSampleRows", wireType)
+			}
+			m.MaxSampleRows = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxSampleRows |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -20595,6 +20632,25 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.UpdateTableStats = bool(v != 0)
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxDiffSeconds", wireType)
+			}
+			m.MaxDiffSeconds = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxDiffSeconds |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

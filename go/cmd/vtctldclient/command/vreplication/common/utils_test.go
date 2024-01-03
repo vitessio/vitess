@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -144,7 +145,7 @@ func SetupLocalVtctldClient(t *testing.T, ctx context.Context, cells ...string) 
 	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
 		return nil
 	})
-	vtctld := grpcvtctldserver.NewVtctldServer(ts)
+	vtctld := grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
 	localvtctldclient.SetServer(vtctld)
 	command.VtctldClientProtocol = "local"
 	client, err := vtctldclient.New(command.VtctldClientProtocol, "")

@@ -667,6 +667,19 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t2 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
 		},
 		{
+			name:  "similar foreign key under different name",
+			from:  "create table t1 (id int primary key, i int, key ix(i), constraint f1 foreign key (i) references parent(id) on delete cascade)",
+			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f2 foreign key (i) references parent(id) on delete cascade)",
+			diff:  "alter table t1 drop foreign key f1, add constraint f2 foreign key (i) references parent (id) on delete cascade",
+			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f1`, ADD CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE CASCADE",
+		},
+		{
+			name:       "similar foreign key under different name, ignore names",
+			from:       "create table t1 (id int primary key, i int, key ix(i), constraint f1 foreign key (i) references parent(id) on delete cascade)",
+			to:         "create table t2 (id int primary key, i int, key ix(i), constraint f2 foreign key (i) references parent(id) on delete cascade)",
+			constraint: ConstraintNamesIgnoreAll,
+		},
+		{
 			name:  "two identical foreign keys, dropping one",
 			from:  "create table t1 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id), constraint f2 foreign key (i) references parent(id))",
 			to:    "create table t2 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id))",
@@ -1254,12 +1267,12 @@ func TestCreateTableDiff(t *testing.T) {
 	standardHints := DiffHints{}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
+			fromStmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := fromStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			toStmt, err := sqlparser.ParseStrictDDL(ts.to)
+			toStmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.to)
 			require.NoError(t, err)
 			toCreateTable, ok := toStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -1319,7 +1332,7 @@ func TestCreateTableDiff(t *testing.T) {
 						}
 					}
 					// validate we can parse back the statement
-					_, err := sqlparser.ParseStrictDDL(diff)
+					_, err := sqlparser.NewTestParser().ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					// Validate "from/to" entities
@@ -1349,7 +1362,7 @@ func TestCreateTableDiff(t *testing.T) {
 				{
 					cdiff := alter.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, cdiff)
-					_, err := sqlparser.ParseStrictDDL(cdiff)
+					_, err := sqlparser.NewTestParser().ParseStrictDDL(cdiff)
 					assert.NoError(t, err)
 				}
 
@@ -1846,12 +1859,12 @@ func TestValidate(t *testing.T) {
 	hints := DiffHints{}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(ts.from)
+			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = sqlparser.ParseStrictDDL(ts.alter)
+			stmt, err = sqlparser.NewTestParser().ParseStrictDDL(ts.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -1875,7 +1888,7 @@ func TestValidate(t *testing.T) {
 				require.True(t, ok)
 				applied = c.normalize()
 
-				stmt, err := sqlparser.ParseStrictDDL(ts.to)
+				stmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.to)
 				require.NoError(t, err)
 				toCreateTable, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
@@ -2159,7 +2172,7 @@ func TestNormalize(t *testing.T) {
 	}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(ts.from)
+			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -2248,7 +2261,7 @@ func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
 		},
 	}
 
-	stmt, err := sqlparser.ParseStrictDDL(sql)
+	stmt, err := sqlparser.NewTestParser().ParseStrictDDL(sql)
 	require.NoError(t, err)
 	createTable, ok := stmt.(*sqlparser.CreateTable)
 	require.True(t, ok)

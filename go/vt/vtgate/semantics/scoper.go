@@ -197,7 +197,7 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 		if isParentSelectStatement(cursor) {
 			s.popScope()
 		}
-	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert, *sqlparser.Union:
+	case *sqlparser.Select, sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Insert, *sqlparser.Union:
 		id := EmptyTableSet()
 		for _, tableInfo := range s.currentScope().tables {
 			set := tableInfo.getTableSet(s.org)
@@ -320,7 +320,7 @@ func checkForInvalidAliasUse(cte *sqlparser.CommonTableExpr, name string) (err e
 	// TODO I'm sure there is a better. way, but we need to do this to stop infinite loops from occurring
 	down := func(node sqlparser.SQLNode, parent sqlparser.SQLNode) bool {
 		tbl, ok := node.(sqlparser.TableName)
-		if !ok || !tbl.Qualifier.IsEmpty() {
+		if !ok || tbl.Qualifier.NotEmpty() {
 			return err == nil
 		}
 		if tbl.Name.String() == name {

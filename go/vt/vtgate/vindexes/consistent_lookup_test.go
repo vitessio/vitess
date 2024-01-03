@@ -528,7 +528,11 @@ func (vc *loggingVCursor) InTransactionAndIsDML() bool {
 }
 
 func (vc *loggingVCursor) ConnCollation() collations.ID {
-	return collations.Default()
+	return vc.CollationEnv().DefaultConnectionCharset()
+}
+
+func (vc *loggingVCursor) CollationEnv() *collations.Environment {
+	return collations.MySQL8()
 }
 
 type bv struct {

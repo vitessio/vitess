@@ -320,10 +320,7 @@ func TestLookupUnicodeLooseMD5HashCreate(t *testing.T) {
 
 	// Test column mismatch.
 	err = lnu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(10), sqltypes.NewInt64(20)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false)
-	want = "lookup.Create: column vindex count does not match the columns in the lookup: 2 vs [fromc]"
-	if err == nil || err.Error() != want {
-		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "VT03030: lookup column count does not match value count with the row (columns, count): ([fromc], 2)")
 }
 
 func TestLookupUnicodeLooseMD5HashCreateAutocommit(t *testing.T) {
@@ -443,10 +440,7 @@ func TestLookupUnicodeLooseMD5HashDelete(t *testing.T) {
 
 	// Test column count fail.
 	err = lnu.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
-	want = "lookup.Delete: column vindex count does not match the columns in the lookup: 2 vs [fromc]"
-	if err == nil || err.Error() != want {
-		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "VT03030: lookup column count does not match value count with the row (columns, count): ([fromc], 2)")
 }
 
 func TestLookupUnicodeLooseMD5HashDeleteAutocommit(t *testing.T) {

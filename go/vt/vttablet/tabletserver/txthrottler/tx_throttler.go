@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -83,14 +83,6 @@ type ThrottlerInterface interface {
 	ResetConfiguration()
 }
 
-// TopologyWatcherInterface defines the public interface that is implemented by
-// discovery.LegacyTopologyWatcher. It is only used here to allow mocking out
-// go/vt/discovery.LegacyTopologyWatcher.
-type TopologyWatcherInterface interface {
-	Start()
-	Stop()
-}
-
 // TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
 // go/vt/throttler.GlobalManager.
 const TxThrottlerName = "TransactionThrottler"
@@ -144,9 +136,7 @@ type txThrottler struct {
 	topoServer *topo.Server
 
 	// stats
-	throttlerRunning *stats.Gauge
-	// TODO(deepthi): deprecated, should be deleted in v20
-	topoWatchers              *stats.GaugesWithSingleLabel
+	throttlerRunning          *stats.Gauge
 	healthChecksReadTotal     *stats.CountersWithMultiLabels
 	healthChecksRecordedTotal *stats.CountersWithMultiLabels
 	requestsTotal             *stats.CountersWithSingleLabel
@@ -199,7 +189,6 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 		config:           config,
 		topoServer:       topoServer,
 		throttlerRunning: env.Exporter().NewGauge(TxThrottlerName+"Running", "transaction throttler running state"),
-		topoWatchers:     env.Exporter().NewGaugesWithSingleLabel(TxThrottlerName+"TopoWatchers", "DEPRECATED: transaction throttler topology watchers", "cell"),
 		healthChecksReadTotal: env.Exporter().NewCountersWithMultiLabels(TxThrottlerName+"HealthchecksRead", "transaction throttler healthchecks read",
 			[]string{"cell", "DbType"}),
 		healthChecksRecordedTotal: env.Exporter().NewCountersWithMultiLabels(TxThrottlerName+"HealthchecksRecorded", "transaction throttler healthchecks recorded",

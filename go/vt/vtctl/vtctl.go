@@ -1814,8 +1814,6 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	force := subFlags.Bool("force", false, "Proceeds even if the keyspace already exists")
 	allowEmptyVSchema := subFlags.Bool("allow_empty_vschema", false, "If set this will allow a new keyspace to have no vschema")
 
-	var servedFrom flagutil.StringMapValue
-	subFlags.Var(&servedFrom, "served_from", "Specifies a comma-separated list of tablet_type:keyspace pairs used to serve traffic")
 	keyspaceType := subFlags.String("keyspace_type", "", "Specifies the type of the keyspace")
 	baseKeyspace := subFlags.String("base_keyspace", "", "Specifies the base keyspace for a snapshot keyspace")
 	timestampStr := subFlags.String("snapshot_time", "", "Specifies the snapshot time for this keyspace")
@@ -1869,18 +1867,6 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		SnapshotTime:     snapshotTime,
 		DurabilityPolicy: *durabilityPolicy,
 		SidecarDbName:    *sidecarDBName,
-	}
-	if len(servedFrom) > 0 {
-		for name, value := range servedFrom {
-			tt, err := topo.ParseServingTabletType(name)
-			if err != nil {
-				return err
-			}
-			ki.ServedFroms = append(ki.ServedFroms, &topodatapb.Keyspace_ServedFrom{
-				TabletType: tt,
-				Keyspace:   value,
-			})
-		}
 	}
 	err := wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
 	if *force && topo.IsErrType(err, topo.NodeExists) {
@@ -2089,7 +2075,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	const defaultMaxReplicationLagAllowed = defaultWaitTime
 
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
-	tabletTypesStr := subFlags.String("tablet_types", "in_order:REPLICA,PRIMARY", "Source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). Defaults to --vreplication_tablet_type parameter value for the tablet, which has the default value of in_order:REPLICA,PRIMARY. Note: SwitchTraffic overrides this default and uses in_order:RDONLY,REPLICA,PRIMARY to switch all traffic by default.")
+	tabletTypesStr := subFlags.String("tablet_types", "in_order:REPLICA,PRIMARY", "Source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). Note: SwitchTraffic overrides this default and uses in_order:RDONLY,REPLICA,PRIMARY to switch all traffic by default.")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchTraffic and only reports the actions to be taken. --dry_run is only supported for SwitchTraffic, ReverseTraffic and Complete.")
 	timeout := subFlags.Duration("timeout", defaultWaitTime, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout. --timeout is only supported for SwitchTraffic and ReverseTraffic.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication (default true). --reverse_replication is only supported for SwitchTraffic.")
@@ -2900,7 +2886,6 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	subFlags.MarkDeprecated("allow_long_unavailability", "")
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
 	ddlStrategy := subFlags.String("ddl_strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
@@ -2936,7 +2921,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		*migrationContext = *requestContext
 	}
 
-	parts, err := sqlparser.SplitStatementToPieces(change)
+	parts, err := wr.SQLParser().SplitStatementToPieces(change)
 	if err != nil {
 		return err
 	}
@@ -3356,7 +3341,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 			*sql = string(sqlBytes)
 		}
 
-		stmt, err := sqlparser.Parse(*sql)
+		stmt, err := wr.SQLParser().Parse(*sql)
 		if err != nil {
 			return fmt.Errorf("error parsing vschema statement `%s`: %v", *sql, err)
 		}
@@ -3407,7 +3392,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 	}
 
 	// Validate the VSchema.
-	ksVs, err := vindexes.BuildKeyspace(vs)
+	ksVs, err := vindexes.BuildKeyspace(vs, wr.SQLParser())
 	if err != nil {
 		return err
 	}
@@ -3422,7 +3407,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		vdx := ksVs.Vindexes[name]
 		if val, ok := vdx.(vindexes.ParamValidating); ok {
 			for _, param := range val.UnknownParams() {
-				wr.Logger().Warningf("Unknown param in vindex %s: %s", name, param)
+				wr.Logger().Warningf("Unknown parameter in vindex %s: %s", name, param)
 			}
 		}
 	}
@@ -3439,7 +3424,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		return err
 	}
 
-	if _, err := vindexes.BuildKeyspace(vs); err != nil {
+	if _, err := vindexes.BuildKeyspace(vs, wr.SQLParser()); err != nil {
 		return err
 	}
 

@@ -329,7 +329,7 @@ func onHealthTick() {
 	}
 }
 
-// ContinuousDiscovery starts an asynchronuous infinite discovery process where instances are
+// ContinuousDiscovery starts an asynchronous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
 // nolint SA1015: using time.Tick leaks the underlying ticker

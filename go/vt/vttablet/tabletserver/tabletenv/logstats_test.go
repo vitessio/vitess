@@ -17,7 +17,6 @@ limitations under the License.
 package tabletenv
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -54,7 +53,7 @@ func TestLogStats(t *testing.T) {
 }
 
 func testFormat(stats *LogStats, params url.Values) string {
-	var b bytes.Buffer
+	var b strings.Builder
 	stats.Logf(&b, params)
 	return b.String()
 }
@@ -183,7 +182,6 @@ func TestLogStatsFilter(t *testing.T) {
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
 	}
-
 }
 
 func TestLogStatsFormatQuerySources(t *testing.T) {

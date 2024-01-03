@@ -30,7 +30,7 @@ func FuzzAnalyse(data []byte) int {
 	if err != nil {
 		return 0
 	}
-	tree, err := sqlparser.Parse(query)
+	tree, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		return -1
 	}

@@ -53,8 +53,8 @@ var (
 )
 
 const (
-	testDataPath   = "../../onlineddl/vrepl_suite/testdata"
-	defaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+	testDataPath          = "../../onlineddl/vrepl_suite/testdata"
+	sqlModeAllowsZeroDate = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
 )
 
 type testTableSchema struct {
@@ -202,7 +202,7 @@ func testSingle(t *testing.T, testName string) {
 		return
 	}
 
-	sqlModeQuery := fmt.Sprintf("set @@global.sql_mode='%s'", defaultSQLMode)
+	sqlModeQuery := fmt.Sprintf("set @@global.sql_mode='%s'", sqlModeAllowsZeroDate)
 	_ = mysqlExec(t, sqlModeQuery, "")
 	_ = mysqlExec(t, "set @@global.event_scheduler=0", "")
 
@@ -345,12 +345,12 @@ func ignoreAutoIncrement(t *testing.T, createTable string) string {
 
 func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, allowSchemadiffNormalization bool, hints *schemadiff.DiffHints) {
 	// turn the "from" and "to" create statement strings (which we just read via SHOW CREATE TABLE into sqlparser.CreateTable statement)
-	fromStmt, err := sqlparser.ParseStrictDDL(fromCreateTable)
+	fromStmt, err := sqlparser.NewTestParser().ParseStrictDDL(fromCreateTable)
 	require.NoError(t, err)
 	fromCreateTableStatement, ok := fromStmt.(*sqlparser.CreateTable)
 	require.True(t, ok)
 
-	toStmt, err := sqlparser.ParseStrictDDL(toCreateTable)
+	toStmt, err := sqlparser.NewTestParser().ParseStrictDDL(toCreateTable)
 	require.NoError(t, err)
 	toCreateTableStatement, ok := toStmt.(*sqlparser.CreateTable)
 	require.True(t, ok)
@@ -394,7 +394,7 @@ func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, al
 		// structure is identical. And so we accept that there can be a normalization issue.
 		if allowSchemadiffNormalization {
 			{
-				stmt, err := sqlparser.ParseStrictDDL(toCreateTable)
+				stmt, err := sqlparser.NewTestParser().ParseStrictDDL(toCreateTable)
 				require.NoError(t, err)
 				createTableStatement, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
@@ -403,7 +403,7 @@ func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, al
 				toCreateTable = c.Create().CanonicalStatementString()
 			}
 			{
-				stmt, err := sqlparser.ParseStrictDDL(resultCreateTable)
+				stmt, err := sqlparser.NewTestParser().ParseStrictDDL(resultCreateTable)
 				require.NoError(t, err)
 				createTableStatement, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
@@ -418,7 +418,7 @@ func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, al
 	assert.Equal(t, toCreateTable, resultCreateTable, "mismatched table structure. ALTER query was: %s", diffedAlterQuery)
 
 	// Also, let's see that our diff agrees there's no change:
-	resultStmt, err := sqlparser.ParseStrictDDL(resultCreateTable)
+	resultStmt, err := sqlparser.NewTestParser().ParseStrictDDL(resultCreateTable)
 	require.NoError(t, err)
 	resultCreateTableStatement, ok := resultStmt.(*sqlparser.CreateTable)
 	require.True(t, ok)

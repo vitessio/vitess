@@ -86,13 +86,14 @@ func TestSimplifyExpression(in *testing.T) {
 		expected: "A and (B or C)",
 	}}
 
+	parser := NewTestParser()
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
-			expr, err := ParseExpr(tc.in)
+			expr, err := parser.ParseExpr(tc.in)
 			require.NoError(t, err)
 
-			expr, didRewrite := simplifyExpression(expr)
-			assert.True(t, didRewrite.changed())
+			expr, changed := simplifyExpression(expr)
+			assert.True(t, changed)
 			assert.Equal(t, tc.expected, String(expr))
 		})
 	}
@@ -129,11 +130,38 @@ func TestRewritePredicate(in *testing.T) {
 	}, {
 		in:       "A and (B or A)",
 		expected: "A",
+	}, {
+		in: "(a = 1 and b = 41) or (a = 2 and b = 42)",
+		// this might look weird, but it allows the planner to either a or b in a vindex operation
+		expected: "a in (1, 2) and (a = 1 or b = 42) and ((b = 41 or a = 2) and b in (41, 42))",
+	}, {
+		in:       "(a = 1 and b = 41) or (a = 2 and b = 42) or (a = 3 and b = 43)",
+		expected: "a in (1, 2, 3) and (a in (1, 2) or b = 43) and ((a = 1 or b = 42 or a = 3) and (a = 1 or b = 42 or b = 43)) and ((b = 41 or a = 2 or a = 3) and (b = 41 or a = 2 or b = 43) and ((b in (41, 42) or a = 3) and b in (41, 42, 43)))",
+	}, {
+		// the following two tests show some pathological cases that would grow too much, and so we abort the rewriting
+		in:       "a = 1 and b = 41 or a = 2 and b = 42 or a = 3 and b = 43 or a = 4 and b = 44 or a = 5 and b = 45 or a = 6 and b = 46",
+		expected: "a = 1 and b = 41 or a = 2 and b = 42 or a = 3 and b = 43 or a = 4 and b = 44 or a = 5 and b = 45 or a = 6 and b = 46",
+	}, {
+		in:       "a = 5 and B or a = 6 and C",
+		expected: "a in (5, 6) and (a = 5 or C) and ((B or a = 6) and (B or C))",
+	}, {
+		in:       "(a = 5 and b = 1 or b = 2 and a = 6)",
+		expected: "(a = 5 or b = 2) and a in (5, 6) and (b in (1, 2) and (b = 1 or a = 6))",
+	}, {
+		in:       "(a in (1,5) and B or C and a = 6)",
+		expected: "(a in (1, 5) or C) and a in (1, 5, 6) and ((B or C) and (B or a = 6))",
+	}, {
+		in:       "(a in (1, 5) and B or C and a in (5, 7))",
+		expected: "(a in (1, 5) or C) and a in (1, 5, 7) and ((B or C) and (B or a in (5, 7)))",
+	}, {
+		in:       "not n0 xor not (n2 and n3) xor (not n2 and (n1 xor n1) xor (n0 xor n0 xor n2))",
+		expected: "not n0 xor not (n2 and n3) xor (not n2 and (n1 xor n1) xor (n0 xor n0 xor n2))",
 	}}
 
+	parser := NewTestParser()
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
-			expr, err := ParseExpr(tc.in)
+			expr, err := parser.ParseExpr(tc.in)
 			require.NoError(t, err)
 
 			output := RewritePredicate(expr)
@@ -147,28 +175,17 @@ func TestExtractINFromOR(in *testing.T) {
 		in       string
 		expected string
 	}{{
-		in:       "(A and B) or (B and A)",
-		expected: "<nil>",
+		in:       "a = 1 and b = 41 or a = 2 and b = 42 or a = 3 and b = 43 or a = 4 and b = 44 or a = 5 and b = 45 or a = 6 and b = 46",
+		expected: "(a, b) in ((1, 41), (2, 42), (3, 43), (4, 44), (5, 45), (6, 46))",
 	}, {
-		in:       "(a = 5 and B) or A",
-		expected: "<nil>",
-	}, {
-		in:       "a = 5 and B or a = 6 and C",
-		expected: "a in (5, 6)",
-	}, {
-		in:       "(a = 5 and b = 1 or b = 2 and a = 6)",
-		expected: "a in (5, 6) and b in (1, 2)",
-	}, {
-		in:       "(a in (1,5) and B or C and a = 6)",
-		expected: "a in (1, 5, 6)",
-	}, {
-		in:       "(a in (1, 5) and B or C and a in (5, 7))",
-		expected: "a in (1, 5, 7)",
+		in:       "a = 1 or a = 2 or a = 3 or a = 4 or a = 5 or a = 6",
+		expected: "(a) in ((1), (2), (3), (4), (5), (6))",
 	}}
 
+	parser := NewTestParser()
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
-			expr, err := ParseExpr(tc.in)
+			expr, err := parser.ParseExpr(tc.in)
 			require.NoError(t, err)
 
 			output := ExtractINFromOR(expr.(*OrExpr))

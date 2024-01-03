@@ -286,6 +286,26 @@ func (e *ForeignKeyDependencyUnresolvedError) Error() string {
 		sqlescape.EscapeID(e.Table))
 }
 
+type ForeignKeyNonexistentReferencedTableError struct {
+	Table           string
+	ReferencedTable string
+}
+
+func (e *ForeignKeyNonexistentReferencedTableError) Error() string {
+	return fmt.Sprintf("table %s foreign key references nonexistent table %s",
+		sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.ReferencedTable))
+}
+
+type ForeignKeyReferencesViewError struct {
+	Table          string
+	ReferencedView string
+}
+
+func (e *ForeignKeyReferencesViewError) Error() string {
+	return fmt.Sprintf("table %s foreign key references view %s",
+		sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.ReferencedView))
+}
+
 type InvalidColumnInForeignKeyConstraintError struct {
 	Table      string
 	Constraint string

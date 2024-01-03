@@ -245,7 +245,7 @@ func (call *builtinASCII) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_ASCII()
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: str.Flag}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(str.Flag)}, nil
 }
 
 func charOrd(b []byte, coll collations.ID) int64 {
@@ -300,7 +300,7 @@ func (call *builtinOrd) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_ORD(col)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: str.Flag}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(str.Flag)}, nil
 }
 
 // maxRepeatLength is the maximum number of times a string can be repeated.
@@ -396,7 +396,7 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 
 	// the collation of a `COLLATION` expr is hardcoded to `utf8mb3_general_ci`,
 	// not to the default collation of our connection. this is probably a bug in MySQL, but we match it
-	return newEvalText([]byte(collations.Local().LookupName(col.Collation)), collationUtf8mb3), nil
+	return newEvalText([]byte(env.collationEnv.LookupName(col.Collation)), collationUtf8mb3), nil
 }
 
 func (expr *builtinCollation) compile(c *compiler) (ctype, error) {
@@ -407,7 +407,7 @@ func (expr *builtinCollation) compile(c *compiler) (ctype, error) {
 
 	skip := c.asm.jumpFrom()
 
-	c.asm.Fn_COLLATION(collationUtf8mb3)
+	c.asm.Fn_COLLATION(c.collationEnv, collationUtf8mb3)
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
@@ -587,7 +587,7 @@ func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck2(str, l)
 
-	col := defaultCoercionCollation(c.collation)
+	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	switch {
 	case str.isTextual():
 		col = str.Col
@@ -693,7 +693,7 @@ func (call *builtinPad) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck3(str, l, pad)
 
-	col := defaultCoercionCollation(c.collation)
+	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	switch {
 	case str.isTextual():
 		col = str.Col
@@ -719,7 +719,7 @@ func (call *builtinPad) compile(c *compiler) (ctype, error) {
 		c.asm.Fn_RPAD(col)
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: col}, nil
+	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
 }
 
 func strcmpCollate(left, right []byte, col collations.ID) int64 {
@@ -755,7 +755,7 @@ func (l *builtinStrcmp) eval(env *ExpressionEnv) (eval, error) {
 	col1 := evalCollation(left)
 	col2 := evalCollation(right)
 
-	mcol, _, _, err := colldata.Merge(collations.Local(), col1, col2, colldata.CoercionOptions{
+	mcol, _, _, err := colldata.Merge(env.collationEnv, col1, col2, colldata.CoercionOptions{
 		ConvertToSuperset:   true,
 		ConvertWithCoercion: true,
 	})
@@ -795,7 +795,7 @@ func (expr *builtinStrcmp) compile(c *compiler) (ctype, error) {
 	if sqltypes.IsNumber(lt.Type) || sqltypes.IsNumber(rt.Type) {
 		mcol = collationNumeric
 	} else {
-		mcol, _, _, err = colldata.Merge(collations.Local(), lt.Col, rt.Col, colldata.CoercionOptions{
+		mcol, _, _, err = colldata.Merge(c.collationEnv, lt.Col, rt.Col, colldata.CoercionOptions{
 			ConvertToSuperset:   true,
 			ConvertWithCoercion: true,
 		})
@@ -814,7 +814,7 @@ func (expr *builtinStrcmp) compile(c *compiler) (ctype, error) {
 
 	c.asm.Strcmp(mcol)
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(lt.Flag | rt.Flag)}, nil
 }
 
 func (call builtinTrim) eval(env *ExpressionEnv) (eval, error) {
@@ -880,7 +880,7 @@ func (call builtinTrim) compile(c *compiler) (ctype, error) {
 
 	skip1 := c.compileNullCheck1(str)
 
-	col := defaultCoercionCollation(c.collation)
+	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	switch {
 	case str.isTextual():
 		col = str.Col
@@ -898,7 +898,7 @@ func (call builtinTrim) compile(c *compiler) (ctype, error) {
 			c.asm.Fn_TRIM1(col)
 		}
 		c.asm.jumpDestination(skip1)
-		return ctype{Type: sqltypes.VarChar, Col: col}, nil
+		return ctype{Type: sqltypes.VarChar, Flag: nullableFlags(str.Flag), Col: col}, nil
 	}
 
 	pat, err := call.Arguments[1].compile(c)
@@ -929,7 +929,7 @@ func (call builtinTrim) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.VarChar, Col: col}, nil
+	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
 }
 
 type builtinConcat struct {
@@ -966,7 +966,6 @@ func concatConvert(buf []byte, str *evalBytes, tc collations.TypedCollation) ([]
 }
 
 func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
-	local := collations.Local()
 	var ca collationAggregation
 	tt := sqltypes.VarChar
 
@@ -979,7 +978,7 @@ func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
 		args = append(args, a)
 		tt = concatSQLType(a.SQLType(), tt)
 
-		err = ca.add(local, evalCollation(a))
+		err = ca.add(evalCollation(a), env.collationEnv)
 		if err != nil {
 			return nil, err
 		}
@@ -989,7 +988,7 @@ func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
 	// If we only had numbers, we instead fall back to the default
 	// collation instead of using the numeric collation.
 	if tc.Coercibility == collations.CoerceNumeric {
-		tc = defaultCoercionCollation(call.collate)
+		tc = typedCoercionCollation(tt, call.collate)
 	}
 
 	var buf []byte
@@ -1014,7 +1013,6 @@ func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func (call *builtinConcat) compile(c *compiler) (ctype, error) {
-	local := collations.Local()
 	var ca collationAggregation
 	tt := sqltypes.VarChar
 	var f typeFlag
@@ -1031,7 +1029,7 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 		args = append(args, a)
 		tt = concatSQLType(a.Type, tt)
 
-		err = ca.add(local, a.Col)
+		err = ca.add(a.Col, c.collationEnv)
 		if err != nil {
 			return ctype{}, err
 		}
@@ -1041,7 +1039,7 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 	// If we only had numbers, we instead fall back to the default
 	// collation instead of using the numeric collation.
 	if tc.Coercibility == collations.CoerceNumeric {
-		tc = defaultCoercionCollation(call.collate)
+		tc = typedCoercionCollation(tt, call.collate)
 	}
 
 	for i, arg := range args {
@@ -1073,7 +1071,6 @@ type builtinConcatWs struct {
 }
 
 func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
-	local := collations.Local()
 	var ca collationAggregation
 	tt := sqltypes.VarChar
 
@@ -1093,7 +1090,7 @@ func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
 		args = append(args, a)
 		tt = concatSQLType(a.SQLType(), tt)
 
-		err = ca.add(local, evalCollation(a))
+		err = ca.add(evalCollation(a), env.collationEnv)
 		if err != nil {
 			return nil, err
 		}
@@ -1103,7 +1100,7 @@ func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
 	// If we only had numbers, we instead fall back to the default
 	// collation instead of using the numeric collation.
 	if tc.Coercibility == collations.CoerceNumeric {
-		tc = defaultCoercionCollation(call.collate)
+		tc = typedCoercionCollation(tt, call.collate)
 	}
 
 	var sep []byte
@@ -1143,7 +1140,6 @@ func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
-	local := collations.Local()
 	var ca collationAggregation
 	tt := sqltypes.VarChar
 
@@ -1156,7 +1152,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 		}
 		tt = concatSQLType(a.Type, tt)
 
-		err = ca.add(local, a.Col)
+		err = ca.add(a.Col, c.collationEnv)
 		if err != nil {
 			return ctype{}, err
 		}
@@ -1173,7 +1169,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 	// If we only had numbers, we instead fall back to the default
 	// collation instead of using the numeric collation.
 	if tc.Coercibility == collations.CoerceNumeric {
-		tc = defaultCoercionCollation(call.collate)
+		tc = typedCoercionCollation(tt, call.collate)
 	}
 
 	for i, arg := range args {

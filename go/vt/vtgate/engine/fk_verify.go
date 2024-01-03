@@ -83,18 +83,11 @@ func (f *FkVerify) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 
 // TryStreamExecute implements the Primitive interface
 func (f *FkVerify) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	for _, v := range f.Verify {
-		err := vcursor.StreamExecutePrimitive(ctx, v.Exec, bindVars, wantfields, func(qr *sqltypes.Result) error {
-			if len(qr.Rows) > 0 {
-				return getError(v.Typ)
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
+	res, err := f.TryExecute(ctx, vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
 	}
-	return vcursor.StreamExecutePrimitive(ctx, f.Exec, bindVars, wantfields, callback)
+	return callback(res)
 }
 
 // Inputs implements the Primitive interface

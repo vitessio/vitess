@@ -138,6 +138,7 @@ func rowToSchemaMigration(row sqltypes.RowNamedValues) (sm *vtctldatapb.SchemaMi
 	}
 
 	sm.PostponeCompletion = row.AsBool("postpone_completion", false)
+	sm.RemovedForeignKeyNames = row.AsString("removed_foreign_key_names", "")
 	sm.RemovedUniqueKeyNames = row.AsString("removed_unique_key_names", "")
 	sm.DroppedNoDefaultColumnNames = row.AsString("dropped_no_default_column_names", "")
 	sm.ExpandedColumnNames = row.AsString("expanded_column_names", "")

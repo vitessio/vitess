@@ -17,7 +17,6 @@ limitations under the License.
 package sqltypes
 
 import (
-	"bytes"
 	crand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -147,7 +146,7 @@ func TestValue(typ querypb.Type, val string) Value {
 // This function should only be used for testing.
 func TestTuple(vals ...Value) Value {
 	return Value{
-		typ: Tuple,
+		typ: uint16(Tuple),
 		val: encodeTuple(vals),
 	}
 }
@@ -155,13 +154,13 @@ func TestTuple(vals ...Value) Value {
 // PrintResults prints []*Results into a string.
 // This function should only be used for testing.
 func PrintResults(results []*Result) string {
-	b := new(bytes.Buffer)
+	var b strings.Builder
 	for i, r := range results {
 		if i == 0 {
-			fmt.Fprintf(b, "%v", r)
+			fmt.Fprintf(&b, "%v", r)
 			continue
 		}
-		fmt.Fprintf(b, ", %v", r)
+		fmt.Fprintf(&b, ", %v", r)
 	}
 	return b.String()
 }
@@ -230,7 +229,7 @@ var RandomGenerators = map[Type]RandomGenerator{
 		return NewFloat64(rand.ExpFloat64())
 	},
 	Decimal: func() Value {
-		dec := fmt.Sprintf("%d.%d", rand.Intn(9999999999), rand.Intn(9999999999))
+		dec := fmt.Sprintf("%d.%d", rand.Intn(999999999), rand.Intn(999999999))
 		if rand.Int()&0x1 == 1 {
 			dec = "-" + dec
 		}

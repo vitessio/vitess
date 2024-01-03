@@ -27,20 +27,20 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/vt/vttablet"
-
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 type vcopier struct {
@@ -219,7 +219,7 @@ func newVCopierCopyWorker(
 func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	defer vc.vr.dbClient.Rollback()
 
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats)
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.collationEnv, vc.vr.vre.parser)
 	if err != nil {
 		return err
 	}
@@ -385,7 +385,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats)
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.collationEnv, vc.vr.vre.parser)
 	if err != nil {
 		return err
 	}
@@ -612,7 +612,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		case result := <-resultCh:
 			switch result.state {
 			case vcopierCopyTaskCancel:
-				// A task cancelation probably indicates an expired context due
+				// A task cancellation probably indicates an expired context due
 				// to a PlannedReparentShard or elapsed copy phase duration,
 				// neither of which are error conditions.
 			case vcopierCopyTaskComplete:
@@ -1087,7 +1087,7 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 			advanceFn = func(context.Context, *vcopierCopyTaskArgs) error {
 				// Commit.
 				if err := vbc.vdbClient.Commit(); err != nil {
-					return vterrors.Wrapf(err, "error commiting transaction")
+					return vterrors.Wrapf(err, "error committing transaction")
 				}
 				return nil
 			}

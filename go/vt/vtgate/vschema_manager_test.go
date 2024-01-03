@@ -18,11 +18,13 @@ func TestVSchemaUpdate(t *testing.T) {
 		Type: querypb.Type_INT64,
 	}}
 	cols2 := []vindexes.Column{{
-		Name: sqlparser.NewIdentifierCI("uid"),
-		Type: querypb.Type_INT64,
+		Name:     sqlparser.NewIdentifierCI("uid"),
+		Type:     querypb.Type_INT64,
+		Nullable: true,
 	}, {
-		Name: sqlparser.NewIdentifierCI("name"),
-		Type: querypb.Type_VARCHAR,
+		Name:     sqlparser.NewIdentifierCI("name"),
+		Type:     querypb.Type_VARCHAR,
+		Nullable: true,
 	}}
 	ks := &vindexes.Keyspace{Name: "ks"}
 	tblNoCol := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
@@ -81,6 +83,27 @@ func TestVSchemaUpdate(t *testing.T) {
 		ChildColumns:  sqlparserCols1,
 		ParentColumns: sqlparserCols1,
 	})
+
+	idxTbl1 := &vindexes.Table{
+		Name:                    sqlparser.NewIdentifierCS("idxTbl1"),
+		Keyspace:                ks,
+		ColumnListAuthoritative: true,
+		PrimaryKey:              sqlparser.Columns{sqlparser.NewIdentifierCI("a")},
+		UniqueKeys: []sqlparser.Exprs{
+			{sqlparser.NewColName("b")},
+			{sqlparser.NewColName("c"), sqlparser.NewColName("d")},
+		},
+	}
+	idxTbl2 := &vindexes.Table{
+		Name:                    sqlparser.NewIdentifierCS("idxTbl2"),
+		Keyspace:                ks,
+		ColumnListAuthoritative: true,
+		PrimaryKey:              sqlparser.Columns{sqlparser.NewIdentifierCI("a")},
+		UniqueKeys: []sqlparser.Exprs{
+			{&sqlparser.BinaryExpr{Operator: sqlparser.DivOp, Left: sqlparser.NewColName("b"), Right: sqlparser.NewIntLiteral("2")}},
+			{sqlparser.NewColName("c"), &sqlparser.BinaryExpr{Operator: sqlparser.PlusOp, Left: sqlparser.NewColName("d"), Right: sqlparser.NewColName("e")}},
+		},
+	}
 
 	tcases := []struct {
 		name           string
@@ -192,41 +215,18 @@ func TestVSchemaUpdate(t *testing.T) {
 					Sharded:        false,
 					ForeignKeyMode: vschemapb.Keyspace_managed,
 					Tables: map[string]*vschemapb.Table{
-						"t1": {
-							Columns: []*vschemapb.Column{
-								{
-									Name: "id",
-									Type: querypb.Type_INT64,
-								},
-							},
-						},
-						"t2": {
-							Columns: []*vschemapb.Column{
-								{
-									Name: "id",
-									Type: querypb.Type_INT64,
-								},
-							},
-						},
+						"t1": {Columns: []*vschemapb.Column{{Name: "id", Type: querypb.Type_INT64}}},
+						"t2": {Columns: []*vschemapb.Column{{Name: "id", Type: querypb.Type_INT64}}},
 						"multicol_t1": {
 							Columns: []*vschemapb.Column{
-								{
-									Name: "uid",
-									Type: querypb.Type_INT64,
-								}, {
-									Name: "name",
-									Type: querypb.Type_VARCHAR,
-								},
+								{Name: "uid", Type: querypb.Type_INT64},
+								{Name: "name", Type: querypb.Type_VARCHAR},
 							},
-						}, "multicol_t2": {
+						},
+						"multicol_t2": {
 							Columns: []*vschemapb.Column{
-								{
-									Name: "uid",
-									Type: querypb.Type_INT64,
-								}, {
-									Name: "name",
-									Type: querypb.Type_VARCHAR,
-								},
+								{Name: "uid", Type: querypb.Type_INT64},
+								{Name: "name", Type: querypb.Type_VARCHAR},
 							},
 						},
 					},
@@ -249,6 +249,69 @@ func TestVSchemaUpdate(t *testing.T) {
 				},
 			},
 		},
+	}, {
+		name:           "indexes in schema using columns",
+		currentVSchema: &vindexes.VSchema{},
+		schema: map[string]*vindexes.TableInfo{
+			"idxTbl1": {
+				Indexes: []*sqlparser.IndexDefinition{{
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypePrimary},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("a")},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("b")},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeDefault},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("x")},
+						{Column: sqlparser.NewIdentifierCI("y")},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("c")},
+						{Column: sqlparser.NewIdentifierCI("d")},
+					},
+				}},
+			},
+		},
+		srvVschema: makeTestSrvVSchema("ks", false, nil),
+		expected:   makeTestVSchema("ks", false, map[string]*vindexes.Table{"idxTbl1": idxTbl1}),
+	}, {
+		name:           "indexes in schema using expressions",
+		currentVSchema: &vindexes.VSchema{},
+		schema: map[string]*vindexes.TableInfo{
+			"idxTbl2": {
+				Indexes: []*sqlparser.IndexDefinition{{
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypePrimary},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("a")},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
+					Columns: []*sqlparser.IndexColumn{
+						{Expression: &sqlparser.BinaryExpr{Operator: sqlparser.DivOp, Left: sqlparser.NewColName("b"), Right: sqlparser.NewIntLiteral("2")}},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeDefault},
+					Columns: []*sqlparser.IndexColumn{
+						{Expression: &sqlparser.BinaryExpr{Operator: sqlparser.PlusOp, Left: sqlparser.NewColName("x"), Right: sqlparser.NewColName("y")}},
+					},
+				}, {
+					Info: &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
+					Columns: []*sqlparser.IndexColumn{
+						{Column: sqlparser.NewIdentifierCI("c")},
+						{Expression: &sqlparser.BinaryExpr{Operator: sqlparser.PlusOp, Left: sqlparser.NewColName("d"), Right: sqlparser.NewColName("e")}},
+					},
+				}},
+			},
+		},
+		srvVschema: makeTestSrvVSchema("ks", false, nil),
+		expected:   makeTestVSchema("ks", false, map[string]*vindexes.Table{"idxTbl2": idxTbl2}),
 	}}
 
 	vm := &VSchemaManager{}
@@ -279,11 +342,13 @@ func TestRebuildVSchema(t *testing.T) {
 		Type: querypb.Type_INT64,
 	}}
 	cols2 := []vindexes.Column{{
-		Name: sqlparser.NewIdentifierCI("uid"),
-		Type: querypb.Type_INT64,
+		Name:     sqlparser.NewIdentifierCI("uid"),
+		Type:     querypb.Type_INT64,
+		Nullable: true,
 	}, {
-		Name: sqlparser.NewIdentifierCI("name"),
-		Type: querypb.Type_VARCHAR,
+		Name:     sqlparser.NewIdentifierCI("name"),
+		Type:     querypb.Type_VARCHAR,
+		Nullable: true,
 	}}
 	ks := &vindexes.Keyspace{Name: "ks"}
 	tblNoCol := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
@@ -462,7 +527,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"col"}, "t3", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
 				return vschema
 			},
-			errWanted: "VT09019: ks has cyclic foreign keys",
+			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys",
 		},
 		{
 			name: "No cycle",
@@ -510,7 +575,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 
 // createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.
 func createFkDefinition(childCols []string, parentTableName string, parentCols []string, onUpdate, onDelete sqlparser.ReferenceAction) *sqlparser.ForeignKeyDefinition {
-	pKs, pTbl, _ := sqlparser.ParseTable(parentTableName)
+	pKs, pTbl, _ := sqlparser.NewTestParser().ParseTable(parentTableName)
 	return &sqlparser.ForeignKeyDefinition{
 		Source: sqlparser.MakeColumns(childCols...),
 		ReferenceDefinition: &sqlparser.ReferenceDefinition{

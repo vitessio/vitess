@@ -229,8 +229,8 @@ func (tsv *TabletServer) AddStatusHeader() {
 // AddStatusPart registers the status part for the status page.
 func (tsv *TabletServer) AddStatusPart() {
 	// Save the threshold values for reporting.
-	degradedThreshold.Store(tsv.config.Healthcheck.DegradedThresholdSeconds.Get().Nanoseconds())
-	unhealthyThreshold.Store(tsv.config.Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
+	degradedThreshold.Store(tsv.config.Healthcheck.DegradedThreshold.Nanoseconds())
+	unhealthyThreshold.Store(tsv.config.Healthcheck.UnhealthyThreshold.Nanoseconds())
 
 	tsv.exporter.AddStatusPart("Health", queryserviceStatusTemplate, func() any {
 		status := queryserviceStatus{

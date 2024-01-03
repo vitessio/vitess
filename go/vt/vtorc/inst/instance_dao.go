@@ -17,7 +17,6 @@
 package inst
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"regexp"
@@ -52,20 +51,26 @@ const (
 	backendDBConcurrency = 20
 )
 
-var instanceReadChan = make(chan bool, backendDBConcurrency)
-var instanceWriteChan = make(chan bool, backendDBConcurrency)
+var (
+	instanceReadChan  = make(chan bool, backendDBConcurrency)
+	instanceWriteChan = make(chan bool, backendDBConcurrency)
+)
 
 var forgetAliases *cache.Cache
 
-var accessDeniedCounter = metrics.NewCounter()
-var readTopologyInstanceCounter = metrics.NewCounter()
-var readInstanceCounter = metrics.NewCounter()
-var writeInstanceCounter = metrics.NewCounter()
-var backendWrites = collection.CreateOrReturnCollection("BACKEND_WRITES")
-var writeBufferLatency = stopwatch.NewNamedStopwatch()
+var (
+	accessDeniedCounter         = metrics.NewCounter()
+	readTopologyInstanceCounter = metrics.NewCounter()
+	readInstanceCounter         = metrics.NewCounter()
+	writeInstanceCounter        = metrics.NewCounter()
+	backendWrites               = collection.CreateOrReturnCollection("BACKEND_WRITES")
+	writeBufferLatency          = stopwatch.NewNamedStopwatch()
+)
 
-var emptyQuotesRegexp = regexp.MustCompile(`^""$`)
-var cacheInitializationCompleted atomic.Bool
+var (
+	emptyQuotesRegexp            = regexp.MustCompile(`^""$`)
+	cacheInitializationCompleted atomic.Bool
+)
 
 func init() {
 	_ = metrics.Register("instance.access_denied", accessDeniedCounter)
@@ -84,7 +89,7 @@ func initializeInstanceDao() {
 	cacheInitializationCompleted.Store(true)
 }
 
-// ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronuously or not
+// ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronously or not
 func ExecDBWriteFunc(f func() error) error {
 	m := query.NewMetric()
 
@@ -749,12 +754,10 @@ func ReadOutdatedInstanceKeys() ([]string, error) {
 		// We don;t return an error because we want to keep filling the outdated instances list.
 		return nil
 	})
-
 	if err != nil {
 		log.Error(err)
 	}
 	return res, err
-
 }
 
 func mkInsertOdku(table string, columns []string, values []string, nrRows int, insertIgnore bool) (string, error) {
@@ -768,21 +771,21 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 		return "", errors.New("number of values must be equal to number of columns")
 	}
 
-	var q bytes.Buffer
+	var q strings.Builder
 	var ignore string
 	if insertIgnore {
 		ignore = "ignore"
 	}
-	var valRow = fmt.Sprintf("(%s)", strings.Join(values, ", "))
-	var val bytes.Buffer
+	valRow := fmt.Sprintf("(%s)", strings.Join(values, ", "))
+	var val strings.Builder
 	val.WriteString(valRow)
 	for i := 1; i < nrRows; i++ {
 		val.WriteString(",\n                ") // indent VALUES, see below
 		val.WriteString(valRow)
 	}
 
-	var col = strings.Join(columns, ", ")
-	var odku bytes.Buffer
+	col := strings.Join(columns, ", ")
+	var odku strings.Builder
 	odku.WriteString(fmt.Sprintf("%s=VALUES(%s)", columns[0], columns[0]))
 	for _, c := range columns[1:] {
 		odku.WriteString(", ")
@@ -810,7 +813,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 	if !instanceWasActuallyFound {
 		insertIgnore = true
 	}
-	var columns = []string{
+	columns := []string{
 		"alias",
 		"hostname",
 		"port",
@@ -876,7 +879,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"last_discovery_latency",
 	}
 
-	var values = make([]string, len(columns))
+	values := make([]string, len(columns))
 	for i := range columns {
 		values[i] = "?"
 	}
@@ -1102,7 +1105,7 @@ func ForgetInstance(tabletAlias string) error {
 	return nil
 }
 
-// ForgetLongUnseenInstances will remove entries of all instacnes that have long since been last seen.
+// ForgetLongUnseenInstances will remove entries of all instances that have long since been last seen.
 func ForgetLongUnseenInstances() error {
 	sqlResult, err := db.ExecVTOrc(`
 			delete

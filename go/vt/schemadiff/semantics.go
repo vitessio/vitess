@@ -34,7 +34,7 @@ var semanticKS = &vindexes.Keyspace{
 
 var _ semantics.SchemaInformation = (*declarativeSchemaInformation)(nil)
 
-// declarativeSchemaInformation is a utility wrapper arounf FakeSI, and adds a few utility functions
+// declarativeSchemaInformation is a utility wrapper around FakeSI, and adds a few utility functions
 // to make it more simple and accessible to schemadiff's logic.
 type declarativeSchemaInformation struct {
 	Tables map[string]*vindexes.Table
@@ -53,7 +53,11 @@ func (si *declarativeSchemaInformation) FindTableOrVindex(tablename sqlparser.Ta
 }
 
 func (si *declarativeSchemaInformation) ConnCollation() collations.ID {
-	return 45
+	return collations.CollationUtf8mb4ID
+}
+
+func (si *declarativeSchemaInformation) CollationEnv() *collations.Environment {
+	return collations.MySQL8()
 }
 
 func (si *declarativeSchemaInformation) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
@@ -61,6 +65,10 @@ func (si *declarativeSchemaInformation) ForeignKeyMode(keyspace string) (vschema
 }
 
 func (si *declarativeSchemaInformation) KeyspaceError(keyspace string) error {
+	return nil
+}
+
+func (si *declarativeSchemaInformation) GetForeignKeyChecksState() *bool {
 	return nil
 }
 

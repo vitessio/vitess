@@ -122,6 +122,9 @@ type Executor struct {
 
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
+
+	collEnv *collations.Environment
+	parser  *sqlparser.Parser
 }
 
 var executorOnce sync.Once
@@ -152,6 +155,8 @@ func NewExecutor(
 	noScatter bool,
 	pv plancontext.PlannerVersion,
 	warmingReadsPercent int,
+	collationEnv *collations.Environment,
+	parser *sqlparser.Parser,
 ) *Executor {
 	e := &Executor{
 		serv:                serv,
@@ -168,6 +173,8 @@ func NewExecutor(
 		plans:               plans,
 		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
+		collEnv:             collationEnv,
+		parser:              parser,
 	}
 
 	vschemaacl.Init()
@@ -177,6 +184,7 @@ func NewExecutor(
 		serv:       serv,
 		cell:       cell,
 		schema:     e.schemaTracker,
+		parser:     parser,
 	}
 	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
@@ -223,7 +231,7 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	}
 	if result != nil && len(result.Rows) > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
+		piiSafeSQL, err := e.parser.RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -357,7 +365,7 @@ func (e *Executor) StreamExecute(
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.insertID, srr.rowsReturned, err)
 	if srr.rowsReturned > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
+		piiSafeSQL, err := e.parser.RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -499,16 +507,20 @@ func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlpars
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		default:
 			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
-				expr, err := sqlparser.ParseExpr(value)
+				expr, err := e.parser.ParseExpr(value)
 				if err != nil {
 					return err
 				}
 
-				evalExpr, err := evalengine.Translate(expr, nil)
+				evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
+					Collation:    vcursor.collation,
+					CollationEnv: e.collEnv,
+					SQLMode:      evalengine.ParseSQLMode(vcursor.SQLMode()),
+				})
 				if err != nil {
 					return err
 				}
-				evaluated, err := evalengine.EmptyExpressionEnv().Evaluate(evalExpr)
+				evaluated, err := evalengine.NewExpressionEnv(context.Background(), nil, vcursor).Evaluate(evalExpr)
 				if err != nil {
 					return err
 				}
@@ -901,14 +913,14 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 	for _, s := range status {
 		for _, ts := range s.TabletsStats {
 			// We only want to show REPLICA and RDONLY tablets
-			if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+			if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
 				continue
 			}
 
 			// Allow people to filter by Keyspace and Shard using a LIKE clause
 			if filter != nil {
 				ksFilterRegex := sqlparser.LikeToRegexp(filter.Like)
-				keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Tablet.Keyspace, ts.Tablet.Shard)
+				keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Target.Keyspace, ts.Target.Shard)
 				if !ksFilterRegex.MatchString(keyspaceShardStr) {
 					continue
 				}
@@ -1042,6 +1054,7 @@ func (e *Executor) getPlan(
 	vcursor.SetIgnoreMaxMemoryRows(sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt))
 	vcursor.SetConsolidator(sqlparser.Consolidator(stmt))
 	vcursor.SetWorkloadName(sqlparser.GetWorkloadNameFromStatement(stmt))
+	vcursor.UpdateForeignKeyChecksState(sqlparser.ForeignKeyChecksState(stmt))
 	priority, err := sqlparser.GetPriorityFromStatement(stmt)
 	if err != nil {
 		return nil, err
@@ -1066,6 +1079,7 @@ func (e *Executor) getPlan(
 		vcursor.safeSession.getSelectLimit(),
 		setVarComment,
 		vcursor.safeSession.SystemVariables,
+		vcursor.GetForeignKeyChecksState(),
 		vcursor,
 	)
 	if err != nil {
@@ -1335,7 +1349,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 
-	stmt, reservedVars, err := parseAndValidateQuery(query)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.parser)
 	if err != nil {
 		return nil, err
 	}
@@ -1370,8 +1384,8 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	return qr.Fields, err
 }
 
-func parseAndValidateQuery(query string) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
-	stmt, reserved, err := sqlparser.Parse2(query)
+func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
+	stmt, reserved, err := parser.Parse2(query)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1506,7 +1520,7 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *SafeSession) error 
 
 // planPrepareStmt implements the IExecutor interface
 func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.parser)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1538,4 +1552,12 @@ func (e *Executor) Close() {
 	}
 	topo.Close()
 	e.plans.Close()
+}
+
+func (e *Executor) collationEnv() *collations.Environment {
+	return e.collEnv
+}
+
+func (e *Executor) sqlparser() *sqlparser.Parser {
+	return e.parser
 }

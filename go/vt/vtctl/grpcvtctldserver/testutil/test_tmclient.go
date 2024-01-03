@@ -1348,7 +1348,7 @@ func (fake *TabletManagerClient) UndoDemotePrimary(ctx context.Context, tablet *
 	return assert.AnError
 }
 
-// VReplicationExec is part of the tmclient.TabletManagerCLient interface.
+// VReplicationExec is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	if fake.VReplicationExecResults == nil {
 		return nil, assert.AnError
@@ -1374,7 +1374,7 @@ func (fake *TabletManagerClient) VReplicationExec(ctx context.Context, tablet *t
 	if resultsForTablet, ok := fake.VReplicationExecResults[key]; ok {
 		// Round trip the expected query both to ensure it's valid and to
 		// standardize on capitalization and formatting.
-		stmt, err := sqlparser.Parse(query)
+		stmt, err := sqlparser.NewTestParser().Parse(query)
 		if err != nil {
 			return nil, err
 		}
@@ -1393,7 +1393,7 @@ func (fake *TabletManagerClient) VReplicationExec(ctx context.Context, tablet *t
 	return nil, assert.AnError
 }
 
-// CheckThrottler is part of the tmclient.TabletManagerCLient interface.
+// CheckThrottler is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	if fake.CheckThrottlerResults == nil {
 		return nil, assert.AnError

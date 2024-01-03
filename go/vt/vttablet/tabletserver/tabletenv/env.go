@@ -19,42 +19,52 @@ limitations under the License.
 package tabletenv
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // Env defines the functions supported by TabletServer
-// that the sub-componennts need to access.
+// that the sub-components need to access.
 type Env interface {
 	CheckMySQL()
 	Config() *TabletConfig
 	Exporter() *servenv.Exporter
 	Stats() *Stats
+	SQLParser() *sqlparser.Parser
 	LogError()
+	CollationEnv() *collations.Environment
 }
 
 type testEnv struct {
-	config   *TabletConfig
-	exporter *servenv.Exporter
-	stats    *Stats
+	config       *TabletConfig
+	exporter     *servenv.Exporter
+	stats        *Stats
+	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
 // NewEnv creates an Env that can be used for tabletserver subcomponents
 // without an actual TabletServer.
-func NewEnv(config *TabletConfig, exporterName string) Env {
+func NewEnv(config *TabletConfig, exporterName string, collationEnv *collations.Environment, parser *sqlparser.Parser) Env {
 	exporter := servenv.NewExporter(exporterName, "Tablet")
 	return &testEnv{
-		config:   config,
-		exporter: exporter,
-		stats:    NewStats(exporter),
+		config:       config,
+		exporter:     exporter,
+		stats:        NewStats(exporter),
+		collationEnv: collationEnv,
+		parser:       parser,
 	}
 }
 
-func (*testEnv) CheckMySQL()                    {}
-func (te *testEnv) Config() *TabletConfig       { return te.config }
-func (te *testEnv) Exporter() *servenv.Exporter { return te.exporter }
-func (te *testEnv) Stats() *Stats               { return te.stats }
+func (*testEnv) CheckMySQL()                              {}
+func (te *testEnv) Config() *TabletConfig                 { return te.config }
+func (te *testEnv) Exporter() *servenv.Exporter           { return te.exporter }
+func (te *testEnv) Stats() *Stats                         { return te.stats }
+func (te *testEnv) CollationEnv() *collations.Environment { return te.collationEnv }
+func (te *testEnv) SQLParser() *sqlparser.Parser          { return te.parser }
 
 func (te *testEnv) LogError() {
 	if x := recover(); x != nil {

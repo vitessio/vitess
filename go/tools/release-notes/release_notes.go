@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -79,9 +78,7 @@ type (
 	}
 )
 
-var (
-	releaseNotesPath = `changelog/`
-)
+var releaseNotesPath = `changelog/`
 
 const (
 	releaseNotesPathGitHub = `https://github.com/vitessio/vitess/blob/main/`
@@ -141,7 +138,7 @@ func (rn *releaseNote) generate(rnFile, changelogFile *os.File) error {
 	// Generate the release notes
 	rn.PathToChangeLogFileOnGH = releaseNotesPathGitHub + path.Join(rn.SubDirPath, "changelog.md")
 	if rnFile == nil {
-		rnFile, err = os.OpenFile(path.Join(rn.SubDirPath, "release_notes.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		rnFile, err = os.OpenFile(path.Join(rn.SubDirPath, "release_notes.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
 		if err != nil {
 			return err
 		}
@@ -155,7 +152,7 @@ func (rn *releaseNote) generate(rnFile, changelogFile *os.File) error {
 
 	// Generate the changelog
 	if changelogFile == nil {
-		changelogFile, err = os.OpenFile(path.Join(rn.SubDirPath, "changelog.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		changelogFile, err = os.OpenFile(path.Join(rn.SubDirPath, "changelog.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
 		if err != nil {
 			return err
 		}
@@ -304,11 +301,11 @@ func getStringForPullRequestInfos(prPerType prsByType) (string, error) {
 	data := createSortedPrTypeSlice(prPerType)
 
 	t := template.Must(template.New("markdownTemplatePR").Parse(markdownTemplatePR))
-	buff := bytes.Buffer{}
-	if err := t.ExecuteTemplate(&buff, "markdownTemplatePR", data); err != nil {
+	var buf strings.Builder
+	if err := t.ExecuteTemplate(&buf, "markdownTemplatePR", data); err != nil {
 		return "", err
 	}
-	return buff.String(), nil
+	return buf.String(), nil
 }
 
 func getStringForKnownIssues(issues []knownIssue) (string, error) {
@@ -316,11 +313,11 @@ func getStringForKnownIssues(issues []knownIssue) (string, error) {
 		return "", nil
 	}
 	t := template.Must(template.New("markdownTemplateKnownIssues").Parse(markdownTemplateKnownIssues))
-	buff := bytes.Buffer{}
-	if err := t.ExecuteTemplate(&buff, "markdownTemplateKnownIssues", issues); err != nil {
+	var buf strings.Builder
+	if err := t.ExecuteTemplate(&buf, "markdownTemplateKnownIssues", issues); err != nil {
 		return "", err
 	}
-	return buff.String(), nil
+	return buf.String(), nil
 }
 
 func groupAndStringifyPullRequest(pris []pullRequestInformation) (string, error) {
@@ -336,9 +333,7 @@ func groupAndStringifyPullRequest(pris []pullRequestInformation) (string, error)
 }
 
 func main() {
-	var (
-		versionName, summaryFile string
-	)
+	var versionName, summaryFile string
 	pflag.StringVarP(&versionName, "version", "v", "", "name of the version (has to be the following format: v11.0.0)")
 	pflag.StringVarP(&summaryFile, "summary", "s", "", "readme file on which there is a summary of the release")
 	pflag.Parse()

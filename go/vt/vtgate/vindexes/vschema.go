@@ -25,9 +25,11 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqlescape"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
@@ -53,6 +55,7 @@ var TabletTypeSuffix = map[topodatapb.TabletType]string{
 
 // The following constants represent table types.
 const (
+	TypeTable     = ""
 	TypeSequence  = "sequence"
 	TypeReference = "reference"
 )
@@ -118,6 +121,12 @@ type Table struct {
 
 	ChildForeignKeys  []ChildFKInfo  `json:"child_foreign_keys,omitempty"`
 	ParentForeignKeys []ParentFKInfo `json:"parent_foreign_keys,omitempty"`
+
+	// index can be columns or expression.
+	// For Primary key, functional indexes are not allowed, therefore it will only be columns.
+	// MySQL error message: ERROR 3756 (HY000): The primary key cannot be a functional index
+	PrimaryKey sqlparser.Columns `json:"primary_key,omitempty"`
+	UniqueKeys []sqlparser.Exprs `json:"unique_keys,omitempty"`
 }
 
 // GetTableName gets the sqlparser.TableName for the vindex Table.
@@ -148,6 +157,7 @@ type ColumnVindex struct {
 type TableInfo struct {
 	Columns     []Column
 	ForeignKeys []*sqlparser.ForeignKeyDefinition
+	Indexes     []*sqlparser.IndexDefinition
 }
 
 // IsUnique is used to tell whether the ColumnVindex
@@ -178,20 +188,46 @@ type Column struct {
 	Name          sqlparser.IdentifierCI `json:"name"`
 	Type          querypb.Type           `json:"type"`
 	CollationName string                 `json:"collation_name"`
+	Default       sqlparser.Expr         `json:"default,omitempty"`
 
 	// Invisible marks this as a column that will not be automatically included in `*` projections
-	Invisible bool `json:"invisible"`
+	Invisible bool  `json:"invisible,omitempty"`
+	Size      int32 `json:"size,omitempty"`
+	Scale     int32 `json:"scale,omitempty"`
+	Nullable  bool  `json:"nullable,omitempty"`
+	// Values contains the list of values for enum and set types.
+	Values []string `json:"values,omitempty"`
 }
 
 // MarshalJSON returns a JSON representation of Column.
 func (col *Column) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Name string `json:"name"`
-		Type string `json:"type,omitempty"`
+	cj := struct {
+		Name      string `json:"name"`
+		Type      string `json:"type,omitempty"`
+		Invisible bool   `json:"invisible,omitempty"`
+		Default   string `json:"default,omitempty"`
 	}{
 		Name: col.Name.String(),
 		Type: querypb.Type_name[int32(col.Type)],
-	})
+	}
+	if col.Invisible {
+		cj.Invisible = true
+	}
+	if col.Default != nil {
+		cj.Default = sqlparser.String(col.Default)
+	}
+	return json.Marshal(cj)
+}
+
+func (col *Column) ToEvalengineType(collationEnv *collations.Environment) evalengine.Type {
+	collation := collations.CollationForType(col.Type, collationEnv.DefaultConnectionCharset())
+	if sqltypes.IsText(col.Type) {
+		coll, found := collationEnv.LookupID(col.CollationName)
+		if found {
+			collation = coll
+		}
+	}
+	return evalengine.NewTypeEx(col.Type, collation, col.Nullable, col.Size, col.Scale)
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
@@ -274,7 +310,7 @@ func (source *Source) String() string {
 }
 
 // BuildVSchema builds a VSchema from a SrvVSchema.
-func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
+func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vschema *VSchema) {
 	vschema = &VSchema{
 		RoutingRules:   make(map[string]*RoutingRule),
 		globalTables:   make(map[string]*Table),
@@ -282,22 +318,22 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 		created:        time.Now(),
 	}
-	buildKeyspaces(source, vschema)
+	buildKeyspaces(source, vschema, parser)
 	// buildGlobalTables before buildReferences so that buildReferences can
 	// resolve sources which reference global tables.
 	buildGlobalTables(source, vschema)
 	buildReferences(source, vschema)
-	buildRoutingRule(source, vschema)
+	buildRoutingRule(source, vschema, parser)
 	buildShardRoutingRule(source, vschema)
 	// Resolve auto-increments after routing rules are built since sequence tables also obey routing rules.
-	resolveAutoIncrement(source, vschema)
+	resolveAutoIncrement(source, vschema, parser)
 	return vschema
 }
 
 // BuildKeyspaceSchema builds the vschema portion for one keyspace.
 // The build ignores sequence references because those dependencies can
 // go cross-keyspace.
-func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceSchema, error) {
+func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string, parser *sqlparser.Parser) (*KeyspaceSchema, error) {
 	if input == nil {
 		input = &vschemapb.Keyspace{}
 	}
@@ -311,18 +347,18 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceS
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
-	buildKeyspaces(formal, vschema)
+	buildKeyspaces(formal, vschema, parser)
 	err := vschema.Keyspaces[keyspace].Error
 	return vschema.Keyspaces[keyspace], err
 }
 
 // BuildKeyspace ensures that the keyspace vschema is valid.
 // External references (like sequence) are not validated.
-func BuildKeyspace(input *vschemapb.Keyspace) (*KeyspaceSchema, error) {
-	return BuildKeyspaceSchema(input, "")
+func BuildKeyspace(input *vschemapb.Keyspace, parser *sqlparser.Parser) (*KeyspaceSchema, error) {
+	return BuildKeyspaceSchema(input, "", parser)
 }
 
-func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlparser.Parser) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := &KeyspaceSchema{
 			Keyspace: &Keyspace{
@@ -334,7 +370,7 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			Vindexes:       make(map[string]Vindex),
 		}
 		vschema.Keyspaces[ksname] = ksvschema
-		ksvschema.Error = buildTables(ks, vschema, ksvschema)
+		ksvschema.Error = buildTables(ks, vschema, ksvschema, parser)
 	}
 }
 
@@ -346,12 +382,12 @@ func replaceUnspecifiedForeignKeyMode(fkMode vschemapb.Keyspace_ForeignKeyMode) 
 	return fkMode
 }
 
-func (vschema *VSchema) AddView(ksname string, viewName, query string) error {
+func (vschema *VSchema) AddView(ksname, viewName, query string, parser *sqlparser.Parser) error {
 	ks, ok := vschema.Keyspaces[ksname]
 	if !ok {
 		return fmt.Errorf("keyspace %s not found in vschema", ksname)
 	}
-	ast, err := sqlparser.Parse(query)
+	ast, err := parser.Parse(query)
 	if err != nil {
 		return err
 	}
@@ -520,7 +556,7 @@ func buildKeyspaceReferences(vschema *VSchema, ksvschema *KeyspaceSchema) error 
 	return nil
 }
 
-func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSchema) error {
+func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSchema, parser *sqlparser.Parser) error {
 	keyspace := ksvschema.Keyspace
 	for vname, vindexInfo := range ks.Vindexes {
 		vindex, err := CreateVindex(vindexInfo.Type, vname, vindexInfo.Params)
@@ -612,8 +648,31 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 					tname,
 				)
 			}
+			var colDefault sqlparser.Expr
+			if col.Default != "" {
+				var err error
+				colDefault, err = parser.ParseExpr(col.Default)
+				if err != nil {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"could not parse the '%s' column's default expression '%s' for table '%s'", col.Name, col.Default, tname)
+				}
+			}
+			nullable := true
+			if col.Nullable != nil {
+				nullable = *col.Nullable
+			}
 			colNames[name.Lowered()] = true
-			t.Columns = append(t.Columns, Column{Name: name, Type: col.Type, Invisible: col.Invisible})
+			t.Columns = append(t.Columns, Column{
+				Name:          name,
+				Type:          col.Type,
+				CollationName: col.CollationName,
+				Default:       colDefault,
+				Invisible:     col.Invisible,
+				Size:          col.Size,
+				Scale:         col.Scale,
+				Nullable:      nullable,
+				Values:        col.Values,
+			})
 		}
 
 		// Initialize ColumnVindexes.
@@ -751,7 +810,7 @@ func (vschema *VSchema) addTableName(t *Table) {
 	}
 }
 
-func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlparser.Parser) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		for tname, table := range ks.Tables {
@@ -759,7 +818,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			if t == nil || table.AutoIncrement == nil {
 				continue
 			}
-			seqks, seqtab, err := sqlparser.ParseTable(table.AutoIncrement.Sequence)
+			seqks, seqtab, err := parser.ParseTable(table.AutoIncrement.Sequence)
 			var seq *Table
 			if err == nil {
 				// Ensure that sequence tables also obey routing rules.
@@ -835,7 +894,7 @@ func parseTable(tableName string) (sqlparser.TableName, error) {
 	}, nil
 }
 
-func buildRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func buildRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlparser.Parser) {
 	var err error
 	if source.RoutingRules == nil {
 		return
@@ -878,7 +937,7 @@ outer:
 				continue outer
 			}
 
-			toKeyspace, toTableName, err := sqlparser.ParseTable(toTable)
+			toKeyspace, toTableName, err := parser.ParseTable(toTable)
 
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{

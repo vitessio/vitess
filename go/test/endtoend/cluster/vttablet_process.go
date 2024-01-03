@@ -76,10 +76,10 @@ type VttabletProcess struct {
 	ServingStatus               string
 	DbPassword                  string
 	DbPort                      int
-	VreplicationTabletType      string
 	DbFlavor                    string
 	Charset                     string
 	ConsolidationsURL           string
+	IsPrimary                   bool
 
 	// Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
@@ -109,7 +109,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
 		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
 		"--service_map", vttablet.ServiceMap,
-		"--vreplication_tablet_type", vttablet.VreplicationTabletType,
 		"--db_charset", vttablet.Charset,
 	)
 	if v, err := GetMajorVersion("vttablet"); err != nil {
@@ -450,16 +449,40 @@ func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 
 // QueryTablet lets you execute a query in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
-	if !useDb {
-		keyspace = ""
-	}
-	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
-	conn, err := vttablet.conn(&dbParams)
+	conn, err := vttablet.TabletConn(keyspace, useDb)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 	return executeQuery(conn, query)
+}
+
+// QueryTabletMultiple lets you execute multiple queries -- without any
+// results -- against the tablet.
+func (vttablet *VttabletProcess) QueryTabletMultiple(queries []string, keyspace string, useDb bool) error {
+	conn, err := vttablet.TabletConn(keyspace, useDb)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	for _, query := range queries {
+		log.Infof("Executing query %s (on %s)", query, vttablet.Name)
+		_, err := executeQuery(conn, query)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// TabletConn opens a MySQL connection on this tablet
+func (vttablet *VttabletProcess) TabletConn(keyspace string, useDb bool) (*mysql.Conn, error) {
+	if !useDb {
+		keyspace = ""
+	}
+	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
+	return vttablet.conn(&dbParams)
 }
 
 func (vttablet *VttabletProcess) defaultConn(dbname string) (*mysql.Conn, error) {
@@ -532,11 +555,6 @@ func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value str
 		return output.Rows[0][1].ToString(), nil
 	}
 	return "", nil
-}
-
-// ToggleProfiling enables or disables the configured CPU profiler on this vttablet
-func (vttablet *VttabletProcess) ToggleProfiling() error {
-	return vttablet.proc.Process.Signal(syscall.SIGUSR1)
 }
 
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
@@ -659,7 +677,6 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 		ServingStatus:               "NOT_SERVING",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
-		VreplicationTabletType:      "replica",
 		TabletUID:                   tabletUID,
 		Charset:                     charset,
 	}

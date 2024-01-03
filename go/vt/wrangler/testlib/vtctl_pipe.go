@@ -30,8 +30,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
@@ -76,7 +78,7 @@ func NewVtctlPipe(t *testing.T, ts *topo.Server) *VtctlPipe {
 
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
-	grpcvtctlserver.StartServer(server, ts)
+	grpcvtctlserver.StartServer(server, ts, collations.MySQL8(), sqlparser.NewTestParser())
 	go server.Serve(listener)
 
 	// Create a VtctlClient gRPC client to talk to the fake server
@@ -138,7 +140,7 @@ func (vp *VtctlPipe) run(args []string, outputFunc func(string)) error {
 }
 
 // RunAndStreamOutput returns the output of the vtctl command as a channel.
-// When the channcel is closed, the command did finish.
+// When the channel is closed, the command did finish.
 func (vp *VtctlPipe) RunAndStreamOutput(args []string) (logutil.EventStream, error) {
 	actionTimeout := 30 * time.Second
 	ctx := context.Background()

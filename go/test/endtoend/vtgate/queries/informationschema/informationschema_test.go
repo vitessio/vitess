@@ -223,6 +223,7 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 }
 
 func TestTypeORMQuery(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	// This test checks that we can run queries similar to the ones that the TypeORM framework uses
 
 	require.NoError(t,
@@ -256,4 +257,34 @@ FROM (SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
 		`[[VARBINARY("t1") VARCHAR("id1") BLOB("bigint")] [VARBINARY("t7_xxhash") VARCHAR("uid") BLOB("varchar")]]`,
 		`[[VARCHAR("t1") VARCHAR("id1") BLOB("bigint")] [VARCHAR("t7_xxhash") VARCHAR("uid") BLOB("varchar")]]`,
 	)
+}
+
+func TestJoinWithSingleShardQueryOnRHS(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+	// This test checks that we can run queries like this, where the RHS is a single shard query
+	mcmp, closer := start(t)
+	defer closer()
+
+	query := `SELECT
+        c.column_name as column_name,
+        c.data_type as data_type,
+        c.table_name as table_name,
+        c.table_schema as table_schema
+FROM
+        information_schema.columns c
+        JOIN (
+          SELECT
+            table_name
+          FROM
+            information_schema.tables
+          WHERE
+            table_schema != 'information_schema'
+          LIMIT
+            1
+        ) AS tables ON tables.table_name = c.table_name
+ORDER BY
+        c.table_name`
+
+	res := utils.Exec(t, mcmp.VtConn, query)
+	require.NotEmpty(t, res.Rows)
 }

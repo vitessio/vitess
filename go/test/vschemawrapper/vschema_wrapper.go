@@ -40,14 +40,15 @@ import (
 var _ plancontext.VSchema = (*VSchemaWrapper)(nil)
 
 type VSchemaWrapper struct {
-	V             *vindexes.VSchema
-	Keyspace      *vindexes.Keyspace
-	TabletType_   topodatapb.TabletType
-	Dest          key.Destination
-	SysVarEnabled bool
-	Version       plancontext.PlannerVersion
-	EnableViews   bool
-	TestBuilder   func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
+	V                     *vindexes.VSchema
+	Keyspace              *vindexes.Keyspace
+	TabletType_           topodatapb.TabletType
+	Dest                  key.Destination
+	SysVarEnabled         bool
+	ForeignKeyChecksState *bool
+	Version               plancontext.PlannerVersion
+	EnableViews           bool
+	TestBuilder           func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
 }
 
 func (vw *VSchemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
@@ -81,7 +82,7 @@ func (vw *VSchemaWrapper) PlanPrepareStatement(ctx context.Context, query string
 	if err != nil {
 		return nil, nil, err
 	}
-	stmt, _, err := sqlparser.Parse2(query)
+	stmt, _, err := vw.SQLParser().Parse2(query)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -122,7 +123,15 @@ func (vw *VSchemaWrapper) GetSrvVschema() *vschemapb.SrvVSchema {
 }
 
 func (vw *VSchemaWrapper) ConnCollation() collations.ID {
-	return collations.CollationUtf8mb3ID
+	return collations.CollationUtf8mb4ID
+}
+
+func (vw *VSchemaWrapper) CollationEnv() *collations.Environment {
+	return collations.MySQL8()
+}
+
+func (vw *VSchemaWrapper) SQLParser() *sqlparser.Parser {
+	return sqlparser.NewTestParser()
 }
 
 func (vw *VSchemaWrapper) PlannerWarning(_ string) {
@@ -138,6 +147,10 @@ func (vw *VSchemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Fo
 
 func (vw *VSchemaWrapper) KeyspaceError(keyspace string) error {
 	return nil
+}
+
+func (vw *VSchemaWrapper) GetForeignKeyChecksState() *bool {
+	return vw.ForeignKeyChecksState
 }
 
 func (vw *VSchemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {

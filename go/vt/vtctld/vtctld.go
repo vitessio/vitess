@@ -23,6 +23,10 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/acl"
@@ -48,8 +52,8 @@ func registerVtctldFlags(fs *pflag.FlagSet) {
 }
 
 // InitVtctld initializes all the vtctld functionality.
-func InitVtctld(ts *topo.Server) error {
-	actionRepo := NewActionRepository(ts)
+func InitVtctld(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) error {
+	actionRepo := NewActionRepository(ts, collationEnv, parser)
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",

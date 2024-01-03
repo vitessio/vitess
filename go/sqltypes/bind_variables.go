@@ -17,10 +17,10 @@ limitations under the License.
 package sqltypes
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -49,7 +49,7 @@ func TupleToProto(v []Value) *querypb.Value {
 
 // ValueToProto converts Value to a *querypb.Value.
 func ValueToProto(v Value) *querypb.Value {
-	return &querypb.Value{Type: v.typ, Value: v.val}
+	return &querypb.Value{Type: v.Type(), Value: v.val}
 }
 
 // ProtoToValue converts a *querypb.Value to a Value.
@@ -143,7 +143,7 @@ func BytesBindVariable(v []byte) *querypb.BindVariable {
 
 // ValueBindVariable converts a Value to a bind var.
 func ValueBindVariable(v Value) *querypb.BindVariable {
-	return &querypb.BindVariable{Type: v.typ, Value: v.val}
+	return &querypb.BindVariable{Type: v.Type(), Value: v.val}
 }
 
 // BuildBindVariable builds a *querypb.BindVariable from a valid input type.
@@ -418,7 +418,7 @@ func FormatBindVariables(bindVariables map[string]*querypb.BindVariable, full, a
 	}
 
 	if asJSON {
-		var buf bytes.Buffer
+		var buf strings.Builder
 		buf.WriteString("{")
 		first := true
 		for k, v := range out {

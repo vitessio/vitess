@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -317,13 +318,11 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 				return err
 			}
 		}
-		if vschema != nil {
-			// We added to the vschema.
-			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
-				return err
-			}
-		}
 
+		// We added to the vschema.
+		if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+			return err
+		}
 	}
 	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return err
@@ -446,7 +445,7 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 		mu      sync.Mutex
 		exists  bool
 		tablets []string
-		ws      = workflow.NewServer(wr.ts, wr.tmc)
+		ws      = workflow.NewServer(wr.ts, wr.tmc, wr.parser)
 	)
 
 	err := forAllSources(func(si *topo.ShardInfo) error {
@@ -541,7 +540,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		return nil, nil, nil, fmt.Errorf("vindex %s is not a lookup type", vindex.Type)
 	}
 
-	targetKeyspace, targetTableName, err = sqlparser.ParseTable(vindex.Params["table"])
+	targetKeyspace, targetTableName, err = wr.parser.ParseTable(vindex.Params["table"])
 	if err != nil || targetKeyspace == "" {
 		return nil, nil, nil, fmt.Errorf("vindex table name must be in the form <keyspace>.<table>. Got: %v", vindex.Params["table"])
 	}
@@ -838,7 +837,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 		return fmt.Errorf("vindex %s not found in vschema", qualifiedVindexName)
 	}
 
-	targetKeyspace, targetTableName, err := sqlparser.ParseTable(sourceVindex.Params["table"])
+	targetKeyspace, targetTableName, err := wr.parser.ParseTable(sourceVindex.Params["table"])
 	if err != nil || targetKeyspace == "" {
 		return fmt.Errorf("vindex table name must be in the form <keyspace>.<table>. Got: %v", sourceVindex.Params["table"])
 	}
@@ -1065,7 +1064,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if err != nil {
 		return nil, err
 	}
-	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace)
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace, wr.parser)
 	if err != nil {
 		return nil, err
 	}
@@ -1221,7 +1220,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropForeignKeys {
 				if ts.SourceExpression != "" {
 					// Check for table if non-empty SourceExpression.
-					sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
+					sourceTableName, err := mz.wr.parser.TableFromStatement(ts.SourceExpression)
 					if err != nil {
 						return err
 					}
@@ -1237,7 +1236,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				}
 
 				if createDDL == createDDLAsCopyDropConstraint {
-					strippedDDL, err := stripTableConstraints(ddl)
+					strippedDDL, err := stripTableConstraints(ddl, mz.wr.parser)
 					if err != nil {
 						return err
 					}
@@ -1246,7 +1245,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				}
 
 				if createDDL == createDDLAsCopyDropForeignKeys {
-					strippedDDL, err := stripTableForeignKeys(ddl)
+					strippedDDL, err := stripTableForeignKeys(ddl, mz.wr.parser)
 					if err != nil {
 						return err
 					}
@@ -1260,6 +1259,21 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		}
 
 		if len(applyDDLs) > 0 {
+			if mz.ms.AtomicCopy {
+				// AtomicCopy suggests we may be interested in Foreign Key support. As such, we want to
+				// normalize the source schema: ensure the order of table definitions is compatible with
+				// the constraints graph. We want to first create the parents, then the children.
+				// We use schemadiff to normalize the schema.
+				// For now, and because this is could have wider implications, we ignore any errors in
+				// reading the source schema.
+				schema, err := schemadiff.NewSchemaFromQueries(applyDDLs, mz.wr.parser)
+				if err != nil {
+					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
+				} else {
+					applyDDLs = schema.ToQueries()
+					log.Infof("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs))
+				}
+			}
 			sql := strings.Join(applyDDLs, ";\n")
 
 			_, err = mz.wr.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
@@ -1277,9 +1291,8 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 	})
 }
 
-func stripTableForeignKeys(ddl string) (string, error) {
-
-	ast, err := sqlparser.ParseStrictDDL(ddl)
+func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error) {
+	ast, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}
@@ -1307,8 +1320,8 @@ func stripTableForeignKeys(ddl string) (string, error) {
 	return newDDL, nil
 }
 
-func stripTableConstraints(ddl string) (string, error) {
-	ast, err := sqlparser.ParseStrictDDL(ddl)
+func stripTableConstraints(ddl string, parser *sqlparser.Parser) (string, error) {
+	ast, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}
@@ -1354,7 +1367,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 			}
 
 			// Validate non-empty query.
-			stmt, err := sqlparser.Parse(ts.SourceExpression)
+			stmt, err := mz.wr.parser.Parse(ts.SourceExpression)
 			if err != nil {
 				return "", err
 			}

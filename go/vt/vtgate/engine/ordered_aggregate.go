@@ -28,13 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-var (
-	// Some predefined values
-	countZero = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
-	countOne  = sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))
-	sumZero   = sqltypes.MakeTrusted(sqltypes.Decimal, []byte("0"))
-)
-
 var _ Primitive = (*OrderedAggregate)(nil)
 
 // OrderedAggregate is a primitive that expects the underlying primitive
@@ -58,6 +51,8 @@ type OrderedAggregate struct {
 
 	// Input is the primitive that will feed into this Primitive.
 	Input Primitive
+
+	CollationEnv *collations.Environment
 }
 
 // GroupByParams specify the grouping key to be used.
@@ -67,6 +62,7 @@ type GroupByParams struct {
 	Expr            sqlparser.Expr
 	FromGroupBy     bool
 	Type            evalengine.Type
+	CollationEnv    *collations.Environment
 }
 
 // String returns a string. Used for plan descriptions
@@ -78,8 +74,8 @@ func (gbp GroupByParams) String() string {
 		out = fmt.Sprintf("(%d|%d)", gbp.KeyCol, gbp.WeightStringCol)
 	}
 
-	if sqltypes.IsText(gbp.Type.Type) && gbp.Type.Coll != collations.Unknown {
-		out += " COLLATE " + collations.Local().LookupName(gbp.Type.Coll)
+	if sqltypes.IsText(gbp.Type.Type()) && gbp.Type.Collation() != collations.Unknown {
+		out += " COLLATE " + gbp.CollationEnv.LookupName(gbp.Type.Collation())
 	}
 
 	return out
@@ -342,15 +338,20 @@ func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (n
 	}
 
 	for _, gb := range oa.GroupByKeys {
-		cmp, err := evalengine.NullsafeCompare(currentKey[gb.KeyCol], nextRow[gb.KeyCol], gb.Type.Coll)
+		v1 := currentKey[gb.KeyCol]
+		v2 := nextRow[gb.KeyCol]
+		if v1.TinyWeightCmp(v2) != 0 {
+			return nextRow, true, nil
+		}
+
+		cmp, err := evalengine.NullsafeCompare(v1, v2, oa.CollationEnv, gb.Type.Collation())
 		if err != nil {
-			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
 			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
-			if !isComparisonErr && !isCollationErr || gb.WeightStringCol == -1 {
+			if !isCollationErr || gb.WeightStringCol == -1 {
 				return nil, false, err
 			}
 			gb.KeyCol = gb.WeightStringCol
-			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], gb.Type.Coll)
+			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], oa.CollationEnv, gb.Type.Collation())
 			if err != nil {
 				return nil, false, err
 			}

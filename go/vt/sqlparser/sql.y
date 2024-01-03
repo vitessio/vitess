@@ -303,7 +303,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
+%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE FORCE_CUTOVER EXPIRE RATIO
 // Throttler tokens
 %token <str> VITESS_THROTTLER
 
@@ -3365,6 +3365,19 @@ alter_statement:
       Type: UnthrottleAllMigrationType,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION STRING FORCE_CUTOVER
+  {
+    $$ = &AlterMigration{
+      Type: ForceCutOverMigrationType,
+      UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION FORCE_CUTOVER ALL
+  {
+    $$ = &AlterMigration{
+      Type: ForceCutOverAllMigrationType,
+    }
+  }
 
 partitions_options_opt:
   {
@@ -4127,6 +4140,10 @@ show_statement:
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowBasic{Command: VschemaTables}}
+  }
+| SHOW VSCHEMA KEYSPACES
+  {
+    $$ = &Show{&ShowBasic{Command: VschemaKeyspaces}}
   }
 | SHOW VSCHEMA VINDEXES
   {
@@ -7506,6 +7523,26 @@ locking_clause:
 FOR UPDATE
   {
     $$ = ForUpdateLock
+  }
+| FOR UPDATE NOWAIT
+  {
+    $$ = ForUpdateLockNoWait
+  }
+| FOR UPDATE SKIP LOCKED
+  {
+    $$ = ForUpdateLockSkipLocked
+  }
+| FOR SHARE
+  {
+    $$ = ForShareLock
+  }
+| FOR SHARE NOWAIT
+  {
+    $$ = ForShareLockNoWait
+  }
+| FOR SHARE SKIP LOCKED
+  {
+    $$ = ForShareLockSkipLocked
   }
 | LOCK IN SHARE MODE
   {

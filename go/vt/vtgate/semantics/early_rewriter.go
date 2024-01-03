@@ -33,6 +33,7 @@ type earlyRewriter struct {
 	clause          string
 	warning         string
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
+	collationEnv    *collations.Environment
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -46,7 +47,9 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	case sqlparser.OrderBy:
 		handleOrderBy(r, cursor, node)
 	case *sqlparser.OrExpr:
-		rewriteOrExpr(cursor, node)
+		rewriteOrExpr(cursor, node, r.collationEnv)
+	case *sqlparser.AndExpr:
+		rewriteAndExpr(cursor, node, r.collationEnv)
 	case *sqlparser.NotExpr:
 		rewriteNotExpr(cursor, node)
 	case sqlparser.GroupBy:
@@ -61,13 +64,28 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		return r.handleWith(node)
 	case *sqlparser.AliasedTableExpr:
 		return r.handleAliasedTable(node)
+	case *sqlparser.Delete:
+		// When we do not have any target, it is a single table delete.
+		// In a single table delete, the table references is always a single aliased table expression.
+		if len(node.Targets) != 0 {
+			return nil
+		}
+		tblExpr, ok := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
+		if !ok {
+			return nil
+		}
+		tblName, err := tblExpr.TableName()
+		if err != nil {
+			return err
+		}
+		node.Targets = append(node.Targets, tblName)
 	}
 	return nil
 }
 
 func (r *earlyRewriter) handleAliasedTable(node *sqlparser.AliasedTableExpr) error {
 	tbl, ok := node.Expr.(sqlparser.TableName)
-	if !ok || !tbl.Qualifier.IsEmpty() {
+	if !ok || tbl.Qualifier.NotEmpty() {
 		return nil
 	}
 	scope := r.scoper.currentScope()
@@ -105,6 +123,11 @@ func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
 		return
 	}
 
+	// There is no inverse operator for NullSafeEqualOp.
+	// There doesn't exist a null safe non-equality.
+	if cmp.Operator == sqlparser.NullSafeEqualOp {
+		return
+	}
 	cmp.Operator = sqlparser.Inverse(cmp.Operator)
 	cursor.Replace(cmp)
 }
@@ -169,11 +192,54 @@ func handleOrderBy(r *earlyRewriter, cursor *sqlparser.Cursor, node sqlparser.Or
 }
 
 // rewriteOrExpr rewrites OR expressions when the right side is FALSE.
-func rewriteOrExpr(cursor *sqlparser.Cursor, node *sqlparser.OrExpr) {
-	newNode := rewriteOrFalse(*node)
+func rewriteOrExpr(cursor *sqlparser.Cursor, node *sqlparser.OrExpr, collationEnv *collations.Environment) {
+	newNode := rewriteOrFalse(*node, collationEnv)
 	if newNode != nil {
 		cursor.ReplaceAndRevisit(newNode)
 	}
+}
+
+// rewriteAndExpr rewrites AND expressions when either side is TRUE.
+func rewriteAndExpr(cursor *sqlparser.Cursor, node *sqlparser.AndExpr, collationEnv *collations.Environment) {
+	newNode := rewriteAndTrue(*node, collationEnv)
+	if newNode != nil {
+		cursor.ReplaceAndRevisit(newNode)
+	}
+}
+
+func rewriteAndTrue(andExpr sqlparser.AndExpr, collationEnv *collations.Environment) sqlparser.Expr {
+	// we are looking for the pattern `WHERE c = 1 AND 1 = 1`
+	isTrue := func(subExpr sqlparser.Expr) bool {
+		coll := collationEnv.DefaultConnectionCharset()
+		evalEnginePred, err := evalengine.Translate(subExpr, &evalengine.Config{
+			CollationEnv: collationEnv,
+			Collation:    coll,
+		})
+		if err != nil {
+			return false
+		}
+
+		env := evalengine.EmptyExpressionEnv(collationEnv)
+		res, err := env.Evaluate(evalEnginePred)
+		if err != nil {
+			return false
+		}
+
+		boolValue, err := res.Value(coll).ToBool()
+		if err != nil {
+			return false
+		}
+
+		return boolValue
+	}
+
+	if isTrue(andExpr.Left) {
+		return andExpr.Right
+	} else if isTrue(andExpr.Right) {
+		return andExpr.Left
+	}
+
+	return nil
 }
 
 // handleLiteral processes literals within the context of ORDER BY expressions.
@@ -348,7 +414,7 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 	}
 
-	if !aliasedExpr.As.IsEmpty() {
+	if aliasedExpr.As.NotEmpty() {
 		return sqlparser.NewColName(aliasedExpr.As.String()), nil
 	}
 
@@ -373,21 +439,25 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	}, nil).(sqlparser.Expr)
 }
 
-func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {
+func rewriteOrFalse(orExpr sqlparser.OrExpr, collationEnv *collations.Environment) sqlparser.Expr {
 	// we are looking for the pattern `WHERE c = 1 OR 1 = 0`
 	isFalse := func(subExpr sqlparser.Expr) bool {
-		evalEnginePred, err := evalengine.Translate(subExpr, nil)
+		coll := collationEnv.DefaultConnectionCharset()
+		evalEnginePred, err := evalengine.Translate(subExpr, &evalengine.Config{
+			CollationEnv: collationEnv,
+			Collation:    coll,
+		})
 		if err != nil {
 			return false
 		}
 
-		env := evalengine.EmptyExpressionEnv()
+		env := evalengine.EmptyExpressionEnv(collationEnv)
 		res, err := env.Evaluate(evalEnginePred)
 		if err != nil {
 			return false
 		}
 
-		boolValue, err := res.Value(collations.Default()).ToBool()
+		boolValue, err := res.Value(coll).ToBool()
 		if err != nil {
 			return false
 		}

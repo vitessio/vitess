@@ -34,7 +34,7 @@ type NodeFormatter func(buf *TrackedBuffer, node SQLNode)
 // want to generate a query that's different from the default.
 type TrackedBuffer struct {
 	*strings.Builder
-	bindLocations []bindLocation
+	bindLocations []BindLocation
 	nodeFormatter NodeFormatter
 	literal       func(string) (int, error)
 	fast          bool
@@ -288,9 +288,9 @@ func areBothISExpr(op Expr, val Expr) bool {
 // WriteArg writes a value argument into the buffer along with
 // tracking information for future substitutions.
 func (buf *TrackedBuffer) WriteArg(prefix, arg string) {
-	buf.bindLocations = append(buf.bindLocations, bindLocation{
-		offset: buf.Len(),
-		length: len(prefix) + len(arg),
+	buf.bindLocations = append(buf.bindLocations, BindLocation{
+		Offset: buf.Len(),
+		Length: len(prefix) + len(arg),
 	})
 	buf.WriteString(prefix)
 	buf.WriteString(arg)

@@ -172,7 +172,7 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 	if node.Ignore {
 		buf.literal("ignore ")
 	}
-	if node.Targets != nil {
+	if node.Targets != nil && !node.isSingleAliasExpr() {
 		buf.astPrintf(node, "%v ", node.Targets)
 	}
 	buf.astPrintf(node, "from %v%v%v%v%v", node.TableExprs, node.Partitions, node.Where, node.OrderBy, node.Limit)
@@ -289,6 +289,10 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "unthrottle"
 	case UnthrottleAllMigrationType:
 		alterType = "unthrottle all"
+	case ForceCutOverMigrationType:
+		alterType = "force_cutover"
+	case ForceCutOverAllMigrationType:
+		alterType = "force_cutover all"
 	}
 	buf.astPrintf(node, " %#s", alterType)
 	if node.Expire != "" {
@@ -831,7 +835,7 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (ii *IndexInfo) Format(buf *TrackedBuffer) {
-	if !ii.ConstraintName.IsEmpty() {
+	if ii.ConstraintName.NotEmpty() {
 		buf.astPrintf(ii, "constraint %v ", ii.ConstraintName)
 	}
 	switch ii.Type {
@@ -847,7 +851,7 @@ func (ii *IndexInfo) Format(buf *TrackedBuffer) {
 	case IndexTypeFullText:
 		buf.astPrintf(ii, "%s %s", keywordStrings[FULLTEXT], keywordStrings[KEY])
 	}
-	if !ii.Name.IsEmpty() {
+	if ii.Name.NotEmpty() {
 		buf.astPrintf(ii, " %v", ii.Name)
 	}
 }
@@ -883,7 +887,7 @@ func (node VindexParam) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (c *ConstraintDefinition) Format(buf *TrackedBuffer) {
-	if !c.Name.IsEmpty() {
+	if c.Name.NotEmpty() {
 		buf.astPrintf(c, "constraint %v ", c.Name)
 	}
 	c.Details.Format(buf)
@@ -1114,7 +1118,7 @@ func (node *StarExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v", node.Expr)
-	if !node.As.IsEmpty() {
+	if node.As.NotEmpty() {
 		buf.astPrintf(node, " as %v", node.As)
 	}
 }
@@ -1163,7 +1167,7 @@ func (node TableExprs) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v%v", node.Expr, node.Partitions)
-	if !node.As.IsEmpty() {
+	if node.As.NotEmpty() {
 		buf.astPrintf(node, " as %v", node.As)
 		if len(node.Columns) != 0 {
 			buf.astPrintf(node, "%v", node.Columns)
@@ -1189,7 +1193,7 @@ func (node TableName) Format(buf *TrackedBuffer) {
 	if node.IsEmpty() {
 		return
 	}
-	if !node.Qualifier.IsEmpty() {
+	if node.Qualifier.NotEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
 	buf.astPrintf(node, "%v", node.Name)
@@ -1544,7 +1548,7 @@ func (node *CollateExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *FuncExpr) Format(buf *TrackedBuffer) {
-	if !node.Qualifier.IsEmpty() {
+	if node.Qualifier.NotEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
 	// Function names should not be back-quoted even
@@ -1598,7 +1602,7 @@ func (node *JSONStorageSizeExpr) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *OverClause) Format(buf *TrackedBuffer) {
 	buf.WriteString("over")
-	if !node.WindowName.IsEmpty() {
+	if node.WindowName.NotEmpty() {
 		buf.astPrintf(node, " %v", node.WindowName)
 	}
 	if node.WindowSpec != nil {
@@ -1608,7 +1612,7 @@ func (node *OverClause) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *WindowSpecification) Format(buf *TrackedBuffer) {
-	if !node.Name.IsEmpty() {
+	if node.Name.NotEmpty() {
 		buf.astPrintf(node, " %v", node.Name)
 	}
 	if node.PartitionClause != nil {
@@ -2020,7 +2024,7 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 	if !node.Tbl.IsEmpty() {
 		buf.astPrintf(node, " from %v", node.Tbl)
 	}
-	if !node.DbName.IsEmpty() {
+	if node.DbName.NotEmpty() {
 		buf.astPrintf(node, " from %v", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
@@ -2070,7 +2074,7 @@ func (node *CreateDatabase) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 	buf.literal("alter database")
-	if !node.DBName.IsEmpty() {
+	if node.DBName.NotEmpty() {
 		buf.astPrintf(node, " %v", node.DBName)
 	}
 	if node.UpdateDataDirectory {
@@ -2354,7 +2358,7 @@ func (node *DropColumn) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *DropKey) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "drop %s", node.Type.ToString())
-	if !node.Name.IsEmpty() {
+	if node.Name.NotEmpty() {
 		buf.astPrintf(node, " %v", node.Name)
 	}
 }
