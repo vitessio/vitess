@@ -175,10 +175,9 @@ func analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sql
 	return op
 }
 
-// AnalyzeInstantDDL takes declarative CreateTable and AlterTable, as well as a server version, and checks whether it is possible to run the ALTER
+// analyzeInstantDDL takes declarative CreateTable and AlterTable, as well as a server version, and checks whether it is possible to run the ALTER
 // using ALGORITHM=INSTANT for that version.
-// This function is INTENTIONALLY public, even though we do not guarantee that it will remain so.
-func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (*SpecialAlterPlan, error) {
+func analyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (*SpecialAlterPlan, error) {
 	capable, err := schemadiff.AlterTableCapableOfInstantDDL(alterTable, createTable, capableOf)
 	if err != nil {
 		return nil, err
@@ -223,7 +222,7 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 		}
 	}
 	if onlineDDL.StrategySetting().IsPreferInstantDDL() {
-		op, err := AnalyzeInstantDDL(alterTable, createTable, capableOf)
+		op, err := analyzeInstantDDL(alterTable, createTable, capableOf)
 		if err != nil {
 			return nil, err
 		}

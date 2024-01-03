@@ -223,7 +223,7 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 			require.True(t, ok)
 
 			_, capableOf, _ := mysql.GetFlavor(tc.version, nil)
-			plan, err := AnalyzeInstantDDL(alterTable, createTable, capableOf)
+			plan, err := analyzeInstantDDL(alterTable, createTable, capableOf)
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {
