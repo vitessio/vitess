@@ -24,7 +24,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path"
 	"strconv"
@@ -291,7 +290,7 @@ func (e *Executor) executeQuery(ctx context.Context, query string) (result *sqlt
 	}
 	defer conn.Recycle()
 
-	return conn.Conn.Exec(ctx, query, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, query, -1, true)
 }
 
 func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, query string) (result *sqltypes.Result, err error) {
@@ -308,7 +307,7 @@ func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, que
 	if err != nil {
 		return nil, err
 	}
-	return conn.Conn.Exec(ctx, uq, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, uq, -1, true)
 }
 
 // TabletAliasString returns tablet alias as string (duh)
