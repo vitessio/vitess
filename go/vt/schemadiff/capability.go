@@ -103,8 +103,8 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
 	case *sqlparser.ModifyColumn:
 		if col := findColumn(opt.NewColDefinition.Name.String()); col != nil {
-			// Check if only diff is change of default
-			// we temporarily remove the DEFAULT expression (if any) from both
+			// Check if only diff is change of default.
+			// We temporarily remove the DEFAULT expression (if any) from both
 			// table and ALTER statement, and compare the columns: if they're otherwise equal,
 			// then the only change can be an addition/change/removal of DEFAULT, which
 			// is instant-table.
