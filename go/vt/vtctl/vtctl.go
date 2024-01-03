@@ -2769,7 +2769,7 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 }
 
 func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
+	concurrency := subFlags.Int32("concurrency", 10, "How many tablets to reload in parallel")
 	includePrimary := subFlags.Bool("include_primary", true, "Include the primary tablet")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -2787,7 +2787,7 @@ func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFla
 		Shard:          shard,
 		WaitPosition:   "",
 		IncludePrimary: *includePrimary,
-		Concurrency:    uint32(*concurrency),
+		Concurrency:    *concurrency,
 	})
 	if resp != nil {
 		for _, e := range resp.Events {
@@ -2798,7 +2798,7 @@ func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFla
 }
 
 func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
+	concurrency := subFlags.Int32("concurrency", 10, "How many tablets to reload in parallel")
 	includePrimary := subFlags.Bool("include_primary", true, "Include the primary tablet(s)")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -2811,7 +2811,7 @@ func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, sub
 		Keyspace:       subFlags.Arg(0),
 		WaitPosition:   "",
 		IncludePrimary: *includePrimary,
-		Concurrency:    uint32(*concurrency),
+		Concurrency:    *concurrency,
 	})
 	if resp != nil {
 		for _, e := range resp.Events {

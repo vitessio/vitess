@@ -401,7 +401,7 @@ message BackupRequest {
   bool allow_primary = 2;
   // Concurrency specifies the number of compression/checksum jobs to run
   // simultaneously.
-  uint64 concurrency = 3;
+  int32 concurrency = 3;
   // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
   // then the backup becomes incremental and applies as of given position.
   string incremental_from_pos = 4;
@@ -426,7 +426,7 @@ message BackupShardRequest {
   bool allow_primary = 3;
   // Concurrency specifies the number of compression/checksum jobs to run
   // simultaneously.
-  uint64 concurrency = 4;
+  int32 concurrency = 4;
   // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
   // so that it's a backup that can be used for an upgrade.
   bool upgrade_safe = 5;
@@ -1306,7 +1306,7 @@ message ReloadSchemaKeyspaceRequest {
   // Concurrency is the global concurrency across all shards in the keyspace
   // (so, at most this many tablets will be reloaded across the keyspace at any
   // given point).
-  uint32 concurrency = 4;
+  int32 concurrency = 4;
 }
 
 message ReloadSchemaKeyspaceResponse {
@@ -1319,7 +1319,7 @@ message ReloadSchemaShardRequest {
   string wait_position = 3;
   bool include_primary = 4;
   // Concurrency is the maximum number of tablets to reload at one time.
-  uint32 concurrency = 5;
+  int32 concurrency = 5;
 }
 
 message ReloadSchemaShardResponse {

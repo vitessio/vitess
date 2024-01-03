@@ -25731,7 +25731,7 @@ export namespace tabletmanagerdata {
     interface IBackupRequest {
 
         /** BackupRequest concurrency */
-        concurrency?: (number|Long|null);
+        concurrency?: (number|null);
 
         /** BackupRequest allow_primary */
         allow_primary?: (boolean|null);
@@ -25753,7 +25753,7 @@ export namespace tabletmanagerdata {
         constructor(properties?: tabletmanagerdata.IBackupRequest);
 
         /** BackupRequest concurrency. */
-        public concurrency: (number|Long);
+        public concurrency: number;
 
         /** BackupRequest allow_primary. */
         public allow_primary: boolean;
@@ -45284,7 +45284,7 @@ export namespace vtctldata {
         allow_primary?: (boolean|null);
 
         /** BackupRequest concurrency */
-        concurrency?: (number|Long|null);
+        concurrency?: (number|null);
 
         /** BackupRequest incremental_from_pos */
         incremental_from_pos?: (string|null);
@@ -45309,7 +45309,7 @@ export namespace vtctldata {
         public allow_primary: boolean;
 
         /** BackupRequest concurrency. */
-        public concurrency: (number|Long);
+        public concurrency: number;
 
         /** BackupRequest incremental_from_pos. */
         public incremental_from_pos: string;
@@ -45523,7 +45523,7 @@ export namespace vtctldata {
         allow_primary?: (boolean|null);
 
         /** BackupShardRequest concurrency */
-        concurrency?: (number|Long|null);
+        concurrency?: (number|null);
 
         /** BackupShardRequest upgrade_safe */
         upgrade_safe?: (boolean|null);
@@ -45551,7 +45551,7 @@ export namespace vtctldata {
         public allow_primary: boolean;
 
         /** BackupShardRequest concurrency. */
-        public concurrency: (number|Long);
+        public concurrency: number;
 
         /** BackupShardRequest upgrade_safe. */
         public upgrade_safe: boolean;
