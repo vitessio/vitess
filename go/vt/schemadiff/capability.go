@@ -152,7 +152,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 
 // AlterTableCapableOfInstantDDL checks if the specific ALTER TABLE is eligible to run via ALGORITHM=INSTANT, given the existing table schema and
 // the MySQL server capabilities.
-// The function is intentionally public, as it is intended to be used buy other packages, such as onlineddl.
+// The function is intentionally public, as it is intended to be used by other packages, such as onlineddl.
 func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (bool, error) {
 	if capableOf == nil {
 		return false, nil
@@ -164,11 +164,7 @@ func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable
 	if !capable {
 		return false, nil
 	}
-	if alterTable.PartitionOption != nil {
-		// no INSTANT for partitions
-		return false, nil
-	}
-	if alterTable.PartitionSpec != nil {
+	if alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil {
 		// no INSTANT for partitions
 		return false, nil
 	}
