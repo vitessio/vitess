@@ -838,51 +838,88 @@ var (
 			input: "select /* function with distinct */ count(distinct a) from t",
 		}, {
 			input: "select /* if as func */ 1 from t where a = if(b)",
-		}, {
-			input: "select /* current_timestamp */ current_timestamp() from t",
-		}, {
-			input: "select /* current_timestamp as func */ current_timestamp() from t",
-		}, {
-			input: "select /* current_timestamp with fsp */ current_timestamp(3) from t",
-		}, {
-			input: "select /* current_date */ current_date() from t",
-		}, {
+		},
+		{
+			input: "select /* current_date */ current_date from t",
+			output: "select /* current_date */ current_date() from t",
+		},
+		{
 			input: "select /* current_date as func */ current_date() from t",
-		}, {
-			input: "select /* current_time */ current_time() from t",
-		}, {
+		},
+		{
+			input: "select /* current_time */ current_time from t",
+			output: "select /* current_time */ current_time(0) from t",
+		},
+		{
 			input: "select /* current_time as func */ current_time() from t",
-		}, {
+			output: "select /* current_time as func */ current_time(0) from t",
+		},
+		{
 			input: "select /* current_time with fsp */ current_time(1) from t",
-		}, {
-			input: "select /* utc_timestamp */ utc_timestamp() from t",
-		}, {
-			input: "select /* utc_timestamp as func */ utc_timestamp() from t",
-		}, {
-			input: "select /* utc_timestamp with fsp */ utc_timestamp(0) from t",
-		}, {
-			input: "select /* utc_time */ utc_time() from t",
-		}, {
-			input: "select /* utc_time as func */ utc_time() from t",
-		}, {
-			input: "select /* utc_time with fsp */ utc_time(4) from t",
-		}, {
-			input: "select /* utc_date */ utc_date() from t",
-		}, {
-			input: "select /* utc_date as func */ utc_date() from t",
-		}, {
-			input: "select /* localtime */ localtime() from t",
-		}, {
+		},
+		{
+			input: "select /* current_timestamp */ current_timestamp from t",
+			output: "select /* current_timestamp */ current_timestamp(0) from t",
+		},
+		{
+			input: "select /* current_timestamp as func */ current_timestamp() from t",
+			output: "select /* current_timestamp as func */ current_timestamp(0) from t",
+		},
+		{
+			input: "select /* current_timestamp with fsp */ current_timestamp(3) from t",
+		},
+		{
+			input: "select /* localtime */ localtime from t",
+			output: "select /* localtime */ localtime(0) from t",
+		},
+		{
 			input: "select /* localtime as func */ localtime() from t",
-		}, {
+			output: "select /* localtime as func */ localtime(0) from t",
+		},
+		{
 			input: "select /* localtime with fsp */ localtime(5) from t",
-		}, {
-			input: "select /* localtimestamp */ localtimestamp() from t",
-		}, {
+		},
+		{
+			input: "select /* localtimestamp */ localtimestamp from t",
+			output: "select /* localtimestamp */ localtimestamp(0) from t",
+		},
+		{
 			input: "select /* localtimestamp as func */ localtimestamp() from t",
-		}, {
+			output: "select /* localtimestamp as func */ localtimestamp(0) from t",
+		},
+		{
 			input: "select /* localtimestamp with fsp */ localtimestamp(7) from t",
-		}, {
+		},
+		{
+			input: "select /* utc_date */ utc_date from t",
+			output: "select /* utc_date */ utc_date() from t",
+		},
+		{
+			input: "select /* utc_date as func */ utc_date() from t",
+		},
+		{
+			input: "select /* utc_time */ utc_time from t",
+			output: "select /* utc_time */ utc_time(0) from t",
+		},
+		{
+			input: "select /* utc_time as func */ utc_time() from t",
+			output: "select /* utc_time as func */ utc_time(0) from t",
+		},
+		{
+			input: "select /* utc_time with fsp */ utc_time(4) from t",
+		},
+		{
+			input: "select /* utc_timestamp */ utc_timestamp from t",
+			output: "select /* utc_timestamp */ utc_timestamp(0) from t",
+		},
+		{
+			input: "select /* utc_timestamp as func */ utc_timestamp() from t",
+			output: "select /* utc_timestamp as func */ utc_timestamp(0) from t",
+		},
+		{
+			input: "select /* utc_timestamp with fsp */ utc_timestamp(0) from t",
+		},
+		{
 			input: "select /* mod as func */ a from tab where mod(b, 2) = 0",
 		}, {
 			input: "select /* database as func no param */ database() from t",
@@ -1639,34 +1676,34 @@ var (
 			output: "alter table b add spatial index a using btree (id)",
 		}, {
 			input:  "create ALGORITHM=UNDEFINED DEFINER=`UserName`@`localhost` SQL SECURITY DEFINER view a as select current_timestamp()",
-			output: "create algorithm = undefined definer = `UserName`@`localhost` sql security definer view a as select current_timestamp()",
+			output: "create algorithm = undefined definer = `UserName`@`localhost` sql security definer view a as select current_timestamp(0)",
 		}, {
 			input:  "create ALGORITHM=UNDEFINED SQL SECURITY DEFINER view a as select current_timestamp()",
-			output: "create algorithm = undefined sql security definer view a as select current_timestamp()",
+			output: "create algorithm = undefined sql security definer view a as select current_timestamp(0)",
 		}, {
 			input:  "create ALGORITHM=UNDEFINED DEFINER=UserName@localhost view a as select current_timestamp()",
-			output: "create algorithm = undefined definer = `UserName`@`localhost` view a as select current_timestamp()",
+			output: "create algorithm = undefined definer = `UserName`@`localhost` view a as select current_timestamp(0)",
 		}, {
 			input:  "create ALGORITHM=MERGE DEFINER=UserName@localhost SQL SECURITY INVOKER view a as select current_timestamp()",
-			output: "create algorithm = merge definer = `UserName`@`localhost` sql security invoker view a as select current_timestamp()",
+			output: "create algorithm = merge definer = `UserName`@`localhost` sql security invoker view a as select current_timestamp(0)",
 		}, {
 			input:  "create ALGORITHM=TEMPTABLE DEFINER=UserName@localhost SQL SECURITY DEFINER view a as select current_timestamp()",
-			output: "create algorithm = temptable definer = `UserName`@`localhost` sql security definer view a as select current_timestamp()",
+			output: "create algorithm = temptable definer = `UserName`@`localhost` sql security definer view a as select current_timestamp(0)",
 		}, {
 			input:  "create DEFINER=`nameUser`@`localhost` SQL SECURITY DEFINER view a as select current_timestamp()",
-			output: "create definer = `nameUser`@`localhost` sql security definer view a as select current_timestamp()",
+			output: "create definer = `nameUser`@`localhost` sql security definer view a as select current_timestamp(0)",
 		}, {
 			input:  "create SQL SECURITY INVOKER view a as select current_timestamp()",
-			output: "create sql security invoker view a as select current_timestamp()",
+			output: "create sql security invoker view a as select current_timestamp(0)",
 		}, {
 			input:  "CREATE VIEW a AS SELECT current_timestamp()",
-			output: "create view a as select current_timestamp()",
+			output: "create view a as select current_timestamp(0)",
 		}, {
 			input:  "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
 			output: "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
 		}, {
 			input:  "CREATE OR REPLACE VIEW a AS SELECT current_timestamp()",
-			output: "create or replace view a as select current_timestamp()",
+			output: "create or replace view a as select current_timestamp(0)",
 		}, {
 			input: "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
 		}, {
@@ -2492,57 +2529,57 @@ var (
 			input: "drop trigger if exists dbName.trigger3",
 		}, {
 			input:  "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-			output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "create table t (c int null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-			output: "create table t (\n\tc int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc int default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "create table t (c INT NOT NULL DEFAULT 0 ON UPDATE current_timestamp() AUTO_INCREMENT COMMENT 'a comment here' UNIQUE)",
-			output: "create table t (\n\tc INT not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc INT not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			// Same input with options backwards.
 			input:  "create table t (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
-			output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			// Transpose pairs in original
 			input:  "create table t (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
-			output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			// Transpose pairs in reversed
 			input:  "create table t (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
-			output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			// Those tests for ALTER TABLE ADD (...
 			input:  "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			// Those tests for ALTER TABLE ADD COLUMN name ...
 			input:  "alter table t add column c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after foo",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) after foo",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n) after foo",
 		}, {
 			input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null first",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) first",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n) first",
 		}, {
 			input:  "alter table t add column c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here'",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add column c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t change foo bar int not null auto_increment first",
 			output: "alter table t change column foo (\n\tbar int not null auto_increment\n) first",
@@ -2551,14 +2588,14 @@ var (
 			output: "alter table test change column v1 (\n\tv2 varchar(255) character set utf8mb4 binary not null\n)",
 		}, {
 			input:  "alter table a modify foo int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after bar",
-			output: "alter table a modify column foo (\n\tfoo int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) after bar",
+			output: "alter table a modify column foo (\n\tfoo int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n) after bar",
 		}, {
 			input: "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null," +
 				" change foo bar int not null auto_increment first," +
 				" reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))," +
 				" add spatial index idx (id)",
 			output: `alter table t add column (
-	c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique
+	c int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique
 ), change column foo (
 	bar int not null auto_increment
 ) first, reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue)), add spatial index idx (id)`,
@@ -3194,25 +3231,32 @@ var (
 		}, {
 			input:  "CREATE EVENT event1 ON SCHEDULE AT '2006-02-10 23:59:00' DO INSERT INTO test.totals VALUES (NOW())",
 			output: "create event event1 on schedule at '2006-02-10 23:59:00' do insert into test.totals values (NOW())",
-		}, {
+		},
+		{
 			input:  "CREATE DEFINER = `root`@`localhost` EVENT event1 ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 3 WEEK + INTERVAL 2 DAY DO INSERT INTO mytable VALUES (NOW())",
-			output: "create definer = `root`@`localhost` event event1 on schedule at CURRENT_TIMESTAMP() + interval 3 WEEK + interval 2 DAY do insert into mytable values (NOW())",
-		}, {
+			output: "create definer = `root`@`localhost` event event1 on schedule at CURRENT_TIMESTAMP(0) + interval 3 WEEK + interval 2 DAY do insert into mytable values (NOW())",
+		},
+		{
 			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 MINUTE ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION PRESERVE disable COMMENT 'new event' DO INSERT INTO mytable VALUES (1)",
-			output: "create event event1 on schedule every 1 MINUTE ends CURRENT_TIMESTAMP() + interval 3 HOUR on completion preserve disable comment 'new event' do insert into mytable values (1)",
-		}, {
+			output: "create event event1 on schedule every 1 MINUTE ends CURRENT_TIMESTAMP(0) + interval 3 HOUR on completion preserve disable comment 'new event' do insert into mytable values (1)",
+		},
+		{
 			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 MINUTE STARTS CURRENT_TIMESTAMP + INTERVAL 2 HOUR ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION NOT PRESERVE enable DO INSERT INTO mytable VALUES (1)",
-			output: "create event event1 on schedule every 1 MINUTE starts CURRENT_TIMESTAMP() + interval 2 HOUR ends CURRENT_TIMESTAMP() + interval 3 HOUR enable do insert into mytable values (1)",
-		}, {
+			output: "create event event1 on schedule every 1 MINUTE starts CURRENT_TIMESTAMP(0) + interval 2 HOUR ends CURRENT_TIMESTAMP(0) + interval 3 HOUR enable do insert into mytable values (1)",
+		},
+		{
 			input:  "CREATE EVENT e_call_myproc ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 DAY disable on slave DO CALL myproc(5, 27)",
-			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP() + interval 1 DAY disable on slave do call myproc(5, 27)",
-		}, {
+			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP(0) + interval 1 DAY disable on slave do call myproc(5, 27)",
+		},
+		{
 			input:  "CREATE EVENT e_call_myproc ON SCHEDULE AT CURRENT_TIMESTAMP DO CALL myproc(5, 27)",
-			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP() do call myproc(5, 27)",
-		}, {
+			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP(0) do call myproc(5, 27)",
+		},
+		{
 			input:  "CREATE EVENT e_call_myproc ON SCHEDULE AT CURRENT_TIMESTAMP DISABLE DO CALL myproc(5, 27)",
-			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP() disable do call myproc(5, 27)",
-		}, {
+			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP(0) disable do call myproc(5, 27)",
+		},
+		{
 			input:  "SHOW EVENTS",
 			output: "show events",
 		}, {
@@ -3232,7 +3276,7 @@ var (
 			output: "show create event myevent",
 		}, {
 			input:  "ALTER EVENT myevent ON SCHEDULE AT CURRENT_TIMESTAMP;",
-			output: "alter event myevent on schedule at CURRENT_TIMESTAMP()",
+			output: "alter event myevent on schedule at CURRENT_TIMESTAMP(0)",
 		}, {
 			input:  "ALTER EVENT myevent ON COMPLETION NOT PRESERVE",
 			output: "alter event myevent on completion not preserve",
@@ -3253,7 +3297,7 @@ var (
 			output: "alter event myevent do insert into mytable values (1)",
 		}, {
 			input:  "ALTER EVENT myevent ON SCHEDULE EVERY 1 MINUTE STARTS CURRENT_TIMESTAMP DO INSERT INTO mytable values (1)",
-			output: "alter event myevent on schedule every 1 MINUTE starts CURRENT_TIMESTAMP() do insert into mytable values (1)",
+			output: "alter event myevent on schedule every 1 MINUTE starts CURRENT_TIMESTAMP(0) do insert into mytable values (1)",
 		}, {
 			input:  "ALTER EVENT myevent RENAME TO new_event DISABLE COMMENT 'renaming and disabling the event'",
 			output: "alter event myevent rename to new_event disable comment 'renaming and disabling the event'",
@@ -4434,34 +4478,75 @@ func TestInvalid(t *testing.T) {
 	invalidSQL := []struct {
 		input string
 		err   string
-	}{{
-		input: "SET @foo = `o` `ne`;",
-		err:   "syntax error",
-	}, {
-		input: "select '1' '2",
-		err:   "syntax error",
-	}, {
-		input: "CHANGE REPLICATION FILTER",
-		err:   "syntax error",
-	}, {
-		input: "change replication filter REPLICATE_DO_TABLE=()",
-		err:   "syntax error",
-	}, {
-		input: "CHANGE REPLICATION SOURCE TO",
-		err:   "syntax error",
-	}, {
-		input: "select a from (select * from tbl)",
-		err:   "Every derived table must have its own alias",
-	}, {
-		input: "select a, b from (select * from tbl) sort by a",
-		err:   "syntax error",
-	}, {
-		input: "with test as (select 1), test_two as (select 2) select * from test, test_two union all with b as (select 1, 2) select * from b",
-		err:   "syntax error",
-	}, {
-		input: "select * from test order by a union select * from test",
-		err:   "syntax error",
-	},
+	}{
+		{
+			input: "SET @foo = `o` `ne`;",
+			err:   "syntax error",
+		},
+		{
+			input: "select '1' '2",
+			err:   "syntax error",
+		},
+		{
+			input: "CHANGE REPLICATION FILTER",
+			err:   "syntax error",
+		},
+		{
+			input: "change replication filter REPLICATE_DO_TABLE=()",
+			err:   "syntax error",
+		},
+		{
+			input: "CHANGE REPLICATION SOURCE TO",
+			err:   "syntax error",
+		},
+		{
+			input: "select a from (select * from tbl)",
+			err:   "Every derived table must have its own alias",
+		},
+		{
+			input: "select a, b from (select * from tbl) sort by a",
+			err:   "syntax error",
+		},
+		{
+			input: "with test as (select 1), test_two as (select 2) select * from test, test_two union all with b as (select 1, 2) select * from b",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from test order by a union select * from test",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(-1)",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(1 + 1)",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp('abc')",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(1.0)",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(now())",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(i)",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(@a)",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(null)",
+			err:   "syntax error",
+		},
 		{
 			input: "create spatial reference system 1234\n" +
 				"name 'name'\n" +
@@ -4542,7 +4627,7 @@ func TestInvalid(t *testing.T) {
 		err:   "cannot include AUTO_INCREMENT more than once at position 133 near 'auto_increment'",
 	}, {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique on update utc_timestamp())",
-		err:   "cannot include ON UPDATE more than once at position 144",
+		err:   "syntax error at position 142 near 'utc_timestamp'",
 	}, {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
 		err:   "cannot include DEFAULT more than once at position 128",
@@ -4563,7 +4648,7 @@ func TestInvalid(t *testing.T) {
 		err:   "cannot include AUTO_INCREMENT more than once at position 136 near 'auto_increment'",
 	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique on update utc_timestamp())",
-		err:   "cannot include ON UPDATE more than once at position 147",
+		err:   "syntax error at position 145 near 'utc_timestamp'",
 	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
 		err:   "cannot include DEFAULT more than once at position 131",
@@ -4656,7 +4741,7 @@ func TestCaseSensitivity(t *testing.T) {
 			input: "insert into A(A, B) values (1, 2)",
 		}, {
 			input:  "create view A as select current_timestamp()",
-			output: "create view a as select current_timestamp()",
+			output: "create view a as select current_timestamp(0)",
 		}, {
 			input:  "drop view A",
 			output: "drop view a",
@@ -4683,16 +4768,21 @@ func TestKeywords(t *testing.T) {
 	validSQL := []parseTest{
 		{
 			input:  "select current_timestamp",
-			output: "select current_timestamp()",
-		}, {
+			output: "select current_timestamp(0)",
+		},
+		{
 			input:                      "select current_TIMESTAMP",
-			output:                     "select current_TIMESTAMP()",
+			output:                     "select current_TIMESTAMP(0)",
 			useSelectExpressionLiteral: true,
-		}, {
+		},
+		{
 			input: "update t set a = current_timestamp()",
-		}, {
+			output: "update t set a = current_timestamp(0)",
+		},
+		{
 			input: "update t set a = current_timestamp(5)",
-		}, {
+		},
+		{
 			input:  "select a, current_date from t",
 			output: "select a, current_date() from t",
 		}, {
@@ -4728,23 +4818,23 @@ func TestKeywords(t *testing.T) {
 			input: "select * from t where a > utc_timestamp(4)",
 		}, {
 			input:  "update t set b = utc_timestamp + 5",
-			output: "update t set b = utc_timestamp() + 5",
+			output: "update t set b = utc_timestamp(0) + 5",
 		}, {
 			input:  "select utc_time, utc_date, utc_time(6)",
-			output: "select utc_time(), utc_date(), utc_time(6)",
+			output: "select utc_time(0), utc_date(), utc_time(6)",
 		}, {
 			input:                      "select utc_TIME, UTC_date, utc_time(6)",
-			output:                     "select utc_TIME(), UTC_date(), utc_time(6)",
+			output:                     "select utc_TIME(0), UTC_date(), utc_time(6)",
 			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select 1 from dual where localtime > utc_time",
-			output: "select 1 where localtime() > utc_time()",
+			output: "select 1 where localtime(0) > utc_time(0)",
 		}, {
 			input:  "select 1 from dual where localtime(2) > utc_time(1)",
 			output: "select 1 where localtime(2) > utc_time(1)",
 		}, {
 			input:  "update t set a = localtimestamp(), b = utc_timestamp",
-			output: "update t set a = localtimestamp(), b = utc_timestamp()",
+			output: "update t set a = localtimestamp(0), b = utc_timestamp(0)",
 		}, {
 			input:  "update t set a = localtimestamp(10), b = utc_timestamp(13)",
 			output: "update t set a = localtimestamp(10), b = utc_timestamp(13)",
@@ -4923,8 +5013,8 @@ func TestFunctionCalls(t *testing.T) {
 		"select CURDATE() from dual",
 		"select CURRENT_DATE() from dual",
 		"select CURRENT_ROLE() from dual",
-		"select CURRENT_TIME() from dual",
-		"select CURRENT_TIMESTAMP() from dual",
+		"select CURRENT_TIME(0) from dual",
+		"select CURRENT_TIMESTAMP(0) from dual",
 		"select CURRENT_USER() from dual",
 		"select CURTIME() from dual",
 		"select DATABASE() from dual",
@@ -5051,8 +5141,8 @@ func TestFunctionCalls(t *testing.T) {
 		"select LineString() from dual",
 		"select LN() from dual",
 		"select LOAD_FILE() from dual",
-		"select LOCALTIME() from dual",
-		"select LOCALTIMESTAMP() from dual",
+		"select LOCALTIME(0) from dual",
+		"select LOCALTIMESTAMP(0) from dual",
 		"select LOCATE() from dual",
 		"select LOG() from dual",
 		"select LOG10() from dual",
@@ -5262,8 +5352,8 @@ func TestFunctionCalls(t *testing.T) {
 		"select UPPER() from dual",
 		"select USER() from dual",
 		"select UTC_DATE() from dual",
-		"select UTC_TIME() from dual",
-		"select UTC_TIMESTAMP() from dual",
+		"select UTC_TIME(0) from dual",
+		"select UTC_TIMESTAMP(0) from dual",
 		"select UUID() from dual",
 		"select UUID_SHORT() from dual",
 		"select UUID_TO_BIN() from dual",
@@ -5290,7 +5380,7 @@ func TestFunctionCalls(t *testing.T) {
 		},
 		{
 			input:  "select LOCALTIMESTAMP from dual",
-			output: "select LOCALTIMESTAMP()",
+			output: "select LOCALTIMESTAMP(0)",
 		},
 		{
 			input:  "SELECT CAST(foo AS DOUBLE)",
@@ -5863,7 +5953,7 @@ func TestCreateTable(t *testing.T) {
 			"	s1 varchar default 'c',\n" +
 			"	s2 varchar default 'this is a string',\n" +
 			"	s3 varchar default null,\n" +
-			"	s4 timestamp default current_timestamp(),\n" +
+			"	s4 timestamp default current_timestamp(0),\n" +
 			"	s5 bit(1) default B'0'\n" +
 			")",
 	}, {
@@ -5881,8 +5971,8 @@ func TestCreateTable(t *testing.T) {
 			"	username varchar unique key,\n" +
 			"	email varchar unique,\n" +
 			"	full_name varchar key,\n" +
-			"	time1 timestamp on update current_timestamp(),\n" +
-			"	time2 timestamp default current_timestamp() on update current_timestamp()\n" +
+			"	time1 timestamp on update current_timestamp(0),\n" +
+			"	time2 timestamp default current_timestamp(0) on update current_timestamp(0)\n" +
 			")",
 	}, {
 		// test alternate key syntax
@@ -5902,7 +5992,21 @@ func TestCreateTable(t *testing.T) {
 			"	unique  namedx (full_name),\n" +
 			"	primary key (id)\n" +
 			")",
-	}, {
+	},
+	{
+		// test now
+		input: "create table t (\n" +
+			"	time1 timestamp default now(),\n" +
+			"	time2 timestamp default now() on update now(),\n" +
+			"	time3 timestamp(3) default now(3) on update now(3)\n" +
+			")",
+		output: "create table t (\n" +
+			"	time1 timestamp default now(),\n" +
+			"	time2 timestamp default now() on update now(),\n" +
+			"	time3 timestamp(3) default now(3) on update now(3)\n" +
+			")",
+	},
+	{
 		// test current_timestamp with and without ()
 		input: "create table t (\n" +
 			"	time1 timestamp default current_timestamp,\n" +
@@ -5912,13 +6016,14 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default current_timestamp(),\n" +
-			"	time2 timestamp default current_timestamp(),\n" +
-			"	time3 timestamp default current_timestamp() on update current_timestamp(),\n" +
-			"	time4 timestamp default current_timestamp() on update current_timestamp(),\n" +
+			"	time1 timestamp default current_timestamp(0),\n" +
+			"	time2 timestamp default current_timestamp(0),\n" +
+			"	time3 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
+			"	time4 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
 			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
 			")",
-	}, {
+	},
+	{
 		// test inline check constraint
 		input: "create table t (\n" +
 			"	a int,\n" +
@@ -5989,10 +6094,10 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default localtime(),\n" +
-			"	time2 timestamp default localtime(),\n" +
-			"	time3 timestamp default localtime() on update localtime(),\n" +
-			"	time4 timestamp default localtime() on update localtime(),\n" +
+			"	time1 timestamp default localtime(0),\n" +
+			"	time2 timestamp default localtime(0),\n" +
+			"	time3 timestamp default localtime(0) on update localtime(0),\n" +
+			"	time4 timestamp default localtime(0) on update localtime(0),\n" +
 			"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
 			")",
 	}, {
@@ -6005,10 +6110,10 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
 			")",
 		output: "create table t (\n" +
-			"	time1 timestamp default localtimestamp(),\n" +
-			"	time2 timestamp default localtimestamp(),\n" +
-			"	time3 timestamp default localtimestamp() on update localtimestamp(),\n" +
-			"	time4 timestamp default localtimestamp() on update localtimestamp(),\n" +
+			"	time1 timestamp default localtimestamp(0),\n" +
+			"	time2 timestamp default localtimestamp(0),\n" +
+			"	time3 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
+			"	time4 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
 			"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
 			")",
 	}, {

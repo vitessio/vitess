@@ -4756,7 +4756,6 @@ func (*CollateExpr) iExpr()       {}
 func (*FuncExpr) iExpr()          {}
 func (*TimestampFuncExpr) iExpr() {}
 func (*ExtractFuncExpr) iExpr()   {}
-func (*CurTimeFuncExpr) iExpr()   {}
 func (*CaseExpr) iExpr()          {}
 func (*ValuesFuncExpr) iExpr()    {}
 func (*ConvertExpr) iExpr()       {}
@@ -5592,32 +5591,6 @@ func (node *TimestampFuncExpr) replace(from, to Expr) bool {
 		return true
 	}
 	return false
-}
-
-// CurTimeFuncExpr represents the function and arguments for CURRENT DATE/TIME functions
-// supported functions are documented in the grammar
-type CurTimeFuncExpr struct {
-	Name ColIdent
-	Fsp  Expr // fractional seconds precision, integer from 0 to 6
-}
-
-// Format formats the node.
-func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s(%v)", node.Name.String(), node.Fsp)
-}
-
-func (node *CurTimeFuncExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Fsp,
-	)
-}
-
-func (node *CurTimeFuncExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Fsp)
 }
 
 // CollateExpr represents dynamic collate operator.
