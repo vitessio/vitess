@@ -121,6 +121,7 @@ type Handler interface {
 	// or after the last ComQuery call completes.
 	WarningCount(c *Conn) uint16
 
+	// ComResetConnection is called when a connection receives a COM_RESET_CONNECTION signal.
 	ComResetConnection(c *Conn)
 
 	// ParserOptionsForConnection returns any parser options that should be used for the given connection. For
@@ -142,19 +143,23 @@ type ExtendedHandler interface {
 	ComParsedQuery(c *Conn, query string, parsed sqlparser.Statement, callback ResultSpoolFn) error
 
 	// ComPrepareParsed is called when a connection receives a prepared statement query that has already been parsed.
-	ComPrepareParsed(c *Conn, statementKey, query string, parsed sqlparser.Statement, prepare *PrepareData) (QueryPlan, []*querypb.Field, error)
+	ComPrepareParsed(c *Conn, query string, parsed sqlparser.Statement, prepare *PrepareData) (ParsedQuery, []*querypb.Field, error)
 
 	// ComBind is called when a connection receives a request to bind a prepared statement to a set of values.
-	ComBind(c *Conn, statementKey, query string, prepare *PrepareData) ([]*querypb.Field, error)
+	ComBind(c *Conn, query string, parsedQuery ParsedQuery, prepare *PrepareData) (BoundQuery, []*querypb.Field, error)
 
 	// ComExecuteBound is called when a connection receives a request to execute a prepared statement that has already
 	// bound to a set of values.
-	ComExecuteBound(c *Conn, statementKey, query string, prepare *PrepareData, callback ResultSpoolFn) error
+	ComExecuteBound(c *Conn, query string, boundQuery BoundQuery, callback ResultSpoolFn) error
 }
 
-// QueryPlan is a marker type for communication between the ExtendedHandler interface and integrators, representing a
+// ParsedQuery is a marker type for communication between the ExtendedHandler interface and integrators, representing a
 // query plan that can be examined or executed
-type QueryPlan any
+type ParsedQuery any
+
+// BoundQuery is a marker type for communication between the ExtendedHandler interface and integrators, representing a
+// query plan that has been bound to a set of values
+type BoundQuery any
 
 // Listener is the MySQL server protocol listener.
 type Listener struct {
