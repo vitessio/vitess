@@ -18,6 +18,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/mysql/capabilities"
 )
 
 func TestServerVersionAtLeast(t *testing.T) {
@@ -92,92 +94,92 @@ func TestServerVersionAtLeast(t *testing.T) {
 func TestGetFlavor(t *testing.T) {
 	testcases := []struct {
 		version    string
-		capability FlavorCapability
+		capability capabilities.FlavorCapability
 		isCapable  bool
 	}{
 		{
 			version:    "8.0.14",
-			capability: InstantDDLFlavorCapability,
+			capability: capabilities.InstantDDLFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.20",
-			capability: TransactionalGtidExecutedFlavorCapability,
+			capability: capabilities.TransactionalGtidExecutedFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.0",
-			capability: InstantAddLastColumnFlavorCapability,
+			capability: capabilities.InstantAddLastColumnFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.0",
-			capability: InstantAddDropColumnFlavorCapability,
+			capability: capabilities.InstantAddDropColumnFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "5.6.7",
-			capability: InstantDDLFlavorCapability,
+			capability: capabilities.InstantDDLFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "5.7.29",
-			capability: TransactionalGtidExecutedFlavorCapability,
+			capability: capabilities.TransactionalGtidExecutedFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "5.6.7",
-			capability: MySQLJSONFlavorCapability,
+			capability: capabilities.MySQLJSONFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "5.7.29",
-			capability: MySQLJSONFlavorCapability,
+			capability: capabilities.MySQLJSONFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.30",
-			capability: DynamicRedoLogCapacityFlavorCapability,
+			capability: capabilities.DynamicRedoLogCapacityFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.29",
-			capability: DynamicRedoLogCapacityFlavorCapability,
+			capability: capabilities.DynamicRedoLogCapacityFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "5.7.38",
-			capability: DynamicRedoLogCapacityFlavorCapability,
+			capability: capabilities.DynamicRedoLogCapacityFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "8.0.21",
-			capability: DisableRedoLogFlavorCapability,
+			capability: capabilities.DisableRedoLogFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.20",
-			capability: DisableRedoLogFlavorCapability,
+			capability: capabilities.DisableRedoLogFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "8.0.15",
-			capability: CheckConstraintsCapability,
+			capability: capabilities.CheckConstraintsCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "8.0.20",
-			capability: CheckConstraintsCapability,
+			capability: capabilities.CheckConstraintsCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "5.7.38",
-			capability: PerformanceSchemaDataLocksTableCapability,
+			capability: capabilities.PerformanceSchemaDataLocksTableCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "8.0.20",
-			capability: PerformanceSchemaDataLocksTableCapability,
+			capability: capabilities.PerformanceSchemaDataLocksTableCapability,
 			isCapable:  true,
 		},
 	}

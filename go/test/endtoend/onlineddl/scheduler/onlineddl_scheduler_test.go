@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -549,7 +550,7 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
-	forceCutoverCapable, err := capableOf(mysql.PerformanceSchemaDataLocksTableCapability) // 8.0
+	forceCutoverCapable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability) // 8.0
 	require.NoError(t, err)
 	if forceCutoverCapable {
 		t.Run("force_cutover", func(t *testing.T) {
@@ -1071,7 +1072,7 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
-	checkConstraintCapable, err := capableOf(mysql.CheckConstraintsCapability) // 8.0.16 and above
+	checkConstraintCapable, err := capableOf(capabilities.CheckConstraintsCapability) // 8.0.16 and above
 	require.NoError(t, err)
 	if checkConstraintCapable {
 		// Constraints
@@ -1091,7 +1092,7 @@ func testScheduler(t *testing.T) {
 	}
 
 	// INSTANT DDL
-	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
+	instantDDLCapable, err := capableOf(capabilities.InstantAddLastColumnFlavorCapability)
 	require.NoError(t, err)
 	if instantDDLCapable {
 		t.Run("INSTANT DDL: postpone-completion", func(t *testing.T) {
