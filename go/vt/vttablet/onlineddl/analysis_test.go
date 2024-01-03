@@ -210,15 +210,16 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 			instant: false,
 		},
 	}
+	parser := sqlparser.NewTestParser()
 	for _, tcase := range tcases {
 		name := tcase.version + " " + tcase.create
 		t.Run(name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(tcase.create)
+			stmt, err := parser.ParseStrictDDL(tcase.create)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = sqlparser.ParseStrictDDL(tcase.alter)
+			stmt, err = parser.ParseStrictDDL(tcase.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -452,16 +453,17 @@ func TestAnalyzeSpecialAlterPlan(t *testing.T) {
 			shouldApplyPlanPerStrategy: true,
 		},
 	}
+	parser := sqlparser.NewTestParser()
 	ctx := context.Background()
 	for _, tcase := range tcases {
 		name := tcase.version + " " + tcase.create
 		t.Run(name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(tcase.create)
+			stmt, err := parser.ParseStrictDDL(tcase.create)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = sqlparser.ParseStrictDDL(tcase.alter)
+			stmt, err = parser.ParseStrictDDL(tcase.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -477,7 +479,7 @@ func TestAnalyzeSpecialAlterPlan(t *testing.T) {
 			}
 
 			_, capableOf, _ := mysql.GetFlavor(tcase.version, nil)
-			plan, shouldApplyPlanPerStrategy, err := analyzeSpecialAlterPlan(ctx, onlineDDL, createTable, capableOf)
+			plan, shouldApplyPlanPerStrategy, err := analyzeSpecialAlterPlan(ctx, onlineDDL, createTable, capableOf, parser)
 			if tcase.expectError {
 				assert.Error(t, err)
 			} else {

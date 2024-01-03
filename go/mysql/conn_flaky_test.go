@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
@@ -73,8 +74,8 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	require.Nil(t, serverErr, "Accept failed: %v", serverErr)
 
 	// Create a Conn on both sides.
-	cConn := newConn(clientConn, DefaultFlushDelay)
-	sConn := newConn(serverConn, DefaultFlushDelay)
+	cConn := newConn(clientConn, DefaultFlushDelay, 0)
+	sConn := newConn(serverConn, DefaultFlushDelay, 0)
 	sConn.PrepareData = map[uint32]*PrepareData{}
 
 	return listener, sConn, cConn
@@ -930,7 +931,7 @@ func TestConnectionErrorWhileWritingComQuery(t *testing.T) {
 		pos:         -1,
 		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComQuery, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
 			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
-	}, DefaultFlushDelay)
+	}, DefaultFlushDelay, 0)
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	errorString := make([]byte, 17000)
@@ -946,7 +947,7 @@ func TestConnectionErrorWhileWritingComStmtSendLongData(t *testing.T) {
 		pos:         -1,
 		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComStmtSendLongData, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
 			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
-	}, DefaultFlushDelay)
+	}, DefaultFlushDelay, 0)
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	handler := &testRun{t: t, err: fmt.Errorf("not used")}
@@ -960,7 +961,7 @@ func TestConnectionErrorWhileWritingComPrepare(t *testing.T) {
 		writeToPass: []bool{false},
 		pos:         -1,
 		queryPacket: []byte{0x01, 0x00, 0x00, 0x00, ComPrepare},
-	}, DefaultFlushDelay)
+	}, DefaultFlushDelay, 0)
 	sConn.Capabilities = sConn.Capabilities | CapabilityClientMultiStatements
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	handler := &testRun{t: t, err: fmt.Errorf("not used")}
@@ -975,7 +976,7 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 		pos:         -1,
 		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComStmtExecute, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
 			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
-	}, DefaultFlushDelay)
+	}, DefaultFlushDelay, 0)
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	handler := &testRun{t: t, err: fmt.Errorf("not used")}
 	res := sConn.handleNextCommand(handler)
@@ -1136,6 +1137,10 @@ func (t testRun) ComPrepare(c *Conn, query string, bv map[string]*querypb.BindVa
 
 func (t testRun) WarningCount(c *Conn) uint16 {
 	return 0
+}
+
+func (t testRun) SQLParser() *sqlparser.Parser {
+	return sqlparser.NewTestParser()
 }
 
 var _ Handler = (*testRun)(nil)

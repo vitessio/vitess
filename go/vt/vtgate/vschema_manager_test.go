@@ -575,7 +575,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 
 // createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.
 func createFkDefinition(childCols []string, parentTableName string, parentCols []string, onUpdate, onDelete sqlparser.ReferenceAction) *sqlparser.ForeignKeyDefinition {
-	pKs, pTbl, _ := sqlparser.ParseTable(parentTableName)
+	pKs, pTbl, _ := sqlparser.NewTestParser().ParseTable(parentTableName)
 	return &sqlparser.ForeignKeyDefinition{
 		Source: sqlparser.MakeColumns(childCols...),
 		ReferenceDefinition: &sqlparser.ReferenceDefinition{

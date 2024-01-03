@@ -1,4 +1,4 @@
-name: Upgrade Downgrade Testing Reparent Old VTTablet
+name: Reparent Old VTTablet - Upgrade Downgrade Testing
 on:
   push:
   pull_request:
@@ -13,32 +13,10 @@ permissions: read-all
 # (vtctl, vttablet, etc) built on different versions.
 
 jobs:
-  get_previous_release:
-    if: always()
-    name: Get Previous Release - Reparent Old VTTablet
-    runs-on: gh-hosted-runners-16cores-1
-    outputs:
-      previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
-
-    steps:
-      - name: Check out to HEAD
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Set output with latest release branch
-        id: output-previous-release-ref
-        run: |
-          previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
-          echo $previous_release_ref
-          echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
   upgrade_downgrade_test:
-    if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test - Reparent Old VTTablet
     runs-on: gh-hosted-runners-16cores-1
-    needs:
-      - get_previous_release
 
     steps:
     - name: Skip CI
@@ -61,6 +39,16 @@ jobs:
     - name: Check out commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Set output with latest release branch
+      id: output-previous-release-ref
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      run: |
+        previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
+        echo $previous_release_ref
+        echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -135,11 +123,11 @@ jobs:
         sudo apt-get install -y percona-xtrabackup-24
 
     # Checkout to the last release of Vitess
-    - name: Check out other version's code (${{ needs.get_previous_release.outputs.previous_release }})
+    - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v3
       with:
-        ref: ${{ needs.get_previous_release.outputs.previous_release }}
+        ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
     - name: Get dependencies for the last release
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

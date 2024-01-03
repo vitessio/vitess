@@ -73,7 +73,7 @@ func (rb *route) Wireup(ctx *plancontext.PlanningContext) error {
 	}
 
 	query, args := planableVindex.Query()
-	stmt, reserved, err := sqlparser.Parse2(query)
+	stmt, reserved, err := ctx.VSchema.SQLParser().Parse2(query)
 	if err != nil {
 		return err
 	}

@@ -24,6 +24,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -65,7 +66,7 @@ func Fuzz(data []byte) int {
 	if err != nil {
 		return -1
 	}
-	_, _ = buildPlan(t1, testLocalVSchema, &binlogdatapb.Filter{
+	_, _ = buildPlan(t1, testLocalVSchema, sqlparser.NewTestParser(), &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{
 			{Match: str1, Filter: str2},
 		},

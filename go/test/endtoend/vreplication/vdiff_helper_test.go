@@ -32,9 +32,9 @@ import (
 )
 
 const (
-	vdiffTimeout             = 90 * time.Second // we can leverage auto retry on error with this longer-than-usual timeout
+	vdiffTimeout             = 120 * time.Second // We can leverage auto retry on error with this longer-than-usual timeout
 	vdiffRetryTimeout        = 30 * time.Second
-	vdiffStatusCheckInterval = 1 * time.Second
+	vdiffStatusCheckInterval = 5 * time.Second
 	vdiffRetryInterval       = 5 * time.Second
 )
 
@@ -109,7 +109,7 @@ func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cell
 				}
 				ch <- true
 				return
-			} else if info.State == "started" { // test the progress report
+			} else if info.State == "started" { // Test the progress report
 				// The ETA should always be in the future -- when we're able to estimate
 				// it -- and the progress percentage should only increase.
 				// The timestamp format allows us to compare them lexicographically.
@@ -154,11 +154,15 @@ type expectedVDiff2Result struct {
 	hasMismatch bool
 }
 
-func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
+func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result, extraFlags ...string) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run(fmt.Sprintf("vtctldclient vdiff %s", ksWorkflow), func(t *testing.T) {
 		// update-table-stats is needed in order to test progress reports.
-		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
+		flags := []string{"--auto-retry", "--update-table-stats"}
+		if len(extraFlags) > 0 {
+			flags = append(flags, extraFlags...)
+		}
+		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false, flags...)
 		info := waitForVDiff2ToComplete(t, false, ksWorkflow, cells, uuid, time.Time{})
 		require.NotNil(t, info)
 		require.Equal(t, workflow, info.Workflow)
@@ -341,6 +345,8 @@ func encodeString(in string) string {
 // generateMoreCustomers creates additional test data for better tests
 // when needed.
 func generateMoreCustomers(t *testing.T, keyspace string, numCustomers int64) {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	log.Infof("Generating more test data with an additional %d customers", numCustomers)
 	res := execVtgateQuery(t, vtgateConn, keyspace, "select max(cid) from customer")
 	startingID, _ := res.Rows[0][0].ToInt64()

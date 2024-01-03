@@ -114,8 +114,8 @@ func init() {
 	}))
 }
 
-func validateSchemaDefinition(name, schema string) (string, error) {
-	stmt, err := sqlparser.ParseStrictDDL(schema)
+func validateSchemaDefinition(name, schema string, parser *sqlparser.Parser) (string, error) {
+	stmt, err := parser.ParseStrictDDL(schema)
 
 	if err != nil {
 		return "", err
@@ -143,7 +143,7 @@ func validateSchemaDefinition(name, schema string) (string, error) {
 
 // loadSchemaDefinitions loads the embedded schema definitions
 // into a slice of sidecarTables for processing.
-func loadSchemaDefinitions() {
+func loadSchemaDefinitions(parser *sqlparser.Parser) {
 	sqlFileExtension := ".sql"
 	err := fs.WalkDir(schemaLocation, ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -172,7 +172,7 @@ func loadSchemaDefinitions() {
 				panic(err)
 			}
 			var normalizedSchema string
-			if normalizedSchema, err = validateSchemaDefinition(name, string(schema)); err != nil {
+			if normalizedSchema, err = validateSchemaDefinition(name, string(schema), parser); err != nil {
 				return err
 			}
 			sidecarTables = append(sidecarTables, &sidecarTable{name: name, module: module, path: path, schema: normalizedSchema})
@@ -197,6 +197,7 @@ type schemaInit struct {
 	ctx       context.Context
 	exec      Exec
 	dbCreated bool // The first upgrade/create query will also create the sidecar database if required.
+	parser    *sqlparser.Parser
 }
 
 // Exec is a callback that has to be passed to Init() to
@@ -228,15 +229,18 @@ func getDDLErrorHistory() []*ddlError {
 
 // Init creates or upgrades the sidecar database based on
 // the declarative schema defined for all tables.
-func Init(ctx context.Context, exec Exec) error {
+func Init(ctx context.Context, exec Exec, parser *sqlparser.Parser) error {
 	printCallerDetails() // for debug purposes only, remove in v17
 	log.Infof("Starting sidecardb.Init()")
 
-	once.Do(loadSchemaDefinitions)
+	once.Do(func() {
+		loadSchemaDefinitions(parser)
+	})
 
 	si := &schemaInit{
-		ctx:  ctx,
-		exec: exec,
+		ctx:    ctx,
+		exec:   exec,
+		parser: parser,
 	}
 
 	// There are paths in the tablet initialization where we
@@ -371,7 +375,7 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreAlways,
 		AlterTableAlgorithmStrategy: schemadiff.AlterTableAlgorithmStrategyCopy,
 	}
-	diff, err := schemadiff.DiffCreateTablesQueries(current, desired, hints)
+	diff, err := schemadiff.DiffCreateTablesQueries(current, desired, hints, si.parser)
 	if err != nil {
 		return "", err
 	}
@@ -459,8 +463,10 @@ func (t *sidecarTable) String() string {
 // AddSchemaInitQueries adds sidecar database schema related
 // queries to a mock db.
 // This is for unit tests only!
-func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
-	once.Do(loadSchemaDefinitions)
+func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool, parser *sqlparser.Parser) {
+	once.Do(func() {
+		loadSchemaDefinitions(parser)
+	})
 	result := &sqltypes.Result{}
 	for _, q := range sidecar.DBInitQueryPatterns {
 		db.AddQueryPattern(q, result)

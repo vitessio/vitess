@@ -24,8 +24,9 @@ import (
 )
 
 func TestCopyOnRewrite(t *testing.T) {
+	parser := NewTestParser()
 	// rewrite an expression without changing the original
-	expr, err := ParseExpr("a = b")
+	expr, err := parser.ParseExpr("a = b")
 	require.NoError(t, err)
 	out := CopyOnRewrite(expr, nil, func(cursor *CopyOnWriteCursor) {
 		col, ok := cursor.Node().(*ColName)
@@ -42,9 +43,10 @@ func TestCopyOnRewrite(t *testing.T) {
 }
 
 func TestCopyOnRewriteDeeper(t *testing.T) {
+	parser := NewTestParser()
 	// rewrite an expression without changing the original. the changed happens deep in the syntax tree,
 	// here we are testing that all ancestors up to the root are cloned correctly
-	expr, err := ParseExpr("a + b * c = 12")
+	expr, err := parser.ParseExpr("a + b * c = 12")
 	require.NoError(t, err)
 	var path []string
 	out := CopyOnRewrite(expr, nil, func(cursor *CopyOnWriteCursor) {
@@ -72,8 +74,9 @@ func TestCopyOnRewriteDeeper(t *testing.T) {
 }
 
 func TestDontCopyWithoutRewrite(t *testing.T) {
+	parser := NewTestParser()
 	// when no rewriting happens, we want the original back
-	expr, err := ParseExpr("a = b")
+	expr, err := parser.ParseExpr("a = b")
 	require.NoError(t, err)
 	out := CopyOnRewrite(expr, nil, func(cursor *CopyOnWriteCursor) {}, nil)
 
@@ -81,9 +84,10 @@ func TestDontCopyWithoutRewrite(t *testing.T) {
 }
 
 func TestStopTreeWalk(t *testing.T) {
+	parser := NewTestParser()
 	// stop walking down part of the AST
 	original := "a = b + c"
-	expr, err := ParseExpr(original)
+	expr, err := parser.ParseExpr(original)
 	require.NoError(t, err)
 	out := CopyOnRewrite(expr, func(node, parent SQLNode) bool {
 		_, ok := node.(*BinaryExpr)
@@ -102,9 +106,10 @@ func TestStopTreeWalk(t *testing.T) {
 }
 
 func TestStopTreeWalkButStillVisit(t *testing.T) {
+	parser := NewTestParser()
 	// here we are asserting that even when we stop at the binary expression, we still visit it in the post visitor
 	original := "1337 = b + c"
-	expr, err := ParseExpr(original)
+	expr, err := parser.ParseExpr(original)
 	require.NoError(t, err)
 	out := CopyOnRewrite(expr, func(node, parent SQLNode) bool {
 		_, ok := node.(*BinaryExpr)

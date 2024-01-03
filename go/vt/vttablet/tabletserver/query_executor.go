@@ -757,7 +757,7 @@ func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
-		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true))
+		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.SQLParser()))
 	}
 	return nil
 }
@@ -1146,7 +1146,7 @@ func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType
 }
 
 func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query, err := eschema.GetFetchViewQuery(viewNames)
+	query, err := eschema.GetFetchViewQuery(viewNames, qre.tsv.SQLParser())
 	if err != nil {
 		return err
 	}
@@ -1154,7 +1154,7 @@ func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(s
 }
 
 func (qre *QueryExecutor) getTableDefinitions(tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query, err := eschema.GetFetchTableQuery(tableNames)
+	query, err := eschema.GetFetchTableQuery(tableNames, qre.tsv.SQLParser())
 	if err != nil {
 		return err
 	}
@@ -1162,7 +1162,7 @@ func (qre *QueryExecutor) getTableDefinitions(tableNames []string, callback func
 }
 
 func (qre *QueryExecutor) getAllDefinitions(tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query, err := eschema.GetFetchTableAndViewsQuery(tableNames)
+	query, err := eschema.GetFetchTableAndViewsQuery(tableNames, qre.tsv.SQLParser())
 	if err != nil {
 		return err
 	}

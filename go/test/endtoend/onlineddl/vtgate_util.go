@@ -57,7 +57,7 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 	require.Nil(t, err)
 	defer conn.Close()
 
-	qr, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	qr, err := conn.ExecuteFetch(query, math.MaxInt, true)
 	if expectError == "" {
 		require.NoError(t, err)
 	} else {

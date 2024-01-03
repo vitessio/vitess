@@ -23,6 +23,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -50,8 +52,8 @@ func registerVtctldFlags(fs *pflag.FlagSet) {
 }
 
 // InitVtctld initializes all the vtctld functionality.
-func InitVtctld(ts *topo.Server, collationEnv *collations.Environment) error {
-	actionRepo := NewActionRepository(ts, collationEnv)
+func InitVtctld(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) error {
+	actionRepo := NewActionRepository(ts, collationEnv, parser)
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",
@@ -128,7 +130,7 @@ func InitVtctld(ts *topo.Server, collationEnv *collations.Environment) error {
 		})
 
 	// Serve the REST API
-	initAPI(context.Background(), ts, actionRepo, collationEnv)
+	initAPI(context.Background(), ts, actionRepo)
 
 	// Serve the topology endpoint in the REST API at /topodata
 	initExplorer(ts)

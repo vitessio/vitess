@@ -92,13 +92,13 @@ type VtctldServer struct {
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
-func NewVtctldServer(ts *topo.Server) *VtctldServer {
+func NewVtctldServer(ts *topo.Server, parser *sqlparser.Parser) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(ts, tmc),
+		ws:  workflow.NewServer(ts, tmc, parser),
 	}
 }
 
@@ -108,7 +108,7 @@ func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *Vtc
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(ts, tmc),
+		ws:  workflow.NewServer(ts, tmc, sqlparser.NewTestParser()),
 	}
 }
 
@@ -268,7 +268,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 		logstream = append(logstream, e)
 	})
 
-	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout, req.BatchSize)
+	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout, req.BatchSize, s.ws.SQLParser())
 
 	if err = executor.SetDDLStrategy(req.DdlStrategy); err != nil {
 		err = vterrors.Wrapf(err, "invalid DdlStrategy: %s", req.DdlStrategy)
@@ -337,7 +337,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		span.Annotate("sql_mode", true)
 
 		var stmt sqlparser.Statement
-		stmt, err = sqlparser.Parse(req.Sql)
+		stmt, err = s.ws.SQLParser().Parse(req.Sql)
 		if err != nil {
 			err = vterrors.Wrapf(err, "Parse(%s)", req.Sql)
 			return nil, err
@@ -364,14 +364,42 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		vs = req.VSchema
 	}
 
-	if req.DryRun { // we return what was passed in and parsed, rather than current
-		return &vtctldatapb.ApplyVSchemaResponse{VSchema: vs}, nil
-	}
-
-	_, err = vindexes.BuildKeyspace(vs)
+	ksVs, err := vindexes.BuildKeyspace(vs, s.ws.SQLParser())
 	if err != nil {
 		err = vterrors.Wrapf(err, "BuildKeyspace(%s)", req.Keyspace)
 		return nil, err
+	}
+	response := &vtctldatapb.ApplyVSchemaResponse{
+		VSchema:             vs,
+		UnknownVindexParams: make(map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList),
+	}
+
+	// Attach unknown Vindex params to the response.
+	var vdxNames []string
+	var unknownVindexParams []string
+	for name := range ksVs.Vindexes {
+		vdxNames = append(vdxNames, name)
+	}
+	sort.Strings(vdxNames)
+	for _, name := range vdxNames {
+		vdx := ksVs.Vindexes[name]
+		if val, ok := vdx.(vindexes.ParamValidating); ok {
+			ups := val.UnknownParams()
+			if len(ups) == 0 {
+				continue
+			}
+			response.UnknownVindexParams[name] = &vtctldatapb.ApplyVSchemaResponse_ParamList{Params: ups}
+			unknownVindexParams = append(unknownVindexParams, fmt.Sprintf("%s (%s)", name, strings.Join(ups, ", ")))
+		}
+	}
+
+	if req.Strict && len(unknownVindexParams) > 0 { // return early if unknown params found in strict mode
+		err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "unknown vindex params: %s", strings.Join(unknownVindexParams, "; "))
+		return response, err
+	}
+
+	if req.DryRun { // return early if dry run
+		return response, err
 	}
 
 	if err = s.ts.SaveVSchema(ctx, req.Keyspace, vs); err != nil {
@@ -390,7 +418,8 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		err = vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
 		return nil, err
 	}
-	return &vtctldatapb.ApplyVSchemaResponse{VSchema: updatedVS}, nil
+	response.VSchema = updatedVS
+	return response, nil
 }
 
 // Backup is part of the vtctlservicepb.VtctldServer interface.
@@ -4830,6 +4859,7 @@ func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCr
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("tables", req.Tables)
 	span.Annotate("auto_retry", req.AutoRetry)
+	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 
 	resp, err = s.ws.VDiffCreate(ctx, req)
 	return resp, err
@@ -4959,8 +4989,8 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
-func StartServer(s *grpc.Server, ts *topo.Server) {
-	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts))
+func StartServer(s *grpc.Server, ts *topo.Server, parser *sqlparser.Parser) {
+	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts, parser))
 }
 
 // getTopologyCell is a helper method that returns a topology cell given its path.

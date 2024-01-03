@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -142,16 +143,22 @@ type Server struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 	// Limit the number of concurrent background goroutines if needed.
-	sem *semaphore.Weighted
+	sem    *semaphore.Weighted
+	parser *sqlparser.Parser
 }
 
 // NewServer returns a new server instance with the given topo.Server and
 // TabletManagerClient.
-func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *Server {
+func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient, parser *sqlparser.Parser) *Server {
 	return &Server{
-		ts:  ts,
-		tmc: tmc,
+		ts:     ts,
+		tmc:    tmc,
+		parser: parser,
 	}
+}
+
+func (s *Server) SQLParser() *sqlparser.Parser {
+	return s.parser
 }
 
 // CheckReshardingJournalExistsOnTablet returns the journal (or an empty
@@ -407,13 +414,71 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		where,
 	)
 
-	vx := vexec.NewVExec(req.Keyspace, "", s.ts, s.tmc)
+	vx := vexec.NewVExec(req.Keyspace, "", s.ts, s.tmc, s.SQLParser())
 	results, err := vx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	m := sync.Mutex{} // guards access to the following maps during concurrent calls to scanWorkflow
+	m := sync.Mutex{} // guards access to the following maps during concurrent calls to fetchCopyStates and scanWorkflow
+
+	copyStatesByShardStreamId := make(map[string][]*vtctldatapb.Workflow_Stream_CopyState, len(results))
+
+	fetchCopyStates := func(ctx context.Context, tablet *topo.TabletInfo, streamIds []int64) error {
+		span, ctx := trace.NewSpan(ctx, "workflow.Server.fetchCopyStates")
+		defer span.Finish()
+
+		span.Annotate("keyspace", req.Keyspace)
+		span.Annotate("shard", tablet.Shard)
+		span.Annotate("tablet_alias", tablet.AliasString())
+
+		copyStates, err := s.getWorkflowCopyStates(ctx, tablet, streamIds)
+		if err != nil {
+			return err
+		}
+
+		m.Lock()
+		defer m.Unlock()
+
+		for _, copyState := range copyStates {
+			shardStreamId := fmt.Sprintf("%s/%d", tablet.Shard, copyState.StreamId)
+			copyStatesByShardStreamId[shardStreamId] = append(
+				copyStatesByShardStreamId[shardStreamId],
+				copyState,
+			)
+		}
+
+		return nil
+	}
+
+	fetchCopyStatesEg, fetchCopyStatesCtx := errgroup.WithContext(ctx)
+
+	for tablet, result := range results {
+		qr := sqltypes.Proto3ToResult(result)
+		tablet := tablet // loop closure
+
+		streamIds := make([]int64, 0, len(qr.Rows))
+		for _, row := range qr.Named().Rows {
+			streamId, err := row.ToInt64("id")
+			if err != nil {
+				return nil, err
+			}
+			streamIds = append(streamIds, streamId)
+		}
+
+		if len(streamIds) == 0 {
+			continue
+		}
+
+		fetchCopyStatesEg.Go(func() error {
+			return fetchCopyStates(fetchCopyStatesCtx, tablet, streamIds)
+		})
+	}
+
+	if err := fetchCopyStatesEg.Wait(); err != nil {
+		return nil, err
+	}
+
 	workflowsMap := make(map[string]*vtctldatapb.Workflow, len(results))
 	sourceKeyspaceByWorkflow := make(map[string]string, len(results))
 	sourceShardsByWorkflow := make(map[string]sets.Set[string], len(results))
@@ -541,19 +606,15 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			},
 		}
 
-		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
-		if err != nil {
-			return err
+		// Merge in copy states, which we've already fetched.
+		shardStreamId := fmt.Sprintf("%s/%d", tablet.Shard, id)
+		if copyState, ok := copyStatesByShardStreamId[shardStreamId]; ok {
+			stream.CopyStates = copyState
 		}
-
-		span.Annotate("num_copy_states", len(stream.CopyStates))
 
 		// At this point, we're going to start modifying the maps defined
 		// outside this function, as well as fields on the passed-in Workflow
 		// pointer. Since we're running concurrently, take the lock.
-		//
-		// We've already made the remote call to getCopyStates, so synchronizing
-		// here shouldn't hurt too badly, performance-wise.
 		m.Lock()
 		defer m.Unlock()
 
@@ -1047,16 +1108,24 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	return ts, state, nil
 }
 
-func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]*vtctldatapb.Workflow_Stream_CopyState, error) {
+func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, streamIds []int64) ([]*vtctldatapb.Workflow_Stream_CopyState, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.getWorkflowCopyStates")
 	defer span.Finish()
 
 	span.Annotate("keyspace", tablet.Keyspace)
 	span.Annotate("shard", tablet.Shard)
 	span.Annotate("tablet_alias", tablet.AliasString())
-	span.Annotate("vrepl_id", id)
+	span.Annotate("stream_ids", fmt.Sprintf("%#v", streamIds))
 
-	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)", id, id)
+	idsBV, err := sqltypes.BuildBindVariable(streamIds)
+	if err != nil {
+		return nil, err
+	}
+	query, err := sqlparser.ParseAndBind("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in %a and id in (select max(id) from _vt.copy_state where vrepl_id in %a group by vrepl_id, table_name)",
+		idsBV, idsBV)
+	if err != nil {
+		return nil, err
+	}
 	qr, err := s.tmc.VReplicationExec(ctx, tablet.Tablet, query)
 	if err != nil {
 		return nil, err
@@ -1069,10 +1138,15 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 
 	copyStates := make([]*vtctldatapb.Workflow_Stream_CopyState, len(result.Rows))
 	for i, row := range result.Rows {
-		// These fields are technically varbinary, but this is close enough.
+		streamId, err := row[0].ToInt64()
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to cast vrepl_id to int64: %v", err)
+		}
+		// These string fields are technically varbinary, but this is close enough.
 		copyStates[i] = &vtctldatapb.Workflow_Stream_CopyState{
-			Table:  row[0].ToString(),
-			LastPk: row[1].ToString(),
+			StreamId: streamId,
+			Table:    row[1].ToString(),
+			LastPk:   row[2].ToString(),
 		}
 	}
 
@@ -1243,6 +1317,7 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		sourceTs: s.ts,
 		tmc:      s.tmc,
 		ms:       ms,
+		parser:   s.SQLParser(),
 	}
 
 	err := mz.createMaterializerStreams()
@@ -1382,6 +1457,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		tmc:          s.tmc,
 		ms:           ms,
 		workflowType: workflowType,
+		parser:       s.SQLParser(),
 	}
 	err = mz.createMoveTablesStreams(req)
 	if err != nil {
@@ -1617,6 +1693,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("tables", req.Tables)
 	span.Annotate("auto_retry", req.AutoRetry)
+	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 
 	tabletTypesStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
 	if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
@@ -1636,6 +1713,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 			TimeoutSeconds:        req.FilteredReplicationWaitTime.Seconds,
 			MaxExtraRowsToCompare: req.MaxExtraRowsToCompare,
 			UpdateTableStats:      req.UpdateTableStats,
+			MaxDiffSeconds:        req.MaxDiffDuration.Seconds,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
 			OnlyPks:       req.OnlyPKs,
@@ -1836,7 +1914,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	deleteReq := &tabletmanagerdatapb.DeleteVReplicationWorkflowRequest{
 		Workflow: req.Workflow,
 	}
-	vx := vexec.NewVExec(req.Keyspace, req.Workflow, s.ts, s.tmc)
+	vx := vexec.NewVExec(req.Keyspace, req.Workflow, s.ts, s.tmc, s.SQLParser())
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
 		res, err := s.tmc.DeleteVReplicationWorkflow(ctx, tablet.Tablet, deleteReq)
 		if err != nil {
@@ -2112,7 +2190,7 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
 	span.Annotate("state", req.TabletRequest.State)
 
-	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc)
+	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc, s.SQLParser())
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
 		res, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, req.TabletRequest)
 		if err != nil {
@@ -2525,7 +2603,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	if err != nil {
 		return nil, err
 	}
-	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace)
+	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace, s.SQLParser())
 	if err != nil {
 		return nil, err
 	}
@@ -3114,7 +3192,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	}
 	if !journalsExist {
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm, err := BuildStreamMigrator(ctx, ts, cancel)
+		sm, err := BuildStreamMigrator(ctx, ts, cancel, s.parser)
 		if err != nil {
 			return handleError("failed to migrate the workflow streams", err)
 		}
@@ -3444,7 +3522,7 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	if !strings.Contains(vindex.Type, "lookup") {
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex %s is not a lookup type", vindex.Type)
 	}
-	targetKeyspace, targetTableName, err = sqlparser.ParseTable(vindex.Params["table"])
+	targetKeyspace, targetTableName, err = s.parser.ParseTable(vindex.Params["table"])
 	if err != nil || targetKeyspace == "" {
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex table name (%s) must be in the form <keyspace>.<table>", vindex.Params["table"])
 	}

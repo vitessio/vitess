@@ -75,7 +75,7 @@ func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "in Executor.getCreateTableStatement()")
 	}
-	stmt, err := sqlparser.ParseStrictDDL(showCreateTable)
+	stmt, err := e.env.SQLParser().ParseStrictDDL(showCreateTable)
 	if err != nil {
 		return nil, err
 	}
@@ -348,8 +348,8 @@ func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.
 
 // analyzeSpecialAlterPlan checks if the given ALTER onlineDDL, and for the current state of affected table,
 // can be executed in a special way. If so, it returns with a "special plan"
-func analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, createTable *sqlparser.CreateTable, capableOf mysql.CapableOf) (plan *SpecialAlterPlan, shouldApplyPlanPerStrategy bool, err error) {
-	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+func analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, createTable *sqlparser.CreateTable, capableOf mysql.CapableOf, parser *sqlparser.Parser) (plan *SpecialAlterPlan, shouldApplyPlanPerStrategy bool, err error) {
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, parser)
 	if err != nil {
 		return nil, false, err
 	}

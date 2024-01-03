@@ -389,12 +389,22 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 		c.asm.CmpDateString()
 	case compareAsDateAndNumeric(lt.Type, rt.Type):
 		if sqltypes.IsDateOrTime(lt.Type) {
-			c.asm.Convert_Ti(2)
-			lt.Type = sqltypes.Int64
+			if lt.Size == 0 {
+				c.asm.Convert_Ti(2)
+				lt.Type = sqltypes.Int64
+			} else {
+				c.asm.Convert_Tf(2)
+				lt.Type = sqltypes.Float64
+			}
 		}
 		if sqltypes.IsDateOrTime(rt.Type) {
-			c.asm.Convert_Ti(1)
-			rt.Type = sqltypes.Int64
+			if rt.Size == 0 {
+				c.asm.Convert_Ti(1)
+				rt.Type = sqltypes.Int64
+			} else {
+				c.asm.Convert_Tf(1)
+				rt.Type = sqltypes.Float64
+			}
 		}
 		swapped = c.compareNumericTypes(lt, rt)
 	case compareAsJSON(lt.Type, rt.Type):

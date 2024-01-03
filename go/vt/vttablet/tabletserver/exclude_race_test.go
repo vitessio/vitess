@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -26,7 +27,13 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 	tl := newTestLogger()
 	defer tl.Close()
 	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation")
-	db, tsv := setupTabletServerTest(t, ctx, "")
+	parser, err := sqlparser.New(sqlparser.Options{
+		MySQLServerVersion: config.DefaultMySQLVersion,
+		TruncateErrLen:     32,
+	})
+	require.NoError(t, err)
+
+	db, tsv := setupTabletServerTestCustom(t, ctx, tabletenv.NewDefaultConfig(), "", parser)
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -37,9 +44,6 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 		"bv3": sqltypes.Int64BindVariable(3333333333),
 		"bv4": sqltypes.Int64BindVariable(4444444444),
 	}
-	origTruncateErrLen := sqlparser.GetTruncateErrLen()
-	sqlparser.SetTruncateErrLen(32)
-	defer sqlparser.SetTruncateErrLen(origTruncateErrLen)
 
 	defer func() {
 		err := logStats.Error

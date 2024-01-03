@@ -59,7 +59,7 @@ var (
 	querylogzFuncMap = template.FuncMap{
 		"stampMicro":    func(t time.Time) string { return t.Format(time.StampMicro) },
 		"cssWrappable":  logz.Wrappable,
-		"truncateQuery": sqlparser.TruncateForUI,
+		"truncateQuery": sqlparser.NewTestParser().TruncateForUI,
 		"unquote":       func(s string) string { return strings.Trim(s, "\"") },
 	}
 	querylogzTmpl = template.Must(template.New("example").Funcs(querylogzFuncMap).Parse(`

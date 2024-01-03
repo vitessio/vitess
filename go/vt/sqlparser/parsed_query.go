@@ -21,12 +21,7 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/bytes2"
-	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -34,11 +29,12 @@ import (
 // bind locations are precomputed for fast substitutions.
 type ParsedQuery struct {
 	Query         string
-	bindLocations []bindLocation
+	bindLocations []BindLocation
+	truncateUILen int
 }
 
-type bindLocation struct {
-	offset, length int
+type BindLocation struct {
+	Offset, Length int
 }
 
 // NewParsedQuery returns a ParsedQuery of the ast.
@@ -67,8 +63,8 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]*querypb.BindVaria
 func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*querypb.BindVariable, extras map[string]Encodable) error {
 	current := 0
 	for _, loc := range pq.bindLocations {
-		buf.WriteString(pq.Query[current:loc.offset])
-		name := pq.Query[loc.offset : loc.offset+loc.length]
+		buf.WriteString(pq.Query[current:loc.Offset])
+		name := pq.Query[loc.Offset : loc.Offset+loc.Length]
 		if encodable, ok := extras[name[1:]]; ok {
 			encodable.EncodeSQL(buf)
 		} else {
@@ -78,86 +74,19 @@ func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*qu
 			}
 			EncodeValue(buf, supplied)
 		}
-		current = loc.offset + loc.length
+		current = loc.Offset + loc.Length
 	}
 	buf.WriteString(pq.Query[current:])
 	return nil
 }
 
-// AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that
-// the fields in the row are in the same order as the placeholders in this query. The fields might include generated
-// columns which are dropped, by checking against skipFields, before binding the variables
-// note: there can be more fields than bind locations since extra columns might be requested from the source if not all
-// primary keys columns are present in the target table, for example. Also some values in the row may not correspond for
-// values from the database on the source: sum/count for aggregation queries, for example
-func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field, row *querypb.Row, skipFields map[string]bool) error {
-	if len(fields) < len(pq.bindLocations) {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ",
-			len(fields), len(pq.bindLocations))
-	}
-
-	type colInfo struct {
-		typ    querypb.Type
-		length int64
-		offset int64
-	}
-	rowInfo := make([]*colInfo, 0)
-
-	offset := int64(0)
-	for i, field := range fields { // collect info required for fields to be bound
-		length := row.Lengths[i]
-		if !skipFields[strings.ToLower(field.Name)] {
-			rowInfo = append(rowInfo, &colInfo{
-				typ:    field.Type,
-				length: length,
-				offset: offset,
-			})
-		}
-		if length > 0 {
-			offset += row.Lengths[i]
-		}
-	}
-
-	// bind field values to locations
-	var offsetQuery int
-	for i, loc := range pq.bindLocations {
-		col := rowInfo[i]
-		buf.WriteString(pq.Query[offsetQuery:loc.offset])
-		typ := col.typ
-
-		switch typ {
-		case querypb.Type_TUPLE:
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
-		case querypb.Type_JSON:
-			if col.length < 0 { // An SQL NULL and not an actual JSON value
-				buf.WriteString(sqltypes.NullStr)
-			} else { // A JSON value (which may be a JSON null literal value)
-				buf2 := row.Values[col.offset : col.offset+col.length]
-				vv, err := vjson.MarshalSQLValue(buf2)
-				if err != nil {
-					return err
-				}
-				buf.WriteString(vv.RawStr())
-			}
-		default:
-			if col.length < 0 {
-				// -1 means a null variable; serialize it directly
-				buf.WriteString(sqltypes.NullStr)
-			} else {
-				vv := sqltypes.MakeTrusted(typ, row.Values[col.offset:col.offset+col.length])
-				vv.EncodeSQLBytes2(buf)
-			}
-		}
-		offsetQuery = loc.offset + loc.length
-	}
-	buf.WriteString(pq.Query[offsetQuery:])
-	return nil
+func (pq *ParsedQuery) BindLocations() []BindLocation {
+	return pq.bindLocations
 }
 
 // MarshalJSON is a custom JSON marshaler for ParsedQuery.
-// Note that any queries longer that 512 bytes will be truncated.
 func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
-	return json.Marshal(TruncateForUI(pq.Query))
+	return json.Marshal(pq.Query)
 }
 
 // EncodeValue encodes one bind variable value into the query.

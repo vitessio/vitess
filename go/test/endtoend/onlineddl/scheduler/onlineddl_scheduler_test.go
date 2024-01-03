@@ -127,7 +127,8 @@ deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 
 func parseTableName(t *testing.T, sql string) (tableName string) {
 	// ddlStatement could possibly be composed of multiple DDL statements
-	tokenizer := sqlparser.NewStringTokenizer(sql)
+	parser := sqlparser.NewTestParser()
+	tokenizer := parser.NewStringTokenizer(sql)
 	for {
 		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
 		if err != nil && errors.Is(err, io.EOF) {
@@ -2293,8 +2294,10 @@ func testForeignKeys(t *testing.T) {
 	fkOnlineDDLPossible := false
 	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
 		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
-		// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
-		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
+		// However, Online DDL is made possible in via these changes:
+		// - https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// - https://github.com/planetscale/mysql-server/commit/c2f1344a6863518d749f2eb01a4c74ca08a5b889
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps3.
 		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
 		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
 		// the children will point to the newly instated table rather than the original, renamed table.

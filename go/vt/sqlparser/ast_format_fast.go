@@ -257,7 +257,7 @@ func (node *Delete) FormatFast(buf *TrackedBuffer) {
 	if node.Ignore {
 		buf.WriteString("ignore ")
 	}
-	if node.Targets != nil {
+	if node.Targets != nil && !node.isSingleAliasExpr() {
 		node.Targets.FormatFast(buf)
 		buf.WriteByte(' ')
 	}

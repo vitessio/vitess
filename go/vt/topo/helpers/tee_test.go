@@ -17,12 +17,13 @@ limitations under the License.
 package helpers
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"context"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -32,7 +33,7 @@ func TestTee(t *testing.T) {
 
 	// create the setup, copy the data
 	fromTS, toTS := createSetup(ctx, t)
-	CopyKeyspaces(ctx, fromTS, toTS)
+	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
 	CopyShards(ctx, fromTS, toTS)
 	CopyTablets(ctx, fromTS, toTS)
 

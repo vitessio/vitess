@@ -104,9 +104,9 @@ func (o opBitShr) numeric(num, shift uint64) uint64 { return num >> shift }
 
 func (o opBitShr) binary(num []byte, shift uint64) []byte {
 	var (
-		bits   = int(shift % 8)
-		bytes  = int(shift / 8)
-		length = len(num)
+		bits   = int64(shift % 8)
+		bytes  = int64(shift / 8)
+		length = int64(len(num))
 		out    = make([]byte, length)
 	)
 
@@ -127,13 +127,13 @@ func (o opBitShl) numeric(num, shift uint64) uint64 { return num << shift }
 
 func (o opBitShl) binary(num []byte, shift uint64) []byte {
 	var (
-		bits   = int(shift % 8)
-		bytes  = int(shift / 8)
-		length = len(num)
+		bits   = int64(shift % 8)
+		bytes  = int64(shift / 8)
+		length = int64(len(num))
 		out    = make([]byte, length)
 	)
 
-	for i := 0; i < length; i++ {
+	for i := int64(0); i < length; i++ {
 		pos := i + bytes + 1
 		switch {
 		case pos < length:

@@ -28,6 +28,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -62,13 +63,15 @@ type externalConnector struct {
 	dbconfigs    map[string]*dbconfigs.DBConfigs
 	connectors   map[string]*mysqlConnector
 	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
-func newExternalConnector(dbcfgs map[string]*dbconfigs.DBConfigs, collationEnv *collations.Environment) *externalConnector {
+func newExternalConnector(dbcfgs map[string]*dbconfigs.DBConfigs, collationEnv *collations.Environment, parser *sqlparser.Parser) *externalConnector {
 	return &externalConnector{
 		dbconfigs:    dbcfgs,
 		connectors:   make(map[string]*mysqlConnector),
 		collationEnv: collationEnv,
+		parser:       parser,
 	}
 }
 
@@ -93,7 +96,7 @@ func (ec *externalConnector) Get(name string) (*mysqlConnector, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "external mysqlConnector %v not found", name)
 	}
 	c := &mysqlConnector{}
-	c.env = tabletenv.NewEnv(config, name, ec.collationEnv)
+	c.env = tabletenv.NewEnv(config, name, ec.collationEnv, ec.parser)
 	c.se = schema.NewEngine(c.env)
 	c.vstreamer = vstreamer.NewEngine(c.env, nil, c.se, nil, "")
 	c.vstreamer.InitDBConfig("", "")

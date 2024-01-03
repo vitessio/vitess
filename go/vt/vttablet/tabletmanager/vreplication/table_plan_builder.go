@@ -132,7 +132,7 @@ const (
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment, parser *sqlparser.Parser) (*ReplicatorPlan, error) {
 	filter := source.Filter
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
@@ -160,7 +160,7 @@ func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[strin
 		if !ok {
 			return nil, fmt.Errorf("table %s not found in schema", tableName)
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser)
 		if err != nil {
 			return nil, err
 		}
@@ -200,7 +200,13 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 }
 
 func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
-	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment) (*TablePlan, error) {
+	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment, parser *sqlparser.Parser) (*TablePlan, error) {
+
+	planError := func(err error, query string) error {
+		// Use the error string here to ensure things are uniform across
+		// vterrors (from parse) and errors (all others).
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s in query: %s", err.Error(), query)
+	}
 
 	filter := rule.Filter
 	query := filter
@@ -217,9 +223,9 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	case filter == ExcludeStr:
 		return nil, nil
 	}
-	sel, fromTable, err := analyzeSelectFrom(query)
+	sel, fromTable, err := analyzeSelectFrom(query, parser)
 	if err != nil {
-		return nil, err
+		return nil, planError(err, query)
 	}
 	sendRule := &binlogdatapb.Rule{
 		Match: fromTable,
@@ -235,10 +241,10 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		// If it's a "select *", we return a partial plan, and complete
 		// it when we get back field info from the stream.
 		if len(sel.SelectExprs) != 1 {
-			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
+			return nil, planError(fmt.Errorf("unsupported mix of '*' and columns"), sqlparser.String(sel))
 		}
 		if !expr.TableName.IsEmpty() {
-			return nil, fmt.Errorf("unsupported qualifier for '*' expression: %v", sqlparser.String(expr))
+			return nil, planError(fmt.Errorf("unsupported qualifier for '*' expression"), sqlparser.String(expr))
 		}
 		sendRule.Filter = query
 		tablePlan := &TablePlan{
@@ -269,7 +275,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
-		return nil, err
+		return nil, planError(err, sqlparser.String(sel))
 	}
 	// It's possible that the target table does not materialize all
 	// the primary keys of the source table. In such situations,
@@ -284,7 +290,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		}
 	}
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
-		return nil, err
+		return nil, planError(err, sqlparser.String(sel))
 	}
 	targetKeyColumnNames, err := textutil.SplitUnescape(rule.TargetUniqueKeyColumns, ",")
 	if err != nil {
@@ -381,28 +387,28 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 	}
 }
 
-func analyzeSelectFrom(query string) (sel *sqlparser.Select, from string, err error) {
-	statement, err := sqlparser.Parse(query)
+func analyzeSelectFrom(query string, parser *sqlparser.Parser) (sel *sqlparser.Select, from string, err error) {
+	statement, err := parser.Parse(query)
 	if err != nil {
 		return nil, "", err
 	}
 	sel, ok := statement.(*sqlparser.Select)
 	if !ok {
-		return nil, "", fmt.Errorf("unexpected: %v", sqlparser.String(statement))
+		return nil, "", fmt.Errorf("unsupported non-select statement")
 	}
 	if sel.Distinct {
-		return nil, "", fmt.Errorf("unexpected: %v", sqlparser.String(sel))
+		return nil, "", fmt.Errorf("unsupported distinct clause")
 	}
 	if len(sel.From) > 1 {
-		return nil, "", fmt.Errorf("unexpected: %v", sqlparser.String(sel))
+		return nil, "", fmt.Errorf("unsupported multi-table usage")
 	}
 	node, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, "", fmt.Errorf("unexpected: %v", sqlparser.String(sel))
+		return nil, "", fmt.Errorf("unsupported from expression (%T)", sel.From[0])
 	}
 	fromTable := sqlparser.GetTableName(node.Expr)
 	if fromTable.IsEmpty() {
-		return nil, "", fmt.Errorf("unexpected: %v", sqlparser.String(sel))
+		return nil, "", fmt.Errorf("unsupported from source (%T)", node.Expr)
 	}
 	return sel, fromTable.String(), nil
 }
@@ -421,7 +427,7 @@ func (tpb *tablePlanBuilder) analyzeExprs(selExprs sqlparser.SelectExprs) error 
 func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr, error) {
 	aliased, ok := selExpr.(*sqlparser.AliasedExpr)
 	if !ok {
-		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(selExpr))
+		return nil, fmt.Errorf("invalid expression: %v", sqlparser.String(selExpr))
 	}
 	as := aliased.As
 	if as.IsEmpty() {
@@ -470,7 +476,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		switch fname := expr.Name.Lowered(); fname {
 		case "keyspace_id":
 			if len(expr.Exprs) != 0 {
-				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+				return nil, fmt.Errorf("unsupported multiple keyspace_id expressions: %v", sqlparser.String(expr))
 			}
 			tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: aliased.Expr})
 			// The vstreamer responds with "keyspace_id" as the field name for this request.
@@ -480,7 +486,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 	}
 	if expr, ok := aliased.Expr.(sqlparser.AggrFunc); ok {
 		if sqlparser.IsDistinct(expr) {
-			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			return nil, fmt.Errorf("unsupported distinct expression usage: %v", sqlparser.String(expr))
 		}
 		switch fname := expr.AggrName(); fname {
 		case "count":
@@ -491,11 +497,11 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			return cexpr, nil
 		case "sum":
 			if len(expr.GetArgs()) != 1 {
-				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+				return nil, fmt.Errorf("unsupported multiple columns in sum clause: %v", sqlparser.String(expr))
 			}
 			innerCol, ok := expr.GetArg().(*sqlparser.ColName)
 			if !ok {
-				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+				return nil, fmt.Errorf("unsupported non-column name in sum clause: %v", sqlparser.String(expr))
 			}
 			if !innerCol.Qualifier.IsEmpty() {
 				return nil, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(innerCol))
@@ -518,7 +524,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		case *sqlparser.Subquery:
 			return false, fmt.Errorf("unsupported subquery: %v", sqlparser.String(node))
 		case sqlparser.AggrFunc:
-			return false, fmt.Errorf("unexpected: %v", sqlparser.String(node))
+			return false, fmt.Errorf("unsupported aggregation function: %v", sqlparser.String(node))
 		}
 		return true, nil
 	}, aliased.Expr)
@@ -545,7 +551,7 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 	for _, expr := range groupBy {
 		colname, ok := expr.(*sqlparser.ColName)
 		if !ok {
-			return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			return fmt.Errorf("unsupported non-column name or alias in group by clause: %v", sqlparser.String(expr))
 		}
 		cexpr := tpb.findCol(colname.Name)
 		if cexpr == nil {

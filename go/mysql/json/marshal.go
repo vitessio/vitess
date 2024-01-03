@@ -169,13 +169,12 @@ func MarshalSQLValue(buf []byte) (*sqltypes.Value, error) {
 	if len(buf) == 0 {
 		buf = sqltypes.NullBytes
 	}
+
 	jsonVal, err := parser.ParseBytes(buf)
 	if err != nil {
 		return nil, err
 	}
+
 	newVal := sqltypes.MakeTrusted(querypb.Type_JSON, jsonVal.MarshalSQLTo(nil))
-	if err != nil {
-		return nil, err
-	}
 	return &newVal, nil
 }

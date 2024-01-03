@@ -323,7 +323,7 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 }
 
 // BuildSettingQuery builds a query for system settings.
-func BuildSettingQuery(settings []string) (query string, resetQuery string, err error) {
+func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query string, resetQuery string, err error) {
 	if len(settings) == 0 {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
 	}
@@ -331,7 +331,7 @@ func BuildSettingQuery(settings []string) (query string, resetQuery string, err 
 	var resetSetExprs sqlparser.SetExprs
 	lDefault := sqlparser.NewStrLiteral("default")
 	for _, setting := range settings {
-		stmt, err := sqlparser.Parse(setting)
+		stmt, err := parser.Parse(setting)
 		if err != nil {
 			return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
 		}
