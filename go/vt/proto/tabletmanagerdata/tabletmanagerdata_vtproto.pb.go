@@ -1971,15 +1971,25 @@ func (m *ReadVReplicationWorkflowsRequest) CloneVT() *ReadVReplicationWorkflowsR
 		copy(tmpContainer, rhs)
 		r.IncludeIds = tmpContainer
 	}
-	if rhs := m.States; rhs != nil {
+	if rhs := m.IncludeWorkflows; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.IncludeWorkflows = tmpContainer
+	}
+	if rhs := m.IncludeStates; rhs != nil {
 		tmpContainer := make([]binlogdata.VReplicationWorkflowState, len(rhs))
 		copy(tmpContainer, rhs)
-		r.States = tmpContainer
+		r.IncludeStates = tmpContainer
 	}
 	if rhs := m.ExcludeWorkflows; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
 		r.ExcludeWorkflows = tmpContainer
+	}
+	if rhs := m.ExcludeStates; rhs != nil {
+		tmpContainer := make([]binlogdata.VReplicationWorkflowState, len(rhs))
+		copy(tmpContainer, rhs)
+		r.ExcludeStates = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -6890,15 +6900,6 @@ func (m *ReadVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.ExcludeWorkflows) > 0 {
-		for iNdEx := len(m.ExcludeWorkflows) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.ExcludeWorkflows[iNdEx])
-			copy(dAtA[i:], m.ExcludeWorkflows[iNdEx])
-			i = encodeVarint(dAtA, i, uint64(len(m.ExcludeWorkflows[iNdEx])))
-			i--
-			dAtA[i] = 0x2a
-		}
-	}
 	if m.ExcludeFrozen {
 		i--
 		if m.ExcludeFrozen {
@@ -6907,16 +6908,16 @@ func (m *ReadVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x20
+		dAtA[i] = 0x38
 	}
-	if len(m.States) > 0 {
+	if len(m.ExcludeStates) > 0 {
 		var pksize2 int
-		for _, num := range m.States {
+		for _, num := range m.ExcludeStates {
 			pksize2 += sov(uint64(num))
 		}
 		i -= pksize2
 		j1 := i
-		for _, num1 := range m.States {
+		for _, num1 := range m.ExcludeStates {
 			num := uint64(num1)
 			for num >= 1<<7 {
 				dAtA[j1] = uint8(uint64(num)&0x7f | 0x80)
@@ -6928,16 +6929,25 @@ func (m *ReadVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 		}
 		i = encodeVarint(dAtA, i, uint64(pksize2))
 		i--
-		dAtA[i] = 0x1a
+		dAtA[i] = 0x32
 	}
-	if len(m.IncludeIds) > 0 {
+	if len(m.ExcludeWorkflows) > 0 {
+		for iNdEx := len(m.ExcludeWorkflows) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.ExcludeWorkflows[iNdEx])
+			copy(dAtA[i:], m.ExcludeWorkflows[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.ExcludeWorkflows[iNdEx])))
+			i--
+			dAtA[i] = 0x2a
+		}
+	}
+	if len(m.IncludeStates) > 0 {
 		var pksize4 int
-		for _, num := range m.IncludeIds {
+		for _, num := range m.IncludeStates {
 			pksize4 += sov(uint64(num))
 		}
 		i -= pksize4
 		j3 := i
-		for _, num1 := range m.IncludeIds {
+		for _, num1 := range m.IncludeStates {
 			num := uint64(num1)
 			for num >= 1<<7 {
 				dAtA[j3] = uint8(uint64(num)&0x7f | 0x80)
@@ -6948,6 +6958,36 @@ func (m *ReadVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 			j3++
 		}
 		i = encodeVarint(dAtA, i, uint64(pksize4))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.IncludeWorkflows) > 0 {
+		for iNdEx := len(m.IncludeWorkflows) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.IncludeWorkflows[iNdEx])
+			copy(dAtA[i:], m.IncludeWorkflows[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.IncludeWorkflows[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if len(m.IncludeIds) > 0 {
+		var pksize6 int
+		for _, num := range m.IncludeIds {
+			pksize6 += sov(uint64(num))
+		}
+		i -= pksize6
+		j5 := i
+		for _, num1 := range m.IncludeIds {
+			num := uint64(num1)
+			for num >= 1<<7 {
+				dAtA[j5] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j5++
+			}
+			dAtA[j5] = uint8(num)
+			j5++
+		}
+		i = encodeVarint(dAtA, i, uint64(pksize6))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -9607,21 +9647,34 @@ func (m *ReadVReplicationWorkflowsRequest) SizeVT() (n int) {
 		}
 		n += 1 + sov(uint64(l)) + l
 	}
-	if len(m.States) > 0 {
+	if len(m.IncludeWorkflows) > 0 {
+		for _, s := range m.IncludeWorkflows {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
+	}
+	if len(m.IncludeStates) > 0 {
 		l = 0
-		for _, e := range m.States {
+		for _, e := range m.IncludeStates {
 			l += sov(uint64(e))
 		}
 		n += 1 + sov(uint64(l)) + l
-	}
-	if m.ExcludeFrozen {
-		n += 2
 	}
 	if len(m.ExcludeWorkflows) > 0 {
 		for _, s := range m.ExcludeWorkflows {
 			l = len(s)
 			n += 1 + l + sov(uint64(l))
 		}
+	}
+	if len(m.ExcludeStates) > 0 {
+		l = 0
+		for _, e := range m.ExcludeStates {
+			l += sov(uint64(e))
+		}
+		n += 1 + sov(uint64(l)) + l
+	}
+	if m.ExcludeFrozen {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -19559,6 +19612,38 @@ func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 				return fmt.Errorf("proto: wrong wireType = %d for field IncludeIds", wireType)
 			}
 		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeWorkflows", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.IncludeWorkflows = append(m.IncludeWorkflows, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 4:
 			if wireType == 0 {
 				var v binlogdata.VReplicationWorkflowState
 				for shift := uint(0); ; shift += 7 {
@@ -19575,7 +19660,7 @@ func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 						break
 					}
 				}
-				m.States = append(m.States, v)
+				m.IncludeStates = append(m.IncludeStates, v)
 			} else if wireType == 2 {
 				var packedLen int
 				for shift := uint(0); ; shift += 7 {
@@ -19603,8 +19688,8 @@ func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 					return io.ErrUnexpectedEOF
 				}
 				var elementCount int
-				if elementCount != 0 && len(m.States) == 0 {
-					m.States = make([]binlogdata.VReplicationWorkflowState, 0, elementCount)
+				if elementCount != 0 && len(m.IncludeStates) == 0 {
+					m.IncludeStates = make([]binlogdata.VReplicationWorkflowState, 0, elementCount)
 				}
 				for iNdEx < postIndex {
 					var v binlogdata.VReplicationWorkflowState
@@ -19622,31 +19707,11 @@ func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 							break
 						}
 					}
-					m.States = append(m.States, v)
+					m.IncludeStates = append(m.IncludeStates, v)
 				}
 			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field States", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeStates", wireType)
 			}
-		case 4:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeFrozen", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.ExcludeFrozen = bool(v != 0)
 		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeWorkflows", wireType)
@@ -19679,6 +19744,95 @@ func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ExcludeWorkflows = append(m.ExcludeWorkflows, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 6:
+			if wireType == 0 {
+				var v binlogdata.VReplicationWorkflowState
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.ExcludeStates = append(m.ExcludeStates, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLength
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLength
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				if elementCount != 0 && len(m.ExcludeStates) == 0 {
+					m.ExcludeStates = make([]binlogdata.VReplicationWorkflowState, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v binlogdata.VReplicationWorkflowState
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= binlogdata.VReplicationWorkflowState(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.ExcludeStates = append(m.ExcludeStates, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeStates", wireType)
+			}
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeFrozen", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ExcludeFrozen = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

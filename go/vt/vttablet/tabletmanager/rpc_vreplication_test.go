@@ -484,8 +484,8 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 		),
 		fmt.Sprintf("%d|%s|%s|%s|Running|", vreplID, blsStr, cells[0], tabletTypes[0]),
 	)
-	idQuery, err := sqlparser.ParseAndBind("select id from _vt.vreplication where workflow = %a",
-		sqltypes.StringBindVariable(workflow))
+	idQuery, err := sqlparser.ParseAndBind("select id from _vt.vreplication where id = %a",
+		sqltypes.Int64BindVariable(int64(vreplID)))
 	require.NoError(t, err)
 	idRes := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -493,7 +493,6 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			"int64",
 		),
 		fmt.Sprintf("%d", vreplID),
-		fmt.Sprintf("%d", vreplID+1),
 	)
 
 	tests := []struct {

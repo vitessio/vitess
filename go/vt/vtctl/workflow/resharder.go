@@ -142,6 +142,79 @@ func (rs *resharder) validateTargets(ctx context.Context) error {
 	return err
 }
 
+/*
+func (rs *resharder) readRefStreams(ctx context.Context) error {
+	var mu sync.Mutex
+	err := rs.forAll(rs.sourceShards, func(source *topo.ShardInfo) error {
+		sourcePrimary := rs.sourcePrimaries[source.ShardName()]
+
+		query := fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name=%s and message != 'FROZEN'", encodeString(sourcePrimary.DbName()))
+		p3qr, err := rs.s.tmc.VReplicationExec(ctx, sourcePrimary.Tablet, query)
+		if err != nil {
+			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", sourcePrimary.Tablet, query)
+		}
+		qr := sqltypes.Proto3ToResult(p3qr)
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		mustCreate := false
+		var ref map[string]bool
+		if rs.refStreams == nil {
+			rs.refStreams = make(map[string]*refStream)
+			mustCreate = true
+		} else {
+			// Copy the ref streams for comparison.
+			ref = make(map[string]bool, len(rs.refStreams))
+			for k := range rs.refStreams {
+				ref[k] = true
+			}
+		}
+		for _, row := range qr.Rows {
+
+			workflow := row[0].ToString()
+			if workflow == "" {
+				return fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s", source.Keyspace(), source.ShardName())
+			}
+			var bls binlogdatapb.BinlogSource
+			rowBytes, err := row[1].ToBytes()
+			if err != nil {
+				return err
+			}
+			if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
+				return vterrors.Wrapf(err, "prototext.Unmarshal: %v", row)
+			}
+			isReference, err := rs.blsIsReference(&bls)
+			if err != nil {
+				return vterrors.Wrap(err, "blsIsReference")
+			}
+			if !isReference {
+				continue
+			}
+			refKey := fmt.Sprintf("%s:%s:%s", workflow, bls.Keyspace, bls.Shard)
+			if mustCreate {
+				rs.refStreams[refKey] = &refStream{
+					workflow:    workflow,
+					bls:         &bls,
+					cell:        row[2].ToString(),
+					tabletTypes: row[3].ToString(),
+				}
+			} else {
+				if !ref[refKey] {
+					return fmt.Errorf("streams are mismatched across source shards for workflow: %s", workflow)
+				}
+				delete(ref, refKey)
+			}
+		}
+		if len(ref) != 0 {
+			return fmt.Errorf("streams are mismatched across source shards: %v", ref)
+		}
+		return nil
+	})
+	return err
+}
+*/
+
 func (rs *resharder) readRefStreams(ctx context.Context) error {
 	var mu sync.Mutex
 	err := rs.forAll(rs.sourceShards, func(source *topo.ShardInfo) error {
@@ -156,26 +229,26 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 			return vterrors.Wrapf(err, "ReadVReplicationWorkflows(%v, %+v)", sourcePrimary.Tablet, req)
 		}
 
-		for _, workflow := range res.Workflows {
-			mu.Lock()
-			defer mu.Unlock()
+		mu.Lock()
+		defer mu.Unlock()
 
-			mustCreate := false
-			var ref map[string]bool
-			if rs.refStreams == nil {
-				rs.refStreams = make(map[string]*refStream)
-				mustCreate = true
-			} else {
-				// Copy the ref streams for comparison.
-				ref = make(map[string]bool, len(rs.refStreams))
-				for k := range rs.refStreams {
-					ref[k] = true
-				}
+		mustCreate := false
+		var ref map[string]bool
+		if rs.refStreams == nil {
+			rs.refStreams = make(map[string]*refStream)
+			mustCreate = true
+		} else {
+			// Copy the ref streams for comparison.
+			ref = make(map[string]bool, len(rs.refStreams))
+			for k := range rs.refStreams {
+				ref[k] = true
 			}
+		}
+		for _, workflow := range res.Workflows {
 			if workflow.Workflow == "" {
 				return fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s", source.Keyspace(), source.ShardName())
 			}
-			for _, stream := range res.Workflows[0].Streams {
+			for _, stream := range workflow.Streams {
 				bls := stream.Bls
 				isReference, err := rs.blsIsReference(bls)
 				if err != nil {

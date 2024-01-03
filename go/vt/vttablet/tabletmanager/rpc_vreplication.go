@@ -171,6 +171,26 @@ func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tab
 	if req.ExcludeFrozen {
 		additionalPredicates.WriteString(fmt.Sprintf(" and message != '%s'", workflow.Frozen))
 	}
+	if len(req.IncludeIds) > 0 {
+		additionalPredicates.WriteString(" and id in (")
+		for i, id := range req.IncludeIds {
+			if i > 0 {
+				additionalPredicates.WriteString(",")
+			}
+			additionalPredicates.WriteString(fmt.Sprintf("%d", id))
+		}
+		additionalPredicates.WriteString(")")
+	}
+	if len(req.IncludeWorkflows) > 0 {
+		additionalPredicates.WriteString(" and workflow in (")
+		for i, wf := range req.IncludeWorkflows {
+			if i > 0 {
+				additionalPredicates.WriteString(",")
+			}
+			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(wf))
+		}
+		additionalPredicates.WriteString(")")
+	}
 	if len(req.ExcludeWorkflows) > 0 {
 		additionalPredicates.WriteString(" and workflow not in (")
 		for i, wf := range req.ExcludeWorkflows {
@@ -181,9 +201,19 @@ func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tab
 		}
 		additionalPredicates.WriteString(")")
 	}
-	if len(req.States) > 0 {
+	if len(req.IncludeStates) > 0 {
 		additionalPredicates.WriteString(" and state in (")
-		for i, state := range req.States {
+		for i, state := range req.IncludeStates {
+			if i > 0 {
+				additionalPredicates.WriteString(",")
+			}
+			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(state.String()))
+		}
+		additionalPredicates.WriteString(")")
+	}
+	if len(req.ExcludeStates) > 0 {
+		additionalPredicates.WriteString(" and state not in (")
+		for i, state := range req.ExcludeStates {
 			if i > 0 {
 				additionalPredicates.WriteString(",")
 			}
@@ -193,10 +223,10 @@ func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tab
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlReadVReplicationWorkflows, sidecar.GetIdentifier(), ":db", additionalPredicates.String())
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
-	log.Errorf("ReadVReplicationWorkflows query: %s", stmt)
 	if err != nil {
 		return nil, err
 	}
+	log.Errorf("ReadVReplicationWorkflows query: %s", stmt)
 	res, err := tm.VREngine.Exec(stmt)
 	if err != nil {
 		return nil, err
@@ -210,8 +240,11 @@ func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tab
 
 	for _, row := range rows {
 		workflow := row["workflow"].ToString()
-		workflows[workflow].Cells = rows[0]["cell"].ToString()
-		tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(rows[0]["tablet_types"].ToString())
+		if workflows[workflow] == nil {
+			workflows[workflow] = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{Workflow: workflow}
+		}
+		workflows[workflow].Cells = row["cell"].ToString()
+		tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(row["tablet_types"].ToString())
 		if err != nil {
 			return nil, vterrors.Wrap(err, "error parsing the tablet_types field from vreplication table record")
 		}
@@ -220,19 +253,19 @@ func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tab
 		if inorder {
 			workflows[workflow].TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_INORDER
 		}
-		workflows[workflow].DbName = rows[0]["db_name"].ToString()
-		workflows[workflow].Tags = rows[0]["tags"].ToString()
-		wft, err := rows[0]["workflow_type"].ToInt32()
+		workflows[workflow].DbName = row["db_name"].ToString()
+		workflows[workflow].Tags = row["tags"].ToString()
+		wft, err := row["workflow_type"].ToInt32()
 		if err != nil {
 			return nil, vterrors.Wrap(err, "error parsing workflow_type field from vreplication table record")
 		}
 		workflows[workflow].WorkflowType = binlogdatapb.VReplicationWorkflowType(wft)
-		wfst, err := rows[0]["workflow_sub_type"].ToInt32()
+		wfst, err := row["workflow_sub_type"].ToInt32()
 		if err != nil {
 			return nil, vterrors.Wrap(err, "error parsing workflow_sub_type field from vreplication table record")
 		}
 		workflows[workflow].WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType(wfst)
-		workflows[workflow].DeferSecondaryKeys = rows[0]["defer_secondary_keys"].ToString() == "1"
+		workflows[workflow].DeferSecondaryKeys = row["defer_secondary_keys"].ToString() == "1"
 
 		// Now the individual streams (there can be more than 1 with shard merges).
 		if workflows[workflow].Streams == nil {

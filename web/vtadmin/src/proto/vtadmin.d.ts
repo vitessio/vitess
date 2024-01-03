@@ -26796,14 +26796,20 @@ export namespace tabletmanagerdata {
         /** ReadVReplicationWorkflowsRequest include_ids */
         include_ids?: (number[]|null);
 
-        /** ReadVReplicationWorkflowsRequest states */
-        states?: (binlogdata.VReplicationWorkflowState[]|null);
+        /** ReadVReplicationWorkflowsRequest include_workflows */
+        include_workflows?: (string[]|null);
 
-        /** ReadVReplicationWorkflowsRequest exclude_frozen */
-        exclude_frozen?: (boolean|null);
+        /** ReadVReplicationWorkflowsRequest include_states */
+        include_states?: (binlogdata.VReplicationWorkflowState[]|null);
 
         /** ReadVReplicationWorkflowsRequest exclude_workflows */
         exclude_workflows?: (string[]|null);
+
+        /** ReadVReplicationWorkflowsRequest exclude_states */
+        exclude_states?: (binlogdata.VReplicationWorkflowState[]|null);
+
+        /** ReadVReplicationWorkflowsRequest exclude_frozen */
+        exclude_frozen?: (boolean|null);
     }
 
     /** Represents a ReadVReplicationWorkflowsRequest. */
@@ -26821,14 +26827,20 @@ export namespace tabletmanagerdata {
         /** ReadVReplicationWorkflowsRequest include_ids. */
         public include_ids: number[];
 
-        /** ReadVReplicationWorkflowsRequest states. */
-        public states: binlogdata.VReplicationWorkflowState[];
+        /** ReadVReplicationWorkflowsRequest include_workflows. */
+        public include_workflows: string[];
 
-        /** ReadVReplicationWorkflowsRequest exclude_frozen. */
-        public exclude_frozen: boolean;
+        /** ReadVReplicationWorkflowsRequest include_states. */
+        public include_states: binlogdata.VReplicationWorkflowState[];
 
         /** ReadVReplicationWorkflowsRequest exclude_workflows. */
         public exclude_workflows: string[];
+
+        /** ReadVReplicationWorkflowsRequest exclude_states. */
+        public exclude_states: binlogdata.VReplicationWorkflowState[];
+
+        /** ReadVReplicationWorkflowsRequest exclude_frozen. */
+        public exclude_frozen: boolean;
 
         /**
          * Creates a new ReadVReplicationWorkflowsRequest instance using the specified properties.

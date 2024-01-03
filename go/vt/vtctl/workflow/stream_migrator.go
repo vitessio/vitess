@@ -218,7 +218,7 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 		DbName:           ti.DbName(),
 		ExcludeWorkflows: []string{sm.ts.ReverseWorkflowName()},
 		IncludeIds:       ids,
-		States:           states,
+		IncludeStates:    states,
 		ExcludeFrozen:    excludeFrozen,
 	}
 
