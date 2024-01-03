@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -177,7 +177,7 @@ func analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sql
 
 // alterOptionAvailableViaInstantDDL checks if the specific alter option is eligible to run via ALGORITHM=INSTANT
 // reference: https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html
-func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf mysql.CapableOf) (bool, error) {
+func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (bool, error) {
 	findColumn := func(colName string) *sqlparser.ColumnDefinition {
 		if createTable == nil {
 			return nil
@@ -247,10 +247,10 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 	case *sqlparser.AddColumns:
 		if opt.First || opt.After != nil {
 			// not a "last" column. Only supported as of 8.0.29
-			return capableOf(mysql.InstantAddDropColumnFlavorCapability)
+			return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
 		}
 		// Adding a *last* column is supported in 8.0
-		return capableOf(mysql.InstantAddLastColumnFlavorCapability)
+		return capableOf(capabilities.InstantAddLastColumnFlavorCapability)
 	case *sqlparser.DropColumn:
 		// not supported in COMPRESSED tables
 		if opt := findTableOption("ROW_FORMAT"); opt != nil {
@@ -260,9 +260,9 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 		}
 		if isVirtualColumn(opt.Name.Name.String()) {
 			// supported by all 8.0 versions
-			return capableOf(mysql.InstantAddDropVirtualColumnFlavorCapability)
+			return capableOf(capabilities.InstantAddDropVirtualColumnFlavorCapability)
 		}
-		return capableOf(mysql.InstantAddDropColumnFlavorCapability)
+		return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
 	case *sqlparser.ModifyColumn:
 		if col := findColumn(opt.NewColDefinition.Name.String()); col != nil {
 			// Check if only diff is change of default
@@ -273,7 +273,7 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 			tableColDefinition := colStringStrippedDown(col, true, false)
 			newColDefinition := colStringStrippedDown(opt.NewColDefinition, true, false)
 			if tableColDefinition == newColDefinition {
-				return capableOf(mysql.InstantChangeColumnDefaultFlavorCapability)
+				return capableOf(capabilities.InstantChangeColumnDefaultFlavorCapability)
 			}
 			// Check if:
 			// 1. this an ENUM/SET
@@ -303,7 +303,7 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 				tableColDefinition := colStringStrippedDown(col, true, true)
 				newColDefinition := colStringStrippedDown(opt.NewColDefinition, true, true)
 				if tableColDefinition == newColDefinition {
-					return capableOf(mysql.InstantExpandEnumCapability)
+					return capableOf(capabilities.InstantExpandEnumCapability)
 				}
 			}
 		}
@@ -316,8 +316,8 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 // AnalyzeInstantDDL takes declarative CreateTable and AlterTable, as well as a server version, and checks whether it is possible to run the ALTER
 // using ALGORITHM=INSTANT for that version.
 // This function is INTENTIONALLY public, even though we do not guarantee that it will remain so.
-func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, capableOf mysql.CapableOf) (*SpecialAlterPlan, error) {
-	capable, err := capableOf(mysql.InstantDDLFlavorCapability)
+func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (*SpecialAlterPlan, error) {
+	capable, err := capableOf(capabilities.InstantDDLFlavorCapability)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +348,7 @@ func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.
 
 // analyzeSpecialAlterPlan checks if the given ALTER onlineDDL, and for the current state of affected table,
 // can be executed in a special way. If so, it returns with a "special plan"
-func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, capableOf mysql.CapableOf) (*SpecialAlterPlan, error) {
+func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, capableOf capabilities.CapableOf) (*SpecialAlterPlan, error) {
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.SQLParser())
 	if err != nil {
 		return nil, err

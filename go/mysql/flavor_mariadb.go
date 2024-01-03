@@ -23,6 +23,7 @@ import (
 	"io"
 	"time"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -286,7 +287,7 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mariadbFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+func (mariadbFlavor) supportsCapability(serverVersion string, capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {
 	default:
 		return false, nil
