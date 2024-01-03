@@ -70,6 +70,14 @@ func (client *FakeTabletManagerClient) DeleteVReplicationWorkflow(ctx context.Co
 	return nil, nil
 }
 
+func (client *FakeTabletManagerClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	return nil, nil
+}
+
+func (client *FakeTabletManagerClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	return nil, nil
+}
+
 func (client *FakeTabletManagerClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	return nil, nil
 }

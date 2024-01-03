@@ -18,14 +18,17 @@ package tabletmanager
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -41,6 +44,9 @@ import (
 const (
 	// Create a new VReplication workflow record.
 	sqlCreateVReplicationWorkflow = "insert into %s.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a)"
+	sqlHasVReplicationWorkflows   = "select if(count(*) > 0, 1, 0) as has_workflows from %s.vreplication where db_name = %a"
+	// Read all VReplication workflows.
+	sqlReadVReplicationWorkflows = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from %s.vreplication where db_name = %a%s group by workflow, id order by workflow, id"
 	// Read a VReplication workflow.
 	sqlReadVReplicationWorkflow = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from %s.vreplication where workflow = %a and db_name = %a"
 	// Delete VReplication records for the given workflow.
@@ -120,6 +126,171 @@ func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *ta
 	res.RowsAffected += streamres.RowsAffected
 
 	return &tabletmanagerdatapb.DeleteVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
+}
+
+func (tm *TabletManager) HasVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	if req == nil || req.DbName == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no DB name provided")
+	}
+	bindVars := map[string]*querypb.BindVariable{
+		"db": sqltypes.StringBindVariable(req.DbName),
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlHasVReplicationWorkflows, sidecar.GetIdentifier(), ":db")
+	stmt, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return nil, err
+	}
+	res, err := tm.VREngine.Exec(stmt)
+	if err != nil {
+		return nil, err
+	}
+	if res == nil || len(res.Rows) == 0 {
+		return nil, nil
+	}
+	if len(res.Rows) != 1 || len(res.Rows[0]) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected response to query %q: expected 1 row with 1 column but got %d row(s) with %d column(s)",
+			parsed.Query, len(res.Rows), len(res.Rows[0]))
+	}
+	has, err := res.Rows[0][0].ToBool()
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected response to query %q: could not convert %q to boolean",
+			parsed.Query, res.Rows[0][0].ToString())
+	}
+
+	return &tabletmanagerdatapb.HasVReplicationWorkflowsResponse{Has: has}, nil
+}
+
+func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	if req == nil || req.DbName == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no DB name provided")
+	}
+	bindVars := map[string]*querypb.BindVariable{
+		"db": sqltypes.StringBindVariable(req.DbName),
+	}
+	additionalPredicates := strings.Builder{}
+	if req.ExcludeFrozen {
+		additionalPredicates.WriteString(fmt.Sprintf(" and message != '%s'", workflow.Frozen))
+	}
+	if len(req.ExcludeWorkflows) > 0 {
+		additionalPredicates.WriteString(" and workflow not in (")
+		for i, wf := range req.ExcludeWorkflows {
+			if i > 0 {
+				additionalPredicates.WriteString(",")
+			}
+			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(wf))
+		}
+		additionalPredicates.WriteString(")")
+	}
+	if len(req.States) > 0 {
+		additionalPredicates.WriteString(" and state in (")
+		for i, state := range req.States {
+			if i > 0 {
+				additionalPredicates.WriteString(",")
+			}
+			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(state.String()))
+		}
+		additionalPredicates.WriteString(")")
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlReadVReplicationWorkflows, sidecar.GetIdentifier(), ":db", additionalPredicates.String())
+	stmt, err := parsed.GenerateQuery(bindVars, nil)
+	log.Errorf("ReadVReplicationWorkflows query: %s", stmt)
+	if err != nil {
+		return nil, err
+	}
+	res, err := tm.VREngine.Exec(stmt)
+	if err != nil {
+		return nil, err
+	}
+	if res == nil || len(res.Rows) == 0 {
+		return nil, nil
+	}
+	rows := res.Named().Rows
+	resp := &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{}
+	workflows := make(map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse)
+
+	for _, row := range rows {
+		workflow := row["workflow"].ToString()
+		workflows[workflow].Cells = rows[0]["cell"].ToString()
+		tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(rows[0]["tablet_types"].ToString())
+		if err != nil {
+			return nil, vterrors.Wrap(err, "error parsing the tablet_types field from vreplication table record")
+		}
+		workflows[workflow].TabletTypes = tabletTypes
+		workflows[workflow].TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_ANY
+		if inorder {
+			workflows[workflow].TabletSelectionPreference = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+		}
+		workflows[workflow].DbName = rows[0]["db_name"].ToString()
+		workflows[workflow].Tags = rows[0]["tags"].ToString()
+		wft, err := rows[0]["workflow_type"].ToInt32()
+		if err != nil {
+			return nil, vterrors.Wrap(err, "error parsing workflow_type field from vreplication table record")
+		}
+		workflows[workflow].WorkflowType = binlogdatapb.VReplicationWorkflowType(wft)
+		wfst, err := rows[0]["workflow_sub_type"].ToInt32()
+		if err != nil {
+			return nil, vterrors.Wrap(err, "error parsing workflow_sub_type field from vreplication table record")
+		}
+		workflows[workflow].WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType(wfst)
+		workflows[workflow].DeferSecondaryKeys = rows[0]["defer_secondary_keys"].ToString() == "1"
+
+		// Now the individual streams (there can be more than 1 with shard merges).
+		if workflows[workflow].Streams == nil {
+			workflows[workflow].Streams = make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, 0, 1)
+		}
+		stream := &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{}
+		if stream.Id, err = row["id"].ToInt32(); err != nil {
+			return nil, vterrors.Wrap(err, "error parsing id field from vreplication table record")
+		}
+		srcBytes, err := row["source"].ToBytes()
+		if err != nil {
+			return nil, vterrors.Wrap(err, "error parsing binlog_source field from vreplication table record")
+		}
+		blspb := &binlogdatapb.BinlogSource{}
+		err = prototext.Unmarshal(srcBytes, blspb)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "error unmarshaling binlog_source field from vreplication table record")
+		}
+		stream.Bls = blspb
+		stream.Pos = row["pos"].ToString()
+		stream.StopPos = row["stop_pos"].ToString()
+		if stream.MaxTps, err = row["max_tps"].ToInt64(); err != nil {
+			return nil, vterrors.Wrap(err, "error parsing max_tps field from vreplication table record")
+		}
+		if stream.MaxReplicationLag, err = row["max_replication_lag"].ToInt64(); err != nil {
+			return nil, vterrors.Wrap(err, "error parsing max_replication_lag field from vreplication table record")
+		}
+		timeUpdated, err := row["time_updated"].ToInt64()
+		if err != nil {
+			return nil, vterrors.Wrap(err, "error parsing time_updated field from vreplication table record")
+		}
+		stream.TimeUpdated = &vttime.Time{Seconds: timeUpdated}
+		txTimestamp, err := row["transaction_timestamp"].ToInt64()
+		if err != nil {
+			return nil, vterrors.Wrap(err, "error parsing transaction_timestamp field from vreplication table record")
+		}
+		stream.TransactionTimestamp = &vttime.Time{Seconds: txTimestamp}
+		stream.State = binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[row["state"].ToString()])
+		stream.Message = row["message"].ToString()
+		if stream.RowsCopied, err = row["rows_copied"].ToInt64(); err != nil {
+			return nil, vterrors.Wrap(err, "error parsing rows_copied field from vreplication table record")
+		}
+		timeHeartbeat, err := row["time_heartbeat"].ToInt64()
+		if err != nil {
+			return nil, vterrors.Wrap(err, "error parsing time_heartbeat field from vreplication table record")
+		}
+		stream.TimeHeartbeat = &vttime.Time{Seconds: timeHeartbeat}
+		timeThrottled, err := row["time_throttled"].ToInt64()
+		if err != nil {
+			return nil, vterrors.Wrap(err, "error parsing time_throttled field from vreplication table record")
+		}
+		stream.TimeThrottled = &vttime.Time{Seconds: timeThrottled}
+		stream.ComponentThrottled = row["component_throttled"].ToString()
+		workflows[workflow].Streams = append(workflows[workflow].Streams, stream)
+	}
+	resp.Workflows = maps.Values(workflows)
+
+	return resp, nil
 }
 
 func (tm *TabletManager) ReadVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {

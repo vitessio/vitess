@@ -23,10 +23,7 @@ import (
 	"sync"
 	"text/template"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
@@ -38,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 /*
@@ -215,84 +213,58 @@ func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 
 // readTabletStreams reads all of the VReplication workflow streams *except*
 // the Reshard workflow's reverse variant.
-func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, constraint string) ([]*VReplicationStream, error) {
-	query := fmt.Sprintf("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name=%s and workflow != %s",
-		encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
-	if constraint != "" {
-		query += fmt.Sprintf(" and %s", constraint)
+func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, ids []int32, states []binlogdatapb.VReplicationWorkflowState, excludeFrozen bool) ([]*VReplicationStream, error) {
+	req := &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+		DbName:           ti.DbName(),
+		ExcludeWorkflows: []string{sm.ts.ReverseWorkflowName()},
+		IncludeIds:       ids,
+		States:           states,
+		ExcludeFrozen:    excludeFrozen,
 	}
 
-	p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, ti.Tablet, query)
+	res, err := sm.ts.TabletManagerClient().ReadVReplicationWorkflows(ctx, ti.Tablet, req)
 	if err != nil {
 		return nil, err
 	}
 
-	qr := sqltypes.Proto3ToResult(p3qr)
-	tabletStreams := make([]*VReplicationStream, 0, len(qr.Rows))
+	tabletStreams := make([]*VReplicationStream, 0, len(res.Workflows))
 
-	for _, row := range qr.Named().Rows {
-		id, err := row["id"].ToInt32()
-		if err != nil {
-			return nil, err
-		}
-
-		workflowName := row["workflow"].ToString()
-		switch workflowName {
+	for _, workflow := range res.Workflows {
+		switch workflow.Workflow {
 		case "":
-			return nil, fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s, stream: %d",
-				ti.Keyspace, ti.Shard, id)
+			return nil, fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s",
+				ti.Keyspace, ti.Shard)
 		case sm.ts.WorkflowName():
-			return nil, fmt.Errorf("VReplication stream has the same workflow name as the resharding workflow: shard: %s:%s, stream: %d",
-				ti.Keyspace, ti.Shard, id)
+			return nil, fmt.Errorf("VReplication stream has the same workflow name as the resharding workflow: shard: %s:%s",
+				ti.Keyspace, ti.Shard)
 		}
 
-		workflowType, err := row["workflow_type"].ToInt32()
-		if err != nil {
-			return nil, err
-		}
-		workflowSubType, err := row["workflow_sub_type"].ToInt32()
-		if err != nil {
-			return nil, err
-		}
+		for _, stream := range workflow.Streams {
+			isReference, err := sm.blsIsReference(stream.Bls)
+			if err != nil {
+				return nil, vterrors.Wrap(err, "blsIsReference")
+			}
 
-		deferSecondaryKeys, err := row["defer_secondary_keys"].ToBool()
-		if err != nil {
-			return nil, err
-		}
+			if isReference {
+				sm.ts.Logger().Infof("readTabletStreams: ignoring reference table %+v", stream.Bls)
+				continue
+			}
 
-		var bls binlogdatapb.BinlogSource
-		rowBytes, err := row["source"].ToBytes()
-		if err != nil {
-			return nil, err
-		}
-		if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
-			return nil, err
-		}
+			pos, err := replication.DecodePosition(stream.Pos)
+			if err != nil {
+				return nil, err
+			}
 
-		isReference, err := sm.blsIsReference(&bls)
-		if err != nil {
-			return nil, vterrors.Wrap(err, "blsIsReference")
+			tabletStreams = append(tabletStreams, &VReplicationStream{
+				ID:                 stream.Id,
+				Workflow:           workflow.Workflow,
+				BinlogSource:       stream.Bls,
+				Position:           pos,
+				WorkflowType:       workflow.WorkflowType,
+				WorkflowSubType:    workflow.WorkflowSubType,
+				DeferSecondaryKeys: workflow.DeferSecondaryKeys,
+			})
 		}
-
-		if isReference {
-			sm.ts.Logger().Infof("readTabletStreams: ignoring reference table %+v", &bls)
-			continue
-		}
-
-		pos, err := replication.DecodePosition(row["pos"].ToString())
-		if err != nil {
-			return nil, err
-		}
-
-		tabletStreams = append(tabletStreams, &VReplicationStream{
-			ID:                 id,
-			Workflow:           workflowName,
-			BinlogSource:       &bls,
-			Position:           pos,
-			WorkflowType:       binlogdatapb.VReplicationWorkflowType(workflowType),
-			WorkflowSubType:    binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
-			DeferSecondaryKeys: deferSecondaryKeys,
-		})
 	}
 	return tabletStreams, nil
 }
@@ -318,7 +290,8 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 			// If so, we request the operator to clean them up, or restart them before going ahead.
 			// This allows us to assume that all stopped streams can be safely restarted
 			// if we cancel the operation.
-			stoppedStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), "state = 'Stopped' and message != 'FROZEN'")
+			stoppedStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), nil,
+				[]binlogdatapb.VReplicationWorkflowState{binlogdatapb.VReplicationWorkflowState_Stopped}, true)
 			if err != nil {
 				return err
 			}
@@ -328,7 +301,7 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 			}
 		}
 
-		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), "")
+		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), nil, nil, false)
 		if err != nil {
 			return err
 		}
@@ -423,7 +396,7 @@ func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 			return err
 		}
 
-		tabletStreams, err = sm.readTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("id in %s", VReplicationStreams(tabletStreams).Values()))
+		tabletStreams, err = sm.readTabletStreams(ctx, source.GetPrimary(), VReplicationStreams(tabletStreams).IDs(), nil, false)
 		if err != nil {
 			return err
 		}
@@ -522,7 +495,7 @@ func (sm *StreamMigrator) verifyStreamPositions(ctx context.Context, stopPositio
 			return nil
 		}
 
-		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("id in %s", VReplicationStreams(tabletStreams).Values()))
+		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), VReplicationStreams(tabletStreams).IDs(), nil, false)
 		if err != nil {
 			return err
 		}

@@ -26,8 +26,6 @@ import (
 	"strings"
 	"sync"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -106,26 +104,23 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.GetTablet"))
 				return
 			}
-			validations := []struct {
-				query string
-				msg   string
-			}{{
-				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(primary.DbName()), encodeString(workflow)),
-				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias),
-			}, {
-				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN' and workflow_sub_type != %d", encodeString(primary.DbName()), binlogdatapb.VReplicationWorkflowSubType_Partial),
-				fmt.Sprintf("found previous frozen workflow on tablet %v, please review and delete it first before creating a new workflow",
-					primary.Alias),
-			}}
-			for _, validation := range validations {
-				p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, validation.query)
-				if err != nil {
-					allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.VReplicationExec"))
+			res, err := tmc.ReadVReplicationWorkflows(ctx, primary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+				DbName: primary.DbName(),
+			})
+			if err != nil {
+				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.ReadVReplicationWorkflows"))
+				return
+			}
+			for _, wf := range res.Workflows {
+				if wf.Workflow == workflow {
+					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias))
 					return
 				}
-				if p3qr != nil && len(p3qr.Rows) != 0 {
-					allErrors.RecordError(vterrors.Wrap(fmt.Errorf(validation.msg), "validateWorkflowName.VReplicationExec"))
-					return
+				for _, stream := range wf.Streams {
+					if stream.Message == Frozen && wf.WorkflowSubType != binlogdatapb.VReplicationWorkflowSubType_Partial {
+						allErrors.RecordError(fmt.Errorf("found previous frozen workflow on tablet %v, please review and delete it first before creating a new workflow", primary.Alias))
+						return
+					}
 				}
 			}
 		}(si)
@@ -531,12 +526,20 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 	} else {
 		_ = ts.ForAllTargets(func(target *MigrationTarget) error {
 			wg.Add(1)
-			query := fmt.Sprintf("select 1 from _vt.vreplication where db_name='%s' and workflow='%s' and message!='FROZEN'", target.GetPrimary().DbName(), ts.WorkflowName())
-			rs, _ := ts.VReplicationExec(ctx, target.GetPrimary().Alias, query)
-			if len(rs.Rows) > 0 {
-				rec.RecordError(fmt.Errorf("vreplication streams are not frozen on tablet %d", target.GetPrimary().Alias.Uid))
+			defer wg.Done()
+			res, err := ts.ws.tmc.ReadVReplicationWorkflow(ctx, target.GetPrimary().Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+				Workflow: ts.WorkflowName(),
+			})
+			if err != nil {
+				rec.RecordError(err)
+				return nil
 			}
-			wg.Done()
+			for _, stream := range res.Streams {
+				if stream.Message != Frozen {
+					rec.RecordError(fmt.Errorf("vreplication streams are not frozen on tablet %d", target.GetPrimary().Alias.Uid))
+					return nil
+				}
+			}
 			return nil
 		})
 	}
@@ -647,122 +650,10 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 	return nil
 }
 
-// LegacyBuildTargets collects MigrationTargets and other metadata (see TargetInfo)
-// from a workflow in the target keyspace. It uses VReplicationExec to get the workflow
-// details rather than the new TabletManager ReadVReplicationWorkflow RPC. This is
-// being used to slowly transition all of the older code, including unit tests, over to
-// the new RPC and limit the impact of the new implementation to vtctldclient. You can see
-// how the unit tests were being migrated here: https://gist.github.com/mattlord/738c12befe951f8d09304ff7fdc47c46
-//
-// New callers should instead use the new BuildTargets function.
-//
-// It returns ErrNoStreams if there are no targets found for the workflow.
-func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
-	targetShards, err := ts.GetShardNames(ctx, targetKeyspace)
-	if err != nil {
-		return nil, err
+func buildTabletTypesString(tabletTypes []topodatapb.TabletType, tabletSelectionPreference tabletmanagerdatapb.TabletSelectionPreference) string {
+	tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
+	if tabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
+		tabletTypesStr = discovery.InOrderHint + tabletTypesStr
 	}
-
-	var (
-		frozen          bool
-		optCells        string
-		optTabletTypes  string
-		targets         = make(map[string]*MigrationTarget, len(targetShards))
-		workflowType    binlogdatapb.VReplicationWorkflowType
-		workflowSubType binlogdatapb.VReplicationWorkflowSubType
-	)
-
-	getVReplicationWorkflowType := func(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowType {
-		i, _ := row["workflow_type"].ToInt32()
-		return binlogdatapb.VReplicationWorkflowType(i)
-	}
-
-	getVReplicationWorkflowSubType := func(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowSubType {
-		i, _ := row["workflow_sub_type"].ToInt32()
-		return binlogdatapb.VReplicationWorkflowSubType(i)
-	}
-
-	// We check all shards in the target keyspace. Not all of them may have a
-	// stream. For example, if we're splitting -80 to [-40,40-80], only those
-	// two target shards will have vreplication streams, and the other shards in
-	// the target keyspace will not.
-	for _, targetShard := range targetShards {
-		si, err := ts.GetShard(ctx, targetKeyspace, targetShard)
-		if err != nil {
-			return nil, err
-		}
-
-		if si.PrimaryAlias == nil {
-			// This can happen if bad inputs are given.
-			return nil, fmt.Errorf("shard %v/%v doesn't have a primary set", targetKeyspace, targetShard)
-		}
-
-		primary, err := ts.GetTablet(ctx, si.PrimaryAlias)
-		if err != nil {
-			return nil, err
-		}
-
-		// NB: changing the whitespace of this query breaks tests for now.
-		// (TODO:@ajm188) extend FakeDBClient to be less whitespace-sensitive on
-		// expected queries.
-		query := fmt.Sprintf("select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(primary.DbName()))
-		p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, query)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(p3qr.Rows) < 1 {
-			continue
-		}
-
-		target := &MigrationTarget{
-			si:      si,
-			primary: primary,
-			Sources: make(map[int32]*binlogdatapb.BinlogSource),
-		}
-
-		qr := sqltypes.Proto3ToResult(p3qr)
-		for _, row := range qr.Named().Rows {
-			id, err := row["id"].ToInt32()
-			if err != nil {
-				return nil, err
-			}
-
-			var bls binlogdatapb.BinlogSource
-			rowBytes, err := row["source"].ToBytes()
-			if err != nil {
-				return nil, err
-			}
-			if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
-				return nil, err
-			}
-
-			if row["message"].ToString() == Frozen {
-				frozen = true
-			}
-
-			target.Sources[id] = &bls
-			optCells = row["cell"].ToString()
-			optTabletTypes = row["tablet_types"].ToString()
-
-			workflowType = getVReplicationWorkflowType(row)
-			workflowSubType = getVReplicationWorkflowSubType(row)
-
-		}
-
-		targets[targetShard] = target
-	}
-
-	if len(targets) == 0 {
-		return nil, fmt.Errorf("%w in keyspace %s for %s", ErrNoStreams, targetKeyspace, workflow)
-	}
-
-	return &TargetInfo{
-		Targets:         targets,
-		Frozen:          frozen,
-		OptCells:        optCells,
-		OptTabletTypes:  optTabletTypes,
-		WorkflowType:    workflowType,
-		WorkflowSubType: workflowSubType,
-	}, nil
+	return tabletTypesStr
 }

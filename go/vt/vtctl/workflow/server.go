@@ -43,7 +43,6 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -1698,7 +1697,11 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 	} else {
 		log.Warningf("Streams will not be started since --auto-start is set to false")
 	}
-	return nil, nil
+
+	return s.WorkflowStatus(ctx, &vtctldatapb.WorkflowStatusRequest{
+		Keyspace: req.Keyspace,
+		Workflow: req.Workflow,
+	})
 }
 
 // VDiffCreate is part of the vtctlservicepb.VtctldServer interface.
@@ -1718,11 +1721,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	span.Annotate("auto_retry", req.AutoRetry)
 	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 
-	tabletTypesStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
-	if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
-		tabletTypesStr = discovery.InOrderHint + tabletTypesStr
-	}
-
+	tabletTypesStr := buildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
 	options := &tabletmanagerdatapb.VDiffOptions{
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			TabletTypes: tabletTypesStr,

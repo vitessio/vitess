@@ -19,14 +19,10 @@ package workflow
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/schema"
@@ -37,7 +33,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type resharder struct {
@@ -132,13 +130,12 @@ func (s *Server) buildResharder(ctx context.Context, keyspace, workflow string, 
 func (rs *resharder) validateTargets(ctx context.Context) error {
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary := rs.targetPrimaries[target.ShardName()]
-		query := fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s", encodeString(targetPrimary.DbName()))
-		p3qr, err := rs.s.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query)
+		res, err := rs.s.tmc.HasVReplicationWorkflows(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.HasVReplicationWorkflowsRequest{DbName: targetPrimary.DbName()})
 		if err != nil {
-			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
+			return vterrors.Wrapf(err, "HasVReplicationWorkflows(%v, %s)", targetPrimary.Tablet, targetPrimary.DbName())
 		}
-		if len(p3qr.Rows) != 0 {
-			return errors.New("some streams already exist in the target shards, please clean them up and retry the command")
+		if res.Has {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "some streams already exist in the target shards, please clean them up and retry the command")
 		}
 		return nil
 	})
@@ -150,66 +147,61 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 	err := rs.forAll(rs.sourceShards, func(source *topo.ShardInfo) error {
 		sourcePrimary := rs.sourcePrimaries[source.ShardName()]
 
-		query := fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name=%s and message != 'FROZEN'", encodeString(sourcePrimary.DbName()))
-		p3qr, err := rs.s.tmc.VReplicationExec(ctx, sourcePrimary.Tablet, query)
+		req := &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+			DbName:        sourcePrimary.DbName(),
+			ExcludeFrozen: true,
+		}
+		res, err := rs.s.tmc.ReadVReplicationWorkflows(ctx, sourcePrimary.Tablet, req)
 		if err != nil {
-			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", sourcePrimary.Tablet, query)
+			return vterrors.Wrapf(err, "ReadVReplicationWorkflows(%v, %+v)", sourcePrimary.Tablet, req)
 		}
-		qr := sqltypes.Proto3ToResult(p3qr)
 
-		mu.Lock()
-		defer mu.Unlock()
+		for _, workflow := range res.Workflows {
+			mu.Lock()
+			defer mu.Unlock()
 
-		mustCreate := false
-		var ref map[string]bool
-		if rs.refStreams == nil {
-			rs.refStreams = make(map[string]*refStream)
-			mustCreate = true
-		} else {
-			// Copy the ref streams for comparison.
-			ref = make(map[string]bool, len(rs.refStreams))
-			for k := range rs.refStreams {
-				ref[k] = true
+			mustCreate := false
+			var ref map[string]bool
+			if rs.refStreams == nil {
+				rs.refStreams = make(map[string]*refStream)
+				mustCreate = true
+			} else {
+				// Copy the ref streams for comparison.
+				ref = make(map[string]bool, len(rs.refStreams))
+				for k := range rs.refStreams {
+					ref[k] = true
+				}
 			}
-		}
-		for _, row := range qr.Rows {
-
-			workflow := row[0].ToString()
-			if workflow == "" {
+			if workflow.Workflow == "" {
 				return fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s", source.Keyspace(), source.ShardName())
 			}
-			var bls binlogdatapb.BinlogSource
-			rowBytes, err := row[1].ToBytes()
-			if err != nil {
-				return err
-			}
-			if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
-				return vterrors.Wrapf(err, "prototext.Unmarshal: %v", row)
-			}
-			isReference, err := rs.blsIsReference(&bls)
-			if err != nil {
-				return vterrors.Wrap(err, "blsIsReference")
-			}
-			if !isReference {
-				continue
-			}
-			refKey := fmt.Sprintf("%s:%s:%s", workflow, bls.Keyspace, bls.Shard)
-			if mustCreate {
-				rs.refStreams[refKey] = &refStream{
-					workflow:    workflow,
-					bls:         &bls,
-					cell:        row[2].ToString(),
-					tabletTypes: row[3].ToString(),
+			for _, stream := range res.Workflows[0].Streams {
+				bls := stream.Bls
+				isReference, err := rs.blsIsReference(bls)
+				if err != nil {
+					return vterrors.Wrap(err, "blsIsReference")
 				}
-			} else {
-				if !ref[refKey] {
-					return fmt.Errorf("streams are mismatched across source shards for workflow: %s", workflow)
+				if !isReference {
+					continue
 				}
-				delete(ref, refKey)
+				refKey := fmt.Sprintf("%s:%s:%s", workflow, bls.Keyspace, bls.Shard)
+				if mustCreate {
+					rs.refStreams[refKey] = &refStream{
+						workflow:    workflow.Workflow,
+						bls:         bls,
+						cell:        workflow.Cells,
+						tabletTypes: buildTabletTypesString(workflow.TabletTypes, workflow.TabletSelectionPreference),
+					}
+				} else {
+					if !ref[refKey] {
+						return fmt.Errorf("streams are mismatched across source shards for workflow: %s", workflow)
+					}
+					delete(ref, refKey)
+				}
 			}
-		}
-		if len(ref) != 0 {
-			return fmt.Errorf("streams are mismatched across source shards: %v", ref)
+			if len(ref) != 0 {
+				return fmt.Errorf("streams are mismatched across source shards: %v", ref)
+			}
 		}
 		return nil
 	})
@@ -332,10 +324,13 @@ func (rs *resharder) startStreams(ctx context.Context) error {
 		// that we've created on the new shards as we're migrating them.
 		// We use the comment directive to indicate that this is intentional
 		// and OK.
-		query := fmt.Sprintf("update /*vt+ %s */ _vt.vreplication set state='Running' where db_name=%s",
-			vreplication.AllowUnsafeWriteCommentDirective, encodeString(targetPrimary.DbName()))
-		if _, err := rs.s.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
-			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
+		req := &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow: rs.workflow,
+			State:    binlogdatapb.VReplicationWorkflowState_Running,
+		}
+		if _, err := rs.s.tmc.UpdateVReplicationWorkflow(ctx, targetPrimary.Tablet, req); err != nil {
+			return vterrors.Wrapf(err, "UpdateVReplicationWorkflow(%v, 'state='%s')",
+				targetPrimary.Tablet, binlogdatapb.VReplicationWorkflowState_Running.String())
 		}
 		return nil
 	})
