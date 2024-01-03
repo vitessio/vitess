@@ -152,6 +152,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 
 // AlterTableCapableOfInstantDDL checks if the specific ALTER TABLE is eligible to run via ALGORITHM=INSTANT, given the existing table schema and
 // the MySQL server capabilities.
+// The function is intentionally public, as it is intended to be used buy other packages, such as onlineddl.
 func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (bool, error) {
 	if capableOf == nil {
 		return false, nil
@@ -184,6 +185,8 @@ func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable
 	return true, nil
 }
 
+// diffCapableOfInstantDDL checks whether the given diff is either trivially instantaneous (e.g. CREATE TABLE) or
+// is capable of `ALGORITHM=INSTANT`.
 func diffCapableOfInstantDDL(diff EntityDiff, capableOf capabilities.CapableOf) (bool, error) {
 	switch diff := diff.(type) {
 	case *CreateTableEntityDiff,
