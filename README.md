@@ -39,7 +39,7 @@ See [Security](SECURITY.md) for a full outline of the security process.
 
 ### Security Audit
 
-A third party security audit was performed by Cure53. [Read the full report](doc/VIT-01-report.pdf).
+A third party security audit was performed by ADA Logics. [Read the full report](doc/VIT-03-report-security-audit.pdf).
 
 ## License
 
