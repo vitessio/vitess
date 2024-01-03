@@ -40,6 +40,14 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input:  "SELECT * FROM base.version;",
+			output: "select * from base.`version`",
+		},
+		{
+			input:  "CREATE VIEW version AS SELECT * FROM base.version;",
+			output: "create view `version` as select * from base.`version`",
+		},
+		{
 			input: "create table t123 (c1 varchar(5) check (c1 in ('v1', 'v2')) NOT NULL);",
 			output: "create table t123 (\n\tc1 varchar(5) not null,\n\tcheck (c1 in ('v1', 'v2'))\n)",
 		},
