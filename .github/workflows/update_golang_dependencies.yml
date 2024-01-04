@@ -1,7 +1,6 @@
 name: Update Golang Dependencies
 
 on:
-  pull_request:
   schedule:
     - cron: "0 0 * * *" # Runs every day at midnight UTC
   workflow_dispatch:
@@ -9,8 +8,8 @@ on:
 permissions: read-all
 
 jobs:
-  update_golang_version:
-#    if: github.repository == 'vitessio/vitess'
+  update_golang_deps:
+    if: github.repository == 'vitessio/vitess'
     permissions:
       contents: write
       pull-requests: write
@@ -39,6 +38,8 @@ jobs:
           if [ -z "${output}" ]; then
             exit 0
           fi
+
+          go mod tidy
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v4
