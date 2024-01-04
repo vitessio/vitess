@@ -30,9 +30,7 @@ jobs:
         with:
           ref: ${{ matrix.branch }}
 
-      - name: Detect new version and update codebase
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Upgrade the Golang Dependencies
         id: detect-and-update
         run: |
           go get -u ./...
