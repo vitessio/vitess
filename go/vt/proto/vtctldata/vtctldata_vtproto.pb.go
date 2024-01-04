@@ -31060,7 +31060,7 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Concurrency |= uint64(b&0x7F) << shift
+				m.Concurrency |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -31453,7 +31453,7 @@ func (m *BackupShardRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Concurrency |= uint64(b&0x7F) << shift
+				m.Concurrency |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -46929,7 +46929,7 @@ func (m *ReloadSchemaKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Concurrency |= uint32(b&0x7F) << shift
+				m.Concurrency |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -47200,7 +47200,7 @@ func (m *ReloadSchemaShardRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Concurrency |= uint32(b&0x7F) << shift
+				m.Concurrency |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
