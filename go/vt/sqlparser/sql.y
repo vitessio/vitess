@@ -2288,6 +2288,10 @@ trigger_begin_end_block:
   {
     $$ = &BeginEndBlock{Statements: $2}
   }
+| BEGIN END
+  {
+    $$ = &BeginEndBlock{}
+  }
 
 case_statement:
   CASE expression case_statement_case_list END CASE

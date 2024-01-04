@@ -1712,33 +1712,49 @@ var (
 		}, {
 			input:  "CREATE OR REPLACE VIEW a AS SELECT current_timestamp()",
 			output: "create or replace view a as select current_timestamp(0)",
-		}, {
+		},
+		{
 			input: "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
-		}, {
+		},
+		{
 			input: "create trigger t2 before update on foo for each row precedes bar call myStoredProc(foo)",
-		}, {
+		},
+		{
 			input: "create trigger dbName.trigger1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
-		}, {
+		},
+		{
 			input: "create trigger t1 after delete on foo for each row delete from xxy where old.y = z",
-		}, { //TODO: figure out why `SET SESSION sys_var = x` does not work when set directly on the trigger (works in BEGIN/END block)
+		},
+		{   //TODO: figure out why `SET SESSION sys_var = x` does not work when set directly on the trigger (works in BEGIN/END block)
 			input:  "create trigger t1 after delete on foo for each row set @@sum = @@sum + old.b",
 			output: "create trigger t1 after delete on foo for each row set session sum = @@sum + old.b",
-		}, {
+		},
+		{
 			input: "create trigger t1 before insert on foo for each row set new.x = new.x + 1",
-		}, {
+		},
+		{
 			input: "create trigger t1 after insert on foo for each row update xxy set y = new.x",
-		}, {
+		},
+		{
 			input: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-		}, {
+		},
+		{
+			input: "create trigger t1 before insert on foo for each row begin end",
+			output: "create trigger t1 before insert on foo for each row begin\nend",
+		},
+		{
 			input:  "create DEFINER=`root`@`localhost` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 			output: "create definer = `root`@`localhost` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-		}, {
+		},
+		{
 			input:  "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 			output: "create definer = `me`@`%` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-		}, {
+		},
+		{
 			input:  "create definer=me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 			output: "create definer = `me`@`%` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-		}, {
+		},
+		{
 			input:  "rename table a to b",
 			output: "rename table a to b",
 		}, {
