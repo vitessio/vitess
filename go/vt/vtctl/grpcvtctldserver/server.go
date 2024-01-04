@@ -515,7 +515,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 	Send(resp *vtctldatapb.BackupResponse) error
 }) error {
 	r := &tabletmanagerdatapb.BackupRequest{
-		Concurrency:        int64(req.Concurrency),
+		Concurrency:        req.Concurrency,
 		AllowPrimary:       req.AllowPrimary,
 		IncrementalFromPos: req.IncrementalFromPos,
 		UpgradeSafe:        req.UpgradeSafe,
