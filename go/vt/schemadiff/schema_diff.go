@@ -18,10 +18,12 @@ package schemadiff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
 	"vitess.io/vitess/go/mathutil"
+	"vitess.io/vitess/go/mysql/capabilities"
 )
 
 type DiffDependencyType int
@@ -342,4 +344,25 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 		// Done taking care of this equivalence class.
 	}
 	return orderedDiffs, nil
+}
+
+// CapableOfInstantDDL returns `true` if all diffs are capable of instant DDL, or are otherwise trivially
+// instantaneously applicable (such as `CREATE TABLE` or `ALTER VIEW`). The answer essentially indicates whether
+// the entire set of changes can be applied as an immediate operation.
+func (d *SchemaDiff) CapableOfInstantDDL(ctx context.Context, capableOf capabilities.CapableOf) (bool, error) {
+	if capableOf == nil {
+		return false, nil
+	}
+	var errs error
+	allCapable := true
+	for _, diff := range d.UnorderedDiffs() {
+		capable, err := diffCapableOfInstantDDL(diff, capableOf)
+		if err != nil {
+			errs = errors.Join(errs, err)
+		}
+		if !capable {
+			allCapable = false
+		}
+	}
+	return allCapable, errs
 }

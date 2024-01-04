@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 
@@ -248,25 +249,25 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlGRFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+func (mysqlGRFlavor) supportsCapability(serverVersion string, capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {
-	case InstantDDLFlavorCapability,
-		InstantExpandEnumCapability,
-		InstantAddLastColumnFlavorCapability,
-		InstantAddDropVirtualColumnFlavorCapability,
-		InstantChangeColumnDefaultFlavorCapability:
+	case capabilities.InstantDDLFlavorCapability,
+		capabilities.InstantExpandEnumCapability,
+		capabilities.InstantAddLastColumnFlavorCapability,
+		capabilities.InstantAddDropVirtualColumnFlavorCapability,
+		capabilities.InstantChangeColumnDefaultFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 0)
-	case InstantAddDropColumnFlavorCapability:
+	case capabilities.InstantAddDropColumnFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 29)
-	case TransactionalGtidExecutedFlavorCapability:
+	case capabilities.TransactionalGtidExecutedFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
-	case FastDropTableFlavorCapability:
+	case capabilities.FastDropTableFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
-	case MySQLJSONFlavorCapability:
+	case capabilities.MySQLJSONFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 5, 7, 0)
-	case MySQLUpgradeInServerFlavorCapability:
+	case capabilities.MySQLUpgradeInServerFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
-	case DynamicRedoLogCapacityFlavorCapability:
+	case capabilities.DynamicRedoLogCapacityFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
 	default:
 		return false, nil
