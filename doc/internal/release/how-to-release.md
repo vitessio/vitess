@@ -87,7 +87,7 @@ That includes:
   >  - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
   >  - For an RC, we need to create a new entry in the sidebar which represents the next version on `main` and mark the version we are releasing as RC.
   >  - For a GA, we need to mark the version we are releasing as "Stable" and the next one as "Development".
-  >  - Update [Install Operator](https://vitess.io/docs/get-started/operator/#install-the-operator): the snippet where we clone the vitess repository has to include `git checkout release-xx.0`. With `xx` being the major version we are releasing.  
+  >  - Update [Install Operator](https://vitess.io/docs/get-started/operator/#install-the-operator): the snippet where we clone the vitess repository has to include `git checkout release-xx.0`. With `xx` being the major version we are releasing.
 - **Create a new GitHub Milestone**
   > - Our GitHub Milestones is a good representation of all our ongoing development cycles. We have a Milestone for `main` and for all release branches. 
   > - After doing Code Freeze, we can create a new GitHub Milestone that matches the next development cycle.
