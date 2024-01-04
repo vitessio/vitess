@@ -1,15 +1,16 @@
 package schemadiff
 
 import (
-	"errors"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
-	ErrUnexpectedDiffType = errors.New("unexpected diff type")
+	ErrUnexpectedDiffType = vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected diff type")
 )
 
 // alterOptionAvailableViaInstantDDL checks if the specific alter option is eligible to run via ALGORITHM=INSTANT
@@ -89,7 +90,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		// Adding a *last* column is supported in 8.0
 		return capableOf(capabilities.InstantAddLastColumnFlavorCapability)
 	case *sqlparser.DropColumn:
-		// not supported in COMPRESSED tables
+		// Not supported in COMPRESSED tables
 		if opt := findTableOption("ROW_FORMAT"); opt != nil {
 			if strings.EqualFold(opt.String, "COMPRESSED") {
 				return false, nil
@@ -102,8 +103,8 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 		return capableOf(capabilities.InstantAddDropColumnFlavorCapability)
 	case *sqlparser.ModifyColumn:
 		if col := findColumn(opt.NewColDefinition.Name.String()); col != nil {
-			// Check if only diff is change of default
-			// we temporarily remove the DEFAULT expression (if any) from both
+			// Check if only diff is change of default.
+			// We temporarily remove the DEFAULT expression (if any) from both
 			// table and ALTER statement, and compare the columns: if they're otherwise equal,
 			// then the only change can be an addition/change/removal of DEFAULT, which
 			// is instant-table.
@@ -152,7 +153,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 
 // AlterTableCapableOfInstantDDL checks if the specific ALTER TABLE is eligible to run via ALGORITHM=INSTANT, given the existing table schema and
 // the MySQL server capabilities.
-// The function is intentionally public, as it is intended to be used buy other packages, such as onlineddl.
+// The function is intentionally public, as it is intended to be used by other packages, such as onlineddl.
 func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (bool, error) {
 	if capableOf == nil {
 		return false, nil
@@ -164,11 +165,7 @@ func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable
 	if !capable {
 		return false, nil
 	}
-	if alterTable.PartitionOption != nil {
-		// no INSTANT for partitions
-		return false, nil
-	}
-	if alterTable.PartitionSpec != nil {
+	if alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil {
 		// no INSTANT for partitions
 		return false, nil
 	}

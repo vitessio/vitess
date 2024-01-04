@@ -178,12 +178,12 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 				tcase.capableOf = capableOf
 			}
 			createTable, err := parser.Parse(tcase.create)
-			require.NoError(t, err)
+			require.NoError(t, err, "failed to parse a CREATE TABLE statement from %q", tcase.create)
 			createTableStmt, ok := createTable.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
 			alterTable, err := parser.Parse(tcase.alter)
-			require.NoError(t, err)
+			require.NoError(t, err, "failed to parse a ALTER TABLE statement from %q", tcase.alter)
 			alterTableStmt, ok := alterTable.(*sqlparser.AlterTable)
 			require.True(t, ok)
 
