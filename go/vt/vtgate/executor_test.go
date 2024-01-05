@@ -103,7 +103,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 
 	for _, test := range testCases {
 		sbclookup.SetResults([]*sqltypes.Result{result})
-		stmt, err := sqlparser.Parse(test.query)
+		stmt, err := sqlparser.NewTestParser().Parse(test.query)
 		require.NoError(t, err)
 
 		_, err = executor.Execute(ctx, nil, "TestExecutorMaxMemoryRowsExceeded", session, test.query, nil)
@@ -640,7 +640,7 @@ func TestExecutorShow(t *testing.T) {
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
-	// Set desitation keyspace in session
+	// Set destination keyspace in session
 	session.TargetString = KsTestUnsharded
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "show create table unknown", nil)
 	require.NoError(t, err)
@@ -667,7 +667,7 @@ func TestExecutorShow(t *testing.T) {
 				append(buildVarCharRow(
 					"utf8mb4",
 					"UTF-8 Unicode",
-					collations.Local().LookupName(collations.Default())),
+					collations.MySQL8().LookupName(collations.MySQL8().DefaultConnectionCharset())),
 					sqltypes.NewUint32(4)),
 			},
 		}
@@ -712,7 +712,7 @@ func TestExecutorShow(t *testing.T) {
 				append(buildVarCharRow(
 					"utf8mb4",
 					"UTF-8 Unicode",
-					collations.Local().LookupName(collations.Default())),
+					collations.MySQL8().LookupName(collations.MySQL8().DefaultConnectionCharset())),
 					sqltypes.NewUint32(4)),
 			},
 		}
@@ -763,7 +763,7 @@ func TestExecutorShow(t *testing.T) {
 		wantqr = &sqltypes.Result{
 			Fields: []*querypb.Field{
 				{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-				{Name: "value", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+				{Name: "value", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt32(1), sqltypes.NewVarChar("foo")},
@@ -1697,7 +1697,7 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *vcur
 			Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
 	}
 
-	stmt, reservedVars, err := parseAndValidateQuery(sql)
+	stmt, reservedVars, err := parseAndValidateQuery(sql, sqlparser.NewTestParser())
 	require.NoError(t, err)
 	plan, err := e.getPlan(context.Background(), vcursor, sql, stmt, comments, bindVars, reservedVars /* normalize */, e.normalize, logStats)
 	require.NoError(t, err)
@@ -1865,7 +1865,7 @@ func TestGetPlanPriority(t *testing.T) {
 			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 			assert.NoError(t, err)
 
-			stmt, err := sqlparser.Parse(testCase.sql)
+			stmt, err := sqlparser.NewTestParser().Parse(testCase.sql)
 			assert.NoError(t, err)
 			crticalityFromStatement, _ := sqlparser.GetPriorityFromStatement(stmt)
 
@@ -2288,7 +2288,7 @@ func TestExecutorVExplain(t *testing.T) {
 
 	result, err = executorExec(ctx, executor, session, "vexplain plan select 42", bindVars)
 	require.NoError(t, err)
-	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\"INT64(42) as 42\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
+	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\"42 as 42\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
 	require.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }
 

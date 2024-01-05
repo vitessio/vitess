@@ -413,7 +413,7 @@ func TestQueries(t *testing.T) {
 			{
 				Name:    "name",
 				Type:    querypb.Type_VARCHAR,
-				Charset: uint32(collations.Default()),
+				Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -451,15 +451,15 @@ func TestQueries(t *testing.T) {
 			{Name: "Type_DATETIME ", Type: querypb.Type_DATETIME, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
 			{Name: "Type_YEAR     ", Type: querypb.Type_YEAR, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "Type_DECIMAL  ", Type: querypb.Type_DECIMAL, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "Type_TEXT     ", Type: querypb.Type_TEXT, Charset: uint32(collations.Default())},
+			{Name: "Type_TEXT     ", Type: querypb.Type_TEXT, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			{Name: "Type_BLOB     ", Type: querypb.Type_BLOB, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
-			{Name: "Type_VARCHAR  ", Type: querypb.Type_VARCHAR, Charset: uint32(collations.Default())},
+			{Name: "Type_VARCHAR  ", Type: querypb.Type_VARCHAR, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			{Name: "Type_VARBINARY", Type: querypb.Type_VARBINARY, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
-			{Name: "Type_CHAR     ", Type: querypb.Type_CHAR, Charset: uint32(collations.Default())},
+			{Name: "Type_CHAR     ", Type: querypb.Type_CHAR, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			{Name: "Type_BINARY   ", Type: querypb.Type_BINARY, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
 			{Name: "Type_BIT      ", Type: querypb.Type_BIT, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
-			{Name: "Type_ENUM     ", Type: querypb.Type_ENUM, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_ENUM_FLAG)},
-			{Name: "Type_SET      ", Type: querypb.Type_SET, Charset: uint32(collations.Default()), Flags: uint32(querypb.MySqlFlag_SET_FLAG)},
+			{Name: "Type_ENUM     ", Type: querypb.Type_ENUM, Charset: uint32(collations.MySQL8().DefaultConnectionCharset()), Flags: uint32(querypb.MySqlFlag_ENUM_FLAG)},
+			{Name: "Type_SET      ", Type: querypb.Type_SET, Charset: uint32(collations.MySQL8().DefaultConnectionCharset()), Flags: uint32(querypb.MySqlFlag_SET_FLAG)},
 			// Skip TUPLE, not possible in Result.
 			{Name: "Type_GEOMETRY ", Type: querypb.Type_GEOMETRY, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_BLOB_FLAG)},
 			{Name: "Type_JSON     ", Type: querypb.Type_JSON, Charset: collations.CollationUtf8mb4ID},
@@ -537,7 +537,7 @@ func TestQueries(t *testing.T) {
 			{
 				Name:    "name",
 				Type:    querypb.Type_VARCHAR,
-				Charset: uint32(collations.Default()),
+				Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 			},
 		},
 		Rows: [][]sqltypes.Value{

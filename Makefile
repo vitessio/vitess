@@ -178,7 +178,7 @@ demo:
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
 		--in ./go/... \
-		--gen vitess.io/vitess/go/pools.Setting \
+		--gen vitess.io/vitess/go/pools/smartconnpool.Setting \
 		--gen vitess.io/vitess/go/vt/schema.DDLStrategySetting \
 		--gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
 		--gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
@@ -278,7 +278,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=24
+BOOTSTRAP_VERSION=26
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -391,6 +391,9 @@ back_to_dev_mode:
 tools:
 	echo $$(date): Installing dependencies
 	./bootstrap.sh
+
+clean_tools:
+	./tools/remove_dependencies.sh
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies

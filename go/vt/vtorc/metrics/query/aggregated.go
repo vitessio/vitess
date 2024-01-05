@@ -1,5 +1,5 @@
-// Package query provdes query metrics with this file providing
-// aggregared metrics based on the underlying values.
+// Package query provides query metrics with this file providing
+// aggregated metrics based on the underlying values.
 package query
 
 import (

@@ -86,7 +86,7 @@ func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 // validateNewWorkflow ensures that the specified workflow doesn't already exist
 // in the keyspace.
 func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace, workflow string) error {
-	allshards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	allshards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil {
 		return err
 	}
@@ -167,8 +167,8 @@ func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.Materia
 	return nil
 }
 
-func stripTableConstraints(ddl string) (string, error) {
-	ast, err := sqlparser.ParseStrictDDL(ddl)
+func stripTableConstraints(ddl string, parser *sqlparser.Parser) (string, error) {
+	ast, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}
@@ -189,8 +189,8 @@ func stripTableConstraints(ddl string) (string, error) {
 	return newDDL, nil
 }
 
-func stripTableForeignKeys(ddl string) (string, error) {
-	ast, err := sqlparser.ParseStrictDDL(ddl)
+func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error) {
+	ast, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}

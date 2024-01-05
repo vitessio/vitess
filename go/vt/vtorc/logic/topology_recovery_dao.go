@@ -369,7 +369,7 @@ func acknowledgeRecoveries(owner string, comment string, markEndRecovery bool, w
 	return rows, err
 }
 
-// AcknowledgeInstanceCompletedRecoveries marks active and COMPLETED recoveries for given instane as acknowledged.
+// AcknowledgeInstanceCompletedRecoveries marks active and COMPLETED recoveries for given instance as acknowledged.
 // This also implied clearing their active period, which in turn enables further recoveries on those topologies
 func AcknowledgeInstanceCompletedRecoveries(tabletAlias string, owner string, comment string) (countAcknowledgedEntries int64, err error) {
 	whereClause := `

@@ -35,7 +35,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -44,17 +43,6 @@ import (
 var (
 	rowStreamertHeartbeatInterval = 10 * time.Second
 )
-
-// RowStreamer exposes an externally usable interface to rowStreamer.
-type RowStreamer interface {
-	Stream() error
-	Cancel()
-}
-
-// NewRowStreamer returns a RowStreamer
-func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine, mode RowStreamerMode) RowStreamer {
-	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send, vse, mode, nil)
-}
 
 type RowStreamerMode int32
 
@@ -151,7 +139,7 @@ func (rs *rowStreamer) Stream() error {
 func (rs *rowStreamer) buildPlan() error {
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
-	sel, fromTable, err := analyzeSelect(rs.query)
+	sel, fromTable, err := analyzeSelect(rs.query, rs.se.SQLParser())
 	if err != nil {
 		return err
 	}
@@ -165,7 +153,7 @@ func (rs *rowStreamer) buildPlan() error {
 		// "puncture"; this is an event that is captured by vstreamer. The completion of the flow fixes the
 		// puncture, and places a new table under the original table's name, but the way it is done does not
 		// cause vstreamer to refresh schema state.
-		// There is therefore a reproducable valid sequence of events where vstreamer thinks a table does not
+		// There is therefore a reproducible valid sequence of events where vstreamer thinks a table does not
 		// exist, where it in fact does exist.
 		// For this reason we give vstreamer a "second chance" to review the up-to-date state of the schema.
 		// In the future, we will reduce this operation to reading a single table rather than the entire schema.
@@ -188,7 +176,7 @@ func (rs *rowStreamer) buildPlan() error {
 	// This is because the row format of a read is identical
 	// to the row format of a binlog event. So, the same
 	// filtering will work.
-	rs.plan, err = buildTablePlan(ti, rs.vschema, rs.query)
+	rs.plan, err = buildTablePlan(ti, rs.vschema, rs.query, rs.se.CollationEnv(), rs.se.SQLParser())
 	if err != nil {
 		log.Errorf("%s", err.Error())
 		return err
@@ -235,7 +223,7 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	var pkColumns = make([]int, 0)
 	if len(st.PKColumns) == 0 {
 		// Use a PK equivalent if one exists.
-		pkColumns, err := rs.vse.mapPKEquivalentCols(rs.ctx, st)
+		pkColumns, err := rs.vse.mapPKEquivalentCols(rs.ctx, rs.cp, st)
 		if err == nil && len(pkColumns) != 0 {
 			return pkColumns, nil
 		}

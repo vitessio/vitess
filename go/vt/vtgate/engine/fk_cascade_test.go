@@ -70,7 +70,7 @@ func TestDeleteCascade(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: delete from child where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} true true`,
+		`ExecuteMultiShard ks.0: delete from child where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x012\x950\x01b"}} true true`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: delete from parent where foo = 48 {} true true`,
 	})
@@ -80,9 +80,9 @@ func TestDeleteCascade(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`StreamExecuteMulti select cola, colb from parent where foo = 48 ks.0: {} `,
+		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: delete from child where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} true true`,
+		`ExecuteMultiShard ks.0: delete from child where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x012\x950\x01b"}} true true`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: delete from parent where foo = 48 {} true true`,
 	})
@@ -131,7 +131,7 @@ func TestUpdateCascade(t *testing.T) {
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: update child set ca = :vtg1 where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} true true`,
+		`ExecuteMultiShard ks.0: update child set ca = :vtg1 where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x012\x950\x01b"}} true true`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update parent set cola = 1 where foo = 48 {} true true`,
 	})
@@ -141,11 +141,87 @@ func TestUpdateCascade(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`StreamExecuteMulti select cola, colb from parent where foo = 48 ks.0: {} `,
+		`ExecuteMultiShard ks.0: select cola, colb from parent where foo = 48 {} false false`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: update child set ca = :vtg1 where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE values:{type:INT64 value:"1"} values:{type:VARCHAR value:"a"}} values:{type:TUPLE values:{type:INT64 value:"2"} values:{type:VARCHAR value:"b"}}} true true`,
+		`ExecuteMultiShard ks.0: update child set ca = :vtg1 where (ca, cb) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x012\x950\x01b"}} true true`,
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update parent set cola = 1 where foo = 48 {} true true`,
+	})
+}
+
+// TestNonLiteralUpdateCascade tests that FkCascade executes the child and parent primitives for a non-literal update cascade.
+func TestNonLiteralUpdateCascade(t *testing.T) {
+	fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("cola|cola <=> colb + 2|colb + 2", "int64|int64|int64"), "1|1|3", "2|0|5", "3|0|7")
+
+	inputP := &Route{
+		Query: "select cola, cola <=> colb + 2, colb + 2, from parent where foo = 48",
+		RoutingParameters: &RoutingParameters{
+			Opcode:   Unsharded,
+			Keyspace: &vindexes.Keyspace{Name: "ks"},
+		},
+	}
+	childP := &Update{
+		DML: &DML{
+			Query: "update child set ca = :fkc_upd where (ca) in ::__vals",
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Unsharded,
+				Keyspace: &vindexes.Keyspace{Name: "ks"},
+			},
+		},
+	}
+	parentP := &Update{
+		DML: &DML{
+			Query: "update parent set cola = colb + 2 where foo = 48",
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Unsharded,
+				Keyspace: &vindexes.Keyspace{Name: "ks"},
+			},
+		},
+	}
+	fkc := &FkCascade{
+		Selection: inputP,
+		Children: []*FkChild{{
+			BVName: "__vals",
+			Cols:   []int{0},
+			NonLiteralInfo: []NonLiteralUpdateInfo{
+				{
+					UpdateExprBvName: "fkc_upd",
+					UpdateExprCol:    2,
+					CompExprCol:      1,
+				},
+			},
+			Exec: childP,
+		}},
+		Parent: parentP,
+	}
+
+	vc := newDMLTestVCursor("0")
+	vc.results = []*sqltypes.Result{fakeRes}
+	_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: select cola, cola <=> colb + 2, colb + 2, from parent where foo = 48 {} false false`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x012"} fkc_upd: type:INT64 value:"5"} true true`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x013"} fkc_upd: type:INT64 value:"7"} true true`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: update parent set cola = colb + 2 where foo = 48 {} true true`,
+	})
+
+	vc.Rewind()
+	err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: select cola, cola <=> colb + 2, colb + 2, from parent where foo = 48 {} false false`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x012"} fkc_upd: type:INT64 value:"5"} true true`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x013"} fkc_upd: type:INT64 value:"7"} true true`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: update parent set cola = colb + 2 where foo = 48 {} true true`,
 	})
 }
 

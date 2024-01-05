@@ -19,17 +19,22 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -1538,7 +1543,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	defer cancel()
 
 	topoServ := memorytopo.NewServer(ctx, "cell")
-	wr := New(logutil.NewConsoleLogger(), topoServ, nil)
+	wr := New(logutil.NewConsoleLogger(), topoServ, nil, collations.MySQL8(), sqlparser.NewTestParser())
 
 	unique := map[string]*vschemapb.Vindex{
 		"v": {
@@ -2538,7 +2543,7 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.MySQL8(), sqlparser.NewTestParser())
 	defer env.close()
 
 	tabletID := 100
@@ -2835,7 +2840,7 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tid int(11) not null auto_increment,\n" +
 				"\tforeign_id int(11),\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
@@ -2858,8 +2863,8 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id),\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
@@ -2867,7 +2872,7 @@ func TestStripForeignKeys(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripTableForeignKeys(tc.ddl)
+		newDDL, err := stripTableForeignKeys(tc.ddl, sqlparser.NewTestParser())
 		if tc.hasErr != (err != nil) {
 			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
 		}
@@ -2904,8 +2909,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id)\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
 
@@ -2927,8 +2932,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id)\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
 		},
@@ -2941,7 +2946,7 @@ func TestStripConstraints(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripTableConstraints(tc.ddl)
+		newDDL, err := stripTableConstraints(tc.ddl, sqlparser.NewTestParser())
 		if tc.hasErr != (err != nil) {
 			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
 		}
@@ -3507,6 +3512,233 @@ func TestAddTablesToVSchema(t *testing.T) {
 			err := wr.addTablesToVSchema(ctx, srcks, tt.inTargetVSchema, tt.tables, tt.copyVSchema)
 			require.NoError(t, err)
 			require.Equal(t, tt.wantTargetVSchema, tt.inTargetVSchema)
+		})
+	}
+}
+
+// TestKeyRangesEqualOptimization tests that we optimize the source
+// filtering when there's only one source shard for the stream and
+// its keyrange is equal to the target shard for the stream. This
+// means that even if the target keyspace is sharded, the source
+// does not need to perform the in_keyrange filtering.
+func TestKeyRangesEqualOptimization(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	workflow := "testwf"
+	sourceKs := "sourceks"
+	targetKs := "targetks"
+	table := "t1"
+	mzi := vtctldatapb.MaterializationIntent_MOVETABLES
+	tableMaterializeSettings := []*vtctldatapb.TableMaterializeSettings{
+		{
+			TargetTable:      table,
+			SourceExpression: fmt.Sprintf("select * from %s", table),
+		},
+	}
+	targetVSchema := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			table: {
+				ColumnVindexes: []*vschemapb.ColumnVindex{
+					{
+						Column: "id",
+						Name:   "xxhash",
+					},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name         string
+		ms           *vtctldatapb.MaterializeSettings
+		sourceShards []string
+		targetShards []string
+		wantBls      map[string]*binlogdatapb.BinlogSource
+	}{
+		{
+			name: "no in_keyrange filter -- partial, one equal shard",
+			ms: &vtctldatapb.MaterializeSettings{
+				MaterializationIntent: mzi,
+				Workflow:              workflow,
+				TargetKeyspace:        targetKs,
+				SourceKeyspace:        sourceKs,
+				Cell:                  "cell",
+				SourceShards:          []string{"-80"}, // Partial MoveTables just for this shard
+				TableSettings:         tableMaterializeSettings,
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-80", "80-"},
+			wantBls: map[string]*binlogdatapb.BinlogSource{
+				"-80": {
+					Keyspace: sourceKs,
+					Shard:    "-80", // Keyranges are equal between the source and target
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s", table),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "in_keyrange filter -- unequal shards",
+			ms: &vtctldatapb.MaterializeSettings{
+				MaterializationIntent: mzi,
+				Workflow:              workflow,
+				TargetKeyspace:        targetKs,
+				SourceKeyspace:        sourceKs,
+				Cell:                  "cell",
+				TableSettings:         tableMaterializeSettings,
+			},
+			sourceShards: []string{"-"},
+			targetShards: []string{"-80", "80-"},
+			wantBls: map[string]*binlogdatapb.BinlogSource{
+				"-80": {
+					Keyspace: sourceKs,
+					Shard:    "-",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-80')", table, targetKs),
+							},
+						},
+					},
+				},
+				"80-": {
+					Keyspace: sourceKs,
+					Shard:    "-",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '80-')", table, targetKs),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "in_keyrange filter -- unequal shards on merge",
+			ms: &vtctldatapb.MaterializeSettings{
+				MaterializationIntent: mzi,
+				Workflow:              workflow,
+				TargetKeyspace:        targetKs,
+				SourceKeyspace:        sourceKs,
+				Cell:                  "cell",
+				TableSettings:         tableMaterializeSettings,
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-"},
+			wantBls: map[string]*binlogdatapb.BinlogSource{
+				"-": {
+					Keyspace: sourceKs,
+					Shard:    "-80",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-')", table, targetKs),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "no in_keyrange filter -- all equal shards",
+			ms: &vtctldatapb.MaterializeSettings{
+				MaterializationIntent: mzi,
+				Workflow:              workflow,
+				TargetKeyspace:        targetKs,
+				SourceKeyspace:        sourceKs,
+				Cell:                  "cell",
+				TableSettings:         tableMaterializeSettings,
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-80", "80-"},
+			wantBls: map[string]*binlogdatapb.BinlogSource{
+				"-80": {
+					Keyspace: sourceKs,
+					Shard:    "-80",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s", table),
+							},
+						},
+					},
+				},
+				"80-": {
+					Keyspace: sourceKs,
+					Shard:    "80-",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{
+							{
+								Match:  table,
+								Filter: fmt.Sprintf("select * from %s", table),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestMaterializerEnv(t, ctx, tc.ms, tc.sourceShards, tc.targetShards)
+			defer env.close()
+
+			// Target is always sharded.
+			err := env.wr.ts.SaveVSchema(ctx, targetKs, targetVSchema)
+			require.NoError(t, err, "SaveVSchema failed: %v", err)
+
+			for _, tablet := range env.tablets {
+				// Queries will only be executed on primary tablets in the target keyspace.
+				if tablet.Keyspace != targetKs || tablet.Type != topodatapb.TabletType_PRIMARY {
+					continue
+				}
+				env.tmc.expectVRQuery(int(tablet.Alias.Uid), mzSelectFrozenQuery, &sqltypes.Result{})
+				// If we are doing a partial MoveTables, we will only perform the workflow
+				// stream creation / INSERT statment on the shard(s) we're migrating.
+				if len(tc.ms.SourceShards) > 0 && !slices.Contains(tc.ms.SourceShards, tablet.Shard) {
+					continue
+				}
+				bls := tc.wantBls[tablet.Shard]
+				require.NotNil(t, bls, "no binlog source defined for tablet %+v", tablet)
+				if bls.Filter != nil {
+					for i, rule := range bls.Filter.Rules {
+						// It's escaped in the SQL statement.
+						bls.Filter.Rules[i].Filter = strings.ReplaceAll(rule.Filter, `'`, `\'`)
+					}
+				}
+				blsBytes, err := prototext.Marshal(bls)
+				require.NoError(t, err, "failed to marshal binlog source: %v", err)
+				// This is also escaped in the SQL statement.
+				blsStr := strings.ReplaceAll(string(blsBytes), `"`, `\"`)
+				// Escape the string for the regexp comparison.
+				blsStr = regexp.QuoteMeta(blsStr)
+				// For some reason we end up with an extra slash added by QuoteMeta for the
+				// escaped single quotes in the filter.
+				blsStr = strings.ReplaceAll(blsStr, `\\\\`, `\\\`)
+				expectedQuery := fmt.Sprintf(`/insert into _vt.vreplication.* values \('%s', '%s'`, workflow, blsStr)
+				env.tmc.expectVRQuery(int(tablet.Alias.Uid), expectedQuery, &sqltypes.Result{})
+			}
+
+			_, err = env.wr.prepareMaterializerStreams(ctx, tc.ms)
+			require.NoError(t, err, "prepareMaterializerStreams failed: %v", err)
 		})
 	}
 }

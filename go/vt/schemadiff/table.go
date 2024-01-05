@@ -1159,7 +1159,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 
 // rangePartitionsAddedRemoved returns true when:
 // - both table partitions are RANGE type
-// - there is exactly one consequitive non-empty shared sequence of partitions (same names, same range values, in same order)
+// - there is exactly one consecutive non-empty shared sequence of partitions (same names, same range values, in same order)
 // - table1 may have non-empty list of partitions _preceding_ this sequence, and table2 may not
 // - table2 may have non-empty list of partitions _following_ this sequence, and table1 may not
 func (c *CreateTableEntity) isRangePartitionsRotation(
@@ -1189,7 +1189,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 		definitions1 = definitions1[1:]
 	}
 	if len(definitions1) == 0 {
-		// We've exhaused definition1 trying to find a shared partition with definitions2. Nothing found.
+		// We've exhausted definition1 trying to find a shared partition with definitions2. Nothing found.
 		// so there is no shared sequence between the two tables.
 		return false, nil, nil
 	}
@@ -1251,9 +1251,9 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		return nil, nil
 	default:
 		// partitioning was changed
-		// For most cases, we produce a complete re-partitioing schema: we don't try and figure out the minimal
+		// For most cases, we produce a complete re-partitioning schema: we don't try and figure out the minimal
 		// needed change. For example, maybe the minimal change is to REORGANIZE a specific partition and split
-		// into two, thus unaffecting the rest of the partitions. But we don't evaluate that, we just set a
+		// into two, thus not affecting the rest of the partitions. But we don't evaluate that, we just set a
 		// complete new ALTER TABLE ... PARTITION BY statement.
 		// The idea is that it doesn't matter: we're not looking to do optimal in-place ALTERs, we run
 		// Online DDL alters, where we create a new table anyway. Thus, the optimization is meaningless.
@@ -1302,11 +1302,14 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	}
 	t1ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
 	t2ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
+	t2ConstraintsCountMap := map[string]int{}
 	for _, constraint := range t1Constraints {
 		t1ConstraintsMap[normalizeConstraintName(t1Name, constraint)] = constraint
 	}
 	for _, constraint := range t2Constraints {
-		t2ConstraintsMap[normalizeConstraintName(t2Name, constraint)] = constraint
+		constraintName := normalizeConstraintName(t2Name, constraint)
+		t2ConstraintsMap[constraintName] = constraint
+		t2ConstraintsCountMap[constraintName]++
 	}
 
 	dropConstraintStatement := func(constraint *sqlparser.ConstraintDefinition) *sqlparser.DropKey {
@@ -1319,12 +1322,22 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	// evaluate dropped constraints
 	//
 	for _, t1Constraint := range t1Constraints {
-		if _, ok := t2ConstraintsMap[normalizeConstraintName(t1Name, t1Constraint)]; !ok {
+		// Due to how we normalize the constraint string (e.g. in ConstraintNamesIgnoreAll we
+		// completely discard the constraint name), it's possible to have multiple constraints under
+		// the same string. Effectively, this means the schema design has duplicate/redundant constraints,
+		// which of course is poor design -- but still valid.
+		// To deal with dropping constraints, we need to not only account for the _existence_ of a constraint,
+		// but also to _how many times_ it appears.
+		constraintName := normalizeConstraintName(t1Name, t1Constraint)
+		if t2ConstraintsCountMap[constraintName] == 0 {
 			// constraint exists in t1 but not in t2, hence it is dropped
 			dropConstraint := dropConstraintStatement(t1Constraint)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
+		} else {
+			t2ConstraintsCountMap[constraintName]--
 		}
 	}
+	// t2ConstraintsCountMap should not be used henceforth.
 
 	for _, t2Constraint := range t2Constraints {
 		normalizedT2ConstraintName := normalizeConstraintName(t2Name, t2Constraint)
@@ -1589,7 +1602,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		modifyColumnDiff := t1ColEntity.ColumnDiff(t2ColEntity, hints)
 		if modifyColumnDiff == nil {
 			// even if there's no apparent change, there can still be implicit changes
-			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both varsions 1 and 2,
+			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both versions 1 and 2,
 			// but implicitly the column has changed its characters set. So we need to explicitly ass a MODIFY COLUMN statement, so that
 			// MySQL rebuilds it.
 			if tableCharsetChanged && t2ColEntity.IsTextual() && t2Col.Type.Charset.Name == "" {
@@ -1671,7 +1684,7 @@ func heuristicallyDetectColumnRenames(
 		// - the DROP and ADD column definitions are identical other than the column name, and
 		// - the DROPped and ADDded column are both FIRST, or they come AFTER the same column, and
 		// - the DROPped and ADDded column are both last, or they come before the same column
-		// This v1 chcek therefore cannot handle a case where two successive columns are renamed.
+		// This v1 check therefore cannot handle a case where two successive columns are renamed.
 		// the problem is complex, and with successive renamed, or drops and adds, it can be
 		// impossible to tell apart different scenarios.
 		// At any case, once we heuristically decide that we found a RENAME, we cancel the DROP,

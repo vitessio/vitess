@@ -15,11 +15,6 @@
     "plan": "VT12001: unsupported: natural right join"
   },
   {
-    "comment": "Multi-value aggregates not supported",
-    "query": "select count(a,b) from user",
-    "plan": "VT03001: aggregate functions take a single argument 'count(a, b)'"
-  },
-  {
     "comment": "subqueries not supported in group by",
     "query": "select id from user group by id, (select id from user_extra)",
     "plan": "VT12001: unsupported: subqueries in GROUP BY"
@@ -53,11 +48,6 @@
     "comment": "scatter update with limit clause",
     "query": "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1",
     "plan": "VT12001: unsupported: multi shard UPDATE with LIMIT"
-  },
-  {
-    "comment": "multi delete multi table",
-    "query": "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'",
-    "plan": "VT12001: unsupported: multi-shard or vindex write statement"
   },
   {
     "comment": "update changes primary vindex column",
@@ -102,7 +92,7 @@
   {
     "comment": "unsharded insert, col list does not match values",
     "query": "insert into unsharded_auto(id, val) values(1)",
-    "plan": "VT03006: column count does not match value count at row 1"
+    "plan": "VT03006: column count does not match value count with the row"
   },
   {
     "comment": "sharded upsert can't change vindex",
@@ -162,7 +152,7 @@
   {
     "comment": "delete with multi-table targets",
     "query": "delete music,user from music inner join user where music.id = user.id",
-    "plan": "VT12001: unsupported: multi-shard or vindex write statement"
+    "plan": "VT12001: unsupported: multi-table DELETE statement in a sharded keyspace"
   },
   {
     "comment": "select get_lock with non-dual table",
@@ -225,11 +215,6 @@
     "plan": "VT12001: unsupported: Select query does not belong to the same keyspace as the view statement"
   },
   {
-    "comment": "avg function on scatter query",
-    "query": "select avg(id) from user",
-    "plan": "VT12001: unsupported: in scatter query: aggregation function 'avg(id)'"
-  },
-  {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# This query will never work as the inner derived table is only selecting one of the column",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
@@ -253,16 +238,6 @@
     "comment": "unsupported with clause in update statement",
     "query": "with x as (select * from user) update x set name = 'f'",
     "plan": "VT12001: unsupported: WITH expression in UPDATE statement"
-  },
-  {
-    "comment": "unsupported with clause in select statement",
-    "query": "with x as (select * from user) select * from x",
-    "plan": "VT12001: unsupported: WITH expression in SELECT statement"
-  },
-  {
-    "comment": "unsupported with clause in union statement",
-    "query": "with x as (select * from user) select * from x union select * from x",
-    "plan": "VT12001: unsupported: WITH expression in UNION statement"
   },
   {
     "comment": "insert having subquery in row values",
@@ -345,14 +320,9 @@
     "plan": "VT12001: unsupported: unmergable subquery can not be inside complex expression"
   },
   {
-    "comment": "cant switch sides for outer joins",
-    "query": "select id from user left join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
-    "plan": "VT12001: unsupported: LEFT JOIN with derived tables"
-  },
-  {
-    "comment": "limit on both sides means that we can't evaluate this at all",
+    "comment": "this query needs better type information to be able to use the hash join",
     "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
-    "plan": "VT12001: unsupported: JOIN between derived tables"
+    "plan": "VT12001: unsupported: missing type information for [u.id, ue.user_id]"
   },
   {
     "comment": "multi-shard union",
@@ -383,5 +353,65 @@
     "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
     "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "CTEs cant use a table with the same name as the CTE alias",
+    "query": "with user as (select aa from user where user.id=1) select ref.col from ref join user",
+    "plan": "VT12001: unsupported: do not support CTE that use the CTE alias inside the CTE query"
+  },
+  {
+    "comment": "Recursive WITH",
+    "query": "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
+    "plan": "VT12001: unsupported: recursive common table expression"
+  },
+  {
+    "comment": "Alias cannot clash with base tables",
+    "query": "WITH user AS (SELECT col FROM user) SELECT * FROM user",
+    "plan": "VT12001: unsupported: do not support CTE that use the CTE alias inside the CTE query"
+  },
+  {
+    "comment": "correlated subqueries in select expressions are unsupported",
+    "query": "SELECT (SELECT sum(user.name) FROM music LIMIT 1) FROM user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "We need schema tracking to allow unexpanded columns inside UNION",
+    "query": "select x from (select t.*, 0 as x from user t union select t.*, 1 as x from user_extra t) AS t",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "multi table delete with 2 sharded tables join on vindex column",
+    "query": "delete u, m from user u join music m on u.id = m.user_id",
+    "plan": "VT12001: unsupported: multi-table DELETE statement in a sharded keyspace"
+  },
+  {
+    "comment": "multi table delete with 2 sharded tables join on non-vindex column",
+    "query": "delete u, m from user u join music m on u.col = m.col",
+    "plan": "VT12001: unsupported: multi-table DELETE statement in a sharded keyspace"
+  },
+  {
+    "comment": "multi table delete with 1 sharded and 1 reference table",
+    "query": "delete u, r from user u join ref_with_source r on u.col = r.col",
+    "plan": "VT12001: unsupported: multi-table DELETE statement in a sharded keyspace"
+  },
+  {
+    "comment": "reference table delete with join",
+    "query": "delete r from user u join ref_with_source r on u.col = r.col",
+    "plan": "VT12001: unsupported: DELETE on reference table with join"
+  },
+  {
+    "comment": "group_concat unsupported when needs full evaluation at vtgate with more than 1 column",
+    "query": "select group_concat(user.col1, music.col2) x from user join music on user.col = music.col order by x",
+    "plan": "VT12001: unsupported: group_concat with more than 1 column"
+  },
+  {
+    "comment": "count aggregation function having multiple column",
+    "query": "select count(distinct user_id, name) from user",
+    "plan": "VT12001: unsupported: distinct aggregation function with multiple expressions 'count(distinct user_id, `name`)'"
+  },
+  {
+    "comment": "count and sum distinct on different columns",
+    "query": "SELECT COUNT(DISTINCT col), SUM(DISTINCT id) FROM user",
+    "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct id)"
   }
 ]

@@ -28,22 +28,23 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
-
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -72,7 +73,7 @@ var waitRetryTime = 1 * time.Second
 // How frequently vcopier will update _vt.vreplication rows_copied
 var rowsCopiedUpdateInterval = 30 * time.Second
 
-// How frequntly vcopier will garbage collect old copy_state rows.
+// How frequently vcopier will garbage collect old copy_state rows.
 // By default, do it in between every 2nd and 3rd rows copied update.
 var copyStateGCInterval = (rowsCopiedUpdateInterval * 3) - (rowsCopiedUpdateInterval / 2)
 
@@ -107,10 +108,13 @@ type Engine struct {
 	throttlerClient *throttle.Client
 
 	// This should only be set in Test Engines in order to short
-	// curcuit functions as needed in unit tests. It's automatically
+	// circuit functions as needed in unit tests. It's automatically
 	// enabled in NewSimpleTestEngine. This should NOT be used in
 	// production.
 	shortcircuit bool
+
+	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
 type journalEvent struct {
@@ -127,15 +131,17 @@ type PostCopyAction struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler, collationEnv *collations.Environment, parser *sqlparser.Parser) *Engine {
 	vre := &Engine{
 		controllers:     make(map[int32]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		journaler:       make(map[string]*journalEvent),
-		ec:              newExternalConnector(config.ExternalConnections),
+		ec:              newExternalConnector(config.ExternalConnections, collationEnv, parser),
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, throttle.ThrottleCheckPrimaryWrite),
+		collationEnv:    collationEnv,
+		parser:          parser,
 	}
 
 	return vre
@@ -143,15 +149,15 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 
 // InitDBConfig should be invoked after the db name is computed.
 func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	// If we're already initilized, it's a test engine. Ignore the call.
+	// If we're already initialized, it's a test engine. Ignore the call.
 	if vre.dbClientFactoryFiltered != nil && vre.dbClientFactoryDba != nil {
 		return
 	}
 	vre.dbClientFactoryFiltered = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB())
+		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB(), vre.parser)
 	}
 	vre.dbClientFactoryDba = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB())
+		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB(), vre.parser)
 	}
 	vre.dbName = dbcfgs.DBName
 }
@@ -167,13 +173,15 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig),
+		ec:                      newExternalConnector(externalConfig, collations.MySQL8(), sqlparser.NewTestParser()),
+		collationEnv:            collations.MySQL8(),
+		parser:                  sqlparser.NewTestParser(),
 	}
 	return vre
 }
 
 // NewSimpleTestEngine creates a new Engine for testing that can
-// also short curcuit functions as needed.
+// also short circuit functions as needed.
 func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
 	vre := &Engine{
 		controllers:             make(map[int32]*controller),
@@ -184,8 +192,10 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig),
+		ec:                      newExternalConnector(externalConfig, collations.MySQL8(), sqlparser.NewTestParser()),
 		shortcircuit:            true,
+		collationEnv:            collations.MySQL8(),
+		parser:                  sqlparser.NewTestParser(),
 	}
 	return vre
 }
@@ -262,7 +272,7 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 		}
 		if err := vre.openLocked(ctx); err == nil {
 			// Don't invoke cancelRetry because openLocked
-			// will hold on to this context for later cancelation.
+			// will hold on to this context for later cancellation.
 			vre.cancelRetry = nil
 			vre.mu.Unlock()
 			return
@@ -362,7 +372,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 	defer vre.updateStats()
 
-	plan, err := buildControllerPlan(query)
+	plan, err := buildControllerPlan(query, vre.parser)
 	if err != nil {
 		return nil, err
 	}
@@ -524,7 +534,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		}
 		return qr, nil
 	case selectQuery, reshardingJournalQuery:
-		// select and resharding journal queries are passed through.
+		// Selects and resharding journal queries are passed through.
 		return dbClient.ExecuteFetch(plan.query, maxRows)
 	}
 	panic("unreachable")
@@ -847,7 +857,7 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 		return nil, err
 	}
 	defer dbClient.Close()
-	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(vre.dbName)), maxRows)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where db_name=%s", encodeString(vre.dbName)), maxRows)
 	if err != nil {
 		return nil, err
 	}

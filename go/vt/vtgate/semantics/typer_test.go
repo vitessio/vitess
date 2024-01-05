@@ -40,7 +40,7 @@ func TestNormalizerAndSemanticAnalysisIntegration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(test.query)
+			parse, err := sqlparser.NewTestParser().Parse(test.query)
 			require.NoError(t, err)
 
 			err = sqlparser.Normalize(parse, sqlparser.NewReservedVars("bv", sqlparser.BindVars{}), map[string]*querypb.BindVariable{})
@@ -51,7 +51,7 @@ func TestNormalizerAndSemanticAnalysisIntegration(t *testing.T) {
 			bv := parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Argument)
 			typ, found := st.ExprTypes[bv]
 			require.True(t, found, "bindvar was not typed")
-			require.Equal(t, test.typ, typ.Type.String())
+			require.Equal(t, test.typ, typ.Type().String())
 		})
 	}
 

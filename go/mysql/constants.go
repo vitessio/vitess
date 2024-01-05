@@ -17,7 +17,7 @@ limitations under the License.
 package mysql
 
 import (
-	"vitess.io/vitess/go/mysql/binlog"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 const (
@@ -274,10 +274,15 @@ const (
 	AuthSwitchRequestPacket = 0xfe
 )
 
+var typeInt24, _ = sqltypes.TypeToMySQL(sqltypes.Int24)
+var typeTimestamp, _ = sqltypes.TypeToMySQL(sqltypes.Timestamp)
+var typeYear, _ = sqltypes.TypeToMySQL(sqltypes.Year)
+var typeNewDecimal, _ = sqltypes.TypeToMySQL(sqltypes.Decimal)
+
 // IsNum returns true if a MySQL type is a numeric value.
 // It is the same as IS_NUM defined in mysql.h.
 func IsNum(typ uint8) bool {
-	return (typ <= binlog.TypeInt24 && typ != binlog.TypeTimestamp) ||
-		typ == binlog.TypeYear ||
-		typ == binlog.TypeNewDecimal
+	return (typ <= typeInt24 && typ != typeTimestamp) ||
+		typ == typeYear ||
+		typ == typeNewDecimal
 }

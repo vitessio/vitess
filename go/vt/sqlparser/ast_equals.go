@@ -2362,8 +2362,8 @@ func (cmp *Comparator) RefOfDelete(a, b *Delete) bool {
 	return cmp.RefOfWith(a.With, b.With) &&
 		a.Ignore == b.Ignore &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
-		cmp.TableNames(a.Targets, b.Targets) &&
 		cmp.TableExprs(a.TableExprs, b.TableExprs) &&
+		cmp.TableNames(a.Targets, b.Targets) &&
 		cmp.Partitions(a.Partitions, b.Partitions) &&
 		cmp.RefOfWhere(a.Where, b.Where) &&
 		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
@@ -4122,11 +4122,11 @@ func (cmp *Comparator) RefOfSelect(a, b *Select) bool {
 		a.StraightJoinHint == b.StraightJoinHint &&
 		a.SQLCalcFoundRows == b.SQLCalcFoundRows &&
 		cmp.RefOfBool(a.Cache, b.Cache) &&
+		cmp.RefOfWith(a.With, b.With) &&
 		cmp.SliceOfTableExpr(a.From, b.From) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.SelectExprs(a.SelectExprs, b.SelectExprs) &&
 		cmp.RefOfWhere(a.Where, b.Where) &&
-		cmp.RefOfWith(a.With, b.With) &&
 		cmp.GroupBy(a.GroupBy, b.GroupBy) &&
 		cmp.RefOfWhere(a.Having, b.Having) &&
 		cmp.NamedWindows(a.Windows, b.Windows) &&
@@ -4590,10 +4590,10 @@ func (cmp *Comparator) RefOfUnion(a, b *Union) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
+		cmp.RefOfWith(a.With, b.With) &&
 		cmp.SelectStatement(a.Left, b.Left) &&
 		cmp.SelectStatement(a.Right, b.Right) &&
 		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
-		cmp.RefOfWith(a.With, b.With) &&
 		cmp.RefOfLimit(a.Limit, b.Limit) &&
 		a.Lock == b.Lock &&
 		cmp.RefOfSelectInto(a.Into, b.Into)
@@ -4901,7 +4901,7 @@ func (cmp *Comparator) RefOfWith(a, b *With) bool {
 		return false
 	}
 	return a.Recursive == b.Recursive &&
-		cmp.SliceOfRefOfCommonTableExpr(a.ctes, b.ctes)
+		cmp.SliceOfRefOfCommonTableExpr(a.CTEs, b.CTEs)
 }
 
 // RefOfXorExpr does deep equals between the two objects.

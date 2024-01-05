@@ -27,6 +27,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/servenv/testutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -47,7 +51,7 @@ func TestAPI(t *testing.T) {
 	cells := []string{"cell1", "cell2"}
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
-	actionRepo := NewActionRepository(ts)
+	actionRepo := NewActionRepository(ts, collations.MySQL8(), sqlparser.NewTestParser())
 	server := testutils.HTTPTestServer()
 	defer server.Close()
 
@@ -237,7 +241,6 @@ func TestAPI(t *testing.T) {
 		// Keyspaces
 		{"GET", "keyspaces", "", `["ks1", "ks3"]`, http.StatusOK},
 		{"GET", "keyspaces/ks1", "", `{
-				"served_froms": [],
 				"keyspace_type":0,
 				"base_keyspace":"",
 				"snapshot_time":null,
@@ -324,11 +327,11 @@ func TestAPI(t *testing.T) {
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"served_froms\": [],\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt_sidecar_ks1\"\n}\n\n"
+		   "Output": "{\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt_sidecar_ks1\"\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"served_froms\": [],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt\"\n}\n\n"
+		   "Output": "{\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt\"\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
 		   "Error": "",

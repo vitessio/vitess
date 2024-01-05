@@ -303,7 +303,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
+%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE FORCE_CUTOVER EXPIRE RATIO
 // Throttler tokens
 %token <str> VITESS_THROTTLER
 
@@ -703,11 +703,11 @@ load_statement:
 with_clause:
   WITH with_list
   {
-	$$ = &With{ctes: $2, Recursive: false}
+	$$ = &With{CTEs: $2, Recursive: false}
   }
 | WITH RECURSIVE with_list
   {
-	$$ = &With{ctes: $3, Recursive: true}
+	$$ = &With{CTEs: $3, Recursive: true}
   }
 
 with_clause_opt:
@@ -1689,11 +1689,11 @@ text_literal
   }
 | BITNUM
   {
-  	$$ = NewBitLiteral($1[2:])
+  	$$ = NewBitLiteral($1)
   }
 | BIT_LITERAL
   {
-	$$ = NewBitLiteral($1)
+	$$ = NewBitLiteral("0b" + $1)
   }
 | VALUE_ARG
   {
@@ -1701,7 +1701,7 @@ text_literal
   }
 | underscore_charsets BIT_LITERAL %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral("0b" + $2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
@@ -1709,7 +1709,7 @@ text_literal
   }
 | underscore_charsets BITNUM %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2[2:])}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
   }
 | underscore_charsets HEX %prec UNARY
   {
@@ -3365,6 +3365,19 @@ alter_statement:
       Type: UnthrottleAllMigrationType,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION STRING FORCE_CUTOVER
+  {
+    $$ = &AlterMigration{
+      Type: ForceCutOverMigrationType,
+      UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION FORCE_CUTOVER ALL
+  {
+    $$ = &AlterMigration{
+      Type: ForceCutOverAllMigrationType,
+    }
+  }
 
 partitions_options_opt:
   {
@@ -4127,6 +4140,10 @@ show_statement:
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowBasic{Command: VschemaTables}}
+  }
+| SHOW VSCHEMA KEYSPACES
+  {
+    $$ = &Show{&ShowBasic{Command: VschemaKeyspaces}}
   }
 | SHOW VSCHEMA VINDEXES
   {
@@ -7507,6 +7524,26 @@ FOR UPDATE
   {
     $$ = ForUpdateLock
   }
+| FOR UPDATE NOWAIT
+  {
+    $$ = ForUpdateLockNoWait
+  }
+| FOR UPDATE SKIP LOCKED
+  {
+    $$ = ForUpdateLockSkipLocked
+  }
+| FOR SHARE
+  {
+    $$ = ForShareLock
+  }
+| FOR SHARE NOWAIT
+  {
+    $$ = ForShareLockNoWait
+  }
+| FOR SHARE SKIP LOCKED
+  {
+    $$ = ForShareLockSkipLocked
+  }
 | LOCK IN SHARE MODE
   {
     $$ = ShareModeLock
@@ -8180,6 +8217,7 @@ non_reserved_keyword:
 | FIXED
 | FLUSH
 | FOLLOWING
+| FORCE_CUTOVER
 | FORMAT
 | FORMAT_BYTES %prec FUNCTION_CALL_NON_KEYWORD
 | FORMAT_PICO_TIME %prec FUNCTION_CALL_NON_KEYWORD

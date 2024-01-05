@@ -97,28 +97,23 @@ func (tr *ShardedRouting) isScatter() bool {
 //     This can sometimes push a predicate to the top, so it's not hiding inside an OR
 //  2. If that is not enough, an additional rewrite pass is performed where we try to
 //     turn ORs into IN, which is easier for the planner to plan
-func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable *QueryTable) (Routing, error) {
+func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable *QueryTable) Routing {
 	oldPredicates := queryTable.Predicates
 	queryTable.Predicates = nil
 	tr.SeenPredicates = nil
 	var routing Routing = tr
-	var err error
 	for _, pred := range oldPredicates {
 		rewritten := sqlparser.RewritePredicate(pred)
 		predicates := sqlparser.SplitAndExpression(nil, rewritten.(sqlparser.Expr))
 		for _, predicate := range predicates {
 			queryTable.Predicates = append(queryTable.Predicates, predicate)
-
-			routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-			if err != nil {
-				return nil, err
-			}
+			routing = UpdateRoutingLogic(ctx, predicate, routing)
 		}
 	}
 
 	// If we have something other than a sharded routing with scatter, we are done
 	if sr, ok := routing.(*ShardedRouting); !ok || !sr.isScatter() {
-		return routing, nil
+		return routing
 	}
 
 	// if we _still_ haven't found a better route, we can run this additional rewrite on any ORs we have
@@ -128,23 +123,19 @@ func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTabl
 			continue
 		}
 		for _, predicate := range sqlparser.ExtractINFromOR(or) {
-			routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-			if err != nil {
-				return nil, err
-			}
+			routing = UpdateRoutingLogic(ctx, predicate, routing)
 		}
 	}
 
-	return routing, nil
+	return routing
 }
 
-func (tr *ShardedRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+func (tr *ShardedRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.Keyspace = tr.keyspace
 	if tr.Selected != nil {
 		rp.Vindex = tr.Selected.FoundVindex
 		rp.Values = tr.Selected.Values
 	}
-	return nil
 }
 
 func (tr *ShardedRouting) Clone() Routing {
@@ -166,17 +157,13 @@ func (tr *ShardedRouting) Clone() Routing {
 	}
 }
 
-func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
 	tr.SeenPredicates = append(tr.SeenPredicates, expr)
 
-	newRouting, newVindexFound, err := tr.searchForNewVindexes(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-
+	newRouting, newVindexFound := tr.searchForNewVindexes(ctx, expr)
 	if newRouting != nil {
 		// we found something that we can route with something other than ShardedRouting
-		return newRouting, nil
+		return newRouting
 	}
 
 	// if we didn't open up any new vindex Options, no need to enter here
@@ -184,10 +171,10 @@ func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, e
 		tr.PickBestAvailableVindex()
 	}
 
-	return tr, nil
+	return tr
 }
 
-func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
+func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
 	tr.RouteOpCode = engine.Scatter
 	tr.Selected = nil
 	for i, vp := range tr.VindexPreds {
@@ -196,16 +183,12 @@ func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) (R
 
 	var routing Routing = tr
 	for _, predicate := range tr.SeenPredicates {
-		var err error
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-		if err != nil {
-			return nil, err
-		}
+		routing = UpdateRoutingLogic(ctx, predicate, routing)
 	}
-	return routing, nil
+	return routing
 }
 
-func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool, error) {
+func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool) {
 	newVindexFound := false
 	switch node := predicate.(type) {
 	case *sqlparser.ComparisonExpr:
@@ -216,23 +199,23 @@ func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext,
 		newVindexFound = newVindexFound || found
 	}
 
-	return nil, newVindexFound, nil
+	return nil, newVindexFound
 }
 
-func (tr *ShardedRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (routing Routing, foundNew bool, err error) {
+func (tr *ShardedRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (routing Routing, foundNew bool) {
 	switch cmp.Operator {
 	case sqlparser.EqualOp:
 		found := tr.planEqualOp(ctx, cmp)
-		return nil, found, nil
+		return nil, found
 	case sqlparser.InOp:
 		found := tr.planInOp(ctx, cmp)
-		return nil, found, nil
+		return nil, found
 	case sqlparser.LikeOp:
 		found := tr.planLikeOp(ctx, cmp)
-		return nil, found, nil
+		return nil, found
 
 	}
-	return nil, false, nil
+	return nil, false
 }
 
 func (tr *ShardedRouting) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsExpr) bool {
@@ -625,8 +608,9 @@ func tryMergeJoinShardedRouting(
 func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) evalengine.Expr {
 	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
 		ee, _ := evalengine.Translate(expr, &evalengine.Config{
-			Collation:   ctx.SemTable.Collation,
-			ResolveType: ctx.SemTable.TypeForExpr,
+			Collation:    ctx.SemTable.Collation,
+			ResolveType:  ctx.SemTable.TypeForExpr,
+			CollationEnv: ctx.VSchema.CollationEnv(),
 		})
 		if ee != nil {
 			return ee

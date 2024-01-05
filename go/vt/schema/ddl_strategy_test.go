@@ -41,19 +41,23 @@ func TestIsDirect(t *testing.T) {
 
 func TestIsCutOverThresholdFlag(t *testing.T) {
 	tt := []struct {
-		s      string
-		expect bool
-		val    string
-		d      time.Duration
+		s           string
+		expect      bool
+		expectError string
+		val         string
+		d           time.Duration
 	}{
 		{
-			s: "something",
+			s:           "something",
+			expectError: "invalid flags",
 		},
 		{
-			s: "-cut-over-threshold",
+			s:           "-cut-over-threshold",
+			expectError: "invalid flags",
 		},
 		{
-			s: "--cut-over-threshold",
+			s:           "--cut-over-threshold",
+			expectError: "invalid flags",
 		},
 		{
 			s:      "--cut-over-threshold=",
@@ -87,6 +91,11 @@ func TestIsCutOverThresholdFlag(t *testing.T) {
 	for _, ts := range tt {
 		t.Run(ts.s, func(t *testing.T) {
 			setting, err := ParseDDLStrategy("online " + ts.s)
+			if ts.expectError != "" {
+				assert.ErrorContains(t, err, ts.expectError)
+				return
+			}
+
 			assert.NoError(t, err)
 
 			val, isCutOver := isCutOverThresholdFlag(ts.s)
@@ -104,19 +113,23 @@ func TestIsCutOverThresholdFlag(t *testing.T) {
 
 func TestIsExpireArtifactsFlag(t *testing.T) {
 	tt := []struct {
-		s      string
-		expect bool
-		val    string
-		d      time.Duration
+		s           string
+		expect      bool
+		expectError string
+		val         string
+		d           time.Duration
 	}{
 		{
-			s: "something",
+			s:           "something",
+			expectError: "invalid flags",
 		},
 		{
-			s: "-retain-artifacts",
+			s:           "-retain-artifacts",
+			expectError: "invalid flags",
 		},
 		{
-			s: "--retain-artifacts",
+			s:           "--retain-artifacts",
+			expectError: "invalid flags",
 		},
 		{
 			s:      "--retain-artifacts=",
@@ -150,6 +163,10 @@ func TestIsExpireArtifactsFlag(t *testing.T) {
 	for _, ts := range tt {
 		t.Run(ts.s, func(t *testing.T) {
 			setting, err := ParseDDLStrategy("online " + ts.s)
+			if ts.expectError != "" {
+				assert.ErrorContains(t, err, ts.expectError)
+				return
+			}
 			assert.NoError(t, err)
 
 			val, isRetainArtifacts := isRetainArtifactsFlag(ts.s)
@@ -181,9 +198,10 @@ func TestParseDDLStrategy(t *testing.T) {
 		allowForeignKeys     bool
 		analyzeTable         bool
 		cutOverThreshold     time.Duration
+		forceCutOverAfter    time.Duration
 		expireArtifacts      time.Duration
 		runtimeOptions       string
-		err                  error
+		expectError          string
 	}{
 		{
 			strategyVariable: "direct",
@@ -304,6 +322,25 @@ func TestParseDDLStrategy(t *testing.T) {
 			cutOverThreshold: 5 * time.Minute,
 		},
 		{
+			strategyVariable:  "vitess --force-cut-over-after=3m",
+			strategy:          DDLStrategyVitess,
+			options:           "--force-cut-over-after=3m",
+			runtimeOptions:    "",
+			forceCutOverAfter: 3 * time.Minute,
+		},
+		{
+			strategyVariable: "vitess --force-cut-over-after=r3m",
+			strategy:         DDLStrategyVitess,
+			runtimeOptions:   "",
+			expectError:      "time: invalid duration",
+		},
+		{
+			strategyVariable: "gh-ost --force-cut-over-after=3m",
+			strategy:         DDLStrategyVitess,
+			runtimeOptions:   "",
+			expectError:      "--force-cut-over-after is only valid in 'vitess' strategy",
+		},
+		{
 			strategyVariable: "vitess --retain-artifacts=4m",
 			strategy:         DDLStrategyVitess,
 			options:          "--retain-artifacts=4m",
@@ -317,10 +354,27 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			analyzeTable:     true,
 		},
+
+		{
+			strategyVariable: "vitess --alow-concrrnt", // intentional typo
+			strategy:         DDLStrategyVitess,
+			runtimeOptions:   "",
+			expectError:      "invalid flags",
+		},
+		{
+			strategyVariable: "vitess --declarative --max-load=Threads_running=100",
+			strategy:         DDLStrategyVitess,
+			runtimeOptions:   "--max-load=Threads_running=100",
+			expectError:      "invalid flags",
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.strategyVariable, func(t *testing.T) {
 			setting, err := ParseDDLStrategy(ts.strategyVariable)
+			if ts.expectError != "" {
+				assert.ErrorContains(t, err, ts.expectError)
+				return
+			}
 			assert.NoError(t, err)
 			assert.Equal(t, ts.strategy, setting.Strategy)
 			assert.Equal(t, ts.options, setting.Options)
@@ -336,6 +390,9 @@ func TestParseDDLStrategy(t *testing.T) {
 			cutOverThreshold, err := setting.CutOverThreshold()
 			assert.NoError(t, err)
 			assert.Equal(t, ts.cutOverThreshold, cutOverThreshold)
+			forceCutOverAfter, err := setting.ForceCutOverAfter()
+			assert.NoError(t, err)
+			assert.Equal(t, ts.forceCutOverAfter, forceCutOverAfter)
 
 			runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
 			assert.Equal(t, ts.runtimeOptions, runtimeOptions)

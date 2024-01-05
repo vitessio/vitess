@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -66,7 +68,7 @@ func TestCreateKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -78,9 +80,7 @@ func TestCreateKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CreateKeyspace(ctx, &vtadminpb.CreateKeyspaceRequest{
 			ClusterId: "test",
@@ -97,9 +97,7 @@ func TestCreateKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CreateKeyspace(ctx, &vtadminpb.CreateKeyspaceRequest{
 			ClusterId: "test",
@@ -135,7 +133,7 @@ func TestCreateShard(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -147,9 +145,7 @@ func TestCreateShard(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CreateShard(ctx, &vtadminpb.CreateShardRequest{
 			ClusterId: "test",
@@ -167,9 +163,7 @@ func TestCreateShard(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CreateShard(ctx, &vtadminpb.CreateShardRequest{
 			ClusterId: "test",
@@ -206,7 +200,7 @@ func TestDeleteKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -218,9 +212,7 @@ func TestDeleteKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteKeyspace(ctx, &vtadminpb.DeleteKeyspaceRequest{
 			ClusterId: "test",
@@ -237,9 +229,7 @@ func TestDeleteKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteKeyspace(ctx, &vtadminpb.DeleteKeyspaceRequest{
 			ClusterId: "test",
@@ -275,7 +265,7 @@ func TestDeleteShards(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -287,9 +277,7 @@ func TestDeleteShards(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteShards(ctx, &vtadminpb.DeleteShardsRequest{
 			ClusterId: "test",
@@ -311,9 +299,7 @@ func TestDeleteShards(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteShards(ctx, &vtadminpb.DeleteShardsRequest{
 			ClusterId: "test",
@@ -354,7 +340,7 @@ func TestDeleteTablet(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -366,9 +352,7 @@ func TestDeleteTablet(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteTablet(ctx, &vtadminpb.DeleteTabletRequest{
 			ClusterIds: []string{"test"},
@@ -386,9 +370,7 @@ func TestDeleteTablet(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteTablet(ctx, &vtadminpb.DeleteTabletRequest{
 			ClusterIds: []string{"test"},
@@ -425,7 +407,7 @@ func TestEmergencyFailoverShard(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -437,9 +419,7 @@ func TestEmergencyFailoverShard(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{
 			ClusterId: "test",
@@ -457,9 +437,7 @@ func TestEmergencyFailoverShard(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{
 			ClusterId: "test",
@@ -505,7 +483,7 @@ func TestFindSchema(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -514,9 +492,7 @@ func TestFindSchema(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
 			Table: "t1",
@@ -528,7 +504,7 @@ func TestFindSchema(t *testing.T) {
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -537,9 +513,7 @@ func TestFindSchema(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
 			Table: "t1",
@@ -550,7 +524,7 @@ func TestFindSchema(t *testing.T) {
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -559,9 +533,7 @@ func TestFindSchema(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
 			Table: "t1",
@@ -601,7 +573,7 @@ func TestGetBackups(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -613,9 +585,7 @@ func TestGetBackups(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetBackups(ctx, &vtadminpb.GetBackupsRequest{})
 		assert.NoError(t, err)
@@ -627,9 +597,7 @@ func TestGetBackups(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetBackups(ctx, &vtadminpb.GetBackupsRequest{})
 		assert.NotEmpty(t, resp.Backups, "actor %+v should be permitted to GetBackups", actor)
@@ -641,9 +609,7 @@ func TestGetBackups(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetBackups(ctx, &vtadminpb.GetBackupsRequest{})
 		assert.NotEmpty(t, resp.Backups, "actor %+v should be permitted to GetBackups", actor)
@@ -680,7 +646,7 @@ func TestGetCellInfos(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -692,9 +658,7 @@ func TestGetCellInfos(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetCellInfos(ctx, &vtadminpb.GetCellInfosRequest{
 			NamesOnly: true,
@@ -708,9 +672,7 @@ func TestGetCellInfos(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetCellInfos(ctx, &vtadminpb.GetCellInfosRequest{
 			NamesOnly: true,
@@ -724,9 +686,7 @@ func TestGetCellInfos(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetCellInfos(ctx, &vtadminpb.GetCellInfosRequest{
 			NamesOnly: true,
@@ -765,7 +725,7 @@ func TestGetCellsAliases(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -777,9 +737,7 @@ func TestGetCellsAliases(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
 		assert.NoError(t, err)
@@ -791,9 +749,7 @@ func TestGetCellsAliases(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
 		assert.NotEmpty(t, resp.Aliases, "actor %+v should be permitted to GetCellsAliases", actor)
@@ -805,9 +761,7 @@ func TestGetCellsAliases(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
 		assert.NotEmpty(t, resp.Aliases, "actor %+v should be permitted to GetCellsAliases", actor)
@@ -838,7 +792,7 @@ func TestGetClusters(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -850,9 +804,7 @@ func TestGetClusters(t *testing.T) {
 
 		var actor *rbac.Actor
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
 		assert.Empty(t, resp.Clusters, "actor %+v should not be permitted to GetClusters", actor)
@@ -863,9 +815,7 @@ func TestGetClusters(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
 		assert.Empty(t, resp.Clusters, "actor %+v should not be permitted to GetClusters", actor)
@@ -876,9 +826,7 @@ func TestGetClusters(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
 		require.NoError(t, err)
@@ -918,7 +866,7 @@ func TestGetGates(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -927,9 +875,7 @@ func TestGetGates(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
 		assert.NoError(t, err)
@@ -939,7 +885,7 @@ func TestGetGates(t *testing.T) {
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -948,9 +894,7 @@ func TestGetGates(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
 		assert.NotEmpty(t, resp.Gates, "actor %+v should be permitted to GetGates", actor)
@@ -961,7 +905,7 @@ func TestGetGates(t *testing.T) {
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -970,9 +914,7 @@ func TestGetGates(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
 		assert.NotEmpty(t, resp.Gates, "actor %+v should be permitted to GetGates", actor)
@@ -1004,7 +946,7 @@ func TestGetKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1016,9 +958,7 @@ func TestGetKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetKeyspace(ctx, &vtadminpb.GetKeyspaceRequest{
 			ClusterId: "test",
@@ -1033,9 +973,7 @@ func TestGetKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetKeyspace(ctx, &vtadminpb.GetKeyspaceRequest{
 			ClusterId: "test",
@@ -1075,7 +1013,7 @@ func TestGetKeyspaces(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1087,9 +1025,7 @@ func TestGetKeyspaces(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
 		assert.NoError(t, err)
@@ -1101,9 +1037,7 @@ func TestGetKeyspaces(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
 		assert.NotEmpty(t, resp.Keyspaces, "actor %+v should be permitted to GetKeyspaces", actor)
@@ -1122,9 +1056,7 @@ func TestGetKeyspaces(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
 		assert.NotEmpty(t, resp.Keyspaces, "actor %+v should be permitted to GetKeyspaces", actor)
@@ -1165,7 +1097,7 @@ func TestGetSchema(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1174,9 +1106,7 @@ func TestGetSchema(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
 			ClusterId: "test",
@@ -1190,7 +1120,7 @@ func TestGetSchema(t *testing.T) {
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1199,9 +1129,7 @@ func TestGetSchema(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
 			ClusterId: "test",
@@ -1245,7 +1173,7 @@ func TestGetSchemas(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1254,9 +1182,7 @@ func TestGetSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
 		assert.NoError(t, err)
@@ -1266,7 +1192,7 @@ func TestGetSchemas(t *testing.T) {
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1275,9 +1201,7 @@ func TestGetSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
 		assert.NotEmpty(t, resp.Schemas, "actor %+v should be permitted to GetSchemas", actor)
@@ -1294,7 +1218,7 @@ func TestGetSchemas(t *testing.T) {
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1303,9 +1227,7 @@ func TestGetSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
 		assert.NotEmpty(t, resp.Schemas, "actor %+v should be permitted to GetSchemas", actor)
@@ -1349,7 +1271,7 @@ func TestGetShardReplicationPositions(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1361,9 +1283,7 @@ func TestGetShardReplicationPositions(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
 		assert.NoError(t, err)
@@ -1375,9 +1295,7 @@ func TestGetShardReplicationPositions(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
 		assert.NotEmpty(t, resp.ReplicationPositions, "actor %+v should be permitted to GetShardReplicationPositions", actor)
@@ -1396,9 +1314,7 @@ func TestGetShardReplicationPositions(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
 		assert.NotEmpty(t, resp.ReplicationPositions, "actor %+v should be permitted to GetShardReplicationPositions", actor)
@@ -1436,7 +1352,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1448,9 +1364,7 @@ func TestGetSrvVSchema(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSrvVSchema(ctx, &vtadminpb.GetSrvVSchemaRequest{
 			ClusterId: "test",
@@ -1465,9 +1379,7 @@ func TestGetSrvVSchema(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSrvVSchema(ctx, &vtadminpb.GetSrvVSchemaRequest{
 			ClusterId: "test",
@@ -1507,7 +1419,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1519,9 +1431,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
 		require.NoError(t, err)
@@ -1533,9 +1443,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
 		assert.NotEmpty(t, resp.SrvVSchemas, "actor %+v should be permitted to GetSrvVSchemas", actor)
@@ -1554,9 +1462,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
 		assert.NotEmpty(t, resp.SrvVSchemas, "actor %+v should be permitted to GetSrvVSchemas", actor)
@@ -1594,7 +1500,7 @@ func TestGetTablet(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1606,9 +1512,7 @@ func TestGetTablet(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetTablet(ctx, &vtadminpb.GetTabletRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -1625,9 +1529,7 @@ func TestGetTablet(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetTablet(ctx, &vtadminpb.GetTabletRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -1669,7 +1571,7 @@ func TestGetTablets(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1681,9 +1583,7 @@ func TestGetTablets(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
 		require.NoError(t, err)
@@ -1695,9 +1595,7 @@ func TestGetTablets(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
 		assert.NotEmpty(t, resp.Tablets, "actor %+v should be permitted to GetTablets", actor)
@@ -1716,9 +1614,7 @@ func TestGetTablets(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
 		assert.NotEmpty(t, resp.Tablets, "actor %+v should be permitted to GetTablets", actor)
@@ -1756,7 +1652,7 @@ func TestGetVSchema(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1768,9 +1664,7 @@ func TestGetVSchema(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetVSchema(ctx, &vtadminpb.GetVSchemaRequest{
 			ClusterId: "test",
@@ -1785,9 +1679,7 @@ func TestGetVSchema(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetVSchema(ctx, &vtadminpb.GetVSchemaRequest{
 			ClusterId: "test",
@@ -1827,7 +1719,7 @@ func TestGetVSchemas(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1839,9 +1731,7 @@ func TestGetVSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetVSchemas(ctx, &vtadminpb.GetVSchemasRequest{})
 		require.NoError(t, err)
@@ -1853,9 +1743,7 @@ func TestGetVSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetVSchemas(ctx, &vtadminpb.GetVSchemasRequest{})
 		assert.NotEmpty(t, resp.VSchemas, "actor %+v should be permitted to GetVSchemas", actor)
@@ -1874,9 +1762,7 @@ func TestGetVSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetVSchemas(ctx, &vtadminpb.GetVSchemasRequest{})
 		assert.NotEmpty(t, resp.VSchemas, "actor %+v should be permitted to GetVSchemas", actor)
@@ -1923,7 +1809,7 @@ func TestGetVtctlds(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1932,9 +1818,7 @@ func TestGetVtctlds(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
 		assert.NoError(t, err)
@@ -1944,7 +1828,7 @@ func TestGetVtctlds(t *testing.T) {
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1953,9 +1837,7 @@ func TestGetVtctlds(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
 		assert.NotEmpty(t, resp.Vtctlds, "actor %+v should be permitted to GetVtctlds", actor)
@@ -1966,7 +1848,7 @@ func TestGetVtctlds(t *testing.T) {
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1975,9 +1857,7 @@ func TestGetVtctlds(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
 		assert.NotEmpty(t, resp.Vtctlds, "actor %+v should be permitted to GetVtctlds", actor)
@@ -2009,7 +1889,7 @@ func TestGetWorkflow(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2021,9 +1901,7 @@ func TestGetWorkflow(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetWorkflow(ctx, &vtadminpb.GetWorkflowRequest{
 			ClusterId: "test",
@@ -2039,9 +1917,7 @@ func TestGetWorkflow(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetWorkflow(ctx, &vtadminpb.GetWorkflowRequest{
 			ClusterId: "test",
@@ -2082,7 +1958,7 @@ func TestGetWorkflows(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2094,9 +1970,7 @@ func TestGetWorkflows(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
 		require.NoError(t, err)
@@ -2108,9 +1982,7 @@ func TestGetWorkflows(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
 		assert.NotEmpty(t, resp.WorkflowsByCluster, "actor %+v should be permitted to GetWorkflows", actor)
@@ -2122,9 +1994,7 @@ func TestGetWorkflows(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
 		assert.NotEmpty(t, resp.WorkflowsByCluster, "actor %+v should be permitted to GetWorkflows", actor)
@@ -2155,7 +2025,7 @@ func TestPingTablet(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2167,9 +2037,7 @@ func TestPingTablet(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.PingTablet(ctx, &vtadminpb.PingTabletRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2186,9 +2054,7 @@ func TestPingTablet(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.PingTablet(ctx, &vtadminpb.PingTabletRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2224,7 +2090,7 @@ func TestPlannedFailoverShard(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2236,9 +2102,7 @@ func TestPlannedFailoverShard(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{
 			ClusterId: "test",
@@ -2256,9 +2120,7 @@ func TestPlannedFailoverShard(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{
 			ClusterId: "test",
@@ -2295,7 +2157,7 @@ func TestRefreshState(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2307,9 +2169,7 @@ func TestRefreshState(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RefreshState(ctx, &vtadminpb.RefreshStateRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2326,9 +2186,7 @@ func TestRefreshState(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RefreshState(ctx, &vtadminpb.RefreshStateRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2364,7 +2222,7 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2376,9 +2234,7 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RefreshTabletReplicationSource(ctx, &vtadminpb.RefreshTabletReplicationSourceRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2395,9 +2251,7 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RefreshTabletReplicationSource(ctx, &vtadminpb.RefreshTabletReplicationSourceRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2439,7 +2293,7 @@ func TestReloadSchemas(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2451,9 +2305,7 @@ func TestReloadSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
 			Keyspaces: []string{
@@ -2470,9 +2322,7 @@ func TestReloadSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
 			Keyspaces: []string{
@@ -2488,9 +2338,7 @@ func TestReloadSchemas(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
 			Keyspaces: []string{
@@ -2525,7 +2373,7 @@ func TestRunHealthCheck(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2537,9 +2385,7 @@ func TestRunHealthCheck(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RunHealthCheck(ctx, &vtadminpb.RunHealthCheckRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2556,9 +2402,7 @@ func TestRunHealthCheck(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RunHealthCheck(ctx, &vtadminpb.RunHealthCheckRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2594,7 +2438,7 @@ func TestSetReadOnly(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2606,9 +2450,7 @@ func TestSetReadOnly(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.SetReadOnly(ctx, &vtadminpb.SetReadOnlyRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2625,9 +2467,7 @@ func TestSetReadOnly(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.SetReadOnly(ctx, &vtadminpb.SetReadOnlyRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2663,7 +2503,7 @@ func TestSetReadWrite(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2675,9 +2515,7 @@ func TestSetReadWrite(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.SetReadWrite(ctx, &vtadminpb.SetReadWriteRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2694,9 +2532,7 @@ func TestSetReadWrite(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.SetReadWrite(ctx, &vtadminpb.SetReadWriteRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2732,7 +2568,7 @@ func TestStartReplication(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2744,9 +2580,7 @@ func TestStartReplication(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.StartReplication(ctx, &vtadminpb.StartReplicationRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2763,9 +2597,7 @@ func TestStartReplication(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.StartReplication(ctx, &vtadminpb.StartReplicationRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2801,7 +2633,7 @@ func TestStopReplication(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2813,9 +2645,7 @@ func TestStopReplication(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.StopReplication(ctx, &vtadminpb.StopReplicationRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2832,9 +2662,7 @@ func TestStopReplication(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.StopReplication(ctx, &vtadminpb.StopReplicationRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2870,7 +2698,7 @@ func TestTabletExternallyPromoted(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2882,9 +2710,7 @@ func TestTabletExternallyPromoted(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.TabletExternallyPromoted(ctx, &vtadminpb.TabletExternallyPromotedRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2901,9 +2727,7 @@ func TestTabletExternallyPromoted(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.TabletExternallyPromoted(ctx, &vtadminpb.TabletExternallyPromotedRequest{
 			Alias: &topodatapb.TabletAlias{
@@ -2942,7 +2766,7 @@ func TestVTExplain(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -2951,9 +2775,7 @@ func TestVTExplain(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.VTExplain(ctx, &vtadminpb.VTExplainRequest{
 			Cluster:  "test",
@@ -2966,7 +2788,7 @@ func TestVTExplain(t *testing.T) {
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts)
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -2975,9 +2797,7 @@ func TestVTExplain(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.VTExplain(ctx, &vtadminpb.VTExplainRequest{
 			Cluster:  "test",
@@ -3011,7 +2831,7 @@ func TestValidateKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -3023,9 +2843,7 @@ func TestValidateKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateKeyspace(ctx, &vtadminpb.ValidateKeyspaceRequest{
 			ClusterId: "test",
@@ -3040,9 +2858,7 @@ func TestValidateKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateKeyspace(ctx, &vtadminpb.ValidateKeyspaceRequest{
 			ClusterId: "test",
@@ -3076,7 +2892,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -3088,9 +2904,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateSchemaKeyspace(ctx, &vtadminpb.ValidateSchemaKeyspaceRequest{
 			ClusterId: "test",
@@ -3105,9 +2919,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateSchemaKeyspace(ctx, &vtadminpb.ValidateSchemaKeyspaceRequest{
 			ClusterId: "test",
@@ -3141,7 +2953,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -3153,9 +2965,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateVersionKeyspace(ctx, &vtadminpb.ValidateVersionKeyspaceRequest{
 			ClusterId: "test",
@@ -3170,9 +2980,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 
 		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
+		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateVersionKeyspace(ctx, &vtadminpb.ValidateVersionKeyspaceRequest{
 			ClusterId: "test",

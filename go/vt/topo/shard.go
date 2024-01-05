@@ -314,7 +314,14 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 	// Set primary as serving only if its keyrange doesn't overlap
 	// with other shards. This applies to unsharded keyspaces also
 	value.IsPrimaryServing = true
-	sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace, &FindAllShardsInKeyspaceOptions{
+		// Assume that CreateShard may be called by many vttablets concurrently
+		// in a large, sharded keyspace. Do not apply concurrency to avoid
+		// overwhelming the toposerver.
+		//
+		// See: https://github.com/vitessio/vitess/pull/5436.
+		Concurrency: 1,
+	})
 	if err != nil && !IsErrType(err, NoNode) {
 		return err
 	}
@@ -659,7 +666,7 @@ func (ts *Server) GetTabletMapForShardByCell(ctx context.Context, keyspace, shar
 
 	// get the tablets for the cells we were able to reach, forward
 	// ErrPartialResult from FindAllTabletAliasesInShard
-	result, gerr := ts.GetTabletMap(ctx, aliases)
+	result, gerr := ts.GetTabletMap(ctx, aliases, nil)
 	if gerr == nil && err != nil {
 		gerr = err
 	}

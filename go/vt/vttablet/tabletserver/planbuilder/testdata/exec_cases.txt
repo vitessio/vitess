@@ -143,7 +143,7 @@
       "Role": 0
     }
   ],
-  "NextCount": "INT64(1)"
+  "NextCount": "1"
 }
 
 # sequence with number
@@ -157,7 +157,7 @@
       "Role": 0
     }
   ],
-  "NextCount": "INT64(10)"
+  "NextCount": "10"
 }
 
 
@@ -175,7 +175,7 @@
   "NextCount": ":a"
 }
 
-# squence with bad value
+# sequence with bad value
 "select next 12345667852342342342323423423 values from seq"
 {
   "PlanID": "Nextval",
@@ -186,7 +186,7 @@
       "Role": 0
     }
   ],
-  "NextCount": "DECIMAL(12345667852342342342323423423)"
+  "NextCount": "12345667852342342342323423423"
 }
 
 # nextval on non-sequence table
@@ -339,7 +339,7 @@
     }
   ],
   "FullQuery": "update d set foo = 'foo' where `name` in ('a', 'b') limit :#maxLimit",
-  "WhereClause": "where `name` in ('a', 'b')"
+  "WhereClause": " where `name` in ('a', 'b')"
 }
 
 # normal update
@@ -355,7 +355,7 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "update d set foo = 'foo' where `name` in ('a', 'b')",
-  "WhereClause": "where `name` in ('a', 'b')"
+  "WhereClause": " where `name` in ('a', 'b')"
 }
 
 # cross-db update
@@ -370,7 +370,7 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "update a.b set foo = 'foo' where `name` in ('a', 'b')",
-  "WhereClause": "where `name` in ('a', 'b')"
+  "WhereClause": " where `name` in ('a', 'b')"
 }
 
 # update unknown table
@@ -385,7 +385,7 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "update bogus set `name` = 'foo' where id = 1",
-  "WhereClause": "where id = 1"
+  "WhereClause": " where id = 1"
 }
 
 # update unknown table
@@ -401,7 +401,7 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "update bogus set `name` = 'foo' where id = 1",
-  "WhereClause": "where id = 1"
+  "WhereClause": " where id = 1"
 }
 
 # multi-table update
@@ -420,7 +420,7 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "update a, b set a.`name` = 'foo' where a.id = b.id and b.var = 'test'",
-  "WhereClause": "where a.id = b.id and b.var = 'test'"
+  "WhereClause": " where a.id = b.id and b.var = 'test'"
 }
 
 # multi-table update
@@ -440,7 +440,7 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "update a join b on a.id = b.id set a.`name` = 'foo' where b.var = 'test'",
-  "WhereClause": "where b.var = 'test'"
+  "WhereClause": " where b.var = 'test'"
 }
 
 
@@ -499,7 +499,7 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "delete from d where `name` in ('a', 'b') limit :#maxLimit",
-  "WhereClause": "where `name` in ('a', 'b')"
+  "WhereClause": " where `name` in ('a', 'b')"
 }
 
 # normal delete
@@ -515,7 +515,7 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "delete from d where `name` in ('a', 'b')",
-  "WhereClause": "where `name` in ('a', 'b')"
+  "WhereClause": " where `name` in ('a', 'b')"
 }
 
 # delete unknown table
@@ -563,7 +563,7 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "delete a, b from a, b where id = 1",
-  "WhereClause": "where id = 1"
+  "WhereClause": " where id = 1"
 }
 
 
@@ -621,7 +621,7 @@ options:PassthroughDMLs
       "Role": 2
     }
   ],
-  "FullQuery":"alter table b add index a (id)"
+  "FullQuery":"alter table b add key a (id)"
 }
 
 # create view
@@ -937,6 +937,25 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "flush tables a, b"
+}
+
+# flush statement with read lock
+"flush tables a,b with read lock"
+{
+  "PlanID": "Flush",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "flush tables a, b with read lock",
+  "NeedsReservedConn": true
 }
 
 # call proc

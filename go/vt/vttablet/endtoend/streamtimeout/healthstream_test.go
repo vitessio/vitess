@@ -74,7 +74,7 @@ func TestSchemaChangeTimedout(t *testing.T) {
 	// This is because the query timeout triggers the *DBConn.Kill() method, which in turn holds the mutex lock on the health_streamer.
 	// Although not indefinitely, this can result in longer wait times.
 	// It's worth noting that the behavior of *DBConn.Kill() is outside the scope of this test.
-	reloadInterval := config.SignalSchemaChangeReloadIntervalSeconds.Get()
+	reloadInterval := config.SignalSchemaChangeReloadInterval
 	time.Sleep(reloadInterval)
 
 	// pause simulating the mysql stall to allow the health_streamer to resume.

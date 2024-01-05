@@ -100,16 +100,26 @@ var (
 				Columns:           []string{"id", "dt"},
 				PrimaryKeyColumns: []string{"id"},
 				Fields:            sqltypes.MakeTestFields("id|dt", "int64|datetime"),
+			}, {
+				Name:    "nopk",
+				Columns: []string{"c1", "c2", "c3"},
+				Fields:  sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
+			}, {
+				Name:    "nopkwithpke",
+				Columns: []string{"c1", "c2", "c3"},
+				Fields:  sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
 			},
 		},
 	}
 	tableDefMap = map[string]int{
-		"t1":        0,
-		"nonpktext": 1,
-		"pktext":    2,
-		"multipk":   3,
-		"aggr":      4,
-		"datze":     5,
+		"t1":          0,
+		"nonpktext":   1,
+		"pktext":      2,
+		"multipk":     3,
+		"aggr":        4,
+		"datze":       5,
+		"nopk":        6,
+		"nopkwithpke": 7,
 	}
 )
 
@@ -197,7 +207,7 @@ func resetBinlogClient() {
 // has verified the necessary behavior.
 func shortCircuitTestAfterQuery(query string, dbClient *binlogplayer.MockDBClient) {
 	dbClient.ExpectRequest(query, singleRowAffected, fmt.Errorf("Short circuiting test"))
-	dbClient.ExpectRequest("update _vt.vdiff set state = 'error', last_error = 'Short circuiting test'  where id = 1", singleRowAffected, nil)
+	dbClient.ExpectRequest("update _vt.vdiff set state = 'error', last_error = left('Short circuiting test', 1024)  where id = 1", singleRowAffected, nil)
 	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: error')", singleRowAffected, nil)
 	dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'Error: Short circuiting test')", singleRowAffected, nil)
 }
@@ -394,6 +404,22 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		globalDBQueries <- query
 	}
 	return qr, err
+}
+
+func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(query)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*sqltypes.Result, 0, len(queries))
+	for _, query := range queries {
+		qr, err := dbc.ExecuteFetch(query, maxrows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, qr)
+	}
+	return results, nil
 }
 
 //----------------------------------------------

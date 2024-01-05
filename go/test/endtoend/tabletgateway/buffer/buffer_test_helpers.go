@@ -229,7 +229,7 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--health_check_interval", "1s",
-		"--queryserver-config-transaction-timeout", "20",
+		"--queryserver-config-transaction-timeout", "20s",
 	}
 	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
 		return nil, 1
@@ -241,7 +241,6 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 		"--buffer_window", "10m",
 		"--buffer_max_failover_duration", "10m",
 		"--buffer_min_time_between_failovers", "20m",
-		"--buffer_implementation", "keyspace_events",
 		"--tablet_refresh_interval", "1s",
 	}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, bt.VtGateExtraArgs...)

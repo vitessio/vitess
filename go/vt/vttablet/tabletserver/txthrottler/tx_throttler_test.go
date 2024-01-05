@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -19,7 +19,6 @@ package txthrottler
 // Commands to generate the mocks for this test.
 //go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler -mock_names "HealthCheck=MockHealthCheck" vitess.io/vitess/go/vt/discovery HealthCheck
 //go:generate mockgen -destination mock_throttler_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler ThrottlerInterface
-//go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 
 import (
 	"context"
@@ -29,7 +28,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -43,7 +44,7 @@ import (
 func TestDisabledThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = false
-	env := tabletenv.NewEnv(config, t.Name())
+	env := tabletenv.NewEnv(config, t.Name(), collations.MySQL8(), sqlparser.NewTestParser())
 	throttler := NewTxThrottler(env, nil)
 	throttler.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
@@ -72,16 +73,6 @@ func TestEnabledThrottler(t *testing.T) {
 	hcCall2.After(hcCall1)
 	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
 		return mockHealthCheck
-	}
-
-	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
-		assert.Equal(t, ts, topoServer)
-		assert.Contains(t, []string{"cell1", "cell2"}, cell)
-		assert.Equal(t, "keyspace", keyspace)
-		assert.Equal(t, "shard", shard)
-		result := NewMockTopologyWatcherInterface(mockCtrl)
-		result.EXPECT().Stop()
-		return result
 	}
 
 	mockThrottler := NewMockThrottlerInterface(mockCtrl)
@@ -117,7 +108,7 @@ func TestEnabledThrottler(t *testing.T) {
 	config.EnableTxThrottler = true
 	config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
 
-	env := tabletenv.NewEnv(config, t.Name())
+	env := tabletenv.NewEnv(config, t.Name(), collations.MySQL8(), sqlparser.NewTestParser())
 	throttler := NewTxThrottler(env, ts)
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.NotNil(t, throttlerImpl)
@@ -131,7 +122,6 @@ func TestEnabledThrottler(t *testing.T) {
 	throttlerStateImpl := throttlerImpl.state.(*txThrottlerStateImpl)
 	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)
 	assert.Equal(t, int64(1), throttlerImpl.throttlerRunning.Get())
-	assert.Equal(t, map[string]int64{"cell1": 1, "cell2": 1}, throttlerImpl.topoWatchers.Counts())
 
 	assert.False(t, throttlerImpl.Throttle(100, "some_workload"))
 	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Counts()["some_workload"])
@@ -162,7 +152,6 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some_workload"])
 	throttlerImpl.Close()
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
-	assert.Equal(t, map[string]int64{"cell1": 0, "cell2": 0}, throttlerImpl.topoWatchers.Counts())
 }
 
 func TestFetchKnownCells(t *testing.T) {
@@ -182,7 +171,7 @@ func TestFetchKnownCells(t *testing.T) {
 
 func TestDryRunThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	env := tabletenv.NewEnv(config, t.Name())
+	env := tabletenv.NewEnv(config, t.Name(), collations.MySQL8(), sqlparser.NewTestParser())
 
 	testCases := []struct {
 		Name                           string

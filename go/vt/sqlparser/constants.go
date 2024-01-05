@@ -27,9 +27,14 @@ const (
 	SQLCalcFoundRowsStr = "sql_calc_found_rows "
 
 	// Select.Lock
-	NoLockStr    = ""
-	ForUpdateStr = " for update"
-	ShareModeStr = " lock in share mode"
+	NoLockStr              = ""
+	ForUpdateStr           = " for update"
+	ForUpdateNoWaitStr     = " for update nowait"
+	ForUpdateSkipLockedStr = " for update skip locked"
+	ForShareStr            = " for share"
+	ForShareNoWaitStr      = " for share nowait"
+	ForShareSkipLockedStr  = " for share skip locked"
+	ShareModeStr           = " lock in share mode"
 
 	// Select.Cache
 	SQLCacheStr   = "sql_cache "
@@ -309,6 +314,7 @@ const (
 	VitessTargetStr            = " vitess_target"
 	VitessVariablesStr         = " vitess_metadata variables"
 	VschemaTablesStr           = " vschema tables"
+	VschemaKeyspacesStr        = " vschema keyspaces"
 	VschemaVindexesStr         = " vschema vindexes"
 	WarningsStr                = " warnings"
 
@@ -515,6 +521,11 @@ const (
 	NoLock Lock = iota
 	ForUpdateLock
 	ShareModeLock
+	ForShareLock
+	ForShareLockNoWait
+	ForShareLockSkipLocked
+	ForUpdateLockNoWait
+	ForUpdateLockSkipLocked
 )
 
 // Constants for Enum Type - TrimType
@@ -881,6 +892,7 @@ const (
 	VitessTarget
 	VitessVariables
 	VschemaTables
+	VschemaKeyspaces
 	VschemaVindexes
 	Warnings
 	Keyspace
@@ -916,6 +928,8 @@ const (
 	ThrottleAllMigrationType
 	UnthrottleMigrationType
 	UnthrottleAllMigrationType
+	ForceCutOverMigrationType
+	ForceCutOverAllMigrationType
 )
 
 // ColumnStorage constants

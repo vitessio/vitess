@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -46,6 +47,8 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
+
+const mysqlShutdownTimeout = 1 * time.Minute
 
 func setBuiltinBackupMysqldDeadline(t time.Duration) time.Duration {
 	old := mysqlctl.BuiltinBackupMysqldTimeout
@@ -154,12 +157,13 @@ func TestExecuteBackup(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
-		Concurrency:  2,
-		HookExtraEnv: map[string]string{},
-		TopoServer:   ts,
-		Keyspace:     keyspace,
-		Shard:        shard,
-		Stats:        fakeStats,
+		Concurrency:          2,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Stats:                fakeStats,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -213,10 +217,11 @@ func TestExecuteBackup(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
-		HookExtraEnv: map[string]string{},
-		TopoServer:   ts,
-		Keyspace:     keyspace,
-		Shard:        shard,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	assert.Error(t, err)
@@ -299,12 +304,13 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
-		Concurrency: 2,
-		TopoServer:  ts,
-		Keyspace:    keyspace,
-		Shard:       shard,
-		Stats:       backupstats.NewFakeStats(),
-		UpgradeSafe: true,
+		Concurrency:          2,
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Stats:                backupstats.NewFakeStats(),
+		UpgradeSafe:          true,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -385,12 +391,13 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
-		Stats:        backupstats.NewFakeStats(),
-		Concurrency:  2,
-		HookExtraEnv: map[string]string{},
-		TopoServer:   ts,
-		Keyspace:     keyspace,
-		Shard:        shard,
+		Stats:                backupstats.NewFakeStats(),
+		Concurrency:          2,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.Error(t, err)
@@ -469,12 +476,13 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
-		Stats:        backupstats.NewFakeStats(),
-		Concurrency:  2,
-		HookExtraEnv: map[string]string{},
-		TopoServer:   ts,
-		Keyspace:     keyspace,
-		Shard:        shard,
+		Stats:                backupstats.NewFakeStats(),
+		Concurrency:          2,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -500,19 +508,20 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
 			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
 		},
-		Logger:              logutil.NewConsoleLogger(),
-		Mysqld:              mysqld,
-		Concurrency:         2,
-		HookExtraEnv:        map[string]string{},
-		DeleteBeforeRestore: false,
-		DbName:              "test",
-		Keyspace:            "test",
-		Shard:               "-",
-		StartTime:           time.Now(),
-		RestoreToPos:        replication.Position{},
-		RestoreToTimestamp:  time.Time{},
-		DryRun:              false,
-		Stats:               fakeStats,
+		Logger:               logutil.NewConsoleLogger(),
+		Mysqld:               mysqld,
+		Concurrency:          2,
+		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		RestoreToPos:         replication.Position{},
+		RestoreToTimestamp:   time.Time{},
+		DryRun:               false,
+		Stats:                fakeStats,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 
 	// Successful restore.
@@ -597,5 +606,5 @@ func needInnoDBRedoLogSubdir() (needIt bool, err error) {
 	if capableOf == nil {
 		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
 	}
-	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
+	return capableOf(capabilities.DynamicRedoLogCapacityFlavorCapability)
 }

@@ -17,15 +17,14 @@ limitations under the License.
 package operators
 
 import (
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // InsertSelection operator represents an INSERT into SELECT FROM query.
 // It holds the operators for running the selection and insertion.
 type InsertSelection struct {
-	Select ops.Operator
-	Insert ops.Operator
+	Select Operator
+	Insert Operator
 
 	// ForceNonStreaming when true, select first then insert, this is to avoid locking rows by select for insert.
 	ForceNonStreaming bool
@@ -34,7 +33,7 @@ type InsertSelection struct {
 	noPredicates
 }
 
-func (is *InsertSelection) Clone(inputs []ops.Operator) ops.Operator {
+func (is *InsertSelection) Clone(inputs []Operator) Operator {
 	return &InsertSelection{
 		Select:            inputs[0],
 		Insert:            inputs[1],
@@ -42,11 +41,11 @@ func (is *InsertSelection) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
-func (is *InsertSelection) Inputs() []ops.Operator {
-	return []ops.Operator{is.Select, is.Insert}
+func (is *InsertSelection) Inputs() []Operator {
+	return []Operator{is.Select, is.Insert}
 }
 
-func (is *InsertSelection) SetInputs(inputs []ops.Operator) {
+func (is *InsertSelection) SetInputs(inputs []Operator) {
 	is.Select = inputs[0]
 	is.Insert = inputs[1]
 }
@@ -58,8 +57,8 @@ func (is *InsertSelection) ShortDescription() string {
 	return ""
 }
 
-func (is *InsertSelection) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (is *InsertSelection) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-var _ ops.Operator = (*InsertSelection)(nil)
+var _ Operator = (*InsertSelection)(nil)

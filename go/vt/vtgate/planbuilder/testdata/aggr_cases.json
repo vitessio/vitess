@@ -13,7 +13,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(*)"
+              "count(*) * count(*) as count(*)"
             ],
             "Inputs": [
               {
@@ -73,7 +73,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as sum(`user`.col)"
+              "sum(`user`.col) * count(*) as sum(`user`.col)"
             ],
             "Inputs": [
               {
@@ -133,7 +133,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(`user`.col)"
+              "count(`user`.col) * count(*) as count(`user`.col)"
             ],
             "Inputs": [
               {
@@ -1012,7 +1012,7 @@
       "Original": "select col, count(*) from user group by col limit 10",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(10)",
+        "Count": "10",
         "Inputs": [
           {
             "OperatorType": "Aggregate",
@@ -1058,7 +1058,7 @@
         "Query": "select `user`.col1 as a from `user` where `user`.id = 5 group by a collate utf8_general_ci",
         "Table": "`user`",
         "Values": [
-          "INT64(5)"
+          "5"
         ],
         "Vindex": "user_index"
       },
@@ -1654,7 +1654,7 @@
       "Original": "(select id from user order by 1 desc) order by 1 asc limit 2",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "INT64(2)",
+        "Count": "2",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1715,7 +1715,7 @@
             "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
             "Table": "user_extra",
             "Values": [
-              "INT64(3)"
+              "3"
             ],
             "Vindex": "user_index"
           }
@@ -2137,7 +2137,7 @@
                   "Sharded": true
                 },
                 "Values": [
-                  "VARCHAR(\"a\")"
+                  "'a'"
                 ],
                 "Vindex": "name_user_map",
                 "Inputs": [
@@ -2192,7 +2192,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(*)"
+              "count(*) * count(*) as count(*)"
             ],
             "Inputs": [
               {
@@ -2287,9 +2287,9 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 2] as a",
-              "[COLUMN 0] * [COLUMN 1] as count(*)",
-              "[COLUMN 3] as weight_string(`user`.a)"
+              ":2 as a",
+              "count(*) * count(*) as count(*)",
+              ":3 as weight_string(`user`.a)"
             ],
             "Inputs": [
               {
@@ -2349,9 +2349,9 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 2] as a",
-              "[COLUMN 1] * [COLUMN 0] as count(user_extra.a)",
-              "[COLUMN 3] as weight_string(`user`.a)"
+              ":2 as a",
+              "count(*) * count(user_extra.a) as count(user_extra.a)",
+              ":3 as weight_string(`user`.a)"
             ],
             "Inputs": [
               {
@@ -2411,10 +2411,10 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(u.textcol1)",
-              "[COLUMN 3] * [COLUMN 2] as count(ue.foo)",
-              "[COLUMN 4] as bar",
-              "[COLUMN 5] as weight_string(us.bar)"
+              "count(u.textcol1) * count(*) as count(u.textcol1)",
+              "count(*) * count(ue.foo) as count(ue.foo)",
+              ":4 as bar",
+              ":5 as weight_string(us.bar)"
             ],
             "Inputs": [
               {
@@ -2445,10 +2445,10 @@
                       {
                         "OperatorType": "Projection",
                         "Expressions": [
-                          "[COLUMN 0] * [COLUMN 1] as count(*)",
-                          "[COLUMN 2] * [COLUMN 1] as count(ue.foo)",
-                          "[COLUMN 3] as bar",
-                          "[COLUMN 4] as weight_string(us.bar)"
+                          "count(*) * count(*) as count(*)",
+                          "count(ue.foo) * count(*) as count(ue.foo)",
+                          ":3 as bar",
+                          ":4 as weight_string(us.bar)"
                         ],
                         "Inputs": [
                           {
@@ -2844,11 +2844,6 @@
     }
   },
   {
-    "comment": "select count(distinct user_id, name) from user",
-    "query": "select count(distinct user_id, name) from user",
-    "plan": "VT03001: aggregate functions take a single argument 'count(distinct user_id, `name`)'"
-  },
-  {
     "comment": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
     "query": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
     "plan": {
@@ -2862,7 +2857,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as sum(col)"
+              "sum(col) * count(*) as sum(col)"
             ],
             "Inputs": [
               {
@@ -3077,9 +3072,9 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "[COLUMN 2] as id",
-                  "[COLUMN 1] * [COLUMN 0] as count(u.`name`)",
-                  "[COLUMN 3] as weight_string(u.id)"
+                  ":2 as id",
+                  "count(*) * count(u.`name`) as count(u.`name`)",
+                  ":3 as weight_string(u.id)"
                 ],
                 "Inputs": [
                   {
@@ -3181,9 +3176,9 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "[COLUMN 2] as id",
-                  "[COLUMN 0] * [COLUMN 1] as count(*)",
-                  "[COLUMN 3] as weight_string(u.id)"
+                  ":2 as id",
+                  "count(*) * count(*) as count(*)",
+                  ":3 as weight_string(u.id)"
                 ],
                 "Inputs": [
                   {
@@ -3300,39 +3295,7 @@
   {
     "comment": "scatter aggregate symtab lookup error",
     "query": "select id, b as id, count(*) from user order by id",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select id, b as id, count(*) from user order by id",
-      "Instructions": {
-        "OperatorType": "Sort",
-        "Variant": "Memory",
-        "OrderBy": "(1|3) ASC",
-        "ResultColumns": 3,
-        "Inputs": [
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "any_value(0) AS id, any_value(1) AS id, sum_count_star(2) AS count(*), any_value(3)",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id, b as id, count(*), weight_string(b) from `user` where 1 != 1",
-                "Query": "select id, b as id, count(*), weight_string(b) from `user`",
-                "Table": "`user`"
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
+    "plan": "Column 'id' in field list is ambiguous"
   },
   {
     "comment": "aggr and non-aggr without group by (with query does not give useful result out)",
@@ -3388,9 +3351,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.id, weight_string(id) from `user` where 1 != 1 group by id, weight_string(id)",
+                "FieldQuery": "select `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by id, weight_string(`user`.id)",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.id, weight_string(id) from `user` group by id, weight_string(id) order by id asc",
+                "Query": "select `user`.id, weight_string(`user`.id) from `user` group by id, weight_string(`user`.id) order by id asc",
                 "Table": "`user`"
               },
               {
@@ -3433,7 +3396,7 @@
             "Inputs": [
               {
                 "OperatorType": "Limit",
-                "Count": "INT64(10)",
+                "Count": "10",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -3476,7 +3439,7 @@
             "Inputs": [
               {
                 "OperatorType": "Limit",
-                "Count": "INT64(10)",
+                "Count": "10",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -3513,7 +3476,7 @@
         "Inputs": [
           {
             "OperatorType": "Limit",
-            "Count": "INT64(10)",
+            "Count": "10",
             "Inputs": [
               {
                 "OperatorType": "Join",
@@ -3581,7 +3544,7 @@
             "Inputs": [
               {
                 "OperatorType": "Limit",
-                "Count": "INT64(2)",
+                "Count": "2",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -3697,10 +3660,10 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 3] as id",
-              "[COLUMN 0] as name",
-              "[COLUMN 1] * [COLUMN 2] as count(m.predef1)",
-              "[COLUMN 4] as weight_string(u.id)"
+              ":3 as id",
+              ":0 as name",
+              "count(m.predef1) * count(*) as count(m.predef1)",
+              ":4 as weight_string(u.id)"
             ],
             "Inputs": [
               {
@@ -3771,7 +3734,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(u.id)"
+              "count(u.id) * coalesce(count(*), 1) as count(u.id)"
             ],
             "Inputs": [
               {
@@ -3831,7 +3794,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 1] * [COLUMN 0] as count(ue.id)"
+              "count(*) * count(ue.id) as count(ue.id)"
             ],
             "Inputs": [
               {
@@ -3886,9 +3849,9 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0] as a",
-          "[COLUMN 1] as b",
-          "[COLUMN 0] / [COLUMN 1] as d"
+          ":0 as a",
+          ":1 as b",
+          "A.a / A.b as d"
         ],
         "Inputs": [
           {
@@ -4123,7 +4086,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(*)"
+              "count(*) * count(*) as count(*)"
             ],
             "Inputs": [
               {
@@ -4183,7 +4146,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)"
+              "count(*) * coalesce(count(*), 1) as count(*)"
             ],
             "Inputs": [
               {
@@ -4245,8 +4208,8 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
-              "[COLUMN 2] as col"
+              "count(*) * coalesce(count(*), 1) as count(*)",
+              ":2 as col"
             ],
             "Inputs": [
               {
@@ -4309,9 +4272,9 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
-              "[COLUMN 2] as col",
-              "[COLUMN 3] as weight_string(music.col)"
+              "count(*) * coalesce(count(*), 1) as count(*)",
+              ":2 as col",
+              ":3 as weight_string(music.col)"
             ],
             "Inputs": [
               {
@@ -4380,8 +4343,8 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
-              "[COLUMN 2] as col"
+              "count(*) * coalesce(count(*), 1) as count(*)",
+              ":2 as col"
             ],
             "Inputs": [
               {
@@ -4444,9 +4407,9 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
-              "[COLUMN 2] as col",
-              "[COLUMN 3] as weight_string(music.col)"
+              "count(*) * coalesce(count(*), 1) as count(*)",
+              ":2 as col",
+              ":3 as weight_string(music.col)"
             ],
             "Inputs": [
               {
@@ -4513,7 +4476,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(*)"
+              "count(*) * count(*) as count(*)"
             ],
             "Inputs": [
               {
@@ -4539,7 +4502,7 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 0] * [COLUMN 1] as count(*)"
+                      "count(*) * count(*) as count(*)"
                     ],
                     "Inputs": [
                       {
@@ -4604,7 +4567,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(*)"
+              "count(*) * count(*) as count(*)"
             ],
             "Inputs": [
               {
@@ -4619,8 +4582,8 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)",
-                      "[COLUMN 2] as foo"
+                      "count(*) * coalesce(count(*), 1) as count(*)",
+                      ":2 as foo"
                     ],
                     "Inputs": [
                       {
@@ -4697,9 +4660,9 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 3] as col",
-              "[COLUMN 2] as intcol",
-              "[COLUMN 0] * [COLUMN 1] as count(*)"
+              ":3 as col",
+              ":2 as intcol",
+              "count(*) * count(*) as count(*)"
             ],
             "Inputs": [
               {
@@ -4775,7 +4738,7 @@
         "OperatorType": "Distinct",
         "Collations": [
           "(0:2)",
-          "(1:2)"
+          "(1:3)"
         ],
         "ResultColumns": 2,
         "Inputs": [
@@ -4786,8 +4749,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b as a, weight_string(b) from `user` where 1 != 1",
-            "Query": "select distinct a, b as a, weight_string(b) from `user`",
+            "FieldQuery": "select a, b as a, weight_string(a), weight_string(b) from `user` where 1 != 1",
+            "Query": "select distinct a, b as a, weight_string(a), weight_string(b) from `user`",
             "Table": "`user`"
           }
         ]
@@ -4974,9 +4937,9 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(*)",
-              "[COLUMN 0] * [COLUMN 1] as count(*)",
-              "[COLUMN 0] * [COLUMN 2] as count(u.col)"
+              "count(*) * count(*) as count(*)",
+              "count(*) * count(*) as count(*)",
+              "count(*) * count(u.col) as count(u.col)"
             ],
             "Inputs": [
               {
@@ -4999,8 +4962,8 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "[COLUMN 0] * [COLUMN 1] as count(*)",
-                      "[COLUMN 2] * [COLUMN 1] as count(u.col)"
+                      "count(*) * count(*) as count(*)",
+                      "count(u.col) * count(*) as count(u.col)"
                     ],
                     "Inputs": [
                       {
@@ -5228,9 +5191,9 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "[COLUMN 0] * [COLUMN 1] as count(*)",
-                  "[COLUMN 2] as `user`.id + user_extra.id",
-                  "[COLUMN 3] as weight_string(`user`.id + user_extra.id)"
+                  "count(*) * count(*) as count(*)",
+                  ":2 as `user`.id + user_extra.id",
+                  ":3 as weight_string(`user`.id + user_extra.id)"
                 ],
                 "Inputs": [
                   {
@@ -5287,7 +5250,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0] + [COLUMN 1] as 1 + count(*)"
+          "1 + count(*) as 1 + count(*)"
         ],
         "Inputs": [
           {
@@ -5324,7 +5287,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "GREATEST([COLUMN 0], [COLUMN 1]) as greatest(sum(`user`.foo), sum(user_extra.bar))"
+          "greatest(sum(`user`.foo), sum(user_extra.bar)) as greatest(sum(`user`.foo), sum(user_extra.bar))"
         ],
         "Inputs": [
           {
@@ -5335,8 +5298,8 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "[COLUMN 0] * [COLUMN 1] as sum(`user`.foo)",
-                  "[COLUMN 3] * [COLUMN 2] as sum(user_extra.bar)"
+                  "sum(`user`.foo) * count(*) as sum(`user`.foo)",
+                  "count(*) * sum(user_extra.bar) as sum(user_extra.bar)"
                 ],
                 "Inputs": [
                   {
@@ -5447,9 +5410,9 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(*)",
-              "[COLUMN 2] as any_value(u.`name`)",
-              "[COLUMN 3] as any_value(ue.title)"
+              "count(*) * count(*) as count(*)",
+              ":2 as any_value(u.`name`)",
+              ":3 as any_value(ue.title)"
             ],
             "Inputs": [
               {
@@ -5884,7 +5847,7 @@
             "Inputs": [
               {
                 "OperatorType": "Limit",
-                "Count": "INT64(2)",
+                "Count": "2",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -5922,7 +5885,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(*)"
+              "count(*) * count(*) as count(*)"
             ],
             "Inputs": [
               {
@@ -6068,6 +6031,900 @@
         "main.dual",
         "user.user",
         "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "avg function on scatter query",
+    "query": "select avg(id) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(id) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "sum(id) / count(id) as avg(id)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS avg(id), sum_count(1) AS count(id)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(id), count(id) from `user` where 1 != 1",
+                "Query": "select sum(id), count(id) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "avg function on scatter query deep inside the output expression",
+    "query": "select avg(id)+count(foo)+bar from user group by bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(id)+count(foo)+bar from user group by bar",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "avg(id) + count(foo) + bar as avg(id) + count(foo) + bar"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":0 as bar",
+              "sum(id) / count(id) as avg(id)",
+              ":2 as count(foo)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(1) AS avg(id), sum_count(2) AS count(foo), sum_count(3) AS count(id)",
+                "GroupBy": "(0|4)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` where 1 != 1 group by bar, weight_string(bar)",
+                    "OrderBy": "(0|4) ASC",
+                    "Query": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` group by bar, weight_string(bar) order by bar asc",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "avg function on scatter query deep inside the output expression",
+    "query": "select avg(id)+count(foo)+bar from user group by bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(id)+count(foo)+bar from user group by bar",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "avg(id) + count(foo) + bar as avg(id) + count(foo) + bar"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":0 as bar",
+              "sum(id) / count(id) as avg(id)",
+              ":2 as count(foo)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(1) AS avg(id), sum_count(2) AS count(foo), sum_count(3) AS count(id)",
+                "GroupBy": "(0|4)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` where 1 != 1 group by bar, weight_string(bar)",
+                    "OrderBy": "(0|4) ASC",
+                    "Query": "select bar, sum(id), count(foo), count(id), weight_string(bar) from `user` group by bar, weight_string(bar) order by bar asc",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "two avg aggregations",
+    "query": "select avg(foo), avg(bar) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(foo), avg(bar) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "sum(foo) / count(foo) as avg(foo)",
+          "sum(bar) / count(bar) as avg(bar)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS avg(foo), sum(1) AS avg(bar), sum_count(2) AS count(foo), sum_count(3) AS count(bar)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(foo), sum(bar), count(foo), count(bar) from `user` where 1 != 1",
+                "Query": "select sum(foo), sum(bar), count(foo), count(bar) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "avg and count on the same argument",
+    "query": "select avg(foo), count(foo) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select avg(foo), count(foo) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "sum(foo) / count(foo) as avg(foo)",
+          ":1 as count(foo)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS avg(foo), sum_count(1) AS count(foo), sum_count(2) AS count(foo)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(foo), count(foo), count(foo) from `user` where 1 != 1",
+                "Query": "select sum(foo), count(foo), count(foo) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "GROUP BY inside derived table on the RHS should not be a problem",
+    "query": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM user WHERE id = 143 GROUP BY 1) AS tables ON tables.table_name = c.table_name",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM user WHERE id = 143 GROUP BY 1) AS tables ON tables.table_name = c.table_name",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "tables_table_name": 0
+        },
+        "TableName": "`user`_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select table_name from (select table_name from `user` where 1 != 1 group by table_name) as `tables` where 1 != 1",
+            "Query": "select table_name from (select table_name from `user` where id = 143 group by table_name) as `tables`",
+            "Table": "`user`",
+            "Values": [
+              "143"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select c.column_name from `user` as c where 1 != 1",
+            "Query": "select c.column_name from `user` as c where c.table_name = :tables_table_name",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Group by aggregated column should not be a problem",
+    "query": "SELECT b.col FROM music AS b JOIN (SELECT MIN(bb.id) AS min_id, MAX(bb.id) AS max_id FROM user AS bb) AS foobars WHERE b.id > foobars.min_id GROUP BY b.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT b.col FROM music AS b JOIN (SELECT MIN(bb.id) AS min_id, MAX(bb.id) AS max_id FROM user AS bb) AS foobars WHERE b.id > foobars.min_id GROUP BY b.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "(0|1)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(0|1) ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "R:0,R:1",
+                "JoinVars": {
+                  "foobars_min_id": 0
+                },
+                "TableName": "`user`_music",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "GroupBy": "0 COLLATE utf8mb4_0900_ai_ci",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Aggregate",
+                        "Variant": "Scalar",
+                        "Aggregates": "min(0|2) AS min_id, max(1|2) AS max_id",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(bb.id) from `user` as bb where 1 != 1 group by weight_string(bb.id)",
+                            "OrderBy": "0 ASC COLLATE utf8mb4_0900_ai_ci",
+                            "Query": "select min(bb.id) as min_id, max(bb.id) as max_id, weight_string(bb.id) from `user` as bb group by weight_string(bb.id) order by min(bb.id) asc",
+                            "Table": "`user`"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select b.col, weight_string(b.col) from music as b where 1 != 1 group by b.col, weight_string(b.col)",
+                    "Query": "select b.col, weight_string(b.col) from music as b where b.id > :foobars_min_id group by b.col, weight_string(b.col)",
+                    "Table": "music"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Group by aliases on both sides of a join",
+    "query": "select count(*), cast(user.foo as datetime) as f1, cast(music.foo as datetime) as f2 from user join music group by f1, f2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*), cast(user.foo as datetime) as f1, cast(music.foo as datetime) as f2 from user join music group by f1, f2",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "GroupBy": "(1|3), (2|4)",
+        "ResultColumns": 3,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(1|3) ASC, (2|4) ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "count(*) * count(*) as count(*)",
+                  ":2 as f1",
+                  ":3 as f2",
+                  ":4 as weight_string(cast(`user`.foo as datetime))",
+                  ":5 as weight_string(cast(music.foo as datetime))"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0,R:0,L:1,R:1,L:2,R:2",
+                    "TableName": "`user`_music",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), cast(`user`.foo as datetime) as f1, weight_string(cast(`user`.foo as datetime)) from `user` where 1 != 1 group by f1, weight_string(cast(`user`.foo as datetime))",
+                        "Query": "select count(*), cast(`user`.foo as datetime) as f1, weight_string(cast(`user`.foo as datetime)) from `user` group by f1, weight_string(cast(`user`.foo as datetime))",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), cast(music.foo as datetime) as f2, weight_string(cast(music.foo as datetime)) from music where 1 != 1 group by f2, weight_string(cast(music.foo as datetime))",
+                        "Query": "select count(*), cast(music.foo as datetime) as f2, weight_string(cast(music.foo as datetime)) from music group by f2, weight_string(cast(music.foo as datetime))",
+                        "Table": "music"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "count(*) push down through left hash join",
+    "query": "select count(*) from user left join (select col, bar from user_extra limit 10) ue on user.col = ue.col group by user.foo, ue.bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join (select col, bar from user_extra limit 10) ue on user.col = ue.col group by user.foo, ue.bar",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "GroupBy": "(1|2), (3|4)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "count(*) * coalesce(count(*), 1) as count(*)",
+              ":4 as foo",
+              ":6 as weight_string(`user`.foo)",
+              ":5 as bar",
+              ":7 as weight_string(ue.bar)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(4|6) ASC, (5|7) ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "count(*) as count(*)",
+                      "count(*) as count(*)",
+                      "`user`.col as col",
+                      "ue.col as col",
+                      "`user`.foo as foo",
+                      "ue.bar as bar",
+                      "weight_string(`user`.foo) as weight_string(`user`.foo)",
+                      "weight_string(ue.bar) as weight_string(ue.bar)"
+                    ],
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "HashLeftJoin",
+                        "Collation": "binary",
+                        "ComparisonType": "INT16",
+                        "JoinColumnIndexes": "-1,1,-2,2,-3,3",
+                        "Predicate": "`user`.col = ue.col",
+                        "TableName": "`user`_user_extra",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*), `user`.col, `user`.foo from `user` where 1 != 1 group by `user`.col, `user`.foo",
+                            "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo",
+                            "Table": "`user`"
+                          },
+                          {
+                            "OperatorType": "Aggregate",
+                            "Variant": "Ordered",
+                            "Aggregates": "count_star(0)",
+                            "GroupBy": "1, (2|3)",
+                            "Inputs": [
+                              {
+                                "OperatorType": "SimpleProjection",
+                                "Columns": [
+                                  2,
+                                  0,
+                                  1,
+                                  3
+                                ],
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Sort",
+                                    "Variant": "Memory",
+                                    "OrderBy": "0 ASC, (1|3) ASC",
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "Limit",
+                                        "Count": "10",
+                                        "Inputs": [
+                                          {
+                                            "OperatorType": "Route",
+                                            "Variant": "Scatter",
+                                            "Keyspace": {
+                                              "Name": "user",
+                                              "Sharded": true
+                                            },
+                                            "FieldQuery": "select col, bar, 1, weight_string(bar) from (select col, bar from user_extra where 1 != 1) as ue where 1 != 1",
+                                            "Query": "select col, bar, 1, weight_string(bar) from (select col, bar from user_extra) as ue limit :__upper_limit",
+                                            "Table": "user_extra"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery inside aggregation function on a dual table",
+    "query": "select max((select min(col) from user where id = 1))",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select min(col) from user where id = 1))",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select max((select min(col) from `user` where 1 != 1)) from dual where 1 != 1",
+        "Query": "select max((select min(col) from `user` where id = 1)) from dual",
+        "Table": "dual",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded subquery inside aggregation function on a sharded table",
+    "query": "select max((select min(col) from unsharded)) from user where id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select min(col) from unsharded)) from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select min(col) from unsharded))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select min(col) from unsharded where 1 != 1",
+                "Query": "select min(col) from unsharded",
+                "Table": "unsharded"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
+                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` where id = 1 group by weight_string(:__sq1)",
+                "Table": "`user`",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery inside aggregation function on a sharded table on different vindex value",
+    "query": "select max((select min(col) from user where id = 1)) from user where id = 2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select min(col) from user where id = 1)) from user where id = 2",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select min(col) from `user` where id = 1))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select min(col) from `user` where 1 != 1",
+                "Query": "select min(col) from `user` where id = 1",
+                "Table": "`user`",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
+                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` where id = 2 group by weight_string(:__sq1)",
+                "Table": "`user`",
+                "Values": [
+                  "2"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery inside group_concat multi-column aggregation function on a dual table",
+    "query": "select max((select group_concat(col1, col2) from user where id = 1))",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select group_concat(col1, col2) from user where id = 1))",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) from dual where 1 != 1",
+        "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) from dual",
+        "Table": "dual",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery inside group_concat multi-column aggregation function on a sharded table on same vindex value",
+    "query": "select max((select group_concat(col1, col2) from user where id = 1)) from user where id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select group_concat(col1, col2) from user where id = 1)) from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) from `user` where 1 != 1",
+        "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) from `user` where id = 1",
+        "Table": "`user`",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery inside group_concat multi-column aggregation function on a sharded table",
+    "query": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select group_concat(col1, col2) from `user` where id = 1))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select group_concat(col1, col2) from `user` where 1 != 1",
+                "Query": "select group_concat(col1, col2) from `user` where id = 1",
+                "Table": "`user`",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
+                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` group by weight_string(:__sq1)",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded correlated subquery inside aggregation function on a sharded table on same vindex",
+    "query": "select max((select max(col2) from user u1 where u1.id = u2.id)) from user u2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select max(col2) from user u1 where u1.id = u2.id)) from user u2",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select max(col2) from `user` as u1 where u1.id = u2.id))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)), weight_string((select max(col2) from `user` as u1 where 1 != 1)) from `user` as u2 where 1 != 1 group by weight_string((select max(col2) from `user` as u1 where 1 != 1))",
+            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)), weight_string((select max(col2) from `user` as u1 where u1.id = u2.id)) from `user` as u2 group by weight_string((select max(col2) from `user` as u1 where u1.id = u2.id))",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Multi-value aggregates pushed as function without splitting",
+    "query": "select count(a,b) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(a,b) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count(0) AS count(a, b)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(a, b) from `user` where 1 != 1",
+            "Query": "select count(a, b) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "group_concat with multi column - pushed without splitting",
+    "query": "select group_concat(col1, col2) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select group_concat(col1, col2) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "group_concat(0) AS group_concat(col1, col2)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select group_concat(col1, col2) from `user` where 1 != 1",
+            "Query": "select group_concat(col1, col2) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "",
+    "query": "select count(distinct name, id) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(distinct name, id) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct `name`, id)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(distinct `name`, id) from `user` where 1 != 1",
+            "Query": "select count(distinct `name`, id) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
       ]
     }
   }

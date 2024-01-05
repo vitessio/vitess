@@ -58,7 +58,7 @@ const (
 	getWorkflowState         = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1"
 	getCopyState             = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
 	getNumCopyStateTable     = "select count(distinct table_name) from _vt.copy_state where vrepl_id=1"
-	getLatestCopyState       = "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)"
+	getLatestCopyState       = "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)"
 	getAutoIncrementStep     = "select @@session.auto_increment_increment"
 	setSessionTZ             = "set @@session.time_zone = '+00:00'"
 	setNames                 = "set names 'binary'"
@@ -111,7 +111,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
 	defer tenv.deleteTablet(targetTablet.tablet)
 
-	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+	ws := workflow.NewServer(tenv.ts, tenv.tmc, sqlparser.NewTestParser())
 
 	tests := []struct {
 		name   string
@@ -268,7 +268,7 @@ func TestMoveTables(t *testing.T) {
 		},
 	})
 
-	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+	ws := workflow.NewServer(tenv.ts, tenv.tmc, sqlparser.NewTestParser())
 
 	tenv.mysqld.Schema = defaultSchema
 	tenv.mysqld.Schema.DatabaseSchema = tenv.dbName
@@ -479,10 +479,10 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 		keyspace, shard)
 	selectRes := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|source|cell|tablet_types",
-			"int64|varchar|varchar|varchar",
+			"id|source|cell|tablet_types|state|message",
+			"int64|varchar|varchar|varchar|varchar|varbinary",
 		),
-		fmt.Sprintf("%d|%s|%s|%s", vreplID, blsStr, cells[0], tabletTypes[0]),
+		fmt.Sprintf("%d|%s|%s|%s|Running|", vreplID, blsStr, cells[0], tabletTypes[0]),
 	)
 	idQuery, err := sqlparser.ParseAndBind("select id from _vt.vreplication where id = %a",
 		sqltypes.Int64BindVariable(int64(vreplID)))
@@ -504,61 +504,79 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			name: "update cells",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow: workflow,
+				State:    binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:    []string{"zone2"},
 				// TabletTypes is an empty value, so the current value should be cleared
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '' where id in (%d)`,
 				keyspace, shard, "zone2", vreplID),
 		},
 		{
 			name: "update cells, NULL tablet_types",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
+				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:       []string{"zone3"},
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)}, // So keep the current value of replica
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, "zone3", tabletTypes[0], vreplID),
 		},
 		{
 			name: "update tablet_types",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:                  workflow,
+				State:                     binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
 				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA},
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '', tablet_types = '%s' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, "in_order:rdonly,replica", vreplID),
 		},
 		{
 			name: "update tablet_types, NULL cells",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
+				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:       textutil.SimulatedNullStringSlice, // So keep the current value of zone1
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, cells[0], "rdonly", vreplID),
 		},
 		{
 			name: "update on_ddl",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow: workflow,
+				State:    binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				OnDdl:    binlogdatapb.OnDDLAction_EXEC,
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '', tablet_types = '' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '', tablet_types = '' where id in (%d)`,
 				keyspace, shard, binlogdatapb.OnDDLAction_EXEC.String(), vreplID),
 		},
 		{
 			name: "update cell,tablet_types,on_ddl",
 			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 				Workflow:    workflow,
+				State:       binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
 				Cells:       []string{"zone1", "zone2", "zone3"},
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY},
 				OnDdl:       binlogdatapb.OnDDLAction_EXEC_IGNORE,
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '%s', tablet_types = '%s' where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '%s', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, binlogdatapb.OnDDLAction_EXEC_IGNORE.String(), "zone1,zone2,zone3", "rdonly,replica,primary", vreplID),
+		},
+		{
+			name: "update state",
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+				Workflow:    workflow,
+				State:       binlogdatapb.VReplicationWorkflowState_Stopped,
+				Cells:       textutil.SimulatedNullStringSlice,
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType(textutil.SimulatedNullInt)},
+				OnDdl:       binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+			},
+			query: fmt.Sprintf(`update _vt.vreplication set state = '%s', source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
+				binlogdatapb.VReplicationWorkflowState_Stopped.String(), keyspace, shard, cells[0], tabletTypes[0], vreplID),
 		},
 	}
 
@@ -574,8 +592,6 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 
 			require.NotNil(t, tt.request, "No request provided")
 			require.NotEqual(t, "", tt.query, "No expected query provided")
-
-			tt.request.State = binlogdatapb.VReplicationWorkflowState_Stopped
 
 			// These are the same for each RPC call.
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
@@ -640,7 +656,7 @@ func TestSourceShardSelection(t *testing.T) {
 		defer tenv.deleteTablet(tt.tablet)
 	}
 
-	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+	ws := workflow.NewServer(tenv.ts, tenv.tmc, sqlparser.NewTestParser())
 
 	tenv.ts.SaveVSchema(ctx, sourceKs, &vschemapb.Keyspace{
 		Sharded: true,
@@ -839,7 +855,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		sourceKs, shard, table, table)
 	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
 	defer tenv.close()
-	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+	ws := workflow.NewServer(tenv.ts, tenv.tmc, sqlparser.NewTestParser())
 
 	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
 	defer tenv.deleteTablet(sourceTablet.tablet)
@@ -977,7 +993,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	)
 
 	// We expect the workflow creation to fail due to the invalid time
-	// zone and thus the workflow iteslf to be cleaned up.
+	// zone and thus the workflow itself to be cleaned up.
 	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet,
 		fmt.Sprintf(deleteWorkflow, sourceKs, workflow.ReverseWorkflowName(wf)),
 		&sqltypes.Result{RowsAffected: 1},

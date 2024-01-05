@@ -93,14 +93,18 @@ func (bs *binLogServer) start(source mysqlSource) error {
 		bs.proc.Args = append(bs.proc.Args, fmt.Sprintf("-ripple_master_password=%s", source.password))
 	}
 
-	errFile, _ := os.Create(path.Join(bs.dataDirectory, "log.txt"))
+	errFile, err := os.Create(path.Join(bs.dataDirectory, "log.txt"))
+	if err != nil {
+		log.Errorf("cannot create error log file for binlog server: %v", err)
+		return err
+	}
 	bs.proc.Stderr = errFile
 
 	bs.proc.Env = append(bs.proc.Env, os.Environ()...)
 
 	log.Infof("Running binlog server with command: %v", strings.Join(bs.proc.Args, " "))
 
-	err := bs.proc.Start()
+	err = bs.proc.Start()
 	if err != nil {
 		return err
 	}

@@ -30,6 +30,7 @@ import (
 
 	"go.uber.org/goleak"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -129,7 +130,8 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	parser := sqlparser.NewTestParser()
+	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc, collations.MySQL8(), parser)
 	tabletID := 100
 	for _, shard := range sources {
 		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
@@ -145,7 +147,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 
 	for _, ts := range ms.TableSettings {
 		tableName := ts.TargetTable
-		table, err := sqlparser.TableFromStatement(ts.SourceExpression)
+		table, err := parser.TableFromStatement(ts.SourceExpression)
 		if err == nil {
 			tableName = table.Name.String()
 		}
@@ -200,12 +202,13 @@ func (env *testMaterializerEnv) addTablet(id int, keyspace, shard string, tablet
 		},
 	}
 	env.tablets[id] = tablet
-	if err := env.wr.TopoServer().InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := env.wr.ts.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		_, err := env.wr.ts.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
 			si.PrimaryAlias = tablet.Alias
+			si.IsPrimaryServing = true
 			return nil
 		})
 		if err != nil {

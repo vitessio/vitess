@@ -22,8 +22,9 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 		{"comparison_f", "column0 = 12", []sqltypes.Value{sqltypes.NewFloat64(420.0)}},
 	}
 
+	parser := sqlparser.NewTestParser()
 	for _, tc := range testCases {
-		expr, err := sqlparser.ParseExpr(tc.expression)
+		expr, err := parser.ParseExpr(tc.expression)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -33,7 +34,7 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 			ResolveColumn: fields.Column,
 			ResolveType:   fields.Type,
 			Collation:     collations.CollationUtf8mb4ID,
-			Optimization:  evalengine.OptimizationLevelCompile,
+			CollationEnv:  collations.MySQL8(),
 		}
 
 		translated, err := evalengine.Translate(expr, cfg)
@@ -42,15 +43,13 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 		}
 
 		b.Run(tc.name+"/eval=ast", func(b *testing.B) {
-			decompiled := evalengine.Deoptimize(translated)
-
 			b.ResetTimer()
 			b.ReportAllocs()
 
 			var env evalengine.ExpressionEnv
 			env.Row = tc.values
 			for n := 0; n < b.N; n++ {
-				_, _ = env.Evaluate(decompiled)
+				_, _ = env.EvaluateAST(translated)
 			}
 		})
 

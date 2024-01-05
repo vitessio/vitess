@@ -28,25 +28,26 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/vttablet"
-
-	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/dbconfigs"
-
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -69,6 +70,7 @@ var (
 	globalFBC                = &fakeBinlogClient{}
 	vrepldb                  = "vrepl"
 	globalDBQueries          = make(chan string, 1000)
+	lastMultiExecQuery       = ""
 	testForeignKeyQueries    = false
 	testSetForeignKeyQueries = false
 	doNotLogDBQueries        = false
@@ -222,6 +224,15 @@ func execStatements(t *testing.T, queries []string) {
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
 		log.Errorf("Error executing query: %s", err.Error())
 		t.Error(err)
+	}
+}
+
+func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []string) {
+	t.Helper()
+	for _, query := range queries {
+		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
+			t.Fatalf("ExecuteFetch(%v) failed: %v", query, err)
+		}
 	}
 }
 
@@ -484,6 +495,23 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	return qr, err
 }
 
+func (dc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(query)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*sqltypes.Result, 0, len(queries))
+	for _, query := range queries {
+		qr, err := dc.ExecuteFetch(query, maxrows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, qr)
+	}
+	lastMultiExecQuery = query
+	return results, nil
+}
+
 func expectDeleteQueries(t *testing.T) {
 	t.Helper()
 	if doNotLogDBQueries {
@@ -494,6 +522,19 @@ func expectDeleteQueries(t *testing.T) {
 		"/delete from _vt.copy_state",
 		"/delete from _vt.post_copy_action",
 	))
+}
+
+func deleteAllVReplicationStreams(t *testing.T) {
+	t.Helper()
+	res, err := playerEngine.Exec("select id from _vt.vreplication")
+	require.NoError(t, err, "could not select ids from _vt.vreplication: %v", err)
+	ids := make([]string, len(res.Rows))
+	for i, row := range res.Rows {
+		id := row[0].ToString()
+		ids[i] = id
+	}
+	_, err = playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id in (%s)", strings.Join(ids, ",")))
+	require.NoError(t, err, "failed to delete vreplication rows: %v", err)
 }
 
 func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *VrLogStats) {
@@ -540,6 +581,9 @@ func shouldIgnoreQuery(query string) bool {
 		", component_throttled=", // update of last throttle time, can happen out-of-band, so can't test for it
 		"context cancel",
 		"SELECT rows_copied FROM _vt.vreplication WHERE id=",
+		// This is only executed if the table has no defined Primary Key, which we don't know in the lower level
+		// code.
+		"SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS",
 	}
 	if sidecardb.MatchesInitQuery(query) {
 		return true

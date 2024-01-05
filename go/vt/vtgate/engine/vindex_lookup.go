@@ -20,6 +20,7 @@ import (
 	"context"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/key"
 
@@ -150,7 +151,7 @@ func (vr *VindexLookup) description() PrimitiveDescription {
 	if vr.Values != nil {
 		formattedValues := make([]string, 0, len(vr.Values))
 		for _, value := range vr.Values {
-			formattedValues = append(formattedValues, evalengine.FormatExpr(value))
+			formattedValues = append(formattedValues, sqlparser.String(value))
 		}
 		other["Values"] = formattedValues
 	}
@@ -226,10 +227,6 @@ func (vr *VindexLookup) executeBatch(ctx context.Context, vcursor VCursor, ids [
 	} else {
 		result, err = vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, false)
 	}
-	if err != nil {
-		return nil, err
-	}
-
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed while running the lookup query")
 	}

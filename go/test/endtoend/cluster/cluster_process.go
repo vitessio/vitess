@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/test/endtoend/filelock"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -764,19 +765,18 @@ func (cluster *LocalProcessCluster) populateVersionInfo() error {
 	return err
 }
 
+var versionRegex = regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+
 func GetMajorVersion(binaryName string) (int, error) {
 	version, err := exec.Command(binaryName, "--version").Output()
 	if err != nil {
 		return 0, err
 	}
-	versionRegex := regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 	v := versionRegex.FindStringSubmatch(string(version))
 	if len(v) != 4 {
 		return 0, fmt.Errorf("could not parse server version from: %s", version)
 	}
-	if err != nil {
-		return 0, fmt.Errorf("could not parse server version from: %s", version)
-	}
+
 	return strconv.Atoi(v[1])
 }
 
@@ -985,6 +985,11 @@ func (cluster *LocalProcessCluster) VtctlclientGetTablet(tablet *Vttablet) (*top
 	return &ti, nil
 }
 
+func (cluster *LocalProcessCluster) VtctlclientChangeTabletType(tablet *Vttablet, tabletType topodatapb.TabletType) error {
+	_, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", "--", tablet.Alias, tabletType.String())
+	return err
+}
+
 // Teardown brings down the cluster by invoking teardown for individual processes
 func (cluster *LocalProcessCluster) Teardown() {
 	PanicHandler(nil)
@@ -1086,7 +1091,7 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 				log.Errorf("Error in conversion to integer: %v", err)
 				return
 			}
-			err = syscall.Kill(pid, syscall.SIGKILL)
+			err = syscallutil.Kill(pid, syscall.SIGKILL)
 			if err != nil {
 				log.Errorf("Error in killing process: %v", err)
 			}

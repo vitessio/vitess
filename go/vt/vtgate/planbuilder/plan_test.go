@@ -41,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	oprewriters "vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -62,6 +62,7 @@ func TestPlan(t *testing.T) {
 		TestBuilder:   TestBuilder,
 	}
 	testOutputTempDir := makeTestOutput(t)
+	addPKs(t, vschemaWrapper.V, "user", []string{"user", "music"})
 
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
@@ -96,6 +97,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "misc_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "cte_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.
@@ -110,6 +112,38 @@ func TestForeignKeyPlanning(t *testing.T) {
 	testOutputTempDir := makeTestOutput(t)
 
 	testFile(t, "foreignkey_cases.json", testOutputTempDir, vschemaWrapper, false)
+}
+
+// TestForeignKeyChecksOn tests the planning when the session variable for foreign_key_checks is set to ON.
+func TestForeignKeyChecksOn(t *testing.T) {
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	setFks(t, vschema)
+	fkChecksState := true
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:                     vschema,
+		TestBuilder:           TestBuilder,
+		ForeignKeyChecksState: &fkChecksState,
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+
+	testFile(t, "foreignkey_checks_on_cases.json", testOutputTempDir, vschemaWrapper, false)
+}
+
+// TestForeignKeyChecksOff tests the planning when the session variable for foreign_key_checks is set to OFF.
+func TestForeignKeyChecksOff(t *testing.T) {
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	setFks(t, vschema)
+	fkChecksState := false
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:                     vschema,
+		TestBuilder:           TestBuilder,
+		ForeignKeyChecksState: &fkChecksState,
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+
+	testFile(t, "foreignkey_checks_off_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func setFks(t *testing.T, vschema *vindexes.VSchema) {
@@ -145,6 +179,8 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		// FK from tblrefDef referencing tbl20 that is shard scoped of SET-Default types.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tblrefDef", createFkDefinition([]string{"ref"}, "tbl20", []string{"col2"}, sqlparser.SetDefault, sqlparser.SetDefault))
 
+		addPKs(t, vschema, "sharded_fk_allow", []string{"tbl1", "tbl2", "tbl3", "tbl4", "tbl5", "tbl6", "tbl7", "tbl9", "tbl10",
+			"multicol_tbl1", "multicol_tbl2", "tblrefDef", "tbl20"})
 	}
 	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
 		// u_tbl2(col2)  -> u_tbl1(col1)  Cascade.
@@ -174,6 +210,24 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl2", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl1", []string{"cola", "colb"}, sqlparser.SetNull, sqlparser.SetNull))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl3", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl2", []string{"cola", "colb"}, sqlparser.Cascade, sqlparser.Cascade))
+
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{&sqlparser.BinaryExpr{Operator: sqlparser.MultOp, Left: sqlparser.NewColName("col9"), Right: sqlparser.NewColName("foo")}})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9"), sqlparser.NewColName("foo")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("foo"), sqlparser.NewColName("bar")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("bar"), sqlparser.NewColName("col9")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl8", sqlparser.Exprs{sqlparser.NewColName("col8")})
+
+		addPKs(t, vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9",
+			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3"})
+	}
+
+}
+
+func addPKs(t *testing.T, vschema *vindexes.VSchema, ks string, tbls []string) {
+	for _, tbl := range tbls {
+		require.NoError(t,
+			vschema.AddPrimaryKey(ks, tbl, []string{"id"}))
 	}
 }
 
@@ -208,11 +262,12 @@ func TestViews(t *testing.T) {
 }
 
 func TestOne(t *testing.T) {
-	reset := oprewriters.EnableDebugPrinting()
+	reset := operators.EnableDebugPrinting()
 	defer reset()
 
 	lv := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, lv)
+	addPKs(t, lv, "user", []string{"user", "music"})
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:           lv,
 		TestBuilder: TestBuilder,
@@ -266,7 +321,7 @@ func TestOneWithUserAsDefault(t *testing.T) {
 }
 
 func TestOneWithTPCHVSchema(t *testing.T) {
-	reset := oprewriters.EnableDebugPrinting()
+	reset := operators.EnableDebugPrinting()
 	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/tpch_schema.json", true),
@@ -477,7 +532,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 	if err != nil {
 		t.Fatal(err)
 	}
-	vschema := vindexes.BuildVSchema(formal)
+	vschema := vindexes.BuildVSchema(formal, sqlparser.NewTestParser())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,9 +543,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 
 		// adding view in user keyspace
 		if ks.Keyspace.Name == "user" {
-			if err = vschema.AddView(ks.Keyspace.Name,
-				"user_details_view",
-				"select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id"); err != nil {
+			if err = vschema.AddView(ks.Keyspace.Name, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id", sqlparser.NewTestParser()); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -513,7 +566,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 
 // createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.
 func createFkDefinition(childCols []string, parentTableName string, parentCols []string, onUpdate, onDelete sqlparser.ReferenceAction) *sqlparser.ForeignKeyDefinition {
-	pKs, pTbl, _ := sqlparser.ParseTable(parentTableName)
+	pKs, pTbl, _ := sqlparser.NewTestParser().ParseTable(parentTableName)
 	return &sqlparser.ForeignKeyDefinition{
 		Source: sqlparser.MakeColumns(childCols...),
 		ReferenceDefinition: &sqlparser.ReferenceDefinition{
@@ -597,6 +650,7 @@ func readJSONTests(filename string) []planTest {
 		panic(err)
 	}
 	dec := json.NewDecoder(file)
+	dec.DisallowUnknownFields()
 	err = dec.Decode(&output)
 	if err != nil {
 		panic(err)
@@ -678,7 +732,7 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 		recover()
 	}()
 
-	ast, err := sqlparser.Parse(query)
+	ast, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		return
 	}

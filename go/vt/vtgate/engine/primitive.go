@@ -87,7 +87,10 @@ type (
 		Session() SessionActions
 
 		ConnCollation() collations.ID
+		CollationEnv() *collations.Environment
+		SQLParser() *sqlparser.Parser
 		TimeZone() *time.Location
+		SQLMode() string
 
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 

@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -30,8 +29,23 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func knownBadQuery(expr Expr) bool {
-	isNullSafeComparison := func(expr Expr) bool {
+func internalExpression(e Expr) IR {
+	switch e := e.(type) {
+	case IR:
+		return e
+	case *CompiledExpr:
+		return e.ir
+	case *UntypedExpr:
+		return e.ir
+	default:
+		panic("invalid Expr")
+	}
+}
+
+func knownBadQuery(e Expr) bool {
+	expr := internalExpression(e)
+
+	isNullSafeComparison := func(expr IR) bool {
 		if cmp, ok := expr.(*ComparisonExpr); ok {
 			return cmp.Op.String() == "<=>"
 		}
@@ -48,17 +62,15 @@ func knownBadQuery(expr Expr) bool {
 var errKnownBadQuery = errors.New("this query is known to give bad results in MySQL")
 
 func convert(t *testing.T, query string, simplify bool) (Expr, error) {
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		t.Fatalf("failed to parse '%s': %v", query, err)
 	}
 
 	cfg := &Config{
-		Collation:    collations.CollationUtf8mb4ID,
-		Optimization: OptimizationLevelNone,
-	}
-	if simplify {
-		cfg.Optimization = OptimizationLevelSimplify
+		Collation:         collations.CollationUtf8mb4ID,
+		CollationEnv:      collations.MySQL8(),
+		NoConstantFolding: !simplify,
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
@@ -77,7 +89,7 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	return NewExpressionEnv(context.Background(), nil, nil).Evaluate(converted)
+	return EmptyExpressionEnv(collations.MySQL8()).Evaluate(converted)
 }
 
 func TestMySQLGolden(t *testing.T) {
@@ -129,11 +141,11 @@ func TestMySQLGolden(t *testing.T) {
 					continue
 				}
 				if tc.Error != "" {
-					t.Errorf("query %d: %s\nmysql err:  %s\nvitess val: %s", testcount, tc.Query, tc.Error, eval.Value(collations.Default()))
+					t.Errorf("query %d: %s\nmysql err:  %s\nvitess val: %s", testcount, tc.Query, tc.Error, eval.Value(collations.MySQL8().DefaultConnectionCharset()))
 					continue
 				}
 				if eval.String() != tc.Value {
-					t.Errorf("query %d: %s\nmysql val:  %s\nvitess val: %s", testcount, tc.Query, tc.Value, eval.Value(collations.Default()))
+					t.Errorf("query %d: %s\nmysql val:  %s\nvitess val: %s", testcount, tc.Query, tc.Value, eval.Value(collations.MySQL8().DefaultConnectionCharset()))
 					continue
 				}
 				ok++
@@ -147,5 +159,5 @@ func TestMySQLGolden(t *testing.T) {
 func TestDebug1(t *testing.T) {
 	// Debug
 	eval, err := testSingle(t, `SELECT  _latin1 0xFF regexp _latin1 '[[:lower:]]' COLLATE latin1_bin`)
-	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.Local().LookupName(eval.Collation()))
+	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.MySQL8().LookupName(eval.Collation()))
 }

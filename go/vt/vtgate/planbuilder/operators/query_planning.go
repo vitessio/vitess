@@ -21,8 +21,8 @@ import (
 	"io"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -35,26 +35,16 @@ type (
 	}
 )
 
-func planQuery(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.Operator, err error) {
-	output, err = runPhases(ctx, root)
-	if err != nil {
-		return nil, err
-	}
+func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
+	output := runPhases(ctx, root)
+	output = planOffsets(ctx, output)
 
-	output, err = planOffsets(ctx, output)
-	if err != nil {
-		return nil, err
-	}
-
-	if rewrite.DebugOperatorTree {
+	if DebugOperatorTree {
 		fmt.Println("After offset planning:")
-		fmt.Println(ops.ToTree(output))
+		fmt.Println(ToTree(output))
 	}
 
-	output, err = compact(ctx, output)
-	if err != nil {
-		return nil, err
-	}
+	output = compact(ctx, output)
 
 	return addTruncationOrProjectionToReturnOutput(ctx, root, output)
 }
@@ -63,35 +53,26 @@ func planQuery(ctx *plancontext.PlanningContext, root ops.Operator) (output ops.
 // If we can push it under a route - done.
 // If we can't, we will instead expand the Horizon into
 // smaller operators and try to push these down as far as possible
-func runPhases(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.Operator, err error) {
-	op = root
-	for _, phase := range getPhases(ctx) {
+func runPhases(ctx *plancontext.PlanningContext, root Operator) Operator {
+	op := root
+
+	p := phaser{}
+	for phase := p.next(ctx); phase != DONE; phase = p.next(ctx) {
 		ctx.CurrentPhase = int(phase)
-		if rewrite.DebugOperatorTree {
+		if DebugOperatorTree {
 			fmt.Printf("PHASE: %s\n", phase.String())
 		}
 
-		op, err = phase.act(ctx, op)
-		if err != nil {
-			return nil, err
-		}
-
-		op, err = runRewriters(ctx, op)
-		if err != nil {
-			return nil, err
-		}
-
-		op, err = compact(ctx, op)
-		if err != nil {
-			return nil, err
-		}
+		op = phase.act(ctx, op)
+		op = runRewriters(ctx, op)
+		op = compact(ctx, op)
 	}
 
 	return addGroupByOnRHSOfJoin(op)
 }
 
-func runRewriters(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		switch in := in.(type) {
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
@@ -117,24 +98,109 @@ func runRewriters(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 			return optimizeQueryGraph(ctx, in)
 		case *LockAndComment:
 			return pushLockAndComment(in)
+		case *Delete:
+			return tryPushDelete(ctx, in)
 		default:
-			return in, rewrite.SameTree, nil
+			return in, NoRewrite
 		}
 	}
 
-	return rewrite.FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
+	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func pushLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushDelete(ctx *plancontext.PlanningContext, in *Delete) (Operator, *ApplyResult) {
+	switch src := in.Source.(type) {
+	case *Route:
+		return pushDeleteUnderRoute(in, src)
+	case *ApplyJoin:
+		return pushDeleteUnderJoin(ctx, in, src)
+	}
+	return in, nil
+}
+
+func pushDeleteUnderRoute(in *Delete, src *Route) (Operator, *ApplyResult) {
+	if in.Limit != nil && !src.IsSingleShardOrByDestination() {
+		panic(vterrors.VT12001("multi shard DELETE with LIMIT"))
+	}
+
+	switch r := src.Routing.(type) {
+	case *SequenceRouting:
+		// Sequences are just unsharded routes
+		src.Routing = &AnyShardRouting{
+			keyspace: r.keyspace,
+		}
+	case *AnyShardRouting:
+		// References would have an unsharded source
+		// Alternates are not required.
+		r.Alternates = nil
+	}
+	return Swap(in, src, "pushed delete under route")
+}
+
+func pushDeleteUnderJoin(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
+	if len(in.Target.VTable.PrimaryKey) == 0 {
+		panic(vterrors.VT09015())
+	}
+	dm := &DeleteMulti{}
+	var selExprs sqlparser.SelectExprs
+	var leftComp sqlparser.ValTuple
+	for _, col := range in.Target.VTable.PrimaryKey {
+		colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
+		selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
+		leftComp = append(leftComp, colName)
+		ctx.SemTable.Recursive[colName] = in.Target.ID
+	}
+
+	sel := &sqlparser.Select{
+		SelectExprs: selExprs,
+		OrderBy:     in.OrderBy,
+		Limit:       in.Limit,
+		Lock:        sqlparser.ForUpdateLock,
+	}
+	dm.Source = newHorizon(src, sel)
+
+	var targetTable *Table
+	_ = Visit(src, func(operator Operator) error {
+		if tbl, ok := operator.(*Table); ok && tbl.QTable.ID == in.Target.ID {
+			targetTable = tbl
+			return io.EOF
+		}
+		return nil
+	})
+	if targetTable == nil {
+		panic(vterrors.VT13001("target DELETE table not found"))
+	}
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, leftComp, sqlparser.ListArg(engine.DM_VALS), nil)
+	targetQT := targetTable.QTable
+	qt := &QueryTable{
+		ID:         targetQT.ID,
+		Alias:      sqlparser.CloneRefOfAliasedTableExpr(targetQT.Alias),
+		Table:      sqlparser.CloneTableName(targetQT.Table),
+		Predicates: []sqlparser.Expr{compExpr},
+	}
+
+	qg := &QueryGraph{Tables: []*QueryTable{qt}}
+	in.Source = qg
+
+	if in.OwnedVindexQuery != nil {
+		in.OwnedVindexQuery.From = sqlparser.TableExprs{targetQT.Alias}
+		in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
+	}
+	dm.Delete = in
+
+	return dm, Rewrote("Delete Multi on top of Delete and ApplyJoin")
+}
+
+func pushLockAndComment(l *LockAndComment) (Operator, *ApplyResult) {
 	switch src := l.Source.(type) {
 	case *Horizon, *QueryGraph:
 		// we want to wait until the horizons have been pushed under a route or expanded
 		// that way we know that we've replaced the QueryGraphs with Routes
-		return l, rewrite.SameTree, nil
+		return l, NoRewrite
 	case *Route:
 		src.Comments = l.Comments
 		src.Lock = l.Lock
-		return src, rewrite.NewTree("put lock and comment into route", l), nil
+		return src, Rewrote("put lock and comment into route")
 	default:
 		inputs := src.Inputs()
 		for i, op := range inputs {
@@ -145,23 +211,20 @@ func pushLockAndComment(l *LockAndComment) (ops.Operator, *rewrite.ApplyResult, 
 			}
 		}
 		src.SetInputs(inputs)
-		return src, rewrite.NewTree("pushed down lock and comments", l), nil
+		return src, Rewrote("pushed down lock and comments")
 	}
 }
 
-func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
+func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operator, *ApplyResult) {
 	if in.IsDerived() {
-		newOp, result, err := pushDerived(ctx, in)
-		if err != nil {
-			return nil, nil, err
-		}
-		if result != rewrite.SameTree {
-			return newOp, result, nil
+		newOp, result := pushDerived(ctx, in)
+		if result != NoRewrite {
+			return newOp, result
 		}
 	}
 
 	if !reachedPhase(ctx, initialPlanning) {
-		return in, rewrite.SameTree, nil
+		return in, NoRewrite
 	}
 
 	if ctx.SemTable.QuerySignature.SubQueries {
@@ -170,15 +233,12 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Ope
 
 	rb, isRoute := in.src().(*Route)
 	if isRoute && rb.IsSingleShard() {
-		return rewrite.Swap(in, rb, "push horizon into route")
+		return Swap(in, rb, "push horizon into route")
 	}
 
 	sel, isSel := in.selectStatement().(*sqlparser.Select)
 
-	qp, err := in.getQP(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
+	qp := in.getQP(ctx)
 
 	needsOrdering := len(qp.OrderExprs) > 0
 	hasHaving := isSel && sel.Having != nil
@@ -191,7 +251,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Ope
 		in.selectStatement().GetLimit() == nil
 
 	if canPush {
-		return rewrite.Swap(in, rb, "push horizon into route")
+		return Swap(in, rb, "push horizon into route")
 	}
 
 	return expandHorizon(ctx, in)
@@ -200,42 +260,58 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Ope
 func tryPushProjection(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
-) (ops.Operator, *rewrite.ApplyResult, error) {
+) (Operator, *ApplyResult) {
 	switch src := p.Source.(type) {
 	case *Route:
-		return rewrite.Swap(p, src, "push projection under route")
+		return Swap(p, src, "push projection under route")
 	case *ApplyJoin:
 		if p.FromAggr || !p.canPush(ctx) {
-			return p, rewrite.SameTree, nil
+			return p, NoRewrite
 		}
 		return pushProjectionInApplyJoin(ctx, p, src)
+	case *HashJoin:
+		if !p.canPush(ctx) {
+			return p, NoRewrite
+		}
+		return pushProjectionThroughHashJoin(ctx, p, src)
 	case *Vindex:
 		if !p.canPush(ctx) {
-			return p, rewrite.SameTree, nil
+			return p, NoRewrite
 		}
 		return pushProjectionInVindex(ctx, p, src)
 	case *SubQueryContainer:
 		if !p.canPush(ctx) {
-			return p, rewrite.SameTree, nil
+			return p, NoRewrite
 		}
 		return pushProjectionToOuterContainer(ctx, p, src)
 	case *SubQuery:
 		return pushProjectionToOuter(ctx, p, src)
 	case *Limit:
-		return rewrite.Swap(p, src, "push projection under limit")
+		return Swap(p, src, "push projection under limit")
 	default:
-		return p, rewrite.SameTree, nil
+		return p, NoRewrite
 	}
 }
 
-func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *SubQuery) (ops.Operator, *rewrite.ApplyResult, error) {
+func pushProjectionThroughHashJoin(ctx *plancontext.PlanningContext, p *Projection, hj *HashJoin) (Operator, *ApplyResult) {
+	cols := p.Columns.(AliasedProjections)
+	for _, col := range cols {
+		if !col.isSameInAndOut(ctx) {
+			return p, NoRewrite
+		}
+		hj.columns.add(col.ColExpr)
+	}
+	return hj, Rewrote("merged projection into hash join")
+}
+
+func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *SubQuery) (Operator, *ApplyResult) {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
-		return p, rewrite.SameTree, nil
+		return p, NoRewrite
 	}
 
-	if !reachedPhase(ctx, subquerySettling) || err != nil {
-		return p, rewrite.SameTree, nil
+	if !reachedPhase(ctx, subquerySettling) {
+		return p, NoRewrite
 	}
 
 	outer := TableID(sq.Outer)
@@ -246,7 +322,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *
 		}
 
 		if !ctx.SemTable.RecursiveDeps(pe.EvalExpr).IsSolvedBy(outer) {
-			return p, rewrite.SameTree, nil
+			return p, NoRewrite
 		}
 
 		se, ok := pe.Info.(SubQueryExpression)
@@ -256,22 +332,22 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *
 	}
 	// all projections can be pushed to the outer
 	sq.Outer, p.Source = p, sq.Outer
-	return sq, rewrite.NewTree("push projection into outer side of subquery", p), nil
+	return sq, Rewrote("push projection into outer side of subquery")
 }
 
 func pushProjectionInVindex(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
 	src *Vindex,
-) (ops.Operator, *rewrite.ApplyResult, error) {
+) (Operator, *ApplyResult) {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
-		return nil, nil, err
+		panic(err)
 	}
 	for _, pe := range ap {
 		src.AddColumn(ctx, true, false, aeWrap(pe.EvalExpr))
 	}
-	return src, rewrite.NewTree("push projection into vindex", p), nil
+	return src, Rewrote("push projection into vindex")
 }
 
 func (p *projector) add(pe *ProjExpr, col *sqlparser.IdentifierCI) {
@@ -289,11 +365,11 @@ func pushProjectionInApplyJoin(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
 	src *ApplyJoin,
-) (ops.Operator, *rewrite.ApplyResult, error) {
+) (Operator, *ApplyResult) {
 	ap, err := p.GetAliasedProjections()
 	if src.LeftJoin || err != nil {
 		// we can't push down expression evaluation to the rhs if we are not sure if it will even be executed
-		return p, rewrite.SameTree, nil
+		return p, NoRewrite
 	}
 	lhs, rhs := &projector{}, &projector{}
 	if p.DT != nil && len(p.DT.Columns) > 0 {
@@ -301,37 +377,24 @@ func pushProjectionInApplyJoin(
 		rhs.explicitColumnAliases = true
 	}
 
-	src.JoinColumns = nil
+	src.JoinColumns = &applyJoinColumns{}
 	for idx, pe := range ap {
 		var col *sqlparser.IdentifierCI
 		if p.DT != nil && idx < len(p.DT.Columns) {
 			col = &p.DT.Columns[idx]
 		}
-		err := splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, col)
-		if err != nil {
-			return nil, nil, err
-		}
+		splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, col)
 	}
 
 	if p.isDerived() {
-		err := exposeColumnsThroughDerivedTable(ctx, p, src, lhs)
-		if err != nil {
-			return nil, nil, err
-		}
+		exposeColumnsThroughDerivedTable(ctx, p, src, lhs)
 	}
 
 	// Create and update the Projection operators for the left and right children, if needed.
-	src.LHS, err = createProjectionWithTheseColumns(ctx, src.LHS, lhs, p.DT)
-	if err != nil {
-		return nil, nil, err
-	}
+	src.LHS = createProjectionWithTheseColumns(ctx, src.LHS, lhs, p.DT)
+	src.RHS = createProjectionWithTheseColumns(ctx, src.RHS, rhs, p.DT)
 
-	src.RHS, err = createProjectionWithTheseColumns(ctx, src.RHS, rhs, p.DT)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return src, rewrite.NewTree("split projection to either side of join", src), nil
+	return src, Rewrote("split projection to either side of join")
 }
 
 // splitProjectionAcrossJoin creates JoinPredicates for all projections,
@@ -342,21 +405,15 @@ func splitProjectionAcrossJoin(
 	lhs, rhs *projector,
 	pe *ProjExpr,
 	colAlias *sqlparser.IdentifierCI,
-) error {
+) {
 
 	// Check if the current expression can reuse an existing column in the ApplyJoin.
-	if _, found := canReuseColumn(ctx, join.JoinColumns, pe.EvalExpr, joinColumnToExpr); found {
-		return nil
+	if _, found := canReuseColumn(ctx, join.JoinColumns.columns, pe.EvalExpr, joinColumnToExpr); found {
+		return
 	}
 
-	col, err := splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias)
-	if err != nil {
-		return err
-	}
-
-	// Add the new JoinColumn to the ApplyJoin's JoinPredicates.
-	join.JoinColumns = append(join.JoinColumns, col)
-	return nil
+	// Add the new applyJoinColumn to the ApplyJoin's JoinPredicates.
+	join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
 }
 
 func splitUnexploredExpression(
@@ -365,14 +422,11 @@ func splitUnexploredExpression(
 	lhs, rhs *projector,
 	pe *ProjExpr,
 	colAlias *sqlparser.IdentifierCI,
-) (JoinColumn, error) {
-	// Get a JoinColumn for the current expression.
-	col, err := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
-	if err != nil {
-		return JoinColumn{}, err
-	}
+) applyJoinColumn {
+	// Get a applyJoinColumn for the current expression.
+	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
 
-	// Update the left and right child columns and names based on the JoinColumn type.
+	// Update the left and right child columns and names based on the applyJoinColumn type.
 	switch {
 	case col.IsPureLeft():
 		lhs.add(pe, colAlias)
@@ -393,7 +447,7 @@ func splitUnexploredExpression(
 		innerPE.Info = pe.Info
 		rhs.add(innerPE, colAlias)
 	}
-	return col, nil
+	return col
 }
 
 // exposeColumnsThroughDerivedTable rewrites expressions within a join that is inside a derived table
@@ -408,30 +462,29 @@ func splitUnexploredExpression(
 // The function iterates through each join predicate, rewriting the expressions in the predicate's
 // LHS expressions to include the derived table. This allows the expressions to be accessed outside
 // the derived table.
-func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin, lhs *projector) error {
+func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin, lhs *projector) {
 	derivedTbl, err := ctx.SemTable.TableInfoFor(p.DT.TableID)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	derivedTblName, err := derivedTbl.Name()
 	if err != nil {
-		return err
+		panic(err)
 	}
-	for _, predicate := range src.JoinPredicates {
+	for _, predicate := range src.JoinPredicates.columns {
 		for idx, bve := range predicate.LHSExprs {
 			expr := bve.Expr
 			tbl, err := ctx.SemTable.TableInfoForExpr(expr)
 			if err != nil {
-				return err
+				panic(err)
 			}
-			tblExpr := tbl.GetExpr()
-			tblName, err := tblExpr.TableName()
+			tblName, err := tbl.Name()
 			if err != nil {
-				return err
+				panic(err)
 			}
 
 			expr = semantics.RewriteDerivedTableExpression(expr, derivedTbl)
-			out := prefixColNames(tblName, expr)
+			out := prefixColNames(ctx, tblName, expr)
 
 			alias := sqlparser.UnescapedString(out)
 			predicate.LHSExprs[idx].Expr = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
@@ -444,34 +497,30 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 			lhs.add(projExpr, colAlias)
 		}
 	}
-	return nil
 }
 
 // prefixColNames adds qualifier prefixes to all ColName:s.
 // We want to be more explicit than the user was to make sure we never produce invalid SQL
-func prefixColNames(tblName sqlparser.TableName, e sqlparser.Expr) sqlparser.Expr {
+func prefixColNames(ctx *plancontext.PlanningContext, tblName sqlparser.TableName, e sqlparser.Expr) sqlparser.Expr {
 	return sqlparser.CopyOnRewrite(e, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		col, ok := cursor.Node().(*sqlparser.ColName)
 		if !ok {
 			return
 		}
-		col.Qualifier = tblName
-	}, nil).(sqlparser.Expr)
+		cursor.Replace(sqlparser.NewColNameWithQualifier(col.Name.String(), tblName))
+	}, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
 }
 
 func createProjectionWithTheseColumns(
 	ctx *plancontext.PlanningContext,
-	src ops.Operator,
+	src Operator,
 	p *projector,
 	dt *DerivedTable,
-) (ops.Operator, error) {
+) Operator {
 	if len(p.columns) == 0 {
-		return src, nil
+		return src
 	}
-	proj, err := createProjection(ctx, src)
-	if err != nil {
-		return nil, err
-	}
+	proj := createProjection(ctx, src)
 	proj.Columns = AliasedProjections(p.columns)
 	if dt != nil {
 		kopy := *dt
@@ -479,42 +528,42 @@ func createProjectionWithTheseColumns(
 		proj.DT = &kopy
 	}
 
-	return proj, nil
+	return proj
 }
 
-func tryPushLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushLimit(in *Limit) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Route:
 		return tryPushingDownLimitInRoute(in, src)
 	case *Aggregator:
-		return in, rewrite.SameTree, nil
+		return in, NoRewrite
 	default:
 		return setUpperLimit(in)
 	}
 }
 
-func tryPushingDownLimitInRoute(in *Limit, src *Route) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushingDownLimitInRoute(in *Limit, src *Route) (Operator, *ApplyResult) {
 	if src.IsSingleShard() {
-		return rewrite.Swap(in, src, "push limit under route")
+		return Swap(in, src, "push limit under route")
 	}
 
 	return setUpperLimit(in)
 }
 
-func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
+func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 	if in.Pushed {
-		return in, rewrite.SameTree, nil
+		return in, NoRewrite
 	}
 	in.Pushed = true
-	visitor := func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
-		return op, rewrite.SameTree, nil
+	visitor := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		return op, NoRewrite
 	}
-	var result *rewrite.ApplyResult
-	shouldVisit := func(op ops.Operator) rewrite.VisitRule {
+	var result *ApplyResult
+	shouldVisit := func(op Operator) VisitRule {
 		switch op := op.(type) {
 		case *Join, *ApplyJoin, *SubQueryContainer, *SubQuery:
 			// we can't push limits down on either side
-			return rewrite.SkipChildren
+			return SkipChildren
 		case *Route:
 			newSrc := &Limit{
 				Source: op.Source,
@@ -522,46 +571,46 @@ func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 				Pushed: false,
 			}
 			op.Source = newSrc
-			result = result.Merge(rewrite.NewTree("push limit under route", newSrc))
-			return rewrite.SkipChildren
+			result = result.Merge(Rewrote("push limit under route"))
+			return SkipChildren
 		default:
-			return rewrite.VisitChildren
+			return VisitChildren
 		}
 	}
 
-	_, err := rewrite.TopDown(in.Source, TableID, visitor, shouldVisit)
-	if err != nil {
-		return nil, nil, err
-	}
-	return in, result, nil
+	TopDown(in.Source, TableID, visitor, shouldVisit)
+
+	return in, result
 }
 
-func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Route:
-		return rewrite.Swap(in, src, "push ordering under route")
+		return Swap(in, src, "push ordering under route")
+	case *Filter:
+		return Swap(in, src, "push ordering under filter")
 	case *ApplyJoin:
 		if canPushLeft(ctx, src, in.Order) {
 			// ApplyJoin is stable in regard to the columns coming from the LHS,
 			// so if all the ordering columns come from the LHS, we can push down the Ordering there
 			src.LHS, in.Source = in, src.LHS
-			return src, rewrite.NewTree("push down ordering on the LHS of a join", in), nil
+			return src, Rewrote("push down ordering on the LHS of a join")
 		}
 	case *Ordering:
 		// we'll just remove the order underneath. The top order replaces whatever was incoming
 		in.Source = src.Source
-		return in, rewrite.NewTree("remove double ordering", src), nil
+		return in, Rewrote("remove double ordering")
 	case *Projection:
 		// we can move ordering under a projection if it's not introducing a column we're sorting by
 		for _, by := range in.Order {
-			if !fetchByOffset(by.SimplifiedExpr) {
-				return in, rewrite.SameTree, nil
+			if !mustFetchFromInput(by.SimplifiedExpr) {
+				return in, NoRewrite
 			}
 		}
-		return rewrite.Swap(in, src, "push ordering under projection")
+		return Swap(in, src, "push ordering under projection")
 	case *Aggregator:
 		if !src.QP.AlignGroupByAndOrderBy(ctx) && !overlaps(ctx, in.Order, src.Grouping) {
-			return in, rewrite.SameTree, nil
+			return in, NoRewrite
 		}
 
 		return pushOrderingUnderAggr(ctx, in, src)
@@ -570,26 +619,26 @@ func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops.Operat
 		for _, order := range in.Order {
 			deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
 			if !deps.IsSolvedBy(outerTableID) {
-				return in, rewrite.SameTree, nil
+				return in, NoRewrite
 			}
 		}
 		src.Outer, in.Source = in, src.Outer
-		return src, rewrite.NewTree("push ordering into outer side of subquery", in), nil
+		return src, Rewrote("push ordering into outer side of subquery")
 	case *SubQuery:
 		outerTableID := TableID(src.Outer)
 		for _, order := range in.Order {
 			deps := ctx.SemTable.RecursiveDeps(order.Inner.Expr)
 			if !deps.IsSolvedBy(outerTableID) {
-				return in, rewrite.SameTree, nil
+				return in, NoRewrite
 			}
 		}
 		src.Outer, in.Source = in, src.Outer
-		return src, rewrite.NewTree("push ordering into outer side of subquery", in), nil
+		return src, Rewrote("push ordering into outer side of subquery")
 	}
-	return in, rewrite.SameTree, nil
+	return in, NoRewrite
 }
 
-func overlaps(ctx *plancontext.PlanningContext, order []ops.OrderBy, grouping []GroupBy) bool {
+func overlaps(ctx *plancontext.PlanningContext, order []OrderBy, grouping []GroupBy) bool {
 ordering:
 	for _, orderBy := range order {
 		for _, groupBy := range grouping {
@@ -603,13 +652,13 @@ ordering:
 	return true
 }
 
-func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, aggregator *Aggregator) (ops.Operator, *rewrite.ApplyResult, error) {
+func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, aggregator *Aggregator) (Operator, *ApplyResult) {
 	// If Aggregator is a derived table, then we should rewrite the ordering before pushing.
 	if aggregator.isDerived() {
 		for idx, orderExpr := range order.Order {
 			ti, err := ctx.SemTable.TableInfoFor(aggregator.DT.TableID)
 			if err != nil {
-				return nil, nil, err
+				panic(err)
 			}
 			newOrderExpr := orderExpr.Map(func(expr sqlparser.Expr) sqlparser.Expr {
 				return semantics.RewriteDerivedTableExpression(expr, ti)
@@ -663,12 +712,12 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 		order.Source = aggrSource.Source
 		aggrSource.Source = nil // removing from plan tree
 		aggregator.Source = order
-		return aggregator, rewrite.NewTree("push ordering under aggregation, removing extra ordering", aggregator), nil
+		return aggregator, Rewrote("push ordering under aggregation, removing extra ordering")
 	}
-	return rewrite.Swap(order, aggregator, "push ordering under aggregation")
+	return Swap(order, aggregator, "push ordering under aggregation")
 }
 
-func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []ops.OrderBy) bool {
+func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []OrderBy) bool {
 	lhs := TableID(aj.LHS)
 	for _, order := range order {
 		deps := ctx.SemTable.DirectDeps(order.Inner.Expr)
@@ -679,7 +728,7 @@ func canPushLeft(ctx *plancontext.PlanningContext, aj *ApplyJoin, order []ops.Or
 	return true
 }
 
-func isOuterTable(op ops.Operator, ts semantics.TableSet) bool {
+func isOuterTable(op Operator, ts semantics.TableSet) bool {
 	aj, ok := op.(*ApplyJoin)
 	if ok && aj.LeftJoin && TableID(aj.RHS).IsOverlapping(ts) {
 		return true
@@ -694,43 +743,39 @@ func isOuterTable(op ops.Operator, ts semantics.TableSet) bool {
 	return false
 }
 
-func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Projection:
 		return pushFilterUnderProjection(ctx, in, src)
 	case *Route:
 		for _, pred := range in.Predicates {
-			var err error
 			deps := ctx.SemTable.RecursiveDeps(pred)
 			if !isOuterTable(src, deps) {
 				// we can only update based on predicates on inner tables
-				src.Routing, err = src.Routing.updateRoutingLogic(ctx, pred)
-				if err != nil {
-					return nil, nil, err
-				}
+				src.Routing = src.Routing.updateRoutingLogic(ctx, pred)
 			}
 		}
-		return rewrite.Swap(in, src, "push filter into Route")
+		return Swap(in, src, "push filter into Route")
 	case *SubQuery:
 		outerTableID := TableID(src.Outer)
 		for _, pred := range in.Predicates {
 			deps := ctx.SemTable.RecursiveDeps(pred)
 			if !deps.IsSolvedBy(outerTableID) {
-				return in, rewrite.SameTree, nil
+				return in, NoRewrite
 			}
 		}
 		src.Outer, in.Source = in, src.Outer
-		return src, rewrite.NewTree("push filter to outer query in subquery container", in), nil
+		return src, Rewrote("push filter to outer query in subquery container")
 	}
 
-	return in, rewrite.SameTree, nil
+	return in, NoRewrite
 }
 
-func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter, projection *Projection) (ops.Operator, *rewrite.ApplyResult, error) {
+func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter, projection *Projection) (Operator, *ApplyResult) {
 	for _, p := range filter.Predicates {
 		cantPush := false
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			if !fetchByOffset(node) {
+			if !mustFetchFromInput(node) {
 				return true, nil
 			}
 
@@ -743,64 +788,64 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 		}, p)
 
 		if cantPush {
-			return filter, rewrite.SameTree, nil
+			return filter, NoRewrite
 		}
 	}
-	return rewrite.Swap(filter, projection, "push filter under projection")
+	return Swap(filter, projection, "push filter under projection")
 
 }
 
-func tryPushDistinct(in *Distinct) (ops.Operator, *rewrite.ApplyResult, error) {
+func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {
 	if in.Required && in.PushedPerformance {
-		return in, rewrite.SameTree, nil
+		return in, NoRewrite
 	}
 	switch src := in.Source.(type) {
 	case *Route:
 		if isDistinct(src.Source) && src.IsSingleShard() {
-			return src, rewrite.NewTree("distinct not needed", in), nil
+			return src, Rewrote("distinct not needed")
 		}
 		if src.IsSingleShard() || !in.Required {
-			return rewrite.Swap(in, src, "push distinct under route")
+			return Swap(in, src, "push distinct under route")
 		}
 
 		if isDistinct(src.Source) {
-			return in, rewrite.SameTree, nil
+			return in, NoRewrite
 		}
 
 		src.Source = &Distinct{Source: src.Source}
 		in.PushedPerformance = true
 
-		return in, rewrite.NewTree("added distinct under route - kept original", src), nil
+		return in, Rewrote("added distinct under route - kept original")
 	case *Distinct:
 		src.Required = false
 		src.PushedPerformance = false
-		return src, rewrite.NewTree("remove double distinct", src), nil
+		return src, Rewrote("remove double distinct")
 	case *Union:
 		for i := range src.Sources {
 			src.Sources[i] = &Distinct{Source: src.Sources[i]}
 		}
 		in.PushedPerformance = true
 
-		return in, rewrite.NewTree("push down distinct under union", src), nil
-	case *ApplyJoin:
-		src.LHS = &Distinct{Source: src.LHS}
-		src.RHS = &Distinct{Source: src.RHS}
+		return in, Rewrote("push down distinct under union")
+	case JoinOp:
+		src.SetLHS(&Distinct{Source: src.GetLHS()})
+		src.SetRHS(&Distinct{Source: src.GetRHS()})
 		in.PushedPerformance = true
 
 		if in.Required {
-			return in, rewrite.NewTree("push distinct under join - kept original", in.Source), nil
+			return in, Rewrote("push distinct under join - kept original")
 		}
 
-		return in.Source, rewrite.NewTree("push distinct under join", in.Source), nil
+		return in.Source, Rewrote("push distinct under join")
 	case *Ordering:
 		in.Source = src.Source
-		return in, rewrite.NewTree("remove ordering under distinct", in), nil
+		return in, Rewrote("remove ordering under distinct")
 	}
 
-	return in, rewrite.SameTree, nil
+	return in, NoRewrite
 }
 
-func isDistinct(op ops.Operator) bool {
+func isDistinct(op Operator) bool {
 	switch op := op.(type) {
 	case *Distinct:
 		return true
@@ -815,73 +860,63 @@ func isDistinct(op ops.Operator) bool {
 	}
 }
 
-func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *rewrite.ApplyResult, error) {
-	if res := compactUnion(op); res != rewrite.SameTree {
-		return op, res, nil
+func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *ApplyResult) {
+	if res := compactUnion(op); res != NoRewrite {
+		return op, res
 	}
 
-	var sources []ops.Operator
+	var sources []Operator
 	var selects []sqlparser.SelectExprs
-	var err error
 
 	if op.distinct {
-		sources, selects, err = mergeUnionInputInAnyOrder(ctx, op)
+		sources, selects = mergeUnionInputInAnyOrder(ctx, op)
 	} else {
-		sources, selects, err = mergeUnionInputsInOrder(ctx, op)
-	}
-	if err != nil {
-		return nil, nil, err
+		sources, selects = mergeUnionInputsInOrder(ctx, op)
 	}
 
 	if len(sources) == 1 {
 		result := sources[0].(*Route)
 		if result.IsSingleShard() || !op.distinct {
-			return result, rewrite.NewTree("push union under route", op), nil
+			return result, Rewrote("push union under route")
 		}
 
 		return &Distinct{
 			Source:   result,
 			Required: true,
-		}, rewrite.NewTree("push union under route", op), nil
+		}, Rewrote("push union under route")
 	}
 
 	if len(sources) == len(op.Sources) {
-		return op, rewrite.SameTree, nil
+		return op, NoRewrite
 	}
-	return newUnion(sources, selects, op.unionColumns, op.distinct), rewrite.NewTree("merge union inputs", op), nil
+	return newUnion(sources, selects, op.unionColumns, op.distinct), Rewrote("merge union inputs")
 }
 
 // addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
-func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, oldHorizon ops.Operator, output ops.Operator) (ops.Operator, error) {
+func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, oldHorizon Operator, output Operator) Operator {
 	horizon, ok := oldHorizon.(*Horizon)
 	if !ok {
-		return output, nil
+		return output
 	}
 
 	cols := output.GetSelectExprs(ctx)
 	sel := sqlparser.GetFirstSelect(horizon.Query)
 	if len(sel.SelectExprs) == len(cols) {
-		return output, nil
+		return output
 	}
 
 	if tryTruncateColumnsAt(output, len(sel.SelectExprs)) {
-		return output, nil
+		return output
 	}
 
-	qp, err := horizon.getQP(ctx)
-	if err != nil {
-		return nil, err
-	}
-	proj, err := createSimpleProjection(ctx, qp, output)
-	if err != nil {
-		return nil, err
-	}
-	return proj, nil
+	qp := horizon.getQP(ctx)
+	proj := createSimpleProjection(ctx, qp, output)
+	return proj
 }
 
-func stopAtRoute(operator ops.Operator) rewrite.VisitRule {
+func stopAtRoute(operator Operator) VisitRule {
 	_, isRoute := operator.(*Route)
-	return rewrite.VisitRule(!isRoute)
+	return VisitRule(!isRoute)
 }
 
 func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {

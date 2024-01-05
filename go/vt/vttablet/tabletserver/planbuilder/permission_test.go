@@ -178,7 +178,7 @@ func TestBuildPermissions(t *testing.T) {
 	}}
 
 	for _, tcase := range tcases {
-		stmt, err := sqlparser.Parse(tcase.input)
+		stmt, err := sqlparser.NewTestParser().Parse(tcase.input)
 		if err != nil {
 			t.Fatal(err)
 		}

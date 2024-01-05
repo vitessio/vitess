@@ -28,7 +28,7 @@ func errCardinality(expected int) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", expected)
 }
 
-func (ast *astCompiler) cardinality(expr Expr) int {
+func (ast *astCompiler) cardinality(expr IR) int {
 	switch expr := expr.(type) {
 	case *BindVariable:
 		if expr.Type == sqltypes.Tuple {
@@ -42,7 +42,7 @@ func (ast *astCompiler) cardinality(expr Expr) int {
 	}
 }
 
-func (ast *astCompiler) ensureCardinality(expr Expr, expected int) error {
+func (ast *astCompiler) ensureCardinality(expr IR, expected int) error {
 	c := ast.cardinality(expr)
 	if c != expected {
 		return errCardinality(expected)
@@ -50,7 +50,7 @@ func (ast *astCompiler) ensureCardinality(expr Expr, expected int) error {
 	return nil
 }
 
-func (ast *astCompiler) cardComparison(expr1 Expr, expr2 Expr) error {
+func (ast *astCompiler) cardComparison(expr1 IR, expr2 IR) error {
 	card1 := ast.cardinality(expr1)
 	card2 := ast.cardinality(expr2)
 
@@ -94,7 +94,7 @@ func (ast *astCompiler) cardComparison(expr1 Expr, expr2 Expr) error {
 	}
 }
 
-func (ast *astCompiler) cardBinary(left, right Expr) error {
+func (ast *astCompiler) cardBinary(left, right IR) error {
 	if err := ast.cardExpr(left); err != nil {
 		return err
 	}
@@ -110,14 +110,14 @@ func (ast *astCompiler) cardBinary(left, right Expr) error {
 	return nil
 }
 
-func (ast *astCompiler) cardUnary(inner Expr) error {
+func (ast *astCompiler) cardUnary(inner IR) error {
 	if err := ast.cardExpr(inner); err != nil {
 		return err
 	}
 	return ast.ensureCardinality(inner, 1)
 }
 
-func (ast *astCompiler) cardExpr(expr Expr) error {
+func (ast *astCompiler) cardExpr(expr IR) error {
 	if expr == nil {
 		return nil
 	}
@@ -174,7 +174,7 @@ func (ast *astCompiler) cardExpr(expr Expr) error {
 				return errCardinality(1)
 			}
 		default:
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple, was %T", expr.Right)
 		}
 
 	case TupleExpr:

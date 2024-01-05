@@ -30,6 +30,7 @@ import (
 	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/tlstest"
@@ -215,11 +216,11 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	// If we found a valid associated mysqld_safe process then let's kill
 	// it first.
 	if err == nil && mysqldSafePID > 0 {
-		if err = syscall.Kill(mysqldSafePID, syscall.SIGKILL); err != nil {
+		if err = syscallutil.Kill(mysqldSafePID, syscall.SIGKILL); err != nil {
 			return err
 		}
 	}
-	return syscall.Kill(pid, syscall.SIGKILL)
+	return syscallutil.Kill(pid, syscall.SIGKILL)
 }
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
@@ -250,16 +251,6 @@ func (mysqlctl *MysqlctlProcess) BinaryLogsPath() string {
 // CleanupFiles clean the mysql files to make sure we can start the same process again
 func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)))
-}
-
-// Connect returns a new connection to the underlying MySQL server
-func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (*mysql.Conn, error) {
-	params := mysql.ConnParams{
-		Uname:      username,
-		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctl.TabletUID), "/mysql.sock"),
-	}
-
-	return mysql.Connect(ctx, &params)
 }
 
 // MysqlCtlProcessInstanceOptionalInit returns a Mysqlctl handle for mysqlctl process

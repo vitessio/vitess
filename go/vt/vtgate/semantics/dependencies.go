@@ -54,10 +54,9 @@ func createCertain(direct TableSet, recursive TableSet, qt evalengine.Type) *cer
 		dependency: dependency{
 			direct:    direct,
 			recursive: recursive,
-			typ:       evalengine.UnknownType(),
 		},
 	}
-	if qt.Type != querypb.Type_NULL_TYPE {
+	if qt.Valid() && qt.Type() != querypb.Type_NULL_TYPE {
 		c.typ = qt
 	}
 	return c

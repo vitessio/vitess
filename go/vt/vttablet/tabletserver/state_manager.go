@@ -64,6 +64,9 @@ func (state servingState) String() string {
 
 // transitionRetryInterval is for tests.
 var transitionRetryInterval = 1 * time.Second
+var logInitTime sync.Once
+
+var ErrNoTarget = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
 
 // stateManager manages state transition for all the TabletServer
 // subcomponents.
@@ -121,7 +124,7 @@ type stateManager struct {
 	throttler   lagThrottler
 	tableGC     tableGarbageCollector
 
-	// hcticks starts on initialiazation and runs forever.
+	// hcticks starts on initialization and runs forever.
 	hcticks *timer.Timer
 
 	// checkMySQLThrottler ensures that CheckMysql
@@ -194,11 +197,11 @@ func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
 	sm.target = target.CloneVT()
 	sm.transitioning = semaphore.NewWeighted(1)
 	sm.checkMySQLThrottler = semaphore.NewWeighted(1)
-	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
-	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
-	sm.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
-	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
-	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
+	sm.timebombDuration = env.Config().OltpReadPool.Timeout * 10
+	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.Interval)
+	sm.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThreshold.Nanoseconds())
+	sm.shutdownGracePeriod = env.Config().GracePeriods.Shutdown
+	sm.transitionGracePeriod = env.Config().GracePeriods.Transition
 }
 
 // SetServingType changes the state to the specified settings.
@@ -432,7 +435,7 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 		}
 	} else {
 		if !tabletenv.IsLocalContext(ctx) {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
+			return ErrNoTarget
 		}
 	}
 	return nil
@@ -611,9 +614,9 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 
 // setState changes the state and logs the event.
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
-	defer func() {
+	defer logInitTime.Do(func() {
 		log.Infof("Tablet Init took %d ms", time.Since(servenv.GetInitStartTime()).Milliseconds())
-	}()
+	})
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if tabletType == topodatapb.TabletType_UNKNOWN {

@@ -149,7 +149,7 @@ func TestCallProcedureChangedTx(t *testing.T) {
 		})
 	}
 
-	// This passes as this starts a new transaction by commiting the old transaction implicitly.
+	// This passes as this starts a new transaction by committing the old transaction implicitly.
 	_, err = client.BeginExecute(`call proc_tx_begin()`, nil, nil)
 	require.NoError(t, err)
 }

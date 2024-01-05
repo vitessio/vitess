@@ -32,7 +32,7 @@ func (ast *astCompiler) binaryCollationForCollation(collation collations.ID) col
 	if binary == nil {
 		return collations.Unknown
 	}
-	return collations.Local().BinaryCollationForCharset(binary.Charset().Name())
+	return ast.cfg.CollationEnv.BinaryCollationForCharset(binary.Charset().Name())
 }
 
 func (ast *astCompiler) translateConvertCharset(charset string, binary bool) (collations.ID, error) {
@@ -47,7 +47,7 @@ func (ast *astCompiler) translateConvertCharset(charset string, binary bool) (co
 		return collation, nil
 	}
 	charset = strings.ToLower(charset)
-	collationID := collations.Local().DefaultCollationForCharset(charset)
+	collationID := ast.cfg.CollationEnv.DefaultCollationForCharset(charset)
 	if collationID == collations.Unknown {
 		return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown character set: '%s'", charset)
 	}
@@ -60,12 +60,13 @@ func (ast *astCompiler) translateConvertCharset(charset string, binary bool) (co
 	return collationID, nil
 }
 
-func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertType) (Expr, error) {
+func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertType) (IR, error) {
 	var (
 		convert ConvertExpr
 		err     error
 	)
 
+	convert.CollationEnv = ast.cfg.CollationEnv
 	convert.Inner, err = ast.translateExpr(expr)
 	if err != nil {
 		return nil, err
@@ -117,12 +118,13 @@ func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *s
 	return &convert, nil
 }
 
-func (ast *astCompiler) translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr) (Expr, error) {
+func (ast *astCompiler) translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr) (IR, error) {
 	var (
 		using ConvertUsingExpr
 		err   error
 	)
 
+	using.CollationEnv = ast.cfg.CollationEnv
 	using.Inner, err = ast.translateExpr(expr.Expr)
 	if err != nil {
 		return nil, err

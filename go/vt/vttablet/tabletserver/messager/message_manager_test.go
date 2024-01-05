@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -317,7 +318,7 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 	// Postpone will wait on the unbuffered ch.
 	<-r1.ch
 
-	// Set up a second subsriber, add a message.
+	// Set up a second subscriber, add a message.
 	r2 := newTestReceiver(1)
 	mm.Subscribe(context.Background(), r2.rcv)
 	<-r2.ch
@@ -833,7 +834,7 @@ type fakeTabletServer struct {
 func newFakeTabletServer() *fakeTabletServer {
 	config := tabletenv.NewDefaultConfig()
 	return &fakeTabletServer{
-		Env: tabletenv.NewEnv(config, "MessagerTest"),
+		Env: tabletenv.NewEnv(config, "MessagerTest", collations.MySQL8(), sqlparser.NewTestParser()),
 	}
 }
 

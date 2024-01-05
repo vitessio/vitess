@@ -25,7 +25,81 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+func TestTinyWeightStrings(t *testing.T) {
+	const Length = 10000
+
+	var cases = []struct {
+		typ  sqltypes.Type
+		gen  func() sqltypes.Value
+		col  collations.ID
+		len  int
+		prec int
+	}{
+		{typ: sqltypes.Int32, gen: sqltypes.RandomGenerators[sqltypes.Int32], col: collations.CollationBinaryID},
+		{typ: sqltypes.Int64, gen: sqltypes.RandomGenerators[sqltypes.Int64], col: collations.CollationBinaryID},
+		{typ: sqltypes.Uint32, gen: sqltypes.RandomGenerators[sqltypes.Uint32], col: collations.CollationBinaryID},
+		{typ: sqltypes.Uint64, gen: sqltypes.RandomGenerators[sqltypes.Uint64], col: collations.CollationBinaryID},
+		{typ: sqltypes.Float64, gen: sqltypes.RandomGenerators[sqltypes.Float64], col: collations.CollationBinaryID},
+		{typ: sqltypes.VarChar, gen: sqltypes.RandomGenerators[sqltypes.VarChar], col: collations.CollationUtf8mb4ID},
+		{typ: sqltypes.VarBinary, gen: sqltypes.RandomGenerators[sqltypes.VarBinary], col: collations.CollationBinaryID},
+		{typ: sqltypes.Decimal, gen: sqltypes.RandomGenerators[sqltypes.Decimal], col: collations.CollationBinaryID, len: 20, prec: 10},
+		{typ: sqltypes.TypeJSON, gen: sqltypes.RandomGenerators[sqltypes.TypeJSON], col: collations.CollationBinaryID},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%v", tc.typ), func(t *testing.T) {
+			field := &querypb.Field{
+				Type:         tc.typ,
+				ColumnLength: uint32(tc.len),
+				Charset:      uint32(tc.col),
+				Decimals:     uint32(tc.prec),
+			}
+			weight := TinyWeighter(field, tc.col)
+			if weight == nil {
+				t.Fatalf("could not generate Tiny Weight function")
+			}
+
+			items := make([]sqltypes.Value, 0, Length)
+			for i := 0; i < Length; i++ {
+				v := tc.gen()
+				weight(&v)
+				items = append(items, v)
+			}
+
+			var fastComparisons int
+			var fullComparisons int
+			slices.SortFunc(items, func(a, b sqltypes.Value) int {
+				if cmp := a.TinyWeightCmp(b); cmp != 0 {
+					fastComparisons++
+					return cmp
+				}
+
+				cmp, err := NullsafeCompare(a, b, collations.MySQL8(), tc.col)
+				require.NoError(t, err)
+
+				fullComparisons++
+				return cmp
+			})
+
+			for i := 0; i < Length-1; i++ {
+				a := items[i]
+				b := items[i+1]
+
+				cmp, err := NullsafeCompare(a, b, collations.MySQL8(), tc.col)
+				require.NoError(t, err)
+
+				if cmp > 0 {
+					t.Fatalf("expected %v [pos=%d] to come after %v [pos=%d]\n%v | %032b\n%v | %032b", a, i, b, i+1, a, a.TinyWeight(), b, b.TinyWeight())
+				}
+			}
+
+			t.Logf("%d fast comparisons, %d full comparisons (%.02f%% were fast)", fastComparisons, fullComparisons, 100.0*float64(fastComparisons)/float64(fastComparisons+fullComparisons))
+		})
+	}
+}
 
 func TestWeightStrings(t *testing.T) {
 	const Length = 1000
@@ -62,7 +136,7 @@ func TestWeightStrings(t *testing.T) {
 				items := make([]item, 0, Length)
 				for i := 0; i < Length; i++ {
 					v := tc.gen()
-					w, _, err := WeightString(nil, v, typ, tc.col, tc.len, tc.prec)
+					w, _, err := WeightString(nil, v, typ, tc.col, tc.len, tc.prec, 0)
 					require.NoError(t, err)
 
 					items = append(items, item{value: v, weight: string(w)})
@@ -82,12 +156,12 @@ func TestWeightStrings(t *testing.T) {
 					a := items[i]
 					b := items[i+1]
 
-					v1, err := valueToEvalCast(a.value, typ, tc.col)
+					v1, err := valueToEvalCast(a.value, typ, tc.col, 0)
 					require.NoError(t, err)
-					v2, err := valueToEvalCast(b.value, typ, tc.col)
+					v2, err := valueToEvalCast(b.value, typ, tc.col, 0)
 					require.NoError(t, err)
 
-					cmp, err := evalCompareNullSafe(v1, v2)
+					cmp, err := evalCompareNullSafe(v1, v2, collations.MySQL8())
 					require.NoError(t, err)
 
 					if cmp > 0 {

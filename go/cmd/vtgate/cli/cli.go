@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
@@ -134,7 +136,6 @@ func run(cmd *cobra.Command, args []string) error {
 	defer exit.Recover()
 
 	servenv.Init()
-	defer servenv.Close()
 
 	ts := topo.Open()
 	defer ts.Close()
@@ -158,9 +159,10 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerName)
+	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
 
 	// pass nil for HealthCheck and it will be created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, cell, tabletTypes, plannerVersion)
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, cell, tabletTypes, plannerVersion, collationEnv)
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.

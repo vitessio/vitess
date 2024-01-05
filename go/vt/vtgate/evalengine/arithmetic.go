@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func dataOutOfRangeError[N1, N2 int | int64 | uint64 | float64](v1 N1, v2 N2, typ, sign string) error {
+func dataOutOfRangeError[N1, N2 int64 | uint64 | float64](v1 N1, v2 N2, typ, sign string) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in '(%v %s %v)'", typ, v1, sign, v2)
 }
 
@@ -133,12 +133,21 @@ func integerDivideConvert(arg eval) evalNumeric {
 		return dec
 	}
 
-	if b1, ok := arg.(*evalBytes); ok && b1.isHexLiteral {
-		hex, ok := b1.toNumericHex()
-		if !ok {
-			return newEvalDecimal(decimal.Zero, 0, 0)
+	if b1, ok := arg.(*evalBytes); ok {
+		if b1.isHexLiteral() {
+			hex, ok := b1.toNumericHex()
+			if !ok {
+				return newEvalDecimal(decimal.Zero, 0, 0)
+			}
+			return hex
 		}
-		return hex
+		if b1.isBitLiteral() {
+			bit, ok := b1.toNumericBit()
+			if !ok {
+				return newEvalDecimal(decimal.Zero, 0, 0)
+			}
+			return bit
+		}
 	}
 	return evalToDecimal(arg, 0, 0)
 }

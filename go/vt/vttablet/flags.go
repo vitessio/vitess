@@ -25,11 +25,14 @@ import (
 )
 
 const (
+	// VReplicationExperimentalFlags is a bitmask of experimental features in vreplication.
 	VReplicationExperimentalFlagOptimizeInserts           = int64(1)
 	VReplicationExperimentalFlagAllowNoBlobBinlogRowImage = int64(2)
+	VReplicationExperimentalFlagVPlayerBatching           = int64(4)
 )
 
 var (
+	// Default flags.
 	VReplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
 	VReplicationNetReadTimeout    = 300
 	VReplicationNetWriteTimeout   = 600

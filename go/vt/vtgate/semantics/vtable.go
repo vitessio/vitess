@@ -70,8 +70,12 @@ func (v *vTableInfo) Name() (sqlparser.TableName, error) {
 	return sqlparser.TableName{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "oh noes")
 }
 
-func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
+func (v *vTableInfo) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return nil
+}
+
+func (v *vTableInfo) canShortCut() shortCut {
+	return canShortCut
 }
 
 // GetVindexTable implements the TableInfo interface
@@ -90,7 +94,7 @@ func (v *vTableInfo) getColumns() []ColumnInfo {
 }
 
 func (v *vTableInfo) hasStar() bool {
-	return v.tables.NonEmpty()
+	return v.tables.NotEmpty()
 }
 
 // GetTables implements the TableInfo interface

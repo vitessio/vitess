@@ -19,11 +19,16 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -45,7 +50,7 @@ const mzSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_ta
 const mzCheckJournal = "/select val from _vt.resharding_journal where id="
 const mzGetWorkflowStatusQuery = "select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type, time_heartbeat, defer_secondary_keys, component_throttled, time_throttled, rows_copied from _vt.vreplication where workflow = 'workflow' and db_name = 'vt_targetks'"
 const mzGetCopyState = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
-const mzGetLatestCopyState = "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)"
+const mzGetLatestCopyState = "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)"
 const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys\) values `
 const eol = "$"
 
@@ -99,7 +104,7 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tid int(11) not null auto_increment,\n" +
 				"\tforeign_id int(11),\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
@@ -122,8 +127,8 @@ func TestStripForeignKeys(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id),\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id),\n" +
 				"\tcheck (foreign_id > 10)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
@@ -131,7 +136,7 @@ func TestStripForeignKeys(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripTableForeignKeys(tc.ddl)
+		newDDL, err := stripTableForeignKeys(tc.ddl, sqlparser.NewTestParser())
 		if tc.hasErr != (err != nil) {
 			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
 		}
@@ -168,8 +173,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id)\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
 
@@ -191,8 +196,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tprimary key (id),\n" +
-				"\tindex fk_table1_ref_foreign_id (foreign_id),\n" +
-				"\tindex fk_table1_ref_user_id (user_id)\n" +
+				"\tkey fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tkey fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
 		},
@@ -205,7 +210,7 @@ func TestStripConstraints(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripTableConstraints(tc.ddl)
+		newDDL, err := stripTableConstraints(tc.ddl, sqlparser.NewTestParser())
 		if tc.hasErr != (err != nil) {
 			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
 		}
@@ -3010,7 +3015,7 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.ws = NewServer(env.topoServ, env.tmc)
+	env.ws = NewServer(env.topoServ, env.tmc, sqlparser.NewTestParser())
 	defer env.close()
 
 	tabletID := 100
@@ -3283,4 +3288,286 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "could not find vindex column c1")
+}
+
+// TestKeyRangesEqualOptimization tests that we optimize the source
+// filtering when there's only one source shard for the stream and
+// its keyrange is equal to the target shard for the stream. This
+// means that even if the target keyspace is sharded, the source
+// does not need to perform the in_keyrange filtering.
+func TestKeyRangesEqualOptimization(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	workflow := "testwf"
+	cells := []string{"cell"}
+	sourceKs := "sourceks"
+	targetKs := "targetks"
+	table := "t1"
+	tableSettings := []*vtctldatapb.TableMaterializeSettings{{
+		TargetTable:      table,
+		SourceExpression: fmt.Sprintf("select * from %s", table),
+	}}
+	targetVSchema := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			table: {
+				ColumnVindexes: []*vschemapb.ColumnVindex{
+					{
+						Column: "id",
+						Name:   "xxhash",
+					},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name          string
+		sourceShards  []string
+		targetShards  []string
+		moveTablesReq *vtctldatapb.MoveTablesCreateRequest
+		// Target Shards are in the order specifed in the targetShards slice
+		// with the UIDs starting at 200 and increasing by 10 for each tablet
+		// and shard since there's only a primary tablet per shard.
+		wantReqs map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
+	}{
+		{
+			name: "no in_keyrange filter -- partial, one equal shard",
+			moveTablesReq: &vtctldatapb.MoveTablesCreateRequest{
+				Workflow:       workflow,
+				TargetKeyspace: targetKs,
+				SourceKeyspace: sourceKs,
+				Cells:          []string{"cell"},
+				SourceShards:   []string{"-80"}, // Partial MoveTables just for this shard
+				IncludeTables:  []string{table},
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-80", "80-"},
+			wantReqs: map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+				200: {
+					Workflow:        workflow,
+					WorkflowType:    binlogdatapb.VReplicationWorkflowType_MoveTables,
+					WorkflowSubType: binlogdatapb.VReplicationWorkflowSubType_Partial,
+					Cells:           cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "-80", // Keyranges are equal between the source and target
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s", table),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "in_keyrange filter -- unequal shards",
+			moveTablesReq: &vtctldatapb.MoveTablesCreateRequest{
+				Workflow:       workflow,
+				TargetKeyspace: targetKs,
+				SourceKeyspace: sourceKs,
+				Cells:          []string{"cell"},
+				IncludeTables:  []string{table},
+			},
+			sourceShards: []string{"-"},
+			targetShards: []string{"-80", "80-"},
+			wantReqs: map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+				200: {
+					Workflow:     workflow,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Cells:        cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-80')", table, targetKs),
+									},
+								},
+							},
+						},
+					},
+				},
+				210: {
+					Workflow:     workflow,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Cells:        cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '80-')", table, targetKs),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "in_keyrange filter -- unequal shards on merge",
+			moveTablesReq: &vtctldatapb.MoveTablesCreateRequest{
+				Workflow:       workflow,
+				TargetKeyspace: targetKs,
+				SourceKeyspace: sourceKs,
+				Cells:          []string{"cell"},
+				IncludeTables:  []string{table},
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-"},
+			wantReqs: map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+				200: {
+					Workflow:     workflow,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Cells:        cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "-80",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-')", table, targetKs),
+									},
+								},
+							},
+						},
+						{
+							Keyspace: sourceKs,
+							Shard:    "80-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s where in_keyrange(id, '%s.xxhash', '-')", table, targetKs),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "no in_keyrange filter -- all equal shards",
+			moveTablesReq: &vtctldatapb.MoveTablesCreateRequest{
+				Workflow:       workflow,
+				TargetKeyspace: targetKs,
+				SourceKeyspace: sourceKs,
+				Cells:          []string{"cell"},
+				IncludeTables:  []string{table},
+			},
+			sourceShards: []string{"-80", "80-"},
+			targetShards: []string{"-80", "80-"},
+			wantReqs: map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
+				200: {
+					Workflow:     workflow,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Cells:        cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "-80",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s", table),
+									},
+								},
+							},
+						},
+					},
+				},
+				210: {
+					Workflow:     workflow,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Cells:        cells,
+					BinlogSource: []*binlogdatapb.BinlogSource{
+						{
+							Keyspace: sourceKs,
+							Shard:    "80-",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{
+									{
+										Match:  table,
+										Filter: fmt.Sprintf("select * from %s", table),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if len(tc.wantReqs) == 0 {
+				require.FailNow(t, "invalid test case", "no wanted requests specified")
+			}
+			workflowType := maps.Values(tc.wantReqs)[0].WorkflowType
+			ms := &vtctldatapb.MaterializeSettings{
+				Workflow:              tc.moveTablesReq.Workflow,
+				MaterializationIntent: vtctldatapb.MaterializationIntent_MOVETABLES,
+				SourceKeyspace:        sourceKs,
+				TargetKeyspace:        targetKs,
+				Cell:                  strings.Join(tc.moveTablesReq.Cells, ","),
+				SourceShards:          tc.moveTablesReq.SourceShards,
+				TableSettings:         tableSettings,
+			}
+			env := newTestMaterializerEnv(t, ctx, ms, tc.sourceShards, tc.targetShards)
+			defer env.close()
+
+			// Target is always sharded.
+			err := env.ws.ts.SaveVSchema(ctx, targetKs, targetVSchema)
+			require.NoError(t, err, "SaveVSchema failed: %v", err)
+
+			for _, tablet := range env.tablets {
+				// Queries will only be executed on primary tablets in the target keyspace.
+				if tablet.Keyspace != targetKs || tablet.Type != topodatapb.TabletType_PRIMARY {
+					continue
+				}
+				env.tmc.expectVRQuery(int(tablet.Alias.Uid), mzSelectFrozenQuery, &sqltypes.Result{})
+				// If we are doing a partial MoveTables, we will only perform the workflow
+				// stream creation / INSERT statment on the shard(s) we're migrating.
+				if len(tc.moveTablesReq.SourceShards) > 0 && !slices.Contains(tc.moveTablesReq.SourceShards, tablet.Shard) {
+					continue
+				}
+				env.tmc.expectCreateVReplicationWorkflowRequest(tablet.Alias.Uid, tc.wantReqs[tablet.Alias.Uid])
+			}
+
+			mz := &materializer{
+				ctx:          ctx,
+				ts:           env.ws.ts,
+				sourceTs:     env.ws.ts,
+				tmc:          env.tmc,
+				ms:           ms,
+				workflowType: workflowType,
+			}
+			err = mz.createMoveTablesStreams(tc.moveTablesReq)
+			require.NoError(t, err, "createMoveTablesStreams failed: %v", err)
+		})
+	}
 }

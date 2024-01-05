@@ -28,6 +28,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"time"
 )
 
 // Mycnf is a memory structure that contains a bunch of interesting
@@ -112,6 +113,10 @@ type Mycnf struct {
 	Path     string // the actual path that represents this mycnf
 }
 
+const (
+	myCnfWaitRetryTime = 100 * time.Millisecond
+)
+
 // TabletDir returns the tablet directory.
 func (cnf *Mycnf) TabletDir() string {
 	return path.Dir(cnf.DataDir)
@@ -153,17 +158,27 @@ func normKey(bkey []byte) string {
 
 // ReadMycnf will read an existing my.cnf from disk, and update the passed in Mycnf object
 // with values from the my.cnf on disk.
-func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
+func ReadMycnf(mycnf *Mycnf, waitTime time.Duration) (*Mycnf, error) {
 	f, err := os.Open(mycnf.Path)
+	if waitTime != 0 {
+		timer := time.NewTimer(waitTime)
+		for err != nil {
+			select {
+			case <-timer.C:
+				return nil, err
+			default:
+				time.Sleep(myCnfWaitRetryTime)
+				f, err = os.Open(mycnf.Path)
+			}
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
 	buf := bufio.NewReader(f)
-	if err != nil {
-		return nil, err
-	}
+
 	mycnf.mycnfMap = make(map[string]string)
 	var lval, rval string
 	var parts [][]byte

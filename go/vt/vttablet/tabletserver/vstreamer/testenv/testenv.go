@@ -20,13 +20,16 @@ package testenv
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"regexp"
 	"strings"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -75,7 +78,9 @@ func Init(ctx context.Context) (*Env, error) {
 	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName); err != nil {
 		panic(err)
 	}
-	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, "TestTopo")
+	// Add a random suffix to metric name to avoid panic. Another option would have been to generate a random string.
+	suffix := rand.Int()
+	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, "TestTopo"+fmt.Sprint(suffix))
 
 	cfg := vttest.Config{
 		Topology: &vttestpb.VTTestTopology{
@@ -105,7 +110,7 @@ func Init(ctx context.Context) (*Env, error) {
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
 	config := tabletenv.NewDefaultConfig()
 	config.DB = te.Dbcfgs
-	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest")
+	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest", collations.MySQL8(), sqlparser.NewTestParser())
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	pos, _ := te.Mysqld.PrimaryPosition()
 	if strings.HasPrefix(strings.ToLower(pos.GTIDSet.Flavor()), string(mysqlctl.FlavorMariaDB)) {
