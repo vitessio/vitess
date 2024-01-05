@@ -24,7 +24,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path"
 	"strconv"
@@ -39,6 +38,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
@@ -291,7 +291,7 @@ func (e *Executor) executeQuery(ctx context.Context, query string) (result *sqlt
 	}
 	defer conn.Recycle()
 
-	return conn.Conn.Exec(ctx, query, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, query, -1, true)
 }
 
 func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, query string) (result *sqltypes.Result, err error) {
@@ -308,7 +308,7 @@ func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, que
 	if err != nil {
 		return nil, err
 	}
-	return conn.Conn.Exec(ctx, uq, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, uq, -1, true)
 }
 
 // TabletAliasString returns tablet alias as string (duh)
@@ -834,7 +834,7 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 		}
 	}
 	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
-	capable, err := capableOf(mysql.PerformanceSchemaDataLocksTableCapability)
+	capable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability)
 	if err != nil {
 		return err
 	}
@@ -2441,7 +2441,14 @@ func (e *Executor) reviewEmptyTableRevertMigrations(ctx context.Context, onlineD
 // Non immediate operations are:
 // - A gh-ost migration
 // - A vitess (vreplication) migration
-func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysql.CapableOf, onlineDDL *schema.OnlineDDL, ddlAction string, isRevert bool, isView bool) (bool, error) {
+func (e *Executor) reviewImmediateOperations(
+	ctx context.Context,
+	capableOf capabilities.CapableOf,
+	onlineDDL *schema.OnlineDDL,
+	ddlAction string,
+	isRevert bool,
+	isView bool,
+) (bool, error) {
 	switch ddlAction {
 	case sqlparser.CreateStr, sqlparser.DropStr:
 		return true, nil
@@ -2467,7 +2474,7 @@ func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysq
 // It analyzes whether the migration can & should be fulfilled immediately (e.g. via INSTANT DDL or just because it's a CREATE or DROP),
 // or backfills necessary information if it's a REVERT.
 // If all goes well, it sets `reviewed_timestamp` which then allows the state machine to schedule the migration.
-func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capableOf mysql.CapableOf) error {
+func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capableOf capabilities.CapableOf) error {
 	onlineDDL, row, err := e.readMigration(ctx, uuid)
 	if err != nil {
 		return err

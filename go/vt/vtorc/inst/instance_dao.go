@@ -294,7 +294,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		instance.LastSQLError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fullStatus.ReplicationStatus.LastSqlError), "")
 		instance.LastIOError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fullStatus.ReplicationStatus.LastIoError), "")
 
-		instance.SQLDelay = uint(fullStatus.ReplicationStatus.SqlDelay)
+		instance.SQLDelay = fullStatus.ReplicationStatus.SqlDelay
 		instance.UsingOracleGTID = fullStatus.ReplicationStatus.AutoPosition
 		instance.UsingMariaDBGTID = fullStatus.ReplicationStatus.UsingGtid
 		instance.SourceUUID = fullStatus.ReplicationStatus.SourceUuid
@@ -527,7 +527,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.LastIOError = m.GetString("last_io_error")
 	instance.SecondsBehindPrimary = m.GetNullInt64("replication_lag_seconds")
 	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
-	instance.SQLDelay = m.GetUint("sql_delay")
+	instance.SQLDelay = m.GetUint32("sql_delay")
 	instance.DataCenter = m.GetString("data_center")
 	instance.Region = m.GetString("region")
 	instance.PhysicalEnvironment = m.GetString("physical_environment")

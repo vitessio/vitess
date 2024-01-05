@@ -19,7 +19,6 @@ package gc
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -27,9 +26,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -190,7 +189,7 @@ func (collector *TableGC) Open() (err error) {
 		return err
 	}
 	defer conn.Close()
-	serverSupportsFastDrops, err := conn.SupportsCapability(mysql.FastDropTableFlavorCapability)
+	serverSupportsFastDrops, err := conn.SupportsCapability(capabilities.FastDropTableFlavorCapability)
 	if err != nil {
 		return err
 	}
@@ -420,7 +419,7 @@ func (collector *TableGC) readTables(ctx context.Context) (gcTables []*gcTable, 
 	}
 	defer conn.Recycle()
 
-	res, err := conn.Conn.Exec(ctx, sqlShowVtTables, math.MaxInt32, true)
+	res, err := conn.Conn.Exec(ctx, sqlShowVtTables, -1, true)
 	if err != nil {
 		return nil, err
 	}
