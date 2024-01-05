@@ -47,7 +47,7 @@ jobs:
           delete-branch: true
           title: "Upgrade the Golang Dependencies"
           body: |
-            This Pull Request updates all the Goland dependencies to their latest version using `go get -u ./...`.
+            This Pull Request updates all the Golang dependencies to their latest version using `go get -u ./...`.
           base: main
           labels: |
             go
