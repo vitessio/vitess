@@ -95,8 +95,7 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         export NOVTADMINBUILD=1
-        # Exclude endtoend tests from the coverage report.
-        # rm -rf go/test/endtoend
+
         eatmydata -- make unit_test_cover
 
     - name: Upload coverage reports to codecov.io
