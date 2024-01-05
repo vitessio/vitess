@@ -152,6 +152,18 @@ func (bv *BindVariable) format(buf *sqlparser.TrackedBuffer) {
 	}
 }
 
+func (bv *TupleBindVariable) Format(buf *sqlparser.TrackedBuffer) {
+	bv.format(buf)
+}
+
+func (bv *TupleBindVariable) FormatFast(buf *sqlparser.TrackedBuffer) {
+	bv.format(buf)
+}
+
+func (bv *TupleBindVariable) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteArg("::", bv.Key)
+}
+
 func (c *Column) Format(buf *sqlparser.TrackedBuffer) {
 	c.format(buf)
 }

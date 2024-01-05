@@ -363,6 +363,22 @@ func (cached *OrderByParams) CachedSize(alloc bool) int64 {
 	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
+func (cached *TupleBindVariable) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Key string
+	size += hack.RuntimeAllocSize(int64(len(cached.Key)))
+	// field Offsets []vitess.io/vitess/go/vt/vtgate/evalengine.Offset
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Offsets)) * int64(24))
+	}
+	return size
+}
 func (cached *UnaryExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
