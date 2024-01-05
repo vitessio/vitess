@@ -795,7 +795,7 @@ func TestWaitForDBAGrants(t *testing.T) {
 		}, {
 			name:      "Failure due to timeout",
 			waitTime:  300 * time.Millisecond,
-			errWanted: "waited 300ms for dba user to have the required permissions",
+			errWanted: "timed out after 300ms waiting for the dba user to have the required permissions",
 			setupFunc: func(t *testing.T) (*tabletenv.TabletConfig, func()) {
 				// Create a new mysql but don't give the grants to the vt_dba user at all.
 				// This should cause a timeout after waiting, since the privileges are never granted.
