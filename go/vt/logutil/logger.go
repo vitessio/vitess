@@ -206,27 +206,6 @@ func (cl *CallbackLogger) Printf(format string, v ...any) {
 	})
 }
 
-// ChannelLogger is a Logger that sends the logging events through a channel for
-// consumption.
-type ChannelLogger struct {
-	CallbackLogger
-	C chan *logutilpb.Event
-}
-
-// NewChannelLogger returns a CallbackLogger which will write the data
-// on a channel
-func NewChannelLogger(size int) *ChannelLogger {
-	c := make(chan *logutilpb.Event, size)
-	return &ChannelLogger{
-		CallbackLogger: CallbackLogger{
-			f: func(e *logutilpb.Event) {
-				c <- e
-			},
-		},
-		C: c,
-	}
-}
-
 // MemoryLogger keeps the logging events in memory.
 // All protected by a mutex.
 type MemoryLogger struct {
