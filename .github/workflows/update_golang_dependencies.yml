@@ -13,9 +13,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    strategy:
-      matrix:
-        branch: [ main, release-18.0, release-17.0, release-16.0 ]
     name: Update Golang Dependencies
     runs-on: ubuntu-latest
     steps:
@@ -27,7 +24,7 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
         with:
-          ref: ${{ matrix.branch }}
+          ref: main
 
       - name: Upgrade the Golang Dependencies
         id: detect-and-update
@@ -44,14 +41,14 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v4
         with:
-          branch: "upgrade-go-deps-on-${{ matrix.branch }}"
+          branch: "upgrade-go-deps-on-main"
           commit-message: "upgrade go deps"
           signoff: true
           delete-branch: true
-          title: "[${{ matrix.branch }}] Upgrade the Golang Dependencies"
+          title: "Upgrade the Golang Dependencies"
           body: |
             This Pull Request updates all the Goland dependencies to their latest version using `go get -u ./...`.
-          base: ${{ matrix.branch }}
+          base: main
           labels: |
             go
             dependencies
