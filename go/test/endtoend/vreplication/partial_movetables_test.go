@@ -78,8 +78,6 @@ func testCancel(t *testing.T) {
 
 }
 
-// TestPartialMoveTablesBasic tests partial move tables by moving each
-// customer shard -- -80,80- -- once a a time to customer2.
 func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	setSidecarDBName("_vt")
 	origDefaultRdonly := defaultRdonly
@@ -148,6 +146,8 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	setupCustomer2Keyspace(t)
 	testCancel(t)
 
+	// We specify the --shards flag for one of the workflows to confirm that both the MoveTables and Workflow commands
+	// work the same with or without the flag.
 	workflowExecOptsPartialDash80 := &workflowExecOptions{
 		deferSecondaryKeys: true,
 		shardSubset:        "-80",
@@ -170,7 +170,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 		sourceKeyspace: sourceKeyspace,
 		tables:         tables,
 		sourceShards:   shard,
-	}, workflowFlavorRandom)
+	}, flavor)
 	mt80Dash.Create()
 
 	var lg *loadGenerator
@@ -259,6 +259,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	vtgateConn.Close()
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
+
 	// No shard targeting
 	_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 	require.Error(t, err)
@@ -372,6 +373,9 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	require.Equal(t, emptyShardRoutingRules, getShardRoutingRules(t))
 }
 
+// TestPartialMoveTablesBasic tests partial move tables by moving each
+// customer shard -- -80,80- -- once a a time to customer2.
+// We test with both the vtctlclient and vtctldclient flavors.
 func TestPartialMoveTablesBasic(t *testing.T) {
 	for _, flavor := range workflowFlavors {
 		t.Run(workflowFlavorNames[flavor], func(t *testing.T) {

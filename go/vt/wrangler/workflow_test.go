@@ -398,7 +398,7 @@ func TestPartialMoveTablesShardOffset(t *testing.T) {
 		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
 		OnDDL:                           binlogdatapb.OnDDLAction_STOP.String(),
 	}
-	tme := newTestTablePartialMigrater(ctx, t, shards, shards[0:1], "select * %s")
+	tme := newTestTablePartialMigrater(ctx, t, shards, shardToMove, "select * %s")
 	defer tme.stopTablets(t)
 
 	// Save some unrelated shard routing rules to be sure that
@@ -433,11 +433,6 @@ func TestPartialMoveTablesShardOffset(t *testing.T) {
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	require.True(t, wf.ts.isPartialMigration, "expected partial shard migration")
 
-	// The default shard routing rule for the keyspace's other shard would
-	// normally be put in place, but the unit test does not execute the
-	// wrangler.MoveTables function which adds all of the default shard
-	// routing rules in the topo for the keyspace when the first workflow
-	// is run against it. So we simulate it here.
 	srr, err = tme.ts.GetShardRoutingRules(ctx)
 	require.NoError(t, err)
 	srr.Rules = append(srr.Rules, &vschema.ShardRoutingRule{

@@ -543,7 +543,6 @@ message CreateVReplicationWorkflowResponse {
 
 message DeleteVReplicationWorkflowRequest {
   string workflow = 1;
-
 }
 
 message DeleteVReplicationWorkflowResponse {

@@ -538,11 +538,7 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 		return "", nil
 	}
 	log.Infof("state:%s, direction %d, switched %t", vrw.CachedState(), vrw.params.Direction, ws.WritesSwitched)
-	var shards []string
-	if vrw.params.ShardSubset != nil {
-		shards = vrw.params.ShardSubset
-	}
-	result, err := vrw.wr.getStreams(vrw.ctx, workflowName, keyspace, shards)
+	result, err := vrw.wr.getStreams(vrw.ctx, workflowName, keyspace, vrw.params.ShardSubset)
 	if err != nil {
 		return "", err
 	}
