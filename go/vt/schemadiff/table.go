@@ -38,6 +38,7 @@ type AlterTableEntityDiff struct {
 
 	canonicalStatementString string
 	subsequentDiff           *AlterTableEntityDiff
+	instantDDLCapability     InstantDDLCapability
 }
 
 // IsEmpty implements EntityDiff
@@ -121,6 +122,14 @@ func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
 	}
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *AlterTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	if d == nil {
+		return InstantDDLCapabilityUnknown
+	}
+	return d.instantDDLCapability
+}
+
 type CreateTableEntityDiff struct {
 	to          *CreateTableEntity
 	createTable *sqlparser.CreateTable
@@ -187,6 +196,11 @@ func (d *CreateTableEntityDiff) SubsequentDiff() EntityDiff {
 
 // SetSubsequentDiff implements EntityDiff
 func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
+// InstantDDLCapability implements EntityDiff
+func (d *CreateTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
 }
 
 type DropTableEntityDiff struct {
@@ -257,6 +271,11 @@ func (d *DropTableEntityDiff) SubsequentDiff() EntityDiff {
 func (d *DropTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *DropTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
 type RenameTableEntityDiff struct {
 	from        *CreateTableEntity
 	to          *CreateTableEntity
@@ -324,6 +343,11 @@ func (d *RenameTableEntityDiff) SubsequentDiff() EntityDiff {
 
 // SetSubsequentDiff implements EntityDiff
 func (d *RenameTableEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
+// InstantDDLCapability implements EntityDiff
+func (d *RenameTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
 }
 
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.

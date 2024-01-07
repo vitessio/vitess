@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -958,6 +959,24 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 			}, diff.Statement())
 		case *DropTableEntityDiff:
 			// No need to handle. Any dependencies will be resolved by any of the other cases
+		}
+	}
+
+	// Check and assign capabilities:
+	if capableOf := mysql.ServerVersionCapableOf(hints.MySQLServerVersion); capableOf != nil {
+		for _, diff := range schemaDiff.UnorderedDiffs() {
+			switch diff := diff.(type) {
+			case *AlterTableEntityDiff:
+				capable, err := AlterTableCapableOfInstantDDL(diff.AlterTable(), diff.from.CreateTable, capableOf)
+				if err != nil {
+					return nil, err
+				}
+				if capable {
+					diff.instantDDLCapability = InstantDDLCapabilityPossible
+				} else {
+					diff.instantDDLCapability = InstantDDLCapabilityImpossible
+				}
+			}
 		}
 	}
 	return schemaDiff, nil
