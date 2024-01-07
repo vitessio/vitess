@@ -48,7 +48,7 @@ type (
 func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
-		e, err := d.QP.GetSimplifiedExpr(ctx, col.Expr)
+		e, err := d.QP.TryGetSimplifiedExpr(ctx, col.Expr)
 		if err != nil {
 			// ambiguous columns are not a problem for DISTINCT
 			e = col.Expr
@@ -62,9 +62,10 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		}
 
 		d.Columns = append(d.Columns, engine.CheckCol{
-			Col:   idx,
-			WsCol: wsCol,
-			Type:  typ,
+			Col:          idx,
+			WsCol:        wsCol,
+			Type:         typ,
+			CollationEnv: ctx.VSchema.CollationEnv(),
 		})
 	}
 	return nil

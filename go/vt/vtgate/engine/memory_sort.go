@@ -143,7 +143,7 @@ func (ms *MemorySort) NeedsTransaction() bool {
 
 func (ms *MemorySort) fetchCount(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (int, error) {
 	if ms.UpperLimit == nil {
-		return math.MaxInt64, nil
+		return math.MaxInt, nil
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	resolved, err := env.Evaluate(ms.UpperLimit)

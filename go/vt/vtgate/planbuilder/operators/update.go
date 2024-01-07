@@ -255,7 +255,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updS
 		fkChildren = append(fkChildren, fkChild)
 	}
 
-	selectionOp := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, updStmt.OrderBy, nil, sqlparser.ForUpdateLockNoWait)
+	selectionOp := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, updStmt.OrderBy, nil, getUpdateLock(updatedTable))
 
 	return &FkCascade{
 		Selection: selectionOp,
@@ -442,7 +442,7 @@ func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.Chi
 	// Because we could be updating the child to a non-null value,
 	// We have to run with foreign key checks OFF because the parent isn't guaranteed to have
 	// the data being updated to.
-	parsedComments := (&sqlparser.ParsedComments{}).SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, "OFF").Parsed()
+	parsedComments := (&sqlparser.ParsedComments{}).SetMySQLSetVarValue(sysvars.ForeignKeyChecks, "OFF").Parsed()
 	childUpdStmt := &sqlparser.Update{
 		Comments:   parsedComments,
 		Exprs:      childUpdateExprs,
@@ -515,7 +515,7 @@ func buildChildUpdOpForSetNull(
 func getParsedCommentsForFkChecks(ctx *plancontext.PlanningContext) (parsedComments *sqlparser.ParsedComments) {
 	fkState := ctx.VSchema.GetForeignKeyChecksState()
 	if fkState != nil && *fkState {
-		parsedComments = parsedComments.SetMySQLSetVarValue(sysvars.ForeignKeyChecks.Name, "ON").Parsed()
+		parsedComments = parsedComments.SetMySQLSetVarValue(sysvars.ForeignKeyChecks, "ON").Parsed()
 	}
 	return parsedComments
 }
@@ -658,7 +658,21 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, upda
 		sqlparser.NewWhere(sqlparser.WhereClause, whereCond),
 		nil,
 		sqlparser.NewLimitWithoutOffset(1),
-		sqlparser.ForShareLockNoWait)
+		getVerifyLock(updatedTable))
+}
+
+func getVerifyLock(vTbl *vindexes.Table) sqlparser.Lock {
+	if len(vTbl.UniqueKeys) > 0 {
+		return sqlparser.ForShareLockNoWait
+	}
+	return sqlparser.ForShareLock
+}
+
+func getUpdateLock(vTbl *vindexes.Table) sqlparser.Lock {
+	if len(vTbl.UniqueKeys) > 0 {
+		return sqlparser.ForUpdateLockNoWait
+	}
+	return sqlparser.ForUpdateLock
 }
 
 // Each child foreign key constraint is verified by a join query of the form:
@@ -728,7 +742,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updat
 		sqlparser.NewWhere(sqlparser.WhereClause, whereCond),
 		nil,
 		sqlparser.NewLimitWithoutOffset(1),
-		sqlparser.ForShareLockNoWait)
+		getVerifyLock(updatedTable))
 }
 
 // nullSafeNotInComparison is used to compare the child columns in the foreign key constraint aren't the same as the updateExpressions exactly.

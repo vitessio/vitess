@@ -58,7 +58,7 @@ const (
 	getWorkflowState         = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1"
 	getCopyState             = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
 	getNumCopyStateTable     = "select count(distinct table_name) from _vt.copy_state where vrepl_id=1"
-	getLatestCopyState       = "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)"
+	getLatestCopyState       = "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)"
 	getAutoIncrementStep     = "select @@session.auto_increment_increment"
 	setSessionTZ             = "set @@session.time_zone = '+00:00'"
 	setNames                 = "set names 'binary'"
@@ -111,7 +111,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
 	defer tenv.deleteTablet(targetTablet.tablet)
 
-	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+	ws := workflow.NewServer(tenv.ts, tenv.tmc, sqlparser.NewTestParser())
 
 	tests := []struct {
 		name   string
@@ -268,7 +268,7 @@ func TestMoveTables(t *testing.T) {
 		},
 	})
 
-	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+	ws := workflow.NewServer(tenv.ts, tenv.tmc, sqlparser.NewTestParser())
 
 	tenv.mysqld.Schema = defaultSchema
 	tenv.mysqld.Schema.DatabaseSchema = tenv.dbName
@@ -656,7 +656,7 @@ func TestSourceShardSelection(t *testing.T) {
 		defer tenv.deleteTablet(tt.tablet)
 	}
 
-	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+	ws := workflow.NewServer(tenv.ts, tenv.tmc, sqlparser.NewTestParser())
 
 	tenv.ts.SaveVSchema(ctx, sourceKs, &vschemapb.Keyspace{
 		Sharded: true,
@@ -855,7 +855,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		sourceKs, shard, table, table)
 	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
 	defer tenv.close()
-	ws := workflow.NewServer(tenv.ts, tenv.tmc)
+	ws := workflow.NewServer(tenv.ts, tenv.tmc, sqlparser.NewTestParser())
 
 	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
 	defer tenv.deleteTablet(sourceTablet.tablet)

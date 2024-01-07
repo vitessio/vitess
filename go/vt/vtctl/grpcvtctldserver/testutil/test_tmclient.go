@@ -1374,7 +1374,7 @@ func (fake *TabletManagerClient) VReplicationExec(ctx context.Context, tablet *t
 	if resultsForTablet, ok := fake.VReplicationExecResults[key]; ok {
 		// Round trip the expected query both to ensure it's valid and to
 		// standardize on capitalization and formatting.
-		stmt, err := sqlparser.Parse(query)
+		stmt, err := sqlparser.NewTestParser().Parse(query)
 		if err != nil {
 			return nil, err
 		}

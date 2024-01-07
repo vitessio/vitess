@@ -83,6 +83,7 @@ That includes:
   > - There are several pages we want to update:
   >  - [The releases page](https://vitess.io/docs/releases/): we must add the new release to the list with all its information and link. The links can be broken (404 error) while we are preparing for the release, this is fine.
   >  - [The local install page](https://vitess.io/docs/get-started/local/): we must use the proper version increment for this guide and the proper SHA. The SHA will have to be modified once the Release Pull Request and the release is tagged is merged.
+  >  - [The Vitess Operator for Kubernetes page](https://vitess.io/docs/get-started/operator/#install-the-operator), [the Local Install via source for Mac page](https://vitess.io/docs/get-started/local-mac/#install-vitess), [the Local Install via Docker page](https://vitess.io/docs/get-started/local-docker/#check-out-the-vitessiovitess-repository), and [the Vttestserver Docker Image page](https://vitess.io/docs/get-started/vttestserver-docker-image/#check-out-the-vitessiovitess-repository): we must checkout to the proper release branch after cloning Vitess.
   > - If we are doing a GA or RC release follow the instructions below:
   >  - There are two scripts in the website repository in `./tools/{ga|rc}_release.sh`, use them to update the website documentation. The scripts automate:
   >  - For an RC, we need to create a new entry in the sidebar which represents the next version on `main` and mark the version we are releasing as RC.

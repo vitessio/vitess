@@ -28,22 +28,20 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -358,7 +356,11 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 			pks = td.PrimaryKeyColumns
 		} else {
 			// Use a PK equivalent if one exists.
-			if pks, _, err = vr.mysqld.GetPrimaryKeyEquivalentColumns(ctx, vr.dbClient.DBName(), td.Name); err != nil {
+			executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+				// This sets wantfields to true.
+				return vr.dbClient.ExecuteFetch(query, maxrows)
+			}
+			if pks, _, err = mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, vr.dbClient.DBName(), td.Name); err != nil {
 				return nil, err
 			}
 			// Fall back to using every column in the table if there's no PK or PKE.
@@ -734,7 +736,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	}
 	tableSchema := schema.TableDefinitions[0].Schema
 	var secondaryKeys []*sqlparser.IndexDefinition
-	parsedDDL, err := sqlparser.ParseStrictDDL(tableSchema)
+	parsedDDL, err := vr.vre.parser.ParseStrictDDL(tableSchema)
 	if err != nil {
 		return secondaryKeys, err
 	}
@@ -981,7 +983,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 				// the table schema and if so move forward and delete the
 				// post_copy_action record.
 				if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERDupKeyName {
-					stmt, err := sqlparser.ParseStrictDDL(action.Task)
+					stmt, err := vr.vre.parser.ParseStrictDDL(action.Task)
 					if err != nil {
 						return failedAlterErr
 					}

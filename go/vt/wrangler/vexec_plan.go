@@ -21,12 +21,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/olekukonko/tablewriter"
+
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"github.com/olekukonko/tablewriter"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // vexecPlan contains the final query to be sent to the tablets
@@ -259,7 +260,7 @@ func (vx *vexec) buildUpdatePlan(ctx context.Context, planner vexecPlanner, upd 
 		}
 	}
 	if templates := plannerParams.updateTemplates; len(templates) > 0 {
-		match, err := sqlparser.QueryMatchesTemplates(vx.query, templates)
+		match, err := vx.wr.parser.QueryMatchesTemplates(vx.query, templates)
 		if err != nil {
 			return nil, err
 		}
@@ -311,7 +312,7 @@ func (vx *vexec) buildInsertPlan(ctx context.Context, planner vexecPlanner, ins 
 		return nil, fmt.Errorf("query not supported by vexec: %s", sqlparser.String(ins))
 	}
 	if len(templates) > 0 {
-		match, err := sqlparser.QueryMatchesTemplates(vx.query, templates)
+		match, err := vx.wr.parser.QueryMatchesTemplates(vx.query, templates)
 		if err != nil {
 			return nil, err
 		}

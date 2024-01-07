@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -37,25 +38,6 @@ var (
 
 	// ErrNoPrimaryStatus means no status was returned by ShowPrimaryStatus().
 	ErrNoPrimaryStatus = errors.New("no master status")
-)
-
-type FlavorCapability int
-
-const (
-	NoneFlavorCapability          FlavorCapability = iota // default placeholder
-	FastDropTableFlavorCapability                         // supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
-	TransactionalGtidExecutedFlavorCapability
-	InstantDDLFlavorCapability
-	InstantAddLastColumnFlavorCapability
-	InstantAddDropVirtualColumnFlavorCapability
-	InstantAddDropColumnFlavorCapability
-	InstantChangeColumnDefaultFlavorCapability
-	InstantExpandEnumCapability
-	MySQLJSONFlavorCapability
-	MySQLUpgradeInServerFlavorCapability
-	DynamicRedoLogCapacityFlavorCapability // supported in MySQL 8.0.30 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html
-	DisableRedoLogFlavorCapability         // supported in MySQL 8.0.21 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-21.html
-	CheckConstraintsCapability             // supported in MySQL 8.0.16 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-16.html
 )
 
 const (
@@ -146,19 +128,16 @@ type flavor interface {
 	// with parsed executed position.
 	primaryStatus(c *Conn) (replication.PrimaryStatus, error)
 
-	// waitUntilPositionCommand returns the SQL command to issue
-	// to wait until the given position, until the context
-	// expires.  The command returns -1 if it times out. It
-	// returns NULL if GTIDs are not enabled.
-	waitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error)
+	// waitUntilPosition waits until the given position is reached or
+	// until the context expires. It returns an error if we did not
+	// succeed.
+	waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error
 
 	baseShowTables() string
 	baseShowTablesWithSizes() string
 
-	supportsCapability(serverVersion string, capability FlavorCapability) (bool, error)
+	supportsCapability(serverVersion string, capability capabilities.FlavorCapability) (bool, error)
 }
-
-type CapableOf func(capability FlavorCapability) (bool, error)
 
 // flavors maps flavor names to their implementation.
 // Flavors need to register only if they support being specified in the
@@ -166,7 +145,8 @@ type CapableOf func(capability FlavorCapability) (bool, error)
 var flavors = make(map[string]func() flavor)
 
 // ServerVersionAtLeast returns true if current server is at least given value.
-// Example: if input is []int{8, 0, 23}... the function returns 'true' if we're on MySQL 8.0.23, 8.0.24, ...
+// Example: if input is []int{8, 0, 23}... the function returns 'true' if we're
+// on MySQL 8.0.23, 8.0.24, ...
 func ServerVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
 	versionPrefix := strings.Split(serverVersion, "-")[0]
 	versionTokens := strings.Split(versionPrefix, ".")
@@ -200,7 +180,7 @@ func ServerVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
 // Note on such servers, 'select version()' would return 10.0.21-MariaDB-...
 // as well (not matching what c.ServerVersion is, but matching after we remove
 // the prefix).
-func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capableOf CapableOf, canonicalVersion string) {
+func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capableOf capabilities.CapableOf, canonicalVersion string) {
 	canonicalVersion = serverVersion
 	switch {
 	case flavorFunc != nil:
@@ -223,7 +203,7 @@ func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capabl
 		f = mysqlFlavor56{}
 	}
 	return f,
-		func(capability FlavorCapability) (bool, error) {
+		func(capability capabilities.FlavorCapability) (bool, error) {
 			return f.supportsCapability(serverVersion, capability)
 		}, canonicalVersion
 }
@@ -448,21 +428,18 @@ func (c *Conn) ShowPrimaryStatus() (replication.PrimaryStatus, error) {
 	return c.flavor.primaryStatus(c)
 }
 
-// WaitUntilPositionCommand returns the SQL command to issue
-// to wait until the given position, until the context
-// expires.  The command returns -1 if it times out. It
-// returns NULL if GTIDs are not enabled.
-func (c *Conn) WaitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error) {
-	return c.flavor.waitUntilPositionCommand(ctx, pos)
+// WaitUntilPosition waits until the given position is reached or until the
+// context expires. It returns an error if we did not succeed.
+func (c *Conn) WaitUntilPosition(ctx context.Context, pos replication.Position) error {
+	return c.flavor.waitUntilPosition(ctx, c, pos)
 }
 
-// WaitUntilFilePositionCommand returns the SQL command to issue
-// to wait until the given position, until the context
-// expires for the file position flavor.  The command returns -1 if it times out. It
-// returns NULL if GTIDs are not enabled.
-func (c *Conn) WaitUntilFilePositionCommand(ctx context.Context, pos replication.Position) (string, error) {
+// WaitUntilFilePosition waits until the given position is reached or until
+// the context expires for the file position flavor. It returns an error if
+// we did not succeed.
+func (c *Conn) WaitUntilFilePosition(ctx context.Context, pos replication.Position) error {
 	filePosFlavor := filePosFlavor{}
-	return filePosFlavor.waitUntilPositionCommand(ctx, pos)
+	return filePosFlavor.waitUntilPosition(ctx, c, pos)
 }
 
 // BaseShowTables returns a query that shows tables
@@ -476,7 +453,7 @@ func (c *Conn) BaseShowTablesWithSizes() string {
 }
 
 // SupportsCapability checks if the database server supports the given capability
-func (c *Conn) SupportsCapability(capability FlavorCapability) (bool, error) {
+func (c *Conn) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	return c.flavor.supportsCapability(c.ServerVersion, capability)
 }
 

@@ -107,6 +107,10 @@ func (dt *DerivedTable) dependencies(colName string, org originable) (dependenci
 		if !strings.EqualFold(name, colName) {
 			continue
 		}
+		if len(dt.recursive) == 0 {
+			// we have unexpanded columns and can't figure this out
+			return nil, ShardedError{Inner: vterrors.VT09015()}
+		}
 		recursiveDeps, qt := dt.recursive[i], dt.types[i]
 
 		return createCertain(directDeps, recursiveDeps, qt), nil
@@ -137,7 +141,7 @@ func (dt *DerivedTable) Name() (sqlparser.TableName, error) {
 	return dt.ASTNode.TableName()
 }
 
-func (dt *DerivedTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
+func (dt *DerivedTable) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return dt.ASTNode
 }
 

@@ -26,7 +26,6 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -41,6 +40,13 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+/*
+  This file contains code that is specific to VReplication Reshard
+  workflows -- which require migrating the *other* VReplication
+  workflows (aside from the Reshard workflow itself) that exist in
+  the keyspace from one set of shards to another when switching traffic.
+*/
+
 // StreamType is an enum representing the kind of stream.
 //
 // (TODO:@ajm188) This should be made package-private once the last references
@@ -54,21 +60,25 @@ const (
 	StreamTypeReference
 )
 
-// StreamMigrator contains information needed to migrate a stream
+// StreamMigrator contains information needed to migrate VReplication
+// streams during Reshard workflows when the keyspace's VReplication
+// workflows need to be migrated from one set of shards to another.
 type StreamMigrator struct {
 	streams   map[string][]*VReplicationStream
 	workflows []string
 	templates []*VReplicationStream
 	ts        ITrafficSwitcher
 	logger    logutil.Logger
+	parser    *sqlparser.Parser
 }
 
 // BuildStreamMigrator creates a new StreamMigrator based on the given
 // TrafficSwitcher.
-func BuildStreamMigrator(ctx context.Context, ts ITrafficSwitcher, cancelMigrate bool) (*StreamMigrator, error) {
+func BuildStreamMigrator(ctx context.Context, ts ITrafficSwitcher, cancelMigrate bool, parser *sqlparser.Parser) (*StreamMigrator, error) {
 	sm := &StreamMigrator{
 		ts:     ts,
 		logger: ts.Logger(),
+		parser: parser,
 	}
 
 	if sm.ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
@@ -147,21 +157,26 @@ func (sm *StreamMigrator) Templates() []*VReplicationStream {
 	return VReplicationStreams(sm.templates).Copy().ToSlice()
 }
 
-// CancelMigration cancels a migration
-func (sm *StreamMigrator) CancelMigration(ctx context.Context) {
+// CancelStreamMigrations cancels the stream migrations.
+func (sm *StreamMigrator) CancelStreamMigrations(ctx context.Context) {
 	if sm.streams == nil {
 		return
 	}
 
 	_ = sm.deleteTargetStreams(ctx)
 
+	// Restart the source streams, but leave the Reshard workflow's reverse
+	// variant stopped.
 	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow != %s", encodeString(source.GetPrimary().DbName()), encodeString(sm.ts.ReverseWorkflowName()))
+		// We intend to update all but our workflow's reverse streams, so we
+		// indicate that it's safe in this case using the comment diretive.
+		query := fmt.Sprintf("update /*vt+ %s */ _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow != %s",
+			vreplication.AllowUnsafeWriteCommentDirective, encodeString(source.GetPrimary().DbName()), encodeString(sm.ts.ReverseWorkflowName()))
 		_, err := sm.ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})
 	if err != nil {
-		sm.logger.Errorf("Cancel migration failed: could not restart source streams: %v", err)
+		sm.logger.Errorf("Cancel stream migrations failed: could not restart source streams: %v", err)
 	}
 }
 
@@ -198,6 +213,8 @@ func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 
 /* tablet streams */
 
+// readTabletStreams reads all of the VReplication workflow streams *except*
+// the Reshard workflow's reverse variant.
 func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, constraint string) ([]*VReplicationStream, error) {
 	query := fmt.Sprintf("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name=%s and workflow != %s",
 		encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
@@ -674,7 +691,7 @@ func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb
 }
 
 func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogdatapb.Rule) error {
-	statement, err := sqlparser.Parse(rule.Filter)
+	statement, err := sm.parser.Parse(rule.Filter)
 	if err != nil {
 		return err
 	}

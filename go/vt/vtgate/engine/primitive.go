@@ -87,6 +87,8 @@ type (
 		Session() SessionActions
 
 		ConnCollation() collations.ID
+		CollationEnv() *collations.Environment
+		SQLParser() *sqlparser.Parser
 		TimeZone() *time.Location
 		SQLMode() string
 
@@ -154,7 +156,6 @@ type (
 
 		SetAutocommit(ctx context.Context, autocommit bool) error
 		SetClientFoundRows(context.Context, bool) error
-		SetSessionForeignKeyChecks(ctx context.Context, autocommit bool) error
 		SetSkipQueryPlanCache(context.Context, bool) error
 		SetSQLSelectLimit(int64) error
 		SetTransactionMode(vtgatepb.TransactionMode)

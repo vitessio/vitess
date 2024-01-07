@@ -104,17 +104,15 @@ func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error)
 	for _, line := range strings.Split(header, "\n") {
 		fmt.Fprintf(&myTemplateSource, "## %v\n", strings.TrimSpace(line))
 	}
-	var dataErr error
+
 	for _, path := range cnfFiles {
-		data, dataErr := os.ReadFile(path)
-		if dataErr != nil {
+		data, err := os.ReadFile(path)
+		if err != nil {
 			continue
 		}
+
 		myTemplateSource.WriteString("## " + path + "\n")
 		myTemplateSource.Write(data)
-	}
-	if dataErr != nil {
-		return "", dataErr
 	}
 
 	myTemplateSource.WriteString("\n") // in case `data` did not end with a newline
@@ -126,9 +124,9 @@ func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error)
 	if err != nil {
 		return "", err
 	}
+
 	var cnfData strings.Builder
-	err = myTemplate.Execute(&cnfData, cnf)
-	if err != nil {
+	if err := myTemplate.Execute(&cnfData, cnf); err != nil {
 		return "", err
 	}
 	return cnfData.String(), nil

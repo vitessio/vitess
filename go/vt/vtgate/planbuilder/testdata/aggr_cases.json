@@ -2844,11 +2844,6 @@
     }
   },
   {
-    "comment": "select count(distinct user_id, name) from user",
-    "query": "select count(distinct user_id, name) from user",
-    "plan": "VT03001: aggregate functions take a single argument 'count(distinct user_id, `name`)'"
-  },
-  {
     "comment": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
     "query": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
     "plan": {
@@ -6369,6 +6364,566 @@
       },
       "TablesUsed": [
         "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Group by aliases on both sides of a join",
+    "query": "select count(*), cast(user.foo as datetime) as f1, cast(music.foo as datetime) as f2 from user join music group by f1, f2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*), cast(user.foo as datetime) as f1, cast(music.foo as datetime) as f2 from user join music group by f1, f2",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "GroupBy": "(1|3), (2|4)",
+        "ResultColumns": 3,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(1|3) ASC, (2|4) ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "count(*) * count(*) as count(*)",
+                  ":2 as f1",
+                  ":3 as f2",
+                  ":4 as weight_string(cast(`user`.foo as datetime))",
+                  ":5 as weight_string(cast(music.foo as datetime))"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0,R:0,L:1,R:1,L:2,R:2",
+                    "TableName": "`user`_music",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), cast(`user`.foo as datetime) as f1, weight_string(cast(`user`.foo as datetime)) from `user` where 1 != 1 group by f1, weight_string(cast(`user`.foo as datetime))",
+                        "Query": "select count(*), cast(`user`.foo as datetime) as f1, weight_string(cast(`user`.foo as datetime)) from `user` group by f1, weight_string(cast(`user`.foo as datetime))",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), cast(music.foo as datetime) as f2, weight_string(cast(music.foo as datetime)) from music where 1 != 1 group by f2, weight_string(cast(music.foo as datetime))",
+                        "Query": "select count(*), cast(music.foo as datetime) as f2, weight_string(cast(music.foo as datetime)) from music group by f2, weight_string(cast(music.foo as datetime))",
+                        "Table": "music"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "count(*) push down through left hash join",
+    "query": "select count(*) from user left join (select col, bar from user_extra limit 10) ue on user.col = ue.col group by user.foo, ue.bar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user left join (select col, bar from user_extra limit 10) ue on user.col = ue.col group by user.foo, ue.bar",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "GroupBy": "(1|2), (3|4)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "count(*) * coalesce(count(*), 1) as count(*)",
+              ":4 as foo",
+              ":6 as weight_string(`user`.foo)",
+              ":5 as bar",
+              ":7 as weight_string(ue.bar)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(4|6) ASC, (5|7) ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "count(*) as count(*)",
+                      "count(*) as count(*)",
+                      "`user`.col as col",
+                      "ue.col as col",
+                      "`user`.foo as foo",
+                      "ue.bar as bar",
+                      "weight_string(`user`.foo) as weight_string(`user`.foo)",
+                      "weight_string(ue.bar) as weight_string(ue.bar)"
+                    ],
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "HashLeftJoin",
+                        "Collation": "binary",
+                        "ComparisonType": "INT16",
+                        "JoinColumnIndexes": "-1,1,-2,2,-3,3",
+                        "Predicate": "`user`.col = ue.col",
+                        "TableName": "`user`_user_extra",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*), `user`.col, `user`.foo from `user` where 1 != 1 group by `user`.col, `user`.foo",
+                            "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo",
+                            "Table": "`user`"
+                          },
+                          {
+                            "OperatorType": "Aggregate",
+                            "Variant": "Ordered",
+                            "Aggregates": "count_star(0)",
+                            "GroupBy": "1, (2|3)",
+                            "Inputs": [
+                              {
+                                "OperatorType": "SimpleProjection",
+                                "Columns": [
+                                  2,
+                                  0,
+                                  1,
+                                  3
+                                ],
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Sort",
+                                    "Variant": "Memory",
+                                    "OrderBy": "0 ASC, (1|3) ASC",
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "Limit",
+                                        "Count": "10",
+                                        "Inputs": [
+                                          {
+                                            "OperatorType": "Route",
+                                            "Variant": "Scatter",
+                                            "Keyspace": {
+                                              "Name": "user",
+                                              "Sharded": true
+                                            },
+                                            "FieldQuery": "select col, bar, 1, weight_string(bar) from (select col, bar from user_extra where 1 != 1) as ue where 1 != 1",
+                                            "Query": "select col, bar, 1, weight_string(bar) from (select col, bar from user_extra) as ue limit :__upper_limit",
+                                            "Table": "user_extra"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery inside aggregation function on a dual table",
+    "query": "select max((select min(col) from user where id = 1))",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select min(col) from user where id = 1))",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select max((select min(col) from `user` where 1 != 1)) from dual where 1 != 1",
+        "Query": "select max((select min(col) from `user` where id = 1)) from dual",
+        "Table": "dual",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded subquery inside aggregation function on a sharded table",
+    "query": "select max((select min(col) from unsharded)) from user where id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select min(col) from unsharded)) from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select min(col) from unsharded))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select min(col) from unsharded where 1 != 1",
+                "Query": "select min(col) from unsharded",
+                "Table": "unsharded"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
+                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` where id = 1 group by weight_string(:__sq1)",
+                "Table": "`user`",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery inside aggregation function on a sharded table on different vindex value",
+    "query": "select max((select min(col) from user where id = 1)) from user where id = 2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select min(col) from user where id = 1)) from user where id = 2",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select min(col) from `user` where id = 1))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select min(col) from `user` where 1 != 1",
+                "Query": "select min(col) from `user` where id = 1",
+                "Table": "`user`",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
+                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` where id = 2 group by weight_string(:__sq1)",
+                "Table": "`user`",
+                "Values": [
+                  "2"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery inside group_concat multi-column aggregation function on a dual table",
+    "query": "select max((select group_concat(col1, col2) from user where id = 1))",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select group_concat(col1, col2) from user where id = 1))",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) from dual where 1 != 1",
+        "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) from dual",
+        "Table": "dual",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery inside group_concat multi-column aggregation function on a sharded table on same vindex value",
+    "query": "select max((select group_concat(col1, col2) from user where id = 1)) from user where id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select group_concat(col1, col2) from user where id = 1)) from user where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select max((select group_concat(col1, col2) from `user` where 1 != 1)) from `user` where 1 != 1",
+        "Query": "select max((select group_concat(col1, col2) from `user` where id = 1)) from `user` where id = 1",
+        "Table": "`user`",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery inside group_concat multi-column aggregation function on a sharded table",
+    "query": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select group_concat(col1, col2) from `user` where id = 1))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select group_concat(col1, col2) from `user` where 1 != 1",
+                "Query": "select group_concat(col1, col2) from `user` where id = 1",
+                "Table": "`user`",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(:__sq1), weight_string(:__sq1) from `user` where 1 != 1 group by weight_string(:__sq1)",
+                "Query": "select max(:__sq1), weight_string(:__sq1) from `user` group by weight_string(:__sq1)",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded correlated subquery inside aggregation function on a sharded table on same vindex",
+    "query": "select max((select max(col2) from user u1 where u1.id = u2.id)) from user u2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select max(col2) from user u1 where u1.id = u2.id)) from user u2",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select max(col2) from `user` as u1 where u1.id = u2.id))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)), weight_string((select max(col2) from `user` as u1 where 1 != 1)) from `user` as u2 where 1 != 1 group by weight_string((select max(col2) from `user` as u1 where 1 != 1))",
+            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)), weight_string((select max(col2) from `user` as u1 where u1.id = u2.id)) from `user` as u2 group by weight_string((select max(col2) from `user` as u1 where u1.id = u2.id))",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Multi-value aggregates pushed as function without splitting",
+    "query": "select count(a,b) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(a,b) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count(0) AS count(a, b)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(a, b) from `user` where 1 != 1",
+            "Query": "select count(a, b) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "group_concat with multi column - pushed without splitting",
+    "query": "select group_concat(col1, col2) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select group_concat(col1, col2) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "group_concat(0) AS group_concat(col1, col2)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select group_concat(col1, col2) from `user` where 1 != 1",
+            "Query": "select group_concat(col1, col2) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "",
+    "query": "select count(distinct name, id) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(distinct name, id) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct `name`, id)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(distinct `name`, id) from `user` where 1 != 1",
+            "Query": "select count(distinct `name`, id) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
         "user.user"
       ]
     }

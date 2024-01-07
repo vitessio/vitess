@@ -50,7 +50,7 @@ const (
 
 	// MaxRateModuleDisabled can be set in NewThrottler() to disable throttling
 	// by a fixed rate.
-	MaxRateModuleDisabled = math.MaxInt64
+	MaxRateModuleDisabled = int64(math.MaxInt64)
 
 	// InvalidMaxRate is a constant which will fail in a NewThrottler() call.
 	// It should be used when returning maxRate in an error case.
@@ -58,7 +58,7 @@ const (
 
 	// ReplicationLagModuleDisabled can be set in NewThrottler() to disable
 	// throttling based on the MySQL replication lag.
-	ReplicationLagModuleDisabled = math.MaxInt64
+	ReplicationLagModuleDisabled = int64(math.MaxInt64)
 
 	// InvalidMaxReplicationLag is a constant which will fail in a NewThrottler()
 	// call. It should be used when returning maxReplicationlag in an error case.

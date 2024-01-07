@@ -1377,10 +1377,10 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitTableNames(in.Targets, f); err != nil {
+	if err := VisitTableExprs(in.TableExprs, f); err != nil {
 		return err
 	}
-	if err := VisitTableExprs(in.TableExprs, f); err != nil {
+	if err := VisitTableNames(in.Targets, f); err != nil {
 		return err
 	}
 	if err := VisitPartitions(in.Partitions, f); err != nil {

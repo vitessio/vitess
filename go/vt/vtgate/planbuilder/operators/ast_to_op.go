@@ -72,7 +72,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 	outerID := TableID(op)
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, expr := range exprs {
-		sqlparser.RemoveKeyspaceFromColName(expr)
+		sqlparser.RemoveKeyspace(expr)
 		subq := sqc.handleSubquery(ctx, expr, outerID)
 		if subq != nil {
 			continue
@@ -96,7 +96,7 @@ func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, 
 
 // findTablesContained returns the TableSet of all the contained
 func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNode) (result semantics.TableSet) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		t, ok := node.(*sqlparser.AliasedTableExpr)
 		if !ok {
 			return true, nil
@@ -108,23 +108,24 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 	return
 }
 
-func rewriteRemainingColumns(
+func checkForCorrelatedSubqueries(
 	ctx *plancontext.PlanningContext,
 	stmt sqlparser.SelectStatement,
 	subqID semantics.TableSet,
-) sqlparser.SelectStatement {
-	return sqlparser.CopyOnRewrite(stmt, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		colname, isColname := cursor.Node().(*sqlparser.ColName)
+) (correlated bool) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		colname, isColname := node.(*sqlparser.ColName)
 		if !isColname {
-			return
+			return true, nil
 		}
 		deps := ctx.SemTable.RecursiveDeps(colname)
 		if deps.IsSolvedBy(subqID) {
-			return
+			return true, nil
 		}
-		rsv := ctx.GetReservedArgumentFor(colname)
-		cursor.Replace(sqlparser.NewArgument(rsv))
-	}, nil).(sqlparser.SelectStatement)
+		correlated = true
+		return false, nil
+	}, stmt)
+	return correlated
 }
 
 // joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any
@@ -133,7 +134,7 @@ func rewriteRemainingColumns(
 type joinPredicateCollector struct {
 	predicates          sqlparser.Exprs
 	remainingPredicates sqlparser.Exprs
-	joinColumns         []JoinColumn
+	joinColumns         []applyJoinColumn
 
 	totalID,
 	subqID,
@@ -176,9 +177,8 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 //  1. verifyAllFKs: For this given statement, do we need to verify validity of all the foreign keys on the vtgate level.
 //  2. fkToIgnore: The foreign key constraint to specifically ignore while planning the statement. This field is used in UPDATE CASCADE planning, wherein while planning the child update
 //     query, we need to ignore the parent foreign key constraint that caused the cascade in question.
-func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement, verifyAllFKs bool, fkToIgnore string) Operator {
-	var err error
-	ctx, err = plancontext.CreatePlanningContext(stmt, ctx.ReservedVars, ctx.VSchema, ctx.PlannerVersion)
+func createOpFromStmt(inCtx *plancontext.PlanningContext, stmt sqlparser.Statement, verifyAllFKs bool, fkToIgnore string) Operator {
+	ctx, err := plancontext.CreatePlanningContext(stmt, inCtx.ReservedVars, inCtx.VSchema, inCtx.PlannerVersion)
 	if err != nil {
 		panic(err)
 	}
@@ -283,10 +283,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			horizon.TableId = &tableID
 			horizon.Alias = tableExpr.As.String()
 			horizon.ColumnAliases = tableExpr.Columns
-			qp, err := CreateQPFromSelectStatement(ctx, tbl.Select)
-			if err != nil {
-				panic(err)
-			}
+			qp := CreateQPFromSelectStatement(ctx, tbl.Select)
 			horizon.QP = qp
 		}
 

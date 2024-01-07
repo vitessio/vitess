@@ -69,7 +69,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name:    "col1",
 			Type:    sqltypes.VarChar,
-			Charset: uint32(collations.Default()),
+			Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
@@ -158,7 +158,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name:    "col1",
 			Type:    sqltypes.VarChar,
-			Charset: uint32(collations.Default()),
+			Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
@@ -287,7 +287,7 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name:    "col1",
 			Type:    sqltypes.VarChar,
-			Charset: uint32(collations.Default()),
+			Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{

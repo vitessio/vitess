@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -128,6 +129,13 @@ type TabletServer struct {
 
 	// This field is only stored for testing
 	checkMysqlGaugeFunc *stats.GaugeFunc
+
+	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
+}
+
+func (tsv *TabletServer) SQLParser() *sqlparser.Parser {
+	return tsv.parser
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -138,8 +146,8 @@ var _ queryservice.QueryService = (*TabletServer)(nil)
 var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(ctx context.Context, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
-	return NewTabletServer(ctx, name, tabletenv.NewCurrentConfig(), topoServer, alias)
+func NewServer(ctx context.Context, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser) *TabletServer {
+	return NewTabletServer(ctx, name, tabletenv.NewCurrentConfig(), topoServer, alias, collationEnv, parser)
 }
 
 var (
@@ -149,7 +157,7 @@ var (
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser) *TabletServer {
 	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
 		exporter:               exporter,
@@ -160,21 +168,23 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
 		alias:                  alias.CloneVT(),
+		collationEnv:           collationEnv,
+		parser:                 parser,
 	}
-	tsv.QueryTimeout.Store(config.Oltp.QueryTimeoutSeconds.Get().Nanoseconds())
+	tsv.QueryTimeout.Store(config.Oltp.QueryTimeout.Nanoseconds())
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(ctx, topoServer, "TabletSrvTopo") })
 
 	tabletTypeFunc := func() topodatapb.TabletType {
-		if tsv.sm == nil {
+		if tsv.sm == nil || tsv.sm.Target() == nil {
 			return topodatapb.TabletType_UNKNOWN
 		}
 		return tsv.sm.Target().TabletType
 	}
 
-	tsv.statelessql = NewQueryList("oltp-stateless")
-	tsv.statefulql = NewQueryList("oltp-stateful")
-	tsv.olapql = NewQueryList("olap")
+	tsv.statelessql = NewQueryList("oltp-stateless", parser)
+	tsv.statefulql = NewQueryList("oltp-stateful", parser)
+	tsv.olapql = NewQueryList("olap", parser)
 	tsv.se = schema.NewEngine(tsv)
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
@@ -236,7 +246,7 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 func WaitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) error {
 	// We don't wait for grants if the tablet is externally managed. Permissions
 	// are then the responsibility of the DBA.
-	if config.DB.HasGlobalSettings() || waitTime == 0 {
+	if config == nil || config.DB.HasGlobalSettings() || waitTime == 0 {
 		return nil
 	}
 	timer := time.NewTimer(waitTime)
@@ -334,6 +344,11 @@ func (tsv *TabletServer) Config() *tabletenv.TabletConfig {
 // Stats satisfies tabletenv.Env.
 func (tsv *TabletServer) Stats() *tabletenv.Stats {
 	return tsv.stats
+}
+
+// Stats satisfies tabletenv.Env.
+func (tsv *TabletServer) CollationEnv() *collations.Environment {
+	return tsv.collationEnv
 }
 
 // LogError satisfies tabletenv.Env.
@@ -551,7 +566,11 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			logStats.OriginalSQL = beginSQL
 			if beginSQL != "" {
 				tsv.stats.QueryTimings.Record("BEGIN", startTime)
-				tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), startTime)
+				targetType, err := tsv.resolveTargetType(ctx, target)
+				if err != nil {
+					return err
+				}
+				tsv.stats.QueryTimingsByTabletType.Record(targetType.String(), startTime)
 			} else {
 				logStats.Method = ""
 			}
@@ -585,6 +604,24 @@ func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions)
 	return optionsPriority
 }
 
+// resolveTargetType returns the appropriate target tablet type for a
+// TabletServer request. If the caller has a local context then it's
+// an internal request and the target is the local tablet's current
+// target. If it's not a local context then there should always be a
+// non-nil target specified.
+func (tsv *TabletServer) resolveTargetType(ctx context.Context, target *querypb.Target) (topodatapb.TabletType, error) {
+	if target != nil {
+		return target.TabletType, nil
+	}
+	if !tabletenv.IsLocalContext(ctx) {
+		return topodatapb.TabletType_UNKNOWN, ErrNoTarget
+	}
+	if tsv.sm.Target() == nil {
+		return topodatapb.TabletType_UNKNOWN, nil // This is true, and does not block the request
+	}
+	return tsv.sm.Target().TabletType, nil
+}
+
 // Commit commits the specified transaction.
 func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (newReservedID int64, err error) {
 	err = tsv.execRequest(
@@ -607,7 +644,11 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 			// handlePanicAndSendLogStats doesn't log the no-op.
 			if commitSQL != "" {
 				tsv.stats.QueryTimings.Record("COMMIT", startTime)
-				tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), startTime)
+				targetType, err := tsv.resolveTargetType(ctx, target)
+				if err != nil {
+					return err
+				}
+				tsv.stats.QueryTimingsByTabletType.Record(targetType.String(), startTime)
 			} else {
 				logStats.Method = ""
 			}
@@ -625,7 +666,11 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("ROLLBACK", time.Now())
-			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
+			targetType, err := tsv.resolveTargetType(ctx, target)
+			if err != nil {
+				return err
+			}
+			defer tsv.stats.QueryTimingsByTabletType.Record(targetType.String(), time.Now())
 			logStats.TransactionID = transactionID
 			newReservedID, err = tsv.te.Rollback(ctx, transactionID)
 			if newReservedID > 0 {
@@ -836,18 +881,22 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 					return err
 				}
 			}
+			targetType, err := tsv.resolveTargetType(ctx, target)
+			if err != nil {
+				return err
+			}
 			qre := &QueryExecutor{
-				query:          query,
-				marginComments: comments,
-				bindVars:       bindVariables,
-				connID:         connID,
-				options:        options,
-				plan:           plan,
-				ctx:            ctx,
-				logStats:       logStats,
-				tsv:            tsv,
-				tabletType:     target.GetTabletType(),
-				setting:        connSetting,
+				query:            query,
+				marginComments:   comments,
+				bindVars:         bindVariables,
+				connID:           connID,
+				options:          options,
+				plan:             plan,
+				ctx:              ctx,
+				logStats:         logStats,
+				tsv:              tsv,
+				targetTabletType: targetType,
+				setting:          connSetting,
 			}
 			result, err = qre.Execute()
 			if err != nil {
@@ -939,16 +988,17 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				}
 			}
 			qre := &QueryExecutor{
-				query:          query,
-				marginComments: comments,
-				bindVars:       bindVariables,
-				connID:         connID,
-				options:        options,
-				plan:           plan,
-				ctx:            ctx,
-				logStats:       logStats,
-				tsv:            tsv,
-				setting:        connSetting,
+				query:            query,
+				marginComments:   comments,
+				bindVars:         bindVariables,
+				connID:           connID,
+				options:          options,
+				plan:             plan,
+				ctx:              ctx,
+				logStats:         logStats,
+				tsv:              tsv,
+				targetTabletType: target.GetTabletType(),
+				setting:          connSetting,
 			}
 			return qre.Stream(callback)
 		},
@@ -1239,7 +1289,11 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
-			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
+			targetType, err := tsv.resolveTargetType(ctx, target)
+			if err != nil {
+				return err
+			}
+			defer tsv.stats.QueryTimingsByTabletType.Record(targetType.String(), time.Now())
 			connID, sessionStateChanges, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
 			if err != nil {
 				return err
@@ -1285,7 +1339,11 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
-			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
+			targetType, err := tsv.resolveTargetType(ctx, target)
+			if err != nil {
+				return err
+			}
+			defer tsv.stats.QueryTimingsByTabletType.Record(targetType.String(), time.Now())
 			connID, sessionStateChanges, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
 			if err != nil {
 				return err
@@ -1339,7 +1397,11 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		target, options, allowOnShutdown,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
-			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
+			targetType, err := tsv.resolveTargetType(ctx, target)
+			if err != nil {
+				return err
+			}
+			defer tsv.stats.QueryTimingsByTabletType.Record(targetType.String(), time.Now())
 			state.ReservedID, err = tsv.te.Reserve(ctx, options, transactionID, preQueries)
 			if err != nil {
 				return err
@@ -1390,7 +1452,11 @@ func (tsv *TabletServer) ReserveStreamExecute(
 		target, options, allowOnShutdown,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
-			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
+			targetType, err := tsv.resolveTargetType(ctx, target)
+			if err != nil {
+				return err
+			}
+			defer tsv.stats.QueryTimingsByTabletType.Record(targetType.String(), time.Now())
 			state.ReservedID, err = tsv.te.Reserve(ctx, options, transactionID, preQueries)
 			if err != nil {
 				return err
@@ -1420,7 +1486,11 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RELEASE", time.Now())
-			defer tsv.stats.QueryTimingsByTabletType.Record(target.TabletType.String(), time.Now())
+			targetType, err := tsv.resolveTargetType(ctx, target)
+			if err != nil {
+				return err
+			}
+			defer tsv.stats.QueryTimingsByTabletType.Record(targetType.String(), time.Now())
 			logStats.TransactionID = transactionID
 			logStats.ReservedID = reservedID
 			if reservedID != 0 {
@@ -1428,7 +1498,7 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 				return tsv.te.Release(reservedID)
 			}
 			// Rollback to cleanup the transaction before returning to the pool.
-			_, err := tsv.te.Rollback(ctx, transactionID)
+			_, err = tsv.te.Rollback(ctx, transactionID)
 			return err
 		},
 	)
@@ -1504,6 +1574,7 @@ func (tsv *TabletServer) execRequest(
 		span.Annotate("workload_name", options.WorkloadName)
 	}
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
+	// With a tabletenv.LocalContext() the target will be nil.
 	if target != nil {
 		span.Annotate("cell", target.Cell)
 		span.Annotate("shard", target.Shard)
@@ -1547,13 +1618,13 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 		// not a concern.
 		var messagef, logMessage, query, truncatedQuery string
 		messagef = fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-		query = queryAsString(sql, bindVariables, tsv.TerseErrors, false)
+		query = queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.SQLParser())
 		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", fmt.Sprintf(messagef, query))
 		if tsv.TerseErrors == tsv.Config().SanitizeLogMessages {
-			truncatedQuery = queryAsString(sql, bindVariables, tsv.TerseErrors, true)
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.TerseErrors, true, tsv.SQLParser())
 			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		} else {
-			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true)
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser())
 			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		}
 		log.Error(logMessage)
@@ -1613,20 +1684,20 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false))
+			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.SQLParser()))
 			if logMethod != nil {
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
+				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser()))
 			}
 		} else {
-			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false))
+			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false, tsv.SQLParser()))
 			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser()))
 			}
 		}
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 		if logMethod != nil {
-			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true))
+			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser()))
 		}
 	}
 
@@ -2058,7 +2129,7 @@ func (tsv *TabletServer) ConsolidatorMode() string {
 // If sanitize is false it also includes the bind variables.
 // If truncateForLog is true, it truncates the sql query and the
 // bind variables.
-func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool, truncateForLog bool) string {
+func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool, truncateForLog bool, parser *sqlparser.Parser) string {
 	// Add the bind vars unless this needs to be sanitized, e.g. for log messages
 	bvBuf := &bytes.Buffer{}
 	fmt.Fprintf(bvBuf, "BindVars: {")
@@ -2082,7 +2153,7 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, s
 
 	// Truncate the bind vars if necessary
 	bv := bvBuf.String()
-	maxLen := sqlparser.GetTruncateErrLen()
+	maxLen := parser.GetTruncateErrLen()
 	if truncateForLog && maxLen > 0 && len(bv) > maxLen {
 		if maxLen <= 12 {
 			bv = sqlparser.TruncationText
@@ -2093,7 +2164,7 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, s
 
 	// Truncate the sql query if necessary
 	if truncateForLog {
-		sql = sqlparser.TruncateForLog(sql)
+		sql = parser.TruncateForLog(sql)
 	}
 
 	// sql is the normalized query without the bind vars

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
@@ -307,7 +308,7 @@ func TestCapability(t *testing.T) {
 	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
 	require.NotNil(t, capableOf)
 	var err error
-	fastDropTable, err = capableOf(mysql.FastDropTableFlavorCapability)
+	fastDropTable, err = capableOf(capabilities.FastDropTableFlavorCapability)
 	require.NoError(t, err)
 }
 

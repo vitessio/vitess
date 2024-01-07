@@ -28,8 +28,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -38,39 +38,30 @@ import (
 // It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,
 // i.e. with foreign_key_checks=0.
 func TestFKWorkflow(t *testing.T) {
-	// ensure that there are multiple copy phase cycles per table
-	extraVTTabletArgs = []string{"--vstream_packet_size=256"}
+	extraVTTabletArgs = []string{
+		// Ensure that there are multiple copy phase cycles per table.
+		"--vstream_packet_size=256",
+		// Test VPlayer batching mode.
+		fmt.Sprintf("--vreplication_experimental_flags=%d",
+			vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
+	}
 	defer func() { extraVTTabletArgs = nil }()
 
-	cellName := "zone"
-	cells := []string{cellName}
-	vc = NewVitessCluster(t, "TestFKWorkflow", cells, mainClusterConfig)
+	cellName := "zone1"
+	vc = NewVitessCluster(t, nil)
 
-	require.NotNil(t, vc)
-	allCellNames = cellName
-	defaultCellName := cellName
-	defaultCell = vc.Cells[defaultCellName]
 	sourceKeyspace := "fksource"
 	shardName := "0"
 
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	cell := vc.Cells[cellName]
 	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, shardName, initialFKSourceVSchema, initialFKSchema, 0, 0, 100, sourceKsOpts)
 
-	vtgate = cell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKeyspace, shardName)
-	require.NoError(t, err)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, shardName), 1, 30*time.Second)
-
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
+	insertInitialFKData(t)
 
 	var ls *fkLoadSimulator
-
-	insertInitialFKData(t)
 	withLoad := true // Set it to false to skip load simulation, while debugging
 	var cancel context.CancelFunc
 	var ctx context.Context
@@ -89,7 +80,6 @@ func TestFKWorkflow(t *testing.T) {
 	targetKeyspace := "fktarget"
 	targetTabletId := 200
 	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, "", 0, 0, targetTabletId, sourceKsOpts)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKeyspace, shardName), 1, 30*time.Second)
 
 	workflowName := "fk"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
@@ -136,6 +126,8 @@ func TestFKWorkflow(t *testing.T) {
 
 func insertInitialFKData(t *testing.T) {
 	t.Run("insertInitialFKData", func(t *testing.T) {
+		vtgateConn, closeConn := getVTGateConn()
+		defer closeConn()
 		sourceKeyspace := "fksource"
 		shard := "0"
 		db := fmt.Sprintf("%s:%s", sourceKeyspace, shard)
@@ -271,6 +263,8 @@ func (ls *fkLoadSimulator) delete() {
 
 func (ls *fkLoadSimulator) exec(query string) *sqltypes.Result {
 	t := ls.t
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
 	qr := execVtgateQuery(t, vtgateConn, "fksource", query)
 	require.NotNil(t, qr)
 	return qr

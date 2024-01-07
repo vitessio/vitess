@@ -99,6 +99,7 @@ Flags:
       --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         Port to use for vtcombo. If this is 0, a random port will be chosen.
       --pprof strings                                                    enable profiling
+      --pprof-http                                                       enable pprof http endpoints (default true)
       --proto_topo string                                                Define the fake cluster topology as a compact text format encoded vttest proto. See vttest.proto for more information.
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --queryserver-config-transaction-timeout float                     query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value
@@ -140,6 +141,7 @@ Flags:
   -v, --version                                                          print binary version
       --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vschema_ddl_authorized_users string                              Comma separated list of users authorized to execute vschema ddl operations via vtgate
+      --vtcombo-bind-host string                                         which host to bind vtcombo servenv listener to (default "localhost")
       --vtctl_client_protocol string                                     Protocol to use to talk to the vtctl server. (default "grpc")
       --vtctld_grpc_ca string                                            the server ca to use to validate servers when connecting
       --vtctld_grpc_cert string                                          the cert to use to connect

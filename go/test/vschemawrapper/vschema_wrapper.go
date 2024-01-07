@@ -82,7 +82,7 @@ func (vw *VSchemaWrapper) PlanPrepareStatement(ctx context.Context, query string
 	if err != nil {
 		return nil, nil, err
 	}
-	stmt, _, err := sqlparser.Parse2(query)
+	stmt, _, err := vw.SQLParser().Parse2(query)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -123,7 +123,15 @@ func (vw *VSchemaWrapper) GetSrvVschema() *vschemapb.SrvVSchema {
 }
 
 func (vw *VSchemaWrapper) ConnCollation() collations.ID {
-	return collations.CollationUtf8mb3ID
+	return collations.CollationUtf8mb4ID
+}
+
+func (vw *VSchemaWrapper) CollationEnv() *collations.Environment {
+	return collations.MySQL8()
+}
+
+func (vw *VSchemaWrapper) SQLParser() *sqlparser.Parser {
+	return sqlparser.NewTestParser()
 }
 
 func (vw *VSchemaWrapper) PlannerWarning(_ string) {

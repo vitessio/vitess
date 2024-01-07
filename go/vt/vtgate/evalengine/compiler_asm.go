@@ -288,13 +288,13 @@ func (asm *assembler) BitShiftLeft_bu() {
 		r := env.vm.stack[env.vm.sp-1].(*evalUint64)
 
 		var (
-			bits   = int(r.u & 7)
-			bytes  = int(r.u >> 3)
-			length = len(l.bytes)
+			bits   = int64(r.u & 7)
+			bytes  = int64(r.u >> 3)
+			length = int64(len(l.bytes))
 			out    = make([]byte, length)
 		)
 
-		for i := 0; i < length; i++ {
+		for i := int64(0); i < length; i++ {
 			pos := i + bytes + 1
 			switch {
 			case pos < length:
@@ -332,9 +332,9 @@ func (asm *assembler) BitShiftRight_bu() {
 		r := env.vm.stack[env.vm.sp-1].(*evalUint64)
 
 		var (
-			bits   = int(r.u & 7)
-			bytes  = int(r.u >> 3)
-			length = len(l.bytes)
+			bits   = int64(r.u & 7)
+			bytes  = int64(r.u >> 3)
+			length = int64(len(l.bytes))
 			out    = make([]byte, length)
 		)
 
@@ -717,25 +717,25 @@ func (asm *assembler) CmpJSON() {
 	}, "CMP JSON(SP-2), JSON(SP-1)")
 }
 
-func (asm *assembler) CmpTuple(fullEquality bool) {
+func (asm *assembler) CmpTuple(collationEnv *collations.Environment, fullEquality bool) {
 	asm.adjustStack(-2)
 	asm.emit(func(env *ExpressionEnv) int {
 		l := env.vm.stack[env.vm.sp-2].(*evalTuple)
 		r := env.vm.stack[env.vm.sp-1].(*evalTuple)
 		env.vm.sp -= 2
-		env.vm.flags.cmp, env.vm.flags.null, env.vm.err = evalCompareMany(l.t, r.t, fullEquality)
+		env.vm.flags.cmp, env.vm.flags.null, env.vm.err = evalCompareMany(l.t, r.t, fullEquality, collationEnv)
 		return 1
 	}, "CMP TUPLE(SP-2), TUPLE(SP-1)")
 }
 
-func (asm *assembler) CmpTupleNullsafe() {
+func (asm *assembler) CmpTupleNullsafe(collationsEnv *collations.Environment) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		l := env.vm.stack[env.vm.sp-2].(*evalTuple)
 		r := env.vm.stack[env.vm.sp-1].(*evalTuple)
 
 		var equals int
-		equals, env.vm.err = evalCompareTuplesNullSafe(l.t, r.t)
+		equals, env.vm.err = evalCompareTuplesNullSafe(l.t, r.t, collationsEnv)
 
 		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBool(equals == 0)
 		env.vm.sp -= 1
@@ -904,7 +904,7 @@ func (asm *assembler) Convert_Ti(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
 		if v.prec != 0 {
-			env.vm.err = errDeoptimize
+			env.vm.err = vterrors.NewErrorf(vtrpc.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "temporal type with non-zero precision")
 			return 1
 		}
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(v.toInt64())
@@ -918,6 +918,18 @@ func (asm *assembler) Convert_Tf(offset int) {
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalFloat(v.toFloat())
 		return 1
 	}, "CONV SQLTIME(SP-%d), FLOAT64", offset)
+}
+
+func (asm *assembler) Convert_Td(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
+		if v.prec == 0 {
+			env.vm.err = vterrors.NewErrorf(vtrpc.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "temporal type with zero precision")
+			return 1
+		}
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalDecimalWithPrec(v.toDecimal(), int32(v.prec))
+		return 1
+	}, "CONV SQLTIME(SP-%d), DECIMAL", offset)
 }
 
 func (asm *assembler) Convert_iB(offset int) {
@@ -2014,10 +2026,10 @@ func (asm *assembler) Fn_CONV_uc(t sqltypes.Type, col collations.TypedCollation)
 	}, "FN CONV VARCHAR(SP-3) INT64(SP-2) INT64(SP-1)")
 }
 
-func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {
+func (asm *assembler) Fn_COLLATION(collationEnv *collations.Environment, col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := evalCollation(env.vm.stack[env.vm.sp-1])
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText([]byte(collations.Local().LookupName(v.Collation)), col)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText([]byte(collationEnv.LookupName(v.Collation)), col)
 		return 1
 	}, "FN COLLATION (SP-1)")
 }
@@ -2763,7 +2775,7 @@ func (asm *assembler) In_table(not bool, table map[vthash.Hash]struct{}) {
 	}
 }
 
-func (asm *assembler) In_slow(not bool) {
+func (asm *assembler) In_slow(collationsEnv *collations.Environment, not bool) {
 	asm.adjustStack(-1)
 
 	if not {
@@ -2772,7 +2784,7 @@ func (asm *assembler) In_slow(not bool) {
 			rhs := env.vm.stack[env.vm.sp-1].(*evalTuple)
 
 			var in boolean
-			in, env.vm.err = evalInExpr(lhs, rhs)
+			in, env.vm.err = evalInExpr(collationsEnv, lhs, rhs)
 
 			env.vm.stack[env.vm.sp-2] = in.not().eval()
 			env.vm.sp -= 1
@@ -2784,7 +2796,7 @@ func (asm *assembler) In_slow(not bool) {
 			rhs := env.vm.stack[env.vm.sp-1].(*evalTuple)
 
 			var in boolean
-			in, env.vm.err = evalInExpr(lhs, rhs)
+			in, env.vm.err = evalInExpr(collationsEnv, lhs, rhs)
 
 			env.vm.stack[env.vm.sp-2] = in.eval()
 			env.vm.sp -= 1
@@ -3834,20 +3846,6 @@ func (asm *assembler) Fn_YEARWEEK() {
 		env.vm.sp--
 		return 1
 	}, "FN YEARWEEK DATE(SP-1)")
-}
-
-func (asm *assembler) Interval_i(l int) {
-	asm.adjustStack(-l)
-	asm.emit(func(env *ExpressionEnv) int {
-		if env.vm.stack[env.vm.sp-l] == nil {
-			env.vm.stack[env.vm.sp-l] = env.vm.arena.newEvalInt64(-1)
-			env.vm.sp -= l
-			return 1
-		}
-
-		env.vm.sp -= l
-		return 1
-	}, "INTERVAL INT64(SP-1)...INT64(SP-%d)", l)
 }
 
 func (asm *assembler) Interval(l int) {

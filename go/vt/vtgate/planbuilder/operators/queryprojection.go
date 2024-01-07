@@ -96,12 +96,14 @@ type (
 		// the offsets point to columns on the same aggregator
 		ColOffset int
 		WSOffset  int
+
+		SubQueryExpression []*SubQuery
 	}
 
 	AggrRewriter struct {
-		qp  *QueryProjection
-		st  *semantics.SemTable
-		Err error
+		qp     *QueryProjection
+		st     *semantics.SemTable
+		failed bool
 	}
 )
 
@@ -177,35 +179,26 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 }
 
 // createQPFromSelect creates the QueryProjection for the input *sqlparser.Select
-func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (*QueryProjection, error) {
+func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) *QueryProjection {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
 	}
 
-	if err := qp.addSelectExpressions(sel); err != nil {
-		return nil, err
-	}
-	if err := qp.addGroupBy(ctx, sel.GroupBy); err != nil {
-		return nil, err
-	}
-	if err := qp.addOrderBy(ctx, sel.OrderBy); err != nil {
-		return nil, err
-	}
+	qp.addSelectExpressions(sel)
+	qp.addGroupBy(ctx, sel.GroupBy)
+	qp.addOrderBy(ctx, sel.OrderBy)
 	if !qp.HasAggr && sel.Having != nil {
 		qp.HasAggr = containsAggr(sel.Having.Expr)
 	}
+	qp.calculateDistinct(ctx)
 
-	if err := qp.calculateDistinct(ctx); err != nil {
-		return nil, err
-	}
-
-	return qp, nil
+	return qp
 }
 
 // RewriteDown stops the walker from entering inside aggregation functions
 func (ar *AggrRewriter) RewriteDown() func(sqlparser.SQLNode, sqlparser.SQLNode) bool {
 	return func(node, _ sqlparser.SQLNode) bool {
-		if ar.Err != nil {
+		if ar.failed {
 			return true
 		}
 		_, ok := node.(sqlparser.AggrFunc)
@@ -216,7 +209,7 @@ func (ar *AggrRewriter) RewriteDown() func(sqlparser.SQLNode, sqlparser.SQLNode)
 // RewriteUp will go through an expression, add aggregations to the QP, and rewrite them to use column offset
 func (ar *AggrRewriter) RewriteUp() func(*sqlparser.Cursor) bool {
 	return func(cursor *sqlparser.Cursor) bool {
-		if ar.Err != nil {
+		if ar.failed {
 			return false
 		}
 		sqlNode := cursor.Node()
@@ -227,7 +220,7 @@ func (ar *AggrRewriter) RewriteUp() func(*sqlparser.Cursor) bool {
 		for offset, expr := range ar.qp.SelectExprs {
 			ae, err := expr.GetAliasedExpr()
 			if err != nil {
-				ar.Err = err
+				ar.failed = true
 				return false
 			}
 			if ar.st.EqualsExprWithDeps(ae.Expr, fExp) {
@@ -257,14 +250,10 @@ func (qp *QueryProjection) AggrRewriter(ctx *plancontext.PlanningContext) *AggrR
 	}
 }
 
-func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
+func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) {
 	for _, selExp := range sel.SelectExprs {
 		switch selExp := selExp.(type) {
 		case *sqlparser.AliasedExpr:
-			err := checkForInvalidAggregations(selExp)
-			if err != nil {
-				return err
-			}
 			col := SelectExpr{
 				Col: selExp,
 			}
@@ -281,10 +270,9 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 			}
 			qp.SelectExprs = append(qp.SelectExprs, col)
 		default:
-			return vterrors.VT13001(fmt.Sprintf("%T in select list", selExp))
+			panic(vterrors.VT13001(fmt.Sprintf("%T in select list", selExp)))
 		}
 	}
-	return nil
 }
 
 func containsAggr(e sqlparser.SQLNode) (hasAggr bool) {
@@ -307,21 +295,14 @@ func containsAggr(e sqlparser.SQLNode) (hasAggr bool) {
 }
 
 // createQPFromUnion creates the QueryProjection for the input *sqlparser.Union
-func createQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) (*QueryProjection, error) {
+func createQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) *QueryProjection {
 	qp := &QueryProjection{}
 
 	sel := sqlparser.GetFirstSelect(union)
-	err := qp.addSelectExpressions(sel)
-	if err != nil {
-		return nil, err
-	}
+	qp.addSelectExpressions(sel)
+	qp.addOrderBy(ctx, union.OrderBy)
 
-	err = qp.addOrderBy(ctx, union.OrderBy)
-	if err != nil {
-		return nil, err
-	}
-
-	return qp, nil
+	return qp
 }
 
 type expressionSet struct {
@@ -341,14 +322,11 @@ func (es *expressionSet) add(ctx *plancontext.PlanningContext, e sqlparser.Expr)
 	return true
 }
 
-func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy sqlparser.OrderBy) error {
+func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy sqlparser.OrderBy) {
 	canPushSorting := true
 	es := &expressionSet{}
 	for _, order := range orderBy {
-		simpleExpr, err := qp.GetSimplifiedExpr(ctx, order.Expr)
-		if err != nil {
-			return err
-		}
+		simpleExpr := qp.GetSimplifiedExpr(ctx, order.Expr)
 		if sqlparser.IsNull(simpleExpr) {
 			// ORDER BY null can safely be ignored
 			continue
@@ -363,15 +341,11 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 		canPushSorting = canPushSorting && !containsAggr(simpleExpr)
 	}
 	qp.CanPushSorting = canPushSorting
-	return nil
 }
 
-func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) error {
+func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) {
 	if qp.Distinct && !qp.HasAggr {
-		distinct, err := qp.useGroupingOverDistinct(ctx)
-		if err != nil {
-			return err
-		}
+		distinct := qp.useGroupingOverDistinct(ctx)
 		if distinct {
 			// if order by exists with overlap with select expressions, we can use the aggregation with ordering over distinct.
 			qp.Distinct = false
@@ -387,7 +361,7 @@ func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) e
 	}
 
 	if !qp.Distinct || len(qp.groupByExprs) == 0 {
-		return nil
+		return
 	}
 
 	for _, gb := range qp.groupByExprs {
@@ -399,27 +373,20 @@ func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) e
 			return getExpr
 		})
 		if !found {
-			return nil
+			return
 		}
 	}
 
 	// since we are returning all grouping expressions, we know the results are guaranteed to be unique
 	qp.Distinct = false
-	return nil
 }
 
-func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy sqlparser.GroupBy) error {
+func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy sqlparser.GroupBy) {
 	es := &expressionSet{}
 	for _, group := range groupBy {
 		selectExprIdx := qp.FindSelectExprIndexForExpr(ctx, group)
-		simpleExpr, err := qp.GetSimplifiedExpr(ctx, group)
-		if err != nil {
-			return err
-		}
-
-		if err = checkForInvalidGroupingExpressions(simpleExpr); err != nil {
-			return err
-		}
+		simpleExpr := qp.GetSimplifiedExpr(ctx, group)
+		checkForInvalidGroupingExpressions(simpleExpr)
 
 		if !es.add(ctx, simpleExpr) {
 			continue
@@ -430,27 +397,11 @@ func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy 
 
 		qp.groupByExprs = append(qp.groupByExprs, groupBy)
 	}
-	return nil
 }
 
 // GetGrouping returns a copy of the grouping parameters of the QP
 func (qp *QueryProjection) GetGrouping() []GroupBy {
 	return slices.Clone(qp.groupByExprs)
-}
-
-func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		aggrFunc, isAggregate := node.(sqlparser.AggrFunc)
-		if !isAggregate {
-			return true, nil
-		}
-		args := aggrFunc.GetArgs()
-		if args != nil && len(args) != 1 {
-			return false, vterrors.VT03001(sqlparser.String(node))
-		}
-		return true, nil
-
-	}, exp.Expr)
 }
 
 func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
@@ -463,7 +414,15 @@ func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext
 }
 
 // GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
-func (qp *QueryProjection) GetSimplifiedExpr(ctx *plancontext.PlanningContext, e sqlparser.Expr) (found sqlparser.Expr, err error) {
+func (qp *QueryProjection) GetSimplifiedExpr(ctx *plancontext.PlanningContext, e sqlparser.Expr) sqlparser.Expr {
+	expr, err := qp.TryGetSimplifiedExpr(ctx, e)
+	if err != nil {
+		panic(err)
+	}
+	return expr
+}
+
+func (qp *QueryProjection) TryGetSimplifiedExpr(ctx *plancontext.PlanningContext, e sqlparser.Expr) (found sqlparser.Expr, err error) {
 	if qp == nil {
 		return e, nil
 	}
@@ -560,83 +519,6 @@ func (qp *QueryProjection) NeedsAggregation() bool {
 	return qp.HasAggr || len(qp.groupByExprs) > 0
 }
 
-// NeedsProjecting returns true if we have projections that need to be evaluated at the vtgate level
-// and can't be pushed down to MySQL
-func (qp *QueryProjection) NeedsProjecting(
-	ctx *plancontext.PlanningContext,
-	pusher func(expr *sqlparser.AliasedExpr) (int, error),
-) (needsVtGateEval bool, expressions []sqlparser.Expr, colNames []string, err error) {
-	for _, se := range qp.SelectExprs {
-		var ae *sqlparser.AliasedExpr
-		ae, err = se.GetAliasedExpr()
-		if err != nil {
-			return false, nil, nil, err
-		}
-
-		expr := ae.Expr
-		colNames = append(colNames, ae.ColumnName())
-
-		if _, isCol := expr.(*sqlparser.ColName); isCol {
-			offset, err := pusher(ae)
-			if err != nil {
-				return false, nil, nil, err
-			}
-			expressions = append(expressions, sqlparser.NewOffset(offset, expr))
-			continue
-		}
-
-		stopOnError := func(sqlparser.SQLNode, sqlparser.SQLNode) bool {
-			return err == nil
-		}
-		rewriter := func(cursor *sqlparser.CopyOnWriteCursor) {
-			col, isCol := cursor.Node().(*sqlparser.ColName)
-			if !isCol {
-				return
-			}
-			var tableInfo semantics.TableInfo
-			tableInfo, err = ctx.SemTable.TableInfoForExpr(col)
-			if err != nil {
-				return
-			}
-			dt, isDT := tableInfo.(*semantics.DerivedTable)
-			if !isDT {
-				return
-			}
-
-			rewritten := semantics.RewriteDerivedTableExpression(col, dt)
-			if containsAggr(rewritten) {
-				offset, tErr := pusher(&sqlparser.AliasedExpr{Expr: col})
-				if tErr != nil {
-					err = tErr
-					return
-				}
-				cursor.Replace(sqlparser.NewOffset(offset, col))
-			}
-		}
-		newExpr := sqlparser.CopyOnRewrite(expr, stopOnError, rewriter, nil)
-
-		if err != nil {
-			return
-		}
-
-		if newExpr != expr {
-			// if we changed the expression, it means that we have to evaluate the rest at the vtgate level
-			expressions = append(expressions, newExpr.(sqlparser.Expr))
-			needsVtGateEval = true
-			continue
-		}
-
-		// we did not need to push any parts of this expression down. Let's check if we can push all of it
-		offset, err := pusher(ae)
-		if err != nil {
-			return false, nil, nil, err
-		}
-		expressions = append(expressions, sqlparser.NewOffset(offset, expr))
-	}
-
-	return
-}
-
 func (qp *QueryProjection) onlyAggr() bool {
 	if !qp.HasAggr {
 		return false
@@ -660,7 +542,7 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 	return true
 }
 
-func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningContext, allowComplexExpression bool) (out []Aggr, complex bool, err error) {
+func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningContext, allowComplexExpression bool) (out []Aggr, complex bool) {
 	qp.addOrderByToSelect(ctx)
 	addAggr := func(a Aggr) {
 		out = append(out, a)
@@ -674,7 +556,7 @@ func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningConte
 	for idx, expr := range qp.SelectExprs {
 		aliasedExpr, err := expr.GetAliasedExpr()
 		if err != nil {
-			return nil, false, err
+			panic(err)
 		}
 
 		idxCopy := idx
@@ -682,7 +564,7 @@ func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningConte
 		if !containsAggr(expr.Col) {
 			getExpr, err := expr.GetExpr()
 			if err != nil {
-				return nil, false, err
+				panic(err)
 			}
 			if !qp.isExprInGroupByExprs(ctx, getExpr) {
 				aggr := NewAggr(opcode.AggregateAnyValue, nil, aliasedExpr, aliasedExpr.ColumnName())
@@ -693,7 +575,7 @@ func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningConte
 		}
 		_, isAggregate := aliasedExpr.Expr.(sqlparser.AggrFunc)
 		if !isAggregate && !allowComplexExpression {
-			return nil, false, vterrors.VT12001("in scatter query: complex aggregate expression")
+			panic(vterrors.VT12001("in scatter query: complex aggregate expression"))
 		}
 
 		sqlparser.CopyOnRewrite(aliasedExpr.Expr, qp.extractAggr(ctx, idx, aliasedExpr, addAggr, makeComplex), nil, nil)
@@ -903,21 +785,18 @@ func (qp *QueryProjection) orderByOverlapWithSelectExpr(ctx *plancontext.Plannin
 	return false
 }
 
-func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningContext) (bool, error) {
+func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningContext) bool {
 	if !qp.orderByOverlapWithSelectExpr(ctx) {
-		return false, nil
+		return false
 	}
 	var gbs []GroupBy
 	for idx, selExpr := range qp.SelectExprs {
 		ae, err := selExpr.GetAliasedExpr()
 		if err != nil {
 			// not an alias Expr, cannot continue forward.
-			return false, nil
+			return false
 		}
-		sExpr, err := qp.GetSimplifiedExpr(ctx, ae.Expr)
-		if err != nil {
-			return false, err
-		}
+		sExpr := qp.GetSimplifiedExpr(ctx, ae.Expr)
 		// check if the grouping already exists on that column.
 		found := slices.IndexFunc(qp.groupByExprs, func(gb GroupBy) bool {
 			return ctx.SemTable.EqualsExprWithDeps(gb.SimplifiedExpr, sExpr)
@@ -932,18 +811,18 @@ func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningCont
 		gbs = append(gbs, groupBy)
 	}
 	qp.groupByExprs = append(qp.groupByExprs, gbs...)
-	return true, nil
+	return true
 }
 
-func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+func checkForInvalidGroupingExpressions(expr sqlparser.Expr) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if _, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
-			return false, vterrors.VT03005(sqlparser.String(expr))
+			panic(vterrors.VT03005(sqlparser.String(expr)))
 		}
 		_, isSubQ := node.(*sqlparser.Subquery)
 		arg, isArg := node.(*sqlparser.Argument)
 		if isSubQ || (isArg && strings.HasPrefix(arg.Name, "__sq")) {
-			return false, vterrors.VT12001("subqueries in GROUP BY")
+			panic(vterrors.VT12001("subqueries in GROUP BY"))
 		}
 		return true, nil
 	}, expr)
@@ -967,12 +846,12 @@ func CompareRefInt(a *int, b *int) bool {
 	return *a < *b
 }
 
-func CreateQPFromSelectStatement(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement) (*QueryProjection, error) {
+func CreateQPFromSelectStatement(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement) *QueryProjection {
 	switch sel := stmt.(type) {
 	case *sqlparser.Select:
 		return createQPFromSelect(ctx, sel)
 	case *sqlparser.Union:
 		return createQPFromUnion(ctx, sel)
 	}
-	return nil, vterrors.VT13001("can only create query projection from Union and Select statements")
+	panic(vterrors.VT13001("can only create query projection from Union and Select statements"))
 }

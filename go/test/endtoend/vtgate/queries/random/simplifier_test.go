@@ -88,13 +88,13 @@ func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
 
 	formal, err := vindexes.LoadFormal("svschema.json")
 	require.NoError(t, err)
-	vSchema := vindexes.BuildVSchema(formal)
+	vSchema := vindexes.BuildVSchema(formal, sqlparser.NewTestParser())
 	vSchemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:       vSchema,
 		Version: planbuilder.Gen4,
 	}
 
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.NewTestParser().Parse(query)
 	require.NoError(t, err)
 
 	simplified := simplifier.SimplifyStatement(

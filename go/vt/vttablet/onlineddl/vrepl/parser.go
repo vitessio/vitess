@@ -78,8 +78,8 @@ func (p *AlterTableParser) analyzeAlter(alterTable *sqlparser.AlterTable) {
 }
 
 // ParseAlterStatement is the main function of th eparser, and parses an ALTER TABLE statement
-func (p *AlterTableParser) ParseAlterStatement(alterQuery string) (err error) {
-	stmt, err := sqlparser.ParseStrictDDL(alterQuery)
+func (p *AlterTableParser) ParseAlterStatement(alterQuery string, parser *sqlparser.Parser) (err error) {
+	stmt, err := parser.ParseStrictDDL(alterQuery)
 	if err != nil {
 		return err
 	}

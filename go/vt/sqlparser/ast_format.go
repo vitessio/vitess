@@ -172,7 +172,7 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 	if node.Ignore {
 		buf.literal("ignore ")
 	}
-	if node.Targets != nil {
+	if node.Targets != nil && !node.isSingleAliasExpr() {
 		buf.astPrintf(node, "%v ", node.Targets)
 	}
 	buf.astPrintf(node, "from %v%v%v%v%v", node.TableExprs, node.Partitions, node.Where, node.OrderBy, node.Limit)
@@ -289,6 +289,10 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "unthrottle"
 	case UnthrottleAllMigrationType:
 		alterType = "unthrottle all"
+	case ForceCutOverMigrationType:
+		alterType = "force_cutover"
+	case ForceCutOverAllMigrationType:
+		alterType = "force_cutover all"
 	}
 	buf.astPrintf(node, " %#s", alterType)
 	if node.Expire != "" {

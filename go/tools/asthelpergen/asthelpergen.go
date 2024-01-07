@@ -29,7 +29,6 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"vitess.io/vitess/go/textutil"
-
 	"vitess.io/vitess/go/tools/codegen"
 )
 

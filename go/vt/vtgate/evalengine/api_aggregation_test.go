@@ -137,7 +137,7 @@ func TestMinMax(t *testing.T) {
 	for i, tcase := range tcases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Run("Min", func(t *testing.T) {
-				agg := NewAggregationMinMax(tcase.type_, tcase.coll)
+				agg := NewAggregationMinMax(tcase.type_, collations.MySQL8(), tcase.coll)
 
 				for _, v := range tcase.values {
 					err := agg.Min(v)
@@ -153,7 +153,7 @@ func TestMinMax(t *testing.T) {
 			})
 
 			t.Run("Max", func(t *testing.T) {
-				agg := NewAggregationMinMax(tcase.type_, tcase.coll)
+				agg := NewAggregationMinMax(tcase.type_, collations.MySQL8(), tcase.coll)
 
 				for _, v := range tcase.values {
 					err := agg.Max(v)

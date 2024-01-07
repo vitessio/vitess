@@ -216,7 +216,6 @@ func (svi *SysVarIgnore) VariableName() string {
 
 // Execute implements the SetOp interface method.
 func (svi *SysVarIgnore) Execute(context.Context, VCursor, *evalengine.ExpressionEnv) error {
-	log.Infof("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)
 	return nil
 }
 
@@ -249,16 +248,13 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
 	}
 	checkSysVarQuery := fmt.Sprintf("select 1 from dual where @@%s = %s", svci.Name, svci.Expr)
-	result, err := execShard(ctx, nil, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	_, err = execShard(ctx, nil, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		// Rather than returning the error, we will just log the error
 		// as the intention for executing the query it to validate the current setting and eventually ignore it anyways.
 		// There is no benefit of returning the error back to client.
 		log.Warningf("unable to validate the current settings for '%s': %s", svci.Name, err.Error())
 		return nil
-	}
-	if len(result.Rows) == 0 {
-		log.Infof("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)
 	}
 	return nil
 }
@@ -445,8 +441,6 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 	switch svss.Name {
 	case sysvars.Autocommit.Name:
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetAutocommit)
-	case sysvars.ForeignKeyChecks.Name:
-		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetSessionForeignKeyChecks)
 	case sysvars.ClientFoundRows.Name:
 		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetClientFoundRows)
 	case sysvars.SkipQueryPlanCache.Name:

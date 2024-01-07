@@ -28,7 +28,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/bucketpool"
@@ -44,6 +43,8 @@ import (
 )
 
 const (
+	DefaultFlushDelay = 100 * time.Millisecond
+
 	// connBufferSize is how much we buffer for reading and
 	// writing. It is also how much we allocate for ephemeral buffers.
 	connBufferSize = 16 * 1024
@@ -129,6 +130,7 @@ type Conn struct {
 
 	bufferedReader *bufio.Reader
 	flushTimer     *time.Timer
+	flushDelay     time.Duration
 	header         [packetHeaderSize]byte
 
 	// Keep track of how and of the buffer we allocated for an
@@ -213,10 +215,9 @@ type Conn struct {
 	// this is used to mark the connection to be closed so that the command phase for the connection can be stopped and
 	// the connection gets closed.
 	closing bool
-}
 
-// splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
-var splitStatementFunction = sqlparser.SplitStatementToPieces
+	truncateErrLen int
+}
 
 // PrepareData is a buffer used for store prepare statement meta data
 type PrepareData struct {
@@ -247,10 +248,15 @@ var readersPool = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, co
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
-func newConn(conn net.Conn) *Conn {
+func newConn(conn net.Conn, flushDelay time.Duration, truncateErrLen int) *Conn {
+	if flushDelay == 0 {
+		flushDelay = DefaultFlushDelay
+	}
 	return &Conn{
 		conn:           conn,
 		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
+		flushDelay:     flushDelay,
+		truncateErrLen: truncateErrLen,
 	}
 }
 
@@ -271,10 +277,12 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	}
 
 	c := &Conn{
-		conn:        conn,
-		listener:    listener,
-		PrepareData: make(map[uint32]*PrepareData),
-		keepAliveOn: enabledKeepAlive,
+		conn:           conn,
+		listener:       listener,
+		PrepareData:    make(map[uint32]*PrepareData),
+		keepAliveOn:    enabledKeepAlive,
+		flushDelay:     listener.flushDelay,
+		truncateErrLen: listener.truncateErrLen,
 	}
 
 	if listener.connReadBufferSize > 0 {
@@ -348,7 +356,7 @@ func (c *Conn) returnReader() {
 // startFlushTimer must be called while holding lock on bufMu.
 func (c *Conn) startFlushTimer() {
 	if c.flushTimer == nil {
-		c.flushTimer = time.AfterFunc(mysqlServerFlushDelay, func() {
+		c.flushTimer = time.AfterFunc(c.flushDelay, func() {
 			c.bufMu.Lock()
 			defer c.bufMu.Unlock()
 
@@ -358,7 +366,7 @@ func (c *Conn) startFlushTimer() {
 			c.bufferedWriter.Flush()
 		})
 	} else {
-		c.flushTimer.Reset(mysqlServerFlushDelay)
+		c.flushTimer.Reset(c.flushDelay)
 	}
 }
 
@@ -1228,7 +1236,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		var err error
-		queries, err = splitStatementFunction(query)
+		queries, err = handler.SQLParser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1241,14 +1249,14 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		queries = []string{query}
 	}
 
-	// Popoulate PrepareData
+	// Populate PrepareData
 	c.StatementID++
 	prepare := &PrepareData{
 		StatementID: c.StatementID,
 		PrepareStmt: queries[0],
 	}
 
-	statement, err := sqlparser.ParseStrictDDL(query)
+	statement, err := handler.SQLParser().ParseStrictDDL(query)
 	if err != nil {
 		log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
 		if !c.writeErrorPacketFromErrorAndLog(err) {
@@ -1356,7 +1364,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	var err error
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err = splitStatementFunction(query)
+		queries, err = handler.SQLParser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1698,42 +1706,4 @@ func (c *Conn) IsMarkedForClose() bool {
 
 func (c *Conn) IsShuttingDown() bool {
 	return c.listener.shutdown.Load()
-}
-
-// ConnCheck ensures that this connection to the MySQL server hasn't been broken.
-// This is a fast, non-blocking check. For details on its implementation, please read
-// "Three Bugs in the Go MySQL Driver" (Vicent Marti, GitHub, 2020)
-// https://github.blog/2020-05-20-three-bugs-in-the-go-mysql-driver/
-func (c *Conn) ConnCheck() error {
-	conn := c.conn
-	if tlsconn, ok := conn.(*tls.Conn); ok {
-		conn = tlsconn.NetConn()
-	}
-	if conn, ok := conn.(syscall.Conn); ok {
-		rc, err := conn.SyscallConn()
-		if err != nil {
-			return err
-		}
-
-		var n int
-		var buff [1]byte
-		rerr := rc.Read(func(fd uintptr) bool {
-			n, err = syscall.Read(int(fd), buff[:])
-			return true
-		})
-
-		switch {
-		case rerr != nil:
-			return rerr
-		case n == 0 && err == nil:
-			return io.EOF
-		case n > 0:
-			return sqlerror.NewSQLError(sqlerror.CRUnknownError, sqlerror.SSUnknownSQLState, "unexpected read from conn")
-		case err == syscall.EAGAIN || err == syscall.EWOULDBLOCK:
-			return nil
-		default:
-			return err
-		}
-	}
-	return nil
 }

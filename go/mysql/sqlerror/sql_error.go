@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -62,7 +61,7 @@ func (se *SQLError) Error() string {
 	fmt.Fprintf(&buf, " (errno %v) (sqlstate %v)", se.Num, se.State)
 
 	if se.Query != "" {
-		fmt.Fprintf(&buf, " during query: %s", sqlparser.TruncateForLog(se.Query))
+		fmt.Fprintf(&buf, " during query: %s", se.Query)
 	}
 
 	return buf.String()
@@ -78,7 +77,7 @@ func (se *SQLError) SQLState() string {
 	return se.State
 }
 
-var errExtract = regexp.MustCompile(`.*\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z]{5})\).*`)
+var errExtract = regexp.MustCompile(`\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z]{5})\)`)
 
 // NewSQLErrorFromError returns a *SQLError from the provided error.
 // If it's not the right type, it still tries to get it from a regexp.

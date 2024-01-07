@@ -47,7 +47,11 @@ func (s *FakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Tab
 }
 
 func (*FakeSI) ConnCollation() collations.ID {
-	return 45
+	return collations.CollationUtf8mb4ID
+}
+
+func (*FakeSI) CollationEnv() *collations.Environment {
+	return collations.MySQL8()
 }
 
 func (s *FakeSI) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {

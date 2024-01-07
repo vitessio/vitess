@@ -29,10 +29,9 @@ import (
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
-
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -160,18 +159,16 @@ func TestSelectDBA(t *testing.T) {
 }
 
 func TestSystemVariablesMySQLBelow80(t *testing.T) {
-	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "5.7.0")
 	executor.normalize = true
-
-	sqlparser.SetParserVersion("57000")
 	setVarEnabled = true
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar(""),
@@ -196,10 +193,9 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 }
 
 func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
-	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "8.0.0")
 	executor.normalize = true
 
-	sqlparser.SetParserVersion("80000")
 	setVarEnabled = false
 	defer func() {
 		setVarEnabled = true
@@ -208,8 +204,8 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar(""),
@@ -234,10 +230,8 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 }
 
 func TestSetSystemVariablesTx(t *testing.T) {
-	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "8.0.1")
 	executor.normalize = true
-
-	sqlparser.SetParserVersion("80001")
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
@@ -250,8 +244,8 @@ func TestSetSystemVariablesTx(t *testing.T) {
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar(""),
@@ -285,16 +279,14 @@ func TestSetSystemVariables(t *testing.T) {
 	executor, _, _, lookup, _ := createExecutorEnv(t)
 	executor.normalize = true
 
-	sqlparser.SetParserVersion("80001")
-
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
 
 	// Set @@sql_mode and execute a select statement. We should have SET_VAR in the select statement
 
 	lookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar(""),
@@ -327,7 +319,7 @@ func TestSetSystemVariables(t *testing.T) {
 
 	lookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "sql_safe_updates", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "sql_safe_updates", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar("0"),
@@ -350,7 +342,7 @@ func TestSetSystemVariables(t *testing.T) {
 
 	lookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "max_tmp_tables", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "max_tmp_tables", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar("4"),
@@ -373,7 +365,7 @@ func TestSetSystemVariables(t *testing.T) {
 
 	lookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "max_tmp_tables", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "max_tmp_tables", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar("1"),
@@ -402,8 +394,8 @@ func TestSetSystemVariablesWithReservedConnection(t *testing.T) {
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "orig", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "new", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar("only_full_group_by"),
@@ -614,7 +606,7 @@ func TestStreamBuffering(t *testing.T) {
 	sbclookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "col", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "col", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
@@ -646,7 +638,7 @@ func TestStreamBuffering(t *testing.T) {
 	wantResults := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "col", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "col", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 	}, {
 		Rows: [][]sqltypes.Value{{
@@ -690,7 +682,7 @@ func TestStreamLimitOffset(t *testing.T) {
 			conn.SetResults([]*sqltypes.Result{{
 				Fields: []*querypb.Field{
 					{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-					{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+					{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 					{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
 				},
 				Rows: returnRows[shard],
@@ -719,7 +711,7 @@ func TestStreamLimitOffset(t *testing.T) {
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 
 		Rows: [][]sqltypes.Value{{
@@ -792,14 +784,14 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "@@enable_system_settings", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "@@sql_select_limit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@transaction_mode", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "@@workload", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "@@read_after_write_gtid", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "@@transaction_mode", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "@@workload", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "@@read_after_write_gtid", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@session_track_gtids", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "@@ddl_strategy", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "@@migration_context", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
-			{Name: "@@socket", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "@@session_track_gtids", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "@@ddl_strategy", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "@@migration_context", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "@@socket", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			{Name: "@@query_timeout", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		Rows: [][]sqltypes.Value{{
@@ -884,7 +876,7 @@ func TestSelectUserDefinedVariable(t *testing.T) {
 	require.NoError(t, err)
 	wantResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "@foo", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "@foo", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar("bar"),
@@ -1077,7 +1069,7 @@ func TestSelectDatabase(t *testing.T) {
 		map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "database()", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "database()", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar("TestExecutor@primary"),
@@ -1563,7 +1555,7 @@ func TestStreamSelectIN(t *testing.T) {
 func createExecutor(ctx context.Context, serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	ex := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
+	ex := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, collations.MySQL8(), sqlparser.NewTestParser())
 	ex.SetQueryLogger(queryLogger)
 	return ex
 }
@@ -1920,7 +1912,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-				{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+				{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			},
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
@@ -1954,7 +1946,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "col1", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 		InsertID: 0,
 	}
@@ -2052,7 +2044,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
 				{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-				{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+				{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			},
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
@@ -2080,7 +2072,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+			{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 		},
 	}
 	for i := 0; i < 4; i++ {
@@ -3189,7 +3181,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	}
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
+	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, collations.MySQL8(), sqlparser.NewTestParser())
 	executor.SetQueryLogger(queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start
@@ -4124,7 +4116,7 @@ func TestSelectCFC(t *testing.T) {
 func TestSelectView(t *testing.T) {
 	executor, sbc, _, _, _ := createExecutorEnv(t)
 	// add the view to local vschema
-	err := executor.vschema.AddView(KsTestSharded, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id")
+	err := executor.vschema.AddView(KsTestSharded, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id", executor.vm.parser)
 	require.NoError(t, err)
 
 	executor.normalize = true

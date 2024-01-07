@@ -257,7 +257,7 @@ func (node *Delete) FormatFast(buf *TrackedBuffer) {
 	if node.Ignore {
 		buf.WriteString("ignore ")
 	}
-	if node.Targets != nil {
+	if node.Targets != nil && !node.isSingleAliasExpr() {
 		node.Targets.FormatFast(buf)
 		buf.WriteByte(' ')
 	}
@@ -416,6 +416,10 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 		alterType = "unthrottle"
 	case UnthrottleAllMigrationType:
 		alterType = "unthrottle all"
+	case ForceCutOverMigrationType:
+		alterType = "force_cutover"
+	case ForceCutOverAllMigrationType:
+		alterType = "force_cutover all"
 	}
 	buf.WriteByte(' ')
 	buf.WriteString(alterType)

@@ -264,6 +264,7 @@ message Workflow {
     message CopyState {
       string table = 1;
       string last_pk = 2;
+      int64 stream_id = 3;
     }
 
     message Log {
@@ -370,10 +371,25 @@ message ApplyVSchemaRequest {
   repeated string cells = 4;
   vschema.Keyspace v_schema = 5;
   string sql = 6;
+  // Strict returns an error if there are unknown vindex params.
+  bool strict = 7;
 }
 
 message ApplyVSchemaResponse {
   vschema.Keyspace v_schema = 1;
+  // UnknownVindexParams is a map of vindex name to params that were not recognized by the vindex
+  // type. E.g.:
+  //
+  // {
+  //   "lookup_vdx": {
+  //     "params": ["raed_lock", "not_verify"]
+  //   }
+  // }
+  map<string, ParamList> unknown_vindex_params = 2;
+
+  message ParamList {
+    repeated string params = 1;
+  }
 }
 
 message BackupRequest {
@@ -385,7 +401,7 @@ message BackupRequest {
   bool allow_primary = 2;
   // Concurrency specifies the number of compression/checksum jobs to run
   // simultaneously.
-  uint64 concurrency = 3;
+  int32 concurrency = 3;
   // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
   // then the backup becomes incremental and applies as of given position.
   string incremental_from_pos = 4;
@@ -410,7 +426,7 @@ message BackupShardRequest {
   bool allow_primary = 3;
   // Concurrency specifies the number of compression/checksum jobs to run
   // simultaneously.
-  uint64 concurrency = 4;
+  int32 concurrency = 4;
   // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
   // so that it's a backup that can be used for an upgrade.
   bool upgrade_safe = 5;
@@ -449,7 +465,6 @@ message CleanupSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
-
 message CompleteSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
@@ -473,9 +488,8 @@ message CreateKeyspaceRequest {
   // OBSOLETE topodata.KeyspaceIdType sharding_column_type = 5;
   reserved 5;
 
-  // ServedFroms specifies a set of db_type:keyspace pairs used to serve
-  // traffic for the keyspace.
-  repeated topodata.Keyspace.ServedFrom served_froms = 6;
+  // OBSOLETE: repeated topodata.Keyspace.ServedFrom served_froms = 6;
+  reserved 6;
 
   // Type is the type of the keyspace to create.
   topodata.KeyspaceType type = 7;
@@ -681,6 +695,15 @@ message FindAllShardsInKeyspaceRequest {
 
 message FindAllShardsInKeyspaceResponse {
   map<string, Shard> shards = 1;
+}
+
+message ForceCutOverSchemaMigrationRequest {
+  string keyspace = 1;
+  string uuid = 2;
+}
+
+message ForceCutOverSchemaMigrationResponse {
+  map<string, uint64> rows_affected_by_shard = 1;
 }
 
 message GetBackupsRequest {
@@ -1283,7 +1306,7 @@ message ReloadSchemaKeyspaceRequest {
   // Concurrency is the global concurrency across all shards in the keyspace
   // (so, at most this many tablets will be reloaded across the keyspace at any
   // given point).
-  uint32 concurrency = 4;
+  int32 concurrency = 4;
 }
 
 message ReloadSchemaKeyspaceResponse {
@@ -1296,7 +1319,7 @@ message ReloadSchemaShardRequest {
   string wait_position = 3;
   bool include_primary = 4;
   // Concurrency is the maximum number of tablets to reload at one time.
-  uint32 concurrency = 5;
+  int32 concurrency = 5;
 }
 
 message ReloadSchemaShardResponse {
@@ -1429,19 +1452,6 @@ message SetKeyspaceDurabilityPolicyRequest {
 }
 
 message SetKeyspaceDurabilityPolicyResponse {
-  // Keyspace is the updated keyspace record.
-  topodata.Keyspace keyspace = 1;
-}
-
-message SetKeyspaceServedFromRequest {
-  string keyspace = 1;
-  topodata.TabletType tablet_type = 2;
-  repeated string cells = 3;
-  bool remove = 4;
-  string source_keyspace = 5;
-}
-
-message SetKeyspaceServedFromResponse {
   // Keyspace is the updated keyspace record.
   topodata.Keyspace keyspace = 1;
 }
@@ -1730,6 +1740,7 @@ message VDiffCreateRequest {
   bool auto_retry = 17;
   bool verbose = 18;
   int64 max_report_sample_rows = 19;
+  vttime.Duration max_diff_duration = 20;
 }
 
 message VDiffCreateResponse {

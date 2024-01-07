@@ -34,6 +34,7 @@ type compiler struct {
 	dynamicTypes []ctype
 	asm          assembler
 	sqlmode      SQLMode
+	collationEnv *collations.Environment
 }
 
 type CompilerLog interface {
@@ -158,8 +159,12 @@ func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type
 
 	if sqltypes.IsDateOrTime(ct.Type) {
 		if preciseDatetime {
-			c.asm.Convert_Ti(offset)
-			return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
+			if ct.Size == 0 {
+				c.asm.Convert_Ti(offset)
+				return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
+			}
+			c.asm.Convert_Td(offset)
+			return ctype{Type: sqltypes.Decimal, Flag: ct.Flag, Col: collationNumeric, Size: ct.Size}
 		}
 		c.asm.Convert_Tf(offset)
 		return ctype{Type: sqltypes.Float64, Flag: ct.Flag, Col: collationNumeric}
@@ -415,7 +420,7 @@ func (c *compiler) compareNumericTypes(lt ctype, rt ctype) (swapped bool) {
 }
 
 func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
-	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type)
+	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type, c.collationEnv)
 	if err != nil {
 		return err
 	}
