@@ -213,6 +213,12 @@ func TestGetFlavor(t *testing.T) {
 			capability: capabilities.CheckConstraintsCapability,
 			isCapable:  false,
 		},
+		{
+			// Some ridiculous version
+			version:    "5914.234.17",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  false,
+		},
 	}
 	for _, tc := range testcases {
 		name := fmt.Sprintf("%s %v", tc.version, tc.capability)
