@@ -94,6 +94,11 @@ func TestServerVersionAtLeast(t *testing.T) {
 			parts:       []int{8, 0, 14},
 			expectError: true,
 		},
+		{
+			version:     "",
+			parts:       []int{8, 0, 14},
+			expectError: true,
+		},
 	}
 	for _, tc := range testcases {
 		result, err := ServerVersionAtLeast(tc.version, tc.parts...)
@@ -201,6 +206,12 @@ func TestGetFlavor(t *testing.T) {
 			version:    "8.0.20",
 			capability: capabilities.PerformanceSchemaDataLocksTableCapability,
 			isCapable:  true,
+		},
+		{
+			// What happens if server version is unspecified
+			version:    "",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  false,
 		},
 	}
 	for _, tc := range testcases {

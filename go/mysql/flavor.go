@@ -38,6 +38,8 @@ var (
 
 	// ErrNoPrimaryStatus means no status was returned by ShowPrimaryStatus().
 	ErrNoPrimaryStatus = errors.New("no master status")
+
+	ErrUnspecifiedServerVersion = vterrors.Errorf(vtrpc.Code_INTERNAL, "server version unspecified")
 )
 
 const (
@@ -148,6 +150,9 @@ var flavors = make(map[string]func() flavor)
 // Example: if input is []int{8, 0, 23}... the function returns 'true' if we're
 // on MySQL 8.0.23, 8.0.24, ...
 func ServerVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
+	if serverVersion == "" {
+		return false, ErrUnspecifiedServerVersion
+	}
 	versionPrefix := strings.Split(serverVersion, "-")[0]
 	versionTokens := strings.Split(versionPrefix, ".")
 	for i, part := range parts {
