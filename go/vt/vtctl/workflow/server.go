@@ -603,6 +603,10 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				maxVReplicationLagByWorkflow[workflow.Name] = vreplicationLag.Seconds()
 			}
 
+			workflow.WorkflowType = res.WorkflowType.String()
+			workflow.WorkflowSubType = res.WorkflowSubType.String()
+			workflow.DeferSecondaryKeys = res.DeferSecondaryKeys
+
 			// MaxVReplicationTransactionLag estimates the actual statement processing lag
 			// between the source and the target. If we are still processing source events it
 			// is the difference b/w current time and the timestamp of the last event. If
