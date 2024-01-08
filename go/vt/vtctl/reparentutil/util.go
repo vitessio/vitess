@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -32,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -219,7 +219,7 @@ func ShardReplicationStatuses(ctx context.Context, ts *topo.Server, tmc tmclient
 	if err != nil {
 		return nil, nil, err
 	}
-	tablets := topotools.CopyMapValues(tabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
+	tablets := maps.Values(tabletMap)
 
 	log.Infof("Gathering tablet replication status for: %v", tablets)
 	wg := sync.WaitGroup{}

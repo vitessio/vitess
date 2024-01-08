@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestDemuxResourceExhaustedErrors(t *testing.T) {
@@ -173,11 +174,17 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			num: EROutOfResources,
 			ss:  SSUnknownSQLState,
 		},
+		{
+			err: vterrors.Errorf(vtrpc.Code_RESOURCE_EXHAUSTED, "vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '1' for key 'PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: \"insert into test(id, `name`) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */)\", BindVars: {vtg1: \"type:INT64 value:\\\"1\\\"\"vtg2: \"type:VARCHAR value:\\\"(errno 1366) (sqlstate 10000)\\\"\"}"),
+			num: ERDupEntry,
+			ss:  SSConstraintViolation,
+		},
 	}
 
 	for _, tc := range tCases {
 		t.Run(tc.err.Error(), func(t *testing.T) {
-			err := NewSQLErrorFromError(tc.err).(*SQLError)
+			var err *SQLError
+			require.ErrorAs(t, NewSQLErrorFromError(tc.err), &err)
 			assert.Equal(t, tc.num, err.Number())
 			assert.Equal(t, tc.ss, err.SQLState())
 		})
