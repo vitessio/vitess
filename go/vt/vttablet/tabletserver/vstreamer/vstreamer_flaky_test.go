@@ -60,6 +60,7 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 type TestColumn struct {
 	name, dataType, colType string
 	len, charset            int64
+	dataTypeLowered         string
 }
 
 type TestFieldEvent struct {
@@ -157,6 +158,26 @@ func TestNoBlob(t *testing.T) {
 	runCases(t, nil, testcases, "current", nil)
 }
 
+func TestXSetAndEnum(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id int, val binary(4), color set('red','green','blue'), size enum('S','M','L'), primary key(id))",
+		},
+	}
+	defer ts.Close()
+	ts.Init()
+	tests := [][]*TestEvents{{
+		{"begin", []*TestEvent{beginEvent}},
+		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", []*TestEvent{RowEvent([]string{"1", "aaa", "5", "1"})}},
+		{"insert into t1 values (2, 'bbb', 'green', 'M')", []*TestEvent{RowEvent([]string{"2", "bbb", "2", "2"})}},
+		{"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')", []*TestEvent{RowEvent([]string{"3", "ccc", "7", "3"})}},
+		{"commit", []*TestEvent{gtidEvent, commitEvent}},
+	}}
+	ts.tests = tests
+	ts.Run()
+}
+
 func TestSetAndEnum(t *testing.T) {
 	execStatements(t, []string{
 		"create table t1(id int, val binary(4), color set('red','green','blue'), size enum('S','M','L'), primary key(id))",
@@ -183,7 +204,7 @@ func TestSetAndEnum(t *testing.T) {
 			{name: "size", dataType: "ENUM", colType: "enum('S','M','L')", len: 4, charset: 45},
 		},
 	}
-
+	log.Infof("field event: %s", fe.String())
 	testcases := []testcase{{
 		input: queries,
 		output: [][]string{{
@@ -197,6 +218,10 @@ func TestSetAndEnum(t *testing.T) {
 		}},
 	}}
 	runCases(t, nil, testcases, "current", nil)
+	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select id, val, color+0, size+0 from t1")
+	require.NoError(t, err)
+	require.NotNil(t, qr)
+	log.Infof("qr: %v", qr)
 }
 
 func TestCellValuePadding(t *testing.T) {
