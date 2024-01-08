@@ -626,6 +626,9 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 }
 
 func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
+	if srv == nil {
+		return
+	}
 	if srv.tcpListener != nil {
 		srv.tcpListener.Shutdown()
 		srv.tcpListener = nil
