@@ -833,7 +833,7 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 			}
 		}
 	}
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
 	capable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability)
 	if err != nil {
 		return err
@@ -2538,7 +2538,7 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 		return err
 	}
 	defer conn.Close()
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -3125,7 +3125,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 		return false, err
 	}
 	defer conn.Close()
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
 
 	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, capableOf)
 	if err != nil {

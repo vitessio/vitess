@@ -291,7 +291,7 @@ func TestCapability(t *testing.T) {
 	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
 
-	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 	require.NotNil(t, capableOf)
 	var err error
 	fastDropTable, err = capableOf(capabilities.FastDropTableFlavorCapability)
