@@ -45,6 +45,21 @@ func TestServerVersionAtLeast(t *testing.T) {
 			expect:  true,
 		},
 		{
+			version: "8.0.14-log",
+			parts:   []int{8, 0, 13},
+			expect:  true,
+		},
+		{
+			version: "8.0.14",
+			parts:   []int{8, 0, 15},
+			expect:  false,
+		},
+		{
+			version: "8.0.14-log",
+			parts:   []int{8, 0, 15},
+			expect:  false,
+		},
+		{
 			version: "8.0.14",
 			parts:   []int{7, 5, 20},
 			expect:  true,
@@ -76,6 +91,11 @@ func TestServerVersionAtLeast(t *testing.T) {
 		},
 		{
 			version:     "8.0.x",
+			parts:       []int{8, 0, 14},
+			expectError: true,
+		},
+		{
+			version:     "",
 			parts:       []int{8, 0, 14},
 			expectError: true,
 		},
@@ -173,6 +193,11 @@ func TestGetFlavor(t *testing.T) {
 			isCapable:  true,
 		},
 		{
+			version:    "8.0.20-log",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  true,
+		},
+		{
 			version:    "5.7.38",
 			capability: capabilities.PerformanceSchemaDataLocksTableCapability,
 			isCapable:  false,
@@ -182,11 +207,23 @@ func TestGetFlavor(t *testing.T) {
 			capability: capabilities.PerformanceSchemaDataLocksTableCapability,
 			isCapable:  true,
 		},
+		{
+			// What happens if server version is unspecified
+			version:    "",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  false,
+		},
+		{
+			// Some ridiculous version
+			version:    "5914.234.17",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  false,
+		},
 	}
 	for _, tc := range testcases {
 		name := fmt.Sprintf("%s %v", tc.version, tc.capability)
 		t.Run(name, func(t *testing.T) {
-			_, capableOf, _ := GetFlavor(tc.version, nil)
+			capableOf := ServerVersionCapableOf(tc.version)
 			isCapable, err := capableOf(tc.capability)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.isCapable, isCapable)

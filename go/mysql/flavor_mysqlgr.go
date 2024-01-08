@@ -249,26 +249,31 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlGRFlavor) supportsCapability(serverVersion string, capability capabilities.FlavorCapability) (bool, error) {
+func (f mysqlGRFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	serverVersionAtLeast := func(parts ...int) (bool, error) {
+		return ServerVersionAtLeast(f.serverVersion, parts...)
+	}
 	switch capability {
 	case capabilities.InstantDDLFlavorCapability,
 		capabilities.InstantExpandEnumCapability,
 		capabilities.InstantAddLastColumnFlavorCapability,
 		capabilities.InstantAddDropVirtualColumnFlavorCapability,
 		capabilities.InstantChangeColumnDefaultFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 0)
+		return serverVersionAtLeast(8, 0, 0)
 	case capabilities.InstantAddDropColumnFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 29)
+		return serverVersionAtLeast(8, 0, 29)
 	case capabilities.TransactionalGtidExecutedFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
+		return serverVersionAtLeast(8, 0, 17)
 	case capabilities.FastDropTableFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
+		return serverVersionAtLeast(8, 0, 23)
 	case capabilities.MySQLJSONFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 5, 7, 0)
+		return serverVersionAtLeast(5, 7, 0)
 	case capabilities.MySQLUpgradeInServerFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
+		return serverVersionAtLeast(8, 0, 16)
 	case capabilities.DynamicRedoLogCapacityFlavorCapability:
-		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
+		return serverVersionAtLeast(8, 0, 30)
+	case capabilities.CheckConstraintsCapability:
+		return serverVersionAtLeast(8, 0, 16)
 	default:
 		return false, nil
 	}
