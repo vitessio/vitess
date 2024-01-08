@@ -500,15 +500,11 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	// - targetShardsByWorkflow[workflow.Name] != nil
 	// - workflow.ShardStatuses != nil
 	scanWorkflow := func(ctx context.Context, workflow *vtctldatapb.Workflow, res *tabletmanagerdatapb.ReadVReplicationWorkflowResponse, tablet *topo.TabletInfo) error {
-		span, ctx := trace.NewSpan(ctx, "workflow.Server.scanWorkflow")
-		defer span.Finish()
-
-		span.Annotate("keyspace", req.Keyspace)
-		span.Annotate("shard", tablet.Shard)
-		span.Annotate("active_only", req.ActiveOnly)
-		span.Annotate("workflow", workflow.Name)
-		span.Annotate("tablet_alias", tablet.AliasString())
-
+		// This is not called concurrently, but we still protect the maps to ensure
+		// that we're concurrency-safe in the face of future changes (e.g. where other
+		// things are running concurrently with this which also access these maps).
+		m.Lock()
+		defer m.Unlock()
 		for _, rstream := range res.Streams {
 			// The value in the pos column can be compressed and thus not
 			// have a valid GTID consisting of valid UTF-8 characters so we
@@ -548,12 +544,6 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			if copyState, ok := copyStatesByShardStreamId[shardStreamId]; ok {
 				stream.CopyStates = copyState
 			}
-
-			// At this point, we're going to start modifying the maps defined
-			// outside this function, as well as fields on the passed-in Workflow
-			// pointer. Since we're running concurrently, take the lock.
-			m.Lock()
-			defer m.Unlock()
 
 			switch {
 			case strings.Contains(strings.ToLower(stream.Message), "error"):
@@ -645,11 +635,6 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		return nil
 	}
 
-	var (
-		scanWorkflowWg     sync.WaitGroup
-		scanWorkflowErrors concurrency.FirstErrorRecorder
-	)
-
 	for tablet, result := range results {
 		// In the old implementation, we knew we had at most one (0 <= N <= 1)
 		// workflow for each shard primary we queried. There might be multiple
@@ -663,7 +648,6 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		// haven't seen yet for that shard primary. We use the workflow name to
 		// dedupe for this.
 		for _, wfres := range result.Workflows {
-			wfres := wfres // https://golang.org/doc/faq#closures_and_goroutines
 			workflowName := wfres.Workflow
 			workflow, ok := workflowsMap[workflowName]
 			if !ok {
@@ -677,19 +661,10 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				targetShardsByWorkflow[workflowName] = sets.New[string]()
 			}
 
-			scanWorkflowWg.Add(1)
-			go func(ctx context.Context, workflow *vtctldatapb.Workflow, res *tabletmanagerdatapb.ReadVReplicationWorkflowResponse, tablet *topo.TabletInfo) {
-				defer scanWorkflowWg.Done()
-				if err := scanWorkflow(ctx, workflow, res, tablet); err != nil {
-					scanWorkflowErrors.RecordError(err)
-				}
-			}(ctx, workflow, wfres, tablet)
+			if err := scanWorkflow(ctx, workflow, wfres, tablet); err != nil {
+				return nil, err
+			}
 		}
-	}
-
-	scanWorkflowWg.Wait()
-	if scanWorkflowErrors.HasErrors() {
-		return nil, scanWorkflowErrors.Error()
 	}
 
 	var (
