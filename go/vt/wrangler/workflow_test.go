@@ -378,8 +378,8 @@ func TestPartialMoveTables(t *testing.T) {
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 }
 
-// TestPartialMoveTablesSpecifiedShards is a version of TestPartialMoveTables which uses the --shards option.
-func TestPartialMoveTablesShardOffset(t *testing.T) {
+// TestPartialMoveTablesShardSubset is a version of TestPartialMoveTables which uses the --shards option.
+func TestPartialMoveTablesShardSubset(t *testing.T) {
 	ctx := context.Background()
 	shards := []string{"-80", "80-"}
 	shardToMove := shards[0:1]

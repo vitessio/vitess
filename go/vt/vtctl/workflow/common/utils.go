@@ -37,21 +37,19 @@ func GetShards(ctx context.Context, ts *topo.Server, keyspace string, shardSubse
 
 	if len(shardSubset) == 0 {
 		return allShards, nil
-	} else {
-		for _, shard := range shardSubset {
-			// Validate that the provided shards are part of the keyspace.
-			found := false
-			for _, shard2 := range allShards {
-				if shard == shard2 {
-					found = true
-				}
-			}
-			if !found {
-				return nil, fmt.Errorf("shard %s not found in keyspace %s", shard, keyspace)
-			}
-		}
-		log.Infof("Selecting subset of shards in keyspace %s: %d from %d :: %+v",
-			keyspace, len(shardSubset), len(allShards), shardSubset)
-		return shardSubset, nil
 	}
+	existingShards := make(map[string]bool, len(allShards))
+	for _, shard := range allShards {
+		existingShards[shard] = true
+	}
+	// Validate that the provided shards are part of the keyspace.
+	for _, shard := range shardSubset {
+		_, found := existingShards[shard]
+		if !found {
+			return nil, fmt.Errorf("shard %s not found in keyspace %s", shard, keyspace)
+		}
+	}
+	log.Infof("Selecting subset of shards in keyspace %s: %d from %d :: %+v",
+		keyspace, len(shardSubset), len(allShards), shardSubset)
+	return shardSubset, nil
 }
