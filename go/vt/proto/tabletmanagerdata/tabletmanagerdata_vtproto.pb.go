@@ -18280,7 +18280,7 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Concurrency |= int64(b&0x7F) << shift
+				m.Concurrency |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

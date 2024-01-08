@@ -1254,7 +1254,7 @@ func tmRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmcl
 // Backup / restore related methods
 //
 
-var testBackupConcurrency = int64(24)
+var testBackupConcurrency = int32(24)
 var testBackupAllowPrimary = false
 var testBackupCalled = false
 var testRestoreFromBackupCalled = false
@@ -1271,7 +1271,7 @@ func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request
 }
 
 func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	req := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(testBackupConcurrency), AllowPrimary: testBackupAllowPrimary}
+	req := &tabletmanagerdatapb.BackupRequest{Concurrency: testBackupConcurrency, AllowPrimary: testBackupAllowPrimary}
 	stream, err := client.Backup(ctx, tablet, req)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
@@ -1281,7 +1281,7 @@ func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletMa
 }
 
 func tmRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	req := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(testBackupConcurrency), AllowPrimary: testBackupAllowPrimary}
+	req := &tabletmanagerdatapb.BackupRequest{Concurrency: testBackupConcurrency, AllowPrimary: testBackupAllowPrimary}
 	stream, err := client.Backup(ctx, tablet, req)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)

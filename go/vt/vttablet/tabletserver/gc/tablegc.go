@@ -26,9 +26,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -189,7 +189,7 @@ func (collector *TableGC) Open() (err error) {
 		return err
 	}
 	defer conn.Close()
-	serverSupportsFastDrops, err := conn.SupportsCapability(mysql.FastDropTableFlavorCapability)
+	serverSupportsFastDrops, err := conn.SupportsCapability(capabilities.FastDropTableFlavorCapability)
 	if err != nil {
 		return err
 	}

@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestMultiEqual(t *testing.T) {
@@ -38,4 +40,41 @@ func TestMultiEqual(t *testing.T) {
 
 	qr = mcmp.Exec("delete from user_tbl where (id, region_id) in ((1,1), (2,4))")
 	assert.EqualValues(t, 1, qr.RowsAffected)
+}
+
+// TestMultiTableDelete executed multi-table delete queries
+func TestMultiTableDelete(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// initial rows
+	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
+	mcmp.Exec("insert into oevent_tbl(oid, ename) values (1,'a'), (2,'b'), (3,'a'), (4,'c')")
+
+	// check rows
+	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
+		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
+	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
+		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("a")] [INT64(4) VARCHAR("c")]]`)
+
+	// multi table delete
+	qr := mcmp.Exec(`delete o from order_tbl o join oevent_tbl ev where o.oid = ev.oid and ev.ename = 'a'`)
+	assert.EqualValues(t, 2, qr.RowsAffected)
+
+	// check rows
+	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
+		`[[INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(4) INT64(55)]]`)
+	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
+		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("a")] [INT64(4) VARCHAR("c")]]`)
+
+	qr = mcmp.Exec(`delete o from order_tbl o join oevent_tbl ev where o.cust_no = ev.oid`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
+
+	// check rows
+	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
+		`[[INT64(2) INT64(4) INT64(55)]]`)
+	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
+		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("a")] [INT64(4) VARCHAR("c")]]`)
 }

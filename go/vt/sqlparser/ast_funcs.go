@@ -2551,3 +2551,11 @@ func (node *Delete) isSingleAliasExpr() bool {
 	_, isAliasExpr := node.TableExprs[0].(*AliasedTableExpr)
 	return isAliasExpr
 }
+
+func (node TableExprs) MultiTable() bool {
+	if len(node) > 1 {
+		return true
+	}
+	_, singleTbl := node[0].(*AliasedTableExpr)
+	return !singleTbl
+}

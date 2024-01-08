@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -601,9 +602,9 @@ func needInnoDBRedoLogSubdir() (needIt bool, err error) {
 		return needIt, err
 	}
 	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
-	_, capableOf, _ := mysql.GetFlavor(versionStr, nil)
+	capableOf := mysql.ServerVersionCapableOf(versionStr)
 	if capableOf == nil {
 		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
 	}
-	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
+	return capableOf(capabilities.DynamicRedoLogCapacityFlavorCapability)
 }
