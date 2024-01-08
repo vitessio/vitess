@@ -193,6 +193,7 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 			// at the shard level, so reads are effectively switched on the
 			// shard when writes are switched.
 			if len(ws.ShardsAlreadySwitched) > 0 && len(ws.ShardsNotYetSwitched) > 0 {
+				sort.Strings(ws.ShardsAlreadySwitched)
 				stateInfo = append(stateInfo, fmt.Sprintf("Reads partially switched, for shards: %s", strings.Join(ws.ShardsAlreadySwitched, ",")))
 				stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(ws.ShardsAlreadySwitched, ",")))
 			} else {

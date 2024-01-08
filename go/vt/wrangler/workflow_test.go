@@ -381,15 +381,15 @@ func TestPartialMoveTables(t *testing.T) {
 // TestPartialMoveTablesShardSubset is a version of TestPartialMoveTables which uses the --shards option.
 func TestPartialMoveTablesShardSubset(t *testing.T) {
 	ctx := context.Background()
-	shards := []string{"-80", "80-"}
-	shardToMove := shards[0:1]
-	otherShard := shards[1:]
+	shards := []string{"-40", "40-80", "80-c0", "c0-"}
+	shardsToMove := shards[0:2]
+	otherShards := shards[2:]
 	p := &VReplicationWorkflowParams{
 		Workflow:                        "test",
 		WorkflowType:                    MoveTablesWorkflow,
 		SourceKeyspace:                  "ks1",
-		SourceShards:                    shardToMove, // shard by shard
-		TargetShards:                    shardToMove, // shard by shard
+		SourceShards:                    shardsToMove, // shard by shard
+		TargetShards:                    shardsToMove, // shard by shard
 		TargetKeyspace:                  "ks2",
 		Tables:                          "t1,t2",
 		Cells:                           "cell1,cell2",
@@ -398,7 +398,7 @@ func TestPartialMoveTablesShardSubset(t *testing.T) {
 		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
 		OnDDL:                           binlogdatapb.OnDDLAction_STOP.String(),
 	}
-	tme := newTestTablePartialMigrater(ctx, t, shards, shardToMove, "select * %s")
+	tme := newTestTablePartialMigrater(ctx, t, shards, shardsToMove, "select * %s")
 	defer tme.stopTablets(t)
 
 	// Save some unrelated shard routing rules to be sure that
@@ -421,12 +421,12 @@ func TestPartialMoveTablesShardSubset(t *testing.T) {
 	require.NoError(t, err)
 
 	// Providing an incorrect shard should result in the workflow not being found.
-	p.ShardSubset = otherShard
+	p.ShardSubset = otherShards
 	wf, err := tme.wr.NewVReplicationWorkflow(ctx, MoveTablesWorkflow, p)
 	require.NoError(t, err)
 	require.Nil(t, wf.ts)
 
-	p.ShardSubset = shardToMove
+	p.ShardSubset = shardsToMove
 	wf, err = tme.wr.NewVReplicationWorkflow(ctx, MoveTablesWorkflow, p)
 	require.NoError(t, err)
 	require.NotNil(t, wf)
@@ -446,9 +446,9 @@ func TestPartialMoveTablesShardSubset(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	expectMoveTablesQueries(t, tme, p)
 	tme.expectNoPreviousJournals()
-	wf.params.ShardSubset = shardToMove
+	wf.params.ShardSubset = shardsToMove
 	require.NoError(t, testSwitchForward(t, wf))
-	require.Equal(t, "Reads partially switched, for shards: -80. Writes partially switched, for shards: -80", wf.CurrentState())
+	require.Equal(t, "Reads partially switched, for shards: -40,40-80. Writes partially switched, for shards: -40,40-80", wf.CurrentState())
 	require.NoError(t, err)
 
 	tme.expectNoPreviousJournals()
