@@ -130,6 +130,9 @@ func evalToSQLValueWithType(e eval, resultType sqltypes.Type) sqltypes.Value {
 			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
 		}
 	default:
+		if e == nil {
+			return sqltypes.MakeTrusted(resultType, nil)
+		}
 		return sqltypes.MakeTrusted(resultType, e.ToRawBytes())
 	}
 	return sqltypes.NULL
