@@ -120,7 +120,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	expected := `[[VARCHAR("dual")] [VARCHAR("main")]]`
+	expected := `[[VARCHAR("main")]]`
 
 	// ensuring our initial table "main" is in the schema
 	utils.AssertMatchesWithTimeout(t, conn,
@@ -133,7 +133,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	// create a new table which is not part of the VSchema
 	utils.Exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
 
-	expected = `[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("new_table_tracked")]]`
+	expected = `[[VARCHAR("main")] [VARCHAR("new_table_tracked")]]`
 
 	// waiting for the vttablet's schema_reload interval to kick in
 	utils.AssertMatchesWithTimeout(t, conn,
@@ -168,7 +168,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	utils.Exec(t, conn, `drop table new_table_tracked`)
 
 	// waiting for the vttablet's schema_reload interval to kick in
-	expected = `[[VARCHAR("dual")] [VARCHAR("main")]]`
+	expected = `[[VARCHAR("main")]]`
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
 		expected,
@@ -193,7 +193,7 @@ func TestCaseSensitiveSchemaTracking(t *testing.T) {
 	// ensuring our initial table "main" is in the schema
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("dual")] [VARCHAR("main")]]`,
+		`[[VARCHAR("main")]]`,
 		100*time.Millisecond,
 		30*time.Second,
 		"initial tables not found in vschema")
@@ -206,7 +206,7 @@ func TestCaseSensitiveSchemaTracking(t *testing.T) {
 	// Wait for schema tracking to be caught up
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("t1")] [VARCHAR("T1")]]`,
+		`[[VARCHAR("main")] [VARCHAR("t1")] [VARCHAR("T1")]]`,
 		100*time.Millisecond,
 		30*time.Second,
 		"schema tracking didn't track both the tables")
