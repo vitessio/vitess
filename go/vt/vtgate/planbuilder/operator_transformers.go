@@ -73,9 +73,27 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformHashJoin(ctx, op)
 	case *operators.Sequential:
 		return transformSequential(ctx, op)
+	case *operators.DeleteMulti:
+		return transformDeleteMulti(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformDeleteMulti(ctx *plancontext.PlanningContext, op *operators.DeleteMulti) (logicalPlan, error) {
+	input, err := transformToLogicalPlan(ctx, op.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	del, err := transformToLogicalPlan(ctx, op.Delete)
+	if err != nil {
+		return nil, err
+	}
+	return &deleteMulti{
+		input:  input,
+		delete: del,
+	}, nil
 }
 
 func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (logicalPlan, error) {
@@ -527,7 +545,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	case *sqlparser.Update:
 		return buildUpdateLogicalPlan(ctx, op, dmlOp, stmt, hints)
 	case *sqlparser.Delete:
-		return buildDeleteLogicalPlan(ctx, op, dmlOp, hints)
+		return buildDeleteLogicalPlan(ctx, op, dmlOp, stmt, hints)
 	case *sqlparser.Insert:
 		return buildInsertLogicalPlan(op, dmlOp, stmt, hints)
 	default:
@@ -689,24 +707,24 @@ func buildUpdateLogicalPlan(
 	return &primitiveWrapper{prim: e}, nil
 }
 
-func buildDeleteLogicalPlan(
-	ctx *plancontext.PlanningContext,
-	rb *operators.Route,
-	dmlOp operators.Operator,
-	hints *queryHints,
-) (logicalPlan, error) {
+func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Route, dmlOp operators.Operator, stmt *sqlparser.Delete, hints *queryHints) (logicalPlan, error) {
 	del := dmlOp.(*operators.Delete)
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
 	rb.Routing.UpdateRoutingParams(ctx, rp)
+	vtable := del.Target.VTable
 	edml := &engine.DML{
-		Query:             generateQuery(del.AST),
-		TableNames:        []string{del.VTable.Name.String()},
-		Vindexes:          del.VTable.Owned,
-		OwnedVindexQuery:  del.OwnedVindexQuery,
+		Query:             generateQuery(stmt),
+		TableNames:        []string{vtable.Name.String()},
+		Vindexes:          vtable.Owned,
 		RoutingParameters: rp,
 	}
 
-	transformDMLPlan(del.VTable, edml, rb.Routing, del.OwnedVindexQuery != "")
+	hasLookupVindex := del.OwnedVindexQuery != nil
+	if hasLookupVindex {
+		edml.OwnedVindexQuery = sqlparser.String(del.OwnedVindexQuery)
+	}
+
+	transformDMLPlan(vtable, edml, rb.Routing, hasLookupVindex)
 
 	e := &engine.Delete{
 		DML: edml,

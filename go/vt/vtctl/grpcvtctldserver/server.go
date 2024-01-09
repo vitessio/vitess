@@ -364,14 +364,42 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		vs = req.VSchema
 	}
 
-	if req.DryRun { // we return what was passed in and parsed, rather than current
-		return &vtctldatapb.ApplyVSchemaResponse{VSchema: vs}, nil
-	}
-
-	_, err = vindexes.BuildKeyspace(vs, s.ws.SQLParser())
+	ksVs, err := vindexes.BuildKeyspace(vs, s.ws.SQLParser())
 	if err != nil {
 		err = vterrors.Wrapf(err, "BuildKeyspace(%s)", req.Keyspace)
 		return nil, err
+	}
+	response := &vtctldatapb.ApplyVSchemaResponse{
+		VSchema:             vs,
+		UnknownVindexParams: make(map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList),
+	}
+
+	// Attach unknown Vindex params to the response.
+	var vdxNames []string
+	var unknownVindexParams []string
+	for name := range ksVs.Vindexes {
+		vdxNames = append(vdxNames, name)
+	}
+	sort.Strings(vdxNames)
+	for _, name := range vdxNames {
+		vdx := ksVs.Vindexes[name]
+		if val, ok := vdx.(vindexes.ParamValidating); ok {
+			ups := val.UnknownParams()
+			if len(ups) == 0 {
+				continue
+			}
+			response.UnknownVindexParams[name] = &vtctldatapb.ApplyVSchemaResponse_ParamList{Params: ups}
+			unknownVindexParams = append(unknownVindexParams, fmt.Sprintf("%s (%s)", name, strings.Join(ups, ", ")))
+		}
+	}
+
+	if req.Strict && len(unknownVindexParams) > 0 { // return early if unknown params found in strict mode
+		err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongArguments, "unknown vindex params: %s", strings.Join(unknownVindexParams, "; "))
+		return response, err
+	}
+
+	if req.DryRun { // return early if dry run
+		return response, err
 	}
 
 	if err = s.ts.SaveVSchema(ctx, req.Keyspace, vs); err != nil {
@@ -390,7 +418,8 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		err = vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
 		return nil, err
 	}
-	return &vtctldatapb.ApplyVSchemaResponse{VSchema: updatedVS}, nil
+	response.VSchema = updatedVS
+	return response, nil
 }
 
 // Backup is part of the vtctlservicepb.VtctldServer interface.
@@ -486,7 +515,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 	Send(resp *vtctldatapb.BackupResponse) error
 }) error {
 	r := &tabletmanagerdatapb.BackupRequest{
-		Concurrency:        int64(req.Concurrency),
+		Concurrency:        req.Concurrency,
 		AllowPrimary:       req.AllowPrimary,
 		IncrementalFromPos: req.IncrementalFromPos,
 		UpgradeSafe:        req.UpgradeSafe,
@@ -4830,6 +4859,7 @@ func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCr
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("tables", req.Tables)
 	span.Annotate("auto_retry", req.AutoRetry)
+	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 
 	resp, err = s.ws.VDiffCreate(ctx, req)
 	return resp, err

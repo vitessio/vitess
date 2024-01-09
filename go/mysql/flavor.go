@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -37,26 +38,8 @@ var (
 
 	// ErrNoPrimaryStatus means no status was returned by ShowPrimaryStatus().
 	ErrNoPrimaryStatus = errors.New("no master status")
-)
 
-type FlavorCapability int
-
-const (
-	NoneFlavorCapability          FlavorCapability = iota // default placeholder
-	FastDropTableFlavorCapability                         // supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
-	TransactionalGtidExecutedFlavorCapability
-	InstantDDLFlavorCapability
-	InstantAddLastColumnFlavorCapability
-	InstantAddDropVirtualColumnFlavorCapability
-	InstantAddDropColumnFlavorCapability
-	InstantChangeColumnDefaultFlavorCapability
-	InstantExpandEnumCapability
-	MySQLJSONFlavorCapability
-	MySQLUpgradeInServerFlavorCapability
-	DynamicRedoLogCapacityFlavorCapability // supported in MySQL 8.0.30 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html
-	DisableRedoLogFlavorCapability         // supported in MySQL 8.0.21 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-21.html
-	CheckConstraintsCapability             // supported in MySQL 8.0.16 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-16.html
-	PerformanceSchemaDataLocksTableCapability
+	ErrUnspecifiedServerVersion = vterrors.Errorf(vtrpc.Code_INTERNAL, "server version unspecified")
 )
 
 const (
@@ -155,10 +138,8 @@ type flavor interface {
 	baseShowTables() string
 	baseShowTablesWithSizes() string
 
-	supportsCapability(serverVersion string, capability FlavorCapability) (bool, error)
+	supportsCapability(capability capabilities.FlavorCapability) (bool, error)
 }
-
-type CapableOf func(capability FlavorCapability) (bool, error)
 
 // flavors maps flavor names to their implementation.
 // Flavors need to register only if they support being specified in the
@@ -169,6 +150,9 @@ var flavors = make(map[string]func() flavor)
 // Example: if input is []int{8, 0, 23}... the function returns 'true' if we're
 // on MySQL 8.0.23, 8.0.24, ...
 func ServerVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
+	if serverVersion == "" {
+		return false, ErrUnspecifiedServerVersion
+	}
 	versionPrefix := strings.Split(serverVersion, "-")[0]
 	versionTokens := strings.Split(versionPrefix, ".")
 	for i, part := range parts {
@@ -189,6 +173,13 @@ func ServerVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
 	return true, nil
 }
 
+// flavorCapableOf is a utility function that returns a CapableOf function for a given flavor
+func flavorCapableOf(f flavor) capabilities.CapableOf {
+	return func(capability capabilities.FlavorCapability) (bool, error) {
+		return f.supportsCapability(capability)
+	}
+}
+
 // GetFlavor fills in c.Flavor. If the params specify the flavor,
 // that is used. Otherwise, we auto-detect.
 //
@@ -201,32 +192,36 @@ func ServerVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
 // Note on such servers, 'select version()' would return 10.0.21-MariaDB-...
 // as well (not matching what c.ServerVersion is, but matching after we remove
 // the prefix).
-func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capableOf CapableOf, canonicalVersion string) {
+func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capableOf capabilities.CapableOf, canonicalVersion string) {
 	canonicalVersion = serverVersion
 	switch {
 	case flavorFunc != nil:
 		f = flavorFunc()
 	case strings.HasPrefix(serverVersion, mariaDBReplicationHackPrefix):
 		canonicalVersion = serverVersion[len(mariaDBReplicationHackPrefix):]
-		f = mariadbFlavor101{}
+		f = mariadbFlavor101{mariadbFlavor{serverVersion: canonicalVersion}}
 	case strings.Contains(serverVersion, mariaDBVersionString):
 		mariadbVersion, err := strconv.ParseFloat(serverVersion[:4], 64)
 		if err != nil || mariadbVersion < 10.2 {
-			f = mariadbFlavor101{}
+			f = mariadbFlavor101{mariadbFlavor{serverVersion: fmt.Sprintf("%f", mariadbVersion)}}
 		} else {
-			f = mariadbFlavor102{}
+			f = mariadbFlavor102{mariadbFlavor{serverVersion: fmt.Sprintf("%f", mariadbVersion)}}
 		}
 	case strings.HasPrefix(serverVersion, mysql57VersionPrefix):
-		f = mysqlFlavor57{}
+		f = mysqlFlavor57{mysqlFlavor{serverVersion: serverVersion}}
 	case strings.HasPrefix(serverVersion, mysql80VersionPrefix):
-		f = mysqlFlavor80{}
+		f = mysqlFlavor80{mysqlFlavor{serverVersion: serverVersion}}
 	default:
-		f = mysqlFlavor56{}
+		f = mysqlFlavor56{mysqlFlavor{serverVersion: serverVersion}}
 	}
-	return f,
-		func(capability FlavorCapability) (bool, error) {
-			return f.supportsCapability(serverVersion, capability)
-		}, canonicalVersion
+	return f, flavorCapableOf(f), canonicalVersion
+}
+
+// ServerVersionCapableOf is a convenience function that returns a CapableOf function given a server version.
+// It is a shortcut for GetFlavor(serverVersion, nil).
+func ServerVersionCapableOf(serverVersion string) (capableOf capabilities.CapableOf) {
+	_, capableOf, _ = GetFlavor(serverVersion, nil)
+	return capableOf
 }
 
 // fillFlavor fills in c.Flavor. If the params specify the flavor,
@@ -474,8 +469,8 @@ func (c *Conn) BaseShowTablesWithSizes() string {
 }
 
 // SupportsCapability checks if the database server supports the given capability
-func (c *Conn) SupportsCapability(capability FlavorCapability) (bool, error) {
-	return c.flavor.supportsCapability(c.ServerVersion, capability)
+func (c *Conn) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return c.flavor.supportsCapability(capability)
 }
 
 func init() {

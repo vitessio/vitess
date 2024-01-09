@@ -21,12 +21,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/olekukonko/tablewriter"
+
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"github.com/olekukonko/tablewriter"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // vexecPlan contains the final query to be sent to the tablets
@@ -83,7 +84,7 @@ func (p vreplicationPlanner) exec(
 	return qr, nil
 }
 func (p vreplicationPlanner) dryRun(ctx context.Context) error {
-	rsr, err := p.vx.wr.getStreams(p.vx.ctx, p.vx.workflow, p.vx.keyspace)
+	rsr, err := p.vx.wr.getStreams(p.vx.ctx, p.vx.workflow, p.vx.keyspace, nil)
 	if err != nil {
 		return err
 	}

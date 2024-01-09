@@ -21,6 +21,8 @@ import (
 	"io"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -96,12 +98,97 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return optimizeQueryGraph(ctx, in)
 		case *LockAndComment:
 			return pushLockAndComment(in)
+		case *Delete:
+			return tryPushDelete(ctx, in)
 		default:
 			return in, NoRewrite
 		}
 	}
 
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func tryPushDelete(ctx *plancontext.PlanningContext, in *Delete) (Operator, *ApplyResult) {
+	switch src := in.Source.(type) {
+	case *Route:
+		return pushDeleteUnderRoute(in, src)
+	case *ApplyJoin:
+		return pushDeleteUnderJoin(ctx, in, src)
+	}
+	return in, nil
+}
+
+func pushDeleteUnderRoute(in *Delete, src *Route) (Operator, *ApplyResult) {
+	if in.Limit != nil && !src.IsSingleShardOrByDestination() {
+		panic(vterrors.VT12001("multi shard DELETE with LIMIT"))
+	}
+
+	switch r := src.Routing.(type) {
+	case *SequenceRouting:
+		// Sequences are just unsharded routes
+		src.Routing = &AnyShardRouting{
+			keyspace: r.keyspace,
+		}
+	case *AnyShardRouting:
+		// References would have an unsharded source
+		// Alternates are not required.
+		r.Alternates = nil
+	}
+	return Swap(in, src, "pushed delete under route")
+}
+
+func pushDeleteUnderJoin(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
+	if len(in.Target.VTable.PrimaryKey) == 0 {
+		panic(vterrors.VT09015())
+	}
+	dm := &DeleteMulti{}
+	var selExprs sqlparser.SelectExprs
+	var leftComp sqlparser.ValTuple
+	for _, col := range in.Target.VTable.PrimaryKey {
+		colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
+		selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
+		leftComp = append(leftComp, colName)
+		ctx.SemTable.Recursive[colName] = in.Target.ID
+	}
+
+	sel := &sqlparser.Select{
+		SelectExprs: selExprs,
+		OrderBy:     in.OrderBy,
+		Limit:       in.Limit,
+		Lock:        sqlparser.ForUpdateLock,
+	}
+	dm.Source = newHorizon(src, sel)
+
+	var targetTable *Table
+	_ = Visit(src, func(operator Operator) error {
+		if tbl, ok := operator.(*Table); ok && tbl.QTable.ID == in.Target.ID {
+			targetTable = tbl
+			return io.EOF
+		}
+		return nil
+	})
+	if targetTable == nil {
+		panic(vterrors.VT13001("target DELETE table not found"))
+	}
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, leftComp, sqlparser.ListArg(engine.DM_VALS), nil)
+	targetQT := targetTable.QTable
+	qt := &QueryTable{
+		ID:         targetQT.ID,
+		Alias:      sqlparser.CloneRefOfAliasedTableExpr(targetQT.Alias),
+		Table:      sqlparser.CloneTableName(targetQT.Table),
+		Predicates: []sqlparser.Expr{compExpr},
+	}
+
+	qg := &QueryGraph{Tables: []*QueryTable{qt}}
+	in.Source = qg
+
+	if in.OwnedVindexQuery != nil {
+		in.OwnedVindexQuery.From = sqlparser.TableExprs{targetQT.Alias}
+		in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
+	}
+	dm.Delete = in
+
+	return dm, Rewrote("Delete Multi on top of Delete and ApplyJoin")
 }
 
 func pushLockAndComment(l *LockAndComment) (Operator, *ApplyResult) {

@@ -26,6 +26,10 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+var StatusOptions = struct {
+	Shards []string
+}{}
+
 func GetStatusCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:                   "status",
@@ -49,6 +53,7 @@ func commandStatus(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.WorkflowStatusRequest{
 		Keyspace: BaseOptions.TargetKeyspace,
 		Workflow: BaseOptions.Workflow,
+		Shards:   StatusOptions.Shards,
 	}
 	resp, err := GetClient().WorkflowStatus(GetCommandCtx(), req)
 	if err != nil {

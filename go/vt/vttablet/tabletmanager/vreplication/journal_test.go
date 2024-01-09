@@ -81,9 +81,7 @@ func TestJournalOneToOne(t *testing.T) {
 	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
-	if _, err := playerEngine.Exec("delete from _vt.vreplication"); err != nil {
-		t.Fatal(err)
-	}
+	deleteAllVReplicationStreams(t)
 	expectDeleteQueries(t)
 }
 
@@ -150,9 +148,7 @@ func TestJournalOneToMany(t *testing.T) {
 	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
-	if _, err := playerEngine.Exec("delete from _vt.vreplication"); err != nil {
-		t.Fatal(err)
-	}
+	deleteAllVReplicationStreams(t)
 	expectDeleteQueries(t)
 }
 
@@ -211,9 +207,7 @@ func TestJournalTablePresent(t *testing.T) {
 	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
-	if _, err := playerEngine.Exec("delete from _vt.vreplication"); err != nil {
-		t.Fatal(err)
-	}
+	deleteAllVReplicationStreams(t)
 	expectDeleteQueries(t)
 }
 
@@ -264,9 +258,7 @@ func TestJournalTableNotPresent(t *testing.T) {
 	defer execStatements(t, []string{"delete from _vt.resharding_journal"})
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
-	if _, err := playerEngine.Exec("delete from _vt.vreplication"); err != nil {
-		t.Fatal(err)
-	}
+	deleteAllVReplicationStreams(t)
 	expectDeleteQueries(t)
 }
 
@@ -326,8 +318,6 @@ func TestJournalTableMixed(t *testing.T) {
 	))
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
-	if _, err := playerEngine.Exec("delete from _vt.vreplication"); err != nil {
-		t.Fatal(err)
-	}
+	deleteAllVReplicationStreams(t)
 	expectDeleteQueries(t)
 }

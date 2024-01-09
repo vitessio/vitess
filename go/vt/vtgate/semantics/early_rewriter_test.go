@@ -573,3 +573,33 @@ func TestCTEToDerivedTableRewrite(t *testing.T) {
 		})
 	}
 }
+
+// TestDeleteTargetTableRewrite checks that delete target rewrite is done correctly.
+func TestDeleteTargetTableRewrite(t *testing.T) {
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		target string
+	}{{
+		sql:    "delete from t",
+		target: "t",
+	}, {
+		sql:    "delete from t t1",
+		target: "t1",
+	}, {
+		sql:    "delete t2 from t t1, t t2",
+		target: "t2",
+	}, {
+		sql:    "delete t2,t1 from t t1, t t2",
+		target: "t2, t1",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
+			require.NoError(t, err)
+			_, err = Analyze(ast, cDB, fakeSchemaInfo())
+			require.NoError(t, err)
+			require.Equal(t, tcase.target, sqlparser.String(ast.(*sqlparser.Delete).Targets))
+		})
+	}
+}

@@ -229,7 +229,7 @@ func NewTabletInfo(tablet *topodatapb.Tablet, version Version) *TabletInfo {
 func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
 	conn, err := ts.ConnForCell(ctx, alias.Cell)
 	if err != nil {
-		log.Errorf("Unable to get connection for cell %s", alias.Cell)
+		log.Errorf("unable to get connection for cell %q: %v", alias.Cell, err)
 		return nil, err
 	}
 
@@ -240,7 +240,7 @@ func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) 
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(alias), TabletFile)
 	data, version, err := conn.Get(ctx, tabletPath)
 	if err != nil {
-		log.Errorf("unable to connect to tablet %s: %s", alias, err)
+		log.Errorf("unable to connect to tablet %q: %v", alias, err)
 		return nil, err
 	}
 	tablet := &topodatapb.Tablet{}

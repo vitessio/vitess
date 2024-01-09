@@ -24,16 +24,14 @@ import (
 	"strconv"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/vthash"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-
+	"vitess.io/vitess/go/test/utils"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 var (
@@ -85,11 +83,11 @@ func TestArithmetics(t *testing.T) {
 			// testing for int64 overflow with min negative value
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewInt64(1),
-			err: dataOutOfRangeError(math.MinInt64, 1, "BIGINT", "-").Error(),
+			err: dataOutOfRangeError(int64(math.MinInt64), int64(1), "BIGINT", "-").Error(),
 		}, {
 			v1:  NewUint64(4),
 			v2:  NewInt64(5),
-			err: dataOutOfRangeError(4, 5, "BIGINT UNSIGNED", "-").Error(),
+			err: dataOutOfRangeError(uint64(4), int64(5), "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			// testing uint - int
 			v1:  NewUint64(7),
@@ -103,7 +101,7 @@ func TestArithmetics(t *testing.T) {
 			// testing for int64 overflow
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewUint64(0),
-			err: dataOutOfRangeError(math.MinInt64, 0, "BIGINT UNSIGNED", "-").Error(),
+			err: dataOutOfRangeError(int64(math.MinInt64), uint64(0), "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			v1:  TestValue(sqltypes.VarChar, "c"),
 			v2:  NewInt64(1),
@@ -140,7 +138,7 @@ func TestArithmetics(t *testing.T) {
 		}, {
 			v1:  NewInt64(-1),
 			v2:  NewUint64(2),
-			err: dataOutOfRangeError(-1, 2, "BIGINT UNSIGNED", "-").Error(),
+			err: dataOutOfRangeError(int64(-1), int64(2), "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			v1:  NewInt64(2),
 			v2:  NewUint64(1),
@@ -169,7 +167,7 @@ func TestArithmetics(t *testing.T) {
 			// testing uint - uint if v2 > v1
 			v1:  NewUint64(2),
 			v2:  NewUint64(4),
-			err: dataOutOfRangeError(2, 4, "BIGINT UNSIGNED", "-").Error(),
+			err: dataOutOfRangeError(uint64(2), uint64(4), "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			// testing uint - (- int)
 			v1:  NewUint64(1),
@@ -207,7 +205,7 @@ func TestArithmetics(t *testing.T) {
 		}, {
 			v1:  NewInt64(-2),
 			v2:  NewUint64(1),
-			err: dataOutOfRangeError(1, -2, "BIGINT UNSIGNED", "+").Error(),
+			err: dataOutOfRangeError(uint64(1), int64(-2), "BIGINT UNSIGNED", "+").Error(),
 		}, {
 			v1:  NewInt64(math.MaxInt64),
 			v2:  NewInt64(-2),
@@ -221,12 +219,12 @@ func TestArithmetics(t *testing.T) {
 			// testing for overflow uint64
 			v1:  NewUint64(maxUint64),
 			v2:  NewUint64(2),
-			err: dataOutOfRangeError(maxUint64, 2, "BIGINT UNSIGNED", "+").Error(),
+			err: dataOutOfRangeError(maxUint64, uint64(2), "BIGINT UNSIGNED", "+").Error(),
 		}, {
 			// int64 underflow
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewInt64(-2),
-			err: dataOutOfRangeError(math.MinInt64, -2, "BIGINT", "+").Error(),
+			err: dataOutOfRangeError(int64(math.MinInt64), int64(-2), "BIGINT", "+").Error(),
 		}, {
 			// checking int64 max value can be returned
 			v1:  NewInt64(math.MaxInt64),
@@ -261,7 +259,7 @@ func TestArithmetics(t *testing.T) {
 			// testing for uint64 overflow with max uint64 + int value
 			v1:  NewUint64(maxUint64),
 			v2:  NewInt64(2),
-			err: dataOutOfRangeError(maxUint64, 2, "BIGINT UNSIGNED", "+").Error(),
+			err: dataOutOfRangeError(maxUint64, int64(2), "BIGINT UNSIGNED", "+").Error(),
 		}, {
 			v1:  sqltypes.NewHexNum([]byte("0x9")),
 			v2:  NewInt64(1),
@@ -309,7 +307,7 @@ func TestArithmetics(t *testing.T) {
 			// Lower bound for int64
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewInt64(1),
-			out: NewDecimal(strconv.Itoa(math.MinInt64) + ".0000"),
+			out: NewDecimal(strconv.FormatInt(math.MinInt64, 10) + ".0000"),
 		}, {
 			// upper bound for uint64
 			v1:  NewUint64(math.MaxUint64),
@@ -413,12 +411,12 @@ func TestArithmetics(t *testing.T) {
 			// testing for overflow of int64
 			v1:  NewInt64(math.MaxInt64),
 			v2:  NewInt64(2),
-			err: dataOutOfRangeError(math.MaxInt64, 2, "BIGINT", "*").Error(),
+			err: dataOutOfRangeError(int64(math.MaxInt64), int64(2), "BIGINT", "*").Error(),
 		}, {
 			// testing for underflow of uint64*max.uint64
 			v1:  NewInt64(2),
 			v2:  NewUint64(maxUint64),
-			err: dataOutOfRangeError(maxUint64, 2, "BIGINT UNSIGNED", "*").Error(),
+			err: dataOutOfRangeError(maxUint64, int64(2), "BIGINT UNSIGNED", "*").Error(),
 		}, {
 			v1:  NewUint64(math.MaxUint64),
 			v2:  NewUint64(1),
@@ -427,7 +425,7 @@ func TestArithmetics(t *testing.T) {
 			// Checking whether maxInt value can be passed as uint value
 			v1:  NewUint64(math.MaxInt64),
 			v2:  NewInt64(3),
-			err: dataOutOfRangeError(math.MaxInt64, 3, "BIGINT UNSIGNED", "*").Error(),
+			err: dataOutOfRangeError(uint64(math.MaxInt64), int64(3), "BIGINT UNSIGNED", "*").Error(),
 		}},
 	}}
 
@@ -492,7 +490,7 @@ func TestNullSafeAdd(t *testing.T) {
 	}, {
 		v1:  NewInt64(-100),
 		v2:  NewUint64(10),
-		err: dataOutOfRangeError(10, -100, "BIGINT UNSIGNED", "+"),
+		err: dataOutOfRangeError(uint64(10), int64(-100), "BIGINT UNSIGNED", "+"),
 	}, {
 		// Make sure underlying error is returned while converting.
 		v1:  NewFloat64(1),
@@ -594,12 +592,12 @@ func TestAddNumeric(t *testing.T) {
 		// Int64 overflow.
 		v1:  newEvalInt64(9223372036854775807),
 		v2:  newEvalInt64(2),
-		err: dataOutOfRangeError(9223372036854775807, 2, "BIGINT", "+"),
+		err: dataOutOfRangeError(int64(9223372036854775807), int64(2), "BIGINT", "+"),
 	}, {
 		// Int64 underflow.
 		v1:  newEvalInt64(-9223372036854775807),
 		v2:  newEvalInt64(-2),
-		err: dataOutOfRangeError(-9223372036854775807, -2, "BIGINT", "+"),
+		err: dataOutOfRangeError(int64(-9223372036854775807), int64(-2), "BIGINT", "+"),
 	}, {
 		v1:  newEvalInt64(-1),
 		v2:  newEvalUint64(2),
@@ -608,7 +606,7 @@ func TestAddNumeric(t *testing.T) {
 		// Uint64 overflow.
 		v1:  newEvalUint64(18446744073709551615),
 		v2:  newEvalUint64(2),
-		err: dataOutOfRangeError(uint64(18446744073709551615), 2, "BIGINT UNSIGNED", "+"),
+		err: dataOutOfRangeError(uint64(18446744073709551615), uint64(2), "BIGINT UNSIGNED", "+"),
 	}}
 	for _, tcase := range tcases {
 		got, err := addNumericWithError(tcase.v1, tcase.v2)
@@ -740,6 +738,23 @@ func TestToSqlValue(t *testing.T) {
 		typ: sqltypes.Decimal,
 		v:   newEvalFloat(1.2e-16),
 		out: TestValue(sqltypes.Decimal, "0.00000000000000012"),
+	}, {
+		// null in should return null out no matter what type
+		typ: sqltypes.Int64,
+		v:   nil,
+		out: sqltypes.NULL,
+	}, {
+		typ: sqltypes.Uint64,
+		v:   nil,
+		out: sqltypes.NULL,
+	}, {
+		typ: sqltypes.Float64,
+		v:   nil,
+		out: sqltypes.NULL,
+	}, {
+		typ: sqltypes.VarChar,
+		v:   nil,
+		out: sqltypes.NULL,
 	}}
 	for _, tcase := range tcases {
 		got := evalToSQLValueWithType(tcase.v, tcase.typ)

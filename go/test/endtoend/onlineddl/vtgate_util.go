@@ -19,7 +19,6 @@ package onlineddl
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"testing"
 	"time"
@@ -57,7 +56,7 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 	require.Nil(t, err)
 	defer conn.Close()
 
-	qr, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	qr, err := conn.ExecuteFetch(query, -1, true)
 	if expectError == "" {
 		require.NoError(t, err)
 	} else {

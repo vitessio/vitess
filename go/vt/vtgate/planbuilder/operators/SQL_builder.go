@@ -309,7 +309,7 @@ func (ts *tableSorter) Swap(i, j int) {
 func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	switch expr := expr.(type) {
 	case *sqlparser.AliasedExpr:
-		sqlparser.RemoveKeyspaceFromColName(expr.Expr)
+		sqlparser.RemoveKeyspace(expr.Expr)
 	case *sqlparser.StarExpr:
 		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
 	}
@@ -376,11 +376,33 @@ func buildQuery(op Operator, qb *queryBuilder) {
 	case *Update:
 		buildUpdate(op, qb)
 	case *Delete:
-		buildDML(op, qb)
+		buildDelete(op, qb)
 	case *Insert:
 		buildDML(op, qb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
+	}
+}
+
+func buildDelete(op *Delete, qb *queryBuilder) {
+	buildQuery(op.Source, qb)
+	// currently the qb builds a select query underneath.
+	// Will take the `From` and `Where` from this select
+	// and create a delete statement.
+	// TODO: change it to directly produce `delete` statement.
+	sel, ok := qb.stmt.(*sqlparser.Select)
+	if !ok {
+		panic(vterrors.VT13001("expected a select here"))
+	}
+
+	qb.dmlOperator = op
+	qb.stmt = &sqlparser.Delete{
+		Ignore:     sqlparser.Ignore(op.Ignore),
+		Targets:    sqlparser.TableNames{op.Target.Name},
+		TableExprs: sel.From,
+		Where:      sel.Where,
+		OrderBy:    op.OrderBy,
+		Limit:      op.Limit,
 	}
 }
 

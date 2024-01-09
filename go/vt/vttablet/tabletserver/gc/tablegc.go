@@ -19,7 +19,6 @@ package gc
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -27,9 +26,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -190,7 +189,7 @@ func (collector *TableGC) Open() (err error) {
 		return err
 	}
 	defer conn.Close()
-	serverSupportsFastDrops, err := conn.SupportsCapability(mysql.FastDropTableFlavorCapability)
+	serverSupportsFastDrops, err := conn.SupportsCapability(capabilities.FastDropTableFlavorCapability)
 	if err != nil {
 		return err
 	}
@@ -276,7 +275,6 @@ func (collector *TableGC) operate(ctx context.Context) {
 			// find something new to do.
 			go tableCheckTicker.TickNow()
 		case <-tableCheckTicker.C:
-			log.Info("TableGC: tableCheckTicker")
 			if err := collector.readAndCheckTables(ctx, dropTablesChan, transitionRequestsChan); err != nil {
 				log.Error(err)
 			}
@@ -415,15 +413,13 @@ func (collector *TableGC) readAndCheckTables(
 
 // readTables reads the list of _vt_% tables from the database
 func (collector *TableGC) readTables(ctx context.Context) (gcTables []*gcTable, err error) {
-	log.Infof("TableGC: read tables")
-
 	conn, err := collector.pool.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
 
-	res, err := conn.Conn.Exec(ctx, sqlShowVtTables, math.MaxInt32, true)
+	res, err := conn.Conn.Exec(ctx, sqlShowVtTables, -1, true)
 	if err != nil {
 		return nil, err
 	}
@@ -441,8 +437,6 @@ func (collector *TableGC) readTables(ctx context.Context) (gcTables []*gcTable, 
 // It lists _vt_% tables, then filters through those which are due-date.
 // It then applies the necessary operation per table.
 func (collector *TableGC) checkTables(ctx context.Context, gcTables []*gcTable, dropTablesChan chan<- *gcTable, transitionRequestsChan chan<- *transitionRequest) error {
-	log.Infof("TableGC: check tables")
-
 	for i := range gcTables {
 		table := gcTables[i] // we capture as local variable as we will later use this in a goroutine
 		shouldTransition, state, uuid, err := collector.shouldTransitionTable(table.tableName)

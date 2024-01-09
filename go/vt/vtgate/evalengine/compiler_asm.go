@@ -35,6 +35,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 
 	"vitess.io/vitess/go/hack"
@@ -288,13 +289,13 @@ func (asm *assembler) BitShiftLeft_bu() {
 		r := env.vm.stack[env.vm.sp-1].(*evalUint64)
 
 		var (
-			bits   = int(r.u & 7)
-			bytes  = int(r.u >> 3)
-			length = len(l.bytes)
+			bits   = int64(r.u & 7)
+			bytes  = int64(r.u >> 3)
+			length = int64(len(l.bytes))
 			out    = make([]byte, length)
 		)
 
-		for i := 0; i < length; i++ {
+		for i := int64(0); i < length; i++ {
 			pos := i + bytes + 1
 			switch {
 			case pos < length:
@@ -332,9 +333,9 @@ func (asm *assembler) BitShiftRight_bu() {
 		r := env.vm.stack[env.vm.sp-1].(*evalUint64)
 
 		var (
-			bits   = int(r.u & 7)
-			bytes  = int(r.u >> 3)
-			length = len(l.bytes)
+			bits   = int64(r.u & 7)
+			bytes  = int64(r.u >> 3)
+			length = int64(len(l.bytes))
 			out    = make([]byte, length)
 		)
 
@@ -904,7 +905,7 @@ func (asm *assembler) Convert_Ti(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
 		if v.prec != 0 {
-			env.vm.err = errDeoptimize
+			env.vm.err = vterrors.NewErrorf(vtrpc.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "temporal type with non-zero precision")
 			return 1
 		}
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(v.toInt64())
@@ -918,6 +919,18 @@ func (asm *assembler) Convert_Tf(offset int) {
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalFloat(v.toFloat())
 		return 1
 	}, "CONV SQLTIME(SP-%d), FLOAT64", offset)
+}
+
+func (asm *assembler) Convert_Td(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
+		if v.prec == 0 {
+			env.vm.err = vterrors.NewErrorf(vtrpc.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "temporal type with zero precision")
+			return 1
+		}
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalDecimalWithPrec(v.toDecimal(), int32(v.prec))
+		return 1
+	}, "CONV SQLTIME(SP-%d), DECIMAL", offset)
 }
 
 func (asm *assembler) Convert_iB(offset int) {
@@ -2711,6 +2724,65 @@ func (asm *assembler) Fn_TRIM2(col collations.TypedCollation) {
 		env.vm.sp--
 		return 1
 	}, "FN TRIM VARCHAR(SP-2) VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_SUBSTRING2(tt sqltypes.Type, cs types.Charset, col collations.TypedCollation) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		pos := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		end := int64(charset.Length(cs, str.bytes))
+		if pos.i < 0 {
+			pos.i += end + 1
+		}
+		str.tt = int16(tt)
+		if pos.i < 1 || pos.i > end {
+			str.bytes = nil
+			str.col = col
+			env.vm.sp--
+			return 1
+		}
+
+		res := charset.Slice(cs, str.bytes, int(pos.i-1), int(end))
+		str.bytes = res
+		str.col = col
+		env.vm.sp--
+		return 1
+	}, "FN SUBSTRING VARCHAR(SP-2) INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SUBSTRING3(tt sqltypes.Type, cs types.Charset, col collations.TypedCollation) {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		pos := env.vm.stack[env.vm.sp-2].(*evalInt64)
+		ll := env.vm.stack[env.vm.sp-1].(*evalInt64)
+
+		end := int64(charset.Length(cs, str.bytes))
+		if pos.i < 0 {
+			pos.i += end + 1
+		}
+		str.tt = int16(tt)
+
+		if pos.i < 1 || pos.i > end || ll.i < 1 {
+			str.bytes = nil
+			str.col = col
+			env.vm.sp -= 2
+			return 1
+		}
+
+		if ll.i > end-pos.i+1 {
+			ll.i = end - pos.i + 1
+		}
+		end = pos.i + ll.i - 1
+		res := charset.Slice(cs, str.bytes, int(pos.i-1), int(end))
+		str.tt = int16(tt)
+		str.bytes = res
+		str.col = col
+		env.vm.sp -= 2
+		return 1
+	}, "FN SUBSTRING VARCHAR(SP-3) INT64(SP-2) INT64(SP-1)")
 }
 
 func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollation) {

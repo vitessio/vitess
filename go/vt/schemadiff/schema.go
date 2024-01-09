@@ -357,6 +357,9 @@ func (s *Schema) normalize() error {
 		if child.Type == "char" && parent.Type == "varchar" {
 			return true
 		}
+		if child.Type == "varchar" && parent.Type == "char" {
+			return true
+		}
 		return false
 	}
 	colTypeEqualForForeignKey := func(child, parent *sqlparser.ColumnType) bool {

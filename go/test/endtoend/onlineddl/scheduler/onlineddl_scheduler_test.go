@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -334,7 +335,7 @@ func testScheduler(t *testing.T) {
 
 	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
-	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 
 	var (
 		t1uuid string
@@ -549,7 +550,7 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
-	forceCutoverCapable, err := capableOf(mysql.PerformanceSchemaDataLocksTableCapability) // 8.0
+	forceCutoverCapable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability) // 8.0
 	require.NoError(t, err)
 	if forceCutoverCapable {
 		t.Run("force_cutover", func(t *testing.T) {
@@ -1071,7 +1072,7 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
-	checkConstraintCapable, err := capableOf(mysql.CheckConstraintsCapability) // 8.0.16 and above
+	checkConstraintCapable, err := capableOf(capabilities.CheckConstraintsCapability) // 8.0.16 and above
 	require.NoError(t, err)
 	if checkConstraintCapable {
 		// Constraints
@@ -1091,7 +1092,7 @@ func testScheduler(t *testing.T) {
 	}
 
 	// INSTANT DDL
-	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
+	instantDDLCapable, err := capableOf(capabilities.InstantAddLastColumnFlavorCapability)
 	require.NoError(t, err)
 	if instantDDLCapable {
 		t.Run("INSTANT DDL: postpone-completion", func(t *testing.T) {
@@ -2287,8 +2288,10 @@ func testForeignKeys(t *testing.T) {
 	fkOnlineDDLPossible := false
 	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
 		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
-		// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
-		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
+		// However, Online DDL is made possible in via these changes:
+		// - https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// - https://github.com/planetscale/mysql-server/commit/c2f1344a6863518d749f2eb01a4c74ca08a5b889
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps3.
 		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
 		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
 		// the children will point to the newly instated table rather than the original, renamed table.

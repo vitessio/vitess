@@ -24,7 +24,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path"
 	"strconv"
@@ -39,6 +38,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
@@ -291,7 +291,7 @@ func (e *Executor) executeQuery(ctx context.Context, query string) (result *sqlt
 	}
 	defer conn.Recycle()
 
-	return conn.Conn.Exec(ctx, query, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, query, -1, true)
 }
 
 func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, query string) (result *sqltypes.Result, err error) {
@@ -308,7 +308,7 @@ func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, que
 	if err != nil {
 		return nil, err
 	}
-	return conn.Conn.Exec(ctx, uq, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, uq, -1, true)
 }
 
 // TabletAliasString returns tablet alias as string (duh)
@@ -833,8 +833,8 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 			}
 		}
 	}
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
-	capable, err := capableOf(mysql.PerformanceSchemaDataLocksTableCapability)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
+	capable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability)
 	if err != nil {
 		return err
 	}
@@ -987,13 +987,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if preserveFKSupported {
 		// This code is only applicable when MySQL supports the 'rename_table_preserve_foreign_key' variable. This variable
 		// does not exist in vanilla MySQL.
-		// See  https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
-		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
-		if _, err := renameConn.Conn.Exec(ctx, sqlEnablePreserveForeignKey, 1, false); err != nil {
-			return err
-		}
-		log.Infof("@@rename_table_preserve_foreign_key enabled")
-		defer renameConn.Conn.Exec(ctx, sqlDisablePreserveForeignKey, 1, false)
+		// See
+		// - https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// - https://github.com/planetscale/mysql-server/commit/c2f1344a6863518d749f2eb01a4c74ca08a5b889
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps3.
+		log.Infof("@@rename_table_preserve_foreign_key supported")
 	}
 
 	renameQuery := sqlparser.BuildParsedQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
@@ -2443,7 +2441,14 @@ func (e *Executor) reviewEmptyTableRevertMigrations(ctx context.Context, onlineD
 // Non immediate operations are:
 // - A gh-ost migration
 // - A vitess (vreplication) migration
-func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysql.CapableOf, onlineDDL *schema.OnlineDDL, ddlAction string, isRevert bool, isView bool) (bool, error) {
+func (e *Executor) reviewImmediateOperations(
+	ctx context.Context,
+	capableOf capabilities.CapableOf,
+	onlineDDL *schema.OnlineDDL,
+	ddlAction string,
+	isRevert bool,
+	isView bool,
+) (bool, error) {
 	switch ddlAction {
 	case sqlparser.CreateStr, sqlparser.DropStr:
 		return true, nil
@@ -2469,7 +2474,7 @@ func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysq
 // It analyzes whether the migration can & should be fulfilled immediately (e.g. via INSTANT DDL or just because it's a CREATE or DROP),
 // or backfills necessary information if it's a REVERT.
 // If all goes well, it sets `reviewed_timestamp` which then allows the state machine to schedule the migration.
-func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capableOf mysql.CapableOf) error {
+func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capableOf capabilities.CapableOf) error {
 	onlineDDL, row, err := e.readMigration(ctx, uuid)
 	if err != nil {
 		return err
@@ -2533,7 +2538,7 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 		return err
 	}
 	defer conn.Close()
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -3120,7 +3125,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 		return false, err
 	}
 	defer conn.Close()
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
 
 	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, capableOf)
 	if err != nil {
@@ -3585,8 +3590,10 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 
 // isPreserveForeignKeySupported checks if the underlying MySQL server supports 'rename_table_preserve_foreign_key'
 // Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
-// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
-// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
+// However, Online DDL is made possible in via these changes:
+// - https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+// - https://github.com/planetscale/mysql-server/commit/c2f1344a6863518d749f2eb01a4c74ca08a5b889
+// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps3.
 // Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
 // When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
 // the children will point to the newly instated table rather than the original, renamed table.

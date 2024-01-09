@@ -112,44 +112,15 @@ func TestMemoryLogger(t *testing.T) {
 	}
 }
 
-func TestChannelLogger(t *testing.T) {
-	cl := NewChannelLogger(10)
-	cl.Infof("test %v", 123)
-	cl.Warningf("test %v", 123)
-	cl.Errorf("test %v", 123)
-	cl.Printf("test %v", 123)
-	close(cl.C)
-
-	count := 0
-	for e := range cl.C {
-		if got, want := e.Value, "test 123"; got != want {
-			t.Errorf("e.Value = %q, want %q", got, want)
-		}
-		if e.File != "logger_test.go" {
-			t.Errorf("Invalid file name: %v", e.File)
-		}
-		count++
-	}
-	if got, want := count, 4; got != want {
-		t.Errorf("count = %v, want %v", got, want)
-	}
-}
-
 func TestTeeLogger(t *testing.T) {
-	ml := NewMemoryLogger()
-	cl := NewChannelLogger(10)
-	tl := NewTeeLogger(ml, cl)
+	ml1 := NewMemoryLogger()
+	ml2 := NewMemoryLogger()
+	tl := NewTeeLogger(ml1, ml2)
 
 	tl.Infof("test infof %v %v", 1, 2)
 	tl.Warningf("test warningf %v %v", 2, 3)
 	tl.Errorf("test errorf %v %v", 3, 4)
 	tl.Printf("test printf %v %v", 4, 5)
-	close(cl.C)
-
-	clEvents := []*logutilpb.Event{}
-	for e := range cl.C {
-		clEvents = append(clEvents, e)
-	}
 
 	wantEvents := []*logutilpb.Event{
 		{Level: logutilpb.Level_INFO, Value: "test infof 1 2"},
@@ -159,7 +130,7 @@ func TestTeeLogger(t *testing.T) {
 	}
 	wantFile := "logger_test.go"
 
-	for i, events := range [][]*logutilpb.Event{ml.Events, clEvents} {
+	for i, events := range [][]*logutilpb.Event{ml1.Events, ml2.Events} {
 		if got, want := len(events), len(wantEvents); got != want {
 			t.Fatalf("[%v] len(events) = %v, want %v", i, got, want)
 		}

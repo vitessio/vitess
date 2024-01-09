@@ -229,7 +229,7 @@ var RandomGenerators = map[Type]RandomGenerator{
 		return NewFloat64(rand.ExpFloat64())
 	},
 	Decimal: func() Value {
-		dec := fmt.Sprintf("%d.%d", rand.Intn(9999999999), rand.Intn(9999999999))
+		dec := fmt.Sprintf("%d.%d", rand.Intn(999999999), rand.Intn(999999999))
 		if rand.Int()&0x1 == 1 {
 			dec = "-" + dec
 		}

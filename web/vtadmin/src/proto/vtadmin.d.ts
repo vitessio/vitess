@@ -25731,7 +25731,7 @@ export namespace tabletmanagerdata {
     interface IBackupRequest {
 
         /** BackupRequest concurrency */
-        concurrency?: (number|Long|null);
+        concurrency?: (number|null);
 
         /** BackupRequest allow_primary */
         allow_primary?: (boolean|null);
@@ -25753,7 +25753,7 @@ export namespace tabletmanagerdata {
         constructor(properties?: tabletmanagerdata.IBackupRequest);
 
         /** BackupRequest concurrency. */
-        public concurrency: (number|Long);
+        public concurrency: number;
 
         /** BackupRequest allow_primary. */
         public allow_primary: boolean;
@@ -27505,6 +27505,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffCoreOptions update_table_stats */
         update_table_stats?: (boolean|null);
+
+        /** VDiffCoreOptions max_diff_seconds */
+        max_diff_seconds?: (number|Long|null);
     }
 
     /** Represents a VDiffCoreOptions. */
@@ -27539,6 +27542,9 @@ export namespace tabletmanagerdata {
 
         /** VDiffCoreOptions update_table_stats. */
         public update_table_stats: boolean;
+
+        /** VDiffCoreOptions max_diff_seconds. */
+        public max_diff_seconds: (number|Long);
 
         /**
          * Creates a new VDiffCoreOptions instance using the specified properties.
@@ -27747,6 +27753,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state */
         state?: (binlogdata.VReplicationWorkflowState|null);
+
+        /** UpdateVReplicationWorkflowRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents an UpdateVReplicationWorkflowRequest. */
@@ -27775,6 +27784,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state. */
         public state: binlogdata.VReplicationWorkflowState;
+
+        /** UpdateVReplicationWorkflowRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
@@ -43557,6 +43569,9 @@ export namespace vtctldata {
 
                 /** CopyState last_pk */
                 last_pk?: (string|null);
+
+                /** CopyState stream_id */
+                stream_id?: (number|Long|null);
             }
 
             /** Represents a CopyState. */
@@ -43573,6 +43588,9 @@ export namespace vtctldata {
 
                 /** CopyState last_pk. */
                 public last_pk: string;
+
+                /** CopyState stream_id. */
+                public stream_id: (number|Long);
 
                 /**
                  * Creates a new CopyState instance using the specified properties.
@@ -44946,6 +44964,9 @@ export namespace vtctldata {
 
         /** ApplyVSchemaRequest sql */
         sql?: (string|null);
+
+        /** ApplyVSchemaRequest strict */
+        strict?: (boolean|null);
     }
 
     /** Represents an ApplyVSchemaRequest. */
@@ -44974,6 +44995,9 @@ export namespace vtctldata {
 
         /** ApplyVSchemaRequest sql. */
         public sql: string;
+
+        /** ApplyVSchemaRequest strict. */
+        public strict: boolean;
 
         /**
          * Creates a new ApplyVSchemaRequest instance using the specified properties.
@@ -45058,6 +45082,9 @@ export namespace vtctldata {
 
         /** ApplyVSchemaResponse v_schema */
         v_schema?: (vschema.IKeyspace|null);
+
+        /** ApplyVSchemaResponse unknown_vindex_params */
+        unknown_vindex_params?: ({ [k: string]: vtctldata.ApplyVSchemaResponse.IParamList }|null);
     }
 
     /** Represents an ApplyVSchemaResponse. */
@@ -45071,6 +45098,9 @@ export namespace vtctldata {
 
         /** ApplyVSchemaResponse v_schema. */
         public v_schema?: (vschema.IKeyspace|null);
+
+        /** ApplyVSchemaResponse unknown_vindex_params. */
+        public unknown_vindex_params: { [k: string]: vtctldata.ApplyVSchemaResponse.IParamList };
 
         /**
          * Creates a new ApplyVSchemaResponse instance using the specified properties.
@@ -45150,6 +45180,106 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    namespace ApplyVSchemaResponse {
+
+        /** Properties of a ParamList. */
+        interface IParamList {
+
+            /** ParamList params */
+            params?: (string[]|null);
+        }
+
+        /** Represents a ParamList. */
+        class ParamList implements IParamList {
+
+            /**
+             * Constructs a new ParamList.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.ApplyVSchemaResponse.IParamList);
+
+            /** ParamList params. */
+            public params: string[];
+
+            /**
+             * Creates a new ParamList instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns ParamList instance
+             */
+            public static create(properties?: vtctldata.ApplyVSchemaResponse.IParamList): vtctldata.ApplyVSchemaResponse.ParamList;
+
+            /**
+             * Encodes the specified ParamList message. Does not implicitly {@link vtctldata.ApplyVSchemaResponse.ParamList.verify|verify} messages.
+             * @param message ParamList message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtctldata.ApplyVSchemaResponse.IParamList, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified ParamList message, length delimited. Does not implicitly {@link vtctldata.ApplyVSchemaResponse.ParamList.verify|verify} messages.
+             * @param message ParamList message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtctldata.ApplyVSchemaResponse.IParamList, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a ParamList message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns ParamList
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplyVSchemaResponse.ParamList;
+
+            /**
+             * Decodes a ParamList message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns ParamList
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplyVSchemaResponse.ParamList;
+
+            /**
+             * Verifies a ParamList message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a ParamList message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns ParamList
+             */
+            public static fromObject(object: { [k: string]: any }): vtctldata.ApplyVSchemaResponse.ParamList;
+
+            /**
+             * Creates a plain object from a ParamList message. Also converts values to other types if specified.
+             * @param message ParamList
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtctldata.ApplyVSchemaResponse.ParamList, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this ParamList to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for ParamList
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
     /** Properties of a BackupRequest. */
     interface IBackupRequest {
 
@@ -45160,7 +45290,7 @@ export namespace vtctldata {
         allow_primary?: (boolean|null);
 
         /** BackupRequest concurrency */
-        concurrency?: (number|Long|null);
+        concurrency?: (number|null);
 
         /** BackupRequest incremental_from_pos */
         incremental_from_pos?: (string|null);
@@ -45185,7 +45315,7 @@ export namespace vtctldata {
         public allow_primary: boolean;
 
         /** BackupRequest concurrency. */
-        public concurrency: (number|Long);
+        public concurrency: number;
 
         /** BackupRequest incremental_from_pos. */
         public incremental_from_pos: string;
@@ -45399,7 +45529,7 @@ export namespace vtctldata {
         allow_primary?: (boolean|null);
 
         /** BackupShardRequest concurrency */
-        concurrency?: (number|Long|null);
+        concurrency?: (number|null);
 
         /** BackupShardRequest upgrade_safe */
         upgrade_safe?: (boolean|null);
@@ -45427,7 +45557,7 @@ export namespace vtctldata {
         public allow_primary: boolean;
 
         /** BackupShardRequest concurrency. */
-        public concurrency: (number|Long);
+        public concurrency: number;
 
         /** BackupShardRequest upgrade_safe. */
         public upgrade_safe: boolean;
@@ -54083,6 +54213,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest include_logs */
         include_logs?: (boolean|null);
+
+        /** GetWorkflowsRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a GetWorkflowsRequest. */
@@ -54108,6 +54241,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest include_logs. */
         public include_logs: boolean;
+
+        /** GetWorkflowsRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
@@ -56971,6 +57107,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest dry_run */
         dry_run?: (boolean|null);
+
+        /** MoveTablesCompleteRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a MoveTablesCompleteRequest. */
@@ -56999,6 +57138,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest dry_run. */
         public dry_run: boolean;
+
+        /** MoveTablesCompleteRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new MoveTablesCompleteRequest instance using the specified properties.
@@ -65613,6 +65755,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest max_report_sample_rows */
         max_report_sample_rows?: (number|Long|null);
+
+        /** VDiffCreateRequest max_diff_duration */
+        max_diff_duration?: (vttime.IDuration|null);
     }
 
     /** Represents a VDiffCreateRequest. */
@@ -65680,6 +65825,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest max_report_sample_rows. */
         public max_report_sample_rows: (number|Long);
+
+        /** VDiffCreateRequest max_diff_duration. */
+        public max_diff_duration?: (vttime.IDuration|null);
 
         /**
          * Creates a new VDiffCreateRequest instance using the specified properties.
@@ -66676,6 +66824,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest keep_routing_rules */
         keep_routing_rules?: (boolean|null);
+
+        /** WorkflowDeleteRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a WorkflowDeleteRequest. */
@@ -66698,6 +66849,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest keep_routing_rules. */
         public keep_routing_rules: boolean;
+
+        /** WorkflowDeleteRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new WorkflowDeleteRequest instance using the specified properties.
@@ -66994,6 +67148,9 @@ export namespace vtctldata {
 
         /** WorkflowStatusRequest workflow */
         workflow?: (string|null);
+
+        /** WorkflowStatusRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a WorkflowStatusRequest. */
@@ -67010,6 +67167,9 @@ export namespace vtctldata {
 
         /** WorkflowStatusRequest workflow. */
         public workflow: string;
+
+        /** WorkflowStatusRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new WorkflowStatusRequest instance using the specified properties.
@@ -67584,6 +67744,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest initialize_target_sequences */
         initialize_target_sequences?: (boolean|null);
+
+        /** WorkflowSwitchTrafficRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a WorkflowSwitchTrafficRequest. */
@@ -67624,6 +67787,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest initialize_target_sequences. */
         public initialize_target_sequences: boolean;
+
+        /** WorkflowSwitchTrafficRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new WorkflowSwitchTrafficRequest instance using the specified properties.
