@@ -35,33 +35,6 @@ const (
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"
 
-	// DetectSchemaChange query detects if there is any schema change from previous copy.
-	DetectSchemaChange = `
-SELECT DISTINCT table_name
-FROM (
-	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-	FROM information_schema.columns
-	WHERE table_schema = database()
-
-	UNION ALL
-
-	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-	FROM %s.schemacopy
-	WHERE table_schema = database()
-) _inner
-GROUP BY table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-HAVING COUNT(*) = 1
-`
-
-	// ClearSchemaCopy query clears the schemacopy table.
-	ClearSchemaCopy = `delete from %s.schemacopy where table_schema = database()`
-
-	// InsertIntoSchemaCopy query copies over the schema information from information_schema.columns table.
-	InsertIntoSchemaCopy = `insert %s.schemacopy
-select table_schema, table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-from information_schema.columns
-where table_schema = database()`
-
 	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
 	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
 )
