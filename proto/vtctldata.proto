@@ -1008,6 +1008,7 @@ message GetWorkflowsRequest {
   // If you only want a specific workflow then set this field.
   string workflow = 4;
   bool include_logs = 5;
+  repeated string shards = 6;
 }
 
 message GetWorkflowsResponse {
@@ -1197,6 +1198,7 @@ message MoveTablesCompleteRequest {
   bool keep_routing_rules = 5;
   bool rename_tables = 6;
   bool dry_run = 7;
+  repeated string shards = 8;
 }
 
 message MoveTablesCompleteResponse {
@@ -1794,6 +1796,7 @@ message WorkflowDeleteRequest {
   string workflow = 2;
   bool keep_data = 3;
   bool keep_routing_rules = 4;
+  repeated string shards = 5;
 }
 
 message WorkflowDeleteResponse {
@@ -1809,6 +1812,7 @@ message WorkflowDeleteResponse {
 message WorkflowStatusRequest {
   string keyspace = 1;
   string workflow = 2;
+  repeated string shards = 3;
 }
 
 message WorkflowStatusResponse {
@@ -1848,6 +1852,7 @@ message WorkflowSwitchTrafficRequest {
   vttime.Duration timeout = 8;
   bool dry_run = 9;
   bool initialize_target_sequences = 10;
+  repeated string shards = 11;
 }
 
 message WorkflowSwitchTrafficResponse {
