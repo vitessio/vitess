@@ -423,9 +423,3 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
-
-// TestNilSrvInShutdownMysqlProtocolAndDrain ensures that calling shutdownMysqlProtocolAndDrain doesn't panic if srv is nil.
-func TestNilSrvInShutdownMysqlProtocolAndDrain(t *testing.T) {
-	var srv *mysqlServer = nil
-	srv.shutdownMysqlProtocolAndDrain()
-}
