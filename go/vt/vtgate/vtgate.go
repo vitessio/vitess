@@ -364,8 +364,10 @@ func Init(
 			st.Start()
 		}
 		srv := initMySQLProtocol(vtgateInst)
-		servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
-		servenv.OnClose(srv.rollbackAtShutdown)
+		if srv != nil {
+			servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
+			servenv.OnClose(srv.rollbackAtShutdown)
+		}
 	})
 	servenv.OnTerm(func() {
 		if st != nil && enableSchemaChangeSignal {
