@@ -908,9 +908,7 @@ func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
 		return errors.New("database app user password not specified")
 	}
 
-	err := c.checkConnectionForExternalMysql()
-
-	return err
+	return c.checkConnectionForExternalMysql()
 }
 
 // Test connectivity of external mysql
@@ -929,8 +927,7 @@ func (c *TabletConfig) checkConnectionForExternalMysql() error {
 		return err
 	}
 
-	err = conn.Ping()
-	return err
+	return conn.Ping()
 }
 
 // verifyTransactionLimitConfig checks TransactionLimitConfig for sanity
