@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -34,6 +35,10 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// nonAtomicCommitWarnMaxShards limits the number of shard names reported in
+// non-atomic commit warnings.
+const nonAtomicCommitWarnMaxShards = 16
 
 // TxConn is used for executing transactional requests.
 type TxConn struct {
@@ -135,13 +140,26 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 	// Retain backward compatibility on commit order for the normal session.
 	for i, shardSession := range session.ShardSessions {
 		if err := txc.commitShard(ctx, shardSession, session.logging); err != nil {
-			_ = txc.Release(ctx, session)
 			if i > 0 {
+				nShards := i
+				elipsis := false
+				if i > nonAtomicCommitWarnMaxShards {
+					nShards = nonAtomicCommitWarnMaxShards
+					elipsis = true
+				}
+				sNames := make([]string, nShards, nShards+1 /*...*/)
+				for j := 0; j < nShards; j++ {
+					sNames[j] = session.ShardSessions[j].Target.Shard
+				}
+				if elipsis {
+					sNames = append(sNames, "...")
+				}
 				session.RecordWarning(&querypb.QueryWarning{
 					Code:    uint32(sqlerror.ERNonAtomicCommit),
-					Message: fmt.Sprintf("multi-db commit failed after committing to %d shards", i),
+					Message: fmt.Sprintf("multi-db commit failed after committing to %d shards: %s", i, strings.Join(sNames, ", ")),
 				})
 			}
+			_ = txc.Release(ctx, session)
 			return err
 		}
 	}

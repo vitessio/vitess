@@ -75,11 +75,11 @@ In `v19.0`, VTGate reports partial-success commits in warnings, e.g.:
 mysql> commit;
 ERROR 1317 (70100): target: customer.-80.primary: vttablet: rpc error: code = Aborted desc = transaction 1703182545849001001: ended at 2023-12-21 14:07:41.515 EST (exceeded timeout: 30s) (CallerID: userData1)
 mysql> show warnings;
-+---------+------+-----------------------------------------------------+
-| Level   | Code | Message                                             |
-+---------+------+-----------------------------------------------------+
-| Warning |  301 | multi-db commit failed after committing to 1 shards |
-+---------+------+-----------------------------------------------------+
++---------+------+----------------------------------------------------------+
+| Level   | Code | Message                                                  |
++---------+------+----------------------------------------------------------+
+| Warning |  301 | multi-db commit failed after committing to 1 shards: -80 |
++---------+------+----------------------------------------------------------+
 1 row in set, 1 warning (0.00 sec)
 ```
 
