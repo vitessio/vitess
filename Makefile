@@ -214,10 +214,14 @@ e2e_test: build
 	go test $(VT_GO_PARALLEL) ./go/.../endtoend/...
 
 # Run the code coverage tools, compute aggregate.
-# If you want to improve in a directory, run:
-#   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
-unit_test_cover: build
-	go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
+unit_test_cover: build dependency_check demo
+	source build.env
+	go test $(VT_GO_PARALLEL) -count=1 -coverprofile=coverage.out ./go/...
+	# Handle go tool cover failures due to not handling `//line` directives, which
+	# the goyacc compiler adds to the generated parser in sql.go. See:
+	# https://github.com/golang/go/issues/41222
+	sed -i'' -e '/^vitess.io\/vitess\/go\/vt\/sqlparser\/yaccpar/d' coverage.out
+	go tool $(VT_GO_PARALLEL) cover -html=coverage.out
 
 unit_test_race: build dependency_check
 	tools/unit_test_race.sh

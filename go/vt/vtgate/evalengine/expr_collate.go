@@ -118,11 +118,12 @@ func (expr *CollateExpr) compile(c *compiler) (ctype, error) {
 	case sqltypes.VarBinary:
 		c.asm.Collate(expr.TypedCollation.Collation)
 	default:
-		return ctype{}, c.unsupported(expr)
+		c.asm.Convert_xc(1, sqltypes.VarChar, expr.TypedCollation.Collation, 0, false)
 	}
 
 	c.asm.jumpDestination(skip)
 
+	ct.Type = sqltypes.VarChar
 	ct.Col = expr.TypedCollation
 	ct.Flag |= flagExplicitCollation | flagNullable
 	return ct, nil

@@ -5,6 +5,13 @@ create table t1
     primary key (id1)
 ) Engine = InnoDB;
 
+create table t2
+(
+    id bigint,
+    value bigint,
+    primary key (id)
+) Engine = InnoDB;
+
 create table t1_id2_idx
 (
     id2         bigint,

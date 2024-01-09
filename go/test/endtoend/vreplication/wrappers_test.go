@@ -52,6 +52,11 @@ var workflowFlavors = []workflowFlavor{
 	workflowFlavorVtctld,
 }
 
+var workflowFlavorNames = map[workflowFlavor]string{
+	workflowFlavorVtctl:  "vtctl",
+	workflowFlavorVtctld: "vtctld",
+}
+
 type workflowInfo struct {
 	vc             *VitessCluster
 	workflowName   string

@@ -662,11 +662,8 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 // New callers should instead use the new BuildTargets function.
 //
 // It returns ErrNoStreams if there are no targets found for the workflow.
-func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
-	targetShards, err := ts.GetShardNames(ctx, targetKeyspace)
-	if err != nil {
-		return nil, err
-	}
+func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string,
+	targetShards []string) (*TargetInfo, error) {
 
 	var (
 		frozen          bool
