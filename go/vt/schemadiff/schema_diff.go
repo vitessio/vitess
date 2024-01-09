@@ -348,7 +348,8 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 // It is a convenience method, whose logic anyone can reimplement.
 func (d *SchemaDiff) InstantDDLCapability() InstantDDLCapability {
 	// The general logic: we return "InstantDDLCapabilityPossible" if there is one or more diffs that is capable of
-	// ALGORITHM=INSTANT, and zero or more diffs that are irrelevant.
+	// ALGORITHM=INSTANT, and zero or more diffs that are irrelevant, and no diffs that are impossible to run with
+	// ALGORITHM=INSTANT.
 	capability := InstantDDLCapabilityIrrelevant
 	for _, diff := range d.UnorderedDiffs() {
 		switch diff.InstantDDLCapability() {
