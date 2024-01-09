@@ -2736,8 +2736,8 @@ func (asm *assembler) Fn_SUBSTRING2(tt sqltypes.Type, cs types.Charset, col coll
 		if pos.i < 0 {
 			pos.i += end + 1
 		}
+		str.tt = int16(tt)
 		if pos.i < 1 || pos.i > end {
-			str.tt = int16(tt)
 			str.bytes = nil
 			str.col = col
 			env.vm.sp--
@@ -2745,7 +2745,6 @@ func (asm *assembler) Fn_SUBSTRING2(tt sqltypes.Type, cs types.Charset, col coll
 		}
 
 		res := charset.Slice(cs, str.bytes, int(pos.i-1), int(end))
-		str.tt = int16(tt)
 		str.bytes = res
 		str.col = col
 		env.vm.sp--
@@ -2764,21 +2763,15 @@ func (asm *assembler) Fn_SUBSTRING3(tt sqltypes.Type, cs types.Charset, col coll
 		if pos.i < 0 {
 			pos.i += end + 1
 		}
-		if pos.i < 1 || pos.i > end {
-			str.tt = int16(tt)
+		str.tt = int16(tt)
+
+		if pos.i < 1 || pos.i > end || ll.i < 1 {
 			str.bytes = nil
 			str.col = col
 			env.vm.sp -= 2
 			return 1
 		}
 
-		if ll.i < 1 {
-			str.tt = int16(tt)
-			str.bytes = nil
-			str.col = col
-			env.vm.sp -= 2
-			return 1
-		}
 		if ll.i > end-pos.i+1 {
 			ll.i = end - pos.i + 1
 		}
