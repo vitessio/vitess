@@ -144,13 +144,6 @@ type flavor interface {
 // connection parameters.
 var flavorFuncs = make(map[string]func() flavor)
 
-// flavorCapableOf is a utility function that returns a CapableOf function for a given flavor
-func flavorCapableOf(f flavor) capabilities.CapableOf {
-	return func(capability capabilities.FlavorCapability) (bool, error) {
-		return f.supportsCapability(capability)
-	}
-}
-
 // GetFlavor fills in c.Flavor. If the params specify the flavor,
 // that is used. Otherwise, we auto-detect.
 //
@@ -186,7 +179,7 @@ func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capabl
 		// If unknown, return the most basic flavor: MySQL 56.
 		f = mysqlFlavor56{mysqlFlavor{serverVersion: serverVersion}}
 	}
-	return f, flavorCapableOf(f), canonicalVersion
+	return f, f.supportsCapability, canonicalVersion
 }
 
 // ServerVersionCapableOf is a convenience function that returns a CapableOf function given a server version.
