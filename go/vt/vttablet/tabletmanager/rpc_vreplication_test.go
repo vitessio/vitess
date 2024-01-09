@@ -55,7 +55,6 @@ const (
 	checkForFrozenWorkflow   = "select 1 from _vt.vreplication where db_name='vt_%s' and message='FROZEN' and workflow_sub_type != 1"
 	freezeWorkflow           = "update _vt.vreplication set message = 'FROZEN' where db_name='vt_%s' and workflow='%s'"
 	checkForJournal          = "/select val from _vt.resharding_journal where id="
-	getWorkflowStatus        = "select id, workflow, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags, workflow_type, workflow_sub_type, time_heartbeat, defer_secondary_keys, component_throttled, time_throttled, rows_copied from _vt.vreplication where workflow = '%s' and db_name = 'vt_%s'"
 	getWorkflowState         = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1"
 	getCopyState             = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
 	getNumCopyStateTable     = "select count(distinct table_name) from _vt.copy_state where vrepl_id=1"
@@ -74,7 +73,8 @@ const (
 	updatePickedSourceTablet = `update _vt.vreplication set message='Picked source tablet: cell:\"%s\" uid:%d' where id=1`
 	getRowsCopied            = "SELECT rows_copied FROM _vt.vreplication WHERE id=1"
 	hasWorkflows             = "select if(count(*) > 0, 1, 0) as has_workflows from _vt.vreplication where db_name = 'vt_%s'"
-	readWorkflows            = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_%s'%s group by workflow, id order by workflow, id"
+	readAllWorkflows         = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_%s'%s group by workflow, id order by workflow, id"
+	readWorkflow             = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_%s' and workflow in ('%s') group by workflow, id order by workflow, id"
 )
 
 var (
@@ -171,10 +171,6 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 		},
 	}
 
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'",
-		targetKs, wf), &sqltypes.Result{})
-	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and message='FROZEN' and workflow_sub_type != 1",
-		targetKs), &sqltypes.Result{})
 	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet, "select val from _vt.resharding_journal where id=7224776740563431192", &sqltypes.Result{})
 
 	for _, tt := range tests {
@@ -195,11 +191,13 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			}
 			tenv.tmc.SetSchema(tt.schema)
 
-			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
 			// This is our expected query, which will also short circuit
 			// the test with an error as at this point we've tested what
 			// we wanted to test.
-			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(tt.query, nil, errShortCircuit)
+			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{}, errShortCircuit)
 			_, err := ws.MoveTablesCreate(ctx, tt.req)
 			tenv.tmc.tablets[targetTabletUID].vrdbClient.Wait()
 			require.ErrorIs(t, err, errShortCircuit)
@@ -304,20 +302,13 @@ func TestMoveTables(t *testing.T) {
 			),
 		)
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, getCopyState, &sqltypes.Result{})
-		tenv.tmc.setVReplicationExecResults(ftc.tablet, fmt.Sprintf(getWorkflowStatus, wf, targetKs),
-			sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields(
-					"id|workflow|source|pos|stop_pos|max_replication_log|state|db_name|time_updated|transaction_timestamp|message|tags|workflow_type|workflow_sub_type|time_heartbeat|defer_secondary_keys|component_throttled|time_throttled|rows_copied",
-					"int64|varchar|blob|varchar|varchar|int64|varchar|varchar|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|int64|int64",
-				),
-				fmt.Sprintf("1|%s|%s|%s|NULL|0|running|vt_%s|1686577659|0|||1|0|0|0||0|10", wf, bls, position, targetKs),
-			),
-		)
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, getLatestCopyState, &sqltypes.Result{})
 
-		ftc.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
 		insert := fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,replica,rdonly', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
 			insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, ftc.tablet.Shard, tenv.cells[0], tenv.dbName)
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: 1}, nil)
 		ftc.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
 		ftc.vrdbClient.ExpectRequest(getVReplicationRecord,
@@ -379,6 +370,15 @@ func TestMoveTables(t *testing.T) {
 			"FULL",
 		), nil)
 
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, targetKs, wf), sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"workflow|id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys",
+				"varchar|int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64",
+			),
+			fmt.Sprintf("%s|1|%s|%s|NULL|0|0|||1686577659|0|Running||%s|1||0|0|0||0|1", wf, bls, position, targetKs),
+		), nil)
+
 		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(insertStreamsCreatedLog, bls), &sqltypes.Result{}, nil)
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, fmt.Sprintf(getWorkflow, targetKs, wf),
 			sqltypes.MakeTestResult(
@@ -390,7 +390,7 @@ func TestMoveTables(t *testing.T) {
 			),
 		)
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, fmt.Sprintf(startWorkflow, targetKs, wf), &sqltypes.Result{})
-		ftc.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, stopForCutover, &sqltypes.Result{})
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, fmt.Sprintf(freezeWorkflow, targetKs, wf), &sqltypes.Result{})
@@ -435,15 +435,14 @@ func TestMoveTables(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet, fmt.Sprintf(getWorkflowStatus, workflow.ReverseWorkflowName(wf), sourceKs),
-		sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields(
-				"id|workflow|source|pos|stop_pos|max_replication_log|state|db_name|time_updated|transaction_timestamp|message|tags|workflow_type|workflow_sub_type|time_heartbeat|defer_secondary_keys|component_throttled|time_throttled|rows_copied",
-				"int64|varchar|blob|varchar|varchar|int64|varchar|varchar|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|int64|int64",
-			),
-			fmt.Sprintf("1|%s|%s|%s|NULL|0|running|vt_%s|1686577659|0|||1|0|0|0||0|10", workflow.ReverseWorkflowName(wf), bls, position, sourceKs),
+	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet, fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{})
+	tenv.tmc.setVReplicationExecResults(sourceTablet.tablet, fmt.Sprintf(readWorkflow, sourceKs, workflow.ReverseWorkflowName(wf)), sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"workflow|id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys",
+			"varchar|int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64",
 		),
-	)
+		fmt.Sprintf("%s|1|%s|%s|NULL|0|0|||1686577659|0|Running||%s|1||0|0|0||0|1", wf, bls, position, targetKs),
+	))
 
 	_, err = ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
 		Keyspace:                 targetKs,
@@ -472,7 +471,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	tablet := tenv.addTablet(t, tabletUID, keyspace, shard)
 	defer tenv.deleteTablet(tablet.tablet)
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.DefaultName, ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":wf")
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(workflow),
 	}
@@ -597,9 +596,9 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			require.NotEqual(t, "", tt.query, "No expected query provided")
 
 			// These are the same for each RPC call.
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
+			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(selectQuery, selectRes, nil)
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
+			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(idQuery, idRes, nil)
 
 			// This is our expected query, which will also short circuit
@@ -795,7 +794,7 @@ func TestSourceShardSelection(t *testing.T) {
 			for uid, streams := range tt.streams {
 				tt := targetTablets[uid]
 				for i, sourceShard := range streams {
-					tt.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
+					tt.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 					var err error
 					if i == len(streams)-1 {
 						// errShortCircuit is intentionally injected into the MoveTables
@@ -892,7 +891,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 			"1",
 		),
 	)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(
 		fmt.Sprintf("%s %s",
 			insertVReplicationPrefix,
@@ -1117,7 +1116,7 @@ func TestHasVReplicationWorkflows(t *testing.T) {
 				DbName: dbNamePrefix + tt.tablet.tablet.Keyspace,
 			}
 
-			tt.tablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
+			tt.tablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 			tt.tablet.vrdbClient.ExpectRequest(fmt.Sprintf(hasWorkflows, tt.tablet.tablet.Keyspace), tt.queryRes, nil)
 
 			got, err := tenv.tmc.HasVReplicationWorkflows(ctx, tt.tablet.tablet, req)
@@ -1132,8 +1131,8 @@ func TestHasVReplicationWorkflows(t *testing.T) {
 	}
 }
 
-// TestReadVReplicationWorkflows tests the RPC requests are turned into
-// the expected proper SQL query.
+// TestReadVReplicationWorkflows tests the RPC requests are turned
+// into the expected proper SQL query.
 func TestReadVReplicationWorkflows(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1247,8 +1246,8 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 			require.NotNil(t, tt.req, "No request provided")
 
 			if !tt.wantErr { // Errors we're testing for occur before executing any queries.
-				tablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
-				tablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflows, tablet.tablet.Keyspace, tt.wantPreds), &sqltypes.Result{}, nil)
+				tablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+				tablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tablet.tablet.Keyspace, tt.wantPreds), &sqltypes.Result{}, nil)
 			}
 
 			_, err := tenv.tmc.ReadVReplicationWorkflows(ctx, tablet.tablet, tt.req)

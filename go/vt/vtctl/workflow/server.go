@@ -1254,11 +1254,12 @@ func (s *Server) MoveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest,
 	workflowType binlogdatapb.VReplicationWorkflowType,
 ) (res *vtctldatapb.WorkflowStatusResponse, err error) {
-	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesCreate")
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.moveTablesCreate")
 	defer span.Finish()
 
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
+	span.Annotate("workflow_type", workflowType)
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("on_ddl", req.OnDdl)

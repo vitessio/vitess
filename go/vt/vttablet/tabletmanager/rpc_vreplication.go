@@ -229,11 +229,11 @@ func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tab
 	if err != nil {
 		return nil, err
 	}
+	resp := &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{}
 	if res == nil || len(res.Rows) == 0 {
-		return nil, nil
+		return resp, nil
 	}
 	rows := res.Named().Rows
-	resp := &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{}
 	workflows := make(map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse)
 
 	for _, row := range rows {

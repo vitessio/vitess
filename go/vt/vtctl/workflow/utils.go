@@ -113,6 +113,10 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.ReadVReplicationWorkflows"))
 				return
 			}
+			if res == nil {
+				// There are no workflows on this tablet.
+				return
+			}
 			for _, wf := range res.Workflows {
 				if wf.Workflow == workflow {
 					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias))
