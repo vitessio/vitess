@@ -2086,6 +2086,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	dropForeignKeys := subFlags.Bool("drop_foreign_keys", false, "If true, tables in the target keyspace will be created without foreign keys.")
 	maxReplicationLagAllowed := subFlags.Duration("max_replication_lag_allowed", defaultMaxReplicationLagAllowed, "Allow traffic to be switched only if vreplication lag is below this (in seconds)")
 	atomicCopy := subFlags.Bool("atomic-copy", false, "(EXPERIMENTAL) Use this if your source keyspace has tables which use foreign key constraints. All tables from the source will be moved.")
+	shards := subFlags.StringSlice("shards", nil, "(Optional) Specifies a comma-separated list of shards to operate on.")
 
 	onDDL := "IGNORE"
 	subFlags.StringVar(&onDDL, "on-ddl", onDDL, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
@@ -2148,10 +2149,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		StopAfterCopy:  *stopAfterCopy,
 		AtomicCopy:     *atomicCopy,
 	}
+	var shardsWithStreams []string
 
 	printDetails := func() error {
 		s := ""
-		res, err := wr.ShowWorkflow(ctx, workflowName, target)
+		res, err := wr.ShowWorkflow(ctx, workflowName, target, shardsWithStreams)
 		if err != nil {
 			return err
 		}
@@ -2315,6 +2317,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		vrwp.KeepRoutingRules = *keepRoutingRules
 	}
 	vrwp.WorkflowType = workflowType
+	vrwp.ShardSubset = *shards
 	wf, err := wr.NewVReplicationWorkflow(ctx, workflowType, vrwp)
 	if err != nil {
 		log.Warningf("NewVReplicationWorkflow returned error %+v", wf)
@@ -2322,6 +2325,15 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	}
 	if !wf.Exists() && action != vReplicationWorkflowActionCreate {
 		return fmt.Errorf("workflow %s does not exist", ksWorkflow)
+	}
+
+	if len(vrwp.ShardSubset) > 0 {
+		if workflowType == wrangler.MoveTablesWorkflow && action != vReplicationWorkflowActionCreate && wf.IsPartialMigration() {
+			log.Infof("Subset of shards: %s have been specified for keyspace %s, workflow %s, for action %s",
+				vrwp.ShardSubset, target, workflowName, action)
+		} else {
+			return fmt.Errorf("The --shards option can only be specified for existing Partial MoveTables workflows")
+		}
 	}
 
 	printCopyProgress := func() error {
@@ -2364,6 +2376,18 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		}
 	}
 
+	wr.WorkflowParams = vrwp
+
+	switch vrwp.WorkflowType {
+	case wrangler.MoveTablesWorkflow:
+		// If this is not a partial MoveTables, SourceShards is nil and all shards will be polled.
+		shardsWithStreams = vrwp.SourceShards
+	case wrangler.ReshardWorkflow:
+		shardsWithStreams = vrwp.TargetShards
+	default:
+	}
+
+	wr.WorkflowParams = vrwp
 	var dryRunResults *[]string
 	startState := wf.CachedState()
 	switch action {
@@ -2399,7 +2423,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					totalStreams, startedStreams, workflowErrors, err := wf.GetStreamCount()
+					totalStreams, startedStreams, workflowErrors, err := wf.GetStreamCount(shardsWithStreams)
 					if err != nil {
 						errCh <- err
 						close(errCh)
@@ -3706,8 +3730,9 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fla
 }
 
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	usage := "usage: Workflow [--dry-run] [--cells] [--tablet-types] <keyspace>[.<workflow>] start/stop/update/delete/show/listall/tags [<tags>]"
+	usage := "usage: Workflow [--shards <shards>] [--dry-run] [--cells] [--tablet-types] <keyspace>[.<workflow>] start/stop/update/delete/show/listall/tags [<tags>]"
 	dryRun := subFlags.Bool("dry-run", false, "Does a dry run of the Workflow action and reports the query and list of tablets on which the operation will be applied")
+	shards := subFlags.StringSlice("shards", nil, "(Optional) Specifies a comma-separated list of shards to operate on.")
 	cells := subFlags.StringSlice("cells", []string{}, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from. (Update only)")
 	tabletTypesStrs := subFlags.StringSlice("tablet-types", []string{}, "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
 	onDDL := subFlags.String("on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE. (Update only)")
@@ -3716,6 +3741,9 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 	}
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf(usage)
+	}
+	if len(*shards) > 0 {
+		log.Infof("Subset of shards specified: %d, %v", len(*shards), strings.Join(*shards, ","))
 	}
 	keyspace := subFlags.Arg(0)
 	action := strings.ToLower(subFlags.Arg(1))
@@ -3803,7 +3831,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 				OnDdl:                     binlogdatapb.OnDDLAction(onddl),
 			}
 		}
-		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq) // Only update currently uses the new RPC path
+		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq, *shards) // Only update currently uses the new RPC path
 		if err != nil {
 			return err
 		}
