@@ -16,13 +16,13 @@ limitations under the License.
 
 CREATE TABLE IF NOT EXISTS schemacopy
 (
-    `table_schema`       varchar(64)     NOT NULL,
-    `table_name`         varchar(64)     NOT NULL,
-    `column_name`        varchar(64)     NOT NULL,
+    `table_schema`       varbinary(64)     NOT NULL,
+    `table_name`         varbinary(64)     NOT NULL,
+    `column_name`        varbinary(64)     NOT NULL,
     `ordinal_position`   bigint unsigned NOT NULL,
-    `character_set_name` varchar(32) DEFAULT NULL,
-    `collation_name`     varchar(32) DEFAULT NULL,
-    `data_type`          varchar(64)     NOT NULL,
-    `column_key`         varchar(3)      NOT NULL,
+    `character_set_name` varbinary(32) DEFAULT NULL,
+    `collation_name`     varbinary(32) DEFAULT NULL,
+    `data_type`          varbinary(64)     NOT NULL,
+    `column_key`         varbinary(3)      NOT NULL,
     PRIMARY KEY (`table_schema`, `table_name`, `ordinal_position`)
 ) ENGINE = InnoDB

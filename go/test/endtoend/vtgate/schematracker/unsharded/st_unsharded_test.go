@@ -206,7 +206,7 @@ func TestCaseSensitiveSchemaTracking(t *testing.T) {
 	// Wait for schema tracking to be caught up
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("main")] [VARCHAR("t1")] [VARCHAR("T1")]]`,
+		`[[VARCHAR("T1")] [VARCHAR("main")] [VARCHAR("t1")]]`,
 		100*time.Millisecond,
 		30*time.Second,
 		"schema tracking didn't track both the tables")
