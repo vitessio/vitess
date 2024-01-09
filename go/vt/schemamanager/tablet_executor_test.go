@@ -72,7 +72,7 @@ func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
 	if err := ts.InitTablet(ctx, tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
-	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyPrimaryAlias", ts, newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
+	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyPrimaryAlias", ts, newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a primary") {
 		t.Fatalf("executor.Open() = '%v', want error", err)
 	}
@@ -105,7 +105,7 @@ func TestTabletExecutorValidate(t *testing.T) {
 		},
 	})
 
-	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
+	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 	ctx := context.Background()
 
 	sqls := []string{
@@ -179,7 +179,7 @@ func TestTabletExecutorDML(t *testing.T) {
 		},
 	})
 
-	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
+	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 	ctx := context.Background()
 
 	executor.Open(ctx, "unsharded_keyspace")
@@ -269,12 +269,13 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		},
 	}
 
+	parser := sqlparser.NewTestParser()
 	for _, ts := range tt {
 		e := &TabletExecutor{}
 		err := e.SetDDLStrategy(ts.ddlStrategy)
 		assert.NoError(t, err)
 
-		stmt, err := sqlparser.Parse(ts.query)
+		stmt, err := parser.Parse(ts.query)
 		assert.NoError(t, err)
 
 		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
@@ -402,7 +403,7 @@ func TestAllSQLsAreCreateQueries(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			result, err := allSQLsAreCreateQueries(tcase.sqls)
+			result, err := allSQLsAreCreateQueries(tcase.sqls, sqlparser.NewTestParser())
 			assert.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})
@@ -437,7 +438,7 @@ func TestApplyAllowZeroInDate(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			result, err := applyAllowZeroInDate(tcase.sql)
+			result, err := applyAllowZeroInDate(tcase.sql, sqlparser.NewTestParser())
 			assert.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})

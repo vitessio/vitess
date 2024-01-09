@@ -62,7 +62,7 @@ var (
 		"--watch_replication_stream",
 		// Frequently reload schema, generating some tablet traffic,
 		//   so we can speed up token refresh
-		"--queryserver-config-schema-reload-time", "5",
+		"--queryserver-config-schema-reload-time", "5s",
 		"--serving_state_grace_period", "1s"}
 	vaultTabletArg = []string{
 		"--db-credentials-server", "vault",

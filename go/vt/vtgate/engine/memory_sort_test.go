@@ -225,7 +225,7 @@ func TestMemorySortStreamExecuteCollation(t *testing.T) {
 		)},
 	}
 
-	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
+	collationID, _ := collations.MySQL8().LookupID("utf8mb4_hu_0900_ai_ci")
 	ms := &MemorySort{
 		OrderBy: []evalengine.OrderByParams{{
 			Col:  0,
@@ -313,7 +313,7 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 		)},
 	}
 
-	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
+	collationID, _ := collations.MySQL8().LookupID("utf8mb4_hu_0900_ai_ci")
 	ms := &MemorySort{
 		OrderBy: []evalengine.OrderByParams{{
 			Col:  0,

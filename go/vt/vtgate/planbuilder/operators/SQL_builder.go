@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -33,7 +32,7 @@ type (
 		ctx         *plancontext.PlanningContext
 		stmt        sqlparser.Statement
 		tableNames  []string
-		dmlOperator ops.Operator
+		dmlOperator Operator
 	}
 )
 
@@ -41,7 +40,7 @@ func (qb *queryBuilder) asSelectStatement() sqlparser.SelectStatement {
 	return qb.stmt.(sqlparser.SelectStatement)
 }
 
-func ToSQL(ctx *plancontext.PlanningContext, op ops.Operator) (_ sqlparser.Statement, _ ops.Operator, err error) {
+func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement, _ Operator, err error) {
 	defer PanicHandler(&err)
 
 	q := &queryBuilder{ctx: ctx}
@@ -310,7 +309,7 @@ func (ts *tableSorter) Swap(i, j int) {
 func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	switch expr := expr.(type) {
 	case *sqlparser.AliasedExpr:
-		sqlparser.RemoveKeyspaceFromColName(expr.Expr)
+		sqlparser.RemoveKeyspace(expr.Expr)
 	case *sqlparser.StarExpr:
 		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
 	}
@@ -347,7 +346,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) {
 }
 
 // buildQuery recursively builds the query into an AST, from an operator tree
-func buildQuery(op ops.Operator, qb *queryBuilder) {
+func buildQuery(op Operator, qb *queryBuilder) {
 	switch op := op.(type) {
 	case *Table:
 		buildTable(op, qb)
@@ -377,11 +376,33 @@ func buildQuery(op ops.Operator, qb *queryBuilder) {
 	case *Update:
 		buildUpdate(op, qb)
 	case *Delete:
-		buildDML(op, qb)
+		buildDelete(op, qb)
 	case *Insert:
 		buildDML(op, qb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
+	}
+}
+
+func buildDelete(op *Delete, qb *queryBuilder) {
+	buildQuery(op.Source, qb)
+	// currently the qb builds a select query underneath.
+	// Will take the `From` and `Where` from this select
+	// and create a delete statement.
+	// TODO: change it to directly produce `delete` statement.
+	sel, ok := qb.stmt.(*sqlparser.Select)
+	if !ok {
+		panic(vterrors.VT13001("expected a select here"))
+	}
+
+	qb.dmlOperator = op
+	qb.stmt = &sqlparser.Delete{
+		Ignore:     sqlparser.Ignore(op.Ignore),
+		Targets:    sqlparser.TableNames{op.Target.Name},
+		TableExprs: sel.From,
+		Where:      sel.Where,
+		OrderBy:    op.OrderBy,
+		Limit:      op.Limit,
 	}
 }
 
@@ -415,7 +436,7 @@ func buildUpdate(op *Update, qb *queryBuilder) {
 }
 
 type OpWithAST interface {
-	ops.Operator
+	Operator
 	Statement() sqlparser.Statement
 }
 

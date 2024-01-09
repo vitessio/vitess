@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -33,7 +32,7 @@ func TestQP(t *testing.T) {
 		sql string
 
 		expErr   string
-		expOrder []ops.OrderBy
+		expOrder []OrderBy
 	}{
 		{
 			sql: "select * from user",
@@ -46,20 +45,20 @@ func TestQP(t *testing.T) {
 		},
 		{
 			sql: "select 1, count(1) from user order by 1",
-			expOrder: []ops.OrderBy{
+			expOrder: []OrderBy{
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewIntLiteral("1")}, SimplifiedExpr: sqlparser.NewIntLiteral("1")},
 			},
 		},
 		{
 			sql: "select id from user order by col, id, 1",
-			expOrder: []ops.OrderBy{
+			expOrder: []OrderBy{
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("col")}, SimplifiedExpr: sqlparser.NewColName("col")},
 				{Inner: &sqlparser.Order{Expr: sqlparser.NewColName("id")}, SimplifiedExpr: sqlparser.NewColName("id")},
 			},
 		},
 		{
 			sql: "SELECT CONCAT(last_name,', ',first_name) AS full_name FROM mytable ORDER BY full_name", // alias in order not supported
-			expOrder: []ops.OrderBy{
+			expOrder: []OrderBy{
 				{
 					Inner: &sqlparser.Order{Expr: sqlparser.NewColName("full_name")},
 					SimplifiedExpr: &sqlparser.FuncExpr{
@@ -80,14 +79,14 @@ func TestQP(t *testing.T) {
 	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(tcase.sql)
+			stmt, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 
 			sel := stmt.(*sqlparser.Select)
 			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 
-			qp, err := createQPFromSelect(ctx, sel)
+			qp, err := getQPAndError(ctx, sel)
 			if tcase.expErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.expErr)
@@ -102,6 +101,12 @@ func TestQP(t *testing.T) {
 			}
 		})
 	}
+}
+
+func getQPAndError(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (qp *QueryProjection, err error) {
+	defer PanicHandler(&err)
+	qp = createQPFromSelect(ctx, sel)
+	return
 }
 
 func TestQPSimplifiedExpr(t *testing.T) {
@@ -188,13 +193,13 @@ func TestQPSimplifiedExpr(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.query, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tc.query)
+			ast, err := sqlparser.NewTestParser().Parse(tc.query)
 			require.NoError(t, err)
 			sel := ast.(*sqlparser.Select)
 			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 			ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
-			qp, err := createQPFromSelect(ctx, sel)
+			qp := createQPFromSelect(ctx, sel)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected[1:], qp.toString())
 		})

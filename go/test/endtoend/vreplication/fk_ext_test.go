@@ -97,27 +97,18 @@ func TestFKExt(t *testing.T) {
 
 	cellName := fkextConfig.cell
 	cells := []string{cellName}
-	vc = NewVitessCluster(t, t.Name(), cells, fkextConfig.ClusterConfig)
-
-	require.NotNil(t, vc)
-	allCellNames = cellName
-	defaultCellName := cellName
-	defaultCell = vc.Cells[defaultCellName]
+	vc = NewVitessCluster(t, &clusterOptions{
+		cells:         cells,
+		clusterConfig: fkextConfig.ClusterConfig,
+	})
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	cell := vc.Cells[cellName]
 
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	sourceKeyspace := fkextConfig.sourceKeyspaceName
 	vc.AddKeyspace(t, []*Cell{cell}, sourceKeyspace, "0", FKExtSourceVSchema, FKExtSourceSchema, 0, 0, 100, nil)
 
-	vtgate = cell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKeyspace, "0")
-	require.NoError(t, err)
-	require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, "0"), 1, shardStatusWaitTimeout))
-
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
 	lg = &SimpleLoadGenerator{}
@@ -160,7 +151,6 @@ func TestFKExt(t *testing.T) {
 		require.NoError(t, vc.AddShards(t, []*Cell{defaultCell}, ks, threeShards, numReplicas, 0, tabletID, nil))
 		tablets := make(map[string]*cluster.VttabletProcess)
 		for i, shard := range strings.Split(threeShards, ",") {
-			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), numReplicas, shardStatusWaitTimeout))
 			tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID+i*100)].Vttablet
 		}
 		sqls := strings.Split(FKExtSourceSchema, "\n")
@@ -176,7 +166,6 @@ func TestFKExt(t *testing.T) {
 		shard := "0"
 		require.NoError(t, vc.AddShards(t, []*Cell{defaultCell}, ks, shard, numReplicas, 0, tabletID, nil))
 		tablets := make(map[string]*cluster.VttabletProcess)
-		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), numReplicas, shardStatusWaitTimeout))
 		tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID)].Vttablet
 		sqls := strings.Split(FKExtSourceSchema, "\n")
 		for _, sql := range sqls {
@@ -194,17 +183,8 @@ func TestFKExt(t *testing.T) {
 
 }
 
-// compareRowCounts compares the row counts for the parent and child tables in the source and target shards. In addition to vdiffs,
-// it is another check to ensure that both tables have the same number of rows in the source and target shards after load generation
-// has stopped.
-func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []string) error {
-	log.Infof("Comparing row counts for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards)
-	lg.Stop()
-	defer lg.Start()
-	if err := waitForCondition("load generator to stop", func() bool { return lg.State() == LoadGeneratorStateStopped }, 10*time.Second); err != nil {
-		return err
-	}
-
+// checkRowCounts checks that the parent and child tables in the source and target shards have the same number of rows.
+func checkRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []string) bool {
 	sourceTabs := make(map[string]*cluster.VttabletProcess)
 	targetTabs := make(map[string]*cluster.VttabletProcess)
 	for _, shard := range sourceShards {
@@ -239,9 +219,26 @@ func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards 
 	log.Infof("Source parent count: %d, child count: %d, target parent count: %d, child count: %d.",
 		sourceParentCount, sourceChildCount, targetParentCount, targetChildCount)
 	if sourceParentCount != targetParentCount || sourceChildCount != targetChildCount {
-		return fmt.Errorf(fmt.Sprintf("source and target row counts do not match; source parent count: %d, target parent count: %d, source child count: %d, target child count: %d",
-			sourceParentCount, targetParentCount, sourceChildCount, targetChildCount))
+		log.Infof("Row counts do not match for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards)
+		return false
 	}
+	return true
+}
+
+// compareRowCounts compares the row counts for the parent and child tables in the source and target shards. In addition to vdiffs,
+// it is another check to ensure that both tables have the same number of rows in the source and target shards after load generation
+// has stopped.
+func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards []string) error {
+	log.Infof("Comparing row counts for keyspace %s, source shards: %v, target shards: %v", keyspace, sourceShards, targetShards)
+	lg.Stop()
+	defer lg.Start()
+	if err := waitForCondition("load generator to stop", func() bool { return lg.State() == LoadGeneratorStateStopped }, 10*time.Second); err != nil {
+		return err
+	}
+	if err := waitForCondition("matching row counts", func() bool { return checkRowCounts(t, keyspace, sourceShards, targetShards) }, 30*time.Second); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -288,7 +285,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 }
 
 func areRowCountsEqual(t *testing.T) bool {
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	parentRowCount := getRowCount(t, vtgateConn, "target2.parent")
 	childRowCount := getRowCount(t, vtgateConn, "target2.child")
@@ -342,13 +339,9 @@ func moveKeyspace(t *testing.T) {
 
 func newKeyspace(t *testing.T, keyspaceName, shards, vschema, schema string, tabletId, numReplicas int) map[string]*cluster.VttabletProcess {
 	tablets := make(map[string]*cluster.VttabletProcess)
-	cellName := fkextConfig.cell
 	cell := vc.Cells[fkextConfig.cell]
+	vtgate := cell.Vtgates[0]
 	vc.AddKeyspace(t, []*Cell{cell}, keyspaceName, shards, vschema, schema, numReplicas, 0, tabletId, nil)
-	for i, shard := range strings.Split(shards, ",") {
-		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1, shardStatusWaitTimeout))
-		tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletId+i*100)].Vttablet
-	}
 	err := vc.VtctldClient.ExecuteCommand("RebuildVSchemaGraph")
 	require.NoError(t, err)
 	require.NoError(t, waitForColumn(t, vtgate, keyspaceName, "parent", "id"))

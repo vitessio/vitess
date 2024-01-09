@@ -295,7 +295,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 		// insert data into the new primary, check the connected replica work
 		insertVal = utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[3]})
 	} else {
-		assert.Contains(t, out, fmt.Sprintf("TabletManager.PrimaryStatus on %s error", tablets[2].Alias))
+		assert.Contains(t, out, fmt.Sprintf("TabletManager.PrimaryStatus on %s", tablets[2].Alias))
 		// insert data into the old primary, check the connected replica works. The primary tablet shouldn't have changed.
 		insertVal = utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})
 	}

@@ -71,16 +71,16 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Type:                 topodatapb.TabletType_REPLICA,
 		Tags:                 map[string]string{},
 		DbNameOverride:       "aa",
-		DefaultConnCollation: uint32(collations.Default()),
+		DefaultConnCollation: uint32(collations.MySQL8().DefaultConnectionCharset()),
 	}
 
-	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil)
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
 
 	// Hostname should be resolved.
 	assert.Equal(t, wantTablet, gotTablet)
 	tabletHostname = ""
-	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
 	assert.NotEqual(t, "", gotTablet.Hostname)
 
@@ -92,7 +92,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Start: []byte(""),
 		End:   []byte("\xc0"),
 	}
-	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
 	// KeyRange check is explicit because the next comparison doesn't
 	// show the diff well enough.
@@ -102,25 +102,25 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	// Invalid inputs.
 	initKeyspace = ""
 	initShard = "0"
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
 	initKeyspace = "test_keyspace"
 	initShard = ""
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
 	initShard = "x-y"
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "cannot validate shard name")
 
 	initShard = "0"
 	initTabletType = "bad"
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "unknown TabletType bad")
 
 	initTabletType = "primary"
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil)
+	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "invalid init_tablet_type PRIMARY")
 }
 
@@ -153,10 +153,10 @@ func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
 		Type:                 topodatapb.TabletType_REPLICA,
 		Tags:                 servenv.AppVersion.ToStringMap(),
 		DbNameOverride:       "aa",
-		DefaultConnCollation: uint32(collations.Default()),
+		DefaultConnCollation: uint32(collations.MySQL8().DefaultConnectionCharset()),
 	}
 
-	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil)
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	require.NoError(t, err)
 	assert.Equal(t, wantTablet, gotTablet)
 }
@@ -282,7 +282,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -297,7 +297,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	// correct and start as PRIMARY.
 	err = ts.DeleteTablet(ctx, alias)
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -311,7 +311,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	ti.Type = topodatapb.TabletType_PRIMARY
 	err = ts.UpdateTablet(ctx, ti)
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -321,7 +321,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	tm.Stop()
 
 	// 5. Subsequent inits will still start the vttablet as PRIMARY.
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -353,7 +353,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -380,7 +380,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -407,7 +407,7 @@ func TestStartCheckMysql(t *testing.T) {
 		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, ""),
 		QueryServiceControl: tabletservermock.NewController(),
 	}
-	err := tm.Start(tablet, 0)
+	err := tm.Start(tablet, nil)
 	require.NoError(t, err)
 	defer tm.Stop()
 
@@ -435,7 +435,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 	}
-	err := tm.Start(tablet, 0)
+	err := tm.Start(tablet, nil)
 	require.NoError(t, err)
 	defer tm.Stop()
 
@@ -511,7 +511,7 @@ func TestStartDoesNotUpdateReplicationDataForTabletInWrongShard(t *testing.T) {
 
 	tablet := newTestTablet(t, 1, "ks", "-d0")
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	assert.Contains(t, err.Error(), "existing tablet keyspace and shard ks/0 differ")
 
 	tablets, err := ts.FindAllTabletAliasesInShard(ctx, "ks", "-d0")
@@ -548,7 +548,7 @@ func TestCheckTabletTypeResets(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	err = tm.Start(tablet, 0)
+	err = tm.Start(tablet, nil)
 	require.NoError(t, err)
 	assert.Equal(t, tm.tmState.tablet.Type, tm.tmState.displayState.tablet.Type)
 	ti, err = ts.GetTablet(ctx, alias)
@@ -671,7 +671,7 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 	}
-	err := tm.Start(tablet, 0)
+	err := tm.Start(tablet, nil)
 	require.NoError(t, err)
 
 	// Wait for SrvKeyspace to be rebuilt. We know that it has been built

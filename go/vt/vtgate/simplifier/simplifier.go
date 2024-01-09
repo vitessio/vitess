@@ -201,7 +201,7 @@ func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.SelectStatement, 
 		simplified := removeTable(clone, searchedTS, currentDB, si)
 		name, _ := tbl.Name()
 		if simplified && test(clone) {
-			log.Errorf("removed table %s: %s -> %s", sqlparser.String(name), sqlparser.String(in), sqlparser.String(clone))
+			log.Errorf("removed table `%s`: \n%s\n%s", sqlparser.String(name), sqlparser.String(in), sqlparser.String(clone))
 			return clone
 		}
 	}

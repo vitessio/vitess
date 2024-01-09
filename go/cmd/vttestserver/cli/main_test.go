@@ -34,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
@@ -189,11 +190,17 @@ func TestCanGetKeyspaces(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
 
-	cluster, err := startCluster()
+	clusterInstance, err := startCluster()
 	assert.NoError(t, err)
-	defer cluster.TearDown()
+	defer clusterInstance.TearDown()
 
-	assertGetKeyspaces(t, cluster)
+	defer func() {
+		if t.Failed() {
+			cluster.PrintFiles(t, clusterInstance.Env.Directory(), "vtcombo.INFO", "error.log")
+		}
+	}()
+
+	assertGetKeyspaces(t, clusterInstance)
 }
 
 func TestExternalTopoServerConsul(t *testing.T) {

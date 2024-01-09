@@ -61,6 +61,7 @@ Flags:
       --pid_file string                                             If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
+      --pprof-http                                                  enable pprof http endpoints (default true)
       --prevent-cross-cell-failover                                 Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover
       --purge_logs_interval duration                                how often try to remove old logs (default 1h0m0s)
       --reasonable-replication-lag duration                         Maximum replication lag on replicas which is deemed to be acceptable (default 10s)
@@ -86,6 +87,7 @@ Flags:
       --tablet_manager_grpc_key string                              the key to use to connect
       --tablet_manager_grpc_server_name string                      the server name to use to validate server certificate
       --tablet_manager_protocol string                              Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
+      --tolerable-replication-lag duration                          Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS
       --topo-information-refresh-duration duration                  Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server (default 15s)
       --topo_consul_lock_delay duration                             LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                      List of checks for consul session. (default "serfHealth")

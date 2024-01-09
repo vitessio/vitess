@@ -174,6 +174,7 @@ Flags:
       --mycnf_slow_log_path string                                  mysql slow query log path
       --mycnf_socket_file string                                    mysql socket file
       --mycnf_tmp_dir string                                        mysql tmp directory
+      --mysql-shutdown-timeout duration                             how long to wait for mysqld shutdown (default 5m0s)
       --mysql_port int                                              mysql port (default 3306)
       --mysql_server_version string                                 MySQL server version to advertise. (default "8.0.30-Vitess")
       --mysql_socket string                                         path to the mysql socket
@@ -181,6 +182,7 @@ Flags:
       --opentsdb_uri string                                         URI of opentsdb /api/put method
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
+      --pprof-http                                                  enable pprof http endpoints (default true)
       --purge_logs_interval duration                                how often try to remove old logs (default 1h0m0s)
       --remote_operation_timeout duration                           time to wait for a remote operation (default 15s)
       --restart_before_backup                                       Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.

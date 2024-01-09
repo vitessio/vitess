@@ -190,6 +190,7 @@ func TestDiffTables(t *testing.T) {
 			},
 		},
 	}
+	parser := sqlparser.NewTestParser()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateTable *sqlparser.CreateTable
@@ -198,7 +199,7 @@ func TestDiffTables(t *testing.T) {
 				hints = ts.hints
 			}
 			if ts.from != "" {
-				fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
+				fromStmt, err := parser.ParseStrictDDL(ts.from)
 				assert.NoError(t, err)
 				var ok bool
 				fromCreateTable, ok = fromStmt.(*sqlparser.CreateTable)
@@ -206,7 +207,7 @@ func TestDiffTables(t *testing.T) {
 			}
 			var toCreateTable *sqlparser.CreateTable
 			if ts.to != "" {
-				toStmt, err := sqlparser.ParseStrictDDL(ts.to)
+				toStmt, err := parser.ParseStrictDDL(ts.to)
 				assert.NoError(t, err)
 				var ok bool
 				toCreateTable, ok = toStmt.(*sqlparser.CreateTable)
@@ -218,7 +219,7 @@ func TestDiffTables(t *testing.T) {
 			// Technically, DiffCreateTablesQueries calls DiffTables,
 			// but we expose both to users of this library. so we want to make sure
 			// both work as expected irrespective of any relationship between them.
-			dq, dqerr := DiffCreateTablesQueries(ts.from, ts.to, hints)
+			dq, dqerr := DiffCreateTablesQueries(ts.from, ts.to, hints, sqlparser.NewTestParser())
 			d, err := DiffTables(fromCreateTable, toCreateTable, hints)
 			switch {
 			case ts.isError:
@@ -241,7 +242,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.ParseStrictDDL(diff)
+					_, err = parser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -260,7 +261,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.ParseStrictDDL(canonicalDiff)
+					_, err = parser.ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
 				// let's also check dq, and also validate that dq's statement is identical to d's
@@ -322,11 +323,12 @@ func TestDiffViews(t *testing.T) {
 		},
 	}
 	hints := &DiffHints{}
+	parser := sqlparser.NewTestParser()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateView *sqlparser.CreateView
 			if ts.from != "" {
-				fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
+				fromStmt, err := parser.ParseStrictDDL(ts.from)
 				assert.NoError(t, err)
 				var ok bool
 				fromCreateView, ok = fromStmt.(*sqlparser.CreateView)
@@ -334,7 +336,7 @@ func TestDiffViews(t *testing.T) {
 			}
 			var toCreateView *sqlparser.CreateView
 			if ts.to != "" {
-				toStmt, err := sqlparser.ParseStrictDDL(ts.to)
+				toStmt, err := parser.ParseStrictDDL(ts.to)
 				assert.NoError(t, err)
 				var ok bool
 				toCreateView, ok = toStmt.(*sqlparser.CreateView)
@@ -346,7 +348,7 @@ func TestDiffViews(t *testing.T) {
 			// Technically, DiffCreateTablesQueries calls DiffTables,
 			// but we expose both to users of this library. so we want to make sure
 			// both work as expected irrespective of any relationship between them.
-			dq, dqerr := DiffCreateViewsQueries(ts.from, ts.to, hints)
+			dq, dqerr := DiffCreateViewsQueries(ts.from, ts.to, hints, parser)
 			d, err := DiffViews(fromCreateView, toCreateView, hints)
 			switch {
 			case ts.isError:
@@ -369,7 +371,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.ParseStrictDDL(diff)
+					_, err = parser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -388,7 +390,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = sqlparser.ParseStrictDDL(canonicalDiff)
+					_, err = parser.ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
 
@@ -796,12 +798,13 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 	}
+	parser := sqlparser.NewTestParser()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			hints := &DiffHints{
 				TableRenameStrategy: ts.tableRename,
 			}
-			diff, err := DiffSchemasSQL(ts.from, ts.to, hints)
+			diff, err := DiffSchemasSQL(ts.from, ts.to, hints, parser)
 			if ts.expectError != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), ts.expectError)
@@ -827,21 +830,21 @@ func TestDiffSchemas(t *testing.T) {
 
 				// validate we can parse back the diff statements
 				for _, s := range statements {
-					_, err := sqlparser.ParseStrictDDL(s)
+					_, err := parser.ParseStrictDDL(s)
 					assert.NoError(t, err)
 				}
 				for _, s := range cstatements {
-					_, err := sqlparser.ParseStrictDDL(s)
+					_, err := parser.ParseStrictDDL(s)
 					assert.NoError(t, err)
 				}
 
 				{
 					// Validate "apply()" on "from" converges with "to"
-					schema1, err := NewSchemaFromSQL(ts.from)
+					schema1, err := NewSchemaFromSQL(ts.from, parser)
 					require.NoError(t, err)
 					schema1SQL := schema1.ToSQL()
 
-					schema2, err := NewSchemaFromSQL(ts.to)
+					schema2, err := NewSchemaFromSQL(ts.to, parser)
 					require.NoError(t, err)
 					applied, err := schema1.Apply(diffs)
 					require.NoError(t, err)
@@ -892,12 +895,13 @@ func TestSchemaApplyError(t *testing.T) {
 		},
 	}
 	hints := &DiffHints{}
+	parser := sqlparser.NewTestParser()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			// Validate "apply()" on "from" converges with "to"
-			schema1, err := NewSchemaFromSQL(ts.from)
+			schema1, err := NewSchemaFromSQL(ts.from, parser)
 			assert.NoError(t, err)
-			schema2, err := NewSchemaFromSQL(ts.to)
+			schema2, err := NewSchemaFromSQL(ts.to, parser)
 			assert.NoError(t, err)
 
 			{

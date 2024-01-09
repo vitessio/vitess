@@ -380,9 +380,6 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
 			return err
 		}
-		if err != nil {
-			return err
-		}
 		for table, vtab := range ks.Tables {
 			vschema.Tables[table] = vtab
 		}
@@ -612,7 +609,8 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 
 func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s", encodeString(source.GetPrimary().DbName()))
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",
+			encodeString(source.GetPrimary().DbName()), encodeString(ts.ReverseWorkflowName()))
 		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})
@@ -1002,7 +1000,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		ts.Logger().Errorf("Cancel migration failed:", err)
 	}
 
-	sm.CancelMigration(ctx)
+	sm.CancelStreamMigrations(ctx)
 
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",

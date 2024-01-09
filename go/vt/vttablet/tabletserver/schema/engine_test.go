@@ -32,13 +32,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
-
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
@@ -576,18 +575,18 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 
 func newEngine(reloadTime time.Duration, idleTimeout time.Duration, schemaMaxAgeSeconds int64, db *fakesqldb.DB) *Engine {
 	config := tabletenv.NewDefaultConfig()
-	_ = config.SchemaReloadIntervalSeconds.Set(reloadTime.String())
-	_ = config.OltpReadPool.IdleTimeoutSeconds.Set(idleTimeout.String())
-	_ = config.OlapReadPool.IdleTimeoutSeconds.Set(idleTimeout.String())
-	_ = config.TxPool.IdleTimeoutSeconds.Set(idleTimeout.String())
+	config.SchemaReloadInterval = reloadTime
+	config.OltpReadPool.IdleTimeout = idleTimeout
+	config.OlapReadPool.IdleTimeout = idleTimeout
+	config.TxPool.IdleTimeout = idleTimeout
 	config.SchemaVersionMaxAgeSeconds = schemaMaxAgeSeconds
-	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest"))
+	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest", collations.MySQL8(), sqlparser.NewTestParser()))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }
 
 func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
-	params, _ := db.ConnParams().MysqlParams()
+	params := db.ConnParams()
 	cp := *params
 	return dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 }
@@ -705,6 +704,29 @@ func AddFakeInnoDBReadRowsResult(db *fakesqldb.DB, value int) *fakesqldb.Expecte
 	))
 }
 
+// TestRegisterNotifier tests the functionality of RegisterNotifier
+// It also makes sure that writing to the tables map in the schema engine doesn't change the tables received by the notifiers.
+func TestRegisterNotifier(t *testing.T) {
+	// Create a new engine for testing
+	se := NewEngineForTests()
+	se.notifiers = map[string]notifier{}
+	se.tables = map[string]*Table{
+		"t1": nil,
+		"t2": nil,
+		"t3": nil,
+	}
+
+	var tablesReceived map[string]*Table
+	// Register a notifier and make it run immediately.
+	se.RegisterNotifier("TestRegisterNotifier", func(full map[string]*Table, created, altered, dropped []*Table) {
+		tablesReceived = full
+	}, true)
+
+	// Change the se.tables and make sure it doesn't affect the tables received by the notifier.
+	se.tables["t4"] = nil
+	require.Len(t, tablesReceived, 3)
+}
+
 // TestEngineMysqlTime tests the functionality of Engine.mysqlTime function
 func TestEngineMysqlTime(t *testing.T) {
 	tests := []struct {
@@ -742,7 +764,8 @@ func TestEngineMysqlTime(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			se := &Engine{}
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			if tt.timeStampErr != nil {
@@ -848,7 +871,8 @@ func TestEnginePopulatePrimaryKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
 
@@ -909,7 +933,8 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
 			se.innoDbReadRowsCounter = stats.NewCounter("TestEngineUpdateInnoDBRowsRead-"+tt.name, "")
@@ -936,7 +961,8 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 // TestEngineGetTableData tests the functionality of getTableData function
 func TestEngineGetTableData(t *testing.T) {
 	db := fakesqldb.New(t)
-	conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+	env := tabletenv.NewEnv(nil, "TestEngineGetTableData", collations.MySQL8(), sqlparser.NewTestParser())
+	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -1110,7 +1136,8 @@ func TestEngineReload(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	cfg.SignalWhenSchemaChange = true
-	conn, err := connpool.NewConn(context.Background(), db.ConnParams(), nil, nil)
+	env := tabletenv.NewEnv(nil, "TestEngineReload", collations.MySQL8(), sqlparser.NewTestParser())
+	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	se := newEngine(10*time.Second, 10*time.Second, 0, db)

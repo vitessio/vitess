@@ -30,8 +30,9 @@ import (
 )
 
 func TestAppend(t *testing.T) {
+	parser := NewTestParser()
 	query := "select * from t where a = 1"
-	tree, err := Parse(query)
+	tree, err := parser.Parse(query)
 	require.NoError(t, err)
 	var b strings.Builder
 	Append(&b, tree)
@@ -49,9 +50,10 @@ func TestAppend(t *testing.T) {
 }
 
 func TestSelect(t *testing.T) {
-	e1, err := ParseExpr("a = 1")
+	parser := NewTestParser()
+	e1, err := parser.ParseExpr("a = 1")
 	require.NoError(t, err)
-	e2, err := ParseExpr("b = 2")
+	e2, err := parser.ParseExpr("b = 2")
 	require.NoError(t, err)
 	t.Run("single predicate where", func(t *testing.T) {
 		sel := &Select{}
@@ -81,7 +83,8 @@ func TestSelect(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	tree, err := Parse("update t set a = 1")
+	parser := NewTestParser()
+	tree, err := parser.Parse("update t set a = 1")
 	require.NoError(t, err)
 
 	upd, ok := tree.(*Update)
@@ -103,11 +106,12 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestRemoveHints(t *testing.T) {
+	parser := NewTestParser()
 	for _, query := range []string{
 		"select * from t use index (i)",
 		"select * from t force index (i)",
 	} {
-		tree, err := Parse(query)
+		tree, err := parser.Parse(query)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -124,16 +128,17 @@ func TestRemoveHints(t *testing.T) {
 }
 
 func TestAddOrder(t *testing.T) {
-	src, err := Parse("select foo, bar from baz order by foo")
+	parser := NewTestParser()
+	src, err := parser.Parse("select foo, bar from baz order by foo")
 	require.NoError(t, err)
 	order := src.(*Select).OrderBy[0]
-	dst, err := Parse("select * from t")
+	dst, err := parser.Parse("select * from t")
 	require.NoError(t, err)
 	dst.(*Select).AddOrder(order)
 	buf := NewTrackedBuffer(nil)
 	dst.Format(buf)
 	require.Equal(t, "select * from t order by foo asc", buf.String())
-	dst, err = Parse("select * from t union select * from s")
+	dst, err = parser.Parse("select * from t union select * from s")
 	require.NoError(t, err)
 	dst.(*Union).AddOrder(order)
 	buf = NewTrackedBuffer(nil)
@@ -142,16 +147,17 @@ func TestAddOrder(t *testing.T) {
 }
 
 func TestSetLimit(t *testing.T) {
-	src, err := Parse("select foo, bar from baz limit 4")
+	parser := NewTestParser()
+	src, err := parser.Parse("select foo, bar from baz limit 4")
 	require.NoError(t, err)
 	limit := src.(*Select).Limit
-	dst, err := Parse("select * from t")
+	dst, err := parser.Parse("select * from t")
 	require.NoError(t, err)
 	dst.(*Select).SetLimit(limit)
 	buf := NewTrackedBuffer(nil)
 	dst.Format(buf)
 	require.Equal(t, "select * from t limit 4", buf.String())
-	dst, err = Parse("select * from t union select * from s")
+	dst, err = parser.Parse("select * from t union select * from s")
 	require.NoError(t, err)
 	dst.(*Union).SetLimit(limit)
 	buf = NewTrackedBuffer(nil)
@@ -213,8 +219,9 @@ func TestDDL(t *testing.T) {
 		},
 		affected: []string{"a", "b"},
 	}}
+	parser := NewTestParser()
 	for _, tcase := range testcases {
-		got, err := Parse(tcase.query)
+		got, err := parser.Parse(tcase.query)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -232,7 +239,8 @@ func TestDDL(t *testing.T) {
 }
 
 func TestSetAutocommitON(t *testing.T) {
-	stmt, err := Parse("SET autocommit=ON")
+	parser := NewTestParser()
+	stmt, err := parser.Parse("SET autocommit=ON")
 	require.NoError(t, err)
 	s, ok := stmt.(*Set)
 	if !ok {
@@ -257,7 +265,7 @@ func TestSetAutocommitON(t *testing.T) {
 		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
 
-	stmt, err = Parse("SET @@session.autocommit=ON")
+	stmt, err = parser.Parse("SET @@session.autocommit=ON")
 	require.NoError(t, err)
 	s, ok = stmt.(*Set)
 	if !ok {
@@ -284,7 +292,8 @@ func TestSetAutocommitON(t *testing.T) {
 }
 
 func TestSetAutocommitOFF(t *testing.T) {
-	stmt, err := Parse("SET autocommit=OFF")
+	parser := NewTestParser()
+	stmt, err := parser.Parse("SET autocommit=OFF")
 	require.NoError(t, err)
 	s, ok := stmt.(*Set)
 	if !ok {
@@ -309,7 +318,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
 
-	stmt, err = Parse("SET @@session.autocommit=OFF")
+	stmt, err = parser.Parse("SET @@session.autocommit=OFF")
 	require.NoError(t, err)
 	s, ok = stmt.(*Set)
 	if !ok {
@@ -491,9 +500,10 @@ func TestReplaceExpr(t *testing.T) {
 		out: "case a when b then c when d then c else :a end",
 	}}
 	to := NewArgument("a")
+	parser := NewTestParser()
 	for _, tcase := range tcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			tree, err := Parse(tcase.in)
+			tree, err := parser.Parse(tcase.in)
 			require.NoError(t, err)
 			var from *Subquery
 			_ = Walk(func(node SQLNode) (kontinue bool, err error) {
@@ -738,13 +748,14 @@ func TestSplitStatementToPieces(t *testing.T) {
 	},
 	}
 
+	parser := NewTestParser()
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
 			}
 
-			stmtPieces, err := SplitStatementToPieces(tcase.input)
+			stmtPieces, err := parser.SplitStatementToPieces(tcase.input)
 			require.NoError(t, err)
 
 			out := strings.Join(stmtPieces, ";")
@@ -766,13 +777,15 @@ func TestDefaultStatus(t *testing.T) {
 }
 
 func TestShowTableStatus(t *testing.T) {
+	parser := NewTestParser()
 	query := "Show Table Status FROM customer"
-	tree, err := Parse(query)
+	tree, err := parser.Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, tree)
 }
 
 func BenchmarkStringTraces(b *testing.B) {
+	parser := NewTestParser()
 	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
 		b.Run(trace, func(b *testing.B) {
 			queries := loadQueries(b, trace)
@@ -782,7 +795,7 @@ func BenchmarkStringTraces(b *testing.B) {
 
 			parsed := make([]Statement, 0, len(queries))
 			for _, q := range queries {
-				pp, err := Parse(q)
+				pp, err := parser.Parse(q)
 				if err != nil {
 					b.Fatal(err)
 				}

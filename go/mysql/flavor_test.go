@@ -18,6 +18,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/mysql/capabilities"
 )
 
 func TestServerVersionAtLeast(t *testing.T) {
@@ -41,6 +43,21 @@ func TestServerVersionAtLeast(t *testing.T) {
 			version: "8.0.14",
 			parts:   []int{8, 0, 13},
 			expect:  true,
+		},
+		{
+			version: "8.0.14-log",
+			parts:   []int{8, 0, 13},
+			expect:  true,
+		},
+		{
+			version: "8.0.14",
+			parts:   []int{8, 0, 15},
+			expect:  false,
+		},
+		{
+			version: "8.0.14-log",
+			parts:   []int{8, 0, 15},
+			expect:  false,
 		},
 		{
 			version: "8.0.14",
@@ -77,6 +94,11 @@ func TestServerVersionAtLeast(t *testing.T) {
 			parts:       []int{8, 0, 14},
 			expectError: true,
 		},
+		{
+			version:     "",
+			parts:       []int{8, 0, 14},
+			expectError: true,
+		},
 	}
 	for _, tc := range testcases {
 		result, err := ServerVersionAtLeast(tc.version, tc.parts...)
@@ -92,89 +114,116 @@ func TestServerVersionAtLeast(t *testing.T) {
 func TestGetFlavor(t *testing.T) {
 	testcases := []struct {
 		version    string
-		capability FlavorCapability
+		capability capabilities.FlavorCapability
 		isCapable  bool
 	}{
 		{
 			version:    "8.0.14",
-			capability: InstantDDLFlavorCapability,
+			capability: capabilities.InstantDDLFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.20",
-			capability: TransactionalGtidExecutedFlavorCapability,
+			capability: capabilities.TransactionalGtidExecutedFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.0",
-			capability: InstantAddLastColumnFlavorCapability,
+			capability: capabilities.InstantAddLastColumnFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.0",
-			capability: InstantAddDropColumnFlavorCapability,
+			capability: capabilities.InstantAddDropColumnFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "5.6.7",
-			capability: InstantDDLFlavorCapability,
+			capability: capabilities.InstantDDLFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "5.7.29",
-			capability: TransactionalGtidExecutedFlavorCapability,
+			capability: capabilities.TransactionalGtidExecutedFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "5.6.7",
-			capability: MySQLJSONFlavorCapability,
+			capability: capabilities.MySQLJSONFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "5.7.29",
-			capability: MySQLJSONFlavorCapability,
+			capability: capabilities.MySQLJSONFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.30",
-			capability: DynamicRedoLogCapacityFlavorCapability,
+			capability: capabilities.DynamicRedoLogCapacityFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.29",
-			capability: DynamicRedoLogCapacityFlavorCapability,
+			capability: capabilities.DynamicRedoLogCapacityFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "5.7.38",
-			capability: DynamicRedoLogCapacityFlavorCapability,
+			capability: capabilities.DynamicRedoLogCapacityFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "8.0.21",
-			capability: DisableRedoLogFlavorCapability,
+			capability: capabilities.DisableRedoLogFlavorCapability,
 			isCapable:  true,
 		},
 		{
 			version:    "8.0.20",
-			capability: DisableRedoLogFlavorCapability,
+			capability: capabilities.DisableRedoLogFlavorCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "8.0.15",
-			capability: CheckConstraintsCapability,
+			capability: capabilities.CheckConstraintsCapability,
 			isCapable:  false,
 		},
 		{
 			version:    "8.0.20",
-			capability: CheckConstraintsCapability,
+			capability: capabilities.CheckConstraintsCapability,
 			isCapable:  true,
+		},
+		{
+			version:    "8.0.20-log",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "5.7.38",
+			capability: capabilities.PerformanceSchemaDataLocksTableCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "8.0.20",
+			capability: capabilities.PerformanceSchemaDataLocksTableCapability,
+			isCapable:  true,
+		},
+		{
+			// What happens if server version is unspecified
+			version:    "",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  false,
+		},
+		{
+			// Some ridiculous version
+			version:    "5914.234.17",
+			capability: capabilities.CheckConstraintsCapability,
+			isCapable:  false,
 		},
 	}
 	for _, tc := range testcases {
 		name := fmt.Sprintf("%s %v", tc.version, tc.capability)
 		t.Run(name, func(t *testing.T) {
-			_, capableOf, _ := GetFlavor(tc.version, nil)
+			capableOf := ServerVersionCapableOf(tc.version)
 			isCapable, err := capableOf(tc.capability)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.isCapable, isCapable)

@@ -27,7 +27,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 
@@ -136,6 +135,9 @@ type VRepl struct {
 	parser *vrepl.AlterTableParser
 
 	convertCharset map[string](*binlogdatapb.CharsetConversion)
+
+	collationEnv *collations.Environment
+	sqlparser    *sqlparser.Parser
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
@@ -149,6 +151,8 @@ func NewVRepl(workflow string,
 	vreplShowCreateTable string,
 	alterQuery string,
 	analyzeTable bool,
+	collationEnv *collations.Environment,
+	parser *sqlparser.Parser,
 ) *VRepl {
 	return &VRepl{
 		workflow:                workflow,
@@ -165,6 +169,8 @@ func NewVRepl(workflow string,
 		enumToTextMap:           map[string]string{},
 		intToEnumMap:            map[string]bool{},
 		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
+		collationEnv:            collationEnv,
+		sqlparser:               parser,
 	}
 }
 
@@ -178,7 +184,7 @@ func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnec
 		return 0, err
 	}
 
-	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(query, -1, true)
 	if err != nil {
 		return 0, err
 	}
@@ -192,7 +198,7 @@ func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnec
 // readTableColumns reads column list from given table
 func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (columns *vrepl.ColumnList, virtualColumns *vrepl.ColumnList, pkColumns *vrepl.ColumnList, err error) {
 	parsed := sqlparser.BuildParsedQuery(sqlShowColumnsFrom, tableName)
-	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(parsed.Query, -1, true)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -230,7 +236,7 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 	if err != nil {
 		return nil, err
 	}
-	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(query, -1, true)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +259,7 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 // When `fast_analyze_table=1`, an `ANALYZE TABLE` command only analyzes the clustering index (normally the `PRIMARY KEY`).
 // This is useful when you want to get a better estimate of the number of table rows, as fast as possible.
 func (v *VRepl) isFastAnalyzeTableSupported(ctx context.Context, conn *dbconnpool.DBConnection) (isSupported bool, err error) {
-	rs, err := conn.ExecuteFetch(sqlShowVariablesLikeFastAnalyzeTable, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(sqlShowVariablesLikeFastAnalyzeTable, -1, true)
 	if err != nil {
 		return false, err
 	}
@@ -288,7 +294,7 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 // readTableStatus reads table status information
 func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (tableRows int64, err error) {
 	parsed := sqlparser.BuildParsedQuery(sqlShowTableStatus, tableName)
-	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(parsed.Query, -1, true)
 	if err != nil {
 		return 0, err
 	}
@@ -309,7 +315,7 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 	if err != nil {
 		return err
 	}
-	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	rs, err := conn.ExecuteFetch(query, -1, true)
 	if err != nil {
 		return err
 	}
@@ -384,7 +390,7 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 		// Happens for REVERT
 		return nil
 	}
-	if err := v.parser.ParseAlterStatement(v.alterQuery); err != nil {
+	if err := v.parser.ParseAlterStatement(v.alterQuery, v.sqlparser); err != nil {
 		return err
 	}
 	if v.parser.IsRenameTable() {
@@ -455,7 +461,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.originalShowCreateTable, v.vreplShowCreateTable)
+	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.sqlparser, v.originalShowCreateTable, v.vreplShowCreateTable)
 	if err != nil {
 		return err
 	}
@@ -553,11 +559,11 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		case sourceCol.Type == vrepl.StringColumnType:
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
-			fromCollation := collations.Local().DefaultCollationForCharset(sourceCol.Charset)
+			fromCollation := v.collationEnv.DefaultCollationForCharset(sourceCol.Charset)
 			if fromCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
 			}
-			toCollation := collations.Local().DefaultCollationForCharset(targetCol.Charset)
+			toCollation := v.collationEnv.DefaultCollationForCharset(targetCol.Charset)
 			// Let's see if target col is at all textual
 			if targetCol.Type == vrepl.StringColumnType && toCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
@@ -659,16 +665,16 @@ func (v *VRepl) generateStartStatement(ctx context.Context) (string, error) {
 	)
 }
 
-func getVreplTable(ctx context.Context, s *VReplStream) (string, error) {
+func getVreplTable(s *VReplStream) (string, error) {
 	// sanity checks:
 	if s == nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No vreplication stream migration %s", s.workflow)
+		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No vreplication stream migration")
 	}
 	if s.bls.Filter == nil {
 		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No binlog source filter for migration %s", s.workflow)
 	}
 	if len(s.bls.Filter.Rules) != 1 {
-		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot detect filter rules for migration/vreplication %+v", s.workflow)
+		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot detect filter rules for migration/vreplication %s", s.workflow)
 	}
 	vreplTable := s.bls.Filter.Rules[0].Match
 	return vreplTable, nil

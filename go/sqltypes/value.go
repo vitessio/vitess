@@ -733,7 +733,13 @@ func (v Value) TinyWeightCmp(other Value) int {
 	if v.flags&other.flags&flagTinyWeight == 0 {
 		return 0
 	}
-	return int(int64(v.tinyweight) - int64(other.tinyweight))
+	if v.tinyweight == other.tinyweight {
+		return 0
+	}
+	if v.tinyweight < other.tinyweight {
+		return -1
+	}
+	return 1
 }
 
 func (v Value) TinyWeight() uint32 {

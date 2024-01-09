@@ -129,7 +129,17 @@ func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
 
 // ConnCollation implements VCursor
 func (t *noopVCursor) ConnCollation() collations.ID {
-	return collations.Default()
+	return collations.MySQL8().DefaultConnectionCharset()
+}
+
+// CollationEnv implements VCursor
+func (t *noopVCursor) CollationEnv() *collations.Environment {
+	return collations.MySQL8()
+}
+
+// SQLParser implements VCursor
+func (t *noopVCursor) SQLParser() *sqlparser.Parser {
+	return sqlparser.NewTestParser()
 }
 
 func (t *noopVCursor) TimeZone() *time.Location {
@@ -275,10 +285,6 @@ func (t *noopVCursor) SetAutocommit(context.Context, bool) error {
 	panic("implement me")
 }
 
-func (t *noopVCursor) SetSessionForeignKeyChecks(ctx context.Context, foreignKeyChecks bool) error {
-	panic("implement me")
-}
-
 func (t *noopVCursor) SetClientFoundRows(context.Context, bool) error {
 	panic("implement me")
 }
@@ -416,6 +422,8 @@ type loggingVCursor struct {
 	ksShardMap map[string][]string
 
 	shardSession []*srvtopo.ResolvedShard
+
+	parser *sqlparser.Parser
 }
 
 func (f *loggingVCursor) HasCreatedTempTable() {
@@ -747,10 +755,6 @@ func (f *loggingVCursor) SetAutocommit(context.Context, bool) error {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetSessionForeignKeyChecks(ctx context.Context, foreignKeyChecks bool) error {
-	panic("implement me")
-}
-
 func (f *loggingVCursor) SetClientFoundRows(context.Context, bool) error {
 	panic("implement me")
 }
@@ -806,11 +810,19 @@ func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
 }
 
 func (f *loggingVCursor) CanUseSetVar() bool {
-	useSetVar := sqlparser.IsMySQL80AndAbove() && !f.disableSetVar
+	useSetVar := f.SQLParser().IsMySQL80AndAbove() && !f.disableSetVar
 	if useSetVar {
 		f.log = append(f.log, "SET_VAR can be used")
 	}
 	return useSetVar
+}
+
+// SQLParser implements VCursor
+func (t *loggingVCursor) SQLParser() *sqlparser.Parser {
+	if t.parser == nil {
+		return sqlparser.NewTestParser()
+	}
+	return t.parser
 }
 
 func (t *noopVCursor) VExplainLogging() {}

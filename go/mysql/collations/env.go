@@ -248,10 +248,10 @@ func (env *Environment) CollationAlias(collation string) (string, bool) {
 // to a Collation ID, with the exception that it can only fit in 1 byte.
 // For MySQL 8.0+ environments, the default charset is `utf8mb4_0900_ai_ci`.
 // For older MySQL environments, the default charset is `utf8mb4_general_ci`.
-func (env *Environment) DefaultConnectionCharset() uint8 {
+func (env *Environment) DefaultConnectionCharset() ID {
 	switch env.version {
 	case collverMySQL8:
-		return uint8(CollationUtf8mb4ID)
+		return CollationUtf8mb4ID
 	default:
 		return 45
 	}
@@ -267,7 +267,7 @@ func (env *Environment) DefaultConnectionCharset() uint8 {
 // handshake.
 // - empty, in which case the default connection charset for this MySQL version
 // is returned.
-func (env *Environment) ParseConnectionCharset(csname string) (uint8, error) {
+func (env *Environment) ParseConnectionCharset(csname string) (ID, error) {
 	if csname == "" {
 		return env.DefaultConnectionCharset(), nil
 	}
@@ -282,7 +282,7 @@ func (env *Environment) ParseConnectionCharset(csname string) (uint8, error) {
 	if collid == 0 || collid > 255 {
 		return 0, fmt.Errorf("unsupported connection charset: %q", csname)
 	}
-	return uint8(collid), nil
+	return collid, nil
 }
 
 func (env *Environment) AllCollationIDs() []ID {

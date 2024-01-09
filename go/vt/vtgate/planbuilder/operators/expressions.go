@@ -28,10 +28,10 @@ func breakExpressionInLHSandRHSForApplyJoin(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
-) (col JoinColumn, err error) {
+) (col applyJoinColumn) {
 	rewrittenExpr := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		nodeExpr, ok := cursor.Node().(sqlparser.Expr)
-		if !ok || !fetchByOffset(nodeExpr) {
+		if !ok || !mustFetchFromInput(nodeExpr) {
 			return
 		}
 		deps := ctx.SemTable.RecursiveDeps(nodeExpr)
@@ -51,9 +51,6 @@ func breakExpressionInLHSandRHSForApplyJoin(
 		cursor.Replace(arg)
 	}, nil).(sqlparser.Expr)
 
-	if err != nil {
-		return JoinColumn{}, err
-	}
 	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
 	col.RHSExpr = rewrittenExpr
 	return

@@ -1102,10 +1102,10 @@
   },
   {
     "comment": "merge even one side have schema name in subquery",
-    "query": "select `COLLATION_NAME` from information_schema.`COLUMNS` t where `COLUMN_NAME` in (select `COLUMN_NAME` from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select `COLUMN_NAME` from information_schema.columns)",
+    "query": "select `COLLATION_NAME` from information_schema.`COLUMNS` t where `COLUMN_NAME` in (select `TABLE_NAME` from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select `COLUMN_NAME` from information_schema.columns)",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select `COLLATION_NAME` from information_schema.`COLUMNS` t where `COLUMN_NAME` in (select `COLUMN_NAME` from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select `COLUMN_NAME` from information_schema.columns)",
+      "Original": "select `COLLATION_NAME` from information_schema.`COLUMNS` t where `COLUMN_NAME` in (select `TABLE_NAME` from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select `COLUMN_NAME` from information_schema.columns)",
       "Instructions": {
         "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutIn",
@@ -1131,8 +1131,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select :COLUMN_NAME from information_schema.`tables` as t where 1 != 1",
-                    "Query": "select distinct :COLUMN_NAME from information_schema.`tables` as t where t.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */",
+                    "FieldQuery": "select TABLE_NAME from information_schema.`tables` as t where 1 != 1",
+                    "Query": "select distinct TABLE_NAME from information_schema.`tables` as t where t.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */",
                     "SysTableTableSchema": "['a']",
                     "Table": "information_schema.`tables`"
                   },

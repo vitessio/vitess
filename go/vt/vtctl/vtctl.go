@@ -1814,8 +1814,6 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	force := subFlags.Bool("force", false, "Proceeds even if the keyspace already exists")
 	allowEmptyVSchema := subFlags.Bool("allow_empty_vschema", false, "If set this will allow a new keyspace to have no vschema")
 
-	var servedFrom flagutil.StringMapValue
-	subFlags.Var(&servedFrom, "served_from", "Specifies a comma-separated list of tablet_type:keyspace pairs used to serve traffic")
 	keyspaceType := subFlags.String("keyspace_type", "", "Specifies the type of the keyspace")
 	baseKeyspace := subFlags.String("base_keyspace", "", "Specifies the base keyspace for a snapshot keyspace")
 	timestampStr := subFlags.String("snapshot_time", "", "Specifies the snapshot time for this keyspace")
@@ -1869,18 +1867,6 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		SnapshotTime:     snapshotTime,
 		DurabilityPolicy: *durabilityPolicy,
 		SidecarDbName:    *sidecarDBName,
-	}
-	if len(servedFrom) > 0 {
-		for name, value := range servedFrom {
-			tt, err := topo.ParseServingTabletType(name)
-			if err != nil {
-				return err
-			}
-			ki.ServedFroms = append(ki.ServedFroms, &topodatapb.Keyspace_ServedFrom{
-				TabletType: tt,
-				Keyspace:   value,
-			})
-		}
 	}
 	err := wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
 	if *force && topo.IsErrType(err, topo.NodeExists) {
@@ -2352,7 +2338,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 			sort.Strings(tables)
 			s := ""
 			var progress wrangler.TableCopyProgress
-			for table := range *copyProgress {
+			for _, table := range tables {
 				var rowCountPct, tableSizePct int64
 				progress = *(*copyProgress)[table]
 				if progress.SourceRowCount > 0 {
@@ -2783,7 +2769,7 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 }
 
 func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
+	concurrency := subFlags.Int32("concurrency", 10, "How many tablets to reload in parallel")
 	includePrimary := subFlags.Bool("include_primary", true, "Include the primary tablet")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -2801,7 +2787,7 @@ func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFla
 		Shard:          shard,
 		WaitPosition:   "",
 		IncludePrimary: *includePrimary,
-		Concurrency:    uint32(*concurrency),
+		Concurrency:    *concurrency,
 	})
 	if resp != nil {
 		for _, e := range resp.Events {
@@ -2812,7 +2798,7 @@ func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFla
 }
 
 func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
+	concurrency := subFlags.Int32("concurrency", 10, "How many tablets to reload in parallel")
 	includePrimary := subFlags.Bool("include_primary", true, "Include the primary tablet(s)")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -2825,7 +2811,7 @@ func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, sub
 		Keyspace:       subFlags.Arg(0),
 		WaitPosition:   "",
 		IncludePrimary: *includePrimary,
-		Concurrency:    uint32(*concurrency),
+		Concurrency:    *concurrency,
 	})
 	if resp != nil {
 		for _, e := range resp.Events {
@@ -2935,7 +2921,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		*migrationContext = *requestContext
 	}
 
-	parts, err := sqlparser.SplitStatementToPieces(change)
+	parts, err := wr.SQLParser().SplitStatementToPieces(change)
 	if err != nil {
 		return err
 	}
@@ -3355,7 +3341,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 			*sql = string(sqlBytes)
 		}
 
-		stmt, err := sqlparser.Parse(*sql)
+		stmt, err := wr.SQLParser().Parse(*sql)
 		if err != nil {
 			return fmt.Errorf("error parsing vschema statement `%s`: %v", *sql, err)
 		}
@@ -3406,7 +3392,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 	}
 
 	// Validate the VSchema.
-	ksVs, err := vindexes.BuildKeyspace(vs)
+	ksVs, err := vindexes.BuildKeyspace(vs, wr.SQLParser())
 	if err != nil {
 		return err
 	}
@@ -3421,7 +3407,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		vdx := ksVs.Vindexes[name]
 		if val, ok := vdx.(vindexes.ParamValidating); ok {
 			for _, param := range val.UnknownParams() {
-				wr.Logger().Warningf("Unknown param in vindex %s: %s", name, param)
+				wr.Logger().Warningf("Unknown parameter in vindex %s: %s", name, param)
 			}
 		}
 	}
@@ -3438,7 +3424,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		return err
 	}
 
-	if _, err := vindexes.BuildKeyspace(vs); err != nil {
+	if _, err := vindexes.BuildKeyspace(vs, wr.SQLParser()); err != nil {
 		return err
 	}
 

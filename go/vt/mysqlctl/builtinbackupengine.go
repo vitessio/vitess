@@ -468,7 +468,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 
 	// shutdown mysqld
 	shutdownCtx, cancel := context.WithTimeout(ctx, BuiltinBackupMysqldTimeout)
-	err = params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true)
+	err = params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true, params.MysqlShutdownTimeout)
 	defer cancel()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't shutdown mysqld")
@@ -886,7 +886,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 // executeRestoreFullBackup restores the files from a full backup. The underlying mysql database service is expected to be stopped.
 func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
-	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
+	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger, params.MysqlShutdownTimeout); err != nil {
 		return err
 	}
 

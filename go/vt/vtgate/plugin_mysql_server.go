@@ -74,6 +74,8 @@ var (
 
 	mysqlDefaultWorkloadName = "OLTP"
 	mysqlDefaultWorkload     int32
+
+	mysqlServerFlushDelay = 100 * time.Millisecond
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -97,6 +99,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&mysqlQueryTimeout, "mysql_server_query_timeout", mysqlQueryTimeout, "mysql query timeout")
 	fs.BoolVar(&mysqlConnBufferPooling, "mysql-server-pool-conn-read-buffers", mysqlConnBufferPooling, "If set, the server will pool incoming connection read buffers")
 	fs.DurationVar(&mysqlKeepAlivePeriod, "mysql-server-keepalive-period", mysqlKeepAlivePeriod, "TCP period between keep-alives")
+	fs.DurationVar(&mysqlServerFlushDelay, "mysql_server_flush_delay", mysqlServerFlushDelay, "Delay after which buffered response will be flushed to the client.")
 	fs.StringVar(&mysqlDefaultWorkloadName, "mysql_default_workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
 }
 
@@ -417,6 +420,10 @@ func (vh *vtgateHandler) KillQuery(connectionID uint32) error {
 	return nil
 }
 
+func (vh *vtgateHandler) SQLParser() *sqlparser.Parser {
+	return vh.vtg.executor.parser
+}
+
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session == nil {
@@ -526,11 +533,13 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			mysqlProxyProtocol,
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
+			mysqlServerFlushDelay,
+			servenv.MySQLServerVersion(),
+			servenv.TruncateErrLen,
 		)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
-		srv.tcpListener.ServerVersion = servenv.MySQLServerVersion()
 		if mysqlSslCert != "" && mysqlSslKey != "" {
 			tlsVersion, err := vttls.TLSVersionToNumber(mysqlTLSMinVersion)
 			if err != nil {
@@ -550,17 +559,10 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	}
 
 	if mysqlServerSocketPath != "" {
-		// Let's create this unix socket with permissions to all users. In this way,
-		// clients can connect to vtgate mysql server without being vtgate user
-		oldMask := syscall.Umask(000)
-		srv.unixListener, err = newMysqlUnixSocket(mysqlServerSocketPath, authServer, srv.vtgateHandle)
-		_ = syscall.Umask(oldMask)
+		err = setupUnixSocket(srv, authServer, mysqlServerSocketPath)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
-			return nil
 		}
-		// Listen for unix socket
-		go srv.unixListener.Accept()
 	}
 	return srv
 }
@@ -578,6 +580,9 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		false,
 		mysqlConnBufferPooling,
 		mysqlKeepAlivePeriod,
+		mysqlServerFlushDelay,
+		servenv.MySQLServerVersion(),
+		servenv.TruncateErrLen,
 	)
 
 	switch err := err.(type) {
@@ -610,6 +615,9 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			false,
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
+			mysqlServerFlushDelay,
+			servenv.MySQLServerVersion(),
+			servenv.TruncateErrLen,
 		)
 		return listener, listenerErr
 	default:

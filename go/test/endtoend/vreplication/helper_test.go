@@ -103,6 +103,19 @@ func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	require.NoError(t, err)
 	return qr
 }
+func getConnectionNoError(t *testing.T, hostname string, port int) *mysql.Conn {
+	vtParams := mysql.ConnParams{
+		Host:  hostname,
+		Port:  port,
+		Uname: "vt_dba",
+	}
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		return nil
+	}
+	return conn
+}
 
 func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	vtParams := mysql.ConnParams{
@@ -428,7 +441,7 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 			require.NotNil(t, res)
 			row := res.Named().Row()
 			tableSchema := row["Create Table"].ToString()
-			parsedDDL, err := sqlparser.ParseStrictDDL(tableSchema)
+			parsedDDL, err := sqlparser.NewTestParser().ParseStrictDDL(tableSchema)
 			require.NoError(t, err)
 			createTable, ok := parsedDDL.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -782,8 +795,6 @@ func (lg *loadGenerator) stop() {
 	log.Infof("Canceling load")
 	lg.cancel()
 	time.Sleep(loadTestWaitForCancel) // wait for cancel to take effect
-	log.Flush()
-
 }
 
 func (lg *loadGenerator) start() {
@@ -906,4 +917,18 @@ func waitForCondition(name string, condition func() bool, timeout time.Duration)
 			return fmt.Errorf("%s: waiting for %s", ctx.Err(), name)
 		}
 	}
+}
+
+func getCellNames(cells []*Cell) string {
+	var cellNames []string
+	if cells == nil {
+		cells = []*Cell{}
+		for _, cell := range vc.Cells {
+			cells = append(cells, cell)
+		}
+	}
+	for _, cell := range cells {
+		cellNames = append(cellNames, cell.Name)
+	}
+	return strings.Join(cellNames, ",")
 }

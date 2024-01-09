@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -131,7 +130,7 @@ func buildSQLCalcFoundRowsPlan(
 		return nil, nil, err
 	}
 
-	statement2, reserved2, err := sqlparser.Parse2(originalQuery)
+	statement2, reserved2, err := vschema.SQLParser().Parse2(originalQuery)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -225,7 +224,7 @@ func newBuildSelectPlan(
 	return plan, operators.TablesUsed(op), nil
 }
 
-func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (ops.Operator, error) {
+func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (operators.Operator, error) {
 	err := queryRewrite(ctx.SemTable, reservedVars, selStmt)
 	if err != nil {
 		return nil, err
@@ -290,7 +289,10 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		if isLFunc {
 			elem := &engine.LockFunc{Typ: expr.Expr.(*sqlparser.LockingFunc)}
 			if lFunc.Name != nil {
-				n, err := evalengine.Translate(lFunc.Name, nil)
+				n, err := evalengine.Translate(lFunc.Name, &evalengine.Config{
+					Collation:    vschema.ConnCollation(),
+					CollationEnv: vschema.CollationEnv(),
+				})
 				if err != nil {
 					return nil, err
 				}
@@ -302,7 +304,10 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		if len(lockFunctions) > 0 {
 			return nil, vterrors.VT12001(fmt.Sprintf("LOCK function and other expression: [%s] in same select query", sqlparser.String(expr)))
 		}
-		exprs[i], err = evalengine.Translate(expr.Expr, &evalengine.Config{Collation: vschema.ConnCollation()})
+		exprs[i], err = evalengine.Translate(expr.Expr, &evalengine.Config{
+			Collation:    vschema.ConnCollation(),
+			CollationEnv: vschema.CollationEnv(),
+		})
 		if err != nil {
 			return nil, nil
 		}

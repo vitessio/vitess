@@ -1175,8 +1175,8 @@ func CloneRefOfDelete(n *Delete) *Delete {
 	out := *n
 	out.With = CloneRefOfWith(n.With)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.Targets = CloneTableNames(n.Targets)
 	out.TableExprs = CloneTableExprs(n.TableExprs)
+	out.Targets = CloneTableNames(n.Targets)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.OrderBy = CloneOrderBy(n.OrderBy)

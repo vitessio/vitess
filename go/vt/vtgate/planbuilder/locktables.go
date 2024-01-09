@@ -33,6 +33,5 @@ func buildLockPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, _ planco
 
 // buildUnlockPlan plans lock tables statement.
 func buildUnlockPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, _ plancontext.VSchema) (*planResult, error) {
-	log.Warningf("Unlock Tables statement is ignored: %v", stmt)
-	return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0))), nil
+	return newPlanResult(&engine.Unlock{}), nil
 }

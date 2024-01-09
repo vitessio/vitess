@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/collations"
 )
 
 func TestEvalResultToBooleanStrict(t *testing.T) {
@@ -43,7 +45,7 @@ func TestEvalResultToBooleanStrict(t *testing.T) {
 	for _, res := range trueValues {
 		name := evalToSQLValue(res).String()
 		t.Run(fmt.Sprintf("ToBooleanStrict() %s expected true (success)", name), func(t *testing.T) {
-			result, err := (&EvalResult{res}).ToBooleanStrict()
+			result, err := (&EvalResult{v: res, collationEnv: collations.MySQL8()}).ToBooleanStrict()
 			require.NoError(t, err, name)
 			require.Equal(t, true, result, name)
 		})
@@ -51,7 +53,7 @@ func TestEvalResultToBooleanStrict(t *testing.T) {
 	for _, res := range falseValues {
 		name := evalToSQLValue(res).String()
 		t.Run(fmt.Sprintf("ToBooleanStrict() %s expected false (success)", name), func(t *testing.T) {
-			result, err := (&EvalResult{res}).ToBooleanStrict()
+			result, err := (&EvalResult{v: res, collationEnv: collations.MySQL8()}).ToBooleanStrict()
 			require.NoError(t, err, name)
 			require.Equal(t, false, result, name)
 		})
@@ -59,7 +61,7 @@ func TestEvalResultToBooleanStrict(t *testing.T) {
 	for _, res := range invalid {
 		name := evalToSQLValue(res).String()
 		t.Run(fmt.Sprintf("ToBooleanStrict() %s  expected fail", name), func(t *testing.T) {
-			_, err := (&EvalResult{res}).ToBooleanStrict()
+			_, err := (&EvalResult{v: res, collationEnv: collations.MySQL8()}).ToBooleanStrict()
 			require.Error(t, err)
 		})
 	}

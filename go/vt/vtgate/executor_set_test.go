@@ -21,8 +21,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/test/utils"
@@ -319,9 +317,12 @@ func TestExecutorSetOp(t *testing.T) {
 		sysVars: map[string]string{"sql_quote_show_create": "0"},
 		result:  returnResult("sql_quote_show_create", "int64", "0"),
 	}, {
-		in:      "set foreign_key_checks = 1",
-		sysVars: map[string]string{"foreign_key_checks": "1"},
-		result:  returnNoResult("foreign_key_checks", "int64"),
+		in:     "set foreign_key_checks = 1",
+		result: returnNoResult("foreign_key_checks", "int64"),
+	}, {
+		in:      "set foreign_key_checks = 0",
+		sysVars: map[string]string{"foreign_key_checks": "0"},
+		result:  returnResult("foreign_key_checks", "int64", "0"),
 	}, {
 		in:      "set unique_checks = 0",
 		sysVars: map[string]string{"unique_checks": "0"},
@@ -504,14 +505,9 @@ func createMap(keys []string, values []any) map[string]*querypb.BindVariable {
 }
 
 func TestSetVar(t *testing.T) {
-	executor, _, _, sbc, ctx := createExecutorEnv(t)
+	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
 	executor.normalize = true
 
-	oldVersion := sqlparser.GetParserVersion()
-	sqlparser.SetParserVersion("80000")
-	defer func() {
-		sqlparser.SetParserVersion(oldVersion)
-	}()
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
 	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
@@ -548,14 +544,9 @@ func TestSetVar(t *testing.T) {
 }
 
 func TestSetVarShowVariables(t *testing.T) {
-	executor, _, _, sbc, ctx := createExecutorEnv(t)
+	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
 	executor.normalize = true
 
-	oldVersion := sqlparser.GetParserVersion()
-	sqlparser.SetParserVersion("80000")
-	defer func() {
-		sqlparser.SetParserVersion(oldVersion)
-	}()
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
 	sbc.SetResults([]*sqltypes.Result{

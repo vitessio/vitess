@@ -177,6 +177,9 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().StringVar(&config.MySQLBindHost, "mysql_bind_host", "localhost",
 		"which host to bind vtgate mysql listener to")
 
+	cmd.Flags().StringVar(&config.VtComboBindAddress, "vtcombo-bind-host", "localhost",
+		"which host to bind vtcombo servenv listener to")
+
 	cmd.Flags().StringVar(&mycnf, "extra_my_cnf", "",
 		"extra files to add to the config, separated by ':'")
 

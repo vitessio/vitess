@@ -39,7 +39,7 @@ func getTable(name string, fieldNames []string, fieldTypes []querypb.Type, pks [
 	fields := []*querypb.Field{}
 	for i := range fieldNames {
 		typ := fieldTypes[i]
-		cs := collations.DefaultCollationForType(typ)
+		cs := collations.CollationForType(typ, collations.MySQL8().DefaultConnectionCharset())
 		fields = append(fields, &querypb.Field{
 			Name:    fieldNames[i],
 			Type:    typ,

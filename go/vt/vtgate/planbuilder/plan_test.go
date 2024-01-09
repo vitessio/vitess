@@ -41,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	oprewriters "vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -62,6 +62,7 @@ func TestPlan(t *testing.T) {
 		TestBuilder:   TestBuilder,
 	}
 	testOutputTempDir := makeTestOutput(t)
+	addPKs(t, vschemaWrapper.V, "user", []string{"user", "music"})
 
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
@@ -261,11 +262,12 @@ func TestViews(t *testing.T) {
 }
 
 func TestOne(t *testing.T) {
-	reset := oprewriters.EnableDebugPrinting()
+	reset := operators.EnableDebugPrinting()
 	defer reset()
 
 	lv := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, lv)
+	addPKs(t, lv, "user", []string{"user", "music"})
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:           lv,
 		TestBuilder: TestBuilder,
@@ -319,7 +321,7 @@ func TestOneWithUserAsDefault(t *testing.T) {
 }
 
 func TestOneWithTPCHVSchema(t *testing.T) {
-	reset := oprewriters.EnableDebugPrinting()
+	reset := operators.EnableDebugPrinting()
 	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/tpch_schema.json", true),
@@ -530,7 +532,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 	if err != nil {
 		t.Fatal(err)
 	}
-	vschema := vindexes.BuildVSchema(formal)
+	vschema := vindexes.BuildVSchema(formal, sqlparser.NewTestParser())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -541,9 +543,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 
 		// adding view in user keyspace
 		if ks.Keyspace.Name == "user" {
-			if err = vschema.AddView(ks.Keyspace.Name,
-				"user_details_view",
-				"select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id"); err != nil {
+			if err = vschema.AddView(ks.Keyspace.Name, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id", sqlparser.NewTestParser()); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -566,7 +566,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 
 // createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.
 func createFkDefinition(childCols []string, parentTableName string, parentCols []string, onUpdate, onDelete sqlparser.ReferenceAction) *sqlparser.ForeignKeyDefinition {
-	pKs, pTbl, _ := sqlparser.ParseTable(parentTableName)
+	pKs, pTbl, _ := sqlparser.NewTestParser().ParseTable(parentTableName)
 	return &sqlparser.ForeignKeyDefinition{
 		Source: sqlparser.MakeColumns(childCols...),
 		ReferenceDefinition: &sqlparser.ReferenceDefinition{
@@ -650,6 +650,7 @@ func readJSONTests(filename string) []planTest {
 		panic(err)
 	}
 	dec := json.NewDecoder(file)
+	dec.DisallowUnknownFields()
 	err = dec.Decode(&output)
 	if err != nil {
 		panic(err)
@@ -731,7 +732,7 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 		recover()
 	}()
 
-	ast, err := sqlparser.Parse(query)
+	ast, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		return
 	}

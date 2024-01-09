@@ -43,7 +43,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -84,6 +83,9 @@ type iExecute interface {
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
 	VSchema() *vindexes.VSchema
 	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
+
+	collationEnv() *collations.Environment
+	sqlparser() *sqlparser.Parser
 }
 
 // VSchemaOperator is an interface to Vschema Operations
@@ -163,7 +165,7 @@ func newVCursorImpl(
 		}
 	}
 	if connCollation == collations.Unknown {
-		connCollation = collations.Default()
+		connCollation = executor.collEnv.DefaultConnectionCharset()
 	}
 
 	warmingReadsPct := 0
@@ -205,6 +207,15 @@ func (vc *vcursorImpl) GetSystemVariables(f func(k string, v string)) {
 // ConnCollation returns the collation of this session
 func (vc *vcursorImpl) ConnCollation() collations.ID {
 	return vc.collation
+}
+
+// ConnCollation returns the collation of this session
+func (vc *vcursorImpl) CollationEnv() *collations.Environment {
+	return vc.executor.collationEnv()
+}
+
+func (vc *vcursorImpl) SQLParser() *sqlparser.Parser {
+	return vc.executor.sqlparser()
 }
 
 func (vc *vcursorImpl) TimeZone() *time.Location {
@@ -832,16 +843,6 @@ func (vc *vcursorImpl) SetAutocommit(ctx context.Context, autocommit bool) error
 	return nil
 }
 
-// SetSessionForeignKeyChecks implements the SessionActions interface
-func (vc *vcursorImpl) SetSessionForeignKeyChecks(ctx context.Context, foreignKeyChecks bool) error {
-	if foreignKeyChecks {
-		vc.safeSession.SetSystemVariable(sysvars.ForeignKeyChecks.Name, "1")
-	} else {
-		vc.safeSession.SetSystemVariable(sysvars.ForeignKeyChecks.Name, "0")
-	}
-	return nil
-}
-
 // SetQueryTimeout implements the SessionActions interface
 func (vc *vcursorImpl) SetQueryTimeout(maxExecutionTime int64) {
 	vc.safeSession.QueryTimeout = maxExecutionTime
@@ -1093,7 +1094,7 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	_, _ = buf.WriteString(vc.keyspace)
 	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
 	_, _ = buf.WriteString("+Collate:")
-	_, _ = buf.WriteString(collations.Local().LookupName(vc.collation))
+	_, _ = buf.WriteString(vc.CollationEnv().LookupName(vc.collation))
 
 	if vc.destination != nil {
 		switch vc.destination.(type) {
@@ -1251,7 +1252,7 @@ func (vc *vcursorImpl) ThrottleApp(ctx context.Context, throttledAppRule *topoda
 }
 
 func (vc *vcursorImpl) CanUseSetVar() bool {
-	return sqlparser.IsMySQL80AndAbove() && setVarEnabled
+	return vc.SQLParser().IsMySQL80AndAbove() && setVarEnabled
 }
 
 func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {
@@ -1280,7 +1281,7 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 }
 
 func (vc *vcursorImpl) VExplainLogging() {
-	vc.safeSession.EnableLogging()
+	vc.safeSession.EnableLogging(vc.SQLParser())
 }
 
 func (vc *vcursorImpl) GetVExplainLogs() []engine.ExecuteEntry {
@@ -1365,17 +1366,7 @@ func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
 		return
 	}
 	// If the query doesn't have anything, then we consult the session state.
-	fkVal, isPresent := vc.safeSession.SystemVariables[sysvars.ForeignKeyChecks.Name]
-	if isPresent {
-		switch strings.ToLower(fkVal) {
-		case "on", "1":
-			val := true
-			vc.fkChecksState = &val
-		case "off", "0":
-			val := false
-			vc.fkChecksState = &val
-		}
-	}
+	vc.fkChecksState = vc.safeSession.ForeignKeyChecks()
 }
 
 // GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.
