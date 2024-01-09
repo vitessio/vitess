@@ -57,18 +57,18 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	return false
 }
 
-type TestColumn struct {
+type VStreamerTestColumn struct {
 	name, dataType, colType string
 	len, charset            int64
 	dataTypeLowered         string
 }
 
-type TestFieldEvent struct {
+type VStreamerTestFieldEvent struct {
 	table, db string
-	cols      []*TestColumn
+	cols      []*VStreamerTestColumn
 }
 
-func (tfe *TestFieldEvent) String() string {
+func (tfe *VStreamerTestFieldEvent) String() string {
 	s := fmt.Sprintf("type:FIELD field_event:{table_name:\"%s\"", tfe.table)
 	fld := ""
 	for _, col := range tfe.cols {
@@ -118,19 +118,19 @@ func TestNoBlob(t *testing.T) {
 		"commit",
 	}
 
-	fe1 := &TestFieldEvent{
+	fe1 := &VStreamerTestFieldEvent{
 		table: "t1",
 		db:    "vttest",
-		cols: []*TestColumn{
+		cols: []*VStreamerTestColumn{
 			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
 			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, charset: 63},
 			{name: "val", dataType: "VARCHAR", colType: "varchar(4)", len: 16, charset: 45},
 		},
 	}
-	fe2 := &TestFieldEvent{
+	fe2 := &VStreamerTestFieldEvent{
 		table: "t2",
 		db:    "vttest",
-		cols: []*TestColumn{
+		cols: []*VStreamerTestColumn{
 			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
 			{name: "txt", dataType: "TEXT", colType: "text", len: 262140, charset: 45},
 			{name: "val", dataType: "VARCHAR", colType: "varchar(4)", len: 16, charset: 45},
@@ -158,8 +158,8 @@ func TestNoBlob(t *testing.T) {
 	runCases(t, nil, testcases, "current", nil)
 }
 
-func TestXSetAndEnum(t *testing.T) {
-	ts := &TestSpec{
+func TestSetAndEnum(t *testing.T) {
+	ts := &VStreamerTestSpec{
 		t: t,
 		ddls: []string{
 			"create table t1(id int, val binary(4), color set('red','green','blue'), size enum('S','M','L'), primary key(id))",
@@ -167,61 +167,14 @@ func TestXSetAndEnum(t *testing.T) {
 	}
 	defer ts.Close()
 	ts.Init()
-	tests := [][]*TestEvents{{
-		{"begin", []*TestEvent{beginEvent}},
-		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", []*TestEvent{RowEvent([]string{"1", "aaa", "5", "1"})}},
-		{"insert into t1 values (2, 'bbb', 'green', 'M')", []*TestEvent{RowEvent([]string{"2", "bbb", "2", "2"})}},
-		{"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')", []*TestEvent{RowEvent([]string{"3", "ccc", "7", "3"})}},
-		{"commit", []*TestEvent{gtidEvent, commitEvent}},
+	ts.tests = [][]*VStreamerTestQuery{{
+		{"begin", []*VStreamerTestEvent{beginEvent}},
+		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", []*VStreamerTestEvent{rowEvent}},
+		{"insert into t1 values (2, 'bbb', 'green', 'M')", []*VStreamerTestEvent{rowEvent}},
+		{"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')", []*VStreamerTestEvent{rowEvent}},
+		{"commit", []*VStreamerTestEvent{gtidEvent, commitEvent}},
 	}}
-	ts.tests = tests
 	ts.Run()
-}
-
-func TestSetAndEnum(t *testing.T) {
-	execStatements(t, []string{
-		"create table t1(id int, val binary(4), color set('red','green','blue'), size enum('S','M','L'), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-	queries := []string{
-		"begin",
-		"insert into t1 values (1, 'aaa', 'red,blue', 'S')",
-		"insert into t1 values (2, 'bbb', 'green', 'M')",
-		"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')",
-		"commit",
-	}
-
-	fe := &TestFieldEvent{
-		table: "t1",
-		db:    "vttest",
-		cols: []*TestColumn{
-			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
-			{name: "val", dataType: "BINARY", colType: "binary(4)", len: 4, charset: 63},
-			{name: "color", dataType: "SET", colType: "set('red','green','blue')", len: 56, charset: 45},
-			{name: "size", dataType: "ENUM", colType: "enum('S','M','L')", len: 4, charset: 45},
-		},
-	}
-	log.Infof("field event: %s", fe.String())
-	testcases := []testcase{{
-		input: queries,
-		output: [][]string{{
-			`begin`,
-			fe.String(),
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 lengths:1 lengths:1 values:"1aaa\x0051"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 lengths:1 lengths:1 values:"2bbb\x0022"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 lengths:1 lengths:1 values:"3ccc\x0073"}}}`,
-			`gtid`,
-			`commit`,
-		}},
-	}}
-	runCases(t, nil, testcases, "current", nil)
-	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select id, val, color+0, size+0 from t1")
-	require.NoError(t, err)
-	require.NotNil(t, qr)
-	log.Infof("qr: %v", qr)
 }
 
 func TestCellValuePadding(t *testing.T) {
@@ -338,10 +291,10 @@ func TestSetForeignKeyCheck(t *testing.T) {
 		"commit",
 	}
 
-	fe := &TestFieldEvent{
+	fe := &VStreamerTestFieldEvent{
 		table: "t1",
 		db:    "vttest",
-		cols: []*TestColumn{
+		cols: []*VStreamerTestColumn{
 			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
 			{name: "val", dataType: "BINARY", colType: "binary(4)", len: 4, charset: 63},
 		},
@@ -2179,10 +2132,10 @@ func TestGeneratedColumns(t *testing.T) {
 		"commit",
 	}
 
-	fe := &TestFieldEvent{
+	fe := &VStreamerTestFieldEvent{
 		table: "t1",
 		db:    "vttest",
-		cols: []*TestColumn{
+		cols: []*VStreamerTestColumn{
 			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
 			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
 			{name: "val2", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
@@ -2226,10 +2179,10 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 		"commit",
 	}
 
-	fe := &TestFieldEvent{
+	fe := &VStreamerTestFieldEvent{
 		table: "t1",
 		db:    "vttest",
-		cols: []*TestColumn{
+		cols: []*VStreamerTestColumn{
 			{name: "my_row_id", dataType: "UINT64", colType: "bigint unsigned", len: 20, charset: 63},
 			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
 		},

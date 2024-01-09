@@ -1,3 +1,19 @@
+/*
+Copyright 2024 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vstreamer
 
 import (
@@ -18,37 +34,38 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-type TestEvents struct {
-	Query  string
-	Events []*TestEvent
+type VStreamerTestQuery struct {
+	query  string
+	events []*VStreamerTestEvent
 }
 
-type TestEvent struct {
-	Type   string
-	Values []string
+type VStreamerTestEvent struct {
+	typ    string
+	values []string
 }
 
-type TestSpec struct {
+type VStreamerTestSpec struct {
 	t     *testing.T
 	ddls  []string
 	input []string
-	tests [][]*TestEvents
+	tests [][]*VStreamerTestQuery
 
 	tables          []string
 	inited          bool
 	schema          *schemadiff.Schema
-	fieldEvents     map[string]*TestFieldEvent
+	fieldEvents     map[string]*VStreamerTestFieldEvent
 	fieldEventsSent map[string]bool
 	state           map[string]*query.Row
 	metadata        map[string][]string
 }
 
-var beginEvent, commitEvent, gtidEvent *TestEvent
+var beginEvent, commitEvent, gtidEvent, rowEvent *VStreamerTestEvent
 
-func RowEvent(values []string) *TestEvent {
-	return &TestEvent{Type: "rowEvent", Values: values}
+func getMetadataKey(table, col string) string {
+	return fmt.Sprintf("%s:%s", table, col)
 }
-func (ts *TestSpec) Init() error {
+
+func (ts *VStreamerTestSpec) Init() error {
 	var err error
 	if ts.inited {
 		return nil
@@ -59,7 +76,7 @@ func (ts *TestSpec) Init() error {
 	if err != nil {
 		return err
 	}
-	ts.fieldEvents = make(map[string]*TestFieldEvent)
+	ts.fieldEvents = make(map[string]*VStreamerTestFieldEvent)
 	ts.fieldEventsSent = make(map[string]bool)
 	ts.state = make(map[string]*query.Row)
 	ts.metadata = make(map[string][]string)
@@ -69,20 +86,21 @@ func (ts *TestSpec) Init() error {
 		fe := ts.getFieldEvent(t)
 		ts.fieldEvents[t.Name()] = fe
 	}
-	beginEvent = &TestEvent{Type: "begin"}
-	commitEvent = &TestEvent{Type: "commit"}
-	gtidEvent = &TestEvent{Type: "gtid"}
+	beginEvent = &VStreamerTestEvent{typ: "begin"}
+	commitEvent = &VStreamerTestEvent{typ: "commit"}
+	gtidEvent = &VStreamerTestEvent{typ: "gtid"}
+	rowEvent = &VStreamerTestEvent{typ: "rowEvent"}
 	engine.se.Reload(context.Background())
 	return nil
 }
 
-func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFieldEvent {
-	var tfe TestFieldEvent
+func (ts *VStreamerTestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *VStreamerTestFieldEvent {
+	var tfe VStreamerTestFieldEvent
 	tfe.table = table.Name()
 	tfe.db = testenv.TestDBName
 
 	for _, col := range table.TableSpec.Columns {
-		tc := TestColumn{}
+		tc := VStreamerTestColumn{}
 		tc.name = col.Name.String()
 		sqlType := col.Type.SQLType()
 		tc.dataType = sqlType.String()
@@ -120,11 +138,7 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 	return &tfe
 }
 
-func getMetadataKey(table, col string) string {
-	return fmt.Sprintf("%s:%s", table, col)
-}
-
-func (ts *TestSpec) setMetadataMap(table, col, value string) {
+func (ts *VStreamerTestSpec) setMetadataMap(table, col, value string) {
 	values := strings.Split(value, ",")
 	valuesReversed := make([]string, len(values))
 	for i, v := range values {
@@ -133,7 +147,7 @@ func (ts *TestSpec) setMetadataMap(table, col, value string) {
 	ts.metadata[getMetadataKey(table, col)] = valuesReversed
 }
 
-func (ts *TestSpec) getMetadataMap(table string, col *TestColumn, value string) string {
+func (ts *VStreamerTestSpec) getMetadataMap(table string, col *VStreamerTestColumn, value string) string {
 	var bits int64
 	value = strings.Trim(value, "'")
 	meta := ts.metadata[getMetadataKey(table, col.name)]
@@ -155,7 +169,7 @@ func (ts *TestSpec) getMetadataMap(table string, col *TestColumn, value string) 
 	return strconv.FormatInt(bits, 10)
 }
 
-func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFieldEvent, event *TestEvent) string {
+func (ts *VStreamerTestSpec) getRowEvent(table string, bv map[string]string, fe *VStreamerTestFieldEvent, event *VStreamerTestEvent) string {
 	rowEvent := &binlogdata.RowEvent{
 		TableName: table,
 		RowChanges: []*binlogdata.RowChange{
@@ -185,7 +199,7 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 	return vEvent.String()
 }
 
-func (ts *TestSpec) Run() {
+func (ts *VStreamerTestSpec) Run() {
 	require.NoError(ts.t, engine.se.Reload(context.Background()))
 	if !ts.inited {
 		require.NoError(ts.t, ts.Init())
@@ -197,8 +211,8 @@ func (ts *TestSpec) Run() {
 		var output []string
 		for _, tq := range t {
 			var table string
-			input = append(input, tq.Query)
-			stmt, err := sqlparser.NewTestParser().Parse(tq.Query)
+			input = append(input, tq.query)
+			stmt, err := sqlparser.NewTestParser().Parse(tq.query)
 			require.NoError(ts.t, err)
 			bv := make(map[string]string)
 			switch stmt.(type) {
@@ -246,9 +260,9 @@ func (ts *TestSpec) Run() {
 				del := stmt.(*sqlparser.Delete)
 				table = del.TableExprs[0].(*sqlparser.AliasedTableExpr).As.String()
 			}
-			for _, ev := range tq.Events {
-				var fe *TestFieldEvent
-				if ev.Type == "rowEvent" {
+			for _, ev := range tq.events {
+				var fe *VStreamerTestFieldEvent
+				if ev.typ == "rowEvent" {
 					fe = ts.fieldEvents[table]
 					if fe == nil {
 						panic(fmt.Sprintf("field event for table %s not found", table))
@@ -269,10 +283,10 @@ func (ts *TestSpec) Run() {
 	runCases(ts.t, nil, testcases, "current", nil)
 }
 
-func (ts *TestSpec) getOutput(table string, bv map[string]string, fe *TestFieldEvent, ev *TestEvent) string {
-	switch ev.Type {
+func (ts *VStreamerTestSpec) getOutput(table string, bv map[string]string, fe *VStreamerTestFieldEvent, ev *VStreamerTestEvent) string {
+	switch ev.typ {
 	case "begin", "commit", "gtid":
-		return ev.Type
+		return ev.typ
 	case "rowEvent":
 		vEvent := ts.getRowEvent(table, bv, fe, ev)
 		return vEvent
@@ -280,9 +294,7 @@ func (ts *TestSpec) getOutput(table string, bv map[string]string, fe *TestFieldE
 	panic(fmt.Sprintf("unknown event %v", ev))
 }
 
-func (ts *TestSpec) Close() func() {
+func (ts *VStreamerTestSpec) Close() {
 	dropStatement := fmt.Sprintf("drop tables %s", strings.Join(ts.schema.TableNames(), ", "))
-	return func() {
-		_, _ = env.Mysqld.FetchSuperQuery(context.Background(), dropStatement)
-	}
+	execStatement(ts.t, dropStatement)
 }
