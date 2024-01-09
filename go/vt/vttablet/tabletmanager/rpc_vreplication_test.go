@@ -21,11 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"runtime/debug"
 	"strings"
 	"testing"
-
-	"vitess.io/vitess/go/vt/vttablet"
 
 	"github.com/stretchr/testify/require"
 
@@ -33,10 +32,12 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -44,10 +45,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 const (
+	dbNamePrefix             = "vt_"
 	insertVReplicationPrefix = "insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys)"
 	getWorkflow              = "select id from _vt.vreplication where db_name='vt_%s' and workflow='%s'"
 	checkForWorkflow         = "select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'"
@@ -72,6 +73,8 @@ const (
 	deleteWorkflow           = "delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
 	updatePickedSourceTablet = `update _vt.vreplication set message='Picked source tablet: cell:\"%s\" uid:%d' where id=1`
 	getRowsCopied            = "SELECT rows_copied FROM _vt.vreplication WHERE id=1"
+	hasWorkflows             = "select if(count(*) > 0, 1, 0) as has_workflows from _vt.vreplication where db_name = 'vt_%s'"
+	readWorkflows            = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_%s'%s group by workflow, id order by workflow, id"
 )
 
 var (
@@ -192,7 +195,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			}
 			tenv.tmc.SetSchema(tt.schema)
 
-			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
 			// This is our expected query, which will also short circuit
 			// the test with an error as at this point we've tested what
 			// we wanted to test.
@@ -312,7 +315,7 @@ func TestMoveTables(t *testing.T) {
 		)
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, getLatestCopyState, &sqltypes.Result{})
 
-		ftc.vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
 		insert := fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,replica,rdonly', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
 			insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, ftc.tablet.Shard, tenv.cells[0], tenv.dbName)
 		ftc.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: 1}, nil)
@@ -792,7 +795,7 @@ func TestSourceShardSelection(t *testing.T) {
 			for uid, streams := range tt.streams {
 				tt := targetTablets[uid]
 				for i, sourceShard := range streams {
-					tt.vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+					tt.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
 					var err error
 					if i == len(streams)-1 {
 						// errShortCircuit is intentionally injected into the MoveTables
@@ -889,7 +892,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 			"1",
 		),
 	)
-	targetTablet.vrdbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(
 		fmt.Sprintf("%s %s",
 			insertVReplicationPrefix,
@@ -1027,4 +1030,232 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	vs2, err := tenv.ts.GetVSchema(ctx, targetKs)
 	require.NoError(t, err, "failed to get target vschema")
 	require.Equal(t, vs, vs2, "expected vschema to be unchanged")
+}
+
+// TestHasVReplicationWorkflows tests the simple RPC to be sure
+// that it generates the expected query and results for each
+// request.
+func TestHasVReplicationWorkflows(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetTabletUID := 300
+	shard := "0"
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	tests := []struct {
+		name     string
+		tablet   *fakeTabletConn
+		queryRes *sqltypes.Result
+		want     *tabletmanagerdatapb.HasVReplicationWorkflowsResponse
+		wantErr  bool
+	}{
+		{
+			name:   "source tablet",
+			tablet: sourceTablet,
+			queryRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"has_workflows",
+					"int64",
+				),
+				"0",
+			),
+			want: &tabletmanagerdatapb.HasVReplicationWorkflowsResponse{
+				Has: false,
+			},
+		},
+		{
+			name:   "target tablet",
+			tablet: targetTablet,
+			queryRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"has_workflows",
+					"int64",
+				),
+				"1",
+			),
+			want: &tabletmanagerdatapb.HasVReplicationWorkflowsResponse{
+				Has: true,
+			},
+		},
+		{
+			name:   "target tablet with error",
+			tablet: targetTablet,
+			queryRes: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"wut|yu",
+					"varchar|varchar",
+				),
+				"byeee|felicia",
+				"no|more",
+			),
+			want:    nil,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// This is needed because MockDBClient uses t.Fatal()
+			// which doesn't play well with subtests.
+			defer func() {
+				if err := recover(); err != nil {
+					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+				}
+			}()
+
+			require.NotNil(t, tt.tablet, "No tablet provided")
+
+			req := &tabletmanagerdatapb.HasVReplicationWorkflowsRequest{
+				DbName: dbNamePrefix + tt.tablet.tablet.Keyspace,
+			}
+
+			tt.tablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
+			tt.tablet.vrdbClient.ExpectRequest(fmt.Sprintf(hasWorkflows, tt.tablet.tablet.Keyspace), tt.queryRes, nil)
+
+			got, err := tenv.tmc.HasVReplicationWorkflows(ctx, tt.tablet.tablet, req)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TabletManager.HasVReplicationWorkflows() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("TabletManager.HasVReplicationWorkflows() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestReadVReplicationWorkflows tests the RPC requests are turned into
+// the expected proper SQL query.
+func TestReadVReplicationWorkflows(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tabletUID := 300
+	ks := "targetks"
+	shard := "0"
+	tenv := newTestEnv(t, ctx, ks, []string{shard})
+	defer tenv.close()
+
+	tablet := tenv.addTablet(t, tabletUID, ks, shard)
+	defer tenv.deleteTablet(tablet.tablet)
+
+	tests := []struct {
+		name      string
+		req       *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest
+		wantPreds string // Additional query predicates
+		wantErr   bool
+	}{
+		{
+			name:    "no db name",
+			req:     &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{},
+			wantErr: true,
+		},
+		{
+			name: "only db name",
+			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+				DbName: dbNamePrefix + ks,
+			},
+			// No additional query predicates.
+		},
+		{
+			name: "all except frozen",
+			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+				DbName:        dbNamePrefix + ks,
+				ExcludeFrozen: true,
+			},
+			wantPreds: " and message != 'FROZEN'",
+		},
+		{
+			name: "1-3 unless frozen",
+			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+				DbName:        dbNamePrefix + ks,
+				IncludeIds:    []int32{1, 2, 3},
+				ExcludeFrozen: true,
+			},
+			wantPreds: " and message != 'FROZEN' and id in (1,2,3)",
+		},
+		{
+			name: "all but wf1 and wf2",
+			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+				DbName:           dbNamePrefix + ks,
+				ExcludeWorkflows: []string{"wf1", "wf2"},
+			},
+			wantPreds: " and workflow not in ('wf1','wf2')",
+		},
+		{
+			name: "all but wf1 and wf2",
+			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+				DbName:           dbNamePrefix + ks,
+				ExcludeWorkflows: []string{"wf1", "wf2"},
+			},
+			wantPreds: " and workflow not in ('wf1','wf2')",
+		},
+		{
+			name: "only wf1 and wf2",
+			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+				DbName:           dbNamePrefix + ks,
+				IncludeWorkflows: []string{"wf1", "wf2"},
+				ExcludeStates: []binlogdatapb.VReplicationWorkflowState{
+					binlogdatapb.VReplicationWorkflowState_Stopped,
+				},
+			},
+			wantPreds: " and workflow in ('wf1','wf2') and state not in ('Stopped')",
+		},
+		{
+			name: "only copying or running",
+			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+				DbName: dbNamePrefix + ks,
+				IncludeStates: []binlogdatapb.VReplicationWorkflowState{
+					binlogdatapb.VReplicationWorkflowState_Copying,
+					binlogdatapb.VReplicationWorkflowState_Running,
+				},
+			},
+			wantPreds: " and state in ('Copying','Running')",
+		},
+		{
+			name: "mess of predicates",
+			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+				DbName:           dbNamePrefix + ks,
+				IncludeIds:       []int32{1, 3},
+				IncludeWorkflows: []string{"wf1"},
+				ExcludeWorkflows: []string{"wf2"},
+				ExcludeStates: []binlogdatapb.VReplicationWorkflowState{
+					binlogdatapb.VReplicationWorkflowState_Copying,
+				},
+				ExcludeFrozen: true,
+			},
+			wantPreds: " and message != 'FROZEN' and id in (1,3) and workflow in ('wf1') and workflow not in ('wf2') and state not in ('Copying')",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// This is needed because MockDBClient uses t.Fatal()
+			// which doesn't play well with subtests.
+			defer func() {
+				if err := recover(); err != nil {
+					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+				}
+			}()
+
+			require.NotNil(t, tt.req, "No request provided")
+
+			if !tt.wantErr { // Errors we're testing for occur before executing any queries.
+				tablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
+				tablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflows, tablet.tablet.Keyspace, tt.wantPreds), &sqltypes.Result{}, nil)
+			}
+
+			_, err := tenv.tmc.ReadVReplicationWorkflows(ctx, tablet.tablet, tt.req)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TabletManager.ReadVReplicationWorkflows() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		})
+	}
 }

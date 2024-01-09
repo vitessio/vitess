@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -226,7 +225,6 @@ func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tab
 	if err != nil {
 		return nil, err
 	}
-	log.Errorf("ReadVReplicationWorkflows query: %s", stmt)
 	res, err := tm.VREngine.Exec(stmt)
 	if err != nil {
 		return nil, err
