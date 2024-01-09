@@ -280,5 +280,5 @@ func (f mysqlGRFlavor) supportsCapability(capability capabilities.FlavorCapabili
 }
 
 func init() {
-	flavors[GRFlavorID] = newMysqlGRFlavor
+	flavorFuncs[GRFlavorID] = newMysqlGRFlavor
 }

@@ -141,10 +141,10 @@ type flavor interface {
 	supportsCapability(capability capabilities.FlavorCapability) (bool, error)
 }
 
-// flavors maps flavor names to their implementation.
+// flavorFuncs maps flavor names to their implementation.
 // Flavors need to register only if they support being specified in the
 // connection parameters.
-var flavors = make(map[string]func() flavor)
+var flavorFuncs = make(map[string]func() flavor)
 
 // ServerVersionAtLeast returns true if current server is at least given value.
 // Example: if input is []int{8, 0, 23}... the function returns 'true' if we're
@@ -237,7 +237,7 @@ func ServerVersionCapableOf(serverVersion string) (capableOf capabilities.Capabl
 // as well (not matching what c.ServerVersion is, but matching after we remove
 // the prefix).
 func (c *Conn) fillFlavor(params *ConnParams) {
-	flavorFunc := flavors[params.Flavor]
+	flavorFunc := flavorFuncs[params.Flavor]
 	c.flavor, _, c.ServerVersion = GetFlavor(c.ServerVersion, flavorFunc)
 }
 
@@ -474,5 +474,5 @@ func (c *Conn) SupportsCapability(capability capabilities.FlavorCapability) (boo
 }
 
 func init() {
-	flavors[replication.FilePosFlavorID] = newFilePosFlavor
+	flavorFuncs[replication.FilePosFlavorID] = newFilePosFlavor
 }
