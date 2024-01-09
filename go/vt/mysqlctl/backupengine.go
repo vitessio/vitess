@@ -269,6 +269,9 @@ type IncrementalBackupDetails struct {
 // their own custom fields by embedding this struct anonymously into their own
 // custom struct, as long as their custom fields don't have conflicting names.
 type BackupManifest struct {
+	// BackupName is the name of the backup, which is also the name of the directory
+	BackupName string
+
 	// BackupMethod is the name of the backup engine that created this backup.
 	// If this is empty, the backup engine is assumed to be "builtin" since that
 	// was the only engine that ever left this field empty. All new backup

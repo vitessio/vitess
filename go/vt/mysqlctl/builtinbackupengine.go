@@ -647,6 +647,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	bm := &builtinBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
+			BackupName:         bh.Name(),
 			BackupMethod:       builtinBackupEngineName,
 			Position:           backupPosition,
 			PurgedPosition:     purgedPosition,
