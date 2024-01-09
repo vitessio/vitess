@@ -33,6 +33,17 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: actions/checkout@v3
 
+      - name: Run FOSSA scan and upload build data
+        # Fails on pull requests when using the API key secret.
+        # In order to run it on pull requests we would need to
+        # generate a push only token and specify that as plain
+        # text here:
+        #   https://github.com/fossa-contrib/fossa-action#push-only-api-token
+        if: github.ref == 'refs/heads/main'
+        uses: fossa-contrib/fossa-action@v2
+        with:
+          fossa-api-key: ${{secrets.fossaApiKey}}
+
       - name: Check for changes in Go files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: frouioui/paths-filter@main
