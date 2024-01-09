@@ -78,6 +78,7 @@ var Cases = []TestCase{
 	{Run: FnLTrim},
 	{Run: FnRTrim},
 	{Run: FnTrim},
+	{Run: FnSubstr},
 	{Run: FnConcat},
 	{Run: FnConcatWs},
 	{Run: FnHex},
@@ -1431,6 +1432,37 @@ func FnTrim(yield Query) {
 			yield(fmt.Sprintf("TRIM(%s FROM %s)", pat, str), nil)
 			for _, mode := range modes {
 				yield(fmt.Sprintf("TRIM(%s %s FROM %s)", mode, pat, str), nil)
+			}
+		}
+	}
+}
+
+func FnSubstr(yield Query) {
+	mysqlDocSamples := []string{
+		`SUBSTRING('Quadratically',5)`,
+		`SUBSTRING('foobarbar' FROM 4)`,
+		`SUBSTRING('Quadratically',5,6)`,
+		`SUBSTRING('Sakila', -3)`,
+		`SUBSTRING('Sakila', -5, 3)`,
+		`SUBSTRING('Sakila' FROM -4 FOR 2)`,
+		`SUBSTR('Quadratically',5)`,
+		`SUBSTR('foobarbar' FROM 4)`,
+		`SUBSTR('Quadratically',5,6)`,
+		`SUBSTR('Sakila', -3)`,
+		`SUBSTR('Sakila', -5, 3)`,
+		`SUBSTR('Sakila' FROM -4 FOR 2)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, str := range inputStrings {
+		for _, i := range radianInputs {
+			yield(fmt.Sprintf("SUBSTRING(%s, %s)", str, i), nil)
+
+			for _, j := range radianInputs {
+				yield(fmt.Sprintf("SUBSTRING(%s, %s, %s)", str, i, j), nil)
 			}
 		}
 	}
