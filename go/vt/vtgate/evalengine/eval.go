@@ -128,7 +128,7 @@ func evalToSQLValueWithType(e eval, resultType sqltypes.Type) sqltypes.Value {
 		case *evalDecimal:
 			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
 		}
-	default:
+	case e != nil:
 		return sqltypes.MakeTrusted(resultType, e.ToRawBytes())
 	}
 	return sqltypes.NULL
