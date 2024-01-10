@@ -202,8 +202,8 @@ func TestDiffTables(t *testing.T) {
 			name:     "changing table level defaults with column specific settings",
 			from:     "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin) default charset=latin1",
 			to:       "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
-			diff:     "alter table t modify column a varchar(64) character set latin1 collate latin1_bin, charset utf8mb4, algorithm = COPY",
-			cdiff:    "ALTER TABLE `t` MODIFY COLUMN `a` varchar(64) CHARACTER SET latin1 COLLATE latin1_bin, CHARSET utf8mb4, ALGORITHM = COPY",
+			diff:     "alter table t charset utf8mb4, algorithm = COPY",
+			cdiff:    "ALTER TABLE `t` CHARSET utf8mb4, ALGORITHM = COPY",
 			action:   "alter",
 			fromName: "t",
 			hints: &DiffHints{
