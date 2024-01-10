@@ -436,10 +436,9 @@ func defaultCharsetCollation(charset string) string {
 	return collationEnv.LookupName(collation)
 }
 
-func (c *CreateTableEntity) normalizeColumnOptions() {
-	tableCharset := defaultCharset()
-	tableCollation := ""
-	for _, option := range c.CreateTable.TableSpec.Options {
+func getTableCharsetAndCollation(tableSpec *sqlparser.TableSpec) (tableCharset string, tableCollation string, defaultCollation string) {
+	tableCharset = defaultCharset()
+	for _, option := range tableSpec.Options {
 		switch strings.ToUpper(option.Name) {
 		case "CHARSET":
 			tableCharset = option.String
@@ -447,10 +446,15 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			tableCollation = option.String
 		}
 	}
-	defaultCollation := defaultCharsetCollation(tableCharset)
+	defaultCollation = defaultCharsetCollation(tableCharset)
 	if tableCollation == "" {
 		tableCollation = defaultCollation
 	}
+	return tableCharset, tableCollation, defaultCollation
+}
+
+func (c *CreateTableEntity) normalizeColumnOptions() {
+	tableCharset, tableCollation, defaultCollation := getTableCharsetAndCollation(c.CreateTable.TableSpec)
 
 	for _, col := range c.CreateTable.TableSpec.Columns {
 		if col.Type.Options == nil {
