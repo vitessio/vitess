@@ -35,11 +35,18 @@ import (
 )
 
 type VStreamerTestQuery struct {
-	query string
+	query  string
+	events []VStreamerTestEvent
+}
+
+type VStreamerTestEvent struct {
+	typ   string
+	event string
 }
 
 type VStreamerTestSpecOptions struct {
 	noblob bool
+	filter *binlogdata.Filter
 }
 
 type VStreamerTestSpec struct {
@@ -66,6 +73,9 @@ func (ts *VStreamerTestSpec) Init() error {
 	}
 
 	ts.inited = true
+	if ts.options == nil {
+		ts.options = &VStreamerTestSpecOptions{}
+	}
 	ts.schema, err = schemadiff.NewSchemaFromQueries(ts.ddls, sqlparser.NewTestParser())
 	if err != nil {
 		return err
@@ -194,7 +204,7 @@ func (ts *VStreamerTestSpec) Run() {
 		log.Flush()
 		testcases = append(testcases, tc)
 	}
-	runCases(ts.t, nil, testcases, "current", nil)
+	runCases(ts.t, ts.options.filter, testcases, "current", nil)
 }
 
 func (ts *VStreamerTestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *VStreamerTestFieldEvent {
