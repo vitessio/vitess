@@ -322,6 +322,9 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	if rule.SourceUniqueKeyColumns != "" {
 		commentsList = append(commentsList, fmt.Sprintf(`ukColumns="%s"`, rule.SourceUniqueKeyColumns))
 	}
+	if rule.ForceUniqueKey != "" {
+		commentsList = append(commentsList, fmt.Sprintf(`ukForce="%s"`, rule.ForceUniqueKey))
+	}
 	if len(commentsList) > 0 {
 		comments := sqlparser.Comments{
 			fmt.Sprintf(`/*vt+ %s */`, strings.Join(commentsList, " ")),
