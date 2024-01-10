@@ -257,19 +257,6 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
 	}
 
-	// @@gtid_purged
-	getPurgedGTIDSet := func() (replication.Position, replication.Mysql56GTIDSet, error) {
-		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
-		if err != nil {
-			return gtidPurged, nil, vterrors.Wrap(err, "can't get @@gtid_purged")
-		}
-		purgedGTIDSet, ok := gtidPurged.GTIDSet.(replication.Mysql56GTIDSet)
-		if !ok {
-			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", gtidPurged)
-		}
-		return gtidPurged, purgedGTIDSet, nil
-	}
-
 	// params.IncrementalFromPos is a string. We want to turn that into a MySQL GTID
 	backupFromGTIDSet, err := getIncrementalFromPosGTIDSet(params.IncrementalFromPos)
 	if err != nil {
@@ -290,6 +277,19 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	binaryLogs, err := params.Mysqld.GetBinaryLogs(ctx)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot get binary logs in incremental backup")
+	}
+
+	// @@gtid_purged
+	getPurgedGTIDSet := func() (replication.Position, replication.Mysql56GTIDSet, error) {
+		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
+		if err != nil {
+			return gtidPurged, nil, vterrors.Wrap(err, "can't get @@gtid_purged")
+		}
+		purgedGTIDSet, ok := gtidPurged.GTIDSet.(replication.Mysql56GTIDSet)
+		if !ok {
+			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", gtidPurged)
+		}
+		return gtidPurged, purgedGTIDSet, nil
 	}
 	// gtid_purged is important information. The restore flow uses this info to to complement binary logs' Previous-GTIDs.
 	// It is important to only get gtid_purged _after_ we've rotated into the new binary log, because the `FLUSH BINARY LOGS`
