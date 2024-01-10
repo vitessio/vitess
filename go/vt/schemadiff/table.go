@@ -439,10 +439,10 @@ func defaultCharsetCollation(charset string) string {
 func getTableCharsetAndCollation(tableSpec *sqlparser.TableSpec) (tableCharset string, tableCollation string, defaultCollation string) {
 	tableCharset = defaultCharset()
 	for _, option := range tableSpec.Options {
-		switch strings.ToUpper(option.Name) {
-		case "CHARSET":
+		if strings.EqualFold(option.Name, "charset") {
 			tableCharset = option.String
-		case "COLLATE":
+		}
+		if strings.EqualFold(option.Name, "collate") {
 			tableCollation = option.String
 		}
 	}
