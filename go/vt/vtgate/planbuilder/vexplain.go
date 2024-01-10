@@ -46,7 +46,7 @@ func buildExplainPlan(ctx context.Context, stmt sqlparser.Explain, reservedVars 
 			vschema.PlannerWarning("EXPLAIN FORMAT = VTEXPLAIN is deprecated, please use VEXPLAIN QUERIES instead.")
 			return buildVExplainLoggingPlan(ctx, &sqlparser.VExplainStmt{Type: sqlparser.QueriesVExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		default:
-			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
+			return buildExplainStmtPlan(ctx, explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		}
 	}
 	return nil, vterrors.VT13001(fmt.Sprintf("unexpected explain type: %T", stmt))
@@ -124,4 +124,45 @@ func buildVExplainLoggingPlan(ctx context.Context, explain *sqlparser.VExplainSt
 	}
 
 	return &planResult{primitive: &engine.VExplain{Input: input.primitive, Type: explain.Type}, tables: input.tables}, nil
+}
+
+func buildExplainStmtPlan(ctx context.Context, explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	input, err := createInstructionFor(ctx, sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	if err != nil {
+		return nil, err
+	}
+
+	parser, err := sqlparser.New(sqlparser.Options{})
+	if err != nil {
+		return nil, err
+	}
+
+	var singleKs string
+	for _, table := range input.tables {
+		ks, _, err := parser.ParseTable(table)
+		if err != nil {
+			return nil, err
+		}
+		if singleKs == ks || singleKs == "" {
+			singleKs = ks
+			continue
+		}
+		return nil, vterrors.VT03031()
+	}
+
+	destination, keyspace, _, err := vschema.TargetDestination(singleKs)
+	if err != nil {
+		return nil, err
+	}
+
+	if destination == nil {
+		destination = key.DestinationAnyShard{}
+	}
+
+	return newPlanResult(&engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: destination,
+		Query:             sqlparser.String(explain),
+		SingleShardOnly:   true,
+	}, input.tables...), nil
 }
