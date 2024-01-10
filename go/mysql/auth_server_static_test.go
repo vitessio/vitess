@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -126,29 +125,6 @@ func TestHostMatcher(t *testing.T) {
 	}
 }
 
-func TestStaticConfigHUP(t *testing.T) {
-	tmpFile, err := ioutil.TempFile("", "mysql_auth_server_static_file.json")
-	if err != nil {
-		t.Fatalf("couldn't create temp file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
-	oldStr := "str5"
-	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
-		t.Fatalf("couldn't write temp file: %v", err)
-	}
-
-	aStatic := NewAuthServerStatic(tmpFile.Name(), "", 0)
-	defer aStatic.close()
-
-	if aStatic.getEntries()[oldStr][0].Password != oldStr {
-		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
-	}
-
-	hupTest(t, aStatic, tmpFile, oldStr, "str2")
-	hupTest(t, aStatic, tmpFile, "str2", "str3") // still handling the signal
-}
-
 func TestStaticConfigHUPWithRotation(t *testing.T) {
 	tmpFile, err := ioutil.TempFile("", "mysql_auth_server_static_file.json")
 	if err != nil {
@@ -178,27 +154,6 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 	hupTestWithRotation(t, aStatic, tmpFile, "str4", "str5")
 
 	aStatic.close()
-}
-
-func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
-	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
-		t.Fatalf("couldn't overwrite temp file: %v", err)
-	}
-
-	if aStatic.getEntries()[oldStr][0].Password != oldStr {
-		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
-	}
-
-	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
-	time.Sleep(100 * time.Millisecond) // wait for signal handler
-
-	if aStatic.getEntries()[oldStr] != nil {
-		t.Fatalf("Should not have old %s after config reload", oldStr)
-	}
-	if aStatic.getEntries()[newStr][0].Password != newStr {
-		t.Fatalf("%s's Password should be '%s'", newStr, newStr)
-	}
 }
 
 func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {

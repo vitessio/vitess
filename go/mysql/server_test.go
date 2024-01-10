@@ -122,12 +122,12 @@ func (th *testHandler) ComInitDB(c *Conn, schemaName string) error {
 	return nil
 }
 
-func (th *testHandler) ComMultiQuery(c *Conn, query string, callback func(res *sqltypes.Result, more bool) error) (string, error) {
+func (th *testHandler) ComMultiQuery(c *Conn, query string, callback ResultSpoolFn) (string, error) {
 	err := th.ComQuery(c, query, callback)
 	return "", err
 }
 
-func (th *testHandler) ComQuery(c *Conn, query string, callback func(res *sqltypes.Result, more bool) error) error {
+func (th *testHandler) ComQuery(c *Conn, query string, callback ResultSpoolFn) error {
 	if result := th.Result(); result != nil {
 		callback(th.result, false)
 		return nil
