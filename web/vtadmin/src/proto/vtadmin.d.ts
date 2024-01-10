@@ -29464,6 +29464,9 @@ export namespace binlogdata {
 
         /** Rule convert_int_to_enum */
         convert_int_to_enum?: ({ [k: string]: boolean }|null);
+
+        /** Rule force_unique_key */
+        force_unique_key?: (string|null);
     }
 
     /** Represents a Rule. */
@@ -29498,6 +29501,9 @@ export namespace binlogdata {
 
         /** Rule convert_int_to_enum. */
         public convert_int_to_enum: { [k: string]: boolean };
+
+        /** Rule force_unique_key. */
+        public force_unique_key: string;
 
         /**
          * Creates a new Rule instance using the specified properties.

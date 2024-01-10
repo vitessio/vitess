@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
@@ -193,7 +194,12 @@ func (rs *rowStreamer) buildPlan() error {
 			return err
 		}
 	}
-
+	if s, found := directives.GetString("ukForce", ""); found {
+		st.PKIndexName, err = url.QueryUnescape(s)
+		if err != nil {
+			return err
+		}
+	}
 	rs.pkColumns, err = rs.buildPKColumns(st)
 	if err != nil {
 		return err

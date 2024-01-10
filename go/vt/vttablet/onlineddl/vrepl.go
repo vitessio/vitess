@@ -27,7 +27,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+<<<<<<< HEAD
 	"math"
+=======
+	"net/url"
+>>>>>>> 61b12e635a (VReplication: send unique key name to `rowstreamer`, which can then use with `FORCE INDEX` (#14916))
 	"strconv"
 	"strings"
 
@@ -559,6 +563,7 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		SourceUniqueKeyColumns:       encodeColumns(&v.chosenSourceUniqueKey.Columns),
 		TargetUniqueKeyColumns:       encodeColumns(&v.chosenTargetUniqueKey.Columns),
 		SourceUniqueKeyTargetColumns: encodeColumns(v.chosenSourceUniqueKey.Columns.MappedNamesColumnList(v.sharedColumnsMap)),
+		ForceUniqueKey:               url.QueryEscape(v.chosenSourceUniqueKey.Name),
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset
