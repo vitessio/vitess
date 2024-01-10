@@ -98,64 +98,38 @@ func TestNoBlob(t *testing.T) {
 		engine = oldEngine
 		env = oldEnv
 	}()
-	execStatements(t, []string{
-		"create table t1(id int, blb blob, val varchar(4), primary key(id))",
-		"create table t2(id int, txt text, val varchar(4), unique key(id, val))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-		"drop table t2",
-	})
-	engine.se.Reload(context.Background())
-	queries := []string{
-		"begin",
-		"insert into t1 values (1, 'blob1', 'aaa')",
-		"update t1 set val = 'bbb'",
-		"commit",
-		"begin",
-		"insert into t2 values (1, 'text1', 'aaa')",
-		"update t2 set val = 'bbb'",
-		"commit",
-	}
 
-	fe1 := &VStreamerTestFieldEvent{
-		table: "t1",
-		db:    "vttest",
-		cols: []*VStreamerTestColumn{
-			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
-			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, charset: 63},
-			{name: "val", dataType: "VARCHAR", colType: "varchar(4)", len: 16, charset: 45},
+	ts := &VStreamerTestSpec{
+		t: t,
+		ddls: []string{
+			// t1 has a blob column and a primary key. The blob column will not be in update row events.
+			"create table t1(id int, blb blob, val varchar(4), primary key(id))",
+			// t2 has a text column and no primary key. The text column will be in update row events.
+			"create table t2(id int, txt text, val varchar(4), unique key(id, val))",
+			// t3 has a text column and a primary key. The text column will not be in update row events.
+			"create table t3(id int, txt text, val varchar(4), primary key(id))",
+		},
+		options: &VStreamerTestSpecOptions{
+			noblob: true,
 		},
 	}
-	fe2 := &VStreamerTestFieldEvent{
-		table: "t2",
-		db:    "vttest",
-		cols: []*VStreamerTestColumn{
-			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
-			{name: "txt", dataType: "TEXT", colType: "text", len: 262140, charset: 45},
-			{name: "val", dataType: "VARCHAR", colType: "varchar(4)", len: 16, charset: 45},
-		},
-	}
-
-	testcases := []testcase{{
-		input: queries,
-		output: [][]string{{
-			"begin",
-			fe1.String(),
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:5 lengths:3 values:"1blob1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:-1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:-1 lengths:3 values:"1bbb"} data_columns:{count:3 cols:"\x05"}}}`,
-			"gtid",
-			"commit",
-		}, {
-			"begin",
-			fe2.String(),
-			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:5 lengths:3 values:"1text1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t2" row_changes:{before:{lengths:1 lengths:5 lengths:3 values:"1text1aaa"} after:{lengths:1 lengths:-1 lengths:3 values:"1bbb"} data_columns:{count:3 cols:"\x05"}}}`,
-			"gtid",
-			"commit",
-		}},
+	defer ts.Close()
+	ts.Init()
+	ts.tests = [][]*VStreamerTestQuery{{
+		{"begin", []*VStreamerTestEvent{beginEvent}},
+		{"insert into t1 values (1, 'blob1', 'aaa')", []*VStreamerTestEvent{rowEvent}},
+		{"update t1 set val = 'bbb'", []*VStreamerTestEvent{rowEvent}},
+		{"commit", []*VStreamerTestEvent{gtidEvent, commitEvent}},
+	}, {{"begin", []*VStreamerTestEvent{beginEvent}},
+		{"insert into t2 values (1, 'text1', 'aaa')", []*VStreamerTestEvent{rowEvent}},
+		{"update t2 set val = 'bbb'", []*VStreamerTestEvent{rowEvent}},
+		{"commit", []*VStreamerTestEvent{gtidEvent, commitEvent}},
+	}, {{"begin", []*VStreamerTestEvent{beginEvent}},
+		{"insert into t3 values (1, 'text1', 'aaa')", []*VStreamerTestEvent{rowEvent}},
+		{"update t3 set val = 'bbb'", []*VStreamerTestEvent{rowEvent}},
+		{"commit", []*VStreamerTestEvent{gtidEvent, commitEvent}},
 	}}
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
 }
 
 func TestSetAndEnum(t *testing.T) {

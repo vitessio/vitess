@@ -34,6 +34,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+var beginEvent, commitEvent, gtidEvent, rowEvent *VStreamerTestEvent
+
 type VStreamerTestQuery struct {
 	query  string
 	events []*VStreamerTestEvent
@@ -44,25 +46,25 @@ type VStreamerTestEvent struct {
 	values []string
 }
 
+type VStreamerTestSpecOptions struct {
+	noblob bool
+}
+
 type VStreamerTestSpec struct {
-	t     *testing.T
-	ddls  []string
-	input []string
-	tests [][]*VStreamerTestQuery
+	t       *testing.T
+	ddls    []string
+	input   []string
+	tests   [][]*VStreamerTestQuery
+	options *VStreamerTestSpecOptions
 
 	tables          []string
+	pkColumns       map[string][]string
 	inited          bool
 	schema          *schemadiff.Schema
 	fieldEvents     map[string]*VStreamerTestFieldEvent
 	fieldEventsSent map[string]bool
 	state           map[string]*query.Row
 	metadata        map[string][]string
-}
-
-var beginEvent, commitEvent, gtidEvent, rowEvent *VStreamerTestEvent
-
-func getMetadataKey(table, col string) string {
-	return fmt.Sprintf("%s:%s", table, col)
 }
 
 func (ts *VStreamerTestSpec) Init() error {
@@ -80,11 +82,30 @@ func (ts *VStreamerTestSpec) Init() error {
 	ts.fieldEventsSent = make(map[string]bool)
 	ts.state = make(map[string]*query.Row)
 	ts.metadata = make(map[string][]string)
+	ts.pkColumns = make(map[string][]string)
 	// create tables
 	for i, t := range ts.schema.Tables() {
-		env.Mysqld.FetchSuperQuery(context.Background(), ts.ddls[i])
+		execStatement(ts.t, ts.ddls[i])
 		fe := ts.getFieldEvent(t)
 		ts.fieldEvents[t.Name()] = fe
+
+		var pkColumns []string
+		var hasPK bool
+		for _, index := range t.TableSpec.Indexes {
+			if index.Info.Type == sqlparser.IndexTypePrimary {
+				for _, col := range index.Columns {
+					pkColumns = append(pkColumns, col.Column.String())
+				}
+				hasPK = true
+			}
+		}
+		if !hasPK {
+			// add all columns as pk columns
+			for _, col := range t.TableSpec.Columns {
+				pkColumns = append(pkColumns, col.Name.String())
+			}
+		}
+		ts.pkColumns[t.Name()] = pkColumns
 	}
 	beginEvent = &VStreamerTestEvent{typ: "begin"}
 	commitEvent = &VStreamerTestEvent{typ: "commit"}
@@ -94,109 +115,9 @@ func (ts *VStreamerTestSpec) Init() error {
 	return nil
 }
 
-func (ts *VStreamerTestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *VStreamerTestFieldEvent {
-	var tfe VStreamerTestFieldEvent
-	tfe.table = table.Name()
-	tfe.db = testenv.TestDBName
-
-	for _, col := range table.TableSpec.Columns {
-		tc := VStreamerTestColumn{}
-		tc.name = col.Name.String()
-		sqlType := col.Type.SQLType()
-		tc.dataType = sqlType.String()
-		tc.dataTypeLowered = strings.ToLower(tc.dataType)
-		switch tc.dataTypeLowered {
-		case "int32":
-			tc.len = 11
-			tc.charset = 63
-			tc.colType = "int(11)"
-		case "varchar", "varbinary", "char", "binary", "blob", "text":
-			l, _ := strconv.Atoi(col.Type.Length.Val)
-			tc.len = int64(l)
-			switch tc.dataTypeLowered {
-			case "binary", "varbinary":
-				tc.charset = 63
-			default:
-				tc.charset = 45
-			}
-			tc.colType = fmt.Sprintf("%s(%d)", tc.dataTypeLowered, l)
-		case "set":
-			tc.len = 56 // todo: works for the unit test with sets, but check if this is computable from the set values ...
-			tc.charset = 45
-			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
-			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
-		case "enum":
-			tc.len = int64(len(col.Type.EnumValues) + 1)
-			tc.charset = 45
-			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
-			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
-		default:
-			panic(fmt.Sprintf("unknown sqlTypeString %s", tc.dataTypeLowered))
-		}
-		tfe.cols = append(tfe.cols, &tc)
-	}
-	return &tfe
-}
-
-func (ts *VStreamerTestSpec) setMetadataMap(table, col, value string) {
-	values := strings.Split(value, ",")
-	valuesReversed := make([]string, len(values))
-	for i, v := range values {
-		valuesReversed[len(values)-1-i] = v
-	}
-	ts.metadata[getMetadataKey(table, col)] = valuesReversed
-}
-
-func (ts *VStreamerTestSpec) getMetadataMap(table string, col *VStreamerTestColumn, value string) string {
-	var bits int64
-	value = strings.Trim(value, "'")
-	meta := ts.metadata[getMetadataKey(table, col.name)]
-	values := strings.Split(value, ",")
-	for _, v := range values {
-		v2 := strings.Trim(v, "'")
-		for i, m := range meta {
-			m2 := strings.Trim(m, "'")
-			if m2 == v2 {
-				switch col.dataTypeLowered {
-				case "set":
-					bits |= 1 << uint(i)
-				case "enum":
-					bits = int64(i) + 1
-				}
-			}
-		}
-	}
-	return strconv.FormatInt(bits, 10)
-}
-
-func (ts *VStreamerTestSpec) getRowEvent(table string, bv map[string]string, fe *VStreamerTestFieldEvent, event *VStreamerTestEvent) string {
-	rowEvent := &binlogdata.RowEvent{
-		TableName: table,
-		RowChanges: []*binlogdata.RowChange{
-			{
-				Before: nil,
-				After:  nil,
-			},
-		},
-	}
-	var row query.Row
-	for _, col := range fe.cols {
-		val := []byte(bv[col.name])
-		l := int64(len(val))
-		if col.dataTypeLowered == "binary" {
-			val = append(val, "\x00"...)
-			l++
-		}
-		row.Values = append(row.Values, val...)
-		row.Lengths = append(row.Lengths, l)
-	}
-	rowEvent.RowChanges[0].After = &row
-	ts.state[table] = &row
-	vEvent := &binlogdata.VEvent{
-		Type:     binlogdata.VEventType_ROW,
-		RowEvent: rowEvent,
-	}
-	return vEvent.String()
+func (ts *VStreamerTestSpec) Close() {
+	dropStatement := fmt.Sprintf("drop tables %s", strings.Join(ts.schema.TableNames(), ", "))
+	execStatement(ts.t, dropStatement)
 }
 
 func (ts *VStreamerTestSpec) Run() {
@@ -240,7 +161,7 @@ func (ts *VStreamerTestSpec) Run() {
 				upd := stmt.(*sqlparser.Update)
 				buf := sqlparser.NewTrackedBuffer(nil)
 				upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
-				table := buf.String()
+				table = buf.String()
 				fe, ok := ts.fieldEvents[table]
 				require.True(ts.t, ok, "field event for table %s not found", table)
 				index := int64(0)
@@ -254,7 +175,7 @@ func (ts *VStreamerTestSpec) Run() {
 					bufN := sqlparser.NewTrackedBuffer(nil)
 					expr.Expr.Format(bufV)
 					expr.Name.Format(bufN)
-					bv[bufN.String()] = bufV.String()
+					bv[bufN.String()] = strings.Trim(bufV.String(), "'")
 				}
 			case *sqlparser.Delete:
 				del := stmt.(*sqlparser.Delete)
@@ -272,7 +193,7 @@ func (ts *VStreamerTestSpec) Run() {
 						ts.fieldEventsSent[table] = true
 					}
 				}
-				output = append(output, ts.getOutput(table, bv, fe, ev))
+				output = append(output, ts.serializeEvent(table, bv, fe, ev, stmt))
 			}
 		}
 		tc.input = input
@@ -283,18 +204,237 @@ func (ts *VStreamerTestSpec) Run() {
 	runCases(ts.t, nil, testcases, "current", nil)
 }
 
-func (ts *VStreamerTestSpec) getOutput(table string, bv map[string]string, fe *VStreamerTestFieldEvent, ev *VStreamerTestEvent) string {
+func (ts *VStreamerTestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *VStreamerTestFieldEvent {
+	var tfe VStreamerTestFieldEvent
+	tfe.table = table.Name()
+	tfe.db = testenv.TestDBName
+	for _, col := range table.TableSpec.Columns {
+		tc := VStreamerTestColumn{}
+		tc.name = col.Name.String()
+		sqlType := col.Type.SQLType()
+		tc.dataType = sqlType.String()
+		tc.dataTypeLowered = strings.ToLower(tc.dataType)
+		switch tc.dataTypeLowered {
+		case "int32":
+			tc.len = 11
+			tc.charset = 63
+			tc.colType = "int(11)"
+		case "varchar", "varbinary", "char", "binary":
+			l, _ := strconv.Atoi(col.Type.Length.Val)
+			switch tc.dataTypeLowered {
+			case "binary", "varbinary":
+				tc.len = int64(l)
+				tc.charset = 63
+			default:
+				tc.len = 4 * int64(l)
+				tc.charset = 45
+			}
+			tc.colType = fmt.Sprintf("%s(%d)", tc.dataTypeLowered, l)
+		case "blob":
+			tc.len = 65535
+			tc.charset = 63
+			tc.colType = "blob"
+		case "text":
+			tc.len = 262140
+			tc.charset = 45
+			tc.colType = "text"
+		case "set":
+			tc.len = 56
+			tc.charset = 45
+			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
+			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
+		case "enum":
+			tc.len = int64(len(col.Type.EnumValues) + 1)
+			tc.charset = 45
+			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
+			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
+		default:
+			log.Infof(fmt.Sprintf("unknown sqlTypeString %s", tc.dataTypeLowered))
+		}
+		tfe.cols = append(tfe.cols, &tc)
+	}
+	return &tfe
+}
+
+func getMetadataKey(table, col string) string {
+	return fmt.Sprintf("%s:%s", table, col)
+}
+
+func (ts *VStreamerTestSpec) setMetadataMap(table, col, value string) {
+	values := strings.Split(value, ",")
+	valuesReversed := make([]string, len(values))
+	for i, v := range values {
+		valuesReversed[len(values)-1-i] = v
+	}
+	ts.metadata[getMetadataKey(table, col)] = valuesReversed
+}
+
+func (ts *VStreamerTestSpec) getMetadataMap(table string, col *VStreamerTestColumn, value string) string {
+	var bits int64
+	value = strings.Trim(value, "'")
+	meta := ts.metadata[getMetadataKey(table, col.name)]
+	values := strings.Split(value, ",")
+	for _, v := range values {
+		v2 := strings.Trim(v, "'")
+		for i, m := range meta {
+			m2 := strings.Trim(m, "'")
+			if m2 == v2 {
+				switch col.dataTypeLowered {
+				case "set":
+					bits |= 1 << uint(i)
+				case "enum":
+					bits = int64(i) + 1
+				}
+			}
+		}
+	}
+	return strconv.FormatInt(bits, 10)
+}
+
+func (ts *VStreamerTestSpec) getRowEvent(table string, bv map[string]string, fe *VStreamerTestFieldEvent, event *VStreamerTestEvent, stmt sqlparser.Statement) string {
+	ev := &binlogdata.RowEvent{
+		TableName: table,
+		RowChanges: []*binlogdata.RowChange{
+			{
+				Before: nil,
+				After:  nil,
+			},
+		},
+	}
+	var row query.Row
+	for _, col := range fe.cols {
+		val := []byte(bv[col.name])
+		l := int64(len(val))
+		if col.dataTypeLowered == "binary" {
+			val = append(val, "\x00"...)
+			l++
+		}
+		row.Values = append(row.Values, val...)
+		row.Lengths = append(row.Lengths, l)
+	}
+	ev.RowChanges = ts.getRowChanges(table, bv, fe, event, stmt, &row)
+	vEvent := &binlogdata.VEvent{
+		Type:     binlogdata.VEventType_ROW,
+		RowEvent: ev,
+	}
+	return vEvent.String()
+}
+
+func (ts *VStreamerTestSpec) getRowChanges(table string, bv map[string]string, fe *VStreamerTestFieldEvent, event *VStreamerTestEvent, stmt sqlparser.Statement, row *query.Row) []*binlogdata.RowChange {
+	var rowChanges []*binlogdata.RowChange
+	var rowChange binlogdata.RowChange
+	switch stmt.(type) {
+	case *sqlparser.Insert:
+		rowChange.After = row
+		ts.state[table] = row
+	case *sqlparser.Update:
+		rowChange = *ts.getRowChangeForUpdate(table, row, stmt)
+		ts.state[table] = row
+	case *sqlparser.Delete:
+		rowChange.Before = row
+		ts.state[table] = nil
+	}
+	rowChanges = append(rowChanges, &rowChange)
+	return rowChanges
+}
+
+// isBitSet returns true if the bit at index is set
+func isBitSet(data []byte, index int) bool {
+	byteIndex := index / 8
+	bitMask := byte(1 << (uint(index) & 0x7))
+	return data[byteIndex]&bitMask > 0
+}
+
+func (ts *VStreamerTestSpec) getRowChangeForUpdate(table string, newState *query.Row, stmt sqlparser.Statement) *binlogdata.RowChange {
+	var rowChange binlogdata.RowChange
+	var bitmap byte
+	var before, after query.Row
+
+	currentState := ts.state[table]
+	if currentState == nil {
+		return nil
+	}
+	var currentValueIndex int64
+	var hasSkip bool
+	for i, l := range currentState.Lengths {
+		skip := false
+		isPKColumn := false
+		for _, pkColumn := range ts.pkColumns[table] {
+			if pkColumn == ts.fieldEvents[table].cols[i].name {
+				isPKColumn = true
+				break
+			}
+		}
+		if ts.options.noblob {
+			switch ts.fieldEvents[table].cols[i].dataTypeLowered {
+			case "blob", "text":
+				currentValue := currentState.Values[currentValueIndex : currentValueIndex+l]
+				newValue := newState.Values[currentValueIndex : currentValueIndex+l]
+				if string(currentValue) == string(newValue) {
+					skip = true
+					hasSkip = true
+				}
+			}
+		}
+
+		if skip && !isPKColumn {
+			before.Lengths = append(before.Lengths, -1)
+		} else {
+			before.Values = append(before.Values, currentState.Values[currentValueIndex:currentValueIndex+l]...)
+			before.Lengths = append(before.Lengths, l)
+		}
+
+		if skip {
+			after.Lengths = append(after.Lengths, -1)
+		} else {
+			after.Values = append(after.Values, newState.Values[currentValueIndex:currentValueIndex+l]...)
+			after.Lengths = append(after.Lengths, l)
+			bitmap |= 1 << uint(i)
+		}
+		currentValueIndex += l
+	}
+	rowChange.Before = &before
+	rowChange.After = &after
+	if hasSkip {
+		rowChange.DataColumns = &binlogdata.RowChange_Bitmap{
+			Count: int64(len(currentState.Lengths)),
+			Cols:  []byte{bitmap},
+		}
+	}
+	return &rowChange
+}
+
+func (ts *VStreamerTestSpec) serializeEvent(table string, bv map[string]string, fe *VStreamerTestFieldEvent, ev *VStreamerTestEvent, stmt sqlparser.Statement) string {
 	switch ev.typ {
 	case "begin", "commit", "gtid":
 		return ev.typ
 	case "rowEvent":
-		vEvent := ts.getRowEvent(table, bv, fe, ev)
+		vEvent := ts.getRowEvent(table, bv, fe, ev, stmt)
 		return vEvent
 	}
 	panic(fmt.Sprintf("unknown event %v", ev))
 }
 
-func (ts *VStreamerTestSpec) Close() {
-	dropStatement := fmt.Sprintf("drop tables %s", strings.Join(ts.schema.TableNames(), ", "))
-	execStatement(ts.t, dropStatement)
+func (ts *VStreamerTestSpec) getBefore(table string) *query.Row {
+	currentState := ts.state[table]
+	if currentState == nil {
+		return nil
+	}
+	var row query.Row
+	var currentValueIndex int64
+	for i, l := range currentState.Lengths {
+		dataTypeIsRedacted := false
+		switch ts.fieldEvents[table].cols[i].dataTypeLowered {
+		case "blob", "text":
+			dataTypeIsRedacted = true
+		}
+		if ts.options.noblob && dataTypeIsRedacted {
+			row.Lengths = append(row.Lengths, -1)
+		} else {
+			row.Values = append(row.Values, currentState.Values[currentValueIndex:currentValueIndex+l]...)
+			row.Lengths = append(row.Lengths, l)
+		}
+		currentValueIndex += l
+	}
+	return &row
 }
