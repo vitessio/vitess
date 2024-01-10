@@ -1150,6 +1150,27 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t` MODIFY COLUMN `t1` varchar(128) NOT NULL, MODIFY COLUMN `t2` varchar(128) NOT NULL, MODIFY COLUMN `t3` tinytext, CHARSET utf8mb4",
 		},
 		{
+			name:  "change table collation",
+			from:  "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_ai_ci",
+			to:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_bin",
+			diff:  "alter table t collate utf8mb4_0900_bin",
+			cdiff: "ALTER TABLE `t` COLLATE utf8mb4_0900_bin",
+		},
+		{
+			name:  "change table collation with textual column",
+			from:  "create table t (id int, t varchar(192) not null) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_ai_ci",
+			to:    "create table t (id int, t varchar(192) not null) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_bin",
+			diff:  "alter table t modify column t varchar(192) not null, collate utf8mb4_0900_bin",
+			cdiff: "ALTER TABLE `t` MODIFY COLUMN `t` varchar(192) NOT NULL, COLLATE utf8mb4_0900_bin",
+		},
+		{
+			name:  "change table collation with textual column that has collation",
+			from:  "create table t (id int, t varchar(192) not null collate utf8mb4_0900_bin) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_ai_ci",
+			to:    "create table t (id int, t varchar(192) not null collate utf8mb4_0900_bin) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_bin",
+			diff:  "alter table t collate utf8mb4_0900_bin",
+			cdiff: "ALTER TABLE `t` COLLATE utf8mb4_0900_bin",
+		},
+		{
 			name:  "normalized unsigned attribute",
 			from:  "create table t1 (id int primary key)",
 			to:    "create table t1 (id int unsigned primary key)",

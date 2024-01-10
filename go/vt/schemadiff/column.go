@@ -92,74 +92,42 @@ func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionE
 //	to:   "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
 //
 // In both cases, the column is really a latin1. But the tables themselves have different collations.
-// In TableCharsetCollateStrict, the situation is handled correctly by converting the table charset as well as
-// pinning the column's charset.
-// But in TableCharsetCollateIgnoreEmpty or in TableCharsetCollateIgnoreAlways, schemadiff is not supposed to
-// change the table's charset. In which case it does need to identify the fact that the two columns are really of
-// the same charset, and not report a diff.
+// We need to denormalize the column's charset/collate properties, so that the comparison can be done.
 func (c *ColumnDefinitionEntity) ColumnDiff(
 	other *ColumnDefinitionEntity,
 	hints *DiffHints,
 	t1cc *charsetCollate,
 	t2cc *charsetCollate,
 ) *ModifyColumnDiff {
-	// We need to understand whether the table's charset is going to be ignored. If so, we need to denormalize
-	// the columns' charset/collate properties for the sake of this comparison.
-	// Denormalization means that if the column does not have charset/collate defined, then it must borrow those
-	// propeties from the table.
-	denormalizeCharsetCollate := false
 	if c.IsTextual() || other.IsTextual() {
-		switch hints.TableCharsetCollateStrategy {
-		case TableCharsetCollateStrict:
-			// No need to do anything
-		case TableCharsetCollateIgnoreEmpty:
-			if t1cc.charset != t2cc.charset {
-				if t1cc.charset == "" || t2cc.charset == "" {
-					denormalizeCharsetCollate = true
-				}
-			}
-			if t1cc.collate != t2cc.collate {
-				if t1cc.collate == "" || t2cc.collate == "" {
-					denormalizeCharsetCollate = true
-				}
-			}
-		case TableCharsetCollateIgnoreAlways:
-			if t1cc.charset != t2cc.charset {
-				denormalizeCharsetCollate = true
-			}
-			if t1cc.collate != t2cc.collate {
-				denormalizeCharsetCollate = true
-			}
-		}
-	}
-
-	if denormalizeCharsetCollate {
-		// We have concluded that the two tables have different charset/collate, and that the diff hints will cause
-		// that difference to be ignored.
-		// Now is the time to populate (denormalize) the column's charset/collate properties.
+		// We will now denormalize the columns charset & collate as needed (if empty, populate from table.)
 		if c.columnDefinition.Type.Charset.Name == "" {
-			c.columnDefinition.Type.Charset.Name = t1cc.charset
 			defer func() {
 				c.columnDefinition.Type.Charset.Name = ""
 			}()
-		}
-		if c.columnDefinition.Type.Options.Collate == "" {
-			c.columnDefinition.Type.Options.Collate = t1cc.collate
-			defer func() {
-				c.columnDefinition.Type.Options.Collate = ""
-			}()
+			c.columnDefinition.Type.Charset.Name = t1cc.charset
+			if c.columnDefinition.Type.Options.Collate == "" {
+				defer func() {
+					c.columnDefinition.Type.Options.Collate = ""
+				}()
+				if c.columnDefinition.Type.Options.Collate = t1cc.collate; c.columnDefinition.Type.Options.Collate == "" {
+					c.columnDefinition.Type.Options.Collate = defaultCharsetCollation(t1cc.charset)
+				}
+			}
 		}
 		if other.columnDefinition.Type.Charset.Name == "" {
-			other.columnDefinition.Type.Charset.Name = t2cc.charset
 			defer func() {
 				other.columnDefinition.Type.Charset.Name = ""
 			}()
-		}
-		if other.columnDefinition.Type.Options.Collate == "" {
-			other.columnDefinition.Type.Options.Collate = t2cc.collate
-			defer func() {
-				other.columnDefinition.Type.Options.Collate = ""
-			}()
+			other.columnDefinition.Type.Charset.Name = t2cc.charset
+			if other.columnDefinition.Type.Options.Collate == "" {
+				defer func() {
+					other.columnDefinition.Type.Options.Collate = ""
+				}()
+				if other.columnDefinition.Type.Options.Collate = t2cc.collate; other.columnDefinition.Type.Options.Collate == "" {
+					other.columnDefinition.Type.Options.Collate = defaultCharsetCollation(t2cc.charset)
+				}
+			}
 		}
 	}
 
