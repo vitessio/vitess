@@ -457,6 +457,32 @@ func FindLatestSuccessfulBackupPosition(ctx context.Context, params BackupParams
 	return bh.Name(), pos, nil
 }
 
+// FindBackupPosition returns the position of a given backup, assuming the backup exists.
+func FindBackupPosition(ctx context.Context, params BackupParams, backupName string) (pos replication.Position, err error) {
+	bs, err := backupstorage.GetBackupStorage()
+	if err != nil {
+		return pos, err
+	}
+	defer bs.Close()
+
+	backupDir := GetBackupDir(params.Keyspace, params.Shard)
+	bhs, err := bs.ListBackups(ctx, backupDir)
+	if err != nil {
+		return pos, vterrors.Wrap(err, "ListBackups failed")
+	}
+	for _, bh := range bhs {
+		if bh.Name() != backupName {
+			continue
+		}
+		manifest, err := GetBackupManifest(ctx, bh)
+		if err != nil {
+			return pos, vterrors.Wrapf(err, "GetBackupManifest failed for backup: %v", backupName)
+		}
+		return manifest.Position, nil
+	}
+	return pos, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "GetBackupManifest could not find backup: %v", backupName)
+}
+
 // FindBackupToRestore returns a path, a sequence of backup handles, to be restored.
 // The returned handles stand for valid backups with complete manifests.
 func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backupstorage.BackupHandle) (restorePath *RestorePath, err error) {

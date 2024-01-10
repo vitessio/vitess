@@ -245,10 +245,26 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		return false, vterrors.Wrap(err, "can't get MySQL version")
 	}
 
+	// We now need to figure out the GTIDSet from which we want to take the incremental backup. The user may have
+	// specified a position, or they may have specified "auto", or they may have specified a backup name, in which
+	// case we need to find the position of that backup.
 	var fromBackupName string
 	if params.IncrementalFromPos == autoIncrementalFromPos {
+		// User has supplied "auto".
 		params.Logger.Infof("auto evaluating incremental_from_pos")
 		backupName, pos, err := FindLatestSuccessfulBackupPosition(ctx, params, bh.Name())
+		if err != nil {
+			return false, err
+		}
+		fromBackupName = backupName
+		params.IncrementalFromPos = replication.EncodePosition(pos)
+		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
+	}
+
+	if _, err := replication.DecodePositionDefaultFlavor(params.IncrementalFromPos, replication.Mysql56FlavorID); err != nil {
+		// This does not seem to be a valid position. Maybe it's a backup name?
+		backupName := params.IncrementalFromPos
+		pos, err := FindBackupPosition(ctx, params, backupName)
 		if err != nil {
 			return false, err
 		}
