@@ -436,9 +436,9 @@ func defaultCharsetCollation(charset string) string {
 	return collationEnv.LookupName(collation)
 }
 
-func getTableCharsetAndCollation(tableSpec *sqlparser.TableSpec) (tableCharset string, tableCollation string, defaultCollation string) {
+func getTableCharsetAndCollation(tableOptions *sqlparser.TableOptions) (tableCharset string, tableCollation string, defaultCollation string) {
 	tableCharset = defaultCharset()
-	for _, option := range tableSpec.Options {
+	for _, option := range *tableOptions {
 		if strings.EqualFold(option.Name, "charset") {
 			tableCharset = option.String
 		}
@@ -454,7 +454,7 @@ func getTableCharsetAndCollation(tableSpec *sqlparser.TableSpec) (tableCharset s
 }
 
 func (c *CreateTableEntity) normalizeColumnOptions() {
-	tableCharset, tableCollation, defaultCollation := getTableCharsetAndCollation(c.CreateTable.TableSpec)
+	tableCharset, tableCollation, defaultCollation := getTableCharsetAndCollation(&c.CreateTable.TableSpec.Options)
 
 	for _, col := range c.CreateTable.TableSpec.Columns {
 		if col.Type.Options == nil {
