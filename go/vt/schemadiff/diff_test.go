@@ -228,8 +228,12 @@ func TestDiffTables(t *testing.T) {
 			case ts.diff == "":
 				assert.NoError(t, err)
 				assert.NoError(t, dqerr)
-				assert.Nil(t, d)
-				assert.Nil(t, dq)
+				if !assert.Nil(t, d) {
+					assert.Failf(t, "found diff", "%v", d.CanonicalStatementString())
+				}
+				if !assert.Nil(t, dq) {
+					assert.Failf(t, "found diff", "%v", dq.CanonicalStatementString())
+				}
 			default:
 				assert.NoError(t, err)
 				require.NotNil(t, d)
@@ -357,8 +361,12 @@ func TestDiffViews(t *testing.T) {
 			case ts.diff == "":
 				assert.NoError(t, err)
 				assert.NoError(t, dqerr)
-				assert.Nil(t, d)
-				assert.Nil(t, dq)
+				if !assert.Nil(t, d) {
+					assert.Failf(t, "found diff", "%v", d.CanonicalStatementString())
+				}
+				if !assert.Nil(t, dq) {
+					assert.Failf(t, "found diff", "%v", dq.CanonicalStatementString())
+				}
 			default:
 				assert.NoError(t, err)
 				require.NotNil(t, d)
