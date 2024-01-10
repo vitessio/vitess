@@ -16,6 +16,14 @@
 
 package mysql
 
+import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"testing"
+	"time"
+)
+
 func TestStaticConfigHUP(t *testing.T) {
 	tmpFile, err := ioutil.TempFile("", "mysql_auth_server_static_file.json")
 	if err != nil {
