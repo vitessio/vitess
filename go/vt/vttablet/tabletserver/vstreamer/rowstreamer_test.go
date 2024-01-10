@@ -51,9 +51,6 @@ func TestRowStreamerQuery(t *testing.T) {
 		}
 		queryTemplate := "select %s id, uk1, val from t1"
 		getQuery := func(directives string) string {
-			if directives == "" {
-				return fmt.Sprintf(queryTemplate, "")
-			}
 			return fmt.Sprintf(queryTemplate, directives)
 		}
 		sendQueryPrefix := "select /*+ MAX_EXECUTION_TIME(3600000) */ id, uk1, val from t1"
