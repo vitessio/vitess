@@ -189,6 +189,41 @@ func TestDiffTables(t *testing.T) {
 				TableQualifierHint: TableQualifierDeclared,
 			},
 		},
+		{
+			name: "changing table level defaults with column specific settings, ignore charset",
+			from: "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin) default charset=latin1",
+			to:   "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
+			hints: &DiffHints{
+				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
+				TableCharsetCollateStrategy: TableCharsetCollateIgnoreAlways,
+			},
+		},
+		{
+			name:     "changing table level defaults with column specific settings",
+			from:     "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin) default charset=latin1",
+			to:       "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
+			diff:     "alter table t modify column a varchar(64) character set latin1 collate latin1_bin, charset utf8mb4, algorithm = COPY",
+			cdiff:    "ALTER TABLE `t` MODIFY COLUMN `a` varchar(64) CHARACTER SET latin1 COLLATE latin1_bin, CHARSET utf8mb4, ALGORITHM = COPY",
+			action:   "alter",
+			fromName: "t",
+			hints: &DiffHints{
+				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
+				TableCharsetCollateStrategy: TableCharsetCollateStrict,
+			},
+		},
+		{
+			name:     "changing table level defaults with column specific settings, table already normalized",
+			from:     "create table t (a varchar(64)) default charset=latin1",
+			to:       "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
+			diff:     "alter table t modify column a varchar(64) character set latin1 collate latin1_bin, charset utf8mb4, algorithm = COPY",
+			cdiff:    "ALTER TABLE `t` MODIFY COLUMN `a` varchar(64) CHARACTER SET latin1 COLLATE latin1_bin, CHARSET utf8mb4, ALGORITHM = COPY",
+			action:   "alter",
+			fromName: "t",
+			hints: &DiffHints{
+				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
+				TableCharsetCollateStrategy: TableCharsetCollateStrict,
+			},
+		},
 	}
 	parser := sqlparser.NewTestParser()
 	for _, ts := range tt {
@@ -229,10 +264,10 @@ func TestDiffTables(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NoError(t, dqerr)
 				if !assert.Nil(t, d) {
-					assert.Failf(t, "found diff", "%v", d.CanonicalStatementString())
+					assert.Failf(t, "found unexpected diff", "%v", d.CanonicalStatementString())
 				}
 				if !assert.Nil(t, dq) {
-					assert.Failf(t, "found diff", "%v", dq.CanonicalStatementString())
+					assert.Failf(t, "found unexpected diff", "%v", dq.CanonicalStatementString())
 				}
 			default:
 				assert.NoError(t, err)
@@ -362,10 +397,10 @@ func TestDiffViews(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NoError(t, dqerr)
 				if !assert.Nil(t, d) {
-					assert.Failf(t, "found diff", "%v", d.CanonicalStatementString())
+					assert.Failf(t, "found unexpected diff", "%v", d.CanonicalStatementString())
 				}
 				if !assert.Nil(t, dq) {
-					assert.Failf(t, "found diff", "%v", dq.CanonicalStatementString())
+					assert.Failf(t, "found unexpected diff", "%v", dq.CanonicalStatementString())
 				}
 			default:
 				assert.NoError(t, err)

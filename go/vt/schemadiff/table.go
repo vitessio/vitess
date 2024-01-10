@@ -31,6 +31,15 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+type charsetCollate struct {
+	charset string
+	collate string
+}
+
+func (c *charsetCollate) defaultCollation() string {
+	return defaultCharsetCollation(c.charset)
+}
+
 type AlterTableEntityDiff struct {
 	from       *CreateTableEntity
 	to         *CreateTableEntity
@@ -436,25 +445,26 @@ func defaultCharsetCollation(charset string) string {
 	return collationEnv.LookupName(collation)
 }
 
-func getTableCharsetAndCollation(tableOptions *sqlparser.TableOptions) (tableCharset string, tableCollation string, defaultCollation string) {
-	tableCharset = defaultCharset()
+func getTableCharsetCollate(tableOptions *sqlparser.TableOptions) *charsetCollate {
+	cc := &charsetCollate{
+		charset: defaultCharset(),
+	}
 	for _, option := range *tableOptions {
 		if strings.EqualFold(option.Name, "charset") {
-			tableCharset = option.String
+			cc.charset = option.String
 		}
 		if strings.EqualFold(option.Name, "collate") {
-			tableCollation = option.String
+			cc.collate = option.String
 		}
 	}
-	defaultCollation = defaultCharsetCollation(tableCharset)
-	if tableCollation == "" {
-		tableCollation = defaultCollation
+	if cc.collate == "" {
+		cc.collate = cc.defaultCollation()
 	}
-	return tableCharset, tableCollation, defaultCollation
+	return cc
 }
 
 func (c *CreateTableEntity) normalizeColumnOptions() {
-	tableCharset, tableCollation, defaultCollation := getTableCharsetAndCollation(&c.CreateTable.TableSpec.Options)
+	cc := getTableCharsetCollate(&c.CreateTable.TableSpec.Options)
 
 	for _, col := range c.CreateTable.TableSpec.Columns {
 		if col.Type.Options == nil {
@@ -575,13 +585,13 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		if _, ok := charsetTypes[col.Type.Type]; ok {
 			// If the charset is explicitly configured and it mismatches, we don't normalize
 			// anything for charsets or collations and move on.
-			if col.Type.Charset.Name != "" && col.Type.Charset.Name != tableCharset {
+			if col.Type.Charset.Name != "" && col.Type.Charset.Name != cc.charset {
 				continue
 			}
 
 			// Alright, first check if both charset and collation are the same as
 			// the table level options, in that case we can remove both since that's equivalent.
-			if col.Type.Charset.Name == tableCharset && col.Type.Options.Collate == tableCollation {
+			if col.Type.Charset.Name == cc.charset && col.Type.Options.Collate == cc.collate {
 				col.Type.Charset.Name = ""
 				col.Type.Options.Collate = ""
 			}
@@ -599,13 +609,13 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			if col.Type.Charset.Name != "" {
 				col.Type.Charset.Name = ""
 				if col.Type.Options.Collate == "" {
-					col.Type.Options.Collate = defaultCollation
+					col.Type.Options.Collate = cc.defaultCollation()
 				}
 			}
 
 			// We now have one case left, which is when we have set a collation but it's the same
 			// as the table level. In that case, we can clear it since that is equivalent.
-			if col.Type.Options.Collate == tableCollation {
+			if col.Type.Options.Collate == cc.collate {
 				col.Type.Options.Collate = ""
 			}
 		}
@@ -830,21 +840,19 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		alterTable.Table.Qualifier = other.Table.Qualifier
 	}
 
-	diffedTableCharset := ""
+	t1cc := getTableCharsetCollate(&c.CreateTable.TableSpec.Options)
+	t2cc := getTableCharsetCollate(&other.CreateTable.TableSpec.Options)
+
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
 	var partitionSpecs []*sqlparser.PartitionSpec
 	var superfluousFulltextKeys []*sqlparser.AddIndexDefinition
 	{
-		t1Options := c.CreateTable.TableSpec.Options
-		t2Options := other.CreateTable.TableSpec.Options
-		diffedTableCharset = c.diffTableCharset(t1Options, t2Options)
-	}
-	{
 		// diff columns
 		// ordered columns for both tables:
+
 		t1Columns := c.CreateTable.TableSpec.Columns
 		t2Columns := other.CreateTable.TableSpec.Columns
-		c.diffColumns(alterTable, t1Columns, t2Columns, hints, diffedTableCharset != "")
+		c.diffColumns(alterTable, t1Columns, t2Columns, hints, t1cc, t2cc)
 	}
 	{
 		// diff keys
@@ -931,21 +939,11 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 }
 
 func (c *CreateTableEntity) diffTableCharset(
-	t1Options sqlparser.TableOptions,
-	t2Options sqlparser.TableOptions,
+	t1cc *charsetCollate,
+	t2cc *charsetCollate,
 ) string {
-	getcharset := func(options sqlparser.TableOptions) string {
-		for _, option := range options {
-			if strings.EqualFold(option.Name, "CHARSET") {
-				return option.String
-			}
-		}
-		return ""
-	}
-	t1Charset := getcharset(t1Options)
-	t2Charset := getcharset(t2Options)
-	if t1Charset != t2Charset {
-		return t2Charset
+	if t1cc.charset != t2cc.charset {
+		return t2cc.charset
 	}
 	return ""
 }
@@ -1023,7 +1021,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 			case "CHARSET":
 				switch hints.TableCharsetCollateStrategy {
 				case TableCharsetCollateStrict:
-					tableOption = &sqlparser.TableOption{String: ""}
+					tableOption = &sqlparser.TableOption{Name: "CHARSET", String: defaultCharset(), CaseSensitive: true}
 					// in all other strategies we ignore the charset
 				}
 			case "CHECKSUM":
@@ -1540,7 +1538,8 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	t1Columns []*sqlparser.ColumnDefinition,
 	t2Columns []*sqlparser.ColumnDefinition,
 	hints *DiffHints,
-	tableCharsetChanged bool,
+	t1cc *charsetCollate,
+	t2cc *charsetCollate,
 ) {
 	getColumnsMap := func(cols []*sqlparser.ColumnDefinition) map[string]*columnDetails {
 		var prevCol *columnDetails
@@ -1603,13 +1602,13 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColEntity := NewColumnDefinitionEntity(t2Col)
 
 		// check diff between before/after columns:
-		modifyColumnDiff := t1ColEntity.ColumnDiff(t2ColEntity, hints)
+		modifyColumnDiff := t1ColEntity.ColumnDiff(t2ColEntity, hints, t1cc, t2cc)
 		if modifyColumnDiff == nil {
 			// even if there's no apparent change, there can still be implicit changes
 			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both versions 1 and 2,
-			// but implicitly the column has changed its characters set. So we need to explicitly ass a MODIFY COLUMN statement, so that
+			// but implicitly the column has changed its character set. So we need to explicitly add a MODIFY COLUMN statement, so that
 			// MySQL rebuilds it.
-			if tableCharsetChanged && t2ColEntity.IsTextual() && t2Col.Type.Charset.Name == "" {
+			if t1cc.charset != t2cc.charset && t2ColEntity.IsTextual() && t2Col.Type.Charset.Name == "" {
 				modifyColumnDiff = NewModifyColumnDiffByDefinition(t2Col)
 			}
 		}
