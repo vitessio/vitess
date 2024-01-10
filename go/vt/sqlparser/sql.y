@@ -389,7 +389,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SENSITIVE SPECIFIC SQL_BIG_RESULT SQL_SMALL_RESULT
 
 %token <bytes> UNUSED DESCRIPTION LATERAL MEMBER RECURSIVE
-%token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED NOT_ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <bytes> INACTIVE INVISIBLE MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_LOAD SECONDARY_UNLOAD
@@ -467,7 +467,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <expr> value value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr timestamp_value
 %type <bytes> time_unit non_microsecond_time_unit
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
-%type <expr> func_datetime_precision function_call_window function_call_aggregate_with_window
+%type <expr> func_datetime_prec_opt function_call_window function_call_aggregate_with_window function_call_on_update
 %type <str> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list group_by_list partition_by_opt
@@ -2288,6 +2288,10 @@ trigger_begin_end_block:
   {
     $$ = &BeginEndBlock{Statements: $2}
   }
+| BEGIN END
+  {
+    $$ = &BeginEndBlock{}
+  }
 
 case_statement:
   CASE expression case_statement_case_list END CASE
@@ -2801,20 +2805,9 @@ table_column_list:
     $$ = &TableSpec{}
     $$.AddConstraint($1)
   }
-| column_definition_for_create check_constraint_definition
-  {
-    $$ = &TableSpec{}
-    $$.AddColumn($1)
-    $$.AddConstraint($2)
-  }
 | table_column_list ',' column_definition_for_create
   {
     $$.AddColumn($3)
-  }
-| table_column_list ',' column_definition_for_create check_constraint_definition
-  {
-    $$.AddColumn($3)
-    $$.AddConstraint($4)
   }
 | table_column_list ',' index_definition
   {
@@ -3031,6 +3024,15 @@ column_type_options:
   // TODO: This still needs support for "ON DELETE" and "ON UPDATE"
   {
     opt := ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3, ReferencedColumns: $5}}
+    if err := $1.merge(opt); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = $1
+  }
+| column_type_options check_constraint_definition
+  {
+    opt := ColumnType{Constraint: $2}
     if err := $1.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
@@ -3459,37 +3461,9 @@ column_default:
   {
     $$ = $2
   }
-| DEFAULT CURRENT_TIMESTAMP func_parens_opt
+| DEFAULT function_call_nonkeyword
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($2))}
-  }
-| DEFAULT CURRENT_TIMESTAMP openb argument_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
-  }
-| DEFAULT LOCALTIME func_parens_opt
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2))}
-  }
-| DEFAULT LOCALTIME openb argument_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
-  }
-| DEFAULT LOCALTIMESTAMP func_parens_opt
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2))}
-  }
-| DEFAULT LOCALTIMESTAMP openb argument_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
-  }
-| DEFAULT NOW openb closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2))}
-  }
-| DEFAULT NOW openb argument_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
+    $$ = $2
   }
 | DEFAULT openb value_expression closeb
   {
@@ -3497,7 +3471,7 @@ column_default:
   }
 
 on_update:
-  ON UPDATE function_call_nonkeyword
+  ON UPDATE function_call_on_update
   {
     $$ = $3
   }
@@ -4159,7 +4133,7 @@ enforced_opt:
   {
     $$ = true
   }
-| NOT ENFORCED
+| NOT_ENFORCED
   {
     $$ = false
   }
@@ -7084,10 +7058,6 @@ function_call_keyword:
   {
     $$ = &ValuesFuncExpr{Name: NewColName(string($3))}
   }
-| VERSION openb closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1))}
-  }
 | REPEAT openb argument_expression_list closeb
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
@@ -7098,75 +7068,35 @@ function_call_keyword:
   Dedicated grammar rules are needed because of the special syntax
 */
 function_call_nonkeyword:
-  CURRENT_TIMESTAMP func_parens_opt
+// functions that do not support fractional second precision (fsp)
+  CURRENT_DATE func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-| UTC_TIMESTAMP func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-| UTC_TIME func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-/* doesn't support fsp */
-| UTC_DATE func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-  // now
-| LOCALTIME func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-  // now
-| LOCALTIMESTAMP func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-  // curdate
-/* doesn't support fsp */
-| CURRENT_DATE func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-  // curtime
-| CURRENT_TIME func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
 | CURRENT_USER func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
-// these functions can also be called with an optional argument
-| CURRENT_TIMESTAMP func_datetime_precision
+| UTC_DATE func_parens_opt
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
-| UTC_TIMESTAMP func_datetime_precision
+// functions that can be called with optional second argument
+| function_call_on_update
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
+    $$ = $1
   }
-| UTC_TIME func_datetime_precision
+| CURRENT_TIME func_datetime_prec_opt
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
-  // now
-| LOCALTIME func_datetime_precision
+| UTC_TIME func_datetime_prec_opt
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
-  // now
-| LOCALTIMESTAMP func_datetime_precision
+| UTC_TIMESTAMP func_datetime_prec_opt
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
-  }
-  // curtime
-| CURRENT_TIME func_datetime_precision
-  {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
 | TIMESTAMPADD openb time_unit ',' value_expression ',' value_expression closeb
   {
@@ -7181,15 +7111,45 @@ function_call_nonkeyword:
     $$ = &ExtractFuncExpr{Name: string($1), Unit: string($3), Expr: $5}
   }
 
+// functions that can be used with the ON UPDATE clause
+function_call_on_update:
+  // NOW is special; it can't be called without parentheses
+  NOW openb closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
+  }
+| NOW openb INTEGRAL closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: NewIntVal($3)}}}
+  }
+| CURRENT_TIMESTAMP func_datetime_prec_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
+  }
+| LOCALTIME func_datetime_prec_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
+  }
+| LOCALTIMESTAMP func_datetime_prec_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
+  }
+
 // Optional parens for certain keyword functions that don't require them.
 func_parens_opt:
   /* empty */
 | openb closeb
 
-func_datetime_precision:
-  openb value_expression closeb
+// Optional datetime precision for certain functions.
+func_datetime_prec_opt:
+  // no arg is the same as 0
+  func_parens_opt
   {
-    $$ = $2
+    $$ = NewIntVal([]byte("0"))
+  }
+| openb INTEGRAL closeb
+  {
+    $$ = NewIntVal($2)
   }
 
 /*
@@ -9009,7 +8969,6 @@ non_reserved_keyword:
 | NETWORK_NAMESPACE
 | NEVER
 | NO
-| NOW
 | NOWAIT
 | NULLS
 | NVARCHAR
@@ -9124,6 +9083,7 @@ non_reserved_keyword:
 | USER_RESOURCES
 | VALUE
 | VARIABLES
+| VERSION
 | VCPU
 | VISIBLE
 | UNDEFINED
@@ -9154,7 +9114,6 @@ non_reserved_keyword2:
 | SUPER
 | TIMESTAMPADD
 | TIMESTAMPDIFF
-| VERSION
 | VERSIONS
 | VIEW
 

@@ -154,12 +154,21 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
 	buf := &bytes2.Buffer{}
-	if tkn.lastNonNilToken != nil {
-		fmt.Fprintf(buf, "%s at position %v near '%s'", err, tkn.Position, tkn.lastNonNilToken)
-	} else {
-		fmt.Fprintf(buf, "%s at position %v", err, tkn.Position)
+
+	position := tkn.Position
+	// Adjust the position in case we've read ahead any tokens
+	if len(tkn.digestedTokens) > 0 {
+		for _, tokenAndValue := range tkn.digestedTokens {
+			position -= len(tokenAndValue.value) + 1
+		}
 	}
-	tkn.LastError = vterrors.SyntaxError{Message: buf.String(), Position: tkn.Position, Statement: string(tkn.buf)}
+
+	if tkn.lastNonNilToken != nil {
+		fmt.Fprintf(buf, "%s at position %v near '%s'", err, position, tkn.lastNonNilToken)
+	} else {
+		fmt.Fprintf(buf, "%s at position %v", err, position)
+	}
+	tkn.LastError = vterrors.SyntaxError{Message: buf.String(), Position: position, Statement: string(tkn.buf)}
 
 	// Try and re-sync to the next statement
 	tkn.skipStatement()
@@ -175,8 +184,9 @@ func (tkn *Tokenizer) digestedToken() (token int, value []byte) {
 	if tkn.digestedTokens == nil || len(tkn.digestedTokens) == 0 {
 		panic("popDigestedToken called with no digested tokens")
 	}
-	tokenAndValue := tkn.digestedTokens[0]
-	tkn.digestedTokens = tkn.digestedTokens[1:]
+	length := len(tkn.digestedTokens)
+	tokenAndValue := tkn.digestedTokens[length-1]
+	tkn.digestedTokens = tkn.digestedTokens[0:length-1]
 
 	if len(tkn.digestedTokens) == 0 {
 		tkn.digestedTokens = nil
@@ -442,6 +452,15 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 			default:
 				tkn.digestToken(token, val)
 				return FOR, buffer.Bytes()
+			}
+		case NOT:
+			token, val := tkn.Scan()
+			switch token {
+			case ENFORCED:
+				return NOT_ENFORCED, append(buffer.Bytes(), append([]byte{' '}, val...)...)
+			default:
+				tkn.digestToken(token, val)
+				return NOT, buffer.Bytes()
 			}
 		}
 
