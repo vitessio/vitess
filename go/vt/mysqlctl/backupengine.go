@@ -411,9 +411,9 @@ func (p *RestorePath) String() string {
 	return sb.String()
 }
 
-// FindLatestSuccessfulBackup returns the handle and manifest for the last good backup,
+// findLatestSuccessfulBackup returns the handle and manifest for the last good backup,
 // which can be either full or increment
-func FindLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs []backupstorage.BackupHandle, excludeBackupName string) (backupstorage.BackupHandle, *BackupManifest, error) {
+func findLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs []backupstorage.BackupHandle, excludeBackupName string) (backupstorage.BackupHandle, *BackupManifest, error) {
 	for index := len(bhs) - 1; index >= 0; index-- {
 		bh := bhs[index]
 		if bh.Name() == excludeBackupName {
@@ -434,8 +434,8 @@ func FindLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs 
 	return nil, nil, ErrNoCompleteBackup
 }
 
-// FindLatestSuccessfulBackupPosition returns the position of the last known successful backup
-func FindLatestSuccessfulBackupPosition(ctx context.Context, params BackupParams, excludeBackupName string) (backupName string, pos replication.Position, err error) {
+// findLatestSuccessfulBackupPosition returns the position of the last known successful backup
+func findLatestSuccessfulBackupPosition(ctx context.Context, params BackupParams, excludeBackupName string) (backupName string, pos replication.Position, err error) {
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return "", pos, err
@@ -449,7 +449,7 @@ func FindLatestSuccessfulBackupPosition(ctx context.Context, params BackupParams
 	if err != nil {
 		return "", pos, vterrors.Wrap(err, "ListBackups failed")
 	}
-	bh, manifest, err := FindLatestSuccessfulBackup(ctx, params.Logger, bhs, excludeBackupName)
+	bh, manifest, err := findLatestSuccessfulBackup(ctx, params.Logger, bhs, excludeBackupName)
 	if err != nil {
 		return "", pos, vterrors.Wrap(err, "FindLatestSuccessfulBackup failed")
 	}
@@ -457,8 +457,8 @@ func FindLatestSuccessfulBackupPosition(ctx context.Context, params BackupParams
 	return bh.Name(), pos, nil
 }
 
-// FindBackupPosition returns the position of a given backup, assuming the backup exists.
-func FindBackupPosition(ctx context.Context, params BackupParams, backupName string) (pos replication.Position, err error) {
+// findBackupPosition returns the position of a given backup, assuming the backup exists.
+func findBackupPosition(ctx context.Context, params BackupParams, backupName string) (pos replication.Position, err error) {
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return pos, err

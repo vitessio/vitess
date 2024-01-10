@@ -58,7 +58,7 @@ import (
 
 const (
 	builtinBackupEngineName = "builtin"
-	autoIncrementalFromPos  = "auto"
+	AutoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
 )
 
@@ -249,10 +249,10 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// specified a position, or they may have specified "auto", or they may have specified a backup name, in which
 	// case we need to find the position of that backup.
 	var fromBackupName string
-	if params.IncrementalFromPos == autoIncrementalFromPos {
+	if params.IncrementalFromPos == AutoIncrementalFromPos {
 		// User has supplied "auto".
 		params.Logger.Infof("auto evaluating incremental_from_pos")
-		backupName, pos, err := FindLatestSuccessfulBackupPosition(ctx, params, bh.Name())
+		backupName, pos, err := findLatestSuccessfulBackupPosition(ctx, params, bh.Name())
 		if err != nil {
 			return false, err
 		}
@@ -264,7 +264,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if _, err := replication.DecodePositionDefaultFlavor(params.IncrementalFromPos, replication.Mysql56FlavorID); err != nil {
 		// This does not seem to be a valid position. Maybe it's a backup name?
 		backupName := params.IncrementalFromPos
-		pos, err := FindBackupPosition(ctx, params, backupName)
+		pos, err := findBackupPosition(ctx, params, backupName)
 		if err != nil {
 			return false, err
 		}
