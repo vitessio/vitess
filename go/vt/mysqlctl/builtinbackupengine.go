@@ -275,7 +275,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, err
 	}
-	// OK, we now have the formal MySQL GTID from which we want to take the incremental backip.
+	// OK, we now have the formal MySQL GTID from which we want to take the incremental backup.
 
 	// binlogs may not contain information about purged GTIDs. e.g. some binlog.000003 may have
 	// previous GTIDs like 00021324-1111-1111-1111-111111111111:30-60, ie 1-29 range is missing. This can happen
