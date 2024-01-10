@@ -95,7 +95,6 @@ func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionE
 // We need to denormalize the column's charset/collate properties, so that the comparison can be done.
 func (c *ColumnDefinitionEntity) ColumnDiff(
 	other *ColumnDefinitionEntity,
-	hints *DiffHints,
 	t1cc *charsetCollate,
 	t2cc *charsetCollate,
 ) *ModifyColumnDiff {

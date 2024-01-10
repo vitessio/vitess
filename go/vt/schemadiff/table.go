@@ -1602,7 +1602,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColEntity := NewColumnDefinitionEntity(t2Col)
 
 		// check diff between before/after columns:
-		modifyColumnDiff := t1ColEntity.ColumnDiff(t2ColEntity, hints, t1cc, t2cc)
+		modifyColumnDiff := t1ColEntity.ColumnDiff(t2ColEntity, t1cc, t2cc)
 		if modifyColumnDiff == nil {
 			// even if there's no apparent change, there can still be implicit changes
 			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both versions 1 and 2,
