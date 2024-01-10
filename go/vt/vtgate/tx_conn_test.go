@@ -165,6 +165,108 @@ func TestTxConnCommitFailure(t *testing.T) {
 	assert.EqualValues(t, 1, sbcs[0].CommitCount.Load(), "sbc0.CommitCount")
 }
 
+func TestTxConnCommitFailureAfterNonAtomicCommitMaxShards(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbcs, rssm, _ := newTestTxConnEnvNShards(t, ctx, "TestTxConn", 18)
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	// Sequence the executes to ensure commit order
+
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	wantSession := vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{},
+	}
+
+	for i := 0; i < 18; i++ {
+		sc.ExecuteMultiShard(ctx, nil, rssm[i], queries, session, false, false)
+		wantSession.ShardSessions = append(wantSession.ShardSessions, &vtgatepb.Session_ShardSession{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      rssm[i][0].Target.Shard,
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			TransactionId: 1,
+			TabletAlias:   sbcs[i].Tablet().Alias,
+		})
+		utils.MustMatch(t, &wantSession, session.Session, "Session")
+	}
+
+	sbcs[17].MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 1
+
+	expectErr := NewShardError(vterrors.New(
+		vtrpcpb.Code_DEADLINE_EXCEEDED,
+		fmt.Sprintf("%v error", vtrpcpb.Code_DEADLINE_EXCEEDED)),
+		rssm[17][0].Target)
+
+	require.ErrorContains(t, sc.txConn.Commit(ctx, session), expectErr.Error())
+	wantSession = vtgatepb.Session{
+		Warnings: []*querypb.QueryWarning{
+			{
+				Code:    uint32(sqlerror.ERNonAtomicCommit),
+				Message: "multi-db commit failed after committing to 17 shards: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, ...",
+			},
+		},
+	}
+
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	for i := 0; i < 17; i++ {
+		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), fmt.Sprintf("sbc%d.CommitCount", i))
+	}
+}
+
+func TestTxConnCommitFailureBeforeNonAtomicCommitMaxShards(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	sc, sbcs, rssm, _ := newTestTxConnEnvNShards(t, ctx, "TestTxConn", 17)
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	// Sequence the executes to ensure commit order
+
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	wantSession := vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{},
+	}
+
+	for i := 0; i < 17; i++ {
+		sc.ExecuteMultiShard(ctx, nil, rssm[i], queries, session, false, false)
+		wantSession.ShardSessions = append(wantSession.ShardSessions, &vtgatepb.Session_ShardSession{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      rssm[i][0].Target.Shard,
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			TransactionId: 1,
+			TabletAlias:   sbcs[i].Tablet().Alias,
+		})
+		utils.MustMatch(t, &wantSession, session.Session, "Session")
+	}
+
+	sbcs[16].MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 1
+
+	expectErr := NewShardError(vterrors.New(
+		vtrpcpb.Code_DEADLINE_EXCEEDED,
+		fmt.Sprintf("%v error", vtrpcpb.Code_DEADLINE_EXCEEDED)),
+		rssm[16][0].Target)
+
+	require.ErrorContains(t, sc.txConn.Commit(ctx, session), expectErr.Error())
+	wantSession = vtgatepb.Session{
+		Warnings: []*querypb.QueryWarning{
+			{
+				Code:    uint32(sqlerror.ERNonAtomicCommit),
+				Message: "multi-db commit failed after committing to 16 shards: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15",
+			},
+		},
+	}
+
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	for i := 0; i < 16; i++ {
+		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), fmt.Sprintf("sbc%d.CommitCount", i))
+	}
+}
+
 func TestTxConnCommitSuccess(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
