@@ -34,16 +34,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-var beginEvent, commitEvent, gtidEvent, rowEvent *VStreamerTestEvent
-
 type VStreamerTestQuery struct {
-	query  string
-	events []*VStreamerTestEvent
-}
-
-type VStreamerTestEvent struct {
-	typ    string
-	values []string
+	query string
 }
 
 type VStreamerTestSpecOptions struct {
@@ -107,10 +99,6 @@ func (ts *VStreamerTestSpec) Init() error {
 		}
 		ts.pkColumns[t.Name()] = pkColumns
 	}
-	beginEvent = &VStreamerTestEvent{typ: "begin"}
-	commitEvent = &VStreamerTestEvent{typ: "commit"}
-	gtidEvent = &VStreamerTestEvent{typ: "gtid"}
-	rowEvent = &VStreamerTestEvent{typ: "rowEvent"}
 	engine.se.Reload(context.Background())
 	return nil
 }
@@ -136,8 +124,14 @@ func (ts *VStreamerTestSpec) Run() {
 			stmt, err := sqlparser.NewTestParser().Parse(tq.query)
 			require.NoError(ts.t, err)
 			bv := make(map[string]string)
+			isRowEvent := false
 			switch stmt.(type) {
+			case *sqlparser.Begin:
+				output = append(output, "begin")
+			case *sqlparser.Commit:
+				output = append(output, "gtid", "commit")
 			case *sqlparser.Insert:
+				isRowEvent = true
 				ins := stmt.(*sqlparser.Insert)
 				tn, _ := ins.Table.TableName()
 				table = tn.Name.String()
@@ -158,6 +152,7 @@ func (ts *VStreamerTestSpec) Run() {
 					}
 				}
 			case *sqlparser.Update:
+				isRowEvent = true
 				upd := stmt.(*sqlparser.Update)
 				buf := sqlparser.NewTrackedBuffer(nil)
 				upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
@@ -178,22 +173,20 @@ func (ts *VStreamerTestSpec) Run() {
 					bv[bufN.String()] = strings.Trim(bufV.String(), "'")
 				}
 			case *sqlparser.Delete:
+				isRowEvent = true
 				del := stmt.(*sqlparser.Delete)
 				table = del.TableExprs[0].(*sqlparser.AliasedTableExpr).As.String()
 			}
-			for _, ev := range tq.events {
-				var fe *VStreamerTestFieldEvent
-				if ev.typ == "rowEvent" {
-					fe = ts.fieldEvents[table]
-					if fe == nil {
-						panic(fmt.Sprintf("field event for table %s not found", table))
-					}
-					if !ts.fieldEventsSent[table] {
-						output = append(output, fe.String())
-						ts.fieldEventsSent[table] = true
-					}
+			if isRowEvent {
+				fe := ts.fieldEvents[table]
+				if fe == nil {
+					panic(fmt.Sprintf("field event for table %s not found", table))
 				}
-				output = append(output, ts.serializeEvent(table, bv, fe, ev, stmt))
+				if !ts.fieldEventsSent[table] {
+					output = append(output, fe.String())
+					ts.fieldEventsSent[table] = true
+				}
+				output = append(output, ts.getRowEvent(table, bv, fe, stmt))
 			}
 		}
 		tc.input = input
@@ -291,7 +284,7 @@ func (ts *VStreamerTestSpec) getMetadataMap(table string, col *VStreamerTestColu
 	return strconv.FormatInt(bits, 10)
 }
 
-func (ts *VStreamerTestSpec) getRowEvent(table string, bv map[string]string, fe *VStreamerTestFieldEvent, event *VStreamerTestEvent, stmt sqlparser.Statement) string {
+func (ts *VStreamerTestSpec) getRowEvent(table string, bv map[string]string, fe *VStreamerTestFieldEvent, stmt sqlparser.Statement) string {
 	ev := &binlogdata.RowEvent{
 		TableName: table,
 		RowChanges: []*binlogdata.RowChange{
@@ -312,7 +305,7 @@ func (ts *VStreamerTestSpec) getRowEvent(table string, bv map[string]string, fe 
 		row.Values = append(row.Values, val...)
 		row.Lengths = append(row.Lengths, l)
 	}
-	ev.RowChanges = ts.getRowChanges(table, bv, fe, event, stmt, &row)
+	ev.RowChanges = ts.getRowChanges(table, stmt, &row)
 	vEvent := &binlogdata.VEvent{
 		Type:     binlogdata.VEventType_ROW,
 		RowEvent: ev,
@@ -320,7 +313,7 @@ func (ts *VStreamerTestSpec) getRowEvent(table string, bv map[string]string, fe 
 	return vEvent.String()
 }
 
-func (ts *VStreamerTestSpec) getRowChanges(table string, bv map[string]string, fe *VStreamerTestFieldEvent, event *VStreamerTestEvent, stmt sqlparser.Statement, row *query.Row) []*binlogdata.RowChange {
+func (ts *VStreamerTestSpec) getRowChanges(table string, stmt sqlparser.Statement, row *query.Row) []*binlogdata.RowChange {
 	var rowChanges []*binlogdata.RowChange
 	var rowChange binlogdata.RowChange
 	switch stmt.(type) {
@@ -402,17 +395,6 @@ func (ts *VStreamerTestSpec) getRowChangeForUpdate(table string, newState *query
 		}
 	}
 	return &rowChange
-}
-
-func (ts *VStreamerTestSpec) serializeEvent(table string, bv map[string]string, fe *VStreamerTestFieldEvent, ev *VStreamerTestEvent, stmt sqlparser.Statement) string {
-	switch ev.typ {
-	case "begin", "commit", "gtid":
-		return ev.typ
-	case "rowEvent":
-		vEvent := ts.getRowEvent(table, bv, fe, ev, stmt)
-		return vEvent
-	}
-	panic(fmt.Sprintf("unknown event %v", ev))
 }
 
 func (ts *VStreamerTestSpec) getBefore(table string) *query.Row {

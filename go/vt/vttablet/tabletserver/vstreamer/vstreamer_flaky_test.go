@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/common/version"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
@@ -116,18 +118,18 @@ func TestNoBlob(t *testing.T) {
 	defer ts.Close()
 	ts.Init()
 	ts.tests = [][]*VStreamerTestQuery{{
-		{"begin", []*VStreamerTestEvent{beginEvent}},
-		{"insert into t1 values (1, 'blob1', 'aaa')", []*VStreamerTestEvent{rowEvent}},
-		{"update t1 set val = 'bbb'", []*VStreamerTestEvent{rowEvent}},
-		{"commit", []*VStreamerTestEvent{gtidEvent, commitEvent}},
-	}, {{"begin", []*VStreamerTestEvent{beginEvent}},
-		{"insert into t2 values (1, 'text1', 'aaa')", []*VStreamerTestEvent{rowEvent}},
-		{"update t2 set val = 'bbb'", []*VStreamerTestEvent{rowEvent}},
-		{"commit", []*VStreamerTestEvent{gtidEvent, commitEvent}},
-	}, {{"begin", []*VStreamerTestEvent{beginEvent}},
-		{"insert into t3 values (1, 'text1', 'aaa')", []*VStreamerTestEvent{rowEvent}},
-		{"update t3 set val = 'bbb'", []*VStreamerTestEvent{rowEvent}},
-		{"commit", []*VStreamerTestEvent{gtidEvent, commitEvent}},
+		{"begin"},
+		{"insert into t1 values (1, 'blob1', 'aaa')"},
+		{"update t1 set val = 'bbb'"},
+		{"commit"},
+	}, {{"begin"},
+		{"insert into t2 values (1, 'text1', 'aaa')"},
+		{"update t2 set val = 'bbb'"},
+		{"commit"},
+	}, {{"begin"},
+		{"insert into t3 values (1, 'text1', 'aaa')"},
+		{"update t3 set val = 'bbb'"},
+		{"commit"},
 	}}
 	ts.Run()
 }
@@ -142,11 +144,11 @@ func TestSetAndEnum(t *testing.T) {
 	defer ts.Close()
 	ts.Init()
 	ts.tests = [][]*VStreamerTestQuery{{
-		{"begin", []*VStreamerTestEvent{beginEvent}},
-		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", []*VStreamerTestEvent{rowEvent}},
-		{"insert into t1 values (2, 'bbb', 'green', 'M')", []*VStreamerTestEvent{rowEvent}},
-		{"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')", []*VStreamerTestEvent{rowEvent}},
-		{"commit", []*VStreamerTestEvent{gtidEvent, commitEvent}},
+		{"begin"},
+		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')"},
+		{"insert into t1 values (2, 'bbb', 'green', 'M')"},
+		{"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')"},
+		{"commit"},
 	}}
 	ts.Run()
 }
@@ -1637,6 +1639,9 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 
 // test that vstreamer ignores tables created by OnlineDDL
 func TestInternalTables(t *testing.T) {
+	if version.GoOS == "darwin" {
+		t.Skip("internal online ddl table matching doesn't work on Mac because it is case insensitive")
+	}
 	if testing.Short() {
 		t.Skip()
 	}
