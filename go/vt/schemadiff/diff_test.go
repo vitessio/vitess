@@ -224,6 +224,14 @@ func TestDiffTables(t *testing.T) {
 				TableCharsetCollateStrategy: TableCharsetCollateStrict,
 			},
 		},
+		{
+			name:   "changing table level charset to default",
+			from:   `create table t (i int) default charset=latin1`,
+			to:     `create table t (i int)`,
+			action: "alter",
+			diff:   "alter table t charset utf8mb4",
+			cdiff:  "ALTER TABLE `t` CHARSET utf8mb4",
+		},
 	}
 	parser := sqlparser.NewTestParser()
 	for _, ts := range tt {
