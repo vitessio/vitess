@@ -1286,21 +1286,22 @@ func TestCreateTableDiff(t *testing.T) {
 		},
 	}
 	standardHints := DiffHints{}
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			fromStmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.from)
+			fromStmt, err := env.Parser.ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := fromStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			toStmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.to)
+			toStmt, err := env.Parser.ParseStrictDDL(ts.to)
 			require.NoError(t, err)
 			toCreateTable, ok := toStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			c, err := NewCreateTableEntity(fromCreateTable)
+			c, err := NewCreateTableEntity(env, fromCreateTable)
 			require.NoError(t, err)
-			other, err := NewCreateTableEntity(toCreateTable)
+			other, err := NewCreateTableEntity(env, toCreateTable)
 			require.NoError(t, err)
 
 			hints := standardHints
@@ -1353,7 +1354,7 @@ func TestCreateTableDiff(t *testing.T) {
 						}
 					}
 					// validate we can parse back the statement
-					_, err := sqlparser.NewTestParser().ParseStrictDDL(diff)
+					_, err := env.Parser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					// Validate "from/to" entities
@@ -1383,7 +1384,7 @@ func TestCreateTableDiff(t *testing.T) {
 				{
 					cdiff := alter.CanonicalStatementString()
 					assert.Equal(t, ts.cdiff, cdiff)
-					_, err := sqlparser.NewTestParser().ParseStrictDDL(cdiff)
+					_, err := env.Parser.ParseStrictDDL(cdiff)
 					assert.NoError(t, err)
 				}
 
@@ -1878,19 +1879,20 @@ func TestValidate(t *testing.T) {
 		},
 	}
 	hints := DiffHints{}
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.from)
+			stmt, err := env.Parser.ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = sqlparser.NewTestParser().ParseStrictDDL(ts.alter)
+			stmt, err = env.Parser.ParseStrictDDL(ts.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
 
-			from, err := NewCreateTableEntity(fromCreateTable)
+			from, err := NewCreateTableEntity(env, fromCreateTable)
 			require.NoError(t, err)
 			a := &AlterTableEntityDiff{from: from, alterTable: alterTable}
 			applied, err := from.Apply(a)
@@ -1909,12 +1911,12 @@ func TestValidate(t *testing.T) {
 				require.True(t, ok)
 				applied = c.normalize()
 
-				stmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.to)
+				stmt, err := env.Parser.ParseStrictDDL(ts.to)
 				require.NoError(t, err)
 				toCreateTable, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
 
-				to, err := NewCreateTableEntity(toCreateTable)
+				to, err := NewCreateTableEntity(env, toCreateTable)
 				require.NoError(t, err)
 				diff, err := applied.Diff(to, &hints)
 				require.NoError(t, err)
@@ -2191,14 +2193,15 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t` (\n\t`id` tinyint(1),\n\t`b` tinyint(1),\n\tPRIMARY KEY (`id`)\n)",
 		},
 	}
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.from)
+			stmt, err := env.Parser.ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			from, err := NewCreateTableEntity(fromCreateTable)
+			from, err := NewCreateTableEntity(env, fromCreateTable)
 			require.NoError(t, err)
 			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
 		})
@@ -2282,11 +2285,12 @@ func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
 		},
 	}
 
-	stmt, err := sqlparser.NewTestParser().ParseStrictDDL(sql)
+	env := NewTestEnv()
+	stmt, err := env.Parser.ParseStrictDDL(sql)
 	require.NoError(t, err)
 	createTable, ok := stmt.(*sqlparser.CreateTable)
 	require.True(t, ok)
-	c, err := NewCreateTableEntity(createTable)
+	c, err := NewCreateTableEntity(env, createTable)
 	require.NoError(t, err)
 	tableColumns := map[string]sqlparser.IdentifierCI{}
 	for _, col := range c.CreateTable.TableSpec.Columns {

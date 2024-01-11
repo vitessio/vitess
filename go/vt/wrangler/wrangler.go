@@ -70,7 +70,7 @@ func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClien
 		logger:       logger,
 		ts:           ts,
 		tmc:          tmc,
-		vtctld:       grpcvtctldserver.NewVtctldServer(ts, parser),
+		vtctld:       grpcvtctldserver.NewVtctldServer(ts, collationEnv, parser),
 		sourceTs:     ts,
 		collationEnv: collationEnv,
 		parser:       parser,

@@ -461,7 +461,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.sqlparser, v.originalShowCreateTable, v.vreplShowCreateTable)
+	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.sqlparser, v.collationEnv, v.originalShowCreateTable, v.vreplShowCreateTable)
 	if err != nil {
 		return err
 	}

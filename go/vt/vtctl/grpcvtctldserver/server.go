@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -92,13 +93,13 @@ type VtctldServer struct {
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
-func NewVtctldServer(ts *topo.Server, parser *sqlparser.Parser) *VtctldServer {
+func NewVtctldServer(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(ts, tmc, parser),
+		ws:  workflow.NewServer(ts, tmc, collationEnv, parser),
 	}
 }
 
@@ -108,7 +109,7 @@ func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *Vtc
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(ts, tmc, sqlparser.NewTestParser()),
+		ws:  workflow.NewServer(ts, tmc, collations.MySQL8(), sqlparser.NewTestParser()),
 	}
 }
 
@@ -4989,8 +4990,8 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
-func StartServer(s *grpc.Server, ts *topo.Server, parser *sqlparser.Parser) {
-	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts, parser))
+func StartServer(s *grpc.Server, ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) {
+	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts, collationEnv, parser))
 }
 
 // getTopologyCell is a helper method that returns a topology cell given its path.

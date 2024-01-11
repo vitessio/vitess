@@ -109,9 +109,7 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 				defer func() {
 					c.columnDefinition.Type.Options.Collate = ""
 				}()
-				if c.columnDefinition.Type.Options.Collate = t1cc.collate; c.columnDefinition.Type.Options.Collate == "" {
-					c.columnDefinition.Type.Options.Collate = defaultCharsetCollation(t1cc.charset)
-				}
+				c.columnDefinition.Type.Options.Collate = t1cc.collate
 			}
 		}
 		if other.columnDefinition.Type.Charset.Name == "" {
@@ -123,9 +121,7 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 				defer func() {
 					other.columnDefinition.Type.Options.Collate = ""
 				}()
-				if other.columnDefinition.Type.Options.Collate = t2cc.collate; other.columnDefinition.Type.Options.Collate == "" {
-					other.columnDefinition.Type.Options.Collate = defaultCharsetCollation(t2cc.charset)
-				}
+				other.columnDefinition.Type.Options.Collate = t2cc.collate
 			}
 		}
 	}

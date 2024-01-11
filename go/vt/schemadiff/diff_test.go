@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -38,6 +39,7 @@ func TestDiffTables(t *testing.T) {
 		action   string
 		isError  bool
 		hints    *DiffHints
+		env      *Environment
 	}{
 		{
 			name: "identical",
@@ -232,8 +234,51 @@ func TestDiffTables(t *testing.T) {
 			diff:   "alter table t charset utf8mb4",
 			cdiff:  "ALTER TABLE `t` CHARSET utf8mb4",
 		},
+		{
+			name: "no changes with normalization and utf8mb4",
+			from: `CREATE TABLE IF NOT EXISTS tables
+			(
+				TABLE_SCHEMA varchar(64) NOT NULL,
+				TABLE_NAME varchar(64) NOT NULL,
+				CREATE_STATEMENT longtext,
+				CREATE_TIME BIGINT,
+				PRIMARY KEY (TABLE_SCHEMA, TABLE_NAME)
+			) engine = InnoDB`,
+			to: "CREATE TABLE `tables` (" +
+				"`TABLE_SCHEMA` varchar(64) NOT NULL," +
+				"`TABLE_NAME` varchar(64) NOT NULL," +
+				"`CREATE_STATEMENT` longtext," +
+				"`CREATE_TIME` bigint DEFAULT NULL," +
+				"PRIMARY KEY (`TABLE_SCHEMA`,`TABLE_NAME`)" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+			hints: &DiffHints{
+				TableCharsetCollateStrategy: TableCharsetCollateIgnoreAlways,
+			},
+		},
+		{
+			name: "no changes with normalization and utf8mb3",
+			from: `CREATE TABLE IF NOT EXISTS tables
+			(
+				TABLE_SCHEMA varchar(64) NOT NULL,
+				TABLE_NAME varchar(64) NOT NULL,
+				CREATE_STATEMENT longtext,
+				CREATE_TIME BIGINT,
+				PRIMARY KEY (TABLE_SCHEMA, TABLE_NAME)
+			) engine = InnoDB`,
+			to: "CREATE TABLE `tables` (" +
+				"`TABLE_SCHEMA` varchar(64) NOT NULL," +
+				"`TABLE_NAME` varchar(64) NOT NULL," +
+				"`CREATE_STATEMENT` longtext," +
+				"`CREATE_TIME` bigint DEFAULT NULL," +
+				"PRIMARY KEY (`TABLE_SCHEMA`,`TABLE_NAME`)" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci",
+			hints: &DiffHints{
+				TableCharsetCollateStrategy: TableCharsetCollateIgnoreAlways,
+			},
+			env: NewEnv(collations.NewEnvironment("5.7.9"), collations.CollationUtf8mb3ID, sqlparser.NewTestParser()),
+		},
 	}
-	parser := sqlparser.NewTestParser()
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateTable *sqlparser.CreateTable
@@ -241,8 +286,11 @@ func TestDiffTables(t *testing.T) {
 			if ts.hints != nil {
 				hints = ts.hints
 			}
+			if ts.env != nil {
+				env = ts.env
+			}
 			if ts.from != "" {
-				fromStmt, err := parser.ParseStrictDDL(ts.from)
+				fromStmt, err := env.Parser.ParseStrictDDL(ts.from)
 				assert.NoError(t, err)
 				var ok bool
 				fromCreateTable, ok = fromStmt.(*sqlparser.CreateTable)
@@ -250,7 +298,7 @@ func TestDiffTables(t *testing.T) {
 			}
 			var toCreateTable *sqlparser.CreateTable
 			if ts.to != "" {
-				toStmt, err := parser.ParseStrictDDL(ts.to)
+				toStmt, err := env.Parser.ParseStrictDDL(ts.to)
 				assert.NoError(t, err)
 				var ok bool
 				toCreateTable, ok = toStmt.(*sqlparser.CreateTable)
@@ -262,8 +310,8 @@ func TestDiffTables(t *testing.T) {
 			// Technically, DiffCreateTablesQueries calls DiffTables,
 			// but we expose both to users of this library. so we want to make sure
 			// both work as expected irrespective of any relationship between them.
-			dq, dqerr := DiffCreateTablesQueries(ts.from, ts.to, hints, sqlparser.NewTestParser())
-			d, err := DiffTables(fromCreateTable, toCreateTable, hints)
+			dq, dqerr := DiffCreateTablesQueries(env, ts.from, ts.to, hints)
+			d, err := DiffTables(env, fromCreateTable, toCreateTable, hints)
 			switch {
 			case ts.isError:
 				assert.Error(t, err)
@@ -289,7 +337,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = parser.ParseStrictDDL(diff)
+					_, err = env.Parser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -308,7 +356,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = parser.ParseStrictDDL(canonicalDiff)
+					_, err = env.Parser.ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
 				// let's also check dq, and also validate that dq's statement is identical to d's
@@ -370,12 +418,12 @@ func TestDiffViews(t *testing.T) {
 		},
 	}
 	hints := &DiffHints{}
-	parser := sqlparser.NewTestParser()
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateView *sqlparser.CreateView
 			if ts.from != "" {
-				fromStmt, err := parser.ParseStrictDDL(ts.from)
+				fromStmt, err := env.Parser.ParseStrictDDL(ts.from)
 				assert.NoError(t, err)
 				var ok bool
 				fromCreateView, ok = fromStmt.(*sqlparser.CreateView)
@@ -383,7 +431,7 @@ func TestDiffViews(t *testing.T) {
 			}
 			var toCreateView *sqlparser.CreateView
 			if ts.to != "" {
-				toStmt, err := parser.ParseStrictDDL(ts.to)
+				toStmt, err := env.Parser.ParseStrictDDL(ts.to)
 				assert.NoError(t, err)
 				var ok bool
 				toCreateView, ok = toStmt.(*sqlparser.CreateView)
@@ -395,8 +443,8 @@ func TestDiffViews(t *testing.T) {
 			// Technically, DiffCreateTablesQueries calls DiffTables,
 			// but we expose both to users of this library. so we want to make sure
 			// both work as expected irrespective of any relationship between them.
-			dq, dqerr := DiffCreateViewsQueries(ts.from, ts.to, hints, parser)
-			d, err := DiffViews(fromCreateView, toCreateView, hints)
+			dq, dqerr := DiffCreateViewsQueries(env, ts.from, ts.to, hints)
+			d, err := DiffViews(env, fromCreateView, toCreateView, hints)
 			switch {
 			case ts.isError:
 				assert.Error(t, err)
@@ -422,7 +470,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = parser.ParseStrictDDL(diff)
+					_, err = env.Parser.ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -441,7 +489,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = parser.ParseStrictDDL(canonicalDiff)
+					_, err = env.Parser.ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
 
@@ -849,13 +897,13 @@ func TestDiffSchemas(t *testing.T) {
 			},
 		},
 	}
-	parser := sqlparser.NewTestParser()
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			hints := &DiffHints{
 				TableRenameStrategy: ts.tableRename,
 			}
-			diff, err := DiffSchemasSQL(ts.from, ts.to, hints, parser)
+			diff, err := DiffSchemasSQL(env, ts.from, ts.to, hints)
 			if ts.expectError != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), ts.expectError)
@@ -881,21 +929,21 @@ func TestDiffSchemas(t *testing.T) {
 
 				// validate we can parse back the diff statements
 				for _, s := range statements {
-					_, err := parser.ParseStrictDDL(s)
+					_, err := env.Parser.ParseStrictDDL(s)
 					assert.NoError(t, err)
 				}
 				for _, s := range cstatements {
-					_, err := parser.ParseStrictDDL(s)
+					_, err := env.Parser.ParseStrictDDL(s)
 					assert.NoError(t, err)
 				}
 
 				{
 					// Validate "apply()" on "from" converges with "to"
-					schema1, err := NewSchemaFromSQL(ts.from, parser)
+					schema1, err := NewSchemaFromSQL(env, ts.from)
 					require.NoError(t, err)
 					schema1SQL := schema1.ToSQL()
 
-					schema2, err := NewSchemaFromSQL(ts.to, parser)
+					schema2, err := NewSchemaFromSQL(env, ts.to)
 					require.NoError(t, err)
 					applied, err := schema1.Apply(diffs)
 					require.NoError(t, err)
@@ -946,13 +994,13 @@ func TestSchemaApplyError(t *testing.T) {
 		},
 	}
 	hints := &DiffHints{}
-	parser := sqlparser.NewTestParser()
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			// Validate "apply()" on "from" converges with "to"
-			schema1, err := NewSchemaFromSQL(ts.from, parser)
+			schema1, err := NewSchemaFromSQL(env, ts.from)
 			assert.NoError(t, err)
-			schema2, err := NewSchemaFromSQL(ts.to, parser)
+			schema2, err := NewSchemaFromSQL(env, ts.to)
 			assert.NoError(t, err)
 
 			{

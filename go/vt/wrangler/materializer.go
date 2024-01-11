@@ -445,7 +445,7 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 		mu      sync.Mutex
 		exists  bool
 		tablets []string
-		ws      = workflow.NewServer(wr.ts, wr.tmc, wr.parser)
+		ws      = workflow.NewServer(wr.ts, wr.tmc, wr.collationEnv, wr.parser)
 	)
 
 	err := forAllSources(func(si *topo.ShardInfo) error {
@@ -1266,7 +1266,8 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				// We use schemadiff to normalize the schema.
 				// For now, and because this is could have wider implications, we ignore any errors in
 				// reading the source schema.
-				schema, err := schemadiff.NewSchemaFromQueries(applyDDLs, mz.wr.parser)
+				env := schemadiff.NewEnv(mz.wr.collationEnv, mz.wr.collationEnv.DefaultConnectionCharset(), mz.wr.parser)
+				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
 				if err != nil {
 					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
 				} else {

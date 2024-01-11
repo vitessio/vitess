@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -144,7 +145,7 @@ func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 				},
 			}
 
-			ws := NewServer(nil, tmc, sqlparser.NewTestParser())
+			ws := NewServer(nil, tmc, collations.MySQL8(), sqlparser.NewTestParser())
 			journal, exists, err := ws.CheckReshardingJournalExistsOnTablet(ctx, tt.tablet, 1)
 			if tt.shouldErr {
 				assert.Error(t, err)
