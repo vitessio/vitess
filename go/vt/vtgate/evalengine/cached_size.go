@@ -373,10 +373,6 @@ func (cached *TupleBindVariable) CachedSize(alloc bool) int64 {
 	}
 	// field Key string
 	size += hack.RuntimeAllocSize(int64(len(cached.Key)))
-	// field Offsets []vitess.io/vitess/go/vt/vtgate/evalengine.Offset
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Offsets)) * int64(24))
-	}
 	return size
 }
 func (cached *UnaryExpr) CachedSize(alloc bool) int64 {

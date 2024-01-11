@@ -25,13 +25,9 @@ import (
 
 type (
 	TupleBindVariable struct {
-		Key     string
-		Offsets []Offset
-	}
+		Key string
 
-	Offset struct {
-		Index int
-
+		Index     int
 		Type      sqltypes.Type
 		Collation collations.ID
 
@@ -40,6 +36,9 @@ type (
 		// compilation will be delayed until the expression is first executed with the bind variables
 		// sent by the user. See: UntypedExpr
 		dynamicTypeOffset int
+	}
+
+	Offset struct {
 	}
 )
 
@@ -63,35 +62,28 @@ func (bv *TupleBindVariable) eval(env *ExpressionEnv) (eval, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' must be a tuple (is %s)", bv.Key, bvar.Type)
 	}
 
-	tuples := make([]eval, 0, len(bvar.Values))
+	tuple := make([]eval, 0, len(bvar.Values))
 	for _, value := range bvar.Values {
 		if value.Type != sqltypes.Tuple {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "result value must be a tuple (is %s)", value.Type)
 		}
-		tuple := make([]eval, 0, len(bv.Offsets))
 		sValue := sqltypes.ProtoToValue(value)
-		var e eval
 		var evalErr error
 		idx := 0
+		found := false
 		loopErr := sValue.ForEachValue(func(val sqltypes.Value) {
-			var o Offset
-			found := false
-			for _, offset := range bv.Offsets {
-				if offset.Index == idx {
-					o = offset
-					found = true
-					break
-				}
-			}
 			idx++
-			if found {
-				e, err = valueToEval(sqltypes.MakeTrusted(value.Type, value.Value), typedCoercionCollation(value.Type, collations.CollationForType(value.Type, o.Collation)))
-				if err != nil {
-					err = evalErr
-					return
-				}
-				tuple = append(tuple, e)
+			if idx-1 != bv.Index {
+				return
 			}
+			found = true
+			e, err := valueToEval(val, typedCoercionCollation(val.Type(), collations.CollationForType(val.Type(), bv.Collation)))
+			if err != nil {
+				evalErr = err
+				return
+			}
+			tuple = append(tuple, e)
+
 		})
 		if loopErr != nil {
 			return nil, loopErr
@@ -99,9 +91,11 @@ func (bv *TupleBindVariable) eval(env *ExpressionEnv) (eval, error) {
 		if evalErr != nil {
 			return nil, evalErr
 		}
-		tuples = append(tuples, &evalTuple{t: tuples})
+		if !found {
+			return nil, vterrors.VT13001("value not found in bind variable")
+		}
 	}
-	return &evalTuple{t: tuples}, nil
+	return &evalTuple{t: tuple}, nil
 }
 
 // typeof implements the expression interface
