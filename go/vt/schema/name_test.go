@@ -18,6 +18,7 @@ package schema
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -69,6 +70,14 @@ func TestIsInternalOperationTableName(t *testing.T) {
 		"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 		"_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 		"_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+		"_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+		"_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+		"_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+		"_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+		"_vt_vrp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+		"_vt_gho_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+		"_vt_ghc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+		"_vt_xyz_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
 	}
 	for _, tableName := range names {
 		assert.True(t, IsInternalOperationTableName(tableName))
@@ -91,5 +100,75 @@ func TestIsInternalOperationTableName(t *testing.T) {
 	}
 	for _, tableName := range irrelevantNames {
 		assert.False(t, IsInternalOperationTableName(tableName))
+	}
+}
+
+func TestAnalyzeInternalTableName(t *testing.T) {
+	baseTime, err := time.Parse(time.RFC1123, "Tue, 15 Sep 2020 12:04:10 UTC")
+	assert.NoError(t, err)
+	tt := []struct {
+		tableName  string
+		hint       string
+		t          time.Time
+		isInternal bool
+	}{
+		{
+			tableName:  "_84371a37_6153_11eb_9917_f875a4d24e90_20210128122816_vrepl",
+			isInternal: false,
+		},
+		{
+			tableName:  "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			isInternal: false,
+		},
+		{
+			tableName:  "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			isInternal: false,
+		},
+		{
+			tableName:  "_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			isInternal: false,
+		},
+		{
+			tableName:  "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			isInternal: false,
+		},
+		{
+			tableName:  "_vt_drop_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			isInternal: false,
+		},
+		{
+			tableName:  "_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			hint:       "drp",
+			t:          baseTime,
+			isInternal: true,
+		},
+		{
+			tableName:  "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			hint:       "hld",
+			t:          baseTime,
+			isInternal: true,
+		},
+		{
+			tableName:  "_vt_xyz_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			hint:       "xyz",
+			t:          baseTime,
+			isInternal: true,
+		},
+		{
+			tableName:  "_vt_xyz_6ace8bcef73211ea87e9f875a4d24e90_20200915129999_",
+			isInternal: false,
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.tableName, func(t *testing.T) {
+			isInternal, hint, uuid, tm, err := AnalyzeInternalTableName(ts.tableName)
+			assert.Equal(t, ts.isInternal, isInternal)
+			if ts.isInternal {
+				assert.NoError(t, err)
+				assert.True(t, IsGCUUID(uuid))
+				assert.Equal(t, ts.hint, hint)
+				assert.Equal(t, ts.t, tm)
+			}
+		})
 	}
 }
