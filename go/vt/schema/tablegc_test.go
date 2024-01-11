@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"regexp"
 	"testing"
 	"time"
 
@@ -32,20 +33,80 @@ func TestIsGCTableName(t *testing.T) {
 			tableName, err := generateGCTableName(state, "", tm)
 			assert.NoError(t, err)
 			assert.True(t, IsGCTableName(tableName))
+
+			tableName, err = generateGCTableNameNewFormat(state, "6ace8bcef73211ea87e9f875a4d24e90", tm)
+			assert.NoError(t, err)
+			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
+
+			tableName, err = GenerateGCTableNameNewFormat(state, tm)
+			assert.NoError(t, err)
+			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
 		}
 	}
-	names := []string{
-		"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_202009151204100",
-		"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410 ",
-		"__vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-		"_vt_DROP_6ace8bcef73211ea87e9f875a4d2_20200915120410",
-		"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915",
-		"_vt_OTHER_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-		"_vt_OTHER_6ace8bcef73211ea87e9f875a4d24e90_zz20200915120410",
-	}
-	for _, tableName := range names {
-		assert.False(t, IsGCTableName(tableName))
-	}
+	t.Run("accept", func(t *testing.T) {
+		names := []string{
+			"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			"_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+		}
+		for _, tableName := range names {
+			t.Run(tableName, func(t *testing.T) {
+				assert.True(t, IsGCTableName(tableName))
+			})
+		}
+	})
+	t.Run("reject", func(t *testing.T) {
+		names := []string{
+			"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_202009151204100",
+			"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410 ",
+			"__vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			"_vt_DROP_6ace8bcef73211ea87e9f875a4d2_20200915120410",
+			"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915",
+			"_vt_OTHER_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			"_vt_OTHER_6ace8bcef73211ea87e9f875a4d24e90_zz20200915120410",
+			"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915999999",
+			"_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915999999_",
+		}
+		for _, tableName := range names {
+			t.Run(tableName, func(t *testing.T) {
+				assert.False(t, IsGCTableName(tableName))
+			})
+		}
+	})
+
+	t.Run("explicit regexp", func(t *testing.T) {
+		// NewGCTableNameExpression regexp is used externally by vreplication. Its a redundant form of
+		// InternalTableNameExpression, but is nonetheless required. We verify it works correctly
+		re := regexp.MustCompile(NewGCTableNameExpression)
+		t.Run("accept", func(t *testing.T) {
+			names := []string{
+				"_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			}
+			for _, tableName := range names {
+				t.Run(tableName, func(t *testing.T) {
+					assert.True(t, IsGCTableName(tableName))
+					assert.True(t, re.MatchString(tableName))
+				})
+			}
+		})
+		t.Run("reject", func(t *testing.T) {
+			names := []string{
+				"_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+				"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+				"_vt_vrp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+				"_vt_gho_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			}
+			for _, tableName := range names {
+				t.Run(tableName, func(t *testing.T) {
+					assert.False(t, re.MatchString(tableName))
+				})
+			}
+		})
+	})
+
 }
 
 func TestAnalyzeGCTableName(t *testing.T) {
@@ -55,35 +116,68 @@ func TestAnalyzeGCTableName(t *testing.T) {
 		tableName string
 		state     TableGCState
 		t         time.Time
+		isGC      bool
 	}{
 		{
 			tableName: "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 			state:     DropTableGCState,
 			t:         baseTime,
+			isGC:      true,
 		},
 		{
 			tableName: "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 			state:     HoldTableGCState,
 			t:         baseTime,
+			isGC:      true,
 		},
 		{
 			tableName: "_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 			state:     EvacTableGCState,
 			t:         baseTime,
+			isGC:      true,
 		},
 		{
 			tableName: "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 			state:     PurgeTableGCState,
 			t:         baseTime,
+			isGC:      true,
+		},
+		{
+			tableName: "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915999999", // time error
+			isGC:      false,
+		},
+		{
+			tableName: "_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			state:     DropTableGCState,
+			t:         baseTime,
+			isGC:      true,
+		},
+		{
+			tableName: "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			state:     HoldTableGCState,
+			t:         baseTime,
+			isGC:      true,
+		},
+		{
+			tableName: "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915999999_", // time error
+			isGC:      false,
+		},
+		{
+			tableName: "_vt_xyz_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			isGC:      false,
 		},
 	}
 	for _, ts := range tt {
-		isGC, state, uuid, tm, err := AnalyzeGCTableName(ts.tableName)
-		assert.NoError(t, err)
-		assert.True(t, isGC)
-		assert.True(t, IsGCUUID(uuid))
-		assert.Equal(t, ts.state, state)
-		assert.Equal(t, ts.t, tm)
+		t.Run(ts.tableName, func(t *testing.T) {
+			isGC, state, uuid, tm, err := AnalyzeGCTableName(ts.tableName)
+			assert.Equal(t, ts.isGC, isGC)
+			if ts.isGC {
+				assert.NoError(t, err)
+				assert.True(t, IsGCUUID(uuid))
+				assert.Equal(t, ts.state, state)
+				assert.Equal(t, ts.t, tm)
+			}
+		})
 	}
 }
 
