@@ -701,6 +701,7 @@ func TestRefreshReplHealthLocked(t *testing.T) {
 	assert.False(t, sm.replHealthy)
 }
 
+// TestPanicInWait tests that we don't panic when we wait for requests if more StartRequest calls come up after we start waiting.
 func TestPanicInWait(t *testing.T) {
 	sm := newTestStateManager(t)
 	sm.wantState = StateServing
@@ -715,13 +716,12 @@ func TestPanicInWait(t *testing.T) {
 		// Simulate the previous RPC finishing after some delay
 		sm.EndRequest()
 		// Simulate a COMMIT call arriving right afterwards
-		err = sm.StartRequest(ctx, sm.target, true)
-		require.NoError(t, err)
+		_ = sm.StartRequest(ctx, sm.target, true)
 	}()
 
 	// Simulate going to a not serving state and calling unserveCommon that waits on requests.
 	sm.wantState = StateNotServing
-	sm.requests.Wait()
+	sm.waitForRequestsToBeEmpty()
 }
 
 func verifySubcomponent(t *testing.T, order int64, component any, state testState) {
