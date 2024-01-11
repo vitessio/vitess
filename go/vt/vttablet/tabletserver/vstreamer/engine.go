@@ -105,6 +105,8 @@ type Engine struct {
 	throttlerClient *throttle.Client
 }
 
+const throttledLoggerInterval = 5 * time.Minute
+
 // NewEngine creates a new Engine.
 // Initialization sequence is: NewEngine->InitDBConfig->Open.
 // Open and Close can be called multiple times and are idempotent.
@@ -147,6 +149,10 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 	env.Exporter().NewGaugeFunc("RowStreamerMaxMySQLReplLagSecs", "", func() int64 { return env.Config().RowStreamer.MaxMySQLReplLagSecs })
 	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
 	return vse
+}
+
+func (vse *Engine) GetTabletInfo() string {
+	return fmt.Sprintf("%s/%s/%s", vse.cell, vse.keyspace, vse.shard)
 }
 
 // InitDBConfig initializes the target parameters for the Engine.

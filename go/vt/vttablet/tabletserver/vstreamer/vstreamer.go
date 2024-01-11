@@ -23,6 +23,8 @@ import (
 	"io"
 	"time"
 
+	"vitess.io/vitess/go/vt/logutil"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -299,6 +301,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		}
 	}
 
+	logger := logutil.NewThrottledLogger(vs.vse.GetTabletInfo(), throttledLoggerInterval)
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
 		throttledHeartbeatsRateLimiter := timer.NewRateLimiter(HeartbeatTime)
 		defer throttledHeartbeatsRateLimiter.Stop()
@@ -316,6 +319,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					return injectHeartbeat(true)
 				})
 				// we won't process events, until we're no longer throttling
+				logger.Infof("throttled.")
 				continue
 			}
 			select {

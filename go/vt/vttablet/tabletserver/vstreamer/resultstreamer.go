@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/logutil"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -97,6 +99,7 @@ func (rs *resultStreamer) Stream() error {
 
 	response := &binlogdatapb.VStreamResultsResponse{}
 	byteCount := 0
+	logger := logutil.NewThrottledLogger(rs.vse.GetTabletInfo(), throttledLoggerInterval)
 	for {
 		select {
 		case <-rs.ctx.Done():
@@ -106,6 +109,7 @@ func (rs *resultStreamer) Stream() error {
 
 		// check throttler.
 		if !rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.ResultStreamerName) {
+			logger.Infof("throttled.")
 			continue
 		}
 
