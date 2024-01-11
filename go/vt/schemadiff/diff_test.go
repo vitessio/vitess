@@ -201,6 +201,15 @@ func TestDiffTables(t *testing.T) {
 			},
 		},
 		{
+			name: "changing table level defaults with column specific settings based on collation, ignore charset",
+			from: "create table t (a varchar(64) COLLATE latin1_bin) default charset=utf8mb4",
+			to:   "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
+			hints: &DiffHints{
+				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
+				TableCharsetCollateStrategy: TableCharsetCollateIgnoreAlways,
+			},
+		},
+		{
 			name:     "changing table level defaults with column specific settings",
 			from:     "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin) default charset=latin1",
 			to:       "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
