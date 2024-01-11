@@ -170,7 +170,7 @@ func TestExpandStar(t *testing.T) {
 		expanded: "main.t1.a, main.t1.b, main.t1.c, main.t5.a",
 	}, {
 		sql:    "select * from t1 join t5 using (b) having b = 12",
-		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 on t1.b = t5.b having b = 12",
+		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 on t1.b = t5.b having t1.b = 12",
 	}, {
 		sql:    "select 1 from t1 join t5 using (b) having b = 12",
 		expSQL: "select 1 from t1 join t5 on t1.b = t5.b having t1.b = 12",
@@ -378,6 +378,22 @@ func TestHavingAndOrderByColumnName(t *testing.T) {
 	}, {
 		sql:    "select id, sum(foo) as foo from t1 having sum(foo) > 1",
 		expSQL: "select id, sum(foo) as foo from t1 having sum(foo) > 1",
+	}, {
+		sql:    "select id, lower(min(foo)) as foo from t1 order by min(foo)",
+		expSQL: "select id, lower(min(foo)) as foo from t1 order by min(foo) asc",
+	}, {
+		// invalid according to group by rules, but still accepted by mysql
+		sql:    "select id, t1.bar as foo from t1 group by id order by min(foo)",
+		expSQL: "select id, t1.bar as foo from t1 group by id order by min(t1.bar) asc",
+	}, {
+		sql:    "select foo + 2 as foo from t1 having foo = 42",
+		expSQL: "select foo + 2 as foo from t1 having foo + 2 = 42",
+	}, {
+		sql:    "select id, b as id, count(*) from t1 order by id",
+		expErr: "Column 'id' in field list is ambiguous",
+	}, {
+		sql:    "select id, id, count(*) from t1 order by id",
+		expSQL: "select id, id, count(*) from t1 order by id asc",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {

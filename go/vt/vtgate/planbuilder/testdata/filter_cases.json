@@ -4018,7 +4018,7 @@
           "Sharded": true
         },
         "FieldQuery": "select a + 2 as a from `user` where 1 != 1",
-        "Query": "select a + 2 as a from `user` where a + 2 = 42",
+        "Query": "select a + 2 as a from `user` where a + 2 + 2 = 42",
         "Table": "`user`"
       },
       "TablesUsed": [
@@ -4062,7 +4062,7 @@
           "Sharded": false
         },
         "FieldQuery": "select col + 2 as a from unsharded where 1 != 1",
-        "Query": "select col + 2 as a from unsharded having a = 42",
+        "Query": "select col + 2 as a from unsharded having col + 2 = 42",
         "Table": "unsharded"
       },
       "TablesUsed": [
