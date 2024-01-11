@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/servenv"
 )
 
 type builtinUser struct {
@@ -47,7 +46,7 @@ type builtinVersion struct {
 var _ IR = (*builtinVersion)(nil)
 
 func (call *builtinVersion) eval(env *ExpressionEnv) (eval, error) {
-	return newEvalText([]byte(servenv.MySQLServerVersion()), collationUtf8mb3), nil
+	return newEvalText([]byte(env.currentVersion()), collationUtf8mb3), nil
 }
 
 func (*builtinVersion) compile(c *compiler) (ctype, error) {

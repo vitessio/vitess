@@ -1474,7 +1474,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, originalShowCreateTable, vreplShowCreateTable, onlineDDL.SQL, onlineDDL.StrategySetting().IsAnalyzeTableFlag(), e.env.CollationEnv(), e.env.SQLParser())
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, originalShowCreateTable, vreplShowCreateTable, onlineDDL.SQL, onlineDDL.StrategySetting().IsAnalyzeTableFlag(), e.env.CollationEnv(), e.env.SQLParser(), e.env.MySQLVersion())
 	return v, nil
 }
 
@@ -1528,7 +1528,7 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "", "", "", false, e.env.CollationEnv(), e.env.SQLParser())
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "", "", "", false, e.env.CollationEnv(), e.env.SQLParser(), e.env.MySQLVersion())
 	v.pos = revertStream.pos
 	return v, nil
 }
@@ -2795,7 +2795,7 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	if newShowCreateTable == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected: cannot find table or view even as it was just created: %v", onlineDDL.Table)
 	}
-	senv := schemadiff.NewEnv(e.env.CollationEnv(), e.env.CollationEnv().DefaultConnectionCharset(), e.env.SQLParser())
+	senv := schemadiff.NewEnv(e.env.CollationEnv(), e.env.CollationEnv().DefaultConnectionCharset(), e.env.SQLParser(), e.env.MySQLVersion())
 	hints := &schemadiff.DiffHints{AutoIncrementStrategy: schemadiff.AutoIncrementApplyHigher}
 	switch ddlStmt.(type) {
 	case *sqlparser.CreateTable:

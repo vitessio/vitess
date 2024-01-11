@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -19,7 +20,7 @@ func TestVitessCluster(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	tmc := newTestWranglerTMClient()
-	wr := New(logutil.NewConsoleLogger(), ts, tmc, collations.MySQL8(), sqlparser.NewTestParser())
+	wr := New(logutil.NewConsoleLogger(), ts, tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	name, topoType, topoServer, topoRoot := "c1", "x", "y", "z"
 
 	t.Run("Zero clusters to start", func(t *testing.T) {

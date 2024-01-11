@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -258,6 +259,7 @@ func TestPlanBuilder(t *testing.T) {
 				},
 			}},
 			collationEnv: collations.MySQL8(),
+			mysqlVersion: config.DefaultMySQLVersion,
 		},
 	}, {
 		inTable: t1,
@@ -289,6 +291,7 @@ func TestPlanBuilder(t *testing.T) {
 				KeyRange:      nil,
 			}},
 			collationEnv: collations.MySQL8(),
+			mysqlVersion: config.DefaultMySQLVersion,
 		},
 	}, {
 		inTable: t1,
@@ -312,6 +315,7 @@ func TestPlanBuilder(t *testing.T) {
 				},
 			}},
 			collationEnv: collations.MySQL8(),
+			mysqlVersion: config.DefaultMySQLVersion,
 		},
 	}, {
 		inTable: t1,
@@ -335,6 +339,7 @@ func TestPlanBuilder(t *testing.T) {
 				},
 			}},
 			collationEnv: collations.MySQL8(),
+			mysqlVersion: config.DefaultMySQLVersion,
 		},
 	}, {
 		inTable: t1,
@@ -358,6 +363,7 @@ func TestPlanBuilder(t *testing.T) {
 				},
 			}},
 			collationEnv: collations.MySQL8(),
+			mysqlVersion: config.DefaultMySQLVersion,
 		},
 	}, {
 		inTable: t1,
@@ -389,6 +395,7 @@ func TestPlanBuilder(t *testing.T) {
 				KeyRange:      nil,
 			}},
 			collationEnv: collations.MySQL8(),
+			mysqlVersion: config.DefaultMySQLVersion,
 		},
 	}, {
 		inTable: t1,
@@ -420,6 +427,7 @@ func TestPlanBuilder(t *testing.T) {
 				KeyRange:      nil,
 			}},
 			collationEnv: collations.MySQL8(),
+			mysqlVersion: config.DefaultMySQLVersion,
 		},
 	}, {
 		inTable: t1,
@@ -451,6 +459,7 @@ func TestPlanBuilder(t *testing.T) {
 				KeyRange:      nil,
 			}},
 			collationEnv: collations.MySQL8(),
+			mysqlVersion: config.DefaultMySQLVersion,
 		},
 	}, {
 		inTable: t2,
@@ -485,6 +494,7 @@ func TestPlanBuilder(t *testing.T) {
 				KeyRange:      nil,
 			}},
 			collationEnv: collations.MySQL8(),
+			mysqlVersion: config.DefaultMySQLVersion,
 		},
 	}, {
 		inTable: t1,
@@ -509,6 +519,7 @@ func TestPlanBuilder(t *testing.T) {
 			}},
 			convertUsingUTF8Columns: map[string]bool{"val": true},
 			collationEnv:            collations.MySQL8(),
+			mysqlVersion:            config.DefaultMySQLVersion,
 		},
 	}, {
 		inTable: regional,
@@ -533,6 +544,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0, 1},
 			}},
 			collationEnv: collations.MySQL8(),
+			mysqlVersion: config.DefaultMySQLVersion,
 		},
 	}, {
 		inTable: t1,
@@ -645,7 +657,7 @@ func TestPlanBuilder(t *testing.T) {
 		t.Run(tcase.inRule.String(), func(t *testing.T) {
 			plan, err := buildPlan(tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{tcase.inRule},
-			}, collations.MySQL8(), sqlparser.NewTestParser())
+			}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 			if tcase.outErr != "" {
 				assert.Nil(t, plan)
@@ -742,7 +754,7 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			plan, err := buildPlan(t1, testLocalVSchema, &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: tcase.inFilter}},
-			}, collations.MySQL8(), sqlparser.NewTestParser())
+			}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 			if tcase.outErr != "" {
 				assert.Nil(t, plan)

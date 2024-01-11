@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -108,9 +109,9 @@ func Init(ctx context.Context) (*Env, error) {
 		return nil, fmt.Errorf("could not launch mysql: %v", err)
 	}
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
-	config := tabletenv.NewDefaultConfig()
-	config.DB = te.Dbcfgs
-	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	conf := tabletenv.NewDefaultConfig()
+	conf.DB = te.Dbcfgs
+	te.TabletEnv = tabletenv.NewEnv(conf, "VStreamerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	pos, _ := te.Mysqld.PrimaryPosition()
 	if strings.HasPrefix(strings.ToLower(pos.GTIDSet.Flavor()), string(mysqlctl.FlavorMariaDB)) {

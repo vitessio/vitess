@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -43,7 +44,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
@@ -90,7 +91,7 @@ func TestGetKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
@@ -119,7 +120,7 @@ func TestGetKeyspaces(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
