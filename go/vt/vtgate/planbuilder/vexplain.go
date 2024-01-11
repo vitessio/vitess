@@ -19,9 +19,6 @@ package planbuilder
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -30,27 +27,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
-
-// Builds an explain-plan for the given Primitive
-func buildExplainPlan(ctx context.Context, stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
-	switch explain := stmt.(type) {
-	case *sqlparser.ExplainTab:
-		return explainTabPlan(explain, vschema)
-	case *sqlparser.ExplainStmt:
-		switch explain.Type {
-		case sqlparser.VitessType:
-			vschema.PlannerWarning("EXPLAIN FORMAT = VITESS is deprecated, please use VEXPLAIN PLAN instead.")
-			return buildVExplainVtgatePlan(ctx, explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
-		case sqlparser.VTExplainType:
-			vschema.PlannerWarning("EXPLAIN FORMAT = VTEXPLAIN is deprecated, please use VEXPLAIN QUERIES instead.")
-			return buildVExplainLoggingPlan(ctx, &sqlparser.VExplainStmt{Type: sqlparser.QueriesVExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
-		default:
-			return buildExplainStmtPlan(ctx, explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
-		}
-	}
-	return nil, vterrors.VT13001(fmt.Sprintf("unexpected explain type: %T", stmt))
-}
 
 func buildVExplainPlan(ctx context.Context, vexplainStmt *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch vexplainStmt.Type {

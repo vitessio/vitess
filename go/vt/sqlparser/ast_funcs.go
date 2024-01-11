@@ -1815,10 +1815,6 @@ func (ty ExplainType) ToString() string {
 		return TreeStr
 	case JSONType:
 		return JSONStr
-	case VitessType:
-		return VitessStr
-	case VTExplainType:
-		return VTExplainStr
 	case TraditionalType:
 		return TraditionalStr
 	case AnalyzeType:

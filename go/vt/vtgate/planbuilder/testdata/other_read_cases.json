@@ -14,22 +14,10 @@
         "TargetDestination": "AnyShard()",
         "Query": "explain select * from `user`",
         "SingleShardOnly": true
-      }
-    }
-  },
-  {
-    "comment": "Explain Vitess statement",
-    "query": "explain format=vitess select * from user",
-    "plan": {
-      "QueryType": "EXPLAIN",
-      "Original": "explain format=vitess select * from user",
-      "Instructions": {
-        "OperatorType": "Rows",
-        "Fields": {
-          "JSON": "VARCHAR"
-        },
-        "RowCount": 1
-      }
+      },
+      "TablesUsed": [
+        "main.user"
+      ]
     }
   },
   {
@@ -67,7 +55,10 @@
         "TargetDestination": "AnyShard()",
         "Query": "explain select * from t",
         "SingleShardOnly": true
-      }
+      },
+      "TablesUsed": [
+        "main.t"
+      ]
     }
   },
   {
@@ -85,7 +76,10 @@
         "TargetDestination": "AnyShard()",
         "Query": "explain select * from t",
         "SingleShardOnly": true
-      }
+      },
+      "TablesUsed": [
+        "main.t"
+      ]
     }
   }
 ]
