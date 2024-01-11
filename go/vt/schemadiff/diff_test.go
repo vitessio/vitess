@@ -210,6 +210,16 @@ func TestDiffTables(t *testing.T) {
 			},
 		},
 		{
+			name: "error on unknown collation",
+			from: "create table t (a varchar(64) COLLATE latin1_nonexisting) default charset=utf8mb4",
+			to:   "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
+			hints: &DiffHints{
+				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
+				TableCharsetCollateStrategy: TableCharsetCollateIgnoreAlways,
+			},
+			isError: true,
+		},
+		{
 			name:     "changing table level defaults with column specific settings",
 			from:     "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin) default charset=latin1",
 			to:       "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
