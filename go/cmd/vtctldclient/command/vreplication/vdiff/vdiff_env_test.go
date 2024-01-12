@@ -25,6 +25,7 @@ import (
 	"sync"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -84,7 +85,7 @@ func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShar
 		tabletType:     topodatapb.TabletType_REPLICA,
 		tmc:            newTestVDiffTMClient(),
 	}
-	env.ws = workflow.NewServer(env.topoServ, env.tmc, sqlparser.NewTestParser())
+	env.ws = workflow.NewServer(env.topoServ, env.tmc, collations.MySQL8(), sqlparser.NewTestParser())
 	env.tmc.testEnv = env
 
 	// Generate a unique dialer name.

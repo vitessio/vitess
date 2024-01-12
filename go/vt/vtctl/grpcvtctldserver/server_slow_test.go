@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/mysql"
@@ -312,7 +313,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.EmergencyReparentShard(ctx, tt.req)
 
@@ -610,7 +611,7 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 			})
 			resp, err := vtctld.PlannedReparentShard(ctx, tt.req)
 
@@ -740,7 +741,7 @@ func TestSleepTablet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 			})
 
 			start := time.Now()

@@ -507,7 +507,7 @@ func TestVDiffPlanFailure(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
-		df := &vdiff{collationEnv: collations.MySQL8()}
+		df := &vdiff{collationEnv: collations.MySQL8(), parser: sqlparser.NewTestParser()}
 		err := df.buildVDiffPlan(context.Background(), filter, schm, nil)
 		assert.EqualError(t, err, tcase.err, tcase.input)
 	}
@@ -1137,7 +1137,7 @@ func TestVDiffPlanInclude(t *testing.T) {
 		}},
 	}
 
-	df := &vdiff{}
+	df := &vdiff{collationEnv: collations.MySQL8(), parser: sqlparser.NewTestParser()}
 	rule := &binlogdatapb.Rule{
 		Match: "/.*",
 	}

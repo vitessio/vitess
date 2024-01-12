@@ -162,7 +162,7 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 		}
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
-	if err := sidecardb.Init(ctx, exec, se.env.SQLParser()); err != nil {
+	if err := sidecardb.Init(ctx, exec, se.env.CollationEnv(), se.env.SQLParser()); err != nil {
 		log.Errorf("Error in sidecardb.Init: %+v", err)
 		if se.env.Config().DB.HasGlobalSettings() {
 			log.Warning("Ignoring sidecardb.Init error for unmanaged tablets")

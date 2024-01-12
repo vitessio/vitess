@@ -35,6 +35,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -143,22 +144,28 @@ type Server struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 	// Limit the number of concurrent background goroutines if needed.
-	sem    *semaphore.Weighted
-	parser *sqlparser.Parser
+	sem          *semaphore.Weighted
+	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
 }
 
 // NewServer returns a new server instance with the given topo.Server and
 // TabletManagerClient.
-func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient, parser *sqlparser.Parser) *Server {
+func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient, collationEnv *collations.Environment, parser *sqlparser.Parser) *Server {
 	return &Server{
-		ts:     ts,
-		tmc:    tmc,
-		parser: parser,
+		ts:           ts,
+		tmc:          tmc,
+		collationEnv: collationEnv,
+		parser:       parser,
 	}
 }
 
 func (s *Server) SQLParser() *sqlparser.Parser {
 	return s.parser
+}
+
+func (s *Server) CollationEnv() *collations.Environment {
+	return s.collationEnv
 }
 
 // CheckReshardingJournalExistsOnTablet returns the journal (or an empty
@@ -1315,12 +1322,13 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 // tables based on the materialization specs.
 func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSettings) error {
 	mz := &materializer{
-		ctx:      ctx,
-		ts:       s.ts,
-		sourceTs: s.ts,
-		tmc:      s.tmc,
-		ms:       ms,
-		parser:   s.SQLParser(),
+		ctx:          ctx,
+		ts:           s.ts,
+		sourceTs:     s.ts,
+		tmc:          s.tmc,
+		ms:           ms,
+		parser:       s.SQLParser(),
+		collationEnv: s.CollationEnv(),
 	}
 
 	err := mz.createMaterializerStreams()
@@ -1460,6 +1468,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		tmc:          s.tmc,
 		ms:           ms,
 		workflowType: workflowType,
+		collationEnv: s.CollationEnv(),
 		parser:       s.SQLParser(),
 	}
 	err = mz.createMoveTablesStreams(req)
