@@ -304,6 +304,15 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 				{sqltypes.NewVarChar("STRICT_TRANS_TABLES")},
 			},
 		},
+		"select @@global.collation_server": {
+			Fields: []*querypb.Field{{
+				Type:    sqltypes.VarChar,
+				Charset: uint32(collations.SystemCollation.Collation),
+			}},
+			Rows: [][]sqltypes.Value{
+				{sqltypes.NewVarChar("utf8mb4_0900_ai_ci")},
+			},
+		},
 		"select @@session.sql_mode as sql_mode": {
 			Fields: []*querypb.Field{{
 				Name:    "sql_mode",

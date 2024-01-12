@@ -547,7 +547,8 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition, collationEn
 	if !ok {
 		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
 	}
-	tableschema, err := schemadiff.NewCreateTableEntity(createtable)
+	env := schemadiff.NewEnv(collationEnv, collationEnv.DefaultConnectionCharset(), parser)
+	tableschema, err := schemadiff.NewCreateTableEntity(env, createtable)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
 	}
