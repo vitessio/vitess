@@ -833,7 +833,7 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 			}
 		}
 	}
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
 	capable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability)
 	if err != nil {
 		return err
@@ -2538,7 +2538,7 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 		return err
 	}
 	defer conn.Close()
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -2795,12 +2795,13 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	if newShowCreateTable == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected: cannot find table or view even as it was just created: %v", onlineDDL.Table)
 	}
+	senv := schemadiff.NewEnv(e.env.CollationEnv(), e.env.CollationEnv().DefaultConnectionCharset(), e.env.SQLParser())
 	hints := &schemadiff.DiffHints{AutoIncrementStrategy: schemadiff.AutoIncrementApplyHigher}
 	switch ddlStmt.(type) {
 	case *sqlparser.CreateTable:
-		diff, err = schemadiff.DiffCreateTablesQueries(existingShowCreateTable, newShowCreateTable, hints, e.env.SQLParser())
+		diff, err = schemadiff.DiffCreateTablesQueries(senv, existingShowCreateTable, newShowCreateTable, hints)
 	case *sqlparser.CreateView:
-		diff, err = schemadiff.DiffCreateViewsQueries(existingShowCreateTable, newShowCreateTable, hints, e.env.SQLParser())
+		diff, err = schemadiff.DiffCreateViewsQueries(senv, existingShowCreateTable, newShowCreateTable, hints)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected CREATE TABLE or CREATE VIEW in online DDL statement: %v", onlineDDL.SQL)
 	}
@@ -3125,7 +3126,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 		return false, err
 	}
 	defer conn.Close()
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
 
 	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, capableOf)
 	if err != nil {

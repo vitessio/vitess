@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/capabilities"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestPermutations(t *testing.T) {
@@ -163,14 +162,15 @@ func TestPermutations(t *testing.T) {
 		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
+	env := NewTestEnv()
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 
-			fromSchema, err := NewSchemaFromQueries(tc.fromQueries, sqlparser.NewTestParser())
+			fromSchema, err := NewSchemaFromQueries(env, tc.fromQueries)
 			require.NoError(t, err)
 			require.NotNil(t, fromSchema)
 
-			toSchema, err := NewSchemaFromQueries(tc.toQueries, sqlparser.NewTestParser())
+			toSchema, err := NewSchemaFromQueries(env, tc.toQueries)
 			require.NoError(t, err)
 			require.NotNil(t, toSchema)
 
@@ -875,16 +875,18 @@ func TestSchemaDiff(t *testing.T) {
 		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
+	env := NewTestEnv()
+
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.fromQueries == nil {
 				tc.fromQueries = createQueries
 			}
-			fromSchema, err := NewSchemaFromQueries(tc.fromQueries, sqlparser.NewTestParser())
+			fromSchema, err := NewSchemaFromQueries(env, tc.fromQueries)
 			require.NoError(t, err)
 			require.NotNil(t, fromSchema)
 
-			toSchema, err := NewSchemaFromQueries(tc.toQueries, sqlparser.NewTestParser())
+			toSchema, err := NewSchemaFromQueries(env, tc.toQueries)
 			require.NoError(t, err)
 			require.NotNil(t, toSchema)
 

@@ -179,6 +179,10 @@ type TabletManager struct {
 	// only hold the mutex to update the fields, nothing else.
 	mutex sync.Mutex
 
+	// _waitForGrantsComplete is a channel for waiting until the grants for all the mysql
+	// users have been verified.
+	_waitForGrantsComplete chan struct{}
+
 	// _shardSyncChan is a channel for informing the shard sync goroutine that
 	// it should wake up and recheck the tablet state, to make sure it and the
 	// shard record are in sync.
@@ -351,6 +355,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.tabletAlias = tablet.Alias
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = semaphore.NewWeighted(1)
+	tm._waitForGrantsComplete = make(chan struct{})
 
 	tm.baseTabletType = tablet.Type
 
@@ -420,7 +425,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	}
 
 	// Make sure we have the correct privileges for the DBA user before we start the state manager.
-	err = tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
+	err = tm.waitForDBAGrants(config, dbaGrantWaitTime)
 	if err != nil {
 		return err
 	}
@@ -818,10 +823,11 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 			}
 
 			// Make sure we have the correct privileges for the DBA user before we start the state manager.
-			err := tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
+			err := tm.waitForDBAGrants(config, dbaGrantWaitTime)
 			if err != nil {
 				log.Exitf("Failed waiting for DBA grants: %v", err)
 			}
+
 			// Open the state manager after restore is done.
 			tm.tmState.Open()
 		}()
@@ -829,6 +835,48 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 	}
 
 	return false, nil
+}
+
+// waitForDBAGrants waits for DBA user to have the required privileges to function properly.
+func (tm *TabletManager) waitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) (err error) {
+	// We should close the _waitForGrantsComplete channel in the end to signify that the wait for dba grants has completed.
+	defer func() {
+		if err == nil {
+			close(tm._waitForGrantsComplete)
+		}
+	}()
+	// We don't wait for grants if the tablet is externally managed. Permissions
+	// are then the responsibility of the DBA.
+	if config == nil || config.DB.HasGlobalSettings() || waitTime == 0 {
+		return nil
+	}
+	timer := time.NewTimer(waitTime)
+	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
+	defer cancel()
+	for {
+		conn, connErr := dbconnpool.NewDBConnection(ctx, config.DB.DbaConnector())
+		if connErr == nil {
+			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
+			conn.Close()
+			if fetchErr != nil {
+				log.Errorf("Error running SHOW GRANTS - %v", fetchErr)
+			}
+			if fetchErr == nil && res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
+				privileges := res.Rows[0][0].ToString()
+				// In MySQL 8.0, all the privileges are listed out explicitly, so we can search for SUPER in the output.
+				// In MySQL 5.7, all the privileges are not listed explicitly, instead ALL PRIVILEGES is written, so we search for that too.
+				if strings.Contains(privileges, "SUPER") || strings.Contains(privileges, "ALL PRIVILEGES") {
+					return nil
+				}
+			}
+		}
+		select {
+		case <-timer.C:
+			return fmt.Errorf("timed out after %v waiting for the dba user to have the required permissions", waitTime)
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 }
 
 func (tm *TabletManager) exportStats() {

@@ -1069,7 +1069,7 @@ func TestGetKeyspace(t *testing.T) {
 				testutil.AddShards(ctx, t, ts, shards...)
 				topos[i] = ts
 				vtctlds[i] = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+					return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 				})
 			}
 
@@ -1313,10 +1313,10 @@ func TestGetKeyspaces(t *testing.T) {
 
 			servers := []vtctlservicepb.VtctldServer{
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[0], nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+					return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 				}),
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[1], nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+					return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 				}),
 			}
 
@@ -1548,7 +1548,7 @@ func TestGetSchema(t *testing.T) {
 			defer cancel()
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 			})
 
 			testutil.AddTablets(ctx, t, tt.ts, nil, vtadmintestutil.TopodataTabletsFromVTAdminTablets(tt.tablets)...)
@@ -2202,10 +2202,10 @@ func TestGetSchemas(t *testing.T) {
 
 			vtctlds := []vtctlservicepb.VtctldServer{
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[0], &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+					return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 				}),
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[1], &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+					return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 				}),
 			}
 
@@ -2641,7 +2641,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -2805,7 +2805,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			}
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -2970,7 +2970,7 @@ func TestGetSrvVSchema(t *testing.T) {
 			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -3264,7 +3264,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -5116,7 +5116,7 @@ func TestVTExplain(t *testing.T) {
 			}
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {

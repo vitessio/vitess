@@ -637,6 +637,7 @@ message UpdateVReplicationWorkflowRequest {
   TabletSelectionPreference tablet_selection_preference = 4;
   binlogdata.OnDDLAction on_ddl = 5;
   binlogdata.VReplicationWorkflowState state = 6;
+  repeated string shards = 7;
 }
 
 message UpdateVReplicationWorkflowResponse {

@@ -205,7 +205,7 @@ func (conv *ConvertExpr) compile(c *compiler) (ctype, error) {
 		convt = c.compileToFloat(arg, 1)
 
 	case "FLOAT":
-		return ctype{}, c.unsupported(conv)
+		return ctype{}, conv.returnUnsupportedError()
 
 	case "SIGNED", "SIGNED INTEGER":
 		convt = c.compileToInt64(arg, 1)

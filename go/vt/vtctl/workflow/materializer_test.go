@@ -28,6 +28,7 @@ import (
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -3015,7 +3016,7 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.ws = NewServer(env.topoServ, env.tmc, sqlparser.NewTestParser())
+	env.ws = NewServer(env.topoServ, env.tmc, collations.MySQL8(), sqlparser.NewTestParser())
 	defer env.close()
 
 	tabletID := 100

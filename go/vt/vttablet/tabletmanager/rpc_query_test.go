@@ -42,10 +42,12 @@ func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 
 	dbName := " escap`e me "
 	tm := &TabletManager{
-		MysqlDaemon:         daemon,
-		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, dbName),
-		QueryServiceControl: tabletservermock.NewController(),
+		MysqlDaemon:            daemon,
+		DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, dbName),
+		QueryServiceControl:    tabletservermock.NewController(),
+		_waitForGrantsComplete: make(chan struct{}),
 	}
+	close(tm._waitForGrantsComplete)
 
 	_, err := tm.ExecuteFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 		Query:   []byte("select 42"),
