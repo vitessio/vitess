@@ -37,9 +37,6 @@ type (
 		// sent by the user. See: UntypedExpr
 		dynamicTypeOffset int
 	}
-
-	Offset struct {
-	}
 )
 
 var _ IR = (*TupleBindVariable)(nil)
