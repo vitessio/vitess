@@ -315,22 +315,31 @@ func TestOrderByGroupByLiteral(t *testing.T) {
 		expErr string
 	}{{
 		sql:    "select 1 as id from t1 order by 1",
-		expSQL: "select 1 as id from t1 order by id asc",
+		expSQL: "select 1 as id from t1 order by '' asc",
 	}, {
 		sql:    "select t1.col from t1 order by 1",
 		expSQL: "select t1.col from t1 order by t1.col asc",
+	}, {
+		sql:    "select t1.col from t1 order by 1.0",
+		expSQL: "select t1.col from t1 order by 1.0 asc",
+	}, {
+		sql:    "select t1.col from t1 order by 'fubick'",
+		expSQL: "select t1.col from t1 order by 'fubick' asc",
+	}, {
+		sql:    "select t1.col as foo from t1 order by 1",
+		expSQL: "select t1.col as foo from t1 order by t1.col asc",
 	}, {
 		sql:    "select t1.col from t1 group by 1",
 		expSQL: "select t1.col from t1 group by t1.col",
 	}, {
 		sql:    "select t1.col as xyz from t1 group by 1",
-		expSQL: "select t1.col as xyz from t1 group by xyz",
+		expSQL: "select t1.col as xyz from t1 group by t1.col",
 	}, {
 		sql:    "select t1.col as xyz, count(*) from t1 group by 1 order by 2",
-		expSQL: "select t1.col as xyz, count(*) from t1 group by xyz order by count(*) asc",
+		expSQL: "select t1.col as xyz, count(*) from t1 group by t1.col order by count(*) asc",
 	}, {
 		sql:    "select id from t1 group by 2",
-		expErr: "Unknown column '2' in 'group statement'",
+		expErr: "Unknown column '2' in 'group clause'",
 	}, {
 		sql:    "select id from t1 order by 2",
 		expErr: "Unknown column '2' in 'order clause'",
@@ -339,7 +348,7 @@ func TestOrderByGroupByLiteral(t *testing.T) {
 		expErr: "cannot use column offsets in order clause when using `*`",
 	}, {
 		sql:    "select *, id from t1 group by 2",
-		expErr: "cannot use column offsets in group statement when using `*`",
+		expErr: "cannot use column offsets in group clause when using `*`",
 	}, {
 		sql:    "select id from t1 order by 1 collate utf8_general_ci",
 		expSQL: "select id from t1 order by id collate utf8_general_ci asc",

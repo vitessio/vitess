@@ -808,7 +808,7 @@
   {
     "comment": "scatter aggregate group by invalid column number",
     "query": "select col from user group by 2",
-    "plan": "Unknown column '2' in 'group statement'"
+    "plan": "Unknown column '2' in 'group clause'"
   },
   {
     "comment": "scatter aggregate order by null",
@@ -1207,7 +1207,7 @@
   {
     "comment": "Group by out of range column number (code is duplicated from symab).",
     "query": "select id from user group by 2",
-    "plan": "Unknown column '2' in 'group statement'"
+    "plan": "Unknown column '2' in 'group clause'"
   },
   {
     "comment": "here it is safe to remove the order by on the derived table since it will not influence the output of the count(*)",
@@ -6900,7 +6900,7 @@
     }
   },
   {
-    "comment": "",
+    "comment": "select count(distinct name, id) from user",
     "query": "select count(distinct name, id) from user",
     "plan": {
       "QueryType": "SELECT",

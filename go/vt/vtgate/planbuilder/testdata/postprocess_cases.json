@@ -373,7 +373,7 @@
         },
         "FieldQuery": "select id as foo, weight_string(id) from music where 1 != 1",
         "OrderBy": "(0|1) ASC",
-        "Query": "select id as foo, weight_string(id) from music order by foo asc",
+        "Query": "select id as foo, weight_string(id) from music order by id asc",
         "ResultColumns": 1,
         "Table": "music"
       },
@@ -1902,9 +1902,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `user`.col1 as a, a collate utf8_general_ci, weight_string(a collate utf8_general_ci) from `user` where 1 != 1",
+        "FieldQuery": "select `user`.col1 as a, `user`.col1 collate utf8_general_ci, weight_string(`user`.col1 collate utf8_general_ci) from `user` where 1 != 1",
         "OrderBy": "(1|2) ASC",
-        "Query": "select `user`.col1 as a, a collate utf8_general_ci, weight_string(a collate utf8_general_ci) from `user` order by a collate utf8_general_ci asc",
+        "Query": "select `user`.col1 as a, `user`.col1 collate utf8_general_ci, weight_string(`user`.col1 collate utf8_general_ci) from `user` order by `user`.col1 collate utf8_general_ci asc",
         "ResultColumns": 1,
         "Table": "`user`"
       },
@@ -1950,9 +1950,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `user`.col1 as a, a collate utf8_general_ci, weight_string(a collate utf8_general_ci) from `user` where 1 != 1",
+        "FieldQuery": "select `user`.col1 as a, `user`.col1 collate utf8_general_ci, weight_string(`user`.col1 collate utf8_general_ci) from `user` where 1 != 1",
         "OrderBy": "(1|2) ASC",
-        "Query": "select `user`.col1 as a, a collate utf8_general_ci, weight_string(a collate utf8_general_ci) from `user` order by a collate utf8_general_ci asc",
+        "Query": "select `user`.col1 as a, `user`.col1 collate utf8_general_ci, weight_string(`user`.col1 collate utf8_general_ci) from `user` order by `user`.col1 collate utf8_general_ci asc",
         "ResultColumns": 1,
         "Table": "`user`"
       },

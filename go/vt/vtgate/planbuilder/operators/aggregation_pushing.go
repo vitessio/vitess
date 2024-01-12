@@ -193,7 +193,7 @@ func pushAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, 
 		// doing the aggregating on the vtgate level instead
 		// Adding to group by can be done only once even though there are multiple distinct aggregation with same expression.
 		if !distinctAggrGroupByAdded {
-			groupBy := NewGroupBy(distinctExprs[0], distinctExprs[0])
+			groupBy := NewGroupBy(distinctExprs[0])
 			groupBy.ColOffset = aggr.ColOffset
 			aggrBelowRoute.Grouping = append(aggrBelowRoute.Grouping, groupBy)
 			distinctAggrGroupByAdded = true
@@ -260,7 +260,7 @@ func pushAggregationThroughFilter(
 withNextColumn:
 	for _, col := range columnsNeeded {
 		for _, gb := range pushedAggr.Grouping {
-			if ctx.SemTable.EqualsExpr(col, gb.SimplifiedExpr) {
+			if ctx.SemTable.EqualsExpr(col, gb.Inner) {
 				continue withNextColumn
 			}
 		}
@@ -300,7 +300,7 @@ func collectColNamesNeeded(ctx *plancontext.PlanningContext, f *Filter) (columns
 
 func overlappingUniqueVindex(ctx *plancontext.PlanningContext, groupByExprs []GroupBy) bool {
 	for _, groupByExpr := range groupByExprs {
-		if exprHasUniqueVindex(ctx, groupByExpr.SimplifiedExpr) {
+		if exprHasUniqueVindex(ctx, groupByExpr.Inner) {
 			return true
 		}
 	}
@@ -419,10 +419,10 @@ func pushAggregationThroughHashJoin(ctx *plancontext.PlanningContext, rootAggr *
 
 	// The two sides of the hash comparisons are added as grouping expressions
 	for _, cmp := range join.JoinComparisons {
-		lhs.addGrouping(ctx, NewGroupBy(cmp.LHS, cmp.LHS))
+		lhs.addGrouping(ctx, NewGroupBy(cmp.LHS))
 		columns.addLeft(cmp.LHS)
 
-		rhs.addGrouping(ctx, NewGroupBy(cmp.RHS, cmp.RHS))
+		rhs.addGrouping(ctx, NewGroupBy(cmp.RHS))
 		columns.addRight(cmp.RHS)
 	}
 
@@ -441,7 +441,7 @@ func pushAggregationThroughHashJoin(ctx *plancontext.PlanningContext, rootAggr *
 			// TODO: Support this as well
 			return nil, nil
 		default:
-			panic(vterrors.VT13001(fmt.Sprintf("grouping with bad dependencies %s", groupBy.SimplifiedExpr)))
+			panic(vterrors.VT13001(fmt.Sprintf("grouping with bad dependencies %s", groupBy.Inner)))
 		}
 	}
 
@@ -484,7 +484,7 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAgg
 				lhs.pushed.Columns = append(lhs.pushed.Columns, aeWrap(expr))
 			}
 			_, found = canReuseColumn(ctx, lhs.pushed.Grouping, wexpr, func(by GroupBy) sqlparser.Expr {
-				return by.SimplifiedExpr
+				return by.Inner
 			})
 
 			if found {
@@ -492,10 +492,9 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAgg
 			}
 
 			lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
-				Inner:          expr,
-				SimplifiedExpr: wexpr,
-				ColOffset:      idx,
-				WSOffset:       -1,
+				Inner:     expr,
+				ColOffset: idx,
+				WSOffset:  -1,
 			})
 		}
 	}
@@ -518,14 +517,14 @@ func splitGroupingToLeftAndRight(
 			rhs.addGrouping(ctx, groupBy)
 			columns.addRight(expr)
 		case deps.IsSolvedBy(lhs.tableID.Merge(rhs.tableID)):
-			jc := breakExpressionInLHSandRHSForApplyJoin(ctx, groupBy.SimplifiedExpr, lhs.tableID)
+			jc := breakExpressionInLHSandRHSForApplyJoin(ctx, groupBy.Inner, lhs.tableID)
 			for _, lhsExpr := range jc.LHSExprs {
 				e := lhsExpr.Expr
-				lhs.addGrouping(ctx, NewGroupBy(e, e))
+				lhs.addGrouping(ctx, NewGroupBy(e))
 			}
-			rhs.addGrouping(ctx, NewGroupBy(jc.RHSExpr, jc.RHSExpr))
+			rhs.addGrouping(ctx, NewGroupBy(jc.RHSExpr))
 		default:
-			panic(vterrors.VT13001(fmt.Sprintf("grouping with bad dependencies %s", groupBy.SimplifiedExpr)))
+			panic(vterrors.VT13001(fmt.Sprintf("grouping with bad dependencies %s", groupBy.Inner)))
 		}
 	}
 }
