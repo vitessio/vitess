@@ -412,7 +412,7 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 	shuttingDown := sm.wantState != StateServing
 	// If requestsWaitCounter is not zero, then there are go-routines blocked on waiting for requests to be empty.
 	// We cannot allow adding to the requests to prevent any panics from happening.
-	if sm.requestsWaitCounter > 0 || (shuttingDown && !allowOnShutdown) {
+	if (shuttingDown && !allowOnShutdown) || sm.requestsWaitCounter > 0 {
 		// This specific error string needs to be returned for vtgate buffering to work.
 		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown)
 	}
