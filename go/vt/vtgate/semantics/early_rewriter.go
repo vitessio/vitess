@@ -253,13 +253,13 @@ type iterator interface {
 	replace(e sqlparser.Expr) error
 }
 
-func (r *earlyRewriter) replaceLiteralsInOrderByGroupBy(e sqlparser.Expr, sel *sqlparser.Select, iter iterator) (bool, error) {
+func (r *earlyRewriter) replaceLiteralsInOrderByGroupBy(e sqlparser.Expr, iter iterator) (bool, error) {
 	lit := getIntLiteral(e)
 	if lit == nil {
 		return false, nil
 	}
 
-	newExpr, err := r.rewriteOrderByExpr(lit, sel)
+	newExpr, err := r.rewriteOrderByExpr(lit)
 	if err != nil {
 		return false, err
 	}
@@ -310,13 +310,14 @@ func getIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
 
 // handleOrderBy processes the ORDER BY clause.
 func (r *earlyRewriter) handleOrderByAndGroupBy(parent sqlparser.SQLNode, iter iterator) error {
-	sel, isSel := parent.(*sqlparser.Select)
-	if !isSel {
+	stmt, ok := parent.(sqlparser.SelectStatement)
+	if !ok {
 		return nil
 	}
 
+	sel := sqlparser.GetFirstSelect(stmt)
 	for e := iter.next(); e != nil; e = iter.next() {
-		lit, err := r.replaceLiteralsInOrderByGroupBy(e, sel, iter)
+		lit, err := r.replaceLiteralsInOrderByGroupBy(e, iter)
 		if err != nil {
 			return err
 		}
@@ -434,27 +435,45 @@ func (r *earlyRewriter) rewriteAliasesInOrderByHavingAndGroupBy(node sqlparser.E
 	return
 }
 
-func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal, stmt *sqlparser.Select) (sqlparser.Expr, error) {
+func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
+	scope, found := r.scoper.specialExprScopes[node]
+	if !found {
+		return node, nil
+	}
 	num, err := strconv.Atoi(node.Val)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
+	}
+
+	stmt, isSel := scope.stmt.(*sqlparser.Select)
+	if !isSel {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", scope.stmt)
 	}
 
 	if num < 1 || num > len(stmt.SelectExprs) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
 	}
 
+	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before
 	for i := 0; i < num; i++ {
-		expr := stmt.SelectExprs[i]
-		_, ok := expr.(*sqlparser.AliasedExpr)
-		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(expr))
+		if _, ok := stmt.SelectExprs[i].(*sqlparser.AliasedExpr); !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.SelectExprs[i]))
 		}
 	}
 
 	aliasedExpr, ok := stmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
+	}
+
+	if scope.isUnion {
+		col, isCol := aliasedExpr.Expr.(*sqlparser.ColName)
+
+		if aliasedExpr.As.IsEmpty() && isCol {
+			return sqlparser.NewColName(col.Name.String()), nil
+		}
+
+		return sqlparser.NewColName(aliasedExpr.ColumnName()), nil
 	}
 
 	return realCloneOfColNames(aliasedExpr.Expr, false), nil
