@@ -66,6 +66,16 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 			tablesUpdates: []string{"a"},
 		}, {
 			shard:         "0",
+			tablesUpdates: []string{"A"},
+		}},
+		updateTables:   []string{"a", "A"},
+		signalExpected: 1,
+	}, {
+		inputs: []input{{
+			shard:         "0",
+			tablesUpdates: []string{"a"},
+		}, {
+			shard:         "0",
 			tablesUpdates: []string{"b"},
 		}},
 		updateTables:   []string{"b"},
@@ -204,6 +214,11 @@ func TestViewsUpdates(t *testing.T) {
 		desc:           "received different view updates from shards",
 		inputs:         []input{{shard: "0", viewUpdates: []string{"a"}}, {shard: "0", viewUpdates: []string{"b"}}},
 		updateViews:    []string{"a", "b"},
+		signalExpected: 1,
+	}, {
+		desc:           "received different view updates from shards - case sensitive names",
+		inputs:         []input{{shard: "0", viewUpdates: []string{"a"}}, {shard: "0", viewUpdates: []string{"A"}}},
+		updateViews:    []string{"a", "A"},
 		signalExpected: 1,
 	}, {
 		desc:           "delay between inputs - different signals from each input",

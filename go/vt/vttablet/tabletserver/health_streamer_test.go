@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -231,8 +230,6 @@ func TestReloadSchema(t *testing.T) {
 			target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 			configs := config.DB
 
-			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
-			db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
 			db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
 					"UNIX_TIMESTAMP(now())",
@@ -345,8 +342,6 @@ func TestReloadView(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
-	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecar.GetIdentifier()).Query+".*", &sqltypes.Result{})
 	db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"UNIX_TIMESTAMP(now())",
