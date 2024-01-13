@@ -18,8 +18,13 @@ package acl
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 )
 
 type TestPolicy struct{}
@@ -86,5 +91,55 @@ func TestEmptyPolicy(t *testing.T) {
 	err = CheckAccessHTTP(nil, DEBUGGING)
 	if err != nil {
 		t.Errorf("got %v, want no error", err)
+	}
+}
+
+func TestValidSecurityPolicy(t *testing.T) {
+	securityPolicy = "test"
+	savePolicy()
+
+	assert.EqualValuesf(t, TestPolicy{}, currentPolicy, "got %v, expected %v", currentPolicy, TestPolicy{})
+}
+
+func TestInvalidSecurityPolicy(t *testing.T) {
+	securityPolicy = "invalidSecurityPolicy"
+	savePolicy()
+
+	assert.EqualValuesf(t, denyAllPolicy{}, currentPolicy, "got %v, expected %v", currentPolicy, denyAllPolicy{})
+}
+
+func TestSendError(t *testing.T) {
+	testW := httptest.NewRecorder()
+
+	testErr := errors.New("Testing error message")
+	SendError(testW, testErr)
+
+	// Check the status code
+	if testW.Code != http.StatusForbidden {
+		t.Errorf("got %v, expected %v", testW.Code, http.StatusForbidden)
+	}
+
+	// Check the writer body
+	want := fmt.Sprintf("Access denied: %v\n", testErr)
+	got := testW.Body.String()
+	if got != want {
+		t.Errorf("got %v, expected %v", got, want)
+	}
+}
+
+func TestRegisterFlags(t *testing.T) {
+	testFs := pflag.NewFlagSet("test", pflag.ExitOnError)
+	securityPolicy = "test"
+
+	RegisterFlags(testFs)
+
+	securityPolicyFlag := testFs.Lookup("security_policy")
+	assert.NotNil(t, securityPolicyFlag, "no security_policy flag is registered")
+
+	// Check the default value of the flag
+	want := "test"
+	got := securityPolicyFlag.DefValue
+	if want != got {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
