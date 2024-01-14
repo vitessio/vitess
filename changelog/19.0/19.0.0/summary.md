@@ -13,6 +13,7 @@
   - **[New Stats](#new-stats)**
     - [Stream Consolidations](#stream-consolidations)
     - [Build Version in `/debug/vars`](#build-version-in-debug-vars)
+    - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
   - **[Planned Reparent Shard](#planned-reparent-shard)**
     - [`--tolerable-replication-lag` Sub-flag](#tolerable-repl-lag)
   - **[Query Compatibility](#query-compatibility)**
@@ -117,6 +118,13 @@ Prior to 19.0 VTTablet reported how much time non-streaming executions spend wai
 #### <a id="build-version-in-debug-vars"/>Build Version in `/debug/vars`
 
 The build version (e.g., `19.0.0-SNAPSHOT`) has been added to `/debug/vars`, allowing users to programmatically inspect Vitess components' build version at runtime.
+
+#### <a id="vttablet-query-cache-hits-and-misses"/>VTTablet Query Cache Hits and Misses
+
+VTTablet exposes two counter stats:
+
+ * `QueryCacheHits`: Query engine query cache hits
+ * `QueryCacheMisses`: Query engine query cache misses
 
 ### <a id="planned-reparent-shard"/>Planned Reparent Shard
 
