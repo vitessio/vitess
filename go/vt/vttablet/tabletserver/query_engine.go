@@ -280,6 +280,12 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", func() int64 {
 		return qe.plans.Metrics.Evicted()
 	})
+	env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query cache hits", func() int64 {
+		return qe.plans.Metrics.Hits()
+	})
+	env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query cache misses", func() int64 {
+		return qe.plans.Metrics.Misses()
+	})
 
 	labels := []string{"Table", "Plan"}
 	if config.EnablePerWorkloadTableMetrics {
