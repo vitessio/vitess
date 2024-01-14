@@ -53,7 +53,7 @@ func TestRowStreamerQuery(t *testing.T) {
 		getQuery := func(directives string) string {
 			return fmt.Sprintf(queryTemplate, directives)
 		}
-		sendQueryPrefix := "select /*+ MAX_EXECUTION_TIME(3600000) */ id, uk1, val from t1"
+		sendQueryPrefix := "select id, uk1, val from t1"
 		testCases := []testCase{
 			{"/*vt+ ukColumns=\"uk1\" ukForce=\"uk2\" */", "force index (`uk2`) order by uk1"},
 			{"/*vt+ ukForce=\"uk2\" */", "force index (`uk2`) order by uk1"},
