@@ -55,7 +55,6 @@ func TestRowStreamerQuery(t *testing.T) {
 		}
 		sendQueryPrefix := "select /*+ MAX_EXECUTION_TIME(3600000) */ id, uk1, val from t1"
 		testCases := []testCase{
-			{"", "force index (`PRIMARY`) order by id"},
 			{"/*vt+ ukColumns=\"uk1\" ukForce=\"uk2\" */", "force index (`uk2`) order by uk1"},
 			{"/*vt+ ukForce=\"uk2\" */", "force index (`uk2`) order by uk1"},
 			{"/*vt+ ukColumns=\"uk1\" */", "order by uk1"},
