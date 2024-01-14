@@ -24,6 +24,7 @@ import (
 	"text/template"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -64,7 +65,8 @@ type materializer struct {
 	primaryVindexesDiffer bool
 	workflowType          binlogdatapb.VReplicationWorkflowType
 
-	parser *sqlparser.Parser
+	parser       *sqlparser.Parser
+	collationEnv *collations.Environment
 }
 
 func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowSubType, error) {
@@ -454,7 +456,8 @@ func (mz *materializer) deploySchema() error {
 				// We use schemadiff to normalize the schema.
 				// For now, and because this is could have wider implications, we ignore any errors in
 				// reading the source schema.
-				schema, err := schemadiff.NewSchemaFromQueries(applyDDLs, mz.parser)
+				env := schemadiff.NewEnv(mz.collationEnv, mz.collationEnv.DefaultConnectionCharset(), mz.parser)
+				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
 				if err != nil {
 					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
 				} else {

@@ -17,6 +17,7 @@
     - [Multi Table Delete Support](#multi-table-delete)
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
+    - [Partial Multi-shard Commit Warnings](#partial-multi-shard-commit-warnings)
   - **[Vttestserver](#vttestserver)**
     - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
 - **[Minor Changes](#minor-changes)**
@@ -64,7 +65,6 @@ Prior to 19.0 VTTablet reported how much time non-streaming executions spend wai
 
 The build version (e.g., `19.0.0-SNAPSHOT`) has been added to `/debug/vars`, allowing users to programmatically inspect Vitess components' build version at runtime.
 
-
 ### <a id="planned-reparent-shard"/>Planned Reparent Shard
 
 #### <a id="tolerable-repl-lag"/>`--tolerable-replication-lag` Sub-flag
@@ -73,7 +73,6 @@ A new sub-flag `--tolerable-replication-lag` has been added to the command `Plan
 This feature is opt-in and not specifying this sub-flag makes Vitess ignore the replication lag entirely.
 
 A new flag in VTOrc with the same name has been added to control the behaviour of the PlannedReparentShard calls that VTOrc issues.
-
 
 ### <a id="query-compatibility"/>Query Compatibility
 
@@ -106,6 +105,24 @@ mysql> show vschema keyspaces;
 #### <a id="fk-checks-vitess-aware"/>`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable
 
 When VTGate receives a query to change the `FOREIGN_KEY_CHECKS` value for a session, instead of sending the value down to MySQL, VTGate now keeps track of the value and changes the queries by adding `SET_VAR(FOREIGN_KEY_CHECKS=On/Off)` style query optimizer hints wherever required. 
+
+#### <a id="partial-multi-shard-commit-warnings"/>Partial Multi-shard Commit Warnings
+
+When using `multi` transaction mode (the default), it is possible for Vitess to successfully commit to one shard, but fail to commit to a subsequent shard, thus breaking the atomicity of a multi-shard transaction.
+
+In `v19.0`, VTGate reports partial-success commits in warnings, e.g.:
+
+```mysql
+mysql> commit;
+ERROR 1317 (70100): target: customer.-80.primary: vttablet: rpc error: code = Aborted desc = transaction 1703182545849001001: ended at 2023-12-21 14:07:41.515 EST (exceeded timeout: 30s) (CallerID: userData1)
+mysql> show warnings;
++---------+------+----------------------------------------------------------+
+| Level   | Code | Message                                                  |
++---------+------+----------------------------------------------------------+
+| Warning |  301 | multi-db commit failed after committing to 1 shards: 80- |
++---------+------+----------------------------------------------------------+
+1 row in set, 1 warning (0.00 sec)
+```
 
 ### <a id="vttestserver"/>Vttestserver
 

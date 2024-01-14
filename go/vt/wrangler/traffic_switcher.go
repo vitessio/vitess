@@ -224,7 +224,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		return nil, nil, err
 	}
 
-	ws := workflow.NewServer(wr.ts, wr.tmc, wr.parser)
+	ws := workflow.NewServer(wr.ts, wr.tmc, wr.collationEnv, wr.parser)
 	state := &workflow.State{
 		Workflow:           workflowName,
 		SourceKeyspace:     ts.SourceKeyspaceName(),
@@ -859,8 +859,45 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowNam
 	return sw.logs(), nil
 }
 
+func (wr *Wrangler) getShardSubset(ctx context.Context, keyspace string, shardSubset []string) ([]string, error) {
+	if wr.WorkflowParams != nil && len(wr.WorkflowParams.ShardSubset) > 0 {
+		shardSubset = wr.WorkflowParams.ShardSubset
+	}
+	allShards, err := wr.ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		return nil, err
+	}
+	if len(allShards) == 0 {
+		return nil, fmt.Errorf("no shards found in keyspace %s", keyspace)
+	}
+
+	if len(shardSubset) == 0 {
+		return allShards, nil
+	}
+
+	existingShards := make(map[string]bool, len(allShards))
+	for _, shard := range allShards {
+		existingShards[shard] = true
+	}
+	// Validate that the provided shards are part of the keyspace.
+	for _, shard := range shardSubset {
+		_, found := existingShards[shard]
+		if !found {
+			return nil, fmt.Errorf("shard %s not found in keyspace %s", shard, keyspace)
+		}
+	}
+	log.Infof("Selecting subset of shards in keyspace %s: %d from %d :: %+v",
+		keyspace, len(shardSubset), len(allShards), shardSubset)
+	return shardSubset, nil
+
+}
+
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, error) {
-	tgtInfo, err := workflow.LegacyBuildTargets(ctx, wr.ts, wr.tmc, targetKeyspace, workflowName)
+	shardSubset, err := wr.getShardSubset(ctx, targetKeyspace, nil)
+	if err != nil {
+		return nil, err
+	}
+	tgtInfo, err := workflow.LegacyBuildTargets(ctx, wr.ts, wr.tmc, targetKeyspace, workflowName, shardSubset)
 	if err != nil {
 		log.Infof("Error building targets: %s", err)
 		return nil, err
@@ -1150,7 +1187,7 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
 	var (
-		ws = workflow.NewServer(ts.TopoServer(), ts.TabletManagerClient(), ts.wr.parser)
+		ws = workflow.NewServer(ts.TopoServer(), ts.TabletManagerClient(), ts.wr.collationEnv, ts.wr.parser)
 		mu sync.Mutex
 	)
 

@@ -95,7 +95,7 @@ func TestInitShardPrimary(t *testing.T) {
 		tablet.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 	}
 
-	vtctld := grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+	vtctld := grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 	resp, err := vtctld.InitShardPrimary(context.Background(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
 		Shard:                   tablet1.Tablet.Shard,
@@ -150,7 +150,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 		tablet.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 	}
 
-	vtctld := grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+	vtctld := grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
 	_, err := vtctld.InitShardPrimary(context.Background(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
 		Shard:                   tablet1.Tablet.Shard,

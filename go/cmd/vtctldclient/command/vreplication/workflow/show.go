@@ -59,6 +59,7 @@ func commandShow(cmd *cobra.Command, args []string) error {
 		Keyspace:    baseOptions.Keyspace,
 		Workflow:    baseOptions.Workflow,
 		IncludeLogs: workflowShowOptions.IncludeLogs,
+		Shards:      baseOptions.Shards,
 	}
 	resp, err := common.GetClient().GetWorkflows(common.GetCommandCtx(), req)
 	if err != nil {

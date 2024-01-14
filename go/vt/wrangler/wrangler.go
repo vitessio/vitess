@@ -58,10 +58,10 @@ type Wrangler struct {
 	// DO NOT USE in production code.
 	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
 	// Limt the number of concurrent background goroutines if needed.
-	sem *semaphore.Weighted
-
-	collationEnv *collations.Environment
-	parser       *sqlparser.Parser
+	sem            *semaphore.Weighted
+	collationEnv   *collations.Environment
+	parser         *sqlparser.Parser
+	WorkflowParams *VReplicationWorkflowParams
 }
 
 // New creates a new Wrangler object.
@@ -70,7 +70,7 @@ func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClien
 		logger:       logger,
 		ts:           ts,
 		tmc:          tmc,
-		vtctld:       grpcvtctldserver.NewVtctldServer(ts, parser),
+		vtctld:       grpcvtctldserver.NewVtctldServer(ts, collationEnv, parser),
 		sourceTs:     ts,
 		collationEnv: collationEnv,
 		parser:       parser,

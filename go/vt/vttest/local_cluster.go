@@ -556,7 +556,7 @@ func (db *LocalCluster) createVTSchema() error {
 		return db.ExecuteFetch(query, "")
 	}
 
-	if err := sidecardb.Init(context.Background(), sidecardbExec, sqlparser.NewTestParser()); err != nil {
+	if err := sidecardb.Init(context.Background(), sidecardbExec, collations.MySQL8(), sqlparser.NewTestParser()); err != nil {
 		return err
 	}
 	return nil
