@@ -27,11 +27,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-<<<<<<< HEAD
 	"math"
-=======
 	"net/url"
->>>>>>> 61b12e635a (VReplication: send unique key name to `rowstreamer`, which can then use with `FORCE INDEX` (#14916))
 	"strconv"
 	"strings"
 

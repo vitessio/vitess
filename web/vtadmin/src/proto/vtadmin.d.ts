@@ -31022,6 +31022,9 @@ export namespace binlogdata {
 
         /** MinimalTable p_k_columns */
         p_k_columns?: ((number|Long)[]|null);
+
+        /** MinimalTable p_k_index_name */
+        p_k_index_name?: (string|null);
     }
 
     /** Represents a MinimalTable. */
@@ -31041,6 +31044,9 @@ export namespace binlogdata {
 
         /** MinimalTable p_k_columns. */
         public p_k_columns: (number|Long)[];
+
+        /** MinimalTable p_k_index_name. */
+        public p_k_index_name: string;
 
         /**
          * Creates a new MinimalTable instance using the specified properties.
