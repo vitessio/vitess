@@ -322,6 +322,22 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 	return result, err
 }
 
+// ExecuteFetchMultiDrain is for executing multiple statements in one call, but without
+// caring for any results. The function returns an error if any of the statements fail.
+// The function drains the query results of all statements, even if there's an error.
+func (c *Conn) ExecuteFetchMultiDrain(query string) (err error) {
+	_, more, err := c.ExecuteFetchMulti(query, 0, false)
+	// We ensure to drain all query results, even if there's an error. We collect all errors until we consume all results.
+	for more {
+		var moreErr error
+		_, more, _, moreErr = c.ReadQueryResult(0, false)
+		if err != nil {
+			err = errors.Join(err, moreErr)
+		}
+	}
+	return err
+}
+
 // ExecuteFetchMulti is for fetching multiple results from a multi-statement result.
 // It returns an additional 'more' flag. If it is set, you must fetch the additional
 // results using ReadQueryResult.
