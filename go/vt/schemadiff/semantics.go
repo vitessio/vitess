@@ -18,6 +18,7 @@ package schemadiff
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -60,6 +61,10 @@ func (si *declarativeSchemaInformation) ConnCollation() collations.ID {
 
 func (si *declarativeSchemaInformation) CollationEnv() *collations.Environment {
 	return si.env.CollationEnv
+}
+
+func (si *declarativeSchemaInformation) MySQLVersion() string {
+	return config.DefaultMySQLVersion
 }
 
 func (si *declarativeSchemaInformation) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {

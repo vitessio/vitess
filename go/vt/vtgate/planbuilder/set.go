@@ -58,6 +58,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 	ec := &expressionConverter{
 		collationEnv: vschema.CollationEnv(),
 		collation:    vschema.ConnCollation(),
+		mysqlVersion: vschema.MySQLVersion(),
 	}
 
 	for _, expr := range stmt.Exprs {
@@ -83,7 +84,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 			}
 			setOps = append(setOps, setOp)
 		case sqlparser.NextTxScope, sqlparser.SessionScope:
-			planFunc, err := sysvarPlanningFuncs.Get(expr, vschema.CollationEnv(), vschema.SQLParser())
+			planFunc, err := sysvarPlanningFuncs.Get(expr, vschema.CollationEnv(), vschema.SQLParser(), vschema.MySQLVersion())
 			if err != nil {
 				return nil, err
 			}

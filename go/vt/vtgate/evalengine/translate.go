@@ -573,6 +573,7 @@ type Config struct {
 	NoCompilation     bool
 	SQLMode           SQLMode
 	CollationEnv      *collations.Environment
+	MySQLVersion      string
 }
 
 func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
@@ -588,7 +589,7 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 	}
 
 	if !cfg.NoConstantFolding {
-		staticEnv := EmptyExpressionEnv(cfg.CollationEnv)
+		staticEnv := EmptyExpressionEnv(cfg.CollationEnv, cfg.MySQLVersion)
 		expr, err = simplifyExpr(staticEnv, expr)
 		if err != nil {
 			return nil, err
@@ -600,7 +601,7 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 	}
 
 	if len(ast.untyped) == 0 && !cfg.NoCompilation {
-		comp := compiler{collation: cfg.Collation, collationEnv: cfg.CollationEnv, sqlmode: cfg.SQLMode}
+		comp := compiler{collation: cfg.Collation, collationEnv: cfg.CollationEnv, sqlmode: cfg.SQLMode, mysqlVersion: cfg.MySQLVersion}
 		return comp.compile(expr)
 	}
 

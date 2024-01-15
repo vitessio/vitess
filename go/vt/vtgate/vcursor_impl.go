@@ -86,6 +86,7 @@ type iExecute interface {
 
 	collationEnv() *collations.Environment
 	sqlparser() *sqlparser.Parser
+	mysqlServerVersion() string
 }
 
 // VSchemaOperator is an interface to Vschema Operations
@@ -212,6 +213,11 @@ func (vc *vcursorImpl) ConnCollation() collations.ID {
 // ConnCollation returns the collation of this session
 func (vc *vcursorImpl) CollationEnv() *collations.Environment {
 	return vc.executor.collationEnv()
+}
+
+// ConnCollation returns the collation of this session
+func (vc *vcursorImpl) MySQLVersion() string {
+	return vc.executor.mysqlServerVersion()
 }
 
 func (vc *vcursorImpl) SQLParser() *sqlparser.Parser {

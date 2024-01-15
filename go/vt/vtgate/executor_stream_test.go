@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/test/utils"
@@ -68,7 +69,7 @@ func TestStreamSQLSharded(t *testing.T) {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
 
-	executor := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, collations.MySQL8(), sqlparser.NewTestParser())
+	executor := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	executor.SetQueryLogger(queryLogger)
 
 	defer executor.Close()

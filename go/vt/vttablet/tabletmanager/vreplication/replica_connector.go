@@ -36,7 +36,7 @@ import (
 // This is used by binlog server to make vstream connection
 // using the vstream connection, it will parse the events from binglog
 // to fetch the corresponding GTID for required recovery time
-func NewReplicaConnector(connParams *mysql.ConnParams, collationEnv *collations.Environment, parser *sqlparser.Parser) *ReplicaConnector {
+func NewReplicaConnector(connParams *mysql.ConnParams, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *ReplicaConnector {
 
 	// Construct
 	config := tabletenv.NewDefaultConfig()
@@ -47,7 +47,7 @@ func NewReplicaConnector(connParams *mysql.ConnParams, collationEnv *collations.
 	dbCfg.SetDbParams(*connParams, *connParams, *connParams)
 	config.DB = dbCfg
 	c := &ReplicaConnector{conn: connParams}
-	env := tabletenv.NewEnv(config, "source", collationEnv, parser)
+	env := tabletenv.NewEnv(config, "source", collationEnv, parser, mysqlVersion)
 	c.se = schema.NewEngine(env)
 	c.se.SkipMetaCheck = true
 	c.vstreamer = vstreamer.NewEngine(env, nil, c.se, nil, "")

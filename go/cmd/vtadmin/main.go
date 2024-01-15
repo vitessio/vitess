@@ -139,10 +139,11 @@ func run(cmd *cobra.Command, args []string) {
 		log.Warningf("no cache-refresh-key set; forcing cache refreshes will not be possible")
 	}
 	cache.SetCacheRefreshKey(cacheRefreshKey)
-	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
+	mysqlServerVersion := servenv.MySQLServerVersion()
+	collationEnv := collations.NewEnvironment(mysqlServerVersion)
 
 	parser, err := sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
+		MySQLServerVersion: mysqlServerVersion,
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
@@ -154,7 +155,7 @@ func run(cmd *cobra.Command, args []string) {
 		HTTPOpts:              httpOpts,
 		RBAC:                  rbacConfig,
 		EnableDynamicClusters: enableDynamicClusters,
-	}, collationEnv, parser)
+	}, collationEnv, parser, mysqlServerVersion)
 	bootSpan.Finish()
 
 	if err := s.ListenAndServe(); err != nil {

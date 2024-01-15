@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 
 	"vitess.io/vitess/go/test/utils"
 
@@ -69,7 +70,7 @@ func initTest(ctx context.Context, mode string, opts *Options, topts *testopts, 
 	}
 
 	opts.ExecutionMode = mode
-	vte, err := Init(ctx, string(vSchema), string(schema), shardmap, opts, collations.MySQL8(), sqlparser.NewTestParser())
+	vte, err := Init(ctx, string(vSchema), string(schema), shardmap, opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 	return vte
 }
@@ -348,7 +349,7 @@ func TestInit(t *testing.T) {
   }
 }`
 	schema := "create table table_missing_primary_vindex (id int primary key)"
-	_, err := Init(ctx, vschema, schema, "", defaultTestOpts(), collations.MySQL8(), sqlparser.NewTestParser())
+	_, err := Init(ctx, vschema, schema, "", defaultTestOpts(), collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing primary col vindex")
 }

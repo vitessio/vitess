@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -93,13 +94,13 @@ type VtctldServer struct {
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
-func NewVtctldServer(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) *VtctldServer {
+func NewVtctldServer(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(ts, tmc, collationEnv, parser),
+		ws:  workflow.NewServer(ts, tmc, collationEnv, parser, mysqlVersion),
 	}
 }
 
@@ -109,7 +110,7 @@ func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *Vtc
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(ts, tmc, collations.MySQL8(), sqlparser.NewTestParser()),
+		ws:  workflow.NewServer(ts, tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion),
 	}
 }
 
@@ -4990,8 +4991,8 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
-func StartServer(s *grpc.Server, ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) {
-	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts, collationEnv, parser))
+func StartServer(s *grpc.Server, ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) {
+	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts, collationEnv, parser, mysqlVersion))
 }
 
 // getTopologyCell is a helper method that returns a topology cell given its path.

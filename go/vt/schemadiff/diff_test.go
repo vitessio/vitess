@@ -294,7 +294,7 @@ func TestDiffTables(t *testing.T) {
 			hints: &DiffHints{
 				TableCharsetCollateStrategy: TableCharsetCollateIgnoreAlways,
 			},
-			env: NewEnv(collations.NewEnvironment("5.7.9"), collations.CollationUtf8mb3ID, sqlparser.NewTestParser()),
+			env: NewEnv(collations.NewEnvironment("5.7.9"), collations.CollationUtf8mb3ID, sqlparser.NewTestParser(), "5.7.9"),
 		},
 	}
 	env := NewTestEnv()

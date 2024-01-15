@@ -682,7 +682,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling is done when we actually
 	// receive the row event. We'll build a JOURNAL event instead.
-	plan, err := buildREPlan(table, nil, "", vs.se.CollationEnv())
+	plan, err := buildREPlan(table, nil, "", vs.se.CollationEnv(), vs.se.MySQLVersion())
 	if err != nil {
 		return err
 	}
@@ -716,7 +716,7 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling is done when we actually
 	// receive the row event. We'll build a JOURNAL event instead.
-	plan, err := buildREPlan(table, nil, "", vs.se.CollationEnv())
+	plan, err := buildREPlan(table, nil, "", vs.se.CollationEnv(), vs.se.MySQLVersion())
 	if err != nil {
 		return err
 	}
@@ -738,7 +738,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		Name:   tm.Name,
 		Fields: cols,
 	}
-	plan, err := buildPlan(table, vs.vschema, vs.filter, vs.se.CollationEnv(), vs.se.SQLParser())
+	plan, err := buildPlan(table, vs.vschema, vs.filter, vs.se.CollationEnv(), vs.se.SQLParser(), vs.se.MySQLVersion())
 	if err != nil {
 		return nil, err
 	}
@@ -957,7 +957,7 @@ func (vs *vstreamer) rebuildPlans() error {
 			// cause that to change.
 			continue
 		}
-		newPlan, err := buildPlan(plan.Table, vs.vschema, vs.filter, vs.se.CollationEnv(), vs.se.SQLParser())
+		newPlan, err := buildPlan(plan.Table, vs.vschema, vs.filter, vs.se.CollationEnv(), vs.se.SQLParser(), vs.se.MySQLVersion())
 		if err != nil {
 			return err
 		}

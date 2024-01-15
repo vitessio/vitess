@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -77,9 +78,9 @@ func TestTracker(t *testing.T) {
 			},
 		}},
 	}
-	config := se.env.Config()
-	config.TrackSchemaVersions = true
-	env := tabletenv.NewEnv(config, "TrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(cfg, "TrackerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	initial := env.Stats().ErrorCounters.Counts()["INTERNAL"]
 	tracker := NewTracker(env, vs, se)
 	tracker.Open()
@@ -121,9 +122,9 @@ func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 			},
 		}},
 	}
-	config := se.env.Config()
-	config.TrackSchemaVersions = true
-	env := tabletenv.NewEnv(config, "TrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(cfg, "TrackerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	tracker := NewTracker(env, vs, se)
 	tracker.Open()
 	<-vs.done
