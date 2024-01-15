@@ -57,6 +57,10 @@ func TestSimplePolicy(t *testing.T) {
 	if err != nil {
 		t.Errorf("got %v, want no error", err)
 	}
+	err = CheckAccessActor("", MONITORING)
+	if err != nil {
+		t.Errorf("got %v, want no error", err)
+	}
 
 	err = CheckAccessHTTP(nil, ADMIN)
 	if err == nil || err.Error() != want {
@@ -64,6 +68,10 @@ func TestSimplePolicy(t *testing.T) {
 	}
 	err = CheckAccessHTTP(nil, DEBUGGING)
 	if err != nil {
+		t.Errorf("got %v, want no error", err)
+	}
+	err = CheckAccessHTTP(nil, MONITORING)
+	if err != nil {	
 		t.Errorf("got %v, want no error", err)
 	}
 }
@@ -78,12 +86,20 @@ func TestEmptyPolicy(t *testing.T) {
 	if err != nil {
 		t.Errorf("got %v, want no error", err)
 	}
+	err = CheckAccessActor("", MONITORING)
+	if err != nil {
+		t.Errorf("got %v, want no error", err)
+	}
 
 	err = CheckAccessHTTP(nil, ADMIN)
 	if err != nil {
 		t.Errorf("got %v, want no error", err)
 	}
 	err = CheckAccessHTTP(nil, DEBUGGING)
+	if err != nil {
+		t.Errorf("got %v, want no error", err)
+	}
+	err = CheckAccessHTTP(nil, MONITORING)
 	if err != nil {
 		t.Errorf("got %v, want no error", err)
 	}
