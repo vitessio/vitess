@@ -875,7 +875,7 @@
           "Sharded": false
         },
         "FieldQuery": "(select 1 from unsharded where 1 != 1 union select 1 from unsharded where 1 != 1 union all select 1 from unsharded where 1 != 1) union select 1 from unsharded where 1 != 1 union all select 1 from unsharded where 1 != 1",
-        "Query": "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by 1 asc) union select 1 from unsharded union all select 1 from unsharded order by 1 asc",
+        "Query": "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by `1` asc) union select 1 from unsharded union all select 1 from unsharded order by `1` asc",
         "Table": "unsharded"
       },
       "TablesUsed": [
