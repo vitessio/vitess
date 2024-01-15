@@ -89,6 +89,11 @@ type (
 		collate collations.ID
 		trim    sqlparser.TrimType
 	}
+
+	builtinSubstring struct {
+		CallExpr
+		collate collations.ID
+	}
 )
 
 var _ IR = (*builtinChangeCase)(nil)
@@ -817,7 +822,7 @@ func (expr *builtinStrcmp) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(lt.Flag | rt.Flag)}, nil
 }
 
-func (call builtinTrim) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 	str, err := call.arg1(env)
 	if err != nil {
 		return nil, err
@@ -872,7 +877,7 @@ func (call builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call builtinTrim) compile(c *compiler) (ctype, error) {
+func (call *builtinTrim) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -930,6 +935,105 @@ func (call builtinTrim) compile(c *compiler) (ctype, error) {
 
 	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
+}
+
+func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
+	str, err := call.Arguments[0].eval(env)
+	if err != nil || str == nil {
+		return nil, err
+	}
+
+	tt := str.SQLType()
+	text, ok := str.(*evalBytes)
+	if !ok {
+		text, err = evalToVarchar(str, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+		tt = sqltypes.VarChar
+	}
+
+	p, err := call.Arguments[1].eval(env)
+	if err != nil || p == nil {
+		return nil, err
+	}
+
+	var l eval
+	if len(call.Arguments) > 2 {
+		l, err = call.Arguments[2].eval(env)
+		if err != nil || l == nil {
+			return nil, err
+		}
+	}
+
+	pos := evalToInt64(p).i
+	if pos == 0 {
+		return newEvalRaw(tt, nil, text.col), nil
+	}
+	cs := colldata.Lookup(text.col.Collation).Charset()
+	end := int64(charset.Length(cs, text.bytes))
+
+	if pos < 0 {
+		pos += end + 1
+	}
+	if pos < 1 || pos > end {
+		return newEvalRaw(tt, nil, text.col), nil
+	}
+
+	if len(call.Arguments) > 2 {
+		ll := evalToInt64(l).i
+		if ll < 1 {
+			return newEvalRaw(tt, nil, text.col), nil
+		}
+		if ll > end-pos+1 {
+			ll = end - pos + 1
+		}
+		end = pos + ll - 1
+	}
+	res := charset.Slice(cs, text.bytes, int(pos-1), int(end))
+	return newEvalRaw(tt, res, text.col), nil
+}
+
+func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	p, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	tt := str.Type
+	skip1 := c.compileNullCheck2(str, p)
+
+	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
+	switch {
+	case str.isTextual():
+		col = str.Col
+	default:
+		tt = sqltypes.VarChar
+		c.asm.Convert_xc(2, tt, col.Collation, 0, false)
+	}
+	_ = c.compileToInt64(p, 1)
+
+	cs := colldata.Lookup(str.Col.Collation).Charset()
+	var skip2 *jump
+	if len(call.Arguments) > 2 {
+		l, err := call.Arguments[2].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skip2 = c.compileNullCheck2(str, l)
+		_ = c.compileToInt64(l, 1)
+		c.asm.Fn_SUBSTRING3(tt, cs, col)
+	} else {
+		c.asm.Fn_SUBSTRING2(tt, cs, col)
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: tt, Col: col, Flag: flagNullable}, nil
 }
 
 type builtinConcat struct {

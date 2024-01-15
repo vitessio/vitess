@@ -34,6 +34,7 @@ type VCursor interface {
 	GetKeyspace() string
 	SQLMode() string
 	CollationEnv() *collations.Environment
+	MySQLVersion() string
 }
 
 type (
@@ -74,16 +75,14 @@ func (env *ExpressionEnv) currentUser() string {
 }
 
 func (env *ExpressionEnv) currentDatabase() string {
-	if env.vc == nil {
-		return ""
-	}
 	return env.vc.GetKeyspace()
 }
 
+func (env *ExpressionEnv) currentVersion() string {
+	return env.vc.MySQLVersion()
+}
+
 func (env *ExpressionEnv) currentTimezone() *time.Location {
-	if env.vc == nil {
-		return nil
-	}
 	return env.vc.TimeZone()
 }
 
@@ -117,9 +116,14 @@ func (env *ExpressionEnv) SetTime(now time.Time) {
 	}
 }
 
+func (env *ExpressionEnv) VCursor() VCursor {
+	return env.vc
+}
+
 type emptyVCursor struct {
 	collationEnv *collations.Environment
 	tz           *time.Location
+	mysqlVersion string
 }
 
 func (e *emptyVCursor) TimeZone() *time.Location {
@@ -138,13 +142,17 @@ func (e *emptyVCursor) CollationEnv() *collations.Environment {
 	return e.collationEnv
 }
 
-func NewEmptyVCursor(collationEnv *collations.Environment, tz *time.Location) VCursor {
-	return &emptyVCursor{collationEnv: collationEnv, tz: tz}
+func (e *emptyVCursor) MySQLVersion() string {
+	return e.mysqlVersion
+}
+
+func NewEmptyVCursor(collationEnv *collations.Environment, tz *time.Location, mysqlVersion string) VCursor {
+	return &emptyVCursor{collationEnv: collationEnv, tz: tz, mysqlVersion: mysqlVersion}
 }
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
-func EmptyExpressionEnv(collationEnv *collations.Environment) *ExpressionEnv {
-	return NewExpressionEnv(context.Background(), nil, NewEmptyVCursor(collationEnv, time.Local))
+func EmptyExpressionEnv(collationEnv *collations.Environment, mysqlVersion string) *ExpressionEnv {
+	return NewExpressionEnv(context.Background(), nil, NewEmptyVCursor(collationEnv, time.Local, mysqlVersion))
 }
 
 // NewExpressionEnv returns an expression environment with no current row, but with bindvars

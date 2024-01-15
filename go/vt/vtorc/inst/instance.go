@@ -63,7 +63,7 @@ type Instance struct {
 	LastSQLError          string
 	LastIOError           string
 	SecondsBehindPrimary  sql.NullInt64
-	SQLDelay              uint
+	SQLDelay              uint32
 	ExecutedGtidSet       string
 	GtidPurged            string
 	GtidErrant            string

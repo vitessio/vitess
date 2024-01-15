@@ -1,0 +1,71 @@
+{
+  "Workflow": "wrWorkflow",
+  "SourceLocation": {
+    "Keyspace": "source",
+    "Shards": [
+      "0"
+    ]
+  },
+  "TargetLocation": {
+    "Keyspace": "target",
+    "Shards": [
+      "80-"
+    ]
+  },
+  "MaxVReplicationLag": 0,
+  "MaxVReplicationTransactionLag": 0,
+  "Frozen": false,
+  "ShardStatuses": {
+    "80-/zone1-0000000210": {
+      "PrimaryReplicationStatuses": [
+        {
+          "Shard": "80-",
+          "Tablet": "zone1-0000000210",
+          "ID": 1,
+          "Bls": {
+            "keyspace": "source",
+            "shard": "0",
+            "filter": {
+              "rules": [
+                {
+                  "match": "t1"
+                },
+                {
+                  "match": "t2"
+                }
+              ]
+            }
+          },
+          "Pos": "14b68925-696a-11ea-aee7-fec597a91f5e:1-3",
+          "StopPos": "",
+          "State": "Copying",
+          "DBName": "vt_target",
+          "TransactionTimestamp": 0,
+          "TimeUpdated": 1234,
+          "TimeHeartbeat": 1234,
+          "TimeThrottled": 0,
+          "ComponentThrottled": "",
+          "Message": "",
+          "Tags": "",
+          "WorkflowType": "Materialize",
+          "WorkflowSubType": "None",
+          "CopyState": [
+            {
+              "Table": "t1",
+              "LastPK": "pk1"
+            },
+            {
+              "Table": "t2",
+              "LastPK": "pk2"
+            }
+          ],
+          "RowsCopied": 1000
+        }
+      ],
+      "TabletControls": null,
+      "PrimaryIsServing": true
+    }
+  },
+  "SourceTimeZone": "",
+  "TargetTimeZone": ""
+}

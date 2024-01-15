@@ -335,6 +335,7 @@ func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Exp
 		ResolveType:  ctx.SemTable.TypeForExpr,
 		Collation:    ctx.SemTable.Collation,
 		CollationEnv: ctx.VSchema.CollationEnv(),
+		MySQLVersion: ctx.VSchema.MySQLVersion(),
 	}
 	eexpr, err := evalengine.Translate(rewrittenExpr, cfg)
 	if err != nil {

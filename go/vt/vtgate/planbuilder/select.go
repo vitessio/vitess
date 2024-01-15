@@ -292,6 +292,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 				n, err := evalengine.Translate(lFunc.Name, &evalengine.Config{
 					Collation:    vschema.ConnCollation(),
 					CollationEnv: vschema.CollationEnv(),
+					MySQLVersion: vschema.MySQLVersion(),
 				})
 				if err != nil {
 					return nil, err
@@ -307,6 +308,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		exprs[i], err = evalengine.Translate(expr.Expr, &evalengine.Config{
 			Collation:    vschema.ConnCollation(),
 			CollationEnv: vschema.CollationEnv(),
+			MySQLVersion: vschema.MySQLVersion(),
 		})
 		if err != nil {
 			return nil, nil

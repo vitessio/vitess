@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"reflect"
 	"strings"
@@ -913,7 +912,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 		"show_tables_with_sizes_employees": {"BASE TABLE", ""},
 	}
 
-	rs, err := conn.ExecuteFetch(conn.BaseShowTablesWithSizes(), math.MaxInt, false)
+	rs, err := conn.ExecuteFetch(conn.BaseShowTablesWithSizes(), -1, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, rs.Rows)
 

@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"vitess.io/vitess/go/vt/schema"
@@ -48,7 +49,7 @@ func TestGetConstraintType(t *testing.T) {
 
 func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	e := Executor{
-		env: tabletenv.NewEnv(nil, "ValidateAndEditCreateTableStatementTest", collations.MySQL8(), sqlparser.NewTestParser()),
+		env: tabletenv.NewEnv(nil, "ValidateAndEditCreateTableStatementTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion),
 	}
 	tt := []struct {
 		name                string
@@ -192,7 +193,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 
 func TestValidateAndEditAlterTableStatement(t *testing.T) {
 	e := Executor{
-		env: tabletenv.NewEnv(nil, "TestValidateAndEditAlterTableStatementTest", collations.MySQL8(), sqlparser.NewTestParser()),
+		env: tabletenv.NewEnv(nil, "TestValidateAndEditAlterTableStatementTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion),
 	}
 	tt := []struct {
 		alter  string
@@ -286,7 +287,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 
 func TestAddInstantAlgorithm(t *testing.T) {
 	e := Executor{
-		env: tabletenv.NewEnv(nil, "AddInstantAlgorithmTest", collations.MySQL8(), sqlparser.NewTestParser()),
+		env: tabletenv.NewEnv(nil, "AddInstantAlgorithmTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion),
 	}
 	tt := []struct {
 		alter  string
@@ -331,7 +332,7 @@ func TestAddInstantAlgorithm(t *testing.T) {
 
 func TestDuplicateCreateTable(t *testing.T) {
 	e := Executor{
-		env: tabletenv.NewEnv(nil, "DuplicateCreateTableTest", collations.MySQL8(), sqlparser.NewTestParser()),
+		env: tabletenv.NewEnv(nil, "DuplicateCreateTableTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion),
 	}
 	ctx := context.Background()
 	onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "something", Strategy: "vitess", Options: "--unsafe-allow-foreign-keys"}

@@ -40,10 +40,12 @@ type Schema struct {
 
 	foreignKeyParents  []*CreateTableEntity // subset of tables
 	foreignKeyChildren []*CreateTableEntity // subset of tables
+
+	env *Environment
 }
 
 // newEmptySchema is used internally to initialize a Schema object
-func newEmptySchema() *Schema {
+func newEmptySchema(env *Environment) *Schema {
 	schema := &Schema{
 		tables: []*CreateTableEntity{},
 		views:  []*CreateViewEntity{},
@@ -52,13 +54,15 @@ func newEmptySchema() *Schema {
 
 		foreignKeyParents:  []*CreateTableEntity{},
 		foreignKeyChildren: []*CreateTableEntity{},
+
+		env: env,
 	}
 	return schema
 }
 
 // NewSchemaFromEntities creates a valid and normalized schema based on list of entities
-func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
-	schema := newEmptySchema()
+func NewSchemaFromEntities(env *Environment, entities []Entity) (*Schema, error) {
+	schema := newEmptySchema(env)
 	for _, e := range entities {
 		switch c := e.(type) {
 		case *CreateTableEntity:
@@ -74,18 +78,18 @@ func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
 }
 
 // NewSchemaFromStatements creates a valid and normalized schema based on list of valid statements
-func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) {
+func NewSchemaFromStatements(env *Environment, statements []sqlparser.Statement) (*Schema, error) {
 	entities := make([]Entity, 0, len(statements))
 	for _, s := range statements {
 		switch stmt := s.(type) {
 		case *sqlparser.CreateTable:
-			c, err := NewCreateTableEntity(stmt)
+			c, err := NewCreateTableEntity(env, stmt)
 			if err != nil {
 				return nil, err
 			}
 			entities = append(entities, c)
 		case *sqlparser.CreateView:
-			v, err := NewCreateViewEntity(stmt)
+			v, err := NewCreateViewEntity(env, stmt)
 			if err != nil {
 				return nil, err
 			}
@@ -94,27 +98,27 @@ func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) 
 			return nil, &UnsupportedStatementError{Statement: sqlparser.CanonicalString(s)}
 		}
 	}
-	return NewSchemaFromEntities(entities)
+	return NewSchemaFromEntities(env, entities)
 }
 
 // NewSchemaFromQueries creates a valid and normalized schema based on list of queries
-func NewSchemaFromQueries(queries []string, parser *sqlparser.Parser) (*Schema, error) {
+func NewSchemaFromQueries(env *Environment, queries []string) (*Schema, error) {
 	statements := make([]sqlparser.Statement, 0, len(queries))
 	for _, q := range queries {
-		stmt, err := parser.ParseStrictDDL(q)
+		stmt, err := env.Parser.ParseStrictDDL(q)
 		if err != nil {
 			return nil, err
 		}
 		statements = append(statements, stmt)
 	}
-	return NewSchemaFromStatements(statements)
+	return NewSchemaFromStatements(env, statements)
 }
 
 // NewSchemaFromSQL creates a valid and normalized schema based on a SQL blob that contains
 // CREATE statements for various objects (tables, views)
-func NewSchemaFromSQL(sql string, parser *sqlparser.Parser) (*Schema, error) {
+func NewSchemaFromSQL(env *Environment, sql string) (*Schema, error) {
 	var statements []sqlparser.Statement
-	tokenizer := parser.NewStringTokenizer(sql)
+	tokenizer := env.Parser.NewStringTokenizer(sql)
 	for {
 		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
 		if err != nil {
@@ -125,7 +129,7 @@ func NewSchemaFromSQL(sql string, parser *sqlparser.Parser) (*Schema, error) {
 		}
 		statements = append(statements, stmt)
 	}
-	return NewSchemaFromStatements(statements)
+	return NewSchemaFromStatements(env, statements)
 }
 
 // getForeignKeyParentTableNames analyzes a CREATE TABLE definition and extracts all referenced foreign key tables names.
@@ -668,7 +672,7 @@ func (s *Schema) ToSQL() string {
 // copy returns a shallow copy of the schema. This is used when applying changes for example.
 // applying changes will ensure we copy new entities themselves separately.
 func (s *Schema) copy() *Schema {
-	dup := newEmptySchema()
+	dup := newEmptySchema(s.env)
 	dup.tables = make([]*CreateTableEntity, len(s.tables))
 	copy(dup.tables, s.tables)
 	dup.views = make([]*CreateViewEntity, len(s.views))
@@ -965,7 +969,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 
 func (s *Schema) ValidateViewReferences() error {
 	var errs error
-	schemaInformation := newDeclarativeSchemaInformation()
+	schemaInformation := newDeclarativeSchemaInformation(s.env)
 
 	// Remember that s.Entities() is already ordered by dependency. ie. tables first, then views
 	// that only depend on those tables (or on dual), then 2nd tier views, etc.

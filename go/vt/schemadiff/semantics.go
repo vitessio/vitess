@@ -18,6 +18,7 @@ package schemadiff
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -38,11 +39,13 @@ var _ semantics.SchemaInformation = (*declarativeSchemaInformation)(nil)
 // to make it more simple and accessible to schemadiff's logic.
 type declarativeSchemaInformation struct {
 	Tables map[string]*vindexes.Table
+	env    *Environment
 }
 
-func newDeclarativeSchemaInformation() *declarativeSchemaInformation {
+func newDeclarativeSchemaInformation(env *Environment) *declarativeSchemaInformation {
 	return &declarativeSchemaInformation{
 		Tables: make(map[string]*vindexes.Table),
+		env:    env,
 	}
 }
 
@@ -53,11 +56,15 @@ func (si *declarativeSchemaInformation) FindTableOrVindex(tablename sqlparser.Ta
 }
 
 func (si *declarativeSchemaInformation) ConnCollation() collations.ID {
-	return collations.CollationUtf8mb4ID
+	return si.env.DefaultColl
 }
 
 func (si *declarativeSchemaInformation) CollationEnv() *collations.Environment {
-	return collations.MySQL8()
+	return si.env.CollationEnv
+}
+
+func (si *declarativeSchemaInformation) MySQLVersion() string {
+	return config.DefaultMySQLVersion
 }
 
 func (si *declarativeSchemaInformation) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {

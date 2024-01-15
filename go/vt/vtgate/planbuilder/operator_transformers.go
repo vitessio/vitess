@@ -73,9 +73,27 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformHashJoin(ctx, op)
 	case *operators.Sequential:
 		return transformSequential(ctx, op)
+	case *operators.DeleteMulti:
+		return transformDeleteMulti(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
+}
+
+func transformDeleteMulti(ctx *plancontext.PlanningContext, op *operators.DeleteMulti) (logicalPlan, error) {
+	input, err := transformToLogicalPlan(ctx, op.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	del, err := transformToLogicalPlan(ctx, op.Delete)
+	if err != nil {
+		return nil, err
+	}
+	return &deleteMulti{
+		input:  input,
+		delete: del,
+	}, nil
 }
 
 func transformUpsert(ctx *plancontext.PlanningContext, op *operators.Upsert) (logicalPlan, error) {
@@ -271,11 +289,11 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		oa.aggregates = append(oa.aggregates, aggrParam)
 	}
 	for _, groupBy := range op.Grouping {
-		typ, _ := ctx.SemTable.TypeForExpr(groupBy.SimplifiedExpr)
+		typ, _ := ctx.SemTable.TypeForExpr(groupBy.Inner)
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
-			Expr:            groupBy.SimplifiedExpr,
+			Expr:            groupBy.Inner,
 			Type:            typ,
 			CollationEnv:    ctx.VSchema.CollationEnv(),
 		})
@@ -698,11 +716,15 @@ func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Rout
 		Query:             generateQuery(stmt),
 		TableNames:        []string{vtable.Name.String()},
 		Vindexes:          vtable.Owned,
-		OwnedVindexQuery:  del.OwnedVindexQuery,
 		RoutingParameters: rp,
 	}
 
-	transformDMLPlan(vtable, edml, rb.Routing, del.OwnedVindexQuery != "")
+	hasLookupVindex := del.OwnedVindexQuery != nil
+	if hasLookupVindex {
+		edml.OwnedVindexQuery = sqlparser.String(del.OwnedVindexQuery)
+	}
+
+	transformDMLPlan(vtable, edml, rb.Routing, hasLookupVindex)
 
 	e := &engine.Delete{
 		DML: edml,
@@ -806,14 +828,15 @@ func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logi
 		return nil, err
 	}
 
-	return createLimit(plan, op.AST, ctx.VSchema.CollationEnv())
+	return createLimit(plan, op.AST, ctx.VSchema.CollationEnv(), ctx.VSchema.MySQLVersion())
 }
 
-func createLimit(input logicalPlan, limit *sqlparser.Limit, collationEnv *collations.Environment) (logicalPlan, error) {
+func createLimit(input logicalPlan, limit *sqlparser.Limit, collationEnv *collations.Environment, mysqlVersion string) (logicalPlan, error) {
 	plan := newLimit(input)
 	cfg := &evalengine.Config{
 		Collation:    collationEnv.DefaultConnectionCharset(),
 		CollationEnv: collationEnv,
+		MySQLVersion: mysqlVersion,
 	}
 	pv, err := evalengine.Translate(limit.Rowcount, cfg)
 	if err != nil {

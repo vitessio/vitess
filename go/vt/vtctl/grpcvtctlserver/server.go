@@ -47,11 +47,12 @@ type VtctlServer struct {
 	ts           *topo.Server
 	collationEnv *collations.Environment
 	parser       *sqlparser.Parser
+	mysqlVersion string
 }
 
 // NewVtctlServer returns a new Vtctl Server for the topo server.
-func NewVtctlServer(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) *VtctlServer {
-	return &VtctlServer{ts: ts, collationEnv: collationEnv, parser: parser}
+func NewVtctlServer(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *VtctlServer {
+	return &VtctlServer{ts: ts, collationEnv: collationEnv, parser: parser, mysqlVersion: mysqlVersion}
 }
 
 // ExecuteVtctlCommand is part of the vtctldatapb.VtctlServer interface
@@ -78,13 +79,13 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *vtctldatapb.ExecuteVtctlCommandR
 	// create the wrangler
 	tmc := tmclient.NewTabletManagerClient()
 	defer tmc.Close()
-	wr := wrangler.New(logger, s.ts, tmc, s.collationEnv, s.parser)
+	wr := wrangler.New(logger, s.ts, tmc, s.collationEnv, s.parser, s.mysqlVersion)
 
 	// execute the command
 	return vtctl.RunCommand(stream.Context(), wr, args.Args)
 }
 
 // StartServer registers the VtctlServer for RPCs
-func StartServer(s *grpc.Server, ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) {
-	vtctlservicepb.RegisterVtctlServer(s, NewVtctlServer(ts, collationEnv, parser))
+func StartServer(s *grpc.Server, ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) {
+	vtctlservicepb.RegisterVtctlServer(s, NewVtctlServer(ts, collationEnv, parser, mysqlVersion))
 }

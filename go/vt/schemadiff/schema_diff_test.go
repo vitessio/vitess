@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/mysql/capabilities"
 )
 
 func TestPermutations(t *testing.T) {
@@ -162,14 +162,15 @@ func TestPermutations(t *testing.T) {
 		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
+	env := NewTestEnv()
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 
-			fromSchema, err := NewSchemaFromQueries(tc.fromQueries, sqlparser.NewTestParser())
+			fromSchema, err := NewSchemaFromQueries(env, tc.fromQueries)
 			require.NoError(t, err)
 			require.NotNil(t, fromSchema)
 
-			toSchema, err := NewSchemaFromQueries(tc.toQueries, sqlparser.NewTestParser())
+			toSchema, err := NewSchemaFromQueries(env, tc.toQueries)
 			require.NoError(t, err)
 			require.NotNil(t, toSchema)
 
@@ -252,6 +253,19 @@ func TestPermutationsContext(t *testing.T) {
 
 func TestSchemaDiff(t *testing.T) {
 	ctx := context.Background()
+	capableOf := func(capability capabilities.FlavorCapability) (bool, error) {
+		switch capability {
+		case
+			capabilities.InstantDDLFlavorCapability,
+			capabilities.InstantAddLastColumnFlavorCapability,
+			capabilities.InstantAddDropVirtualColumnFlavorCapability,
+			capabilities.InstantAddDropColumnFlavorCapability,
+			capabilities.InstantChangeColumnDefaultFlavorCapability,
+			capabilities.InstantExpandEnumCapability:
+			return true, nil
+		}
+		return false, nil
+	}
 	var (
 		createQueries = []string{
 			"create table t1 (id int primary key, info int not null);",
@@ -268,11 +282,13 @@ func TestSchemaDiff(t *testing.T) {
 		sequential       bool
 		conflictingDiffs int
 		entityOrder      []string // names of tables/views in expected diff order
+		instantCapable   bool
 	}{
 		{
-			name:        "no change",
-			toQueries:   createQueries,
-			entityOrder: []string{},
+			name:           "no change",
+			toQueries:      createQueries,
+			entityOrder:    []string{},
+			instantCapable: true,
 		},
 		{
 			name: "three unrelated changes",
@@ -282,8 +298,9 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v1 as select id from t1",
 				"create view v2 as select 1 from dual",
 			},
-			expectDiffs: 3,
-			entityOrder: []string{"t1", "t2", "v2"},
+			expectDiffs:    3,
+			entityOrder:    []string{"t1", "t2", "v2"},
+			instantCapable: true,
 		},
 		{
 			name: "three unrelated changes 2",
@@ -292,8 +309,9 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t2 (id int primary key, ts timestamp, v varchar);",
 				"create view v2 as select 1 from dual",
 			},
-			expectDiffs: 3,
-			entityOrder: []string{"v1", "t2", "v2"},
+			expectDiffs:    3,
+			entityOrder:    []string{"v1", "t2", "v2"},
+			instantCapable: true,
 		},
 		// Subsequent
 		{
@@ -361,8 +379,9 @@ func TestSchemaDiff(t *testing.T) {
 				createQueries,
 				"create view v2 as select id from t2",
 			),
-			expectDiffs: 1,
-			entityOrder: []string{"v2"},
+			expectDiffs:    1,
+			entityOrder:    []string{"v2"},
+			instantCapable: true,
 		},
 		{
 			name: "add view, alter table",
@@ -372,9 +391,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v1 as select id from t1",
 				"create view v2 as select id from t2",
 			},
-			expectDiffs: 2,
-			expectDeps:  1,
-			entityOrder: []string{"t2", "v2"},
+			expectDiffs:    2,
+			expectDeps:     1,
+			entityOrder:    []string{"t2", "v2"},
+			instantCapable: true,
 		},
 		{
 			name: "alter view, alter table",
@@ -396,9 +416,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v1 as select id from t1",
 				"create view v2 as select id, v from t2",
 			},
-			expectDiffs: 2,
-			expectDeps:  1,
-			entityOrder: []string{"t2", "v2"},
+			expectDiffs:    2,
+			expectDeps:     1,
+			entityOrder:    []string{"t2", "v2"},
+			instantCapable: true,
 		},
 		{
 			name: "create view depending on 2 tables, alter table",
@@ -408,9 +429,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v1 as select id from t1",
 				"create view v2 as select info, v from t1, t2",
 			},
-			expectDiffs: 2,
-			expectDeps:  1,
-			entityOrder: []string{"t2", "v2"},
+			expectDiffs:    2,
+			expectDeps:     1,
+			entityOrder:    []string{"t2", "v2"},
+			instantCapable: true,
 		},
 		{
 			name: "create view depending on 2 tables, alter other table",
@@ -422,9 +444,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v2 as select info, ts from t1, t2",
 				// "create view v2 as select info, ts from t1, t2",
 			},
-			expectDiffs: 2,
-			expectDeps:  1,
-			entityOrder: []string{"t1", "v2"},
+			expectDiffs:    2,
+			expectDeps:     1,
+			entityOrder:    []string{"t1", "v2"},
+			instantCapable: true,
 		},
 		{
 			name: "create view depending on 2 tables, alter both tables",
@@ -434,9 +457,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v1 as select id from t1",
 				"create view v2 as select info, ts from t1, t2",
 			},
-			expectDiffs: 3,
-			expectDeps:  2,
-			entityOrder: []string{"t1", "t2", "v2"},
+			expectDiffs:    3,
+			expectDeps:     2,
+			entityOrder:    []string{"t1", "t2", "v2"},
+			instantCapable: true,
 		},
 		{
 			name: "alter view depending on 2 tables, uses new column, alter tables",
@@ -446,9 +470,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v1 as select id from t1",
 				"create view v2 as select info, v from t1, t2",
 			},
-			expectDiffs: 3,
-			expectDeps:  2,
-			entityOrder: []string{"t1", "t2", "v2"},
+			expectDiffs:    3,
+			expectDeps:     2,
+			entityOrder:    []string{"t1", "t2", "v2"},
+			instantCapable: true,
 		},
 		{
 			name: "drop view",
@@ -456,9 +481,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t1 (id int primary key, info int not null);",
 				"create table t2 (id int primary key, ts timestamp);",
 			},
-			expectDiffs: 1,
-			expectDeps:  0,
-			entityOrder: []string{"v1"},
+			expectDiffs:    1,
+			expectDeps:     0,
+			entityOrder:    []string{"v1"},
+			instantCapable: true,
 		},
 		{
 			name: "drop view, alter dependent table",
@@ -466,27 +492,30 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t1 (id int primary key, info int not null, dt datetime);",
 				"create table t2 (id int primary key, ts timestamp);",
 			},
-			expectDiffs: 2,
-			expectDeps:  1,
-			entityOrder: []string{"v1", "t1"},
+			expectDiffs:    2,
+			expectDeps:     1,
+			entityOrder:    []string{"v1", "t1"},
+			instantCapable: true,
 		},
 		{
 			name: "drop view, drop dependent table",
 			toQueries: []string{
 				"create table t2 (id int primary key, ts timestamp);",
 			},
-			expectDiffs: 2,
-			expectDeps:  1,
-			entityOrder: []string{"v1", "t1"},
+			expectDiffs:    2,
+			expectDeps:     1,
+			entityOrder:    []string{"v1", "t1"},
+			instantCapable: true,
 		},
 		{
 			name: "drop view, drop unrelated table",
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
 			},
-			expectDiffs: 2,
-			expectDeps:  0,
-			entityOrder: []string{"v1", "t2"},
+			expectDiffs:    2,
+			expectDeps:     0,
+			entityOrder:    []string{"v1", "t2"},
+			instantCapable: true,
 		},
 		{
 			name: "alter view, drop table",
@@ -494,9 +523,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t2 (id int primary key, ts timestamp);",
 				"create view v1 as select id from t2",
 			},
-			expectDiffs: 2,
-			expectDeps:  1,
-			entityOrder: []string{"v1", "t1"},
+			expectDiffs:    2,
+			expectDeps:     1,
+			entityOrder:    []string{"v1", "t1"},
+			instantCapable: true,
 		},
 		{
 			name: "alter view, add view",
@@ -506,9 +536,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v1 as select id, info from t1",
 				"create view v2 as select info from v1",
 			},
-			expectDiffs: 2,
-			expectDeps:  1,
-			entityOrder: []string{"v1", "v2"},
+			expectDiffs:    2,
+			expectDeps:     1,
+			entityOrder:    []string{"v1", "v2"},
+			instantCapable: true,
 		},
 		{
 			name: "alter view, add view, 2",
@@ -518,9 +549,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v1 as select id, ts from v2",
 				"create view v2 as select id, ts from t2",
 			},
-			expectDiffs: 2,
-			expectDeps:  1,
-			entityOrder: []string{"v2", "v1"},
+			expectDiffs:    2,
+			expectDeps:     1,
+			entityOrder:    []string{"v2", "v1"},
+			instantCapable: true,
 		},
 		{
 			name: "alter table, alter view, add view",
@@ -530,9 +562,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v1 as select ts from t2",
 				"create view v2 as select v from t2",
 			},
-			expectDiffs: 3,
-			expectDeps:  2,
-			entityOrder: []string{"t2", "v1", "v2"},
+			expectDiffs:    3,
+			expectDeps:     2,
+			entityOrder:    []string{"t2", "v1", "v2"},
+			instantCapable: true,
 		},
 		{
 			name: "alter table, alter view, impossible sequence",
@@ -547,6 +580,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs:      2,
 			expectDeps:       1,
 			conflictingDiffs: 2,
+			instantCapable:   true,
 		},
 
 		// FKs
@@ -556,8 +590,9 @@ func TestSchemaDiff(t *testing.T) {
 				createQueries,
 				"create table t3 (id int primary key, ts timestamp, t1_id int, foreign key (t1_id) references t1 (id) on delete no action);",
 			),
-			expectDiffs: 1,
-			entityOrder: []string{"t3"},
+			expectDiffs:    1,
+			entityOrder:    []string{"t3"},
+			instantCapable: true,
 		},
 		{
 			name: "create two tables with fk",
@@ -566,10 +601,11 @@ func TestSchemaDiff(t *testing.T) {
 				"create table tp (id int primary key, info int not null);",
 				"create table t3 (id int primary key, ts timestamp, tp_id int, foreign key (tp_id) references tp (id) on delete no action);",
 			),
-			expectDiffs: 2,
-			expectDeps:  1,
-			entityOrder: []string{"tp", "t3"},
-			sequential:  true,
+			expectDiffs:    2,
+			expectDeps:     1,
+			entityOrder:    []string{"tp", "t3"},
+			sequential:     true,
+			instantCapable: true,
 		},
 		{
 			name: "add FK",
@@ -839,16 +875,18 @@ func TestSchemaDiff(t *testing.T) {
 		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
+	env := NewTestEnv()
+
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.fromQueries == nil {
 				tc.fromQueries = createQueries
 			}
-			fromSchema, err := NewSchemaFromQueries(tc.fromQueries, sqlparser.NewTestParser())
+			fromSchema, err := NewSchemaFromQueries(env, tc.fromQueries)
 			require.NoError(t, err)
 			require.NotNil(t, fromSchema)
 
-			toSchema, err := NewSchemaFromQueries(tc.toQueries, sqlparser.NewTestParser())
+			toSchema, err := NewSchemaFromQueries(env, tc.toQueries)
 			require.NoError(t, err)
 			require.NotNil(t, toSchema)
 
@@ -904,6 +942,10 @@ func TestSchemaDiff(t *testing.T) {
 				_, err := schemaDiff.r.ElementClass(s)
 				require.NoError(t, err)
 			}
+			capableOfInstantDDL, err := schemaDiff.CapableOfInstantDDL(ctx, capableOf)
+			require.NoError(t, err)
+			assert.Equal(t, tc.instantCapable, capableOfInstantDDL)
 		})
+
 	}
 }

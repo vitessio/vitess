@@ -568,7 +568,7 @@ func (expr *InExpr) compile(c *compiler) (ctype, error) {
 
 		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | (nullableFlags(lhs.Flag) | (rt.Flag & flagNullable))}, nil
 	case *BindVariable:
-		return ctype{}, c.unsupported(expr)
+		return ctype{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
 	default:
 		panic("unreachable")
 	}

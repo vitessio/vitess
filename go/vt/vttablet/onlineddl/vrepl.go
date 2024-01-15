@@ -27,7 +27,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -139,6 +139,7 @@ type VRepl struct {
 
 	collationEnv *collations.Environment
 	sqlparser    *sqlparser.Parser
+	mysqlVersion string
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
@@ -154,6 +155,7 @@ func NewVRepl(workflow string,
 	analyzeTable bool,
 	collationEnv *collations.Environment,
 	parser *sqlparser.Parser,
+	mysqlVersion string,
 ) *VRepl {
 	return &VRepl{
 		workflow:                workflow,
@@ -172,6 +174,7 @@ func NewVRepl(workflow string,
 		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
 		collationEnv:            collationEnv,
 		sqlparser:               parser,
+		mysqlVersion:            mysqlVersion,
 	}
 }
 
@@ -185,7 +188,7 @@ func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnec
 		return 0, err
 	}
 
-	rs, err := conn.ExecuteFetch(query, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(query, -1, true)
 	if err != nil {
 		return 0, err
 	}
@@ -199,7 +202,7 @@ func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnec
 // readTableColumns reads column list from given table
 func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (columns *vrepl.ColumnList, virtualColumns *vrepl.ColumnList, pkColumns *vrepl.ColumnList, err error) {
 	parsed := sqlparser.BuildParsedQuery(sqlShowColumnsFrom, tableName)
-	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(parsed.Query, -1, true)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -237,7 +240,7 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 	if err != nil {
 		return nil, err
 	}
-	rs, err := conn.ExecuteFetch(query, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(query, -1, true)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +263,7 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 // When `fast_analyze_table=1`, an `ANALYZE TABLE` command only analyzes the clustering index (normally the `PRIMARY KEY`).
 // This is useful when you want to get a better estimate of the number of table rows, as fast as possible.
 func (v *VRepl) isFastAnalyzeTableSupported(ctx context.Context, conn *dbconnpool.DBConnection) (isSupported bool, err error) {
-	rs, err := conn.ExecuteFetch(sqlShowVariablesLikeFastAnalyzeTable, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(sqlShowVariablesLikeFastAnalyzeTable, -1, true)
 	if err != nil {
 		return false, err
 	}
@@ -295,7 +298,7 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 // readTableStatus reads table status information
 func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (tableRows int64, err error) {
 	parsed := sqlparser.BuildParsedQuery(sqlShowTableStatus, tableName)
-	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(parsed.Query, -1, true)
 	if err != nil {
 		return 0, err
 	}
@@ -316,7 +319,7 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 	if err != nil {
 		return err
 	}
-	rs, err := conn.ExecuteFetch(query, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(query, -1, true)
 	if err != nil {
 		return err
 	}
@@ -462,7 +465,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.sqlparser, v.originalShowCreateTable, v.vreplShowCreateTable)
+	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.sqlparser, v.collationEnv, v.mysqlVersion, v.originalShowCreateTable, v.vreplShowCreateTable)
 	if err != nil {
 		return err
 	}
@@ -620,6 +623,7 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		SourceUniqueKeyColumns:       encodeColumns(&v.chosenSourceUniqueKey.Columns),
 		TargetUniqueKeyColumns:       encodeColumns(&v.chosenTargetUniqueKey.Columns),
 		SourceUniqueKeyTargetColumns: encodeColumns(v.chosenSourceUniqueKey.Columns.MappedNamesColumnList(v.sharedColumnsMap)),
+		ForceUniqueKey:               url.QueryEscape(v.chosenSourceUniqueKey.Name),
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset

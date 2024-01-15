@@ -28,7 +28,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table, collationEnv *collations.Environment) (plan *Plan, err error) {
+func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table, collationEnv *collations.Environment, mysqlVersion string) (plan *Plan, err error) {
 	plan = &Plan{
 		PlanID:    PlanSelect,
 		FullQuery: GenerateLimitQuery(sel),
@@ -52,6 +52,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table, colla
 		v, err := evalengine.Translate(nextVal.Expr, &evalengine.Config{
 			CollationEnv: collationEnv,
 			Collation:    collationEnv.DefaultConnectionCharset(),
+			MySQLVersion: mysqlVersion,
 		})
 		if err != nil {
 			return nil, err

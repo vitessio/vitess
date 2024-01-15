@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -52,6 +53,10 @@ func (*FakeSI) ConnCollation() collations.ID {
 
 func (*FakeSI) CollationEnv() *collations.Environment {
 	return collations.MySQL8()
+}
+
+func (*FakeSI) MySQLVersion() string {
+	return config.DefaultMySQLVersion
 }
 
 func (s *FakeSI) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
