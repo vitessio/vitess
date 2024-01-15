@@ -306,7 +306,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 	var more bool
 	result, more, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
 	if more {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected multiple results")
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected multiple results. Use ExecuteFetchMulti instead")
 	}
 	return result, err
 }
