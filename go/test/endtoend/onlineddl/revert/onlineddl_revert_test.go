@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
@@ -559,7 +560,7 @@ func testRevert(t *testing.T) {
 	mysqlVersion = onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
 
-	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 
 	var uuids []string
 	ddlStrategy := "online"
@@ -1041,7 +1042,7 @@ func testRevert(t *testing.T) {
 		require.NotNil(t, row)
 		specialPlan := row.AsString("special_plan", "")
 		artifacts := row.AsString("artifacts", "")
-		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
 		assert.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0
@@ -1058,7 +1059,7 @@ func testRevert(t *testing.T) {
 	t.Run("INSTANT DDL: fail revert", func(t *testing.T) {
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
 		assert.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0, therefore revert is impossible

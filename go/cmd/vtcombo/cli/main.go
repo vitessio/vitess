@@ -83,6 +83,7 @@ In particular, it contains:
 	collationEnv    *collations.Environment
 	resilientServer *srvtopo.ResilientServer
 	parser          *sqlparser.Parser
+	mysqlVersion    string
 )
 
 func init() {
@@ -192,8 +193,9 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	servenv.Init()
 	tabletenv.Init()
 
+	mysqlVersion = servenv.MySQLServerVersion()
 	parser, err = sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
+		MySQLServerVersion: mysqlVersion,
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
@@ -232,7 +234,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	// to be the "internal" protocol that InitTabletMap registers.
 	cmd.Flags().Set("tablet_manager_protocol", "internal")
 	cmd.Flags().Set("tablet_protocol", "internal")
-	uid, err := vtcombo.InitTabletMap(ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql, collationEnv, parser)
+	uid, err := vtcombo.InitTabletMap(ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql, collationEnv, parser, mysqlVersion)
 	if err != nil {
 		// ensure we start mysql in the event we fail here
 		if startMysql {
@@ -257,8 +259,8 @@ func run(cmd *cobra.Command, args []string) (err error) {
 			}
 		}
 
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil, collationEnv, parser)
-		newUID, err := vtcombo.CreateKs(ctx, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, ks, true, uid, wr, collationEnv, parser)
+		wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil, collationEnv, parser, mysqlVersion)
+		newUID, err := vtcombo.CreateKs(ctx, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, ks, true, uid, wr, collationEnv, parser, mysqlVersion)
 		if err != nil {
 			return err
 		}
@@ -308,10 +310,10 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
 
 	// pass nil for healthcheck, it will get created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait, plannerVersion, collationEnv)
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait, plannerVersion, collationEnv, mysqlVersion)
 
 	// vtctld configuration and init
-	err = vtctld.InitVtctld(ts, collationEnv, parser)
+	err = vtctld.InitVtctld(ts, collationEnv, parser, mysqlVersion)
 	if err != nil {
 		return err
 	}

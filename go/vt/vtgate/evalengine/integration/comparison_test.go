@@ -204,6 +204,7 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 var seenGoldenTests []GoldenTest
 
 type vcursor struct {
+	mysqlVersion string
 }
 
 func (vc *vcursor) GetKeyspace() string {
@@ -220,6 +221,10 @@ func (vc *vcursor) SQLMode() string {
 
 func (vc *vcursor) CollationEnv() *collations.Environment {
 	return collations.MySQL8()
+}
+
+func (vc *vcursor) MySQLVersion() string {
+	return vc.mysqlVersion
 }
 
 func initTimezoneData(t *testing.T, conn *mysql.Conn) {
@@ -254,7 +259,6 @@ func TestMySQL(t *testing.T) {
 
 	// We require MySQL 8.0 collations for the comparisons in the tests
 
-	servenv.SetMySQLServerVersionForTest(conn.ServerVersion)
 	collationEnv := collations.NewEnvironment(conn.ServerVersion)
 	servenv.OnParse(registerFlags)
 	initTimezoneData(t, conn)
@@ -264,7 +268,7 @@ func TestMySQL(t *testing.T) {
 			ctx := callerid.NewContext(context.Background(), &vtrpc.CallerID{Principal: "testuser"}, &querypb.VTGateCallerID{
 				Username: "vt_dba",
 			})
-			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{})
+			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{mysqlVersion: conn.ServerVersion})
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
 				compareRemoteExprEnv(t, collationEnv, env, conn, query, tc.Schema, tc.Compare)

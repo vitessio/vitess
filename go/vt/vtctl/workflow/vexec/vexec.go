@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/workflow/common"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -96,7 +97,8 @@ type VExec struct {
 	// - Execute serially rather than concurrently.
 	// - Only return error if greater than some percentage of the targets fail.
 
-	parser *sqlparser.Parser
+	parser      *sqlparser.Parser
+	shardSubset []string
 }
 
 // NewVExec returns a new instance suitable for making vexec queries to a given
@@ -112,6 +114,14 @@ func NewVExec(keyspace string, workflow string, ts *topo.Server, tmc tmclient.Ta
 		workflow: workflow,
 		parser:   parser,
 	}
+}
+
+func (vx *VExec) SetShardSubset(shardSubset []string) {
+	vx.shardSubset = shardSubset
+}
+
+func (vx *VExec) GetShardSubset() []string {
+	return vx.shardSubset
 }
 
 // QueryContext executes the given vexec query, returning a mapping of tablet
@@ -208,13 +218,9 @@ func (vx *VExec) initialize(ctx context.Context) error {
 	getShardsCtx, getShardsCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer getShardsCancel()
 
-	shards, err := vx.ts.GetShardNames(getShardsCtx, vx.keyspace)
+	shards, err := common.GetShards(getShardsCtx, vx.ts, vx.keyspace, vx.shardSubset)
 	if err != nil {
 		return err
-	}
-
-	if len(shards) == 0 {
-		return fmt.Errorf("%w %s", ErrNoShardsForKeyspace, vx.keyspace)
 	}
 
 	primaries := make([]*topo.TabletInfo, 0, len(shards))

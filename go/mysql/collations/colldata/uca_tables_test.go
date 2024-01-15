@@ -65,7 +65,7 @@ func verifyAllCodepoints(t *testing.T, expected map[rune][]uint16, weights uca.W
 }
 
 func loadExpectedWeights(t *testing.T, weights string) map[rune][]uint16 {
-	fullpath := fmt.Sprintf("testdata/mysqldata/%s.json", weights)
+	fullpath := fmt.Sprintf("../testdata/mysqldata/%s.json", weights)
 	weightsMysqlFile, err := os.Open(fullpath)
 	if err != nil {
 		t.Skipf("failed to load %q (did you run 'colldump' locally?)", fullpath)

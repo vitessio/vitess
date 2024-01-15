@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/logutil"
@@ -556,7 +557,7 @@ func (db *LocalCluster) createVTSchema() error {
 		return db.ExecuteFetch(query, "")
 	}
 
-	if err := sidecardb.Init(context.Background(), sidecardbExec, sqlparser.NewTestParser()); err != nil {
+	if err := sidecardb.Init(context.Background(), sidecardbExec, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion); err != nil {
 		return err
 	}
 	return nil

@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -335,7 +336,7 @@ func (*filePosFlavor) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (*filePosFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+func (*filePosFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {
 	default:
 		return false, nil

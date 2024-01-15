@@ -104,7 +104,7 @@ type explainTablet struct {
 
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
-func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatapb.Tablet, collationEnv *collations.Environment, parser *sqlparser.Parser) *explainTablet {
+func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatapb.Tablet, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *explainTablet {
 	db := fakesqldb.New(nil)
 	sidecardb.AddSchemaInitQueries(db, true, vte.parser)
 
@@ -119,7 +119,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatap
 	config.EnableTableGC = false
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(ctx, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias, collationEnv, parser)
+	tsv := tabletserver.NewTabletServer(ctx, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias, collationEnv, parser, mysqlVersion)
 
 	tablet := explainTablet{db: db, tsv: tsv, vte: vte, collationEnv: collationEnv}
 	db.Handler = &tablet
@@ -302,6 +302,15 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 			}},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarChar("STRICT_TRANS_TABLES")},
+			},
+		},
+		"select @@global.collation_server": {
+			Fields: []*querypb.Field{{
+				Type:    sqltypes.VarChar,
+				Charset: uint32(collations.SystemCollation.Collation),
+			}},
+			Rows: [][]sqltypes.Value{
+				{sqltypes.NewVarChar("utf8mb4_0900_ai_ci")},
 			},
 		},
 		"select @@session.sql_mode as sql_mode": {

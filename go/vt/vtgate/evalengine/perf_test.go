@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -35,6 +36,7 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 			ResolveType:   fields.Type,
 			Collation:     collations.CollationUtf8mb4ID,
 			CollationEnv:  collations.MySQL8(),
+			MySQLVersion:  config.DefaultMySQLVersion,
 		}
 
 		translated, err := evalengine.Translate(expr, cfg)

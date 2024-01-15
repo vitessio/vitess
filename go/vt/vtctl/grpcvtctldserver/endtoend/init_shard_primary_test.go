@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -48,7 +49,7 @@ func TestInitShardPrimary(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tmc := tmclient.NewTabletManagerClient()
 	defer tmc.Close()
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc, collations.MySQL8(), sqlparser.NewTestParser())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 	primaryDb := fakesqldb.New(t)
 	defer primaryDb.Close()
@@ -95,7 +96,7 @@ func TestInitShardPrimary(t *testing.T) {
 		tablet.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 	}
 
-	vtctld := grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+	vtctld := grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	resp, err := vtctld.InitShardPrimary(context.Background(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
 		Shard:                   tablet1.Tablet.Shard,
@@ -111,7 +112,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tmc := tmclient.NewTabletManagerClient()
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc, collations.MySQL8(), sqlparser.NewTestParser())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 	primaryDb := fakesqldb.New(t)
 	defer primaryDb.Close()
@@ -150,7 +151,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 		tablet.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 	}
 
-	vtctld := grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+	vtctld := grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	_, err := vtctld.InitShardPrimary(context.Background(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
 		Shard:                   tablet1.Tablet.Shard,

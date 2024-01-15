@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -62,6 +61,7 @@ func TestPlan(t *testing.T) {
 		TestBuilder:   TestBuilder,
 	}
 	testOutputTempDir := makeTestOutput(t)
+	addPKs(t, vschemaWrapper.V, "user", []string{"user", "music"})
 
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
@@ -232,12 +232,7 @@ func addPKs(t *testing.T, vschema *vindexes.VSchema, ks string, tbls []string) {
 
 func TestSystemTables57(t *testing.T) {
 	// first we move everything to use 5.7 logic
-	oldVer := servenv.MySQLServerVersion()
-	servenv.SetMySQLServerVersionForTest("5.7")
-	defer func() {
-		servenv.SetMySQLServerVersionForTest(oldVer)
-	}()
-	vschemaWrapper := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true)}
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true), MySQLServerVersion: "5.7.9"}
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "info_schema57_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
@@ -266,6 +261,7 @@ func TestOne(t *testing.T) {
 
 	lv := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, lv)
+	addPKs(t, lv, "user", []string{"user", "music"})
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:           lv,
 		TestBuilder: TestBuilder,
@@ -331,12 +327,7 @@ func TestOneWithTPCHVSchema(t *testing.T) {
 
 func TestOneWith57Version(t *testing.T) {
 	// first we move everything to use 5.7 logic
-	oldVer := servenv.MySQLServerVersion()
-	servenv.SetMySQLServerVersionForTest("5.7")
-	defer func() {
-		servenv.SetMySQLServerVersionForTest(oldVer)
-	}()
-	vschema := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true)}
+	vschema := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true), MySQLServerVersion: "5.7.9"}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }

@@ -354,7 +354,7 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 		case sqltypes.Null:
 			nullable = true
 		default:
-			return ctype{}, c.unsupported(call)
+			panic("unexpected argument type")
 		}
 	}
 

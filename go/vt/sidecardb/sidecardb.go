@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/history"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
@@ -46,8 +47,9 @@ import (
 )
 
 const (
-	sidecarDBExistsQuery = "select 'true' as 'dbexists' from information_schema.SCHEMATA where SCHEMA_NAME = %a"
-	showCreateTableQuery = "show create table %s.%s"
+	sidecarDBExistsQuery  = "select 'true' as 'dbexists' from information_schema.SCHEMATA where SCHEMA_NAME = %a"
+	showCreateTableQuery  = "show create table %s.%s"
+	sidecarCollationQuery = "select @@global.collation_server"
 
 	maxDDLErrorHistoryLength = 100
 
@@ -194,10 +196,13 @@ func printCallerDetails() {
 }
 
 type schemaInit struct {
-	ctx       context.Context
-	exec      Exec
-	dbCreated bool // The first upgrade/create query will also create the sidecar database if required.
-	parser    *sqlparser.Parser
+	ctx          context.Context
+	exec         Exec
+	dbCreated    bool // The first upgrade/create query will also create the sidecar database if required.
+	parser       *sqlparser.Parser
+	collEnv      *collations.Environment
+	coll         collations.ID
+	mysqlVersion string
 }
 
 // Exec is a callback that has to be passed to Init() to
@@ -229,7 +234,7 @@ func getDDLErrorHistory() []*ddlError {
 
 // Init creates or upgrades the sidecar database based on
 // the declarative schema defined for all tables.
-func Init(ctx context.Context, exec Exec, parser *sqlparser.Parser) error {
+func Init(ctx context.Context, exec Exec, collEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) error {
 	printCallerDetails() // for debug purposes only, remove in v17
 	log.Infof("Starting sidecardb.Init()")
 
@@ -238,9 +243,11 @@ func Init(ctx context.Context, exec Exec, parser *sqlparser.Parser) error {
 	})
 
 	si := &schemaInit{
-		ctx:    ctx,
-		exec:   exec,
-		parser: parser,
+		ctx:          ctx,
+		exec:         exec,
+		collEnv:      collEnv,
+		parser:       parser,
+		mysqlVersion: mysqlVersion,
 	}
 
 	// There are paths in the tablet initialization where we
@@ -268,6 +275,10 @@ func Init(ctx context.Context, exec Exec, parser *sqlparser.Parser) error {
 		return err
 	}
 	defer resetSQLMode()
+
+	if si.coll, err = si.collation(); err != nil {
+		return err
+	}
 
 	for _, table := range sidecarTables {
 		if err := si.ensureSchema(table); err != nil {
@@ -342,6 +353,22 @@ func (si *schemaInit) setCurrentDatabase(dbName string) error {
 	return err
 }
 
+func (si *schemaInit) collation() (collations.ID, error) {
+	rs, err := si.exec(si.ctx, sidecarCollationQuery, 2, false)
+	if err != nil {
+		log.Error(err)
+		return collations.Unknown, err
+	}
+
+	switch len(rs.Rows) {
+	case 1:
+		return si.collEnv.LookupByName(rs.Rows[0][0].ToString()), nil
+	default:
+		// This should never happen.
+		return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid results for SidecarDB query %q as it produced %d rows", sidecarCollationQuery, len(rs.Rows))
+	}
+}
+
 // Gets existing schema of a table in the sidecar database.
 func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 	var currentTableSchema string
@@ -375,7 +402,8 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreAlways,
 		AlterTableAlgorithmStrategy: schemadiff.AlterTableAlgorithmStrategyCopy,
 	}
-	diff, err := schemadiff.DiffCreateTablesQueries(current, desired, hints, si.parser)
+	env := schemadiff.NewEnv(si.collEnv, si.coll, si.parser, si.mysqlVersion)
+	diff, err := schemadiff.DiffCreateTablesQueries(env, current, desired, hints)
 	if err != nil {
 		return "", err
 	}
@@ -495,7 +523,12 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool, parser *sqlpars
 		config.DefaultSQLMode,
 	)
 	db.AddQuery("select @@session.sql_mode as sql_mode", sqlModeResult)
-
+	collationResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"@@global.collation_server ",
+		"varchar"),
+		"utf8mb4_0900_ai_ci",
+	)
+	db.AddQuery("select @@global.collation_server", collationResult)
 	db.AddQuery("set @@session.sql_mode=''", &sqltypes.Result{})
 }
 

@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -574,13 +575,13 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 }
 
 func newEngine(reloadTime time.Duration, idleTimeout time.Duration, schemaMaxAgeSeconds int64, db *fakesqldb.DB) *Engine {
-	config := tabletenv.NewDefaultConfig()
-	config.SchemaReloadInterval = reloadTime
-	config.OltpReadPool.IdleTimeout = idleTimeout
-	config.OlapReadPool.IdleTimeout = idleTimeout
-	config.TxPool.IdleTimeout = idleTimeout
-	config.SchemaVersionMaxAgeSeconds = schemaMaxAgeSeconds
-	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest", collations.MySQL8(), sqlparser.NewTestParser()))
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.SchemaReloadInterval = reloadTime
+	cfg.OltpReadPool.IdleTimeout = idleTimeout
+	cfg.OlapReadPool.IdleTimeout = idleTimeout
+	cfg.TxPool.IdleTimeout = idleTimeout
+	cfg.SchemaVersionMaxAgeSeconds = schemaMaxAgeSeconds
+	se := NewEngine(tabletenv.NewEnv(cfg, "SchemaTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }
@@ -764,7 +765,7 @@ func TestEngineMysqlTime(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			se := &Engine{}
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
@@ -871,7 +872,7 @@ func TestEnginePopulatePrimaryKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
@@ -933,7 +934,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
@@ -961,7 +962,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 // TestEngineGetTableData tests the functionality of getTableData function
 func TestEngineGetTableData(t *testing.T) {
 	db := fakesqldb.New(t)
-	env := tabletenv.NewEnv(nil, "TestEngineGetTableData", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(nil, "TestEngineGetTableData", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
@@ -1136,7 +1137,7 @@ func TestEngineReload(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	cfg.SignalWhenSchemaChange = true
-	env := tabletenv.NewEnv(nil, "TestEngineReload", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(nil, "TestEngineReload", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
@@ -1189,23 +1190,23 @@ func TestEngineReload(t *testing.T) {
 	}
 	// MySQL unix timestamp query.
 	db.AddQuery("SELECT UNIX_TIMESTAMP()", sqltypes.MakeTestResult(sqltypes.MakeTestFields("UNIX_TIMESTAMP", "int64"), "987654326"))
-	// Table t2 is updated, t3 is created and t4 is deleted.
-	// View v2 is updated, v3 is created and v4 is deleted.
+	// Table t2 is updated, T2 is created and t4 is deleted.
+	// View v2 is updated, V2 is created and v4 is deleted.
 	db.AddQuery(conn.BaseShowTables(), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|table_type|unix_timestamp(create_time)|table_comment",
 		"varchar|varchar|int64|varchar"),
 		"t1|BASE_TABLE|123456789|",
 		"t2|BASE_TABLE|123456790|",
-		"t3|BASE_TABLE|123456789|",
+		"T2|BASE_TABLE|123456789|",
 		"v1|VIEW|123456789|",
 		"v2|VIEW|123456789|",
-		"v3|VIEW|123456789|",
+		"V2|VIEW|123456789|",
 	))
 
 	// Detecting view changes.
-	// According to the database, v2, v3, v4, and v5 require updating.
+	// According to the database, v2, V2, v4, and v5 require updating.
 	db.AddQuery(fmt.Sprintf(detectViewChange, sidecar.GetIdentifier()), sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"),
 		"v2",
-		"v3",
+		"V2",
 		"v4",
 		"v5",
 	))
@@ -1224,7 +1225,7 @@ func TestEngineReload(t *testing.T) {
 		"Innodb_rows_read|35"))
 
 	// Queries to load the tables' information.
-	for _, tableName := range []string{"t2", "t3", "v2", "v3"} {
+	for _, tableName := range []string{"t2", "T2", "v2", "V2"} {
 		db.AddQuery(fmt.Sprintf(`SELECT COLUMN_NAME as column_name
 		FROM INFORMATION_SCHEMA.COLUMNS
 		WHERE TABLE_SCHEMA = 'fakesqldb' AND TABLE_NAME = '%s'
@@ -1238,12 +1239,12 @@ func TestEngineReload(t *testing.T) {
 	db.AddQuery(mysql.BaseShowPrimary, sqltypes.MakeTestResult(mysql.ShowPrimaryFields,
 		"t1|col1",
 		"t2|col1",
-		"t3|col1",
+		"T2|col1",
 	))
 
 	// Queries for reloading the tables' information.
 	{
-		for _, tableName := range []string{"t2", "t3"} {
+		for _, tableName := range []string{"t2", "T2"} {
 			db.AddQuery(fmt.Sprintf(`show create table %s`, tableName),
 				sqltypes.MakeTestResult(sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar"),
 					fmt.Sprintf("%v|create_table_%v", tableName, tableName)))
@@ -1252,41 +1253,41 @@ func TestEngineReload(t *testing.T) {
 		db.AddQuery("commit", &sqltypes.Result{})
 		db.AddQuery("rollback", &sqltypes.Result{})
 		// We are adding both the variants of the delete statements that we can see in the test, since the deleted tables are initially stored as a map, the order is not defined.
-		db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('t5', 't4', 't3', 't2')", &sqltypes.Result{})
-		db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('t4', 't5', 't3', 't2')", &sqltypes.Result{})
+		db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('t5', 't4', 'T2', 't2')", &sqltypes.Result{})
+		db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('t4', 't5', 'T2', 't2')", &sqltypes.Result{})
 		db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 't2', 'create_table_t2', 123456790)", &sqltypes.Result{})
-		db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 't3', 'create_table_t3', 123456789)", &sqltypes.Result{})
+		db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 'T2', 'create_table_T2', 123456789)", &sqltypes.Result{})
 	}
 
 	// Queries for reloading the views' information.
 	{
-		for _, tableName := range []string{"v2", "v3"} {
+		for _, tableName := range []string{"v2", "V2"} {
 			db.AddQuery(fmt.Sprintf(`show create table %s`, tableName),
 				sqltypes.MakeTestResult(sqltypes.MakeTestFields(" View | Create View | character_set_client | collation_connection", "varchar|varchar|varchar|varchar"),
 					fmt.Sprintf("%v|create_table_%v|utf8mb4|utf8mb4_0900_ai_ci", tableName, tableName)))
 		}
 		// We are adding both the variants of the select statements that we can see in the test, since the deleted views are initially stored as a map, the order is not defined.
-		db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v4', 'v5', 'v3', 'v2')",
+		db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v4', 'v5', 'V2', 'v2')",
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar"),
 				"v2|select_v2",
-				"v3|select_v3",
+				"V2|select_V2",
 			))
-		db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v5', 'v4', 'v3', 'v2')",
+		db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v5', 'v4', 'V2', 'v2')",
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar"),
 				"v2|select_v2",
-				"v3|select_v3",
+				"V2|select_V2",
 			))
 
 		// We are adding both the variants of the delete statements that we can see in the test, since the deleted views are initially stored as a map, the order is not defined.
-		db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('v4', 'v5', 'v3', 'v2')", &sqltypes.Result{})
-		db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('v5', 'v4', 'v3', 'v2')", &sqltypes.Result{})
+		db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('v4', 'v5', 'V2', 'v2')", &sqltypes.Result{})
+		db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('v5', 'v4', 'V2', 'v2')", &sqltypes.Result{})
 		db.AddQuery("insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v2', 'create_table_v2', 'select_v2')", &sqltypes.Result{})
-		db.AddQuery("insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v3', 'create_table_v3', 'select_v3')", &sqltypes.Result{})
+		db.AddQuery("insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'V2', 'create_table_V2', 'select_V2')", &sqltypes.Result{})
 	}
 
 	// Verify the list of created, altered and dropped tables seen.
 	se.RegisterNotifier("test", func(full map[string]*Table, created, altered, dropped []*Table) {
-		require.ElementsMatch(t, extractNamesFromTablesList(created), []string{"t3", "v3"})
+		require.ElementsMatch(t, extractNamesFromTablesList(created), []string{"T2", "V2"})
 		require.ElementsMatch(t, extractNamesFromTablesList(altered), []string{"t2", "v2"})
 		require.ElementsMatch(t, extractNamesFromTablesList(dropped), []string{"t4", "v4", "t5", "v5"})
 	}, false)

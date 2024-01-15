@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -76,7 +77,7 @@ create table t2 (
 	defer cancel()
 	collationEnv := collations.MySQL8()
 	parser := sqlparser.NewTestParser()
-	vte, err := Init(ctx, testVSchema, testSchema, "", opts, collationEnv, parser)
+	vte, err := Init(ctx, testVSchema, testSchema, "", opts, collationEnv, parser, config.DefaultMySQLVersion)
 	require.NoError(t, err)
 	defer vte.Stop()
 
@@ -142,7 +143,7 @@ create table test_partitioned (
 		Keyspace: "test_keyspace",
 		Shard:    "-80",
 		Alias:    &topodatapb.TabletAlias{},
-	}, collationEnv, parser)
+	}, collationEnv, parser, config.DefaultMySQLVersion)
 	se := tablet.tsv.SchemaEngine()
 	tables := se.GetSchema()
 

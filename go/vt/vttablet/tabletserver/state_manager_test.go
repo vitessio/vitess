@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -701,6 +702,29 @@ func TestRefreshReplHealthLocked(t *testing.T) {
 	assert.False(t, sm.replHealthy)
 }
 
+// TestPanicInWait tests that we don't panic when we wait for requests if more StartRequest calls come up after we start waiting.
+func TestPanicInWait(t *testing.T) {
+	sm := newTestStateManager(t)
+	sm.wantState = StateServing
+	sm.state = StateServing
+	sm.replHealthy = true
+	ctx := context.Background()
+	// Simulate an Execute RPC running
+	err := sm.StartRequest(ctx, sm.target, false)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		// Simulate the previous RPC finishing after some delay
+		sm.EndRequest()
+		// Simulate a COMMIT call arriving right afterwards
+		_ = sm.StartRequest(ctx, sm.target, true)
+	}()
+
+	// Simulate going to a not serving state and calling unserveCommon that waits on requests.
+	sm.wantState = StateNotServing
+	sm.waitForRequestsToBeEmpty()
+}
+
 func verifySubcomponent(t *testing.T, order int64, component any, state testState) {
 	tos := component.(orderState)
 	assert.Equal(t, order, tos.Order())
@@ -709,9 +733,9 @@ func verifySubcomponent(t *testing.T, order int64, component any, state testStat
 
 func newTestStateManager(t *testing.T) *stateManager {
 	order.Store(0)
-	config := tabletenv.NewDefaultConfig()
-	env := tabletenv.NewEnv(config, "StateManagerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	cfg := tabletenv.NewDefaultConfig()
 	parser := sqlparser.NewTestParser()
+	env := tabletenv.NewEnv(cfg, "StateManagerTest", collations.MySQL8(), parser, config.DefaultMySQLVersion)
 	sm := &stateManager{
 		statelessql: NewQueryList("stateless", parser),
 		statefulql:  NewQueryList("stateful", parser),

@@ -24,12 +24,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 func TestFilterPass(t *testing.T) {
+	collationEnv := collations.MySQL8()
 	utf8mb4Bin := collationEnv.LookupByName("utf8mb4_bin")
 	predicate := &sqlparser.ComparisonExpr{
 		Operator: sqlparser.GreaterThanOp,
@@ -72,6 +74,7 @@ func TestFilterPass(t *testing.T) {
 				Collation:     utf8mb4Bin,
 				ResolveColumn: evalengine.FieldResolver(tc.res.Fields).Column,
 				CollationEnv:  collations.MySQL8(),
+				MySQLVersion:  config.DefaultMySQLVersion,
 			})
 			require.NoError(t, err)
 
@@ -87,6 +90,7 @@ func TestFilterPass(t *testing.T) {
 }
 
 func TestFilterStreaming(t *testing.T) {
+	collationEnv := collations.MySQL8()
 	utf8mb4Bin := collationEnv.LookupByName("utf8mb4_bin")
 	predicate := &sqlparser.ComparisonExpr{
 		Operator: sqlparser.GreaterThanOp,
@@ -129,6 +133,7 @@ func TestFilterStreaming(t *testing.T) {
 				Collation:     utf8mb4Bin,
 				ResolveColumn: evalengine.FieldResolver(tc.res[0].Fields).Column,
 				CollationEnv:  collations.MySQL8(),
+				MySQLVersion:  config.DefaultMySQLVersion,
 			})
 			require.NoError(t, err)
 
