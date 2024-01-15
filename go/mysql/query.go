@@ -303,7 +303,11 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 //	 2. if the server closes the connection when a command is in flight,
 //	    readComQueryResponse will fail, and we'll return CRServerLost(2013).
 func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
-	result, _, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
+	var more bool
+	result, more, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
+	if more {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected multiple results")
+	}
 	return result, err
 }
 
