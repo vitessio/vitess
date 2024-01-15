@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -28,10 +29,38 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
+
+func TestQueriesHaveAllowZeroInDateDirective(t *testing.T) {
+	tcases := []struct {
+		query    string
+		expected bool
+	}{
+		{
+			query:    "create table t(id int)",
+			expected: false,
+		},
+		{
+			query:    "create /*vt+ allowZeroInDate=true */ table t (id int)",
+			expected: true,
+		},
+		{
+			query:    "create table a (id int) ; create /*vt+ allowZeroInDate=true */ table b (id int)",
+			expected: true,
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.query, func(t *testing.T) {
+			parser := sqlparser.NewTestParser()
+			got := queriesHaveAllowZeroInDateDirective(tcase.query, parser)
+			assert.Equal(t, tcase.expected, got)
+		})
+	}
+}
 
 func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 	ctx := context.Background()

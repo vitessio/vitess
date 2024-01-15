@@ -18,16 +18,42 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
+	"io"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// queriesHaveAllowZeroInDateDirective reutrns 'true' when at least one of the queries
+// in the given SQL has a `/*vt+ allowZeroInDate=true */` directive.
+func queriesHaveAllowZeroInDateDirective(sql string, parser *sqlparser.Parser) bool {
+	tokenizer := parser.NewStringTokenizer(sql)
+	for {
+		stmt, err := sqlparser.ParseNext(tokenizer)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return false
+		}
+		if cmnt, ok := stmt.(sqlparser.Commented); ok {
+			directives := cmnt.GetParsedComments().Directives()
+			if directives.IsSet("allowZeroInDate") {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
 func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
@@ -55,25 +81,44 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
-	// Handle special possible directives
-	var directives *sqlparser.CommentDirectives
-	if stmt, err := tm.SQLParser.Parse(string(req.Query)); err == nil {
+	allowZeroInDate := false
+	tokenizer := tm.SQLParser.NewStringTokenizer(string(req.Query))
+	for {
+		stmt, err := sqlparser.ParseNext(tokenizer)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not parse statement in ExecuteFetchAsDba: %v: %v", string(req.Query), err)
+		}
 		if cmnt, ok := stmt.(sqlparser.Commented); ok {
-			directives = cmnt.GetParsedComments().Directives()
+			directives := cmnt.GetParsedComments().Directives()
+			if directives.IsSet("allowZeroInDate") {
+				// --allow-zero-in-date Applies to DDLs. As a backport solution to
+				// https://github.com/vitessio/vitess/issues/14952, it is enough that
+				// one of the DDLs has the `allowZeroInDate` directive, that we allow
+				// zero in date for all queries.
+				allowZeroInDate = true
+			}
 		}
 	}
-	if directives.IsSet("allowZeroInDate") {
+	if allowZeroInDate {
 		if _, err := conn.ExecuteFetch("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 1, false); err != nil {
 			return nil, err
 		}
 	}
-
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.SQLParser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	uq, err := tm.SQLParser.ReplaceTableQualifiersMultiQuery(string(req.Query), sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
-	result, err := conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
+	result, more, err := conn.ExecuteFetchMulti(uq, int(req.MaxRows), true /*wantFields*/)
+	for more {
+		_, more, _, err = conn.ReadQueryResult(0, false)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// re-enable binlogs if necessary
 	if req.DisableBinlogs && !conn.IsClosed() {
