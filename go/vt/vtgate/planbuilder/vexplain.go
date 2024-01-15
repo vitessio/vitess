@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func buildVExplainPlan(ctx context.Context, vexplainStmt *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
@@ -104,7 +105,28 @@ func buildVExplainLoggingPlan(ctx context.Context, explain *sqlparser.VExplainSt
 	return &planResult{primitive: &engine.VExplain{Input: input.primitive, Type: explain.Type}, tables: input.tables}, nil
 }
 
-func buildExplainStmtPlan(ctx context.Context, explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func buildExplainStmtPlan(
+	ctx context.Context,
+	explain *sqlparser.ExplainStmt,
+	reservedVars *sqlparser.ReservedVars,
+	vschema plancontext.VSchema,
+	enableOnlineDDL, enableDirectDDL bool,
+) (*planResult, error) {
+	ksName := ""
+	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+		ksName = ks.Name
+	}
+
+	semTable, err := semantics.Analyze(explain.Statement, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	ks := semTable.SingleKeyspace()
+	if ks == nil {
+		return nil, vterrors.VT03031()
+	}
+
 	input, err := createInstructionFor(ctx, sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
