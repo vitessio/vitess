@@ -18,7 +18,7 @@ package operators
 
 import "vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-type DeleteMulti struct {
+type DeleteWithInput struct {
 	Source Operator
 	Delete Operator
 
@@ -26,30 +26,30 @@ type DeleteMulti struct {
 	noPredicates
 }
 
-func (d *DeleteMulti) Clone(inputs []Operator) Operator {
+func (d *DeleteWithInput) Clone(inputs []Operator) Operator {
 	newD := *d
 	newD.SetInputs(inputs)
 	return &newD
 }
 
-func (d *DeleteMulti) Inputs() []Operator {
+func (d *DeleteWithInput) Inputs() []Operator {
 	return []Operator{d.Source, d.Delete}
 }
 
-func (d *DeleteMulti) SetInputs(inputs []Operator) {
+func (d *DeleteWithInput) SetInputs(inputs []Operator) {
 	if len(inputs) != 2 {
-		panic("unexpected number of inputs for DeleteMulti operator")
+		panic("unexpected number of inputs for DeleteWithInput operator")
 	}
 	d.Source = inputs[0]
 	d.Delete = inputs[1]
 }
 
-func (d *DeleteMulti) ShortDescription() string {
+func (d *DeleteWithInput) ShortDescription() string {
 	return ""
 }
 
-func (d *DeleteMulti) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
+func (d *DeleteWithInput) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-var _ Operator = (*DeleteMulti)(nil)
+var _ Operator = (*DeleteWithInput)(nil)

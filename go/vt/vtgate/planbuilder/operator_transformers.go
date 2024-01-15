@@ -74,14 +74,14 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformHashJoin(ctx, op)
 	case *operators.Sequential:
 		return transformSequential(ctx, op)
-	case *operators.DeleteMulti:
+	case *operators.DeleteWithInput:
 		return transformDeleteMulti(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
 }
 
-func transformDeleteMulti(ctx *plancontext.PlanningContext, op *operators.DeleteMulti) (logicalPlan, error) {
+func transformDeleteMulti(ctx *plancontext.PlanningContext, op *operators.DeleteWithInput) (logicalPlan, error) {
 	input, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
