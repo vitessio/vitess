@@ -77,11 +77,12 @@ type (
 
 	// QuerySignature is used to identify shortcuts in the planning process
 	QuerySignature struct {
-		Union,
-		Aggregation,
-		Distinct,
-		SubQueries,
-		HashJoin bool
+		Aggregation bool
+		Delete      bool
+		Distinct    bool
+		HashJoin    bool
+		SubQueries  bool
+		Union       bool
 	}
 
 	// SemTable contains semantic analysis information about the query.

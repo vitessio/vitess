@@ -99,7 +99,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		case *LockAndComment:
 			return pushLockAndComment(in)
 		case *Delete:
-			return tryPushDelete(ctx, in)
+			return tryPushDelete(in)
 		default:
 			return in, NoRewrite
 		}
@@ -108,12 +108,10 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func tryPushDelete(ctx *plancontext.PlanningContext, in *Delete) (Operator, *ApplyResult) {
+func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Route:
 		return pushDeleteUnderRoute(in, src)
-	case *ApplyJoin:
-		return pushDeleteUnderJoin(ctx, in, src)
 	}
 	return in, nil
 }
@@ -137,7 +135,7 @@ func pushDeleteUnderRoute(in *Delete, src *Route) (Operator, *ApplyResult) {
 	return Swap(in, src, "pushed delete under route")
 }
 
-func pushDeleteUnderJoin(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
+func createDeleteWithInput(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
 	if len(in.Target.VTable.PrimaryKey) == 0 {
 		panic(vterrors.VT09015())
 	}
