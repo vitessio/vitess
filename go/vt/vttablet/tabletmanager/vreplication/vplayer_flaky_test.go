@@ -2901,7 +2901,7 @@ func TestPlayerInvalidDates(t *testing.T) {
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
 	pos := primaryPosition(t)
-	execStatements(t, []string{"set sql_mode='';insert into src1 values(1, '0000-00-00');set sql_mode='STRICT_TRANS_TABLES';"})
+	execStatements(t, []string{"set sql_mode=''", "insert into src1 values(1, '0000-00-00')", "set sql_mode='STRICT_TRANS_TABLES'"})
 	env.SchemaEngine.Reload(context.Background())
 
 	// default mysql flavor allows invalid dates: so disallow explicitly for this test
