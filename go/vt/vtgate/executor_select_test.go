@@ -1552,6 +1552,75 @@ func TestStreamSelectIN(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 }
 
+// TestSelectListArg tests list arg filter with select query
+func TestSelectListArg(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+
+	tupleBV := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.NewVarChar("a")))},
+	}
+	bvMap := map[string]*querypb.BindVariable{"vals": tupleBV}
+	_, err := executorExec(ctx, executor, session, "select id from user where (id, col) in ::vals", bvMap)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select id from `user` where (id, col) in ::vals",
+		BindVariables: bvMap,
+	}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	assert.Nil(t, sbc2.Queries, "sbc2.Queries: %+v, want nil", sbc2.Queries)
+
+	sbc1.Queries = nil
+	// get c0-e0 sandbox connection.
+	tbh, err := executor.scatterConn.gateway.hc.GetTabletHealthByAlias(&topodatapb.TabletAlias{
+		Cell: "aa",
+		Uid:  7,
+	})
+	require.NoError(t, err)
+	sbc := tbh.Conn.(*sandboxconn.SandboxConn)
+	sbc.Queries = nil
+
+	_, err = executorExec(ctx, executor, session, "select id from multicol_tbl where (cola, colb) in ::vals", bvMap)
+	require.NoError(t, err)
+
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           "select id from multicol_tbl where (cola, colb) in ::vals",
+		BindVariables: bvMap,
+	}}
+	utils.MustMatch(t, wantQueries, sbc.Queries)
+	assert.Nil(t, sbc1.Queries, "sbc1.Queries: %+v, want nil", sbc2.Queries)
+	assert.Nil(t, sbc2.Queries, "sbc2.Queries: %+v, want nil", sbc2.Queries)
+
+	tupleBV.Values[0] = sqltypes.ValueToProto(sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.NewInt64(42), sqltypes.NewVarChar("a")))
+	sbc.Queries = nil
+	_, err = executorExec(ctx, executor, session, "select id from multicol_tbl where (cola, colx, colb) in ::vals", bvMap)
+	require.NoError(t, err)
+
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           "select id from multicol_tbl where (cola, colx, colb) in ::vals",
+		BindVariables: bvMap,
+	}}
+	utils.MustMatch(t, wantQueries, sbc.Queries)
+	assert.Nil(t, sbc1.Queries, "sbc1.Queries: %+v, want nil", sbc2.Queries)
+	assert.Nil(t, sbc2.Queries, "sbc2.Queries: %+v, want nil", sbc2.Queries)
+
+	tupleBV.Values[0] = sqltypes.ValueToProto(sqltypes.TestTuple(sqltypes.NewVarChar("a"), sqltypes.NewInt64(42), sqltypes.NewInt64(1)))
+	sbc.Queries = nil
+	_, err = executorExec(ctx, executor, session, "select id from multicol_tbl where (colb, colx, cola) in ::vals", bvMap)
+	require.NoError(t, err)
+
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           "select id from multicol_tbl where (colb, colx, cola) in ::vals",
+		BindVariables: bvMap,
+	}}
+	utils.MustMatch(t, wantQueries, sbc.Queries)
+	assert.Nil(t, sbc1.Queries, "sbc1.Queries: %+v, want nil", sbc2.Queries)
+	assert.Nil(t, sbc2.Queries, "sbc2.Queries: %+v, want nil", sbc2.Queries)
+}
+
 func createExecutor(ctx context.Context, serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()

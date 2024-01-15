@@ -261,7 +261,9 @@ func (option *VindexOption) updateWithNewColumn(
 	opcode func(*vindexes.ColumnVindex) engine.Opcode,
 ) bool {
 	option.ColsSeen[colLoweredName] = true
-	option.ValueExprs = append(option.ValueExprs, valueExpr)
+	if valueExpr != nil {
+		option.ValueExprs = append(option.ValueExprs, valueExpr)
+	}
 	option.Values[indexOfCol] = value
 	option.Predicates[indexOfCol] = node
 	option.Ready = len(option.ColsSeen) == len(colVindex.Columns)
