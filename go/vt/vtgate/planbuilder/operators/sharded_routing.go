@@ -656,6 +656,7 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 			Collation:    ctx.SemTable.Collation,
 			ResolveType:  ctx.SemTable.TypeForExpr,
 			CollationEnv: ctx.VSchema.CollationEnv(),
+			MySQLVersion: ctx.VSchema.MySQLVersion(),
 		})
 		if ee != nil {
 			return ee

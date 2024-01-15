@@ -202,7 +202,7 @@ func (plan *Plan) TableNames() (names []string) {
 }
 
 // Build builds a plan based on the schema.
-func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, viewsEnabled bool, collationEnv *collations.Environment) (plan *Plan, err error) {
+func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, viewsEnabled bool, collationEnv *collations.Environment, mysqlVersion string) (plan *Plan, err error) {
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan, err = &Plan{
@@ -210,7 +210,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 			FullQuery: GenerateLimitQuery(stmt),
 		}, nil
 	case *sqlparser.Select:
-		plan, err = analyzeSelect(stmt, tables, collationEnv)
+		plan, err = analyzeSelect(stmt, tables, collationEnv, mysqlVersion)
 	case *sqlparser.Insert:
 		plan, err = analyzeInsert(stmt, tables)
 	case *sqlparser.Update:

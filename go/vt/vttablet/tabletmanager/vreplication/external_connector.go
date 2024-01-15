@@ -64,14 +64,16 @@ type externalConnector struct {
 	connectors   map[string]*mysqlConnector
 	collationEnv *collations.Environment
 	parser       *sqlparser.Parser
+	mysqlVersion string
 }
 
-func newExternalConnector(dbcfgs map[string]*dbconfigs.DBConfigs, collationEnv *collations.Environment, parser *sqlparser.Parser) *externalConnector {
+func newExternalConnector(dbcfgs map[string]*dbconfigs.DBConfigs, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *externalConnector {
 	return &externalConnector{
 		dbconfigs:    dbcfgs,
 		connectors:   make(map[string]*mysqlConnector),
 		collationEnv: collationEnv,
 		parser:       parser,
+		mysqlVersion: mysqlVersion,
 	}
 }
 
@@ -96,7 +98,7 @@ func (ec *externalConnector) Get(name string) (*mysqlConnector, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "external mysqlConnector %v not found", name)
 	}
 	c := &mysqlConnector{}
-	c.env = tabletenv.NewEnv(config, name, ec.collationEnv, ec.parser)
+	c.env = tabletenv.NewEnv(config, name, ec.collationEnv, ec.parser, ec.mysqlVersion)
 	c.se = schema.NewEngine(c.env)
 	c.vstreamer = vstreamer.NewEngine(c.env, nil, c.se, nil, "")
 	c.vstreamer.InitDBConfig("", "")

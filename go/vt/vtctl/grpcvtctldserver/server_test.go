@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -87,7 +88,7 @@ func TestPanicHandler(t *testing.T) {
 	}()
 
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, nil, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	_, err := vtctld.AddCellInfo(context.Background(), nil)
@@ -143,7 +144,7 @@ func TestAddCellInfo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			_, err := vtctld.AddCellInfo(ctx, tt.req)
 			if tt.shouldErr {
@@ -216,7 +217,7 @@ func TestAddCellsAlias(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			_, err := vtctld.AddCellsAlias(ctx, tt.req)
 			if tt.shouldErr {
@@ -328,7 +329,7 @@ func TestApplyRoutingRules(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			_, err := vtctld.ApplyRoutingRules(ctx, tt.req)
 			if tt.shouldErr {
@@ -596,7 +597,7 @@ func TestApplyVSchema(t *testing.T) {
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
@@ -879,7 +880,7 @@ func TestBackup(t *testing.T) {
 				testutil.AddTablet(ctx, t, tt.ts, tt.tablet, nil)
 			}
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			client := localvtctldclient.New(vtctld)
 			stream, err := client.Backup(ctx, tt.req)
@@ -1219,7 +1220,7 @@ func TestBackupShard(t *testing.T) {
 				}, tt.tablets...,
 			)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			client := localvtctldclient.New(vtctld)
 			stream, err := client.BackupShard(ctx, tt.req)
@@ -1439,7 +1440,7 @@ func TestCancelSchemaMigration(t *testing.T) {
 			}, test.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			resp, err := vtctld.CancelSchemaMigration(ctx, test.req)
@@ -1672,7 +1673,7 @@ func TestChangeTabletType(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
 				TopoServer: ts,
 			}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -1720,7 +1721,7 @@ func TestChangeTabletType(t *testing.T) {
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
 			TopoServer: nil,
 		}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-			return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+			return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		})
 
 		testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
@@ -1942,7 +1943,7 @@ func TestCleanupSchemaMigration(t *testing.T) {
 			}, test.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			resp, err := vtctld.CleanupSchemaMigration(ctx, test.req)
@@ -2144,7 +2145,7 @@ func TestForceCutOverSchemaMigration(t *testing.T) {
 			}, test.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			resp, err := vtctld.ForceCutOverSchemaMigration(ctx, test.req)
@@ -2348,7 +2349,7 @@ func TestCompleteSchemaMigration(t *testing.T) {
 			}, test.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			resp, err := vtctld.CompleteSchemaMigration(ctx, test.req)
@@ -2604,7 +2605,7 @@ func TestCreateKeyspace(t *testing.T) {
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			for name, ks := range tt.topo {
@@ -2882,7 +2883,7 @@ func TestCreateShard(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			for _, ks := range tt.keyspaces {
@@ -2937,7 +2938,7 @@ func TestDeleteCellInfo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			_, err := vtctld.DeleteCellInfo(ctx, tt.req)
 			if tt.shouldErr {
@@ -2998,7 +2999,7 @@ func TestDeleteCellsAlias(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			_, err := vtctld.DeleteCellsAlias(ctx, tt.req)
 			if tt.shouldErr {
@@ -3230,7 +3231,7 @@ func TestDeleteKeyspace(t *testing.T) {
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			defer ts.Close()
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
@@ -3744,7 +3745,7 @@ func TestDeleteShards(t *testing.T) {
 
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.AddShards(ctx, t, ts, tt.shards...)
@@ -3887,7 +3888,7 @@ func TestDeleteSrvKeyspace(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			_, err := vtctld.DeleteSrvVSchema(ctx, tt.req)
 			if tt.shouldErr {
@@ -4348,7 +4349,7 @@ func TestDeleteTablets(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			// Setup tablets and shards
@@ -4577,7 +4578,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.EmergencyReparentShard(ctx, tt.req)
 
@@ -4719,7 +4720,7 @@ func TestExecuteFetchAsApp(t *testing.T) {
 			testutil.AddTablet(ctx, t, ts, tt.tablet, nil)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.ExecuteFetchAsApp(ctx, tt.req)
 			if tt.shouldErr {
@@ -4846,7 +4847,7 @@ func TestExecuteFetchAsDBA(t *testing.T) {
 			testutil.AddTablet(ctx, t, ts, tt.tablet, nil)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.ExecuteFetchAsDBA(ctx, tt.req)
 			if tt.shouldErr {
@@ -5031,7 +5032,7 @@ func TestExecuteHook(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testutil.AddTablets(ctx, t, tt.ts, nil, tt.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			_, err := vtctld.ExecuteHook(ctx, tt.req)
@@ -5052,7 +5053,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	ks := &vtctldatapb.Keyspace{
@@ -5094,7 +5095,7 @@ func TestGetBackups(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx)
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	testutil.BackupStorage.Backups = map[string][]string{
@@ -5202,7 +5203,7 @@ func TestGetKeyspace(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	expected := &vtctldatapb.GetKeyspaceResponse{
@@ -5228,7 +5229,7 @@ func TestGetCellInfoNames(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2", "cell3")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	resp, err := vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
@@ -5237,7 +5238,7 @@ func TestGetCellInfoNames(t *testing.T) {
 
 	ts = memorytopo.NewServer(ctx)
 	vtctld = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	resp, err = vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
@@ -5246,7 +5247,7 @@ func TestGetCellInfoNames(t *testing.T) {
 
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx, "cell1")
 	vtctld = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	topofactory.SetError(assert.AnError)
@@ -5261,7 +5262,7 @@ func TestGetCellInfo(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx)
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	expected := &topodatapb.CellInfo{
@@ -5289,7 +5290,7 @@ func TestGetCellsAliases(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "c11", "c12", "c13", "c21", "c22")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	alias1 := &topodatapb.CellsAlias{
@@ -5316,7 +5317,7 @@ func TestGetCellsAliases(t *testing.T) {
 
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx)
 	vtctld = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	topofactory.SetError(assert.AnError)
@@ -5397,7 +5398,7 @@ func TestGetFullStatus(t *testing.T) {
 					ServerUuid: tt.serverUUID,
 				},
 			}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -5423,7 +5424,7 @@ func TestGetKeyspaces(t *testing.T) {
 	defer cancel()
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	resp, err := vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
@@ -5591,7 +5592,7 @@ func TestGetPermissions(t *testing.T) {
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.GetPermissions(ctx, tt.req)
 			if tt.shouldErr {
@@ -5667,7 +5668,7 @@ func TestGetRoutingRules(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.GetRoutingRules(ctx, &vtctldatapb.GetRoutingRulesRequest{})
 			if tt.shouldErr {
@@ -5692,7 +5693,7 @@ func TestGetSchema(t *testing.T) {
 		}{},
 	}
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	validAlias := &topodatapb.TabletAlias{
@@ -6057,7 +6058,7 @@ func TestGetSchemaMigrations(t *testing.T) {
 			ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, test.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			if test.failTopo {
@@ -6148,7 +6149,7 @@ func TestGetShard(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.AddShards(ctx, t, ts, tt.topo...)
@@ -6285,7 +6286,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.GetSrvKeyspaceNames(ctx, tt.req)
 			if tt.shouldErr {
@@ -6442,7 +6443,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 
 			testutil.AddSrvKeyspaces(t, ts, tt.srvKeyspaces...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			if tt.topoErr != nil {
@@ -6469,7 +6470,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	defer cancel()
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	zone1SrvVSchema := &vschemapb.SrvVSchema{
@@ -6680,7 +6681,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2", "zone3")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			zone1SrvVSchema := &vschemapb.SrvVSchema{
@@ -6740,7 +6741,7 @@ func TestGetTablet(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	tablet := &topodatapb.Tablet{
@@ -7363,7 +7364,7 @@ func TestGetTablets(t *testing.T) {
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, tt.cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
@@ -7387,7 +7388,7 @@ func TestGetTopologyPath(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2", "cell3")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	err := ts.CreateKeyspace(ctx, "keyspace1", &topodatapb.Keyspace{})
@@ -7476,7 +7477,7 @@ func TestGetVSchema(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	t.Run("found", func(t *testing.T) {
@@ -7707,7 +7708,7 @@ func TestLaunchSchemaMigration(t *testing.T) {
 			}, test.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			resp, err := vtctld.LaunchSchemaMigration(ctx, test.req)
@@ -7794,7 +7795,7 @@ func TestPingTablet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			resp, err := vtctld.PingTablet(ctx, tt.req)
@@ -8042,7 +8043,7 @@ func TestPlannedReparentShard(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.PlannedReparentShard(ctx, tt.req)
 
@@ -8085,7 +8086,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 			Name: "testkeyspace",
 		})
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-			return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+			return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		})
 
 		_, err := vtctld.RebuildKeyspaceGraph(ctx, &vtctldatapb.RebuildKeyspaceGraphRequest{
@@ -8102,7 +8103,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 
 		ts := memorytopo.NewServer(ctx, "zone1")
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-			return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+			return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		})
 
 		_, err := vtctld.RebuildKeyspaceGraph(context.Background(), &vtctldatapb.RebuildKeyspaceGraphRequest{
@@ -8122,7 +8123,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 			Name: "testkeyspace",
 		})
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-			return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+			return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		})
 		factory.SetError(assert.AnError)
 
@@ -8143,7 +8144,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 			Name: "testkeyspace",
 		})
 		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-			return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+			return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		})
 
 		lctx, unlock, lerr := ts.LockKeyspace(context.Background(), "testkeyspace", "test lock")
@@ -8192,7 +8193,7 @@ func TestRebuildVSchemaGraph(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			_, err := vtctld.RebuildVSchemaGraph(ctx, req)
 			if tt.shouldErr {
@@ -8291,7 +8292,7 @@ func TestRefreshState(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			_, err := vtctld.RefreshState(ctx, tt.req)
 			if tt.shouldErr {
@@ -8476,7 +8477,7 @@ func TestRefreshStateByShard(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.RefreshStateByShard(ctx, tt.req)
 			if tt.shouldErr {
@@ -8580,7 +8581,7 @@ func TestReloadSchema(t *testing.T) {
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			_, err := vtctld.ReloadSchema(ctx, tt.req)
 			if tt.shouldErr {
@@ -8678,7 +8679,7 @@ func TestReloadSchemaKeyspace(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.ReloadSchemaKeyspace(ctx, tt.req)
 			if tt.shouldErr {
@@ -8836,7 +8837,7 @@ func TestReloadSchemaShard(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.ReloadSchemaShard(ctx, tt.req)
 			if tt.shouldErr {
@@ -8855,7 +8856,7 @@ func TestRemoveBackup(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx)
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	setup := func() {
@@ -9046,7 +9047,7 @@ func TestRemoveKeyspaceCell(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			// Setup topo
@@ -9335,7 +9336,7 @@ func TestRemoveShardCell(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			// Setup shard topos and replication graphs.
@@ -9945,7 +9946,7 @@ func TestReparentTablet(t *testing.T) {
 			defer cancel()
 			ts, topofactory := memorytopo.NewServerAndFactory(ctx, cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -10078,7 +10079,7 @@ func TestRestoreFromBackup(t *testing.T) {
 				}, tt.tablets...,
 			)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			client := localvtctldclient.New(vtctld)
 			stream, err := client.RestoreFromBackup(ctx, tt.req)
@@ -10296,7 +10297,7 @@ func TestRetrySchemaMigration(t *testing.T) {
 			}, test.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, test.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			resp, err := vtctld.RetrySchemaMigration(ctx, test.req)
@@ -10403,7 +10404,7 @@ func TestRunHealthCheck(t *testing.T) {
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			_, err := vtctld.RunHealthCheck(ctx, tt.req)
 			if tt.shouldErr {
@@ -10483,7 +10484,7 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.SetKeyspaceDurabilityPolicy(ctx, tt.req)
 			if tt.expectedErr != "" {
@@ -10580,7 +10581,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.SetShardIsPrimaryServing(tt.ctx, tt.req)
 			if tt.shouldErr {
@@ -10830,7 +10831,7 @@ func TestSetShardTabletControl(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.SetShardTabletControl(tt.ctx, tt.req)
 			if tt.shouldErr {
@@ -11034,7 +11035,7 @@ func TestSetWritable(t *testing.T) {
 
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			_, err := vtctld.SetWritable(ctx, tt.req)
@@ -11055,7 +11056,7 @@ func TestShardReplicationAdd(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	tablets := []*topodatapb.Tablet{
@@ -11350,7 +11351,7 @@ func TestShardReplicationPositions(t *testing.T) {
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			requestCtx := ctx
@@ -11381,7 +11382,7 @@ func TestShardReplicationRemove(t *testing.T) {
 
 	ts := memorytopo.NewServer(ctx, "zone1")
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	tablets := []*topodatapb.Tablet{
@@ -11541,7 +11542,7 @@ func TestSourceShardAdd(t *testing.T) {
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.AddShards(ctx, t, ts, tt.shards...)
@@ -11676,7 +11677,7 @@ func TestSourceShardDelete(t *testing.T) {
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.AddShards(ctx, t, ts, tt.shards...)
@@ -11868,7 +11869,7 @@ func TestStartReplication(t *testing.T) {
 				AlsoSetShardPrimary: true,
 			}, tt.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			_, err := vtctld.StartReplication(ctx, tt.req)
@@ -12005,7 +12006,7 @@ func TestStopReplication(t *testing.T) {
 
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			_, err := vtctld.StopReplication(ctx, tt.req)
@@ -12392,7 +12393,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 				TopoServer: ts,
 			}
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			if tt.tmcHasNoTopo {
@@ -12577,7 +12578,7 @@ func TestUpdateCellInfo(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.UpdateCellInfo(ctx, tt.req)
 			if tt.shouldErr {
@@ -12727,7 +12728,7 @@ func TestUpdateCellsAlias(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.UpdateCellsAlias(ctx, tt.req)
 			if tt.shouldErr {
@@ -12835,7 +12836,7 @@ func TestValidate(t *testing.T) {
 		SkipShardCreation:    false,
 	}, tablets...)
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	resp, err := vtctld.Validate(ctx, &vtctldatapb.ValidateRequest{
@@ -12952,7 +12953,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 	}, tablets...)
 
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	schema1 := &tabletmanagerdatapb.SchemaDefinition{
@@ -13138,7 +13139,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 	}, tablets...)
 
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	tests := []*struct {
@@ -13253,7 +13254,7 @@ func TestValidateVersionShard(t *testing.T) {
 	}, tablets...)
 
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+		return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	})
 
 	tests := []*struct {
@@ -13845,7 +13846,7 @@ func TestValidateShard(t *testing.T) {
 			}
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser())
+				return NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 			resp, err := vtctld.ValidateShard(ctx, tt.req)
 			if tt.shouldErr {

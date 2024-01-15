@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -507,7 +508,7 @@ func TestVDiffPlanFailure(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
-		df := &vdiff{collationEnv: collations.MySQL8(), parser: sqlparser.NewTestParser()}
+		df := &vdiff{collationEnv: collations.MySQL8(), parser: sqlparser.NewTestParser(), mysqlVersion: config.DefaultMySQLVersion}
 		err := df.buildVDiffPlan(context.Background(), filter, schm, nil)
 		assert.EqualError(t, err, tcase.err, tcase.input)
 	}
@@ -1100,7 +1101,7 @@ func TestVDiffFindPKs(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := findPKs(tc.table, tc.targetSelect, tc.tdIn, collations.MySQL8(), sqlparser.NewTestParser())
+			_, err := findPKs(tc.table, tc.targetSelect, tc.tdIn, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			require.NoError(t, err)
 			require.EqualValues(t, tc.tdOut, tc.tdIn)
 		})
@@ -1137,7 +1138,7 @@ func TestVDiffPlanInclude(t *testing.T) {
 		}},
 	}
 
-	df := &vdiff{collationEnv: collations.MySQL8(), parser: sqlparser.NewTestParser()}
+	df := &vdiff{collationEnv: collations.MySQL8(), parser: sqlparser.NewTestParser(), mysqlVersion: config.DefaultMySQLVersion}
 	rule := &binlogdatapb.Rule{
 		Match: "/.*",
 	}
@@ -1258,7 +1259,7 @@ func TestGetColumnCollations(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getColumnCollations(tt.table, collationEnv, sqlparser.NewTestParser())
+			got, err := getColumnCollations(tt.table, collationEnv, sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("getColumnCollations() error = %v, wantErr = %t", err, tt.wantErr)
 				return

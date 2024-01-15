@@ -487,7 +487,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 
 		logstream := logutil.NewMemoryLogger()
 
-		wr := wrangler.New(logstream, ts, tmClient, actions.collationEnv, actions.parser)
+		wr := wrangler.New(logstream, ts, tmClient, actions.collationEnv, actions.parser, actions.mysqlVersion)
 		err := vtctl.RunCommand(r.Context(), wr, args)
 		if err != nil {
 			resp.Error = err.Error()
@@ -523,7 +523,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 		logger := logutil.NewCallbackLogger(func(ev *logutilpb.Event) {
 			w.Write([]byte(logutil.EventString(ev)))
 		})
-		wr := wrangler.New(logger, ts, tmClient, actions.collationEnv, actions.parser)
+		wr := wrangler.New(logger, ts, tmClient, actions.collationEnv, actions.parser, actions.mysqlVersion)
 
 		apiCallUUID, err := schema.CreateUUID()
 		if err != nil {

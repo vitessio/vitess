@@ -83,6 +83,7 @@ func buildChangedVindexesValues(
 					ResolveType:  ctx.SemTable.TypeForExpr,
 					Collation:    ctx.SemTable.Collation,
 					CollationEnv: ctx.VSchema.CollationEnv(),
+					MySQLVersion: ctx.VSchema.MySQLVersion(),
 				})
 				if err != nil {
 					panic(invalidUpdateExpr(assignment.Name.Name.String(), assignment.Expr.EvalExpr))

@@ -224,7 +224,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		return nil, nil, err
 	}
 
-	ws := workflow.NewServer(wr.ts, wr.tmc, wr.collationEnv, wr.parser)
+	ws := workflow.NewServer(wr.ts, wr.tmc, wr.collationEnv, wr.parser, wr.mysqlVersion)
 	state := &workflow.State{
 		Workflow:           workflowName,
 		SourceKeyspace:     ts.SourceKeyspaceName(),
@@ -1187,7 +1187,7 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
 	var (
-		ws = workflow.NewServer(ts.TopoServer(), ts.TabletManagerClient(), ts.wr.collationEnv, ts.wr.parser)
+		ws = workflow.NewServer(ts.TopoServer(), ts.TabletManagerClient(), ts.wr.collationEnv, ts.wr.parser, ts.wr.mysqlVersion)
 		mu sync.Mutex
 	)
 

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -128,6 +129,7 @@ func TestTranslateSimplification(t *testing.T) {
 				ResolveColumn:     fields.Column,
 				Collation:         collations.MySQL8().DefaultConnectionCharset(),
 				CollationEnv:      collations.MySQL8(),
+				MySQLVersion:      config.DefaultMySQLVersion,
 				NoConstantFolding: true,
 				NoCompilation:     true,
 			}
@@ -306,6 +308,7 @@ func TestEvaluate(t *testing.T) {
 			sqltypesExpr, err := Translate(astExpr, &Config{
 				Collation:    collations.MySQL8().DefaultConnectionCharset(),
 				CollationEnv: collations.MySQL8(),
+				MySQLVersion: config.DefaultMySQLVersion,
 			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
@@ -316,7 +319,7 @@ func TestEvaluate(t *testing.T) {
 				"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
 				"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 				"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
-			}, NewEmptyVCursor(collations.MySQL8(), time.Local))
+			}, NewEmptyVCursor(collations.MySQL8(), time.Local, config.DefaultMySQLVersion))
 
 			// When
 			r, err := env.Evaluate(sqltypesExpr)
@@ -355,12 +358,13 @@ func TestEvaluateTuple(t *testing.T) {
 			sqltypesExpr, err := Translate(astExpr, &Config{
 				Collation:    collationEnv.DefaultConnectionCharset(),
 				CollationEnv: collationEnv,
+				MySQLVersion: config.DefaultMySQLVersion,
 			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 
 			// When
-			r, err := EmptyExpressionEnv(collationEnv).Evaluate(sqltypesExpr)
+			r, err := EmptyExpressionEnv(collationEnv, config.DefaultMySQLVersion).Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
@@ -395,6 +399,7 @@ func TestTranslationFailures(t *testing.T) {
 			_, err = Translate(astExpr, &Config{
 				Collation:    collations.MySQL8().DefaultConnectionCharset(),
 				CollationEnv: collations.MySQL8(),
+				MySQLVersion: config.DefaultMySQLVersion,
 			})
 			require.EqualError(t, err, testcase.expectedErr)
 		})
@@ -434,6 +439,7 @@ func TestCardinalityWithBindVariables(t *testing.T) {
 				_, err = Translate(astExpr, &Config{
 					Collation:     collations.MySQL8().DefaultConnectionCharset(),
 					CollationEnv:  collations.MySQL8(),
+					MySQLVersion:  config.DefaultMySQLVersion,
 					NoCompilation: true,
 				})
 				return err

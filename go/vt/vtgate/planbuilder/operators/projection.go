@@ -557,6 +557,7 @@ func (p *Projection) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			ResolveType:  ctx.SemTable.TypeForExpr,
 			Collation:    ctx.SemTable.Collation,
 			CollationEnv: ctx.VSchema.CollationEnv(),
+			MySQLVersion: ctx.VSchema.MySQLVersion(),
 		})
 		if err != nil {
 			panic(err)

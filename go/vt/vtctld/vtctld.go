@@ -52,8 +52,8 @@ func registerVtctldFlags(fs *pflag.FlagSet) {
 }
 
 // InitVtctld initializes all the vtctld functionality.
-func InitVtctld(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) error {
-	actionRepo := NewActionRepository(ts, collationEnv, parser)
+func InitVtctld(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) error {
+	actionRepo := NewActionRepository(ts, collationEnv, parser, mysqlVersion)
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",

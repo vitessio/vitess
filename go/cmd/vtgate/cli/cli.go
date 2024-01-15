@@ -158,11 +158,12 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cells_to_watch validation failed: %v", err)
 	}
 
+	mysqlVersion := servenv.MySQLServerVersion()
 	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerName)
-	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
+	collationEnv := collations.NewEnvironment(mysqlVersion)
 
 	// pass nil for HealthCheck and it will be created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, cell, tabletTypes, plannerVersion, collationEnv)
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, cell, tabletTypes, plannerVersion, collationEnv, mysqlVersion)
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.

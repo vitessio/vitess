@@ -34,6 +34,7 @@ type earlyRewriter struct {
 	warning         string
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 	collationEnv    *collations.Environment
+	mysqlVersion    string
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -47,9 +48,9 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	case sqlparser.OrderBy:
 		handleOrderBy(r, cursor, node)
 	case *sqlparser.OrExpr:
-		rewriteOrExpr(cursor, node, r.collationEnv)
+		rewriteOrExpr(cursor, node, r.collationEnv, r.mysqlVersion)
 	case *sqlparser.AndExpr:
-		rewriteAndExpr(cursor, node, r.collationEnv)
+		rewriteAndExpr(cursor, node, r.collationEnv, r.mysqlVersion)
 	case *sqlparser.NotExpr:
 		rewriteNotExpr(cursor, node)
 	case sqlparser.GroupBy:
@@ -192,34 +193,35 @@ func handleOrderBy(r *earlyRewriter, cursor *sqlparser.Cursor, node sqlparser.Or
 }
 
 // rewriteOrExpr rewrites OR expressions when the right side is FALSE.
-func rewriteOrExpr(cursor *sqlparser.Cursor, node *sqlparser.OrExpr, collationEnv *collations.Environment) {
-	newNode := rewriteOrFalse(*node, collationEnv)
+func rewriteOrExpr(cursor *sqlparser.Cursor, node *sqlparser.OrExpr, collationEnv *collations.Environment, mysqlVersion string) {
+	newNode := rewriteOrFalse(*node, collationEnv, mysqlVersion)
 	if newNode != nil {
 		cursor.ReplaceAndRevisit(newNode)
 	}
 }
 
 // rewriteAndExpr rewrites AND expressions when either side is TRUE.
-func rewriteAndExpr(cursor *sqlparser.Cursor, node *sqlparser.AndExpr, collationEnv *collations.Environment) {
-	newNode := rewriteAndTrue(*node, collationEnv)
+func rewriteAndExpr(cursor *sqlparser.Cursor, node *sqlparser.AndExpr, collationEnv *collations.Environment, mysqlVersion string) {
+	newNode := rewriteAndTrue(*node, collationEnv, mysqlVersion)
 	if newNode != nil {
 		cursor.ReplaceAndRevisit(newNode)
 	}
 }
 
-func rewriteAndTrue(andExpr sqlparser.AndExpr, collationEnv *collations.Environment) sqlparser.Expr {
+func rewriteAndTrue(andExpr sqlparser.AndExpr, collationEnv *collations.Environment, mysqlVersion string) sqlparser.Expr {
 	// we are looking for the pattern `WHERE c = 1 AND 1 = 1`
 	isTrue := func(subExpr sqlparser.Expr) bool {
 		coll := collationEnv.DefaultConnectionCharset()
 		evalEnginePred, err := evalengine.Translate(subExpr, &evalengine.Config{
 			CollationEnv: collationEnv,
 			Collation:    coll,
+			MySQLVersion: mysqlVersion,
 		})
 		if err != nil {
 			return false
 		}
 
-		env := evalengine.EmptyExpressionEnv(collationEnv)
+		env := evalengine.EmptyExpressionEnv(collationEnv, mysqlVersion)
 		res, err := env.Evaluate(evalEnginePred)
 		if err != nil {
 			return false
@@ -439,19 +441,20 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	}, nil).(sqlparser.Expr)
 }
 
-func rewriteOrFalse(orExpr sqlparser.OrExpr, collationEnv *collations.Environment) sqlparser.Expr {
+func rewriteOrFalse(orExpr sqlparser.OrExpr, collationEnv *collations.Environment, mysqlVersion string) sqlparser.Expr {
 	// we are looking for the pattern `WHERE c = 1 OR 1 = 0`
 	isFalse := func(subExpr sqlparser.Expr) bool {
 		coll := collationEnv.DefaultConnectionCharset()
 		evalEnginePred, err := evalengine.Translate(subExpr, &evalengine.Config{
 			CollationEnv: collationEnv,
 			Collation:    coll,
+			MySQLVersion: mysqlVersion,
 		})
 		if err != nil {
 			return false
 		}
 
-		env := evalengine.EmptyExpressionEnv(collationEnv)
+		env := evalengine.EmptyExpressionEnv(collationEnv, mysqlVersion)
 		res, err := env.Evaluate(evalEnginePred)
 		if err != nil {
 			return false

@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -105,17 +106,19 @@ func TestFuzzRewriting(t *testing.T) {
 			original, err := evalengine.Translate(predicate, &evalengine.Config{
 				Collation:     collations.MySQL8().DefaultConnectionCharset(),
 				CollationEnv:  collations.MySQL8(),
+				MySQLVersion:  config.DefaultMySQLVersion,
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)
 			simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), &evalengine.Config{
 				Collation:     collations.MySQL8().DefaultConnectionCharset(),
 				CollationEnv:  collations.MySQL8(),
+				MySQLVersion:  config.DefaultMySQLVersion,
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)
 
-			env := evalengine.EmptyExpressionEnv(collations.MySQL8())
+			env := evalengine.EmptyExpressionEnv(collations.MySQL8(), config.DefaultMySQLVersion)
 			env.Row = make([]sqltypes.Value, tc.nodes)
 			for i := range env.Row {
 				env.Row[i] = sqltypes.NewInt32(1)

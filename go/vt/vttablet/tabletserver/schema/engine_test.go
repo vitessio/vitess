@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -574,13 +575,13 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 }
 
 func newEngine(reloadTime time.Duration, idleTimeout time.Duration, schemaMaxAgeSeconds int64, db *fakesqldb.DB) *Engine {
-	config := tabletenv.NewDefaultConfig()
-	config.SchemaReloadInterval = reloadTime
-	config.OltpReadPool.IdleTimeout = idleTimeout
-	config.OlapReadPool.IdleTimeout = idleTimeout
-	config.TxPool.IdleTimeout = idleTimeout
-	config.SchemaVersionMaxAgeSeconds = schemaMaxAgeSeconds
-	se := NewEngine(tabletenv.NewEnv(config, "SchemaTest", collations.MySQL8(), sqlparser.NewTestParser()))
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.SchemaReloadInterval = reloadTime
+	cfg.OltpReadPool.IdleTimeout = idleTimeout
+	cfg.OlapReadPool.IdleTimeout = idleTimeout
+	cfg.TxPool.IdleTimeout = idleTimeout
+	cfg.SchemaVersionMaxAgeSeconds = schemaMaxAgeSeconds
+	se := NewEngine(tabletenv.NewEnv(cfg, "SchemaTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }
@@ -764,7 +765,7 @@ func TestEngineMysqlTime(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			se := &Engine{}
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
@@ -871,7 +872,7 @@ func TestEnginePopulatePrimaryKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
@@ -933,7 +934,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser())
+			env := tabletenv.NewEnv(nil, tt.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
@@ -961,7 +962,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 // TestEngineGetTableData tests the functionality of getTableData function
 func TestEngineGetTableData(t *testing.T) {
 	db := fakesqldb.New(t)
-	env := tabletenv.NewEnv(nil, "TestEngineGetTableData", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(nil, "TestEngineGetTableData", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
@@ -1136,7 +1137,7 @@ func TestEngineReload(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	cfg.SignalWhenSchemaChange = true
-	env := tabletenv.NewEnv(nil, "TestEngineReload", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(nil, "TestEngineReload", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 

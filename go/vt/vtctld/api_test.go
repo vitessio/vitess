@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 
 	"vitess.io/vitess/go/vt/servenv/testutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -51,7 +52,7 @@ func TestAPI(t *testing.T) {
 	cells := []string{"cell1", "cell2"}
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
-	actionRepo := NewActionRepository(ts, collations.MySQL8(), sqlparser.NewTestParser())
+	actionRepo := NewActionRepository(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	server := testutils.HTTPTestServer()
 	defer server.Close()
 

@@ -67,6 +67,7 @@ type materializer struct {
 
 	parser       *sqlparser.Parser
 	collationEnv *collations.Environment
+	mysqlVersion string
 }
 
 func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowSubType, error) {
@@ -456,7 +457,7 @@ func (mz *materializer) deploySchema() error {
 				// We use schemadiff to normalize the schema.
 				// For now, and because this is could have wider implications, we ignore any errors in
 				// reading the source schema.
-				env := schemadiff.NewEnv(mz.collationEnv, mz.collationEnv.DefaultConnectionCharset(), mz.parser)
+				env := schemadiff.NewEnv(mz.collationEnv, mz.collationEnv.DefaultConnectionCharset(), mz.parser, mz.mysqlVersion)
 				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
 				if err != nil {
 					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
