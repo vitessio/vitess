@@ -4402,5 +4402,164 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "list args: single column vindex",
+    "query": "select 1 from user where (id, col) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user where (id, col) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where (id, col) in ::vals",
+        "Table": "`user`",
+        "Values": [
+          "vals:0"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "list args: single column vindex on non-zero offset",
+    "query": "select 1 from user where (col, id) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user where (col, id) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where (col, id) in ::vals",
+        "Table": "`user`",
+        "Values": [
+          "vals:1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex",
+    "query": "select 1 from multicol_tbl where (cola, colb) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (cola, colb) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where (cola, colb) in ::vals",
+        "Table": "multicol_tbl",
+        "Values": [
+          "vals:0",
+          "vals:1"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex - subshard",
+    "query": "select 1 from multicol_tbl where (cola) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (cola) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where cola in ::__vals0",
+        "Table": "multicol_tbl",
+        "Values": [
+          "::vals"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex - more columns",
+    "query": "select 1 from multicol_tbl where (cola, colx, colb) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (cola, colx, colb) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where (cola, colx, colb) in ::vals",
+        "Table": "multicol_tbl",
+        "Values": [
+          "vals:0",
+          "vals:2"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex - columns rearranged",
+    "query": "select 1 from multicol_tbl where (colb, colx, cola) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (colb, colx, cola) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where (colb, colx, cola) in ::vals",
+        "Table": "multicol_tbl",
+        "Values": [
+          "vals:2",
+          "vals:0"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
   }
 ]
