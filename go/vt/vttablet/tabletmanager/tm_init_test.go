@@ -908,7 +908,7 @@ func startMySQLAndCreateUser(t *testing.T, testUser string) (vttest.LocalCluster
 	connParams := cluster.MySQLConnParams()
 	conn, err := mysql.Connect(context.Background(), &connParams)
 	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(fmt.Sprintf(`CREATE USER '%v'@'localhost';`, testUser), 1000, false)
+	_, err = conn.ExecuteFetch(fmt.Sprintf(`CREATE USER '%v'@'localhost'`, testUser), 1000, false)
 	conn.Close()
 
 	return cluster, err
@@ -918,11 +918,11 @@ func startMySQLAndCreateUser(t *testing.T, testUser string) (vttest.LocalCluster
 func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUser string) {
 	conn, err := mysql.Connect(context.Background(), &connParams)
 	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost';`, testUser), 1000, false)
+	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
 	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost';`, testUser), 1000, false)
+	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
 	require.NoError(t, err)
-	_, err = conn.ExecuteFetch("FLUSH PRIVILEGES;", 1000, false)
+	_, err = conn.ExecuteFetch("FLUSH PRIVILEGES", 1000, false)
 	require.NoError(t, err)
 	conn.Close()
 }
