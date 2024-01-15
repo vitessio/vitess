@@ -4027,6 +4027,30 @@
     }
   },
   {
+    "comment": "Order by aliases are expanded",
+    "query": "select a+2 as a from user order by a",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select a+2 as a from user order by a",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a + 2 as a, weight_string(a + 2) from `user` where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select a + 2 as a, weight_string(a + 2) from `user` order by a + 2 asc",
+        "ResultColumns": 1,
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "HAVING predicates that use table columns are safe to rewrite if we can move them to the WHERE clause",
     "query": "select user.col + 2 as a from user having a = 42",
     "plan": {
@@ -4062,7 +4086,7 @@
           "Sharded": false
         },
         "FieldQuery": "select col + 2 as a from unsharded where 1 != 1",
-        "Query": "select col + 2 as a from unsharded having a = 42",
+        "Query": "select col + 2 as a from unsharded having col + 2 = 42",
         "Table": "unsharded"
       },
       "TablesUsed": [
