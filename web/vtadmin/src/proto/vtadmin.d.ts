@@ -43425,6 +43425,9 @@ export namespace vtctldata {
 
             /** Stream throttler_status */
             throttler_status?: (vtctldata.Workflow.Stream.IThrottlerStatus|null);
+
+            /** Stream tablet_types */
+            tablet_types?: (string|null);
         }
 
         /** Represents a Stream. */
@@ -43486,6 +43489,9 @@ export namespace vtctldata {
 
             /** Stream throttler_status. */
             public throttler_status?: (vtctldata.Workflow.Stream.IThrottlerStatus|null);
+
+            /** Stream tablet_types. */
+            public tablet_types: string;
 
             /**
              * Creates a new Stream instance using the specified properties.

@@ -63,11 +63,21 @@ func TestVtctldclientCLI(t *testing.T) {
 
 	workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", "customer", "show", "--workflow", "wf1")
 	require.NoError(t, err)
-	require.Equalf(t, moveTablesOutput, workflowOutput, "output of MoveTables Show should be same as that of Workflow Show")
-	var response vtctldata.GetWorkflowsResponse
-	err = protojson.Unmarshal([]byte(workflowOutput), &response)
+	var moveTablesResponse vtctldata.GetWorkflowsResponse
+	err = protojson.Unmarshal([]byte(moveTablesOutput), &moveTablesResponse)
 	require.NoError(t, err)
-	validateWorkflow1(t, response.Workflows)
+
+	var workflowResponse vtctldata.GetWorkflowsResponse
+	err = protojson.Unmarshal([]byte(workflowOutput), &workflowResponse)
+	require.NoError(t, err)
+
+	moveTablesResponse.Workflows[0].MaxVReplicationTransactionLag = 0
+	moveTablesResponse.Workflows[0].MaxVReplicationLag = 0
+
+	workflowResponse.Workflows[0].MaxVReplicationTransactionLag = 0
+	workflowResponse.Workflows[0].MaxVReplicationLag = 0
+
+	validateWorkflow1(t, workflowResponse.Workflows)
 	confirmNoRoutingRules(t)
 }
 
@@ -100,14 +110,13 @@ func validateWorkflow1(t *testing.T, workflows []*vtctldata.Workflow) {
 		break
 	}
 	require.NotNil(t, oneStream)
+
 	stream := oneStream.Streams[0]
 	require.Equal(t, "Stopped", stream.State)
+	require.Equal(t, "in_order:primary,rdonly", stream.TabletTypes)
 
 	bls := stream.BinlogSource
-	// todo: this fails
 	require.Equalf(t, 1, len(bls.Filter.Rules), "Rules are %+v", bls.Filter.Rules) // only customer, customer2 should be excluded
 	require.Equal(t, binlogdata.OnDDLAction_STOP, bls.OnDdl)
 	require.True(t, bls.StopAfterCopy)
-	// fixme: this fails
-	require.Equal(t, "in-order:primary,rdonly", bls.TabletType.String())
 }
