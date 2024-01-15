@@ -35,29 +35,66 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-func TestQueriesHaveAllowZeroInDateDirective(t *testing.T) {
+func TestAnalyzeExecuteFetchAsDbaMultiQuery(t *testing.T) {
 	tcases := []struct {
-		query    string
-		expected bool
+		query           string
+		stmts           int
+		allowZeroInDate bool
+		allCreate       bool
+		expectErr       bool
 	}{
 		{
-			query:    "create table t(id int)",
-			expected: false,
+			query:     "",
+			expectErr: true,
 		},
 		{
-			query:    "create /*vt+ allowZeroInDate=true */ table t (id int)",
-			expected: true,
+			query: "select * from t1 ; select * from t2",
+			stmts: 2,
 		},
 		{
-			query:    "create table a (id int) ; create /*vt+ allowZeroInDate=true */ table b (id int)",
-			expected: true,
+			query:     "create table t(id int)",
+			stmts:     1,
+			allCreate: true,
+		},
+		{
+			query:     "create table t(id int); create view v as select 1 from dual",
+			stmts:     2,
+			allCreate: true,
+		},
+		{
+			query:     "create table t(id int); create view v as select 1 from dual; drop table t3",
+			stmts:     3,
+			allCreate: false,
+		},
+		{
+			query:           "create /*vt+ allowZeroInDate=true */ table t (id int)",
+			stmts:           1,
+			allCreate:       true,
+			allowZeroInDate: true,
+		},
+		{
+			query:           "create table a (id int) ; create /*vt+ allowZeroInDate=true */ table b (id int)",
+			stmts:           2,
+			allCreate:       true,
+			allowZeroInDate: true,
+		},
+		{
+			query:     "create table a (id int) ; --comment ; what",
+			expectErr: true,
 		},
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.query, func(t *testing.T) {
 			parser := sqlparser.NewTestParser()
-			got := queriesHaveAllowZeroInDateDirective(tcase.query, parser)
-			assert.Equal(t, tcase.expected, got)
+			statements, allCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(tcase.query, parser)
+			if tcase.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tcase.stmts, len(statements))
+				assert.Equal(t, tcase.allCreate, allCreate)
+				assert.Equal(t, tcase.allowZeroInDate, allowZeroInDate)
+			}
 		})
 	}
 }

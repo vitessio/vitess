@@ -18,8 +18,6 @@ package tabletmanager
 
 import (
 	"context"
-	"errors"
-	"io"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqlescape"
@@ -33,26 +31,32 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// queriesHaveAllowZeroInDateDirective reutrns 'true' when at least one of the queries
+// analyzeExecuteFetchAsDbaMultiQuery reutrns 'true' when at least one of the queries
 // in the given SQL has a `/*vt+ allowZeroInDate=true */` directive.
-func queriesHaveAllowZeroInDateDirective(sql string, parser *sqlparser.Parser) bool {
-	tokenizer := parser.NewStringTokenizer(sql)
-	for {
-		stmt, err := sqlparser.ParseNext(tokenizer)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return false
+func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (statements []sqlparser.Statement, allCreateTableViewQueries bool, allowZeroInDate bool, err error) {
+	statements, err = parser.SplitStatements(sql)
+	if err != nil {
+		return nil, false, false, err
+	}
+	if len(statements) == 0 {
+		return nil, false, false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no statements found in query: %s", sql)
+	}
+	allCreateTableViewQueries = true
+	for _, stmt := range statements {
+		switch stmt.(type) {
+		case *sqlparser.CreateTable, *sqlparser.CreateView:
+		default:
+			allCreateTableViewQueries = false
 		}
+
 		if cmnt, ok := stmt.(sqlparser.Commented); ok {
 			directives := cmnt.GetParsedComments().Directives()
 			if directives.IsSet("allowZeroInDate") {
-				return true
+				allowZeroInDate = true
 			}
 		}
 	}
-	return false
+	return statements, allCreateTableViewQueries, allowZeroInDate, nil
 }
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
@@ -81,25 +85,17 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
-	allowZeroInDate := false
-	tokenizer := tm.SQLParser.NewStringTokenizer(string(req.Query))
-	for {
-		stmt, err := sqlparser.ParseNext(tokenizer)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not parse statement in ExecuteFetchAsDba: %v: %v", string(req.Query), err)
-		}
-		if cmnt, ok := stmt.(sqlparser.Commented); ok {
-			directives := cmnt.GetParsedComments().Directives()
-			if directives.IsSet("allowZeroInDate") {
-				// --allow-zero-in-date Applies to DDLs. As a backport solution to
-				// https://github.com/vitessio/vitess/issues/14952, it is enough that
-				// one of the DDLs has the `allowZeroInDate` directive, that we allow
-				// zero in date for all queries.
-				allowZeroInDate = true
-			}
+	statements, allCreateTableViewQueries, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(string(req.Query), tm.SQLParser)
+	if err != nil {
+		return nil, err
+	}
+	if len(statements) > 1 {
+		// Up to v19, we allow multi-statement SQL in ExecuteFetchAsDba, but only for the specific case
+		// where all statements are CREATE TABLE or CREATE VIEW. This is to support `ApplySchema --batch-size`.
+		// In v20, we will not support multi statements whatsoever.
+		// v20 will throw an error by virtua of using ExecuteFetch instead of ExecuteFetchMulti.
+		if !allCreateTableViewQueries {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba unless all are CREATE TABLE or CREATE VIEW")
 		}
 	}
 	if allowZeroInDate {
@@ -108,10 +104,15 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		}
 	}
 	// Replace any provided sidecar database qualifiers with the correct one.
+	// TODO(shlomi): we use ReplaceTableQualifiersMultiQuery for backwards compatibility. In v20 we will not accept
+	// multi statement queries in ExecuteFetchAsDBA. This will be rewritten as ReplaceTableQualifiers()
 	uq, err := tm.SQLParser.ReplaceTableQualifiersMultiQuery(string(req.Query), sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
+	// TODO(shlomi): we use ExecuteFetchMulti for backwards compatibility. In v20 we will not accept
+	// multi statement queries in ExecuteFetchAsDBA. This will be rewritten as:
+	//  (in v20): result, err := ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 	result, more, err := conn.ExecuteFetchMulti(uq, int(req.MaxRows), true /*wantFields*/)
 	for more {
 		_, more, _, err = conn.ReadQueryResult(0, false)
