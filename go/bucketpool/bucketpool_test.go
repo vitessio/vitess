@@ -140,6 +140,16 @@ func TestPoolTwoSizeNotMultiplier(t *testing.T) {
 	pool.Put(buf)
 }
 
+func TestPoolMaxSizeLessThanMinSize(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("Expected the code to panic")
+		}
+	}()
+
+	New(15000, 1024)
+}
+
 func TestPoolWeirdMaxSize(t *testing.T) {
 	maxSize := 15000
 	pool := New(1024, maxSize)
