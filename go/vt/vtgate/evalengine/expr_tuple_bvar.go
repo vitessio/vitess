@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"errors"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -56,21 +58,22 @@ func (bv *TupleBindVariable) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	if bvar.Type != sqltypes.Tuple {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' must be a tuple (is %s)", bv.Key, bvar.Type)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' must be a tuple (is %s)", bv.Key, bvar.Type.String())
 	}
 
 	tuple := make([]eval, 0, len(bvar.Values))
 	for _, value := range bvar.Values {
 		if value.Type != sqltypes.Tuple {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "result value must be a tuple (is %s)", value.Type)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "result value must be a tuple (is %s)", value.Type.String())
 		}
 		sValue := sqltypes.ProtoToValue(value)
 		var evalErr error
 		idx := 0
 		found := false
+		// looking for a single index on each Tuple Value.
 		loopErr := sValue.ForEachValue(func(val sqltypes.Value) {
-			idx++
-			if idx-1 != bv.Index {
+			if found || idx != bv.Index {
+				idx++
 				return
 			}
 			found = true
@@ -82,14 +85,11 @@ func (bv *TupleBindVariable) eval(env *ExpressionEnv) (eval, error) {
 			tuple = append(tuple, e)
 
 		})
-		if loopErr != nil {
-			return nil, loopErr
-		}
-		if evalErr != nil {
-			return nil, evalErr
+		if err = errors.Join(loopErr, evalErr); err != nil {
+			return nil, err
 		}
 		if !found {
-			return nil, vterrors.VT13001("value not found in bind variable")
+			return nil, vterrors.VT13001("value not found in the bind variable")
 		}
 	}
 	return &evalTuple{t: tuple}, nil
