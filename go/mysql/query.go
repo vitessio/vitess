@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -306,7 +307,17 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 	var more bool
 	result, more, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
 	if more {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected multiple results. Use ExecuteFetchMulti instead")
+		// Multiple results are unexpected. Prioritize this "unexpected" error over whatever error we got from the first result.
+		err = errors.Join(vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected multiple results. Use ExecuteFetchMulti instead"), err)
+	}
+	// Even though we do not allow multiple result sets, we still prefer to drain them so as to clean the connection, as well as
+	// exhaust any further possible error.
+	for more {
+		var moreErr error
+		_, more, _, moreErr = c.ReadQueryResult(0, false)
+		if err != nil {
+			err = errors.Join(err, moreErr)
+		}
 	}
 	return result, err
 }
