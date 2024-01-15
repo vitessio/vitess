@@ -1410,7 +1410,10 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	var tables2 []string
 	for _, t := range tables {
 		if shouldInclude(t, req.ExcludeTables) {
+			log.Infof(">>>>>>>>> Including table %s", t)
 			tables2 = append(tables2, t)
+		} else {
+			log.Infof(">>>>>>>>> Excluding table %s", t)
 		}
 	}
 	tables = tables2

@@ -37,6 +37,7 @@ type iWorkflow interface {
 	Cancel()
 	Complete()
 	Flavor() string
+	GetLastOutput() string
 }
 
 type workflowFlavor int
@@ -72,6 +73,9 @@ type moveTablesWorkflow struct {
 	tables         string
 	atomicCopy     bool
 	sourceShards   string
+	createFlags    []string // currently only used by vtctld
+
+	lastOutput string
 }
 
 type iMoveTables interface {
@@ -157,6 +161,10 @@ func (vmt *VtctlMoveTables) Complete() {
 	vmt.exec(workflowActionComplete)
 }
 
+func (vmt *VtctlMoveTables) GetLastOutput() string {
+	return vmt.lastOutput
+}
+
 var _ iMoveTables = (*VtctldMoveTables)(nil)
 
 type VtctldMoveTables struct {
@@ -174,8 +182,9 @@ func (v VtctldMoveTables) Flavor() string {
 func (v VtctldMoveTables) exec(args ...string) {
 	args2 := []string{"MoveTables", "--workflow=" + v.workflowName, "--target-keyspace=" + v.targetKeyspace}
 	args2 = append(args2, args...)
-	if err := vc.VtctldClient.ExecuteCommand(args2...); err != nil {
-		v.vc.t.Fatalf("failed to create MoveTables workflow: %v", err)
+	var err error
+	if v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...); err != nil {
+		v.vc.t.Fatalf("failed to create MoveTables workflow: %s: %v", v.lastOutput, err)
 	}
 }
 
@@ -192,6 +201,7 @@ func (v VtctldMoveTables) Create() {
 	if v.sourceShards != "" {
 		args = append(args, "--source-shards="+v.sourceShards)
 	}
+	args = append(args, v.createFlags...)
 	v.exec(args...)
 }
 
@@ -204,8 +214,7 @@ func (v VtctldMoveTables) ReverseReadsAndWrites() {
 }
 
 func (v VtctldMoveTables) Show() {
-	//TODO implement me
-	panic("implement me")
+	v.exec("Show")
 }
 
 func (v VtctldMoveTables) SwitchReads() {
@@ -226,6 +235,10 @@ func (v VtctldMoveTables) Complete() {
 	v.exec("Complete")
 }
 
+func (v VtctldMoveTables) GetLastOutput() string {
+	return v.lastOutput
+}
+
 // Reshard wrappers
 
 type reshardWorkflow struct {
@@ -233,6 +246,8 @@ type reshardWorkflow struct {
 	sourceShards   string
 	targetShards   string
 	skipSchemaCopy bool
+
+	lastOutput string
 }
 
 type iReshard interface {
@@ -312,6 +327,10 @@ func (vrs *VtctlReshard) Complete() {
 	vrs.exec(workflowActionComplete)
 }
 
+func (vrs *VtctlReshard) GetLastOutput() string {
+	return vrs.lastOutput
+}
+
 var _ iReshard = (*VtctldReshard)(nil)
 
 type VtctldReshard struct {
@@ -377,4 +396,8 @@ func (v VtctldReshard) Cancel() {
 
 func (v VtctldReshard) Complete() {
 	v.exec("Complete")
+}
+
+func (v VtctldReshard) GetLastOutput() string {
+	return v.lastOutput
 }
