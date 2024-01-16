@@ -102,7 +102,7 @@ jobs:
 
         # Exclude endtoend tests from the coverage report.
         # TODO: figure out how best to include our endtoend tests in the coverage report.
-        rm -rf go/test/endtoend go/*/endtoend go/vt/*/endtoend go/cmd/vttestserver
+        rm -rf go/test/endtoend/{backup,cellalias,clustertest,docker,keyspace,messaging,migration,mysqlctl,mysqlctld,mysqlserver,onlineddl,preparestmt,recovery,reparent,schemadiff,sharded,stress,tabletgateway,tabletmanager,throttler,topoconncache,topotest,utils,vault,versionupgrade,vreplication,vtcombo,vtctldclient,vtgate,vtorc} go/flags/endtoend go/mysql/endtoend go/vt/*/endtoend
 
         eatmydata -- make unit_test_cover
 
