@@ -89,11 +89,12 @@ type ActionRepository struct {
 	ts              *topo.Server
 	collationEnv    *collations.Environment
 	parser          *sqlparser.Parser
+	mysqlVersion    string
 }
 
 // NewActionRepository creates and returns a new ActionRepository,
 // with no actions.
-func NewActionRepository(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) *ActionRepository {
+func NewActionRepository(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *ActionRepository {
 	return &ActionRepository{
 		keyspaceActions: make(map[string]actionKeyspaceMethod),
 		shardActions:    make(map[string]actionShardMethod),
@@ -101,6 +102,7 @@ func NewActionRepository(ts *topo.Server, collationEnv *collations.Environment, 
 		ts:              ts,
 		collationEnv:    collationEnv,
 		parser:          parser,
+		mysqlVersion:    mysqlVersion,
 	}
 }
 
@@ -133,7 +135,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(ctx context.Context, actionName,
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), ar.collationEnv, ar.parser)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), ar.collationEnv, ar.parser, ar.mysqlVersion)
 	output, err := action(ctx, wr, keyspace)
 	cancel()
 	if err != nil {
@@ -160,7 +162,7 @@ func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, ke
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), ar.collationEnv, ar.parser)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), ar.collationEnv, ar.parser, ar.mysqlVersion)
 	output, err := action(ctx, wr, keyspace, shard)
 	cancel()
 	if err != nil {
@@ -194,7 +196,7 @@ func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName st
 
 	// run the action
 	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), ar.collationEnv, ar.parser)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), ar.collationEnv, ar.parser, ar.mysqlVersion)
 	output, err := action.method(ctx, wr, tabletAlias)
 	cancel()
 	if err != nil {

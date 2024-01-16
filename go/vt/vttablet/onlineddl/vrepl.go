@@ -139,6 +139,7 @@ type VRepl struct {
 
 	collationEnv *collations.Environment
 	sqlparser    *sqlparser.Parser
+	mysqlVersion string
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
@@ -154,6 +155,7 @@ func NewVRepl(workflow string,
 	analyzeTable bool,
 	collationEnv *collations.Environment,
 	parser *sqlparser.Parser,
+	mysqlVersion string,
 ) *VRepl {
 	return &VRepl{
 		workflow:                workflow,
@@ -172,6 +174,7 @@ func NewVRepl(workflow string,
 		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
 		collationEnv:            collationEnv,
 		sqlparser:               parser,
+		mysqlVersion:            mysqlVersion,
 	}
 }
 
@@ -462,7 +465,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.sqlparser, v.collationEnv, v.originalShowCreateTable, v.vreplShowCreateTable)
+	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.sqlparser, v.collationEnv, v.mysqlVersion, v.originalShowCreateTable, v.vreplShowCreateTable)
 	if err != nil {
 		return err
 	}

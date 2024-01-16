@@ -5097,7 +5097,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "Scatter",
+            "Variant": "MultiEqual",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5107,7 +5107,11 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select `user`.Id, `user`.`Name`, `user`.Costly from `user` where (`user`.id) in ::dm_vals for update",
             "Query": "delete from `user` where (`user`.id) in ::dm_vals",
-            "Table": "user"
+            "Table": "user",
+            "Values": [
+              "dm_vals:0"
+            ],
+            "Vindex": "user_index"
           }
         ]
       },
@@ -5162,7 +5166,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "Scatter",
+            "Variant": "MultiEqual",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5172,7 +5176,11 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where (u.id) in ::dm_vals for update",
             "Query": "delete from `user` as u where (u.id) in ::dm_vals",
-            "Table": "user"
+            "Table": "user",
+            "Values": [
+              "dm_vals:0"
+            ],
+            "Vindex": "user_index"
           }
         ]
       },
@@ -5227,7 +5235,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "Scatter",
+            "Variant": "MultiEqual",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5237,7 +5245,11 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where (u.id) in ::dm_vals for update",
             "Query": "delete from `user` as u where (u.id) in ::dm_vals",
-            "Table": "user"
+            "Table": "user",
+            "Values": [
+              "dm_vals:0"
+            ],
+            "Vindex": "user_index"
           }
         ]
       },
@@ -5318,7 +5330,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "Scatter",
+            "Variant": "MultiEqual",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5328,7 +5340,11 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where (u.id) in ::dm_vals for update",
             "Query": "delete from `user` as u where (u.id) in ::dm_vals",
-            "Table": "user"
+            "Table": "user",
+            "Values": [
+              "dm_vals:0"
+            ],
+            "Vindex": "user_index"
           }
         ]
       },
@@ -5384,7 +5400,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "Scatter",
+            "Variant": "MultiEqual",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5394,7 +5410,11 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select m.user_id, m.id from music as m where (m.id) in ::dm_vals for update",
             "Query": "delete from music as m where (m.id) in ::dm_vals",
-            "Table": "music"
+            "Table": "music",
+            "Values": [
+              "dm_vals:0"
+            ],
+            "Vindex": "music_user_map"
           }
         ]
       },

@@ -20,18 +20,18 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type expressionConverter struct {
 	tabletExpressions []sqlparser.Expr
 	collationEnv      *collations.Environment
 	collation         collations.ID
+	mysqlVersion      string
 }
 
 func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
@@ -86,6 +86,7 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 	evalExpr, err := evalengine.Translate(astExpr, &evalengine.Config{
 		Collation:    ec.collation,
 		CollationEnv: ec.collationEnv,
+		MySQLVersion: ec.mysqlVersion,
 	})
 	if err != nil {
 		if !strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {

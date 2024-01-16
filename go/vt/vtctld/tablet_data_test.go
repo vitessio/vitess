@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -116,7 +117,7 @@ func TestTabletData(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)

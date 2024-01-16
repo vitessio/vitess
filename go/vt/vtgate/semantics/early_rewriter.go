@@ -34,30 +34,38 @@ type earlyRewriter struct {
 	warning         string
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 	collationEnv    *collations.Environment
+	mysqlVersion    string
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Where:
-		handleWhereClause(node, cursor.Parent())
+		return r.handleWhereClause(node, cursor.Parent())
 	case sqlparser.SelectExprs:
-		return handleSelectExprs(r, cursor, node)
+		return r.handleSelectExprs(cursor, node)
 	case *sqlparser.JoinTableExpr:
-		handleJoinTableExpr(r, node)
+		r.handleJoinTableExpr(node)
 	case sqlparser.OrderBy:
-		handleOrderBy(r, cursor, node)
+		r.clause = "order clause"
+		iter := &orderByIterator{
+			node: node,
+			idx:  -1,
+		}
+
+		return r.handleOrderByAndGroupBy(cursor.Parent(), iter)
 	case *sqlparser.OrExpr:
-		rewriteOrExpr(cursor, node, r.collationEnv)
+		rewriteOrExpr(cursor, node, r.collationEnv, r.mysqlVersion)
 	case *sqlparser.AndExpr:
-		rewriteAndExpr(cursor, node, r.collationEnv)
+		rewriteAndExpr(cursor, node, r.collationEnv, r.mysqlVersion)
 	case *sqlparser.NotExpr:
 		rewriteNotExpr(cursor, node)
 	case sqlparser.GroupBy:
-		r.clause = "group statement"
-	case *sqlparser.Literal:
-		return handleLiteral(r, cursor, node)
-	case *sqlparser.CollateExpr:
-		return handleCollateExpr(r, node)
+		r.clause = "group clause"
+		iter := &exprIterator{
+			node: node,
+			idx:  -1,
+		}
+		return r.handleOrderByAndGroupBy(cursor.Parent(), iter)
 	case *sqlparser.ComparisonExpr:
 		return handleComparisonExpr(cursor, node)
 	case *sqlparser.With:
@@ -160,15 +168,25 @@ func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
 }
 
 // handleWhereClause processes WHERE clauses, specifically the HAVING clause.
-func handleWhereClause(node *sqlparser.Where, parent sqlparser.SQLNode) {
-	if node.Type != sqlparser.HavingClause {
-		return
+func (r *earlyRewriter) handleWhereClause(node *sqlparser.Where, parent sqlparser.SQLNode) error {
+	sel, ok := parent.(*sqlparser.Select)
+	if !ok {
+		return nil
 	}
-	rewriteHavingAndOrderBy(node, parent)
+	if node.Type != sqlparser.HavingClause {
+		return nil
+	}
+	expr, err := r.rewriteAliasesInOrderByHavingAndGroupBy(node.Expr, sel)
+	if err != nil {
+		return err
+	}
+
+	node.Expr = expr
+	return nil
 }
 
 // handleSelectExprs expands * in SELECT expressions.
-func handleSelectExprs(r *earlyRewriter, cursor *sqlparser.Cursor, node sqlparser.SelectExprs) error {
+func (r *earlyRewriter) handleSelectExprs(cursor *sqlparser.Cursor, node sqlparser.SelectExprs) error {
 	_, isSel := cursor.Parent().(*sqlparser.Select)
 	if !isSel {
 		return nil
@@ -177,7 +195,7 @@ func handleSelectExprs(r *earlyRewriter, cursor *sqlparser.Cursor, node sqlparse
 }
 
 // handleJoinTableExpr processes JOIN table expressions and handles the Straight Join type.
-func handleJoinTableExpr(r *earlyRewriter, node *sqlparser.JoinTableExpr) {
+func (r *earlyRewriter) handleJoinTableExpr(node *sqlparser.JoinTableExpr) {
 	if node.Join != sqlparser.StraightJoinType {
 		return
 	}
@@ -185,41 +203,313 @@ func handleJoinTableExpr(r *earlyRewriter, node *sqlparser.JoinTableExpr) {
 	r.warning = "straight join is converted to normal join"
 }
 
+type orderByIterator struct {
+	node sqlparser.OrderBy
+	idx  int
+}
+
+func (it *orderByIterator) next() sqlparser.Expr {
+	it.idx++
+
+	if it.idx >= len(it.node) {
+		return nil
+	}
+
+	return it.node[it.idx].Expr
+}
+
+func (it *orderByIterator) replace(e sqlparser.Expr) error {
+	if it.idx >= len(it.node) {
+		return vterrors.VT13001("went past the last item")
+	}
+	it.node[it.idx].Expr = e
+	return nil
+}
+
+type exprIterator struct {
+	node []sqlparser.Expr
+	idx  int
+}
+
+func (it *exprIterator) next() sqlparser.Expr {
+	it.idx++
+
+	if it.idx >= len(it.node) {
+		return nil
+	}
+
+	return it.node[it.idx]
+}
+
+func (it *exprIterator) replace(e sqlparser.Expr) error {
+	if it.idx >= len(it.node) {
+		return vterrors.VT13001("went past the last item")
+	}
+	it.node[it.idx] = e
+	return nil
+}
+
+type iterator interface {
+	next() sqlparser.Expr
+	replace(e sqlparser.Expr) error
+}
+
+func (r *earlyRewriter) replaceLiteralsInOrderByGroupBy(e sqlparser.Expr, iter iterator) (bool, error) {
+	lit := getIntLiteral(e)
+	if lit == nil {
+		return false, nil
+	}
+
+	newExpr, err := r.rewriteOrderByExpr(lit)
+	if err != nil {
+		return false, err
+	}
+
+	if getIntLiteral(newExpr) == nil {
+		coll, ok := e.(*sqlparser.CollateExpr)
+		if ok {
+			coll.Expr = newExpr
+			newExpr = coll
+		}
+	} else {
+		// the expression is still a literal int. that means that we don't really need to sort by it.
+		// we'll just replace the number with a string instead, just like mysql would do in this situation
+		// mysql> explain select 1 as foo from user group by 1;
+		// <snip>
+		// 	mysql> show warnings;
+		// 	+-------+------+-----------------------------------------------------------------+
+		// 	| Level | Code | Message                                                         |
+		// 	+-------+------+-----------------------------------------------------------------+
+		// 	| Note  | 1003 | /* select#1 */ select 1 AS `foo` from `test`.`user` group by '' |
+		// 	+-------+------+-----------------------------------------------------------------+
+		newExpr = sqlparser.NewStrLiteral("")
+	}
+
+	err = iter.replace(newExpr)
+	return true, err
+}
+
+func getIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
+	var lit *sqlparser.Literal
+	switch node := e.(type) {
+	case *sqlparser.Literal:
+		lit = node
+	case *sqlparser.CollateExpr:
+		expr, ok := node.Expr.(*sqlparser.Literal)
+		if !ok {
+			return nil
+		}
+		lit = expr
+	default:
+		return nil
+	}
+	if lit.Type != sqlparser.IntVal {
+		return nil
+	}
+	return lit
+}
+
 // handleOrderBy processes the ORDER BY clause.
-func handleOrderBy(r *earlyRewriter, cursor *sqlparser.Cursor, node sqlparser.OrderBy) {
-	r.clause = "order clause"
-	rewriteHavingAndOrderBy(node, cursor.Parent())
+func (r *earlyRewriter) handleOrderByAndGroupBy(parent sqlparser.SQLNode, iter iterator) error {
+	stmt, ok := parent.(sqlparser.SelectStatement)
+	if !ok {
+		return nil
+	}
+
+	sel := sqlparser.GetFirstSelect(stmt)
+	for e := iter.next(); e != nil; e = iter.next() {
+		lit, err := r.replaceLiteralsInOrderByGroupBy(e, iter)
+		if err != nil {
+			return err
+		}
+		if lit {
+			continue
+		}
+		expr, err := r.rewriteAliasesInOrderByHavingAndGroupBy(e, sel)
+		if err != nil {
+			return err
+		}
+		err = iter.replace(expr)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// rewriteHavingAndOrderBy rewrites columns in the ORDER BY and HAVING clauses to use aliases
+// from the SELECT expressions when applicable, following MySQL scoping rules:
+//   - A column identifier without a table qualifier that matches an alias introduced
+//     in SELECT points to that expression, not any table column.
+//   - However, if the aliased expression is an aggregation and the column identifier in
+//     the HAVING/ORDER BY clause is inside an aggregation function, the rule does not apply.
+func (r *earlyRewriter) rewriteAliasesInOrderByHavingAndGroupBy(node sqlparser.Expr, sel *sqlparser.Select) (expr sqlparser.Expr, err error) {
+	type ExprContainer struct {
+		expr      sqlparser.Expr
+		ambiguous bool
+	}
+
+	aliases := map[string]ExprContainer{}
+	for _, e := range sel.SelectExprs {
+		ae, ok := e.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+
+		var alias string
+
+		item := ExprContainer{expr: ae.Expr}
+		if ae.As.NotEmpty() {
+			alias = ae.As.Lowered()
+		} else if col, ok := ae.Expr.(*sqlparser.ColName); ok {
+			alias = col.Name.Lowered()
+		}
+
+		if old, alreadyExists := aliases[alias]; alreadyExists && !sqlparser.Equals.Expr(old.expr, item.expr) {
+			item.ambiguous = true
+		}
+
+		aliases[alias] = item
+	}
+
+	insideAggr := false
+	downF := func(node, _ sqlparser.SQLNode) bool {
+		switch node.(type) {
+		case *sqlparser.Subquery:
+			return false
+		case sqlparser.AggrFunc:
+			insideAggr = true
+		}
+
+		return true
+	}
+
+	output := sqlparser.CopyOnRewrite(node, downF, func(cursor *sqlparser.CopyOnWriteCursor) {
+		switch col := cursor.Node().(type) {
+		case sqlparser.AggrFunc:
+			insideAggr = false
+		case *sqlparser.ColName:
+			if !col.Qualifier.IsEmpty() {
+				// we are only interested in columns not qualified by table names
+				break
+			}
+
+			item, found := aliases[col.Name.Lowered()]
+			if !found {
+				break
+			}
+
+			if item.ambiguous {
+				err = &AmbiguousColumnError{Column: sqlparser.String(col)}
+				cursor.StopTreeWalk()
+				return
+			}
+
+			if insideAggr && sqlparser.ContainsAggregation(item.expr) {
+				// I'm not sure about this, but my experiments point to this being the behaviour mysql has
+				// mysql> select min(name) as name from user order by min(name);
+				// 1 row in set (0.00 sec)
+				//
+				// mysql> select id % 2, min(name) as name from user group by id % 2 order by min(name);
+				// 2 rows in set (0.00 sec)
+				//
+				// mysql> select id % 2, 'foobar' as name from user group by id % 2 order by min(name);
+				// 2 rows in set (0.00 sec)
+				//
+				// mysql> select id % 2 from user group by id % 2 order by min(min(name));
+				// ERROR 1111 (HY000): Invalid use of group function
+				//
+				// mysql> select id % 2, min(name) as k from user group by id % 2 order by min(k);
+				// ERROR 1111 (HY000): Invalid use of group function
+				//
+				// mysql> select id % 2, -id as name from user group by id % 2, -id order by min(name);
+				// 6 rows in set (0.01 sec)
+				break
+			}
+
+			cursor.Replace(sqlparser.CloneExpr(item.expr))
+		}
+	}, nil)
+
+	expr = output.(sqlparser.Expr)
+	return
+}
+
+func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
+	scope, found := r.scoper.specialExprScopes[node]
+	if !found {
+		return node, nil
+	}
+	num, err := strconv.Atoi(node.Val)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
+	}
+
+	stmt, isSel := scope.stmt.(*sqlparser.Select)
+	if !isSel {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", scope.stmt)
+	}
+
+	if num < 1 || num > len(stmt.SelectExprs) {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
+	}
+
+	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before
+	for i := 0; i < num; i++ {
+		if _, ok := stmt.SelectExprs[i].(*sqlparser.AliasedExpr); !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.SelectExprs[i]))
+		}
+	}
+
+	aliasedExpr, ok := stmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
+	}
+
+	if scope.isUnion {
+		col, isCol := aliasedExpr.Expr.(*sqlparser.ColName)
+
+		if aliasedExpr.As.IsEmpty() && isCol {
+			return sqlparser.NewColName(col.Name.String()), nil
+		}
+
+		return sqlparser.NewColName(aliasedExpr.ColumnName()), nil
+	}
+
+	return realCloneOfColNames(aliasedExpr.Expr, false), nil
 }
 
 // rewriteOrExpr rewrites OR expressions when the right side is FALSE.
-func rewriteOrExpr(cursor *sqlparser.Cursor, node *sqlparser.OrExpr, collationEnv *collations.Environment) {
-	newNode := rewriteOrFalse(*node, collationEnv)
+func rewriteOrExpr(cursor *sqlparser.Cursor, node *sqlparser.OrExpr, collationEnv *collations.Environment, mysqlVersion string) {
+	newNode := rewriteOrFalse(*node, collationEnv, mysqlVersion)
 	if newNode != nil {
 		cursor.ReplaceAndRevisit(newNode)
 	}
 }
 
 // rewriteAndExpr rewrites AND expressions when either side is TRUE.
-func rewriteAndExpr(cursor *sqlparser.Cursor, node *sqlparser.AndExpr, collationEnv *collations.Environment) {
-	newNode := rewriteAndTrue(*node, collationEnv)
+func rewriteAndExpr(cursor *sqlparser.Cursor, node *sqlparser.AndExpr, collationEnv *collations.Environment, mysqlVersion string) {
+	newNode := rewriteAndTrue(*node, collationEnv, mysqlVersion)
 	if newNode != nil {
 		cursor.ReplaceAndRevisit(newNode)
 	}
 }
 
-func rewriteAndTrue(andExpr sqlparser.AndExpr, collationEnv *collations.Environment) sqlparser.Expr {
+func rewriteAndTrue(andExpr sqlparser.AndExpr, collationEnv *collations.Environment, mysqlVersion string) sqlparser.Expr {
 	// we are looking for the pattern `WHERE c = 1 AND 1 = 1`
 	isTrue := func(subExpr sqlparser.Expr) bool {
 		coll := collationEnv.DefaultConnectionCharset()
 		evalEnginePred, err := evalengine.Translate(subExpr, &evalengine.Config{
 			CollationEnv: collationEnv,
 			Collation:    coll,
+			MySQLVersion: mysqlVersion,
 		})
 		if err != nil {
 			return false
 		}
 
-		env := evalengine.EmptyExpressionEnv(collationEnv)
+		env := evalengine.EmptyExpressionEnv(collationEnv, mysqlVersion)
 		res, err := env.Evaluate(evalEnginePred)
 		if err != nil {
 			return false
@@ -239,34 +529,6 @@ func rewriteAndTrue(andExpr sqlparser.AndExpr, collationEnv *collations.Environm
 		return andExpr.Left
 	}
 
-	return nil
-}
-
-// handleLiteral processes literals within the context of ORDER BY expressions.
-func handleLiteral(r *earlyRewriter, cursor *sqlparser.Cursor, node *sqlparser.Literal) error {
-	newNode, err := r.rewriteOrderByExpr(node)
-	if err != nil {
-		return err
-	}
-	if newNode != nil {
-		cursor.Replace(newNode)
-	}
-	return nil
-}
-
-// handleCollateExpr processes COLLATE expressions.
-func handleCollateExpr(r *earlyRewriter, node *sqlparser.CollateExpr) error {
-	lit, ok := node.Expr.(*sqlparser.Literal)
-	if !ok {
-		return nil
-	}
-	newNode, err := r.rewriteOrderByExpr(lit)
-	if err != nil {
-		return err
-	}
-	if newNode != nil {
-		node.Expr = newNode
-	}
 	return nil
 }
 
@@ -318,110 +580,6 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 	return nil
 }
 
-// rewriteHavingAndOrderBy rewrites columns in the ORDER BY and HAVING clauses to use aliases
-// from the SELECT expressions when applicable, following MySQL scoping rules:
-//   - A column identifier without a table qualifier that matches an alias introduced
-//     in SELECT points to that expression, not any table column.
-//   - However, if the aliased expression is an aggregation and the column identifier in
-//     the HAVING/ORDER BY clause is inside an aggregation function, the rule does not apply.
-func rewriteHavingAndOrderBy(node, parent sqlparser.SQLNode) {
-	sel, isSel := parent.(*sqlparser.Select)
-	if !isSel {
-		return
-	}
-
-	sqlparser.SafeRewrite(node, avoidSubqueries,
-		func(cursor *sqlparser.Cursor) bool {
-			col, ok := cursor.Node().(*sqlparser.ColName)
-			if !ok || !col.Qualifier.IsEmpty() {
-				// we are only interested in columns not qualified by table names
-				return true
-			}
-
-			_, parentIsAggr := cursor.Parent().(sqlparser.AggrFunc)
-
-			// Iterate through SELECT expressions.
-			for _, e := range sel.SelectExprs {
-				ae, ok := e.(*sqlparser.AliasedExpr)
-				if !ok || !ae.As.Equal(col.Name) {
-					// we are searching for aliased expressions that match the column we have found
-					continue
-				}
-
-				expr := ae.Expr
-				if parentIsAggr {
-					if _, aliasPointsToAggr := expr.(sqlparser.AggrFunc); aliasPointsToAggr {
-						return false
-					}
-				}
-
-				if isSafeToRewrite(expr) {
-					cursor.Replace(expr)
-				}
-			}
-			return true
-		})
-}
-
-func avoidSubqueries(node, _ sqlparser.SQLNode) bool {
-	_, isSubQ := node.(*sqlparser.Subquery)
-	return !isSubQ
-}
-
-func isSafeToRewrite(e sqlparser.Expr) bool {
-	safeToRewrite := true
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node.(type) {
-		case *sqlparser.ColName:
-			safeToRewrite = false
-			return false, nil
-		case sqlparser.AggrFunc:
-			return false, nil
-		}
-		return true, nil
-	}, e)
-	return safeToRewrite
-}
-
-func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
-	currScope, found := r.scoper.specialExprScopes[node]
-	if !found {
-		return nil, nil
-	}
-	num, err := strconv.Atoi(node.Val)
-	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
-	}
-	stmt, isSel := currScope.stmt.(*sqlparser.Select)
-	if !isSel {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", currScope.stmt)
-	}
-
-	if num < 1 || num > len(stmt.SelectExprs) {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
-	}
-
-	for i := 0; i < num; i++ {
-		expr := stmt.SelectExprs[i]
-		_, ok := expr.(*sqlparser.AliasedExpr)
-		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(expr))
-		}
-	}
-
-	aliasedExpr, ok := stmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
-	}
-
-	if aliasedExpr.As.NotEmpty() {
-		return sqlparser.NewColName(aliasedExpr.As.String()), nil
-	}
-
-	expr := realCloneOfColNames(aliasedExpr.Expr, currScope.isUnion)
-	return expr, nil
-}
-
 // realCloneOfColNames clones all the expressions including ColName.
 // Since sqlparser.CloneRefOfColName does not clone col names, this method is needed.
 func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
@@ -439,19 +597,20 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	}, nil).(sqlparser.Expr)
 }
 
-func rewriteOrFalse(orExpr sqlparser.OrExpr, collationEnv *collations.Environment) sqlparser.Expr {
+func rewriteOrFalse(orExpr sqlparser.OrExpr, collationEnv *collations.Environment, mysqlVersion string) sqlparser.Expr {
 	// we are looking for the pattern `WHERE c = 1 OR 1 = 0`
 	isFalse := func(subExpr sqlparser.Expr) bool {
 		coll := collationEnv.DefaultConnectionCharset()
 		evalEnginePred, err := evalengine.Translate(subExpr, &evalengine.Config{
 			CollationEnv: collationEnv,
 			Collation:    coll,
+			MySQLVersion: mysqlVersion,
 		})
 		if err != nil {
 			return false
 		}
 
-		env := evalengine.EmptyExpressionEnv(collationEnv)
+		env := evalengine.EmptyExpressionEnv(collationEnv, mysqlVersion)
 		res, err := env.Evaluate(evalEnginePred)
 		if err != nil {
 			return false

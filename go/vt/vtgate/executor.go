@@ -123,8 +123,9 @@ type Executor struct {
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
 
-	collEnv *collations.Environment
-	parser  *sqlparser.Parser
+	collEnv      *collations.Environment
+	parser       *sqlparser.Parser
+	mysqlVersion string
 }
 
 var executorOnce sync.Once
@@ -157,6 +158,7 @@ func NewExecutor(
 	warmingReadsPercent int,
 	collationEnv *collations.Environment,
 	parser *sqlparser.Parser,
+	mysqlVersion string,
 ) *Executor {
 	e := &Executor{
 		serv:                serv,
@@ -175,6 +177,7 @@ func NewExecutor(
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
 		collEnv:             collationEnv,
 		parser:              parser,
+		mysqlVersion:        mysqlVersion,
 	}
 
 	vschemaacl.Init()
@@ -515,6 +518,7 @@ func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlpars
 				evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
 					Collation:    vcursor.collation,
 					CollationEnv: e.collEnv,
+					MySQLVersion: e.mysqlVersion,
 					SQLMode:      evalengine.ParseSQLMode(vcursor.SQLMode()),
 				})
 				if err != nil {
@@ -1560,4 +1564,8 @@ func (e *Executor) collationEnv() *collations.Environment {
 
 func (e *Executor) sqlparser() *sqlparser.Parser {
 	return e.parser
+}
+
+func (e *Executor) mysqlServerVersion() string {
+	return e.mysqlVersion
 }

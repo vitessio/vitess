@@ -42,7 +42,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: fossa-contrib/fossa-action@v2
         with:
-          fossa-api-key: ${{secrets.fossaApiKey}}
+          fossa-api-key: ${{ secrets.FOSSA_API_KEY }}
 
       - name: Check for changes in Go files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
