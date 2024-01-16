@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func TestMaps2(t *testing.T) {
+func TestMaps(t *testing.T) {
 	tests := []struct {
 		name   string
 		m      map[int]string
