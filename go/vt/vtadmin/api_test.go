@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/test/utils"
@@ -559,7 +560,7 @@ func TestFindSchema(t *testing.T) {
 				clusters[i] = vtadmintestutil.BuildCluster(t, cfg)
 			}
 
-			api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+			api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			defer api.Close()
 
 			resp, err := api.FindSchema(ctx, tt.req)
@@ -769,7 +770,7 @@ func TestFindSchema(t *testing.T) {
 		},
 		)
 
-		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		defer api.Close()
 
 		schema, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
@@ -869,7 +870,7 @@ func TestGetClusters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(tt.clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+			api := NewAPI(tt.clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 			resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
 			assert.NoError(t, err)
@@ -947,7 +948,7 @@ func TestGetGates(t *testing.T) {
 		},
 	}
 
-	api := NewAPI([]*cluster.Cluster{cluster1, cluster2}, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+	api := NewAPI([]*cluster.Cluster{cluster1, cluster2}, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	ctx := context.Background()
 
 	resp, err := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
@@ -1069,7 +1070,7 @@ func TestGetKeyspace(t *testing.T) {
 				testutil.AddShards(ctx, t, ts, shards...)
 				topos[i] = ts
 				vtctlds[i] = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+					return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				})
 			}
 
@@ -1085,7 +1086,7 @@ func TestGetKeyspace(t *testing.T) {
 					})
 				}
 
-				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				ks, err := api.GetKeyspace(ctx, tt.req)
 				if tt.shouldErr {
 					assert.Error(t, err)
@@ -1313,10 +1314,10 @@ func TestGetKeyspaces(t *testing.T) {
 
 			servers := []vtctlservicepb.VtctldServer{
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[0], nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+					return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				}),
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[1], nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+					return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				}),
 			}
 
@@ -1338,7 +1339,7 @@ func TestGetKeyspaces(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				resp, err := api.GetKeyspaces(ctx, tt.req)
 				require.NoError(t, err)
 
@@ -1548,7 +1549,7 @@ func TestGetSchema(t *testing.T) {
 			defer cancel()
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.AddTablets(ctx, t, tt.ts, nil, vtadmintestutil.TopodataTabletsFromVTAdminTablets(tt.tablets)...)
@@ -1562,7 +1563,7 @@ func TestGetSchema(t *testing.T) {
 					VtctldClient: client,
 					Tablets:      tt.tablets,
 				})
-				api := NewAPI([]*cluster.Cluster{c}, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+				api := NewAPI([]*cluster.Cluster{c}, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				defer api.Close()
 
 				resp, err := api.GetSchema(ctx, tt.req)
@@ -1692,7 +1693,7 @@ func TestGetSchema(t *testing.T) {
 		},
 		)
 
-		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		defer api.Close()
 
 		schema, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
@@ -2202,10 +2203,10 @@ func TestGetSchemas(t *testing.T) {
 
 			vtctlds := []vtctlservicepb.VtctldServer{
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[0], &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+					return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				}),
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[1], &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+					return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				}),
 			}
 
@@ -2246,7 +2247,7 @@ func TestGetSchemas(t *testing.T) {
 					})
 				}
 
-				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				defer api.Close()
 
 				resp, err := api.GetSchemas(ctx, tt.req)
@@ -2467,7 +2468,7 @@ func TestGetSchemas(t *testing.T) {
 		},
 		)
 
-		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		defer api.Close()
 
 		resp, err := api.GetSchemas(context.Background(), &vtadminpb.GetSchemasRequest{
@@ -2641,7 +2642,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -2660,7 +2661,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				resp, err := api.GetSrvKeyspace(ctx, tt.req)
 
 				if tt.shouldErr {
@@ -2805,7 +2806,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			}
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -2826,7 +2827,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				resp, err := api.GetSrvKeyspaces(ctx, tt.req)
 
 				if tt.shouldErr {
@@ -2970,7 +2971,7 @@ func TestGetSrvVSchema(t *testing.T) {
 			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -2989,7 +2990,7 @@ func TestGetSrvVSchema(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				resp, err := api.GetSrvVSchema(ctx, tt.req)
 
 				if tt.shouldErr {
@@ -3264,7 +3265,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -3283,7 +3284,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				resp, err := api.GetSrvVSchemas(ctx, tt.req)
 
 				if tt.shouldErr {
@@ -3554,7 +3555,7 @@ func TestGetTablet(t *testing.T) {
 				})
 			}
 
-			api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+			api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			resp, err := api.GetTablet(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -3749,7 +3750,7 @@ func TestGetTablets(t *testing.T) {
 				})
 			}
 
-			api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+			api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			resp, err := api.GetTablets(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -3880,7 +3881,7 @@ func TestGetVSchema(t *testing.T) {
 			t.Parallel()
 
 			clusters := []*cluster.Cluster{vtadmintestutil.BuildCluster(t, tt.clusterCfg)}
-			api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+			api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 			resp, err := api.GetVSchema(ctx, tt.req)
 			if tt.shouldErr {
@@ -4210,7 +4211,7 @@ func TestGetVSchemas(t *testing.T) {
 			}
 
 			clusters := vtadmintestutil.BuildClusters(t, tt.clusterCfgs...)
-			api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+			api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 			resp, err := api.GetVSchemas(ctx, tt.req)
 			if tt.shouldErr {
@@ -4294,7 +4295,7 @@ func TestGetVtctlds(t *testing.T) {
 		},
 	}
 
-	api := NewAPI([]*cluster.Cluster{cluster1, cluster2}, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+	api := NewAPI([]*cluster.Cluster{cluster1, cluster2}, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	ctx := context.Background()
 
 	resp, err := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
@@ -4426,7 +4427,7 @@ func TestGetWorkflow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(vtadmintestutil.BuildClusters(t, tt.cfgs...), Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+			api := NewAPI(vtadmintestutil.BuildClusters(t, tt.cfgs...), Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 			resp, err := api.GetWorkflow(ctx, tt.req)
 			if tt.shouldErr {
@@ -4865,7 +4866,7 @@ func TestGetWorkflows(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(vtadmintestutil.BuildClusters(t, tt.cfgs...), Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+			api := NewAPI(vtadmintestutil.BuildClusters(t, tt.cfgs...), Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 			resp, err := api.GetWorkflows(ctx, tt.req)
 			if tt.shouldErr {
@@ -5116,7 +5117,7 @@ func TestVTExplain(t *testing.T) {
 			}
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+				return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -5155,7 +5156,7 @@ func TestVTExplain(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser())
+				api := NewAPI(clusters, Options{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 				resp, err := api.VTExplain(ctx, tt.req)
 
 				if tt.expectedError != nil {
@@ -5357,7 +5358,7 @@ func TestServeHTTP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(tt.clusters, Options{EnableDynamicClusters: tt.enableDynamicClusters}, collations.MySQL8(), sqlparser.NewTestParser())
+			api := NewAPI(tt.clusters, Options{EnableDynamicClusters: tt.enableDynamicClusters}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 			// Copy the Cookie over to a new Request
 			req := httptest.NewRequest(http.MethodGet, "/api/clusters", nil)

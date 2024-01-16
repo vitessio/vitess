@@ -201,6 +201,7 @@ func (m *Rule) CloneVT() *Rule {
 		SourceUniqueKeyColumns:       m.SourceUniqueKeyColumns,
 		TargetUniqueKeyColumns:       m.TargetUniqueKeyColumns,
 		SourceUniqueKeyTargetColumns: m.SourceUniqueKeyTargetColumns,
+		ForceUniqueKey:               m.ForceUniqueKey,
 	}
 	if rhs := m.ConvertEnumToText; rhs != nil {
 		tmpContainer := make(map[string]string, len(rhs))
@@ -1297,6 +1298,13 @@ func (m *Rule) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.ForceUniqueKey) > 0 {
+		i -= len(m.ForceUniqueKey)
+		copy(dAtA[i:], m.ForceUniqueKey)
+		i = encodeVarint(dAtA, i, uint64(len(m.ForceUniqueKey)))
+		i--
+		dAtA[i] = 0x4a
 	}
 	if len(m.ConvertIntToEnum) > 0 {
 		for k := range m.ConvertIntToEnum {
@@ -3361,6 +3369,10 @@ func (m *Rule) SizeVT() (n int) {
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + 1 + 1
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
+	}
+	l = len(m.ForceUniqueKey)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -5564,6 +5576,38 @@ func (m *Rule) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ConvertIntToEnum[mapkey] = mapvalue
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ForceUniqueKey", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ForceUniqueKey = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

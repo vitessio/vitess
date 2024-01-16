@@ -28,6 +28,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -82,7 +83,9 @@ var (
 	actionTimeout time.Duration
 	compactOutput bool
 
-	parser *sqlparser.Parser
+	collationEnv *collations.Environment
+	parser       *sqlparser.Parser
+	mysqlVersion string
 
 	topoOptions = struct {
 		implementation        string
@@ -212,7 +215,7 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 				return nil
 			})
 		})
-		vtctld := grpcvtctldserver.NewVtctldServer(ts, parser)
+		vtctld := grpcvtctldserver.NewVtctldServer(ts, collationEnv, parser, mysqlVersion)
 		localvtctldclient.SetServer(vtctld)
 		VtctldClientProtocol = "local"
 		server = ""
@@ -230,9 +233,11 @@ func init() {
 	Root.PersistentFlags().StringVar(&topoOptions.globalRoot, "topo-global-root", topoOptions.globalRoot, "the path of the global topology data in the global topology server")
 	vreplcommon.RegisterCommands(Root)
 
+	mysqlVersion = servenv.MySQLServerVersion()
+	collationEnv = collations.NewEnvironment(mysqlVersion)
 	var err error
 	parser, err = sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
+		MySQLServerVersion: mysqlVersion,
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})

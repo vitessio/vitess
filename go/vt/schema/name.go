@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"regexp"
 	"strings"
 	"time"
 
@@ -25,6 +26,15 @@ import (
 
 const (
 	readableTimeFormat = "20060102150405"
+)
+
+const (
+	InternalTableNameExpression string = `^_vt_([a-zA-Z0-9]{3})_([0-f]{32})_([0-9]{14})_$`
+)
+
+var (
+	// internalTableNameRegexp parses new intrnal table name format, e.g. _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_
+	internalTableNameRegexp = regexp.MustCompile(InternalTableNameExpression)
 )
 
 // CreateUUIDWithDelimiter creates a globally unique ID, with a given delimiter
@@ -61,6 +71,9 @@ func ToReadableTimestamp(t time.Time) string {
 // - Table GC (renamed before drop)
 // Apps such as VStreamer may choose to ignore such tables.
 func IsInternalOperationTableName(tableName string) bool {
+	if internalTableNameRegexp.MatchString(tableName) {
+		return true
+	}
 	if IsGCTableName(tableName) {
 		return true
 	}
@@ -68,4 +81,22 @@ func IsInternalOperationTableName(tableName string) bool {
 		return true
 	}
 	return false
+}
+
+// AnalyzeInternalTableName analyzes a table name, and assumign it's a vitess internal table name, extracts
+// the hint, uuid and time out of the name.
+// An internal table name can be e.g. `_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_`, analyzed like so:
+// - hint is `hld`
+// - UUID is `6ace8bcef73211ea87e9f875a4d24e90`
+// - Time is 2020-09-15 12:04:10
+func AnalyzeInternalTableName(tableName string) (isInternalTable bool, hint string, uuid string, t time.Time, err error) {
+	submatch := internalTableNameRegexp.FindStringSubmatch(tableName)
+	if len(submatch) == 0 {
+		return false, hint, uuid, t, nil
+	}
+	t, err = time.Parse(readableTimeFormat, submatch[3])
+	if err != nil {
+		return false, hint, uuid, t, err
+	}
+	return true, submatch[1], submatch[2], t, nil
 }

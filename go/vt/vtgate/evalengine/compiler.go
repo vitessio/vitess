@@ -35,6 +35,7 @@ type compiler struct {
 	asm          assembler
 	sqlmode      SQLMode
 	collationEnv *collations.Environment
+	mysqlVersion string
 }
 
 type CompilerLog interface {

@@ -689,7 +689,7 @@ message ReloadSchemasRequest {
     //
     // In Tablets mode, Concurrency is the number of tablets to reload at once
     // *per cluster*.
-    uint32 concurrency = 5;
+    int32 concurrency = 5;
     // WaitPosition is the replication position that replicating tablets should
     // reach prior to reloading their schemas.
     //
@@ -757,7 +757,7 @@ message ReloadSchemaShardRequest {
   string wait_position = 4;
   bool include_primary = 5;
 
-  uint32 concurrency = 6;
+  int32 concurrency = 6;
 }
 
 message ReloadSchemaShardResponse {

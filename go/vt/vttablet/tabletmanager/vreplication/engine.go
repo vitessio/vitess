@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -115,6 +116,7 @@ type Engine struct {
 
 	collationEnv *collations.Environment
 	parser       *sqlparser.Parser
+	mysqlVersion string
 }
 
 type journalEvent struct {
@@ -131,17 +133,18 @@ type PostCopyAction struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler, collationEnv *collations.Environment, parser *sqlparser.Parser) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *Engine {
 	vre := &Engine{
 		controllers:     make(map[int32]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		journaler:       make(map[string]*journalEvent),
-		ec:              newExternalConnector(config.ExternalConnections, collationEnv, parser),
+		ec:              newExternalConnector(config.ExternalConnections, collationEnv, parser, mysqlVersion),
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, throttle.ThrottleCheckPrimaryWrite),
 		collationEnv:    collationEnv,
 		parser:          parser,
+		mysqlVersion:    mysqlVersion,
 	}
 
 	return vre
@@ -173,9 +176,10 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig, collations.MySQL8(), sqlparser.NewTestParser()),
+		ec:                      newExternalConnector(externalConfig, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion),
 		collationEnv:            collations.MySQL8(),
 		parser:                  sqlparser.NewTestParser(),
+		mysqlVersion:            config.DefaultMySQLVersion,
 	}
 	return vre
 }
@@ -192,10 +196,11 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig, collations.MySQL8(), sqlparser.NewTestParser()),
+		ec:                      newExternalConnector(externalConfig, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion),
 		shortcircuit:            true,
 		collationEnv:            collations.MySQL8(),
 		parser:                  sqlparser.NewTestParser(),
+		mysqlVersion:            config.DefaultMySQLVersion,
 	}
 	return vre
 }

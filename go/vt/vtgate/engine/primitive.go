@@ -91,6 +91,7 @@ type (
 		SQLParser() *sqlparser.Parser
 		TimeZone() *time.Location
 		SQLMode() string
+		MySQLVersion() string
 
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 

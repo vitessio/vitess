@@ -131,8 +131,11 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	installSignalHandlers(cancel)
 
+	mysqlVersion := servenv.MySQLServerVersion()
+	collationEnv := collations.NewEnvironment(mysqlVersion)
+
 	parser, err := sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
+		MySQLServerVersion: mysqlVersion,
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
@@ -164,7 +167,7 @@ func main() {
 		// New behavior. Strip off the prefix, and set things up to run through
 		// the vtctldclient command tree, using the localvtctldclient (in-process)
 		// client.
-		vtctld := grpcvtctldserver.NewVtctldServer(ts, parser)
+		vtctld := grpcvtctldserver.NewVtctldServer(ts, collationEnv, parser, mysqlVersion)
 		localvtctldclient.SetServer(vtctld)
 		command.VtctldClientProtocol = "local"
 
@@ -180,8 +183,7 @@ func main() {
 		fallthrough
 	default:
 		log.Warningf("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
-		collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv, parser)
+		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv, parser, mysqlVersion)
 
 		if args[0] == "--" {
 			vtctl.PrintDoubleDashDeprecationNotice(wr)

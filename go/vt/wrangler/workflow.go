@@ -77,6 +77,11 @@ type VReplicationWorkflowParams struct {
 
 	// MoveTables only
 	NoRoutingRules bool
+
+	// Only these shards will be expected to participate in the workflow. Expects user to know what they are doing
+	// and provide the correct set of shards associated with the workflow. This is for reducing latency for workflows
+	// that only use a small set of shards in a keyspace with a large number of shards.
+	ShardSubset []string
 }
 
 // VReplicationWorkflow stores various internal objects for a workflow
@@ -101,6 +106,7 @@ func (vrw *VReplicationWorkflow) String() string {
 func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VReplicationWorkflowType,
 	params *VReplicationWorkflowParams) (*VReplicationWorkflow, error) {
 
+	wr.WorkflowParams = params
 	log.Infof("NewVReplicationWorkflow with params %+v", params)
 	vrw := &VReplicationWorkflow{wr: wr, ctx: ctx, params: params, workflowType: workflowType}
 	ts, ws, err := wr.getWorkflowState(ctx, params.TargetKeyspace, params.Workflow)
@@ -187,6 +193,7 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 			// at the shard level, so reads are effectively switched on the
 			// shard when writes are switched.
 			if len(ws.ShardsAlreadySwitched) > 0 && len(ws.ShardsNotYetSwitched) > 0 {
+				sort.Strings(ws.ShardsAlreadySwitched)
 				stateInfo = append(stateInfo, fmt.Sprintf("Reads partially switched, for shards: %s", strings.Join(ws.ShardsAlreadySwitched, ",")))
 				stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(ws.ShardsAlreadySwitched, ",")))
 			} else {
@@ -253,12 +260,19 @@ func NewWorkflowError(tablet string, id int32, description string) *WorkflowErro
 	return wfErr
 }
 
+func (vrw *VReplicationWorkflow) IsPartialMigration() bool {
+	if vrw.ws == nil {
+		return false
+	}
+	return vrw.ws.IsPartialMigration
+}
+
 // GetStreamCount returns a count of total streams and of streams that have started processing
-func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowError, error) {
+func (vrw *VReplicationWorkflow) GetStreamCount(shards []string) (int64, int64, []*WorkflowError, error) {
 	var err error
 	var workflowErrors []*WorkflowError
 	var total, started int64
-	res, err := vrw.wr.ShowWorkflow(vrw.ctx, vrw.params.Workflow, vrw.params.TargetKeyspace)
+	res, err := vrw.wr.ShowWorkflow(vrw.ctx, vrw.params.Workflow, vrw.params.TargetKeyspace, shards)
 	if err != nil {
 		return 0, 0, nil, err
 	}
@@ -525,7 +539,7 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 		return "", nil
 	}
 	log.Infof("state:%s, direction %d, switched %t", vrw.CachedState(), vrw.params.Direction, ws.WritesSwitched)
-	result, err := vrw.wr.getStreams(vrw.ctx, workflowName, keyspace)
+	result, err := vrw.wr.getStreams(vrw.ctx, workflowName, keyspace, vrw.params.ShardSubset)
 	if err != nil {
 		return "", err
 	}

@@ -47,26 +47,16 @@ type (
 		Distinct     bool
 		groupByExprs []GroupBy
 		OrderExprs   []OrderBy
-		HasStar      bool
 
 		// AddedColumn keeps a counter for expressions added to solve HAVING expressions the user is not selecting
 		AddedColumn int
 
 		hasCheckedAlignment bool
-
-		// TODO Remove once all horizon planning is done on the operators
-		CanPushSorting bool
 	}
 
 	// GroupBy contains the expression to used in group by and also if grouping is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
 	GroupBy struct {
 		Inner sqlparser.Expr
-
-		// The simplified expressions is the "unaliased expression".
-		// In the following query, the group by has the inner expression
-		// `x` and the `SimplifiedExpr` is `table.col + 10`:
-		// select table.col + 10 as x, count(*) from tbl group by x
-		SimplifiedExpr sqlparser.Expr
 
 		// The index at which the user expects to see this column. Set to nil, if the user does not ask for it
 		InnerIndex *int
@@ -125,12 +115,11 @@ func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) evalengine.T
 }
 
 // NewGroupBy creates a new group by from the given fields.
-func NewGroupBy(inner, simplified sqlparser.Expr) GroupBy {
+func NewGroupBy(inner sqlparser.Expr) GroupBy {
 	return GroupBy{
-		Inner:          inner,
-		SimplifiedExpr: simplified,
-		ColOffset:      -1,
-		WSOffset:       -1,
+		Inner:     inner,
+		ColOffset: -1,
+		WSOffset:  -1,
 	}
 }
 
@@ -151,7 +140,7 @@ func (b GroupBy) AsOrderBy() OrderBy {
 			Expr:      b.Inner,
 			Direction: sqlparser.AscOrder,
 		},
-		SimplifiedExpr: b.SimplifiedExpr,
+		SimplifiedExpr: b.Inner,
 	}
 }
 
@@ -264,7 +253,6 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) {
 
 			qp.SelectExprs = append(qp.SelectExprs, col)
 		case *sqlparser.StarExpr:
-			qp.HasStar = true
 			col := SelectExpr{
 				Col: selExp,
 			}
@@ -326,21 +314,19 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 	canPushSorting := true
 	es := &expressionSet{}
 	for _, order := range orderBy {
-		simpleExpr := qp.GetSimplifiedExpr(ctx, order.Expr)
-		if sqlparser.IsNull(simpleExpr) {
+		if sqlparser.IsNull(order.Expr) {
 			// ORDER BY null can safely be ignored
 			continue
 		}
-		if !es.add(ctx, simpleExpr) {
+		if !es.add(ctx, order.Expr) {
 			continue
 		}
 		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
 			Inner:          sqlparser.CloneRefOfOrder(order),
-			SimplifiedExpr: simpleExpr,
+			SimplifiedExpr: order.Expr,
 		})
-		canPushSorting = canPushSorting && !containsAggr(simpleExpr)
+		canPushSorting = canPushSorting && !containsAggr(order.Expr)
 	}
-	qp.CanPushSorting = canPushSorting
 }
 
 func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) {
@@ -365,7 +351,7 @@ func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) {
 	}
 
 	for _, gb := range qp.groupByExprs {
-		_, found := canReuseColumn(ctx, qp.SelectExprs, gb.SimplifiedExpr, func(expr SelectExpr) sqlparser.Expr {
+		_, found := canReuseColumn(ctx, qp.SelectExprs, gb.Inner, func(expr SelectExpr) sqlparser.Expr {
 			getExpr, err := expr.GetExpr()
 			if err != nil {
 				panic(err)
@@ -383,16 +369,15 @@ func (qp *QueryProjection) calculateDistinct(ctx *plancontext.PlanningContext) {
 
 func (qp *QueryProjection) addGroupBy(ctx *plancontext.PlanningContext, groupBy sqlparser.GroupBy) {
 	es := &expressionSet{}
-	for _, group := range groupBy {
-		selectExprIdx := qp.FindSelectExprIndexForExpr(ctx, group)
-		simpleExpr := qp.GetSimplifiedExpr(ctx, group)
-		checkForInvalidGroupingExpressions(simpleExpr)
+	for _, grouping := range groupBy {
+		selectExprIdx := qp.FindSelectExprIndexForExpr(ctx, grouping)
+		checkForInvalidGroupingExpressions(grouping)
 
-		if !es.add(ctx, simpleExpr) {
+		if !es.add(ctx, grouping) {
 			continue
 		}
 
-		groupBy := NewGroupBy(group, simpleExpr)
+		groupBy := NewGroupBy(grouping)
 		groupBy.InnerIndex = selectExprIdx
 
 		qp.groupByExprs = append(qp.groupByExprs, groupBy)
@@ -406,77 +391,11 @@ func (qp *QueryProjection) GetGrouping() []GroupBy {
 
 func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
 	for _, groupByExpr := range qp.groupByExprs {
-		if ctx.SemTable.EqualsExprWithDeps(groupByExpr.SimplifiedExpr, expr) {
+		if ctx.SemTable.EqualsExprWithDeps(groupByExpr.Inner, expr) {
 			return true
 		}
 	}
 	return false
-}
-
-// GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
-func (qp *QueryProjection) GetSimplifiedExpr(ctx *plancontext.PlanningContext, e sqlparser.Expr) sqlparser.Expr {
-	expr, err := qp.TryGetSimplifiedExpr(ctx, e)
-	if err != nil {
-		panic(err)
-	}
-	return expr
-}
-
-func (qp *QueryProjection) TryGetSimplifiedExpr(ctx *plancontext.PlanningContext, e sqlparser.Expr) (found sqlparser.Expr, err error) {
-	if qp == nil {
-		return e, nil
-	}
-	// If the ORDER BY is against a column alias, we need to remember the expression
-	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
-	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
-
-	in, isColName := e.(*sqlparser.ColName)
-	if !(isColName && in.Qualifier.IsEmpty()) {
-		// we are only interested in unqualified column names. if it's not a column name and not unqualified, we're done
-		return e, nil
-	}
-
-	check := func(e sqlparser.Expr) error {
-		if found != nil && !ctx.SemTable.EqualsExprWithDeps(found, e) {
-			return &semantics.AmbiguousColumnError{Column: sqlparser.String(in)}
-		}
-		found = e
-		return nil
-	}
-
-	for _, selectExpr := range qp.SelectExprs {
-		ae, ok := selectExpr.Col.(*sqlparser.AliasedExpr)
-		if !ok {
-			continue
-		}
-		aliased := ae.As.NotEmpty()
-		if aliased {
-			if in.Name.Equal(ae.As) {
-				err = check(ae.Expr)
-				if err != nil {
-					return nil, err
-				}
-			}
-		} else {
-			seCol, ok := ae.Expr.(*sqlparser.ColName)
-			if !ok {
-				continue
-			}
-			if seCol.Name.Equal(in.Name) {
-				// If the column name matches, we have a match, even if the table name is not listed
-				err = check(ae.Expr)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-
-	if found == nil {
-		found = e
-	}
-
-	return found, nil
 }
 
 // toString should only be used for tests
@@ -706,7 +625,7 @@ func (qp *QueryProjection) OldAlignGroupByAndOrderBy(ctx *plancontext.PlanningCo
 		used := make([]bool, len(qp.groupByExprs))
 		for _, orderExpr := range qp.OrderExprs {
 			for i, groupingExpr := range qp.groupByExprs {
-				if !used[i] && ctx.SemTable.EqualsExpr(groupingExpr.SimplifiedExpr, orderExpr.SimplifiedExpr) {
+				if !used[i] && ctx.SemTable.EqualsExpr(groupingExpr.Inner, orderExpr.SimplifiedExpr) {
 					newGrouping = append(newGrouping, groupingExpr)
 					used[i] = true
 				}
@@ -746,7 +665,7 @@ func (qp *QueryProjection) AlignGroupByAndOrderBy(ctx *plancontext.PlanningConte
 outer:
 	for _, orderBy := range qp.OrderExprs {
 		for gidx, groupBy := range qp.groupByExprs {
-			if ctx.SemTable.EqualsExprWithDeps(groupBy.SimplifiedExpr, orderBy.SimplifiedExpr) {
+			if ctx.SemTable.EqualsExprWithDeps(groupBy.Inner, orderBy.SimplifiedExpr) {
 				newGrouping = append(newGrouping, groupBy)
 				used[gidx] = true
 				continue outer
@@ -796,15 +715,14 @@ func (qp *QueryProjection) useGroupingOverDistinct(ctx *plancontext.PlanningCont
 			// not an alias Expr, cannot continue forward.
 			return false
 		}
-		sExpr := qp.GetSimplifiedExpr(ctx, ae.Expr)
 		// check if the grouping already exists on that column.
 		found := slices.IndexFunc(qp.groupByExprs, func(gb GroupBy) bool {
-			return ctx.SemTable.EqualsExprWithDeps(gb.SimplifiedExpr, sExpr)
+			return ctx.SemTable.EqualsExprWithDeps(gb.Inner, ae.Expr)
 		})
 		if found != -1 {
 			continue
 		}
-		groupBy := NewGroupBy(ae.Expr, sExpr)
+		groupBy := NewGroupBy(ae.Expr)
 		selectExprIdx := idx
 		groupBy.InnerIndex = &selectExprIdx
 

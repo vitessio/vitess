@@ -122,6 +122,7 @@ func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		ResolveType:  ctx.SemTable.TypeForExpr,
 		Collation:    ctx.SemTable.Collation,
 		CollationEnv: ctx.VSchema.CollationEnv(),
+		MySQLVersion: ctx.VSchema.MySQLVersion(),
 	}
 
 	predicate := sqlparser.AndExpressions(f.Predicates...)

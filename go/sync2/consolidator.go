@@ -127,21 +127,19 @@ func (rs *pendingResult) Wait() {
 // It is also used by the txserializer package to count how often transactions
 // have been queued and had to wait because they targeted the same row (range).
 type ConsolidatorCache struct {
-	*cache.LRUCache
+	*cache.LRUCache[*ccount]
 }
 
 // NewConsolidatorCache creates a new cache with the given capacity.
 func NewConsolidatorCache(capacity int64) *ConsolidatorCache {
-	return &ConsolidatorCache{cache.NewLRUCache(capacity, func(_ any) int64 {
-		return 1
-	})}
+	return &ConsolidatorCache{cache.NewLRUCache[*ccount](capacity)}
 }
 
 // Record increments the count for "query" by 1.
 // If it's not in the cache yet, it will be added.
 func (cc *ConsolidatorCache) Record(query string) {
-	if v, ok := cc.Get(query); ok {
-		v.(*ccount).add(1)
+	if c, ok := cc.Get(query); ok {
+		c.add(1)
 	} else {
 		c := ccount(1)
 		cc.Set(query, &c)
@@ -159,7 +157,7 @@ func (cc *ConsolidatorCache) Items() []ConsolidatorCacheItem {
 	items := cc.LRUCache.Items()
 	ret := make([]ConsolidatorCacheItem, len(items))
 	for i, v := range items {
-		ret[i] = ConsolidatorCacheItem{Query: v.Key, Count: v.Value.(*ccount).get()}
+		ret[i] = ConsolidatorCacheItem{Query: v.Key, Count: v.Value.get()}
 	}
 	return ret
 }

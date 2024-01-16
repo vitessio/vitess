@@ -36,6 +36,7 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 		Collation:    ctx.SemTable.Collation,
 		ResolveType:  ctx.SemTable.TypeForExpr,
 		CollationEnv: ctx.VSchema.CollationEnv(),
+		MySQLVersion: ctx.VSchema.MySQLVersion(),
 	})
 	if err != nil {
 		return nil, err

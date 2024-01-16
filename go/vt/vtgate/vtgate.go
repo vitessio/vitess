@@ -249,6 +249,7 @@ func Init(
 	tabletTypesToWait []topodatapb.TabletType,
 	pv plancontext.PlannerVersion,
 	collationEnv *collations.Environment,
+	mysqlServerVersion string,
 ) *VTGate {
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
@@ -300,7 +301,7 @@ func Init(
 	}
 
 	parser, err := sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
+		MySQLServerVersion: mysqlServerVersion,
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
@@ -333,6 +334,7 @@ func Init(
 		warmingReadsPercent,
 		collationEnv,
 		parser,
+		mysqlServerVersion,
 	)
 
 	if err := executor.defaultQueryLogger(); err != nil {
@@ -364,8 +366,10 @@ func Init(
 			st.Start()
 		}
 		srv := initMySQLProtocol(vtgateInst)
-		servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
-		servenv.OnClose(srv.rollbackAtShutdown)
+		if srv != nil {
+			servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
+			servenv.OnClose(srv.rollbackAtShutdown)
+		}
 	})
 	servenv.OnTerm(func() {
 		if st != nil && enableSchemaChangeSignal {

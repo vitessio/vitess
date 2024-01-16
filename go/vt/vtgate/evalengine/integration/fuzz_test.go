@@ -31,6 +31,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -146,8 +147,9 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 		cfg := &evalengine.Config{
 			ResolveColumn:     evalengine.FieldResolver(fields).Column,
 			Collation:         collations.CollationUtf8mb4ID,
-			CollationEnv:      collations.MySQL8(),
+			CollationEnv:      env.VCursor().CollationEnv(),
 			NoConstantFolding: !debugSimplify,
+			MySQLVersion:      env.VCursor().MySQLVersion(),
 		}
 		expr, err = evalengine.Translate(astExpr, cfg)
 		return
@@ -200,7 +202,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 	compareWithMySQL := func(expr sqlparser.Expr) *mismatch {
 		query := "SELECT " + sqlparser.String(expr)
 
-		env := evalengine.EmptyExpressionEnv(collations.MySQL8())
+		env := evalengine.EmptyExpressionEnv(collations.MySQL8(), config.DefaultMySQLVersion)
 		eval, localErr := evaluateLocalEvalengine(env, query, nil)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 

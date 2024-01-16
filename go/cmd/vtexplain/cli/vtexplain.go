@@ -175,16 +175,17 @@ func parseAndRun() error {
 		Target:          dbName,
 	}
 
-	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
+	mysqlServerVersion := servenv.MySQLServerVersion()
+	collationEnv := collations.NewEnvironment(mysqlServerVersion)
 	parser, err := sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
+		MySQLServerVersion: mysqlServerVersion,
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
 		return err
 	}
-	vte, err := vtexplain.Init(context.Background(), vschema, schema, ksShardMap, opts, collationEnv, parser)
+	vte, err := vtexplain.Init(context.Background(), vschema, schema, ksShardMap, opts, collationEnv, parser, mysqlServerVersion)
 	if err != nil {
 		return err
 	}

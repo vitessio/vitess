@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -110,15 +111,15 @@ func TestCloseWhileStuckWriting(t *testing.T) {
 }
 
 func newTestWriter(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatWriter {
-	config := tabletenv.NewDefaultConfig()
-	config.ReplicationTracker.Mode = tabletenv.Heartbeat
-	config.ReplicationTracker.HeartbeatInterval = time.Second
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.ReplicationTracker.Mode = tabletenv.Heartbeat
+	cfg.ReplicationTracker.HeartbeatInterval = time.Second
 
 	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tw := newHeartbeatWriter(tabletenv.NewEnv(config, "WriterTest", collations.MySQL8(), sqlparser.NewTestParser()), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
+	tw := newHeartbeatWriter(tabletenv.NewEnv(cfg, "WriterTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
 	tw.keyspaceShard = "test:0"
 
 	if frozenTime != nil {

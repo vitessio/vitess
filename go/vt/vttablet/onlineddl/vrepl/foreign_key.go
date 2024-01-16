@@ -21,6 +21,7 @@ limitations under the License.
 package vrepl
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -28,14 +29,17 @@ import (
 // RemovedForeignKeyNames returns the names of removed foreign keys, ignoring mere name changes
 func RemovedForeignKeyNames(
 	parser *sqlparser.Parser,
+	collEnv *collations.Environment,
+	mysqlVersion string,
 	originalCreateTable string,
 	vreplCreateTable string,
 ) (names []string, err error) {
 	if originalCreateTable == "" || vreplCreateTable == "" {
 		return nil, nil
 	}
+	env := schemadiff.NewEnv(collEnv, collEnv.DefaultConnectionCharset(), parser, mysqlVersion)
 	diffHints := schemadiff.DiffHints{ConstraintNamesStrategy: schemadiff.ConstraintNamesIgnoreAll}
-	diff, err := schemadiff.DiffCreateTablesQueries(originalCreateTable, vreplCreateTable, &diffHints, parser)
+	diff, err := schemadiff.DiffCreateTablesQueries(env, originalCreateTable, vreplCreateTable, &diffHints)
 	if err != nil {
 		return nil, err
 	}

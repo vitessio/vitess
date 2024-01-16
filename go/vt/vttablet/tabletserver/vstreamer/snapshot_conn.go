@@ -19,7 +19,6 @@ package vstreamer
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -255,7 +254,7 @@ func (conn *snapshotConn) startSnapshotAllTables(ctx context.Context) (gtid stri
 			return "", err
 		}
 		// get list of all tables
-		rs, err := conn.ExecuteFetch("show full tables", math.MaxInt32, true)
+		rs, err := conn.ExecuteFetch("show full tables", -1, true)
 		if err != nil {
 			return "", err
 		}

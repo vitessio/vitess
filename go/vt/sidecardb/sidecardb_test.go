@@ -32,6 +32,8 @@ import (
 
 	"vitess.io/vitess/go/stats"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -42,6 +44,7 @@ func TestInitErrors(t *testing.T) {
 
 	db := fakesqldb.New(t)
 	defer db.Close()
+	collEnv := collations.MySQL8()
 	parser := sqlparser.NewTestParser()
 	AddSchemaInitQueries(db, false, parser)
 
@@ -87,7 +90,7 @@ func TestInitErrors(t *testing.T) {
 	}
 
 	require.Equal(t, int64(0), getDDLCount())
-	err = Init(ctx, exec, parser)
+	err = Init(ctx, exec, collEnv, parser, config.DefaultMySQLVersion)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)-len(schemaErrors)), getDDLCount())
 	require.Equal(t, int64(len(schemaErrors)), getDDLErrorCount())
@@ -126,6 +129,7 @@ func TestMiscSidecarDB(t *testing.T) {
 
 	db := fakesqldb.New(t)
 	defer db.Close()
+	collEnv := collations.MySQL8()
 	parser := sqlparser.NewTestParser()
 	AddSchemaInitQueries(db, false, parser)
 	db.AddQuery("use dbname", &sqltypes.Result{})
@@ -158,7 +162,7 @@ func TestMiscSidecarDB(t *testing.T) {
 	ddlErrorCount.Set(0)
 	ddlCount.Set(0)
 	require.Equal(t, int64(0), getDDLCount())
-	err = Init(ctx, exec, parser)
+	err = Init(ctx, exec, collEnv, parser, config.DefaultMySQLVersion)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)), getDDLCount())
 
@@ -167,15 +171,17 @@ func TestMiscSidecarDB(t *testing.T) {
 	AddSchemaInitQueries(db, true, parser)
 
 	// tests init on already inited db
-	err = Init(ctx, exec, parser)
+	err = Init(ctx, exec, collEnv, parser, config.DefaultMySQLVersion)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)), getDDLCount())
 
 	// tests misc paths not covered above
 	si := &schemaInit{
-		ctx:    ctx,
-		exec:   exec,
-		parser: parser,
+		ctx:          ctx,
+		exec:         exec,
+		collEnv:      collations.MySQL8(),
+		parser:       parser,
+		mysqlVersion: config.DefaultMySQLVersion,
 	}
 
 	err = si.setCurrentDatabase(sidecar.GetIdentifier())
@@ -226,7 +232,9 @@ func TestAlterTableAlgorithm(t *testing.T) {
 		{"modify column", "t1", "create table if not exists _vt.t1(i int)", "create table if not exists _vt.t(i float)"},
 	}
 	si := &schemaInit{
-		parser: sqlparser.NewTestParser(),
+		collEnv:      collations.MySQL8(),
+		parser:       sqlparser.NewTestParser(),
+		mysqlVersion: config.DefaultMySQLVersion,
 	}
 	copyAlgo := sqlparser.AlgorithmValue("COPY")
 	for _, tc := range testCases {

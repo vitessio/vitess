@@ -2466,6 +2466,10 @@ var (
 		input:  "show foobar like select * from table where syntax is 'ignored'",
 		output: "show foobar",
 	}, {
+		// Making sure "force_cutover" is not a keyword
+		input:  "select force_cutover from t",
+		output: "select `force_cutover` from t",
+	}, {
 		input:  "use db",
 		output: "use db",
 	}, {
