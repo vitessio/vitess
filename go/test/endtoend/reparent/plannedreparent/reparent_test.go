@@ -250,6 +250,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 		"RESET MASTER",
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
 		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
+		"START SLAVE",
 	}
 	utils.RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[2])
 
