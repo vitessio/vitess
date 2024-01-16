@@ -144,7 +144,7 @@ func TestMain(m *testing.M) {
 		}
 
 		primaryTabletProcess := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
-		if _, err := primaryTabletProcess.QueryTablet(createProcSQL, keyspaceName, false); err != nil {
+		if _, err := primaryTabletProcess.QueryTablet(createProcSQL, keyspaceName, true); err != nil {
 			return 1, err
 		}
 
