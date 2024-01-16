@@ -108,6 +108,9 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	hc.SetServing(primaryTablet, true)
 	hc.Broadcast(primaryTablet)
 
+	err = tg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
+	require.NoError(t, err)
+
 	// wait for the query to execute before checking for results
 	select {
 	case <-queryChan:
