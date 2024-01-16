@@ -188,7 +188,7 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 	case *sqlparser.ExplainTab:
 		return explainTabPlan(stmt, vschema)
 	case *sqlparser.ExplainStmt:
-		return buildExplainStmtPlan(ctx, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildExplainStmtPlan(stmt, reservedVars, vschema)
 	case *sqlparser.VExplainStmt:
 		return buildVExplainPlan(ctx, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.OtherAdmin:

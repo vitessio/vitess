@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -105,12 +106,11 @@ func buildVExplainLoggingPlan(ctx context.Context, explain *sqlparser.VExplainSt
 	return &planResult{primitive: &engine.VExplain{Input: input.primitive, Type: explain.Type}, tables: input.tables}, nil
 }
 
+// buildExplainStmtPlan takes an EXPLAIN query and if possible sends the whole query to a single shard
 func buildExplainStmtPlan(
-	ctx context.Context,
 	explain *sqlparser.ExplainStmt,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-	enableOnlineDDL, enableDirectDDL bool,
 ) (*planResult, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
@@ -127,30 +127,11 @@ func buildExplainStmtPlan(
 		return nil, vterrors.VT03031()
 	}
 
-	input, err := createInstructionFor(ctx, sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
-	if err != nil {
+	if err = queryRewrite(semTable, reservedVars, explain.Statement); err != nil {
 		return nil, err
 	}
 
-	parser, err := sqlparser.New(sqlparser.Options{})
-	if err != nil {
-		return nil, err
-	}
-
-	var singleKs string
-	for _, table := range input.tables {
-		ks, _, err := parser.ParseTable(table)
-		if err != nil {
-			return nil, err
-		}
-		if singleKs == ks || singleKs == "" {
-			singleKs = ks
-			continue
-		}
-		return nil, vterrors.VT03031()
-	}
-
-	destination, keyspace, _, err := vschema.TargetDestination(singleKs)
+	destination, keyspace, _, err := vschema.TargetDestination(ks.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -159,10 +140,21 @@ func buildExplainStmtPlan(
 		destination = key.DestinationAnyShard{}
 	}
 
+	var tables []string
+	for _, table := range semTable.Tables {
+		name, err := table.Name()
+		if err != nil {
+			// this is just for reporting which tables we are touching
+			// it's OK to ignore errors here
+			continue
+		}
+		tables = append(tables, operators.QualifiedString(ks, name.Name.String()))
+	}
+
 	return newPlanResult(&engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
-	}, input.tables...), nil
+	}, tables...), nil
 }
