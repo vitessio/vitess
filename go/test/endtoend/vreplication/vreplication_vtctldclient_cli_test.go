@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
+
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -50,6 +52,7 @@ func TestVtctldclientCLI(t *testing.T) {
 	workflowName := "wf1"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
 	targetTabs := setupMinimalCustomerKeyspace(t)
+	tables := "customer,customer2"
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
 		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
 		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
@@ -57,6 +60,65 @@ func TestVtctldclientCLI(t *testing.T) {
 	}
 	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
 
+	mt := createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags)
+	mt.Show()
+	moveTablesOutput := mt.GetLastOutput()
+	t.Run("testMoveTablesFlags1", func(t *testing.T) {
+		workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", "customer", "show", "--workflow", "wf1")
+		require.NoError(t, err)
+		var moveTablesResponse vtctldata.GetWorkflowsResponse
+		err = protojson.Unmarshal([]byte(moveTablesOutput), &moveTablesResponse)
+		require.NoError(t, err)
+
+		var workflowResponse vtctldata.GetWorkflowsResponse
+		err = protojson.Unmarshal([]byte(workflowOutput), &workflowResponse)
+		require.NoError(t, err)
+
+		moveTablesResponse.Workflows[0].MaxVReplicationTransactionLag = 0
+		moveTablesResponse.Workflows[0].MaxVReplicationLag = 0
+
+		workflowResponse.Workflows[0].MaxVReplicationTransactionLag = 0
+		workflowResponse.Workflows[0].MaxVReplicationLag = 0
+
+		validateWorkflow1(t, workflowResponse.Workflows)
+		confirmNoRoutingRules(t)
+	})
+
+	t.Run("testCompleteFlags1", func(t *testing.T) {
+		mt.Start() // Need to start because we set auto-start to false.
+		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
+		confirmNoRoutingRules(t)
+
+		for _, tab := range targetTabs {
+			alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
+			query := "update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_customer' and workflow = 'wf1'"
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, query)
+			require.NoError(t, err, output)
+		}
+
+		confirmNoRoutingRules(t)
+		completeMoveTables(t, mt, targetTabs)
+		confirmRoutingRulesExist(t)
+		require.True(t, checkTablesExist(t, "zone1-100", []string{"customer", "customer2"}))
+	})
+	t.Run("testCompleteFlags2", func(t *testing.T) {
+		for _, tab := range targetTabs {
+			alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, "drop table customer")
+			require.NoError(t, err, output)
+		}
+
+		createFlags = []string{}
+		completeFlags = []string{"--rename-tables"}
+		tables = "customer2"
+		mt = createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags)
+		completeMoveTables(t, mt, targetTabs)
+		require.True(t, checkTablesExist(t, "zone1-100", []string{"_customer2_old"}))
+		require.False(t, checkTablesExist(t, "zone1-100", []string{"customer2"}))
+	})
+}
+
+func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, tables string, createFlags, completeFlags []string) iMoveTables {
 	mt := newMoveTables(vc, &moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
@@ -64,44 +126,15 @@ func TestVtctldclientCLI(t *testing.T) {
 			targetKeyspace: targetKeyspace,
 		},
 		sourceKeyspace: sourceKeyspace,
-		tables:         "customer,customer2",
+		tables:         tables,
 		createFlags:    createFlags,
 		completeFlags:  completeFlags,
 	}, workflowFlavorVtctld)
 	mt.Create()
+	return mt
+}
 
-	mt.Show()
-	moveTablesOutput := mt.GetLastOutput()
-
-	workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", "customer", "show", "--workflow", "wf1")
-	require.NoError(t, err)
-	var moveTablesResponse vtctldata.GetWorkflowsResponse
-	err = protojson.Unmarshal([]byte(moveTablesOutput), &moveTablesResponse)
-	require.NoError(t, err)
-
-	var workflowResponse vtctldata.GetWorkflowsResponse
-	err = protojson.Unmarshal([]byte(workflowOutput), &workflowResponse)
-	require.NoError(t, err)
-
-	moveTablesResponse.Workflows[0].MaxVReplicationTransactionLag = 0
-	moveTablesResponse.Workflows[0].MaxVReplicationLag = 0
-
-	workflowResponse.Workflows[0].MaxVReplicationTransactionLag = 0
-	workflowResponse.Workflows[0].MaxVReplicationLag = 0
-
-	validateWorkflow1(t, workflowResponse.Workflows)
-	confirmNoRoutingRules(t)
-
-	mt.Start() // Need to start because we set auto-start to false.
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
-
-	for _, tab := range targetTabs {
-		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
-		query := "update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_customer' and workflow = 'wf1'"
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, query)
-		require.NoError(t, err, output)
-	}
-
+func completeMoveTables(t *testing.T, mt iMoveTables, targetTabs map[string]*cluster.VttabletProcess) {
 	mt.Start() // Need to start because we set stop-after-copy to true.
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
 	for _, tab := range targetTabs {
@@ -109,8 +142,6 @@ func TestVtctldclientCLI(t *testing.T) {
 	}
 	mt.SwitchReadsAndWrites()
 	mt.Complete()
-	confirmRoutingRulesExist(t)
-	require.True(t, checkTablesExist(t, "zone1-100", []string{"customer", "customer2"}))
 }
 
 func checkTablesExist(t *testing.T, tabletAlias string, tables []string) bool {

@@ -190,7 +190,7 @@ func (v VtctldMoveTables) exec(args ...string) {
 	args2 = append(args2, args...)
 	var err error
 	if v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...); err != nil {
-		v.vc.t.Fatalf("failed to create MoveTables workflow: %s: %v", v.lastOutput, err)
+		require.FailNowf(v.vc.t, "failed MoveTables action", "%v: %s", err, v.lastOutput)
 	}
 }
 
