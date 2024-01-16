@@ -18,8 +18,6 @@ package schemadiff
 
 import (
 	"errors"
-	"fmt"
-	"io"
 	"sort"
 	"strings"
 
@@ -117,17 +115,9 @@ func NewSchemaFromQueries(env *Environment, queries []string) (*Schema, error) {
 // NewSchemaFromSQL creates a valid and normalized schema based on a SQL blob that contains
 // CREATE statements for various objects (tables, views)
 func NewSchemaFromSQL(env *Environment, sql string) (*Schema, error) {
-	var statements []sqlparser.Statement
-	tokenizer := env.Parser.NewStringTokenizer(sql)
-	for {
-		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, fmt.Errorf("could not parse statement in SQL: %v: %w", sql, err)
-		}
-		statements = append(statements, stmt)
+	statements, err := env.Parser.SplitStatements(sql)
+	if err != nil {
+		return nil, err
 	}
 	return NewSchemaFromStatements(env, statements)
 }
