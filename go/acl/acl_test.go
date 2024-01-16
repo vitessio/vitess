@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/spf13/pflag"
@@ -142,4 +144,22 @@ func TestRegisterFlags(t *testing.T) {
 	if want != got {
 		t.Errorf("got %v, want %v", got, want)
 	}
+}
+
+func TestAlreadyRegisteredPolicy(t *testing.T) {
+	if os.Getenv("TEST_ACL") == "1" {
+		RegisterPolicy("test", nil)
+		return
+	}
+
+	// Run subprocess to test os.Exit which is called by log.fatalf
+	// os.Exit should be called if we try to re-register a policy
+	cmd := exec.Command(os.Args[0], "-test.run=TestAlreadyRegisteredPolicy")
+	cmd.Env = append(os.Environ(), "TEST_ACL=1")
+	err := cmd.Run()
+	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
+		return
+	}
+
+	t.Errorf("process ran with err %v, want exit status 1", err)
 }
