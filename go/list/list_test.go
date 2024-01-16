@@ -1,3 +1,16 @@
+/*
+Copyright 2019 The Vitess Authors.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package list
 
 import (
@@ -17,7 +30,8 @@ func TestInitEmptyList(t *testing.T) {
         t.Error("Expected Back() to be nil")
     }
 }
-    // Can insert an element at the front of the list
+    
+// Can insert an element at the front of the list
 func TestInsertFront(t *testing.T) {
     l := New[int]()
     e := l.PushFront(1)
@@ -31,7 +45,8 @@ func TestInsertFront(t *testing.T) {
         t.Error("Expected Back() to be the inserted element")
     }
 }
-    // Can insert an element at the back of the list
+
+// Can insert an element at the back of the list
 func TestInsertBack(t *testing.T) {
     l := New[int]()
     e := l.PushBack(1)
@@ -45,7 +60,8 @@ func TestInsertBack(t *testing.T) {
         t.Error("Expected Back() to be the inserted element")
     }
 }
-    // Can insert an element at the front of an empty list
+    
+// Can insert an element at the front of an empty list
 func TestInsertFrontEmptyList(t *testing.T) {
     l := New[int]()
     e := l.PushFront(1)
@@ -59,7 +75,8 @@ func TestInsertFrontEmptyList(t *testing.T) {
         t.Error("Expected Back() to be the inserted element")
     }
 }
-    // Can insert an element at the back of an empty list
+    
+// Can insert an element at the back of an empty list
 func TestInsertBackEmptyList(t *testing.T) {
     l := New[int]()
     e := l.PushBack(1)
@@ -73,7 +90,8 @@ func TestInsertBackEmptyList(t *testing.T) {
         t.Error("Expected Back() to be the inserted element")
     }
 }
-    // Can remove the only element from the list
+    
+// Can remove the only element from the list
 func TestRemoveOnlyElement(t *testing.T) {
     l := New[int]()
     e := l.PushFront(1)
@@ -88,6 +106,7 @@ func TestRemoveOnlyElement(t *testing.T) {
         t.Error("Expected Back() to be nil")
     }
 }
+
 func TestRemoveElement(t *testing.T) {
     l := New[int]()
     e := l.PushFront(1)
@@ -102,6 +121,7 @@ func TestRemoveElement(t *testing.T) {
         t.Error("Expected Back() to be nil")
     }
 }
+
 func TestGetFirstElement(t *testing.T) {
     l := New[int]()
     e := l.PushFront(1)
@@ -109,6 +129,7 @@ func TestGetFirstElement(t *testing.T) {
         t.Error("Expected Front() to be the first element")
     }
 }
+
 func TestGetLastElement(t *testing.T) {
     l := New[int]()
     e := l.PushBack(1)
