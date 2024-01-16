@@ -22,15 +22,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/vtgate/buffer"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtgate/buffer"
 )
 
 // TestGatewayBufferingWhenPrimarySwitchesServingState is used to test that the buffering mechanism buffers the queries when a primary goes to a non serving state and
@@ -64,6 +63,12 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	// add a primary tablet which is serving
 	sbc := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 
+	waitForBuffering := func(enabled bool) {
+		for _, buffering := tg.kev.PrimaryIsNotServing(ctx, target); buffering != enabled; _, buffering = tg.kev.PrimaryIsNotServing(ctx, target) {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
 	// add a result to the sandbox connection
 	sqlResult1 := &sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -94,6 +99,8 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	// add another result to the sandbox connection
 	sbc.SetResults([]*sqltypes.Result{sqlResult1})
 
+	waitForBuffering(true)
+
 	// execute the query in a go routine since it should be buffered, and check that it eventually succeed
 	queryChan := make(chan struct{})
 	go func() {
@@ -102,12 +109,11 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	}()
 
 	// set the serving type for the primary tablet true and broadcast it so that the buffering code registers this change
-	// this should stop the buffering and the query executed in the go routine should work. This should be done with some delay so
-	// that we know that the query was buffered
-	time.Sleep(1 * time.Second)
+	// this should stop the buffering and the query executed in the go routine should work.
 	hc.SetServing(primaryTablet, true)
 	hc.Broadcast(primaryTablet)
 
+	waitForBuffering(false)
 	err = tg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 	require.NoError(t, err)
 
@@ -115,7 +121,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	select {
 	case <-queryChan:
 		require.NoError(t, err)
-		require.Equal(t, res, sqlResult1)
+		require.Equal(t, sqlResult1, res)
 	case <-time.After(15 * time.Second):
 		t.Fatalf("timed out waiting for query to execute")
 	}
