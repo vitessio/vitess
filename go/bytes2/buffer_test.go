@@ -16,45 +16,41 @@ limitations under the License.
 
 package bytes2
 
-import "testing"
+import (
+	"testing"
 
-// Checks if the actual value is equal to the expected value for the given function
-func assertEqual(t *testing.T, got any, want any, funcName string) {
-	if got != want {
-		t.Errorf("%s: got %v, want %v", funcName, got, want)
-	}
-}
+	"github.com/stretchr/testify/assert"
+)
 
 func TestBuffer(t *testing.T) {
-	// Initialize a new buffer
 	b := NewBuffer(nil)
 
 	// Test Write function
 	b.Write([]byte("ab"))
-	assertEqual(t, string(b.Bytes()), "ab", "Write()")
+	assert.Equal(t, "ab", string(b.Bytes()), "Write()")
 
 	// Test WriteString function
 	b.WriteString("cd")
-	assertEqual(t, string(b.Bytes()), "abcd", "WriteString()")
+	assert.Equal(t, "abcd", string(b.Bytes()), "WriteString()")
 
 	// Test WriteByte function
 	b.WriteByte('e')
-	assertEqual(t, string(b.Bytes()), "abcde", "WriteByte()")
+	assert.Equal(t, "abcde", string(b.Bytes()), "WriteByte()")
 
 	// Test Bytes function
-	assertEqual(t, string(b.Bytes()), "abcde", "Bytes()")
+	assert.Equal(t, "abcde", string(b.Bytes()), "Bytes()")
 
 	// Test String function
-	assertEqual(t, b.String(), "abcde", "String()")
+	assert.Equal(t, "abcde", b.String(), "String()")
 
 	// Test StringUnsafe function
-	assertEqual(t, b.StringUnsafe(), "abcde", "StringUnsafe()")
+	assert.Equal(t, "abcde", b.StringUnsafe(), "StringUnsafe()")
 
 	// Test Len function
-	assertEqual(t, b.Len(), 5, "Len()")
+	assert.Equal(t, 5, b.Len(), "Len()")
 
 	// Test Reset function
 	b.Reset()
-	assertEqual(t, string(b.Bytes()), "", "Reset()")
-	assertEqual(t, b.Len(), 0, "Reset() - Len()")
+	assert.Equal(t, "", string(b.Bytes()), "Reset()")
+	assert.Equal(t, 0, b.Len(), "Reset(): Len()")
 }
