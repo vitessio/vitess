@@ -174,3 +174,47 @@ func TestEquivalenceRelation(t *testing.T) {
 		})
 	}
 }
+
+func TestUnknownElementError(t *testing.T) {
+	err := &UnknownElementError{element: "test_element"}
+
+	assert.Equal(t, "unknown element test_element", err.Error())
+}
+
+func TestUnknownClassError(t *testing.T) {
+	err := &UnknownClassError{class: 42}
+
+	assert.Equal(t, "unknown class 42", err.Error())
+}
+
+func TestAdd(t *testing.T) {
+	r := NewEquivalenceRelation()
+	initialElements := []string{"a", "b", "c"}
+
+	for _, element := range initialElements {
+		r.Add(element)
+	}
+
+	for _, element := range initialElements {
+		class, err := r.ElementClass(element)
+		require.NoError(t, err)
+		assert.Contains(t, r.classElementsMap[class], element)
+	}
+
+	classCounter := r.classCounter
+	r.Add("a")
+	assert.Equal(t, classCounter, r.classCounter)
+}
+
+func TestElementClass(t *testing.T) {
+	r := NewEquivalenceRelation()
+	element := "test_element"
+
+	_, err := r.ElementClass(element)
+	assert.Error(t, err)
+
+	r.Add(element)
+	class, err := r.ElementClass(element)
+	require.NoError(t, err)
+	assert.Greater(t, class, -1)
+}
