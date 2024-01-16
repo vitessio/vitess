@@ -17,6 +17,8 @@ limitations under the License.
 package vreplication
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,22 +31,31 @@ import (
 
 func TestVtctldclientCLI(t *testing.T) {
 	setSidecarDBName("_vt")
+	var err error
 	origDefaultRdonly := defaultRdonly
 	defer func() {
 		defaultRdonly = origDefaultRdonly
 	}()
 	defaultRdonly = 0
 	vc = setupMinimalCluster(t)
+
+	err = vc.Vtctl.AddCellInfo("zone2")
+	require.NoError(t, err)
+	zone2, err := vc.AddCell(t, "zone2")
+	require.NoError(t, err)
+	require.NotNil(t, zone2)
 	defer vc.TearDown()
 	sourceKeyspace := "product"
 	targetKeyspace := "customer"
 	workflowName := "wf1"
-	setupMinimalCustomerKeyspace(t)
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
+	targetTabs := setupMinimalCustomerKeyspace(t)
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
-		"--no-routing-rules", "--on-ddl", "STOP",
-		"--exclude-tables", "customer2",
+		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
 		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
+		"--all-cells",
 	}
+	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
 
 	mt := newMoveTables(vc, &moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
@@ -55,6 +66,7 @@ func TestVtctldclientCLI(t *testing.T) {
 		sourceKeyspace: sourceKeyspace,
 		tables:         "customer,customer2",
 		createFlags:    createFlags,
+		completeFlags:  completeFlags,
 	}, workflowFlavorVtctld)
 	mt.Create()
 
@@ -79,15 +91,63 @@ func TestVtctldclientCLI(t *testing.T) {
 
 	validateWorkflow1(t, workflowResponse.Workflows)
 	confirmNoRoutingRules(t)
+
+	mt.Start() // Need to start because we set auto-start to false.
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
+
+	for _, tab := range targetTabs {
+		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
+		query := "update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_customer' and workflow = 'wf1'"
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, query)
+		require.NoError(t, err, output)
+	}
+
+	mt.Start() // Need to start because we set stop-after-copy to true.
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+	for _, tab := range targetTabs {
+		catchup(t, tab, workflowName, "MoveTables")
+	}
+	mt.SwitchReadsAndWrites()
+	mt.Complete()
+	confirmRoutingRulesExist(t)
+	require.True(t, checkTablesExist(t, "zone1-100", []string{"customer", "customer2"}))
 }
 
-func confirmNoRoutingRules(t *testing.T) {
+func checkTablesExist(t *testing.T, tabletAlias string, tables []string) bool {
+	tablesResponse, err := vc.VtctldClient.ExecuteCommandWithOutput("GetSchema", tabletAlias, "--tables", strings.Join(tables, ","), "--table-names-only")
+	require.NoError(t, err)
+	tablesFound := strings.Split(tablesResponse, "\n")
+	for _, table := range tables {
+		found := false
+		for _, tableFound := range tablesFound {
+			if tableFound == table {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func getRoutingRules(t *testing.T) *vschema.RoutingRules {
 	routingRules, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
 	var routingRulesResponse vschema.RoutingRules
 	err = protojson.Unmarshal([]byte(routingRules), &routingRulesResponse)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(routingRulesResponse.Rules))
+	return &routingRulesResponse
+}
+func confirmNoRoutingRules(t *testing.T) {
+	routingRulesResponse := getRoutingRules(t)
+	require.Zero(t, len(routingRulesResponse.Rules))
+}
+
+func confirmRoutingRulesExist(t *testing.T) {
+	routingRulesResponse := getRoutingRules(t)
+	require.NotZero(t, len(routingRulesResponse.Rules))
 }
 
 // We only want to validate non-standard attributes that are set by the CLI. The other end-to-end tests validate the rest.
@@ -114,6 +174,7 @@ func validateWorkflow1(t *testing.T, workflows []*vtctldata.Workflow) {
 	stream := oneStream.Streams[0]
 	require.Equal(t, "Stopped", stream.State)
 	require.Equal(t, "in_order:primary,rdonly", stream.TabletTypes)
+	require.Equal(t, "zone1,zone2", stream.Cells)
 
 	bls := stream.BinlogSource
 	require.Equalf(t, 1, len(bls.Filter.Rules), "Rules are %+v", bls.Filter.Rules) // only customer, customer2 should be excluded

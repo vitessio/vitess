@@ -261,6 +261,7 @@ message Workflow {
     int64 rows_copied = 16;
     ThrottlerStatus throttler_status = 17;
     string tablet_types = 18;
+    string cells = 19;
 
     message CopyState {
       string table = 1;

@@ -38,6 +38,7 @@ type iWorkflow interface {
 	Complete()
 	Flavor() string
 	GetLastOutput() string
+	Start()
 }
 
 type workflowFlavor int
@@ -75,7 +76,8 @@ type moveTablesWorkflow struct {
 	sourceShards   string
 	createFlags    []string // currently only used by vtctld
 
-	lastOutput string
+	lastOutput    string
+	completeFlags []string
 }
 
 type iMoveTables interface {
@@ -165,6 +167,10 @@ func (vmt *VtctlMoveTables) GetLastOutput() string {
 	return vmt.lastOutput
 }
 
+func (vmt *VtctlMoveTables) Start() {
+	panic("implement me")
+}
+
 var _ iMoveTables = (*VtctldMoveTables)(nil)
 
 type VtctldMoveTables struct {
@@ -232,11 +238,17 @@ func (v VtctldMoveTables) Cancel() {
 }
 
 func (v VtctldMoveTables) Complete() {
-	v.exec("Complete")
+	args := []string{"Complete"}
+	args = append(args, v.completeFlags...)
+	v.exec(args...)
 }
 
 func (v VtctldMoveTables) GetLastOutput() string {
 	return v.lastOutput
+}
+
+func (v VtctldMoveTables) Start() {
+	v.exec("Start")
 }
 
 // Reshard wrappers
@@ -331,6 +343,10 @@ func (vrs *VtctlReshard) GetLastOutput() string {
 	return vrs.lastOutput
 }
 
+func (vrs *VtctlReshard) Start() {
+	panic("implement me")
+}
+
 var _ iReshard = (*VtctldReshard)(nil)
 
 type VtctldReshard struct {
@@ -400,4 +416,8 @@ func (v VtctldReshard) Complete() {
 
 func (v VtctldReshard) GetLastOutput() string {
 	return v.lastOutput
+}
+
+func (vrs *VtctldReshard) Start() {
+	vrs.exec("Start")
 }

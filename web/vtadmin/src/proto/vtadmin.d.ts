@@ -43428,6 +43428,9 @@ export namespace vtctldata {
 
             /** Stream tablet_types */
             tablet_types?: (string|null);
+
+            /** Stream cells */
+            cells?: (string|null);
         }
 
         /** Represents a Stream. */
@@ -43492,6 +43495,9 @@ export namespace vtctldata {
 
             /** Stream tablet_types. */
             public tablet_types: string;
+
+            /** Stream cells. */
+            public cells: string;
 
             /**
              * Creates a new Stream instance using the specified properties.

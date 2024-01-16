@@ -417,7 +417,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			component_throttled,
 			time_throttled,
 			rows_copied,
-			tablet_types
+			tablet_types,
+			cell
 		FROM
 			_vt.vreplication
 		%s`,
@@ -591,6 +592,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		}
 
 		tabletTypes := row["tablet_types"].ToString()
+		cells := row["cell"].ToString()
+
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:           id,
 			Shard:        tablet.Shard,
@@ -601,6 +604,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			State:        state,
 			DbName:       dbName,
 			TabletTypes:  tabletTypes,
+			Cells:        cells,
 			TransactionTimestamp: &vttimepb.Time{
 				Seconds: transactionTimeSeconds,
 			},
@@ -1429,7 +1433,6 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			return nil, err
 		}
 	}
-
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:                  req.Workflow,
 		MaterializationIntent:     vtctldatapb.MaterializationIntent_MOVETABLES,
