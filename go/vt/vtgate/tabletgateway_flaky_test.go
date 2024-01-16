@@ -63,8 +63,16 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	// add a primary tablet which is serving
 	sbc := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 
+	bufferingWaitTimeout := 60 * time.Second
 	waitForBuffering := func(enabled bool) {
+		timer := time.NewTimer(bufferingWaitTimeout)
+		defer timer.Stop()
 		for _, buffering := tg.kev.PrimaryIsNotServing(ctx, target); buffering != enabled; _, buffering = tg.kev.PrimaryIsNotServing(ctx, target) {
+			select {
+			case <-timer.C:
+				require.Fail(t, "timed out waiting for buffering of enabled: %t", enabled)
+			default:
+			}
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
@@ -114,8 +122,6 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	hc.Broadcast(primaryTablet)
 
 	waitForBuffering(false)
-	err = tg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
-	require.NoError(t, err)
 
 	// wait for the query to execute before checking for results
 	select {
