@@ -178,13 +178,13 @@ func TestEquivalenceRelation(t *testing.T) {
 func TestUnknownElementError(t *testing.T) {
 	err := &UnknownElementError{element: "test_element"}
 
-	assert.Equal(t, "unknown element test_element", err.Error())
+	assert.EqualError(t, err, "unknown element test_element")
 }
 
 func TestUnknownClassError(t *testing.T) {
 	err := &UnknownClassError{class: 42}
 
-	assert.Equal(t, "unknown class 42", err.Error())
+	assert.EqualError(t, err, "unknown class 42")
 }
 
 func TestAdd(t *testing.T) {
@@ -283,7 +283,7 @@ func TestRelated(t *testing.T) {
 
 			result, err := r.Related(tc.element1, tc.element2)
 			if tc.err != nil {
-				assert.Error(t, err)
+				assert.EqualError(t, err, tc.err.Error())
 			} else {
 				assert.Equal(t, tc.expect, result)
 			}
