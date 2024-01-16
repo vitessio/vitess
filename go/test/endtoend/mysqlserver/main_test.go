@@ -51,7 +51,7 @@ var (
 		PARTITION BY HASH( TO_DAYS(created) )
 		PARTITIONS 10;
 `
-	createProcSQL = `use vt_test_keyspace;
+	createProcSQL = `
 CREATE PROCEDURE testing()
 BEGIN
 	delete from vt_insert_test;
