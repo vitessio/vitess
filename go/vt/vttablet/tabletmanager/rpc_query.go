@@ -33,20 +33,28 @@ import (
 
 // analyzeExecuteFetchAsDbaMultiQuery reutrns 'true' when at least one of the queries
 // in the given SQL has a `/*vt+ allowZeroInDate=true */` directive.
-func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (statements []sqlparser.Statement, allCreateTableViewQueries bool, allowZeroInDate bool, err error) {
-	statements, err = parser.SplitStatements(sql)
+func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (queries []string, parseable bool, countCreate int, allowZeroInDate bool, err error) {
+	queries, err = parser.SplitStatementToPieces(sql)
 	if err != nil {
-		return nil, false, false, err
+		return nil, false, 0, false, err
 	}
-	if len(statements) == 0 {
-		return nil, false, false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no statements found in query: %s", sql)
+	if len(queries) == 0 {
+		return nil, false, 0, false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no statements found in query: %s", sql)
 	}
-	allCreateTableViewQueries = true
-	for _, stmt := range statements {
+	parseable = true
+	for _, query := range queries {
+		// Some of the queries we receive here are legitimately non-parseable by our
+		// current parser, such as `CHANGE REPLICATION SOURCE TO...`. We must allow
+		// them and so we skip parsing errors.
+		stmt, err := parser.Parse(query)
+		if err != nil {
+			parseable = false
+			continue
+		}
 		switch stmt.(type) {
 		case *sqlparser.CreateTable, *sqlparser.CreateView:
+			countCreate++
 		default:
-			allCreateTableViewQueries = false
 		}
 
 		if cmnt, ok := stmt.(sqlparser.Commented); ok {
@@ -55,8 +63,9 @@ func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (s
 				allowZeroInDate = true
 			}
 		}
+
 	}
-	return statements, allCreateTableViewQueries, allowZeroInDate, nil
+	return queries, parseable, countCreate, allowZeroInDate, nil
 }
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
@@ -85,7 +94,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
-	statements, allCreateTableViewQueries, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(string(req.Query), tm.SQLParser)
+	statements, _, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(string(req.Query), tm.SQLParser)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +103,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		// where all statements are CREATE TABLE or CREATE VIEW. This is to support `ApplySchema --batch-size`.
 		// In v20, we will not support multi statements whatsoever.
 		// v20 will throw an error by virtua of using ExecuteFetch instead of ExecuteFetchMulti.
-		if !allCreateTableViewQueries {
+		if countCreate != len(statements) {
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba unless all are CREATE TABLE or CREATE VIEW")
 		}
 	}
