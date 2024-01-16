@@ -59,6 +59,16 @@ func TestDurationFromProto(t *testing.T) {
 			isOk:      true,
 			shouldErr: true,
 		},
+		{
+			name: "nanoseconds",
+			in: &vttime.Duration{
+				Seconds: 1,
+				Nanos:   500000000,
+			},
+			expected:  time.Second + 500*time.Millisecond,
+			isOk:      true,
+			shouldErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -77,6 +87,43 @@ func TestDurationFromProto(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, actual)
 			assert.Equal(t, tt.isOk, ok, "expected (_, ok, _) = DurationFromProto; to be ok = %v", tt.isOk)
+		})
+	}
+}
+
+func TestDurationToProto(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		in       time.Duration
+		expected *vttime.Duration
+	}{
+		{
+			name:     "success",
+			in:       time.Second * 1000,
+			expected: &vttime.Duration{Seconds: 1000},
+		},
+		{
+			name:     "zero duration",
+			in:       0,
+			expected: &vttime.Duration{},
+		},
+		{
+			name:     "nanoseconds",
+			in:       time.Second + 500*time.Millisecond,
+			expected: &vttime.Duration{Seconds: 1, Nanos: 500000000},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual := DurationToProto(tt.in)
+			assert.Equal(t, tt.expected, actual)
 		})
 	}
 }
