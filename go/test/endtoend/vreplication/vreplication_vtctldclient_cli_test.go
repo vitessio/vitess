@@ -21,8 +21,6 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -31,6 +29,8 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+// TestVtctldclientCLI tests the vreplication vtctldclient CLI commands, primarily to check that non-standard flags
+// are being handled correctly. The other end-to-end tests are expected to test the various common workflows.
 func TestVtctldclientCLI(t *testing.T) {
 	setSidecarDBName("_vt")
 	var err error
@@ -59,11 +59,13 @@ func TestVtctldclientCLI(t *testing.T) {
 		"--all-cells",
 	}
 	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
+	switchFlags := []string{}
 
-	mt := createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags)
+	mt := createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags, switchFlags)
 	mt.Show()
 	moveTablesOutput := mt.GetLastOutput()
-	t.Run("testMoveTablesFlags1", func(t *testing.T) {
+	// Test one set of MoveTable flags.
+	t.Run("moveTablesFlags1", func(t *testing.T) {
 		workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", "customer", "show", "--workflow", "wf1")
 		require.NoError(t, err)
 		var moveTablesResponse vtctldata.GetWorkflowsResponse
@@ -76,49 +78,74 @@ func TestVtctldclientCLI(t *testing.T) {
 
 		moveTablesResponse.Workflows[0].MaxVReplicationTransactionLag = 0
 		moveTablesResponse.Workflows[0].MaxVReplicationLag = 0
-
 		workflowResponse.Workflows[0].MaxVReplicationTransactionLag = 0
 		workflowResponse.Workflows[0].MaxVReplicationLag = 0
+		// also validates that MoveTables Show and Workflow Show return the same output.
+		require.EqualValues(t, moveTablesResponse.CloneVT(), workflowResponse.CloneVT())
 
+		// Validate that the flags are set correctly in the database.
 		validateWorkflow1(t, workflowResponse.Workflows)
+		// Since we used --no-routing-rules, there should be no routing rules.
 		confirmNoRoutingRules(t)
 	})
 
-	t.Run("testCompleteFlags1", func(t *testing.T) {
+	// More tests for the
+	t.Run("moveTablesFlags2", func(t *testing.T) {
 		mt.Start() // Need to start because we set auto-start to false.
 		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
 		confirmNoRoutingRules(t)
-
 		for _, tab := range targetTabs {
 			alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
 			query := "update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_customer' and workflow = 'wf1'"
 			output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, query)
 			require.NoError(t, err, output)
 		}
-
 		confirmNoRoutingRules(t)
-		completeMoveTables(t, mt, targetTabs)
+		mt.Start() // Need to start because we set stop-after-copy to true.
+		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+		mt.Stop()
+		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
+		mt.Start()
+		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+		for _, tab := range targetTabs {
+			catchup(t, tab, workflowName, "MoveTables")
+		}
+		mt.SwitchReadsAndWrites()
+		mt.Complete()
 		confirmRoutingRulesExist(t)
+		// Confirm that --keep-data was honored.
 		require.True(t, checkTablesExist(t, "zone1-100", []string{"customer", "customer2"}))
 	})
-	t.Run("testCompleteFlags2", func(t *testing.T) {
+	t.Run("completeFlags", func(t *testing.T) {
 		for _, tab := range targetTabs {
 			alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
 			output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, "drop table customer")
 			require.NoError(t, err, output)
 		}
-
 		createFlags = []string{}
 		completeFlags = []string{"--rename-tables"}
 		tables = "customer2"
-		mt = createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags)
-		completeMoveTables(t, mt, targetTabs)
+		switchFlags = []string{"--enable-reverse-replication=false"}
+		mt = createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags, switchFlags)
+		mt.Start() // Need to start because we set stop-after-copy to true.
+		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+		mt.Stop() // Test stopping workflow.
+		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
+		mt.Start()
+		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+		for _, tab := range targetTabs {
+			catchup(t, tab, workflowName, "MoveTables")
+		}
+		mt.SwitchReadsAndWrites()
+		mt.Complete()
+		// Confirm that the source tables were renamed.
 		require.True(t, checkTablesExist(t, "zone1-100", []string{"_customer2_old"}))
 		require.False(t, checkTablesExist(t, "zone1-100", []string{"customer2"}))
 	})
 }
 
-func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, tables string, createFlags, completeFlags []string) iMoveTables {
+func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, tables string,
+	createFlags, completeFlags, switchFlags []string) iMoveTables {
 	mt := newMoveTables(vc, &moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
@@ -129,19 +156,10 @@ func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName
 		tables:         tables,
 		createFlags:    createFlags,
 		completeFlags:  completeFlags,
+		switchFlags:    switchFlags,
 	}, workflowFlavorVtctld)
 	mt.Create()
 	return mt
-}
-
-func completeMoveTables(t *testing.T, mt iMoveTables, targetTabs map[string]*cluster.VttabletProcess) {
-	mt.Start() // Need to start because we set stop-after-copy to true.
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
-	for _, tab := range targetTabs {
-		catchup(t, tab, workflowName, "MoveTables")
-	}
-	mt.SwitchReadsAndWrites()
-	mt.Complete()
 }
 
 func checkTablesExist(t *testing.T, tabletAlias string, tables []string) bool {
