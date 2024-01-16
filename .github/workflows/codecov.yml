@@ -109,5 +109,8 @@ jobs:
     - name: Upload coverage reports to codecov.io
       if: steps.changes.outputs.changed_files == 'true'
       uses: codecov/codecov-action@v3
+      with:
+        fail_ci_if_error: true
+        verbose: true
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

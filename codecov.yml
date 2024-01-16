@@ -11,5 +11,5 @@ coverage:
   status: # https://docs.codecov.com/docs/commit-status
     project:
       default:
-        informational: true # Don't ever fail the codecov/project or codecove/patch tests
+        informational: true # Don't ever fail the codecov/project or codecov/patch tests
 
