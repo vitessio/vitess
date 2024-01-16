@@ -37,3 +37,19 @@ func TestMarshalPB(t *testing.T) {
 		t.Errorf("MarshalPB(col): %q, want %q", b, want)
 	}
 }
+
+func TestMarshalIndentPB(t *testing.T) {
+	col := &vschemapb.Column{
+		Name: "c1",
+		Type: querypb.Type_VARCHAR,
+	}
+	indent := "  "
+	b, err := MarshalIndentPB(col, indent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "{\n  \"name\": \"c1\",\n  \"type\": \"VARCHAR\"\n}"
+	if string(b) != want {
+		t.Errorf("MarshalIndentPB(col, indent): %q, want %q", b, want)
+	}
+}
