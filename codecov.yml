@@ -1,0 +1,15 @@
+# https://docs.codecov.com/docs/
+# https://docs.codecov.com/docs/codecov-yaml
+
+codecov:
+  branch: main # Set the default branch
+
+comment: # https://docs.codecov.com/docs/pull-request-comments
+    hide_project_coverage: false
+
+coverage:
+  status: # https://docs.codecov.com/docs/commit-status
+    project:
+      default:
+        informational: true # Don't ever fail the codecov/project or codecove/patch tests
+
