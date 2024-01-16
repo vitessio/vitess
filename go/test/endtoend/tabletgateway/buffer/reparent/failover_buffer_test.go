@@ -48,10 +48,8 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	replica := clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
 	oldPrimary := primary
 	newPrimary := replica
-	for _, query := range demoteQueries {
-		_, err := primary.VttabletProcess.QueryTablet(query, keyspaceUnshardedName, true)
-		require.NoError(t, err)
-	}
+	err := primary.VttabletProcess.QueryTabletMultiple(demoteQueries, keyspaceUnshardedName, true)
+	require.NoError(t, err)
 
 	// Wait for replica to catch up to primary.
 	cluster.WaitForReplicationPos(t, primary, replica, false, time.Minute)
@@ -65,10 +63,8 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	}
 
 	// Promote replica to new primary.
-	for _, query := range promoteQueries {
-		_, err := replica.VttabletProcess.QueryTablet(query, keyspaceUnshardedName, true)
-		require.NoError(t, err)
-	}
+	err = replica.VttabletProcess.QueryTabletMultiple(promoteQueries, keyspaceUnshardedName, true)
+	require.NoError(t, err)
 
 	// Configure old primary to replicate from new primary.
 
@@ -89,7 +85,7 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	}
 
 	// Notify the new vttablet primary about the reparent.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newPrimary.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newPrimary.Alias)
 	require.NoError(t, err)
 }
 
