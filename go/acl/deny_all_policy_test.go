@@ -16,39 +16,31 @@ limitations under the License.
 
 package acl
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestDenyAllPolicy(t *testing.T) {
 	testDenyAllPolicy := denyAllPolicy{}
 
 	want := errDenyAll
 	err := testDenyAllPolicy.CheckAccessActor("", ADMIN)
-	if err == nil || err != want {
-		t.Errorf("got %v; want %v", err, want)
-	}
+	assert.Equalf(t, err, want, "got %v; want %v", err, want)
 
 	err = testDenyAllPolicy.CheckAccessActor("", DEBUGGING)
-	if err == nil || err != want {
-		t.Errorf("got %v; want %v", err, want)
-	}
+	assert.Equalf(t, err, want, "got %v; want %v", err, want)
 
 	err = testDenyAllPolicy.CheckAccessActor("", MONITORING)
-	if err == nil || err != want {
-		t.Errorf("got %v; want %v", err, want)
-	}
+	assert.Equalf(t, err, want, "got %v; want %v", err, want)
 
 	err = testDenyAllPolicy.CheckAccessHTTP(nil, ADMIN)
-	if err == nil || err != want {
-		t.Errorf("got %v; want %v", err, want)
-	}
+	assert.Equalf(t, err, want, "got %v; want %v", err, want)
 
 	err = testDenyAllPolicy.CheckAccessHTTP(nil, DEBUGGING)
-	if err == nil || err != want {
-		t.Errorf("got %v; want %v", err, want)
-	}
+	assert.Equalf(t, err, want, "got %v; want %v", err, want)
 
 	err = testDenyAllPolicy.CheckAccessHTTP(nil, MONITORING)
-	if err == nil || err != want {
-		t.Errorf("got %v; want %v", err, want)
-	}
+	assert.Equalf(t, err, want, "got %v; want %v", err, want)
 }

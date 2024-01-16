@@ -16,39 +16,31 @@ limitations under the License.
 
 package acl
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestReadOnlyPolicy(t *testing.T) {
 	testReadOnlyPolicy := readOnlyPolicy{}
 
 	want := errReadOnly
 	err := testReadOnlyPolicy.CheckAccessActor("", ADMIN)
-	if err == nil || err != want {
-		t.Errorf("got %v; want %v", err, want)
-	}
+	assert.Equalf(t, err, want, "got %v; want %v", err, want)
 
 	err = testReadOnlyPolicy.CheckAccessActor("", DEBUGGING)
-	if err != nil {
-		t.Errorf("got %v; want no error", err)
-	}
+	assert.Equalf(t, err, nil, "got %v; want no error", err)
 
 	err = testReadOnlyPolicy.CheckAccessActor("", MONITORING)
-	if err != nil {
-		t.Errorf("got %v; want no error", err)
-	}
+	assert.Equalf(t, err, nil, "got %v; want no error", err)
 
 	err = testReadOnlyPolicy.CheckAccessHTTP(nil, ADMIN)
-	if err == nil || err != want {
-		t.Errorf("got %v; want %v", err, want)
-	}
+	assert.Equalf(t, err, want, "got %v; want %v", err, want)
 
 	err = testReadOnlyPolicy.CheckAccessHTTP(nil, DEBUGGING)
-	if err != nil {
-		t.Errorf("got %v; want no error", err)
-	}
+	assert.Equalf(t, err, nil, "got %v; want no error", err)
 
 	err = testReadOnlyPolicy.CheckAccessHTTP(nil, MONITORING)
-	if err != nil {
-		t.Errorf("got %v; want no error", err)
-	}
+	assert.Equalf(t, err, nil, "got %v; want no error", err)
 }
