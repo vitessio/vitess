@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
