@@ -38,19 +38,19 @@ func TestBuffer(t *testing.T) {
 	assert.Equal(t, "abcde", string(b.Bytes()), "WriteByte()")
 
 	// Test Bytes function
-	assert.Equal(t, "abcde", string(b.Bytes()), "Bytes()")
+	assert.Equal(t, "abcde", string(b.Bytes()))
 
 	// Test String function
-	assert.Equal(t, "abcde", b.String(), "String()")
+	assert.Equal(t, "abcde", b.String())
 
 	// Test StringUnsafe function
-	assert.Equal(t, "abcde", b.StringUnsafe(), "StringUnsafe()")
+	assert.Equal(t, "abcde", b.StringUnsafe())
 
 	// Test Len function
-	assert.Equal(t, 5, b.Len(), "Len()")
+	assert.Equal(t, 5, b.Len())
 
 	// Test Reset function
 	b.Reset()
-	assert.Equal(t, "", string(b.Bytes()), "Reset()")
-	assert.Equal(t, 0, b.Len(), "Reset(): Len()")
+	assert.Equal(t, "", string(b.Bytes()))
+	assert.Equal(t, 0, b.Len())
 }
