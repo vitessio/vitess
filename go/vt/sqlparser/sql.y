@@ -428,7 +428,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <declareHandlerAction> declare_handler_action
 %type <bytes> signal_condition_value
 %type <str> trigger_time trigger_event
-%type <statement> alter_statement alter_table_statement alter_database_statement alter_event_statement
+%type <statement> alter_statement alter_table_statement alter_database_statement alter_event_statement alter_user_statement
 %type <ddl> create_table_prefix rename_list alter_table_statement_part
 %type <ddls> alter_table_statement_list
 %type <statement> analyze_statement analyze_opt show_statement use_statement prepare_statement execute_statement deallocate_statement
@@ -4533,6 +4533,7 @@ alter_statement:
   alter_database_statement
 | alter_table_statement
 | alter_event_statement
+| alter_user_statement
 
 alter_database_statement:
   ALTER DATABASE ID creation_option_opt
@@ -4768,6 +4769,16 @@ alter_table_statement_part:
 | INSERT_METHOD equal_opt LAST
   {
     $$ = &DDL{Action: AlterStr}
+  }
+
+alter_user_statement:
+  ALTER USER exists_opt account_name authentication
+  {
+    var ifExists bool
+    if $3 != 0 {
+      ifExists = true
+    }
+    $$ = &DDL{Action: AlterStr, User: $4, Authentication: $5, IfExists: ifExists}
   }
 
 column_order_opt:

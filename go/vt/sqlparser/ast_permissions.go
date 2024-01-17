@@ -37,6 +37,11 @@ func (an *AccountName) String() string {
 		strings.ReplaceAll(an.Name, "`", "``"), strings.ReplaceAll(host, "`", "``"))
 }
 
+// IsEmpty returns true if any of the fields in this AccountName are set.
+func (an *AccountName) IsEmpty() bool {
+	return an.Name == "" && an.Host == ""
+}
+
 // AccountRename represents an account changing its name.
 type AccountRename struct {
 	From AccountName
