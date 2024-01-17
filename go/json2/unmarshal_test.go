@@ -20,8 +20,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gotest.tools/assert"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestUnmarshal(t *testing.T) {
@@ -50,6 +53,25 @@ func TestUnmarshal(t *testing.T) {
 		}
 		assert.Equal(t, tcase.err, got, "Unmarshal(%v) err", tcase.in)
 	}
+}
+
+func TestUnmarshalProto(t *testing.T) {
+	protoData := &emptypb.Empty{}
+	protoJSONData, err := protojson.Marshal(protoData)
+	assert.Nil(t, err, "protojson.Marshal error")
+
+	tcase := struct {
+		in  string
+		out *emptypb.Empty
+	}{
+		in:  string(protoJSONData),
+		out: &emptypb.Empty{},
+	}
+
+	err = Unmarshal([]byte(tcase.in), tcase.out)
+
+	assert.Nil(t, err, "Unmarshal(%v) protobuf message", tcase.in)
+	assert.Equal(t, protoData, tcase.out, "Unmarshal(%v) protobuf message result", tcase.in)
 }
 
 func TestAnnotate(t *testing.T) {
