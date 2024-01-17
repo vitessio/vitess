@@ -69,7 +69,6 @@ func TestProbesPostDisable(t *testing.T) {
 	})
 
 	t.Run("aggregated", func(t *testing.T) {
-		throttler.Disable()
 		assert.Equal(t, 0, throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
 		aggr := throttler.aggregatedMetricsSnapshot()
 		assert.Equal(t, 0, len(aggr))
