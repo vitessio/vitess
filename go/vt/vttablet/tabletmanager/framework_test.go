@@ -49,7 +49,7 @@ import (
 )
 
 const (
-	gtidFlavor   = "MySQL56"
+	gtidFlavor   = "MySQL"
 	gtidPosition = "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-220"
 )
 

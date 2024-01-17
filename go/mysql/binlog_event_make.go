@@ -30,8 +30,8 @@ const (
 // This file contains utility methods to create binlog replication
 // packets. They are mostly used for testing.
 
-// NewMySQL56BinlogFormat returns a typical BinlogFormat for MySQL 5.6.
-func NewMySQL56BinlogFormat() BinlogFormat {
+// NewMySQLBinlogFormat returns a typical BinlogFormat for MySQL 5.6.
+func NewMySQLBinlogFormat() BinlogFormat {
 	return BinlogFormat{
 		FormatVersion:     4,
 		ServerVersion:     "5.6.33-0ubuntu0.14.04.1-log",
@@ -133,11 +133,11 @@ func (s *FakeBinlogStream) Packetize(f BinlogFormat, typ byte, flags uint16, dat
 
 // NewInvalidEvent returns an invalid event (its size is <19).
 func NewInvalidEvent() BinlogEvent {
-	return NewMysql56BinlogEvent([]byte{0})
+	return NewMysqlBinlogEvent([]byte{0})
 }
 
 // NewFormatDescriptionEvent creates a new FormatDescriptionEvent
-// based on the provided BinlogFormat. It uses a mysql56BinlogEvent
+// based on the provided BinlogFormat. It uses a mysqlBinlogEvent
 // but could use a MariaDB one.
 func NewFormatDescriptionEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
 	length := 2 + // binlog-version
@@ -155,7 +155,7 @@ func NewFormatDescriptionEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent 
 	data[57+len(f.HeaderSizes)] = f.ChecksumAlgorithm
 
 	ev := s.Packetize(f, eFormatDescriptionEvent, 0, data)
-	return NewMysql56BinlogEvent(ev)
+	return NewMysqlBinlogEvent(ev)
 }
 
 // NewInvalidFormatDescriptionEvent returns an invalid FormatDescriptionEvent.
@@ -166,7 +166,7 @@ func NewInvalidFormatDescriptionEvent(f BinlogFormat, s *FakeBinlogStream) Binlo
 	data[0] = 3
 
 	ev := s.Packetize(f, eFormatDescriptionEvent, 0, data)
-	return NewMysql56BinlogEvent(ev)
+	return NewMysqlBinlogEvent(ev)
 }
 
 // NewRotateEvent returns a RotateEvent.
@@ -179,7 +179,7 @@ func NewRotateEvent(f BinlogFormat, s *FakeBinlogStream, position uint64, filena
 	copy(data[8:], filename)
 
 	ev := s.Packetize(f, eRotateEvent, 0, data)
-	return NewMysql56BinlogEvent(ev)
+	return NewMysqlBinlogEvent(ev)
 }
 
 func NewFakeRotateEvent(f BinlogFormat, s *FakeBinlogStream, filename string) BinlogEvent {
@@ -190,14 +190,14 @@ func NewFakeRotateEvent(f BinlogFormat, s *FakeBinlogStream, filename string) Bi
 	copy(data[8:], filename)
 
 	ev := s.Packetize(f, eRotateEvent, FlagLogEventArtificial, data)
-	return NewMysql56BinlogEvent(ev)
+	return NewMysqlBinlogEvent(ev)
 }
 
 // NewHeartbeatEvent returns a HeartbeatEvent.
 // see https://dev.mysql.com/doc/internals/en/heartbeat-event.html
 func NewHeartbeatEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
 	ev := s.Packetize(f, eHeartbeatEvent, 0, []byte{})
-	return NewMysql56BinlogEvent(ev)
+	return NewMysqlBinlogEvent(ev)
 }
 
 // NewHeartbeatEvent returns a HeartbeatEvent.
@@ -208,7 +208,7 @@ func NewHeartbeatEventWithLogFile(f BinlogFormat, s *FakeBinlogStream, filename 
 	copy(data, filename)
 
 	ev := s.Packetize(f, eHeartbeatEvent, 0, data)
-	return NewMysql56BinlogEvent(ev)
+	return NewMysqlBinlogEvent(ev)
 }
 
 // NewQueryEvent makes up a QueryEvent based on the Query structure.
@@ -250,7 +250,7 @@ func NewQueryEvent(f BinlogFormat, s *FakeBinlogStream, q Query) BinlogEvent {
 	copy(data[pos:], q.SQL)
 
 	ev := s.Packetize(f, eQueryEvent, 0, data)
-	return NewMysql56BinlogEvent(ev)
+	return NewMysqlBinlogEvent(ev)
 }
 
 // NewInvalidQueryEvent returns an invalid QueryEvent. IsValid is however true.
@@ -261,7 +261,7 @@ func NewInvalidQueryEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
 	data[4+4] = 200 // > 100
 
 	ev := s.Packetize(f, eQueryEvent, 0, data)
-	return NewMysql56BinlogEvent(ev)
+	return NewMysqlBinlogEvent(ev)
 }
 
 // NewXIDEvent returns a XID event. We do not use the data, so keep it 0.
@@ -270,7 +270,7 @@ func NewXIDEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
 	data := make([]byte, length)
 
 	ev := s.Packetize(f, eXIDEvent, 0, data)
-	return NewMysql56BinlogEvent(ev)
+	return NewMysqlBinlogEvent(ev)
 }
 
 // NewIntVarEvent returns an IntVar event.
@@ -289,7 +289,7 @@ func NewIntVarEvent(f BinlogFormat, s *FakeBinlogStream, typ byte, value uint64)
 	data[8] = byte(value >> 56)
 
 	ev := s.Packetize(f, eIntVarEvent, 0, data)
-	return NewMysql56BinlogEvent(ev)
+	return NewMysqlBinlogEvent(ev)
 }
 
 // NewMariaDBGTIDEvent returns a MariaDB specific GTID event.
@@ -462,5 +462,5 @@ func newRowsEvent(f BinlogFormat, s *FakeBinlogStream, typ byte, tableID uint64,
 	}
 
 	ev := s.Packetize(f, typ, 0, data)
-	return NewMysql56BinlogEvent(ev)
+	return NewMysqlBinlogEvent(ev)
 }

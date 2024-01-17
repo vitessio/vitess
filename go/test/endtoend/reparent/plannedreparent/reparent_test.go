@@ -446,7 +446,7 @@ func TestFullStatus(t *testing.T) {
 	// For a primary tablet there is no replication status
 	assert.Nil(t, primaryStatus.ReplicationStatus)
 	assert.Contains(t, primaryStatus.PrimaryStatus.String(), "vt-0000000101-bin")
-	assert.Equal(t, primaryStatus.GtidPurged, "MySQL56/")
+	assert.Equal(t, primaryStatus.GtidPurged, "MySQL/")
 	assert.False(t, primaryStatus.ReadOnly)
 	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
 	require.NoError(t, err)
@@ -484,7 +484,7 @@ func TestFullStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, replicaStatus.ServerUuid)
 	assert.NotEmpty(t, replicaStatus.ServerId)
-	assert.Contains(t, replicaStatus.ReplicationStatus.Position, "MySQL56/"+replicaStatus.ReplicationStatus.SourceUuid)
+	assert.Contains(t, replicaStatus.ReplicationStatus.Position, "MySQL/"+replicaStatus.ReplicationStatus.SourceUuid)
 	assert.EqualValues(t, replication.ReplicationStateRunning, replicaStatus.ReplicationStatus.IoState)
 	assert.EqualValues(t, replication.ReplicationStateRunning, replicaStatus.ReplicationStatus.SqlState)
 	assert.Equal(t, fileNameFromPosition(replicaStatus.ReplicationStatus.FilePosition), fileNameFromPosition(primaryStatus.PrimaryStatus.FilePosition))
@@ -507,7 +507,7 @@ func TestFullStatus(t *testing.T) {
 	assert.EqualValues(t, replicaStatus.ReplicationStatus.SourcePort, tablets[0].MySQLPort)
 	assert.Equal(t, replicaStatus.ReplicationStatus.SourceUser, "vt_repl")
 	assert.Contains(t, replicaStatus.PrimaryStatus.String(), "vt-0000000102-bin")
-	assert.Equal(t, replicaStatus.GtidPurged, "MySQL56/")
+	assert.Equal(t, replicaStatus.GtidPurged, "MySQL/")
 	assert.True(t, replicaStatus.ReadOnly)
 	// For all version at or above v17.0.0, each replica will start in super_read_only mode.
 	if vtTabletVersion >= 17 && vtcltlVersion >= 17 {

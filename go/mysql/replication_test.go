@@ -119,7 +119,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		}
 		assert.Equal(t, expectedData, data)
 	})
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 
 	t.Run("Write rotate event", func(t *testing.T) {

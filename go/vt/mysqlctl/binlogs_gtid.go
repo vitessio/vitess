@@ -71,7 +71,7 @@ func ChooseBinlogsForIncrementalBackup(
 		if err != nil {
 			return nil, "", "", vterrors.Wrapf(err, "cannot get previous gtids for binlog %v", binlog)
 		}
-		previousGTIDsPos, err := replication.ParsePosition(replication.Mysql56FlavorID, previousGtids)
+		previousGTIDsPos, err := replication.ParsePosition(replication.MysqlFlavorID, previousGtids)
 		if err != nil {
 			return nil, "", "", vterrors.Wrapf(err, "cannot decode binlog %s position in incremental backup: %v", binlog, previousGTIDsPos)
 		}

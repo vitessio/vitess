@@ -82,10 +82,10 @@ func TestChooseNewPrimary(t *testing.T) {
 				// zone1-101 is behind zone1-102 and zone1-102 has a tolerable replication lag
 				replicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000101": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
 					},
 					"zone1-0000000102": {
-						Position:              "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						Position:              "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						ReplicationLagSeconds: 20,
 					},
 				},
@@ -142,10 +142,10 @@ func TestChooseNewPrimary(t *testing.T) {
 				// zone1-101 is behind zone1-102 and we don't care about the replication lag
 				replicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000101": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
 					},
 					"zone1-0000000102": {
-						Position:              "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						Position:              "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						ReplicationLagSeconds: 230,
 					},
 				},
@@ -202,10 +202,10 @@ func TestChooseNewPrimary(t *testing.T) {
 				// zone1-101 is behind zone1-102
 				replicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000101": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
 					},
 					"zone1-0000000102": {
-						Position:              "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						Position:              "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						ReplicationLagSeconds: 232,
 					},
 				},
@@ -263,11 +263,11 @@ func TestChooseNewPrimary(t *testing.T) {
 				// since the relay log position for zone1-102 is more advanced
 				replicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000101": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
 					},
 					"zone1-0000000102": {
-						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
-						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						Position:         "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 			},
@@ -321,7 +321,7 @@ func TestChooseNewPrimary(t *testing.T) {
 			tmc: &chooseNewPrimaryTestTMClient{
 				replicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000101": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
 					},
 				},
 			},
@@ -361,7 +361,7 @@ func TestChooseNewPrimary(t *testing.T) {
 			tmc: &chooseNewPrimaryTestTMClient{
 				replicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000101": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
 					},
 				},
 			},
@@ -405,7 +405,7 @@ func TestChooseNewPrimary(t *testing.T) {
 						Position: "",
 					},
 					"zone1-0000000101": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
 					},
 				},
 			},
@@ -443,10 +443,10 @@ func TestChooseNewPrimary(t *testing.T) {
 				// zone1-101 is behind zone1-102
 				replicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000101": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
 					},
 					"zone1-0000000102": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 			},
@@ -498,10 +498,10 @@ func TestChooseNewPrimary(t *testing.T) {
 				// zone1-101 is behind zone1-102
 				replicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000101": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
 					},
 					"zone1-0000000102": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 			},
@@ -600,7 +600,7 @@ func TestFindPositionForTablet(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Position: &replicationdatapb.Status{
-							Position:              "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							Position:              "MySQL/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 							ReplicationLagSeconds: 201,
 						},
 					},
@@ -613,7 +613,7 @@ func TestFindPositionForTablet(t *testing.T) {
 				},
 			},
 			expectedLag:      201 * time.Second,
-			expectedPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			expectedPosition: "MySQL/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 		}, {
 			name: "no replication status",
 			tmc: &testutil.TabletManagerClient{
@@ -644,7 +644,7 @@ func TestFindPositionForTablet(t *testing.T) {
 					"zone1-0000000100": {
 						Position: &replicationdatapb.Status{
 							Position:              "unused",
-							RelayLogPosition:      "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							RelayLogPosition:      "MySQL/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 							ReplicationLagSeconds: 291,
 						},
 					},
@@ -657,7 +657,7 @@ func TestFindPositionForTablet(t *testing.T) {
 				},
 			},
 			expectedLag:      291 * time.Second,
-			expectedPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			expectedPosition: "MySQL/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 		}, {
 			name: "error in parsing position",
 			tmc: &testutil.TabletManagerClient{
@@ -869,28 +869,28 @@ func TestFindCurrentPrimary(t *testing.T) {
 
 func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
 	sid1 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	mysqlGTID1 := replication.Mysql56GTID{
+	mysqlGTID1 := replication.MysqlGTID{
 		Server:   sid1,
 		Sequence: 9,
 	}
-	mysqlGTID2 := replication.Mysql56GTID{
+	mysqlGTID2 := replication.MysqlGTID{
 		Server:   sid1,
 		Sequence: 10,
 	}
-	mysqlGTID3 := replication.Mysql56GTID{
+	mysqlGTID3 := replication.MysqlGTID{
 		Server:   sid1,
 		Sequence: 11,
 	}
 
-	positionMostAdvanced := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionMostAdvanced := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID1)
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID2)
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID3)
 
-	positionIntermediate1 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionIntermediate1 := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 	positionIntermediate1.GTIDSet = positionIntermediate1.GTIDSet.AddGTID(mysqlGTID1)
 
-	positionIntermediate2 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionIntermediate2 := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID1)
 	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID2)
 

@@ -44,7 +44,7 @@ func ParseMysqlPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error)
 	status := ParsePrimaryStatus(resultMap)
 
 	var err error
-	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	status.Position.GTIDSet, err = ParseMysqlGTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
 		return PrimaryStatus{}, vterrors.Wrapf(err, "PrimaryStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}

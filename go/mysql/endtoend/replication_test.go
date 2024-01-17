@@ -90,7 +90,7 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 	for {
 		be, err := conn.ReadBinlogEvent()
 		require.NoError(t, err, "ReadPacket failed: %v", err)
-		require.True(t, be.IsValid(), "NewMysql56BinlogEvent has an invalid packet: %v", be)
+		require.True(t, be.IsValid(), "NewMysqlBinlogEvent has an invalid packet: %v", be)
 
 		// Skip rotate packets. These are normal as first packets.
 		if be.IsRotate() {

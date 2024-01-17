@@ -105,7 +105,7 @@ type LocalTestEnv struct {
 
 // DefaultMySQLFlavor is the MySQL flavor used by vttest when no explicit
 // flavor is given.
-const DefaultMySQLFlavor = "MySQL56"
+const DefaultMySQLFlavor = "MySQL"
 
 // GetMySQLOptions returns the set of MySQL CNF files and any errors.
 func GetMySQLOptions() ([]string, error) {

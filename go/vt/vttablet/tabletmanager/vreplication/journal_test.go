@@ -64,7 +64,7 @@ func TestJournalOneToOne(t *testing.T) {
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "other_keyspace",
 			Shard:    "0",
-			Gtid:     "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10",
+			Gtid:     "MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10",
 		}},
 	}
 	query := fmt.Sprintf("insert into _vt.resharding_journal(id, db_name, val) values (1, 'vttest', %v)", encodeString(journal.String()))
@@ -73,7 +73,7 @@ func TestJournalOneToOne(t *testing.T) {
 
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"0\\.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10'`,
+		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"0\\.*'MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10'`,
 		fmt.Sprintf("delete from _vt.vreplication where id=%d", firstID),
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
@@ -124,11 +124,11 @@ func TestJournalOneToMany(t *testing.T) {
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "other_keyspace",
 			Shard:    "-80",
-			Gtid:     "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-5",
+			Gtid:     "MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-5",
 		}, {
 			Keyspace: "other_keyspace",
 			Shard:    "80-",
-			Gtid:     "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:5-10",
+			Gtid:     "MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:5-10",
 		}},
 	}
 	query := fmt.Sprintf("insert into _vt.resharding_journal(id, db_name, val) values (1, 'vttest', %v)", encodeString(journal.String()))
@@ -137,8 +137,8 @@ func TestJournalOneToMany(t *testing.T) {
 
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"-80\\.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-5'`,
-		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"80-\\.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:5-10'`,
+		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"-80\\.*'MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-5'`,
+		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"80-\\.*'MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:5-10'`,
 		fmt.Sprintf("delete from _vt.vreplication where id=%d", firstID),
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
@@ -190,7 +190,7 @@ func TestJournalTablePresent(t *testing.T) {
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "other_keyspace",
 			Shard:    "0",
-			Gtid:     "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10",
+			Gtid:     "MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10",
 		}},
 	}
 	query := fmt.Sprintf("insert into _vt.resharding_journal(id, db_name, val) values (1, 'vttest', %v)", encodeString(journal.String()))
@@ -199,7 +199,7 @@ func TestJournalTablePresent(t *testing.T) {
 
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"0\\.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10'`,
+		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"0\\.*'MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10'`,
 		fmt.Sprintf("delete from _vt.vreplication where id=%d", firstID),
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
@@ -250,7 +250,7 @@ func TestJournalTableNotPresent(t *testing.T) {
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "other_keyspace",
 			Shard:    "0",
-			Gtid:     "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10",
+			Gtid:     "MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10",
 		}},
 	}
 	query := fmt.Sprintf("insert into _vt.resharding_journal(id, db_name, val) values (1, 'vttest', %v)", encodeString(journal.String()))
@@ -306,7 +306,7 @@ func TestJournalTableMixed(t *testing.T) {
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "other_keyspace",
 			Shard:    "0",
-			Gtid:     "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10",
+			Gtid:     "MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10",
 		}},
 	}
 	query := fmt.Sprintf("insert into _vt.resharding_journal(id, db_name, val) values (1, 'vttest', %v)", encodeString(journal.String()))

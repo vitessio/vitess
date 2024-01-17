@@ -36,7 +36,7 @@ import (
 // This file tests the RBR events are parsed correctly.
 
 func TestStreamerParseRBREvents(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 	s.ServerID = 62344
 
@@ -286,7 +286,7 @@ func TestStreamerParseRBREvents(t *testing.T) {
 }
 
 func TestStreamerParseRBRNameEscapes(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 	s.ServerID = 62344
 

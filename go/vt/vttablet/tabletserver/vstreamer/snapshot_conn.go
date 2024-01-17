@@ -156,9 +156,9 @@ func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (
 	if err != nil {
 		return "", err
 	}
-	// The "session_track_gtids = START_GTID" patch is only applicable to MySQL56 GTID, which is
-	// why we hardcode the position as mysql.Mysql56FlavorID
-	mpos, err := replication.ParsePosition(replication.Mysql56FlavorID, result.SessionStateChanges)
+	// The "session_track_gtids = START_GTID" patch is only applicable to MySQL GTID, which is
+	// why we hardcode the position as mysql.MysqlFlavorID
+	mpos, err := replication.ParsePosition(replication.MysqlFlavorID, result.SessionStateChanges)
 	if err != nil {
 		return "", err
 	}

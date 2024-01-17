@@ -24,20 +24,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseMysql56GTID(t *testing.T) {
+func TestParseMysqlGTID(t *testing.T) {
 	input := "00010203-0405-0607-0809-0A0B0C0D0E0F:56789"
-	want := Mysql56GTID{
+	want := MysqlGTID{
 		Server:   SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 		Sequence: 56789,
 	}
 
-	got, err := parseMysql56GTID(input)
+	got, err := parseMysqlGTID(input)
 	require.NoError(t, err, "unexpected error: %v", err)
-	assert.Equal(t, want, got, "parseMysql56GTID(%#v) = %#v, want %#v", input, got, want)
+	assert.Equal(t, want, got, "parseMysqlGTID(%#v) = %#v, want %#v", input, got, want)
 
 }
 
-func TestParseMysql56GTIDInvalid(t *testing.T) {
+func TestParseMysqlGTIDInvalid(t *testing.T) {
 	table := []string{
 		"",
 		"00010203-0405-0607-0809-0A0B0C0D0E0F",
@@ -47,8 +47,8 @@ func TestParseMysql56GTIDInvalid(t *testing.T) {
 	}
 
 	for _, input := range table {
-		_, err := parseMysql56GTID(input)
-		assert.Error(t, err, "parseMysql56GTID(%#v): expected error, got none", input)
+		_, err := parseMysqlGTID(input)
+		assert.Error(t, err, "parseMysqlGTID(%#v): expected error, got none", input)
 
 	}
 }
@@ -87,8 +87,8 @@ func TestParseSIDInvalid(t *testing.T) {
 	}
 }
 
-func TestMysql56GTIDString(t *testing.T) {
-	input := Mysql56GTID{
+func TestMysqlGTIDString(t *testing.T) {
+	input := MysqlGTID{
 		Server:   SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 		Sequence: 12345,
 	}
@@ -98,22 +98,22 @@ func TestMysql56GTIDString(t *testing.T) {
 	}
 }
 
-func TestMysql56GTIDFlavor(t *testing.T) {
-	input := Mysql56GTID{}
-	if got, want := input.Flavor(), "MySQL56"; got != want {
+func TestMysqlGTIDFlavor(t *testing.T) {
+	input := MysqlGTID{}
+	if got, want := input.Flavor(), "MySQL"; got != want {
 		t.Errorf("%#v.Flavor() = %#v, want %#v", input, got, want)
 	}
 }
 
-func TestMysql56SequenceDomain(t *testing.T) {
-	input := Mysql56GTID{}
+func TestMysqlSequenceDomain(t *testing.T) {
+	input := MysqlGTID{}
 	if got, want := input.SequenceDomain(), any(nil); got != want {
 		t.Errorf("%#v.SequenceDomain() = %#v, want %#v", input, got, want)
 	}
 }
 
-func TestMysql56SourceServer(t *testing.T) {
-	input := Mysql56GTID{
+func TestMysqlSourceServer(t *testing.T) {
+	input := MysqlGTID{
 		Server: SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 	}
 	want := any(SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
@@ -122,8 +122,8 @@ func TestMysql56SourceServer(t *testing.T) {
 	}
 }
 
-func TestMysql56SequenceNumber(t *testing.T) {
-	input := Mysql56GTID{
+func TestMysqlSequenceNumber(t *testing.T) {
+	input := MysqlGTID{
 		Server:   SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 		Sequence: 5432,
 	}
@@ -133,23 +133,23 @@ func TestMysql56SequenceNumber(t *testing.T) {
 	}
 }
 
-func TestMysql56GTIDGTIDSet(t *testing.T) {
+func TestMysqlGTIDGTIDSet(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	input := Mysql56GTID{Server: sid1, Sequence: 5432}
-	want := Mysql56GTIDSet{sid1: []interval{{5432, 5432}}}
+	input := MysqlGTID{Server: sid1, Sequence: 5432}
+	want := MysqlGTIDSet{sid1: []interval{{5432, 5432}}}
 	if got := input.GTIDSet(); !got.Equal(want) {
 		t.Errorf("%#v.GTIDSet() = %#v, want %#v", input, got, want)
 	}
 }
 
-func TestMysql56ParseGTID(t *testing.T) {
+func TestMysqlParseGTID(t *testing.T) {
 	input := "00010203-0405-0607-0809-0A0B0C0D0E0F:56789"
-	want := Mysql56GTID{
+	want := MysqlGTID{
 		Server:   SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 		Sequence: 56789,
 	}
 
-	got, err := parseMysql56GTID(input)
+	got, err := parseMysqlGTID(input)
 	require.NoError(t, err, "unexpected error: %v", err)
-	assert.Equal(t, want, got, "(&mysql56{}).ParseGTID(%#v) = %#v, want %#v", input, got, want)
+	assert.Equal(t, want, got, "(&mysql{}).ParseGTID(%#v) = %#v, want %#v", input, got, want)
 }

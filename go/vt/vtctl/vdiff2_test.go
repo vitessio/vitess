@@ -280,8 +280,8 @@ func TestVDiff2Sharded(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	env := newTestVDiffEnv(t, ctx, []string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
-		"-80": "MySQL56/0e45e704-7cb9-11ed-a1eb-0242ac120002:1-890",
-		"80-": "MySQL56/1497ddb0-7cb9-11ed-a1eb-0242ac120002:1-891",
+		"-80": "MySQL/0e45e704-7cb9-11ed-a1eb-0242ac120002:1-890",
+		"80-": "MySQL/1497ddb0-7cb9-11ed-a1eb-0242ac120002:1-891",
 	})
 	defer env.close()
 

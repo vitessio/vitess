@@ -4467,7 +4467,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 					},
 				},
@@ -4505,18 +4505,18 @@ func TestEmergencyReparentShard(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
-								Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+								Position:         "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5": nil,
 					},
 					"zone1-0000000200": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5": nil,
 					},
 				},
 			},

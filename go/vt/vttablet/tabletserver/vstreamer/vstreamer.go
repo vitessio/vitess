@@ -632,7 +632,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, err
 		}
 	case ev.IsTransactionPayload():
-		if !vs.pos.MatchesFlavor(replication.Mysql56FlavorID) {
+		if !vs.pos.MatchesFlavor(replication.MysqlFlavorID) {
 			return nil, fmt.Errorf("compressed transaction payload events are not supported with database flavor %s",
 				vs.vse.env.Config().DB.Flavor)
 		}

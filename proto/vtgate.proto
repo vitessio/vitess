@@ -312,7 +312,7 @@ message VStreamRequest {
 
   // position specifies the starting point of the bin log positions
   // as well as the keyspace-shards to pull events from.
-  // position is of the form 'ks1:0@MySQL56/<mysql_pos>|ks2:-80@MySQL56/<mysql_pos>'.
+  // position is of the form 'ks1:0@MySQL/<mysql_pos>|ks2:-80@MySQL/<mysql_pos>'.
   binlogdata.VGtid vgtid = 3;
   binlogdata.Filter filter = 4;
   VStreamFlags flags = 5;

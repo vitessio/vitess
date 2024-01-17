@@ -220,7 +220,7 @@ func (tp *TransactionPayload) decode() error {
 					eventLen, pos, decompressedPayloadLen))
 		}
 		eventData := decompressedPayload[pos : pos+eventLen]
-		ble := NewMysql56BinlogEvent(eventData)
+		ble := NewMysqlBinlogEvent(eventData)
 		tp.Events = append(tp.Events, ble)
 
 		pos += eventLen

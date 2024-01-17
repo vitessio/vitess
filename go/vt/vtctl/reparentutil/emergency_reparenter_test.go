@@ -166,7 +166,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -175,7 +175,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -184,20 +184,20 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
 					},
 				},
 			},
@@ -283,7 +283,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -292,7 +292,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -301,7 +301,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
 							},
 						},
 					},
@@ -314,13 +314,13 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
 					},
 				},
 			},
@@ -428,7 +428,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -437,7 +437,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -446,20 +446,20 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 				},
 			},
@@ -517,7 +517,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 						},
 					},
 				},
@@ -557,7 +557,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -566,17 +566,17 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
 					},
 				},
 			},
@@ -770,7 +770,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -779,7 +779,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -864,7 +864,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -873,7 +873,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -882,7 +882,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -892,13 +892,13 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": assert.AnError,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": assert.AnError,
 					},
 				},
 			},
@@ -959,7 +959,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -968,7 +968,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -977,20 +977,20 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 				},
 			},
@@ -1065,7 +1065,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 						Error:    nil,
 					},
 					"zone1-0000000102": {
@@ -1081,7 +1081,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1090,7 +1090,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20",
 							},
 						},
 					},
@@ -1099,21 +1099,21 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20": nil,
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-20": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 				},
 			},
@@ -1194,7 +1194,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1203,7 +1203,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1212,20 +1212,20 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1317,7 +1317,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1326,7 +1326,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1335,20 +1335,20 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
 					},
 				},
 			},
@@ -1437,7 +1437,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1446,7 +1446,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1455,20 +1455,20 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
 					},
 				},
 			},
@@ -1552,7 +1552,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1561,7 +1561,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1570,20 +1570,20 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
 					},
 				},
 			},
@@ -1685,7 +1685,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1694,7 +1694,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1703,20 +1703,20 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
 					},
 				},
 			},
@@ -1817,7 +1817,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1826,7 +1826,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 							},
 						},
 					},
@@ -1835,20 +1835,20 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 							After: &replicationdatapb.Status{
 								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+								RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
 							},
 						},
 					},
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000101": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 					},
 					"zone1-0000000102": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
 					},
 				},
 			},
@@ -2775,7 +2775,7 @@ func TestEmergencyReparenterStats(t *testing.T) {
 					Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+						RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 					},
 				},
 			},
@@ -2784,7 +2784,7 @@ func TestEmergencyReparenterStats(t *testing.T) {
 					Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+						RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
 					},
 				},
 			},
@@ -2793,20 +2793,20 @@ func TestEmergencyReparenterStats(t *testing.T) {
 					Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
 					After: &replicationdatapb.Status{
 						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
-						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+						RelayLogPosition: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
 					},
 				},
 			},
 		},
 		WaitForPositionResults: map[string]map[string]error{
 			"zone1-0000000100": {
-				"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+				"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 			},
 			"zone1-0000000101": {
-				"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+				"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
 			},
 			"zone1-0000000102": {
-				"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+				"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
 			},
 		},
 	}
@@ -2897,35 +2897,35 @@ func TestEmergencyReparenterStats(t *testing.T) {
 
 func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 	sid1 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	mysqlGTID1 := replication.Mysql56GTID{
+	mysqlGTID1 := replication.MysqlGTID{
 		Server:   sid1,
 		Sequence: 9,
 	}
-	mysqlGTID2 := replication.Mysql56GTID{
+	mysqlGTID2 := replication.MysqlGTID{
 		Server:   sid1,
 		Sequence: 10,
 	}
-	mysqlGTID3 := replication.Mysql56GTID{
+	mysqlGTID3 := replication.MysqlGTID{
 		Server:   sid1,
 		Sequence: 11,
 	}
 
-	positionMostAdvanced := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionMostAdvanced := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID1)
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID2)
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID3)
 
-	positionIntermediate1 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionIntermediate1 := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 	positionIntermediate1.GTIDSet = positionIntermediate1.GTIDSet.AddGTID(mysqlGTID1)
 
-	positionIntermediate2 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionIntermediate2 := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID1)
 	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID2)
 
-	positionOnly2 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionOnly2 := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 	positionOnly2.GTIDSet = positionOnly2.GTIDSet.AddGTID(mysqlGTID2)
 
-	positionEmpty := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionEmpty := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 
 	tests := []struct {
 		name                 string

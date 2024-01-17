@@ -33,7 +33,7 @@ import (
 // FormatDescriptionEvent is working properly.
 func TestFormatDescriptionEvent(t *testing.T) {
 	// MySQL 5.6
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 
 	event := NewFormatDescriptionEvent(f, s)
@@ -59,7 +59,7 @@ func TestFormatDescriptionEvent(t *testing.T) {
 }
 
 func TestQueryEvent(t *testing.T) {
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 
 	q := Query{
@@ -85,7 +85,7 @@ func TestQueryEvent(t *testing.T) {
 }
 
 func TestXIDEvent(t *testing.T) {
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 
 	event := NewXIDEvent(f, s)
@@ -95,7 +95,7 @@ func TestXIDEvent(t *testing.T) {
 }
 
 func TestIntVarEvent(t *testing.T) {
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 
 	event := NewIntVarEvent(f, s, IntVarLastInsertID, 0x123456789abcdef0)
@@ -117,7 +117,7 @@ func TestIntVarEvent(t *testing.T) {
 }
 
 func TestInvalidEvents(t *testing.T) {
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 
 	// InvalidEvent
@@ -146,7 +146,7 @@ func TestInvalidEvents(t *testing.T) {
 }
 
 func TestMariadDBGTIDEVent(t *testing.T) {
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 	s.ServerID = 0x87654321
 
@@ -190,7 +190,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 }
 
 func TestTableMapEvent(t *testing.T) {
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 
 	tm := &TableMap{
@@ -245,7 +245,7 @@ func TestTableMapEvent(t *testing.T) {
 }
 
 func TestLargeTableMapEvent(t *testing.T) {
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 
 	colLen := 256
@@ -287,7 +287,7 @@ func TestLargeTableMapEvent(t *testing.T) {
 }
 
 func TestRowsEvent(t *testing.T) {
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 
 	/*
@@ -375,7 +375,7 @@ func TestRowsEvent(t *testing.T) {
 
 func TestHeartbeatEvent(t *testing.T) {
 	// MySQL 5.6
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 	event := NewHeartbeatEvent(f, s)
 	require.NotNil(t, event)
@@ -385,7 +385,7 @@ func TestHeartbeatEvent(t *testing.T) {
 
 func TestRotateRotateEvent(t *testing.T) {
 	// MySQL 5.6
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 	event := NewRotateEvent(f, s, 456, "mysql-bin.000123")
 	require.NotNil(t, event)
@@ -398,7 +398,7 @@ func TestRotateRotateEvent(t *testing.T) {
 
 func TestFakeRotateEvent(t *testing.T) {
 	// MySQL 5.6
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 	event := NewFakeRotateEvent(f, s, "mysql-bin.000123")
 	require.NotNil(t, event)
@@ -409,7 +409,7 @@ func TestFakeRotateEvent(t *testing.T) {
 	assert.Equal(t, "mysql-bin.000123", nextFile)
 }
 func TestLargeRowsEvent(t *testing.T) {
-	f := NewMySQL56BinlogFormat()
+	f := NewMySQLBinlogFormat()
 	s := NewFakeBinlogStream()
 
 	/*

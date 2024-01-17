@@ -35,7 +35,7 @@ func TestTracker(t *testing.T) {
 	initialSchemaInserted := false
 	se, db, cancel := getTestSchemaEngine(t, 0)
 	defer cancel()
-	gtid1 := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"
+	gtid1 := "MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"
 	ddl1 := "create table tracker_test (id int)"
 	query := "CREATE TABLE IF NOT EXISTS _vt.schema_version.*"
 	db.AddQueryPattern(query, &sqltypes.Result{})
@@ -95,7 +95,7 @@ func TestTracker(t *testing.T) {
 func TestTrackerShouldNotInsertInitialSchema(t *testing.T) {
 	initialSchemaInserted := false
 	se, db, cancel := getTestSchemaEngine(t, 0)
-	gtid1 := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"
+	gtid1 := "MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"
 
 	defer cancel()
 	// simulates existing rows in schema_version, so initial schema should not be inserted

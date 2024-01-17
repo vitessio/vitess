@@ -64,21 +64,21 @@ func TestFindErrantGTIDs(t *testing.T) {
 	sid4 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18}
 	sourceSID := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 19}
 
-	set1 := Mysql56GTIDSet{
+	set1 := MysqlGTIDSet{
 		sid1:      []interval{{20, 30}, {35, 39}, {40, 53}, {55, 75}},
 		sid2:      []interval{{1, 7}, {20, 50}, {60, 70}},
 		sid4:      []interval{{1, 30}},
 		sourceSID: []interval{{1, 7}, {20, 30}},
 	}
 
-	set2 := Mysql56GTIDSet{
+	set2 := MysqlGTIDSet{
 		sid1:      []interval{{20, 30}, {35, 37}, {50, 60}},
 		sid2:      []interval{{3, 5}, {22, 25}, {32, 37}, {67, 70}},
 		sid3:      []interval{{1, 45}},
 		sourceSID: []interval{{2, 6}, {15, 40}},
 	}
 
-	set3 := Mysql56GTIDSet{
+	set3 := MysqlGTIDSet{
 		sid1:      []interval{{20, 30}, {35, 38}, {50, 70}},
 		sid2:      []interval{{3, 5}, {22, 25}, {32, 37}, {67, 70}},
 		sid3:      []interval{{1, 45}},
@@ -88,14 +88,14 @@ func TestFindErrantGTIDs(t *testing.T) {
 	testcases := []struct {
 		mainRepStatus    *ReplicationStatus
 		otherRepStatuses []*ReplicationStatus
-		want             Mysql56GTIDSet
+		want             MysqlGTIDSet
 	}{{
 		mainRepStatus: &ReplicationStatus{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set1}},
 		otherRepStatuses: []*ReplicationStatus{
 			{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set2}},
 			{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set3}},
 		},
-		want: Mysql56GTIDSet{
+		want: MysqlGTIDSet{
 			sid1: []interval{{39, 39}, {40, 49}, {71, 75}},
 			sid2: []interval{{1, 2}, {6, 7}, {20, 21}, {26, 31}, {38, 50}, {60, 66}},
 			sid4: []interval{{1, 30}},
@@ -125,7 +125,7 @@ func TestMysqlShouldGetPosition(t *testing.T) {
 
 	sid, _ := ParseSID("3e11fa47-71ca-11e1-9e33-c80aa9429562")
 	want := PrimaryStatus{
-		Position:     Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 5}}}},
+		Position:     Position{GTIDSet: MysqlGTIDSet{sid: []interval{{start: 1, end: 5}}}},
 		FilePosition: Position{GTIDSet: FilePosGTID{File: "source-bin.000003", Pos: 1307}},
 	}
 	got, err := ParseMysqlPrimaryStatus(resultMap)
@@ -179,8 +179,8 @@ func TestMysqlShouldGetRelayLogPosition(t *testing.T) {
 
 	sid, _ := ParseSID("3e11fa47-71ca-11e1-9e33-c80aa9429562")
 	want := ReplicationStatus{
-		Position:         Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 5}}}},
-		RelayLogPosition: Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 9}}}},
+		Position:         Position{GTIDSet: MysqlGTIDSet{sid: []interval{{start: 1, end: 5}}}},
+		RelayLogPosition: Position{GTIDSet: MysqlGTIDSet{sid: []interval{{start: 1, end: 9}}}},
 	}
 	got, err := ParseMysqlReplicationStatus(resultMap)
 	require.NoError(t, err)

@@ -61,30 +61,30 @@ func TestReparentSorter(t *testing.T) {
 		Type: topodatapb.TabletType_RDONLY,
 	}
 
-	mysqlGTID1 := replication.Mysql56GTID{
+	mysqlGTID1 := replication.MysqlGTID{
 		Server:   sid1,
 		Sequence: 9,
 	}
-	mysqlGTID2 := replication.Mysql56GTID{
+	mysqlGTID2 := replication.MysqlGTID{
 		Server:   sid2,
 		Sequence: 10,
 	}
-	mysqlGTID3 := replication.Mysql56GTID{
+	mysqlGTID3 := replication.MysqlGTID{
 		Server:   sid1,
 		Sequence: 11,
 	}
 
-	positionMostAdvanced := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionMostAdvanced := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID1)
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID2)
 	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID3)
 
-	positionEmpty := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionEmpty := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 
-	positionIntermediate1 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionIntermediate1 := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 	positionIntermediate1.GTIDSet = positionIntermediate1.GTIDSet.AddGTID(mysqlGTID1)
 
-	positionIntermediate2 := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
+	positionIntermediate2 := replication.Position{GTIDSet: replication.MysqlGTIDSet{}}
 	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID1)
 	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID2)
 

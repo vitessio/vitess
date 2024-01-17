@@ -214,7 +214,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				require.NotEqual(t, manifest.Position, manifest.FromPosition)
 				require.True(t, manifest.Position.GTIDSet.Union(manifest.PurgedPosition.GTIDSet).Contains(manifest.FromPosition.GTIDSet))
 
-				gtidPurgedPos, err := replication.ParsePosition(replication.Mysql56FlavorID, GetReplicaGtidPurged(t, 0))
+				gtidPurgedPos, err := replication.ParsePosition(replication.MysqlFlavorID, GetReplicaGtidPurged(t, 0))
 				require.NoError(t, err)
 				fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 
@@ -429,7 +429,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 					}
 				}
 
-				gtidPurgedPos, err := replication.ParsePosition(replication.Mysql56FlavorID, GetReplicaGtidPurged(t, 0))
+				gtidPurgedPos, err := replication.ParsePosition(replication.MysqlFlavorID, GetReplicaGtidPurged(t, 0))
 				require.NoError(t, err)
 				fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 
@@ -675,7 +675,7 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 						require.NotEqual(t, manifest.Position, manifest.FromPosition)
 						require.True(t, manifest.Position.GTIDSet.Union(manifest.PurgedPosition.GTIDSet).Contains(manifest.FromPosition.GTIDSet))
 
-						gtidPurgedPos, err := replication.ParsePosition(replication.Mysql56FlavorID, GetReplicaGtidPurged(t, tc.replicaIndex))
+						gtidPurgedPos, err := replication.ParsePosition(replication.MysqlFlavorID, GetReplicaGtidPurged(t, tc.replicaIndex))
 						require.NoError(t, err)
 						fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 

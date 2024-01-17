@@ -1168,7 +1168,7 @@ type VStreamRequest struct {
 	TabletType topodata.TabletType `protobuf:"varint,2,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// position specifies the starting point of the bin log positions
 	// as well as the keyspace-shards to pull events from.
-	// position is of the form 'ks1:0@MySQL56/<mysql_pos>|ks2:-80@MySQL56/<mysql_pos>'.
+	// position is of the form 'ks1:0@MySQL/<mysql_pos>|ks2:-80@MySQL/<mysql_pos>'.
 	Vgtid  *binlogdata.VGtid  `protobuf:"bytes,3,opt,name=vgtid,proto3" json:"vgtid,omitempty"`
 	Filter *binlogdata.Filter `protobuf:"bytes,4,opt,name=filter,proto3" json:"filter,omitempty"`
 	Flags  *VStreamFlags      `protobuf:"bytes,5,opt,name=flags,proto3" json:"flags,omitempty"`

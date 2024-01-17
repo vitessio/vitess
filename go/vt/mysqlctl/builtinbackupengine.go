@@ -214,16 +214,16 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	return be.executeFullBackup(ctx, params, bh)
 }
 
-// getIncrementalFromPosGTIDSet turns the given string into a valid Mysql56GTIDSet
-func getIncrementalFromPosGTIDSet(incrementalFromPos string) (replication.Mysql56GTIDSet, error) {
-	pos, err := replication.DecodePositionDefaultFlavor(incrementalFromPos, replication.Mysql56FlavorID)
+// getIncrementalFromPosGTIDSet turns the given string into a valid MysqlGTIDSet
+func getIncrementalFromPosGTIDSet(incrementalFromPos string) (replication.MysqlGTIDSet, error) {
+	pos, err := replication.DecodePositionDefaultFlavor(incrementalFromPos, replication.MysqlFlavorID)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot decode position in incremental backup: %v", incrementalFromPos)
 	}
-	if !pos.MatchesFlavor(replication.Mysql56FlavorID) {
+	if !pos.MatchesFlavor(replication.MysqlFlavorID) {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "incremental backup only supports MySQL GTID positions. Got: %v", incrementalFromPos)
 	}
-	ifPosGTIDSet, ok := pos.GTIDSet.(replication.Mysql56GTIDSet)
+	ifPosGTIDSet, ok := pos.GTIDSet.(replication.MysqlGTIDSet)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID value: %v", pos)
 	}
@@ -258,12 +258,12 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	}
 
 	// @@gtid_purged
-	getPurgedGTIDSet := func() (replication.Position, replication.Mysql56GTIDSet, error) {
+	getPurgedGTIDSet := func() (replication.Position, replication.MysqlGTIDSet, error) {
 		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
 		if err != nil {
 			return gtidPurged, nil, vterrors.Wrap(err, "can't get @@gtid_purged")
 		}
-		purgedGTIDSet, ok := gtidPurged.GTIDSet.(replication.Mysql56GTIDSet)
+		purgedGTIDSet, ok := gtidPurged.GTIDSet.(replication.MysqlGTIDSet)
 		if !ok {
 			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", gtidPurged)
 		}
@@ -316,11 +316,11 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot get binary logs to backup in incremental backup")
 	}
-	incrementalBackupFromPosition, err := replication.ParsePosition(replication.Mysql56FlavorID, incrementalBackupFromGTID)
+	incrementalBackupFromPosition, err := replication.ParsePosition(replication.MysqlFlavorID, incrementalBackupFromGTID)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupFromGTID)
 	}
-	incrementalBackupToPosition, err := replication.ParsePosition(replication.Mysql56FlavorID, incrementalBackupToGTID)
+	incrementalBackupToPosition, err := replication.ParsePosition(replication.MysqlFlavorID, incrementalBackupToGTID)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupToGTID)
 	}
