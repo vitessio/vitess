@@ -19,6 +19,8 @@ package json2
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
@@ -29,13 +31,10 @@ func TestMarshalPB(t *testing.T) {
 		Type: querypb.Type_VARCHAR,
 	}
 	b, err := MarshalPB(col)
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	require.NoError(t, err, "MarshalPB(col) error")
 	want := "{\"name\":\"c1\",\"type\":\"VARCHAR\"}"
-	if string(b) != want {
-		t.Errorf("MarshalPB(col): %q, want %q", b, want)
-	}
+	assert.Equal(t, want, string(b), "MarshalPB(col)")
 }
 
 func TestMarshalIndentPB(t *testing.T) {
@@ -45,11 +44,8 @@ func TestMarshalIndentPB(t *testing.T) {
 	}
 	indent := "  "
 	b, err := MarshalIndentPB(col, indent)
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	require.NoError(t, err, "MarshalIndentPB(col, indent) error")
 	want := "{\n  \"name\": \"c1\",\n  \"type\": \"VARCHAR\"\n}"
-	if string(b) != want {
-		t.Errorf("MarshalIndentPB(col, indent): %q, want %q", b, want)
-	}
+	assert.Equal(t, want, string(b), "MarshalIndentPB(col, indent)")
 }

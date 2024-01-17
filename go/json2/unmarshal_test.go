@@ -18,6 +18,8 @@ package json2
 
 import (
 	"testing"
+
+	"gotest.tools/assert"
 )
 
 func TestUnmarshal(t *testing.T) {
@@ -37,14 +39,13 @@ func TestUnmarshal(t *testing.T) {
 		err: "",
 	}}
 	for _, tcase := range tcases {
-		out := make(map[string]any)
+		out := make(map[string]interface{})
 		err := Unmarshal([]byte(tcase.in), &out)
+
 		got := ""
 		if err != nil {
 			got = err.Error()
 		}
-		if got != tcase.err {
-			t.Errorf("Unmarshal(%v) err: %v, want %v", tcase.in, got, tcase.err)
-		}
+		assert.Equal(t, tcase.err, got, "Unmarshal(%v) err", tcase.in)
 	}
 }
