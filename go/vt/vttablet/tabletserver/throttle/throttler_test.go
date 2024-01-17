@@ -391,7 +391,6 @@ func TestProbesPostDisable(t *testing.T) {
 	throttler := newTestThrottler()
 	runThrottler(t, throttler, 2*time.Second, nil)
 
-	time.Sleep(time.Second) // throttler's Operate() quits asynchronously. For sake of `go test -race` we allow a graceful wait.
 	probes := throttler.mysqlInventory.ClustersProbes
 	assert.NotEmpty(t, probes)
 
