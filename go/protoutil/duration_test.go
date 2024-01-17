@@ -26,7 +26,6 @@ import (
 )
 
 func TestDurationFromProto(t *testing.T) {
-	t.Parallel()
 
 	tests := []struct {
 		name      string
@@ -85,7 +84,6 @@ func TestDurationFromProto(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 
 			actual, ok, err := DurationFromProto(tt.in)
 			if tt.shouldErr {
@@ -102,7 +100,6 @@ func TestDurationFromProto(t *testing.T) {
 }
 
 func TestDurationToProto(t *testing.T) {
-	t.Parallel()
 
 	tests := []struct {
 		name     string
@@ -130,7 +127,6 @@ func TestDurationToProto(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 
 			actual := DurationToProto(tt.in)
 			assert.Equal(t, tt.expected, actual)
