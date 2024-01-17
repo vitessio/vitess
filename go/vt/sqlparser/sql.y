@@ -6979,11 +6979,11 @@ function_call_keyword:
   }
 | CHAR openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
+    $$ = &CharExpr{Exprs: $3}
   }
 | CHAR openb argument_expression_list USING charset closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
+    $$ = &CharExpr{Exprs: $3, Type: $5}
   }
 | CONVERT openb expression USING charset closeb
   {

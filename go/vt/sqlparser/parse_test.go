@@ -5394,6 +5394,7 @@ func TestFunctionCalls(t *testing.T) {
 		"select WEIGHT_STRING() from dual",
 		"select YEAR() from dual",
 		"select YEARWEEK() from dual",
+		"select CHAR(77, 121, 83, 81, '76' USING utf8mb4) from dual",
 	}
 
 	// Functions where the input doesn't match the output. Prefer query tests above when possible.
@@ -5418,10 +5419,6 @@ func TestFunctionCalls(t *testing.T) {
 
 	// Unimplemented or broken functionality
 	skippedTestCases := []parseTest{
-		{
-			// USING syntax parsed but not captured
-			input: "select CHAR(77,121,83,81,'76' USING utf8mb4) from dual",
-		},
 		{
 			// INTERVAL function produces a grammar conflict
 			input: "select INTERVAL(col1, col2) from dual",

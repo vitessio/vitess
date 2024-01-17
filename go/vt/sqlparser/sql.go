@@ -19588,13 +19588,13 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:6981
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &CharExpr{Exprs: yyDollar[3].selectExprs}
 		}
 	case 1419:
 		yyDollar = yyS[yypt-6 : yypt+1]
 //line sql.y:6985
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &CharExpr{Exprs: yyDollar[3].selectExprs, Type: yyDollar[5].str}
 		}
 	case 1420:
 		yyDollar = yyS[yypt-6 : yypt+1]

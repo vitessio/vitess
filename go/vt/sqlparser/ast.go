@@ -4762,6 +4762,7 @@ func (*ConvertExpr) iExpr()       {}
 func (*SubstrExpr) iExpr()        {}
 func (*TrimExpr) iExpr()          {}
 func (*ConvertUsingExpr) iExpr()  {}
+func (*CharExpr) iExpr()  {}
 func (*MatchExpr) iExpr()         {}
 func (*GroupConcatExpr) iExpr()   {}
 func (*Default) iExpr()           {}
@@ -5918,6 +5919,32 @@ func (node *ConvertUsingExpr) walkSubtree(visit Visit) error {
 
 func (node *ConvertUsingExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
+}
+
+// CharExpr represents a call to CHAR(expr1, expr2, ... using charset)
+type CharExpr struct {
+	Exprs SelectExprs
+	Type  string
+}
+
+// Format formats the node.
+func (node *CharExpr) Format(buf *TrackedBuffer) {
+	if node.Type == "" {
+		buf.Myprintf("CHAR(%v)", node.Exprs)
+		return
+	}
+	buf.Myprintf("CHAR(%v USING %s)", node.Exprs, node.Type)
+}
+
+func (node *CharExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.Exprs)
+}
+
+func (node *CharExpr) replace(from, to Expr) bool {
+	return replaceExprs(from, to)
 }
 
 // ConvertType represents the type in call to CONVERT(expr, type)
