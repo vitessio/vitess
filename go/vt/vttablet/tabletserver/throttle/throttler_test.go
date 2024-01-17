@@ -332,9 +332,9 @@ func runThrottler(t *testing.T, throttler *Throttler, timeout time.Duration, f f
 	assert.False(t, throttler.IsEnabled())
 
 	wg := throttler.Enable()
-	defer throttler.Disable()
-	assert.NotNil(t, wg)
+	require.NotNil(t, wg)
 	defer wg.Wait()
+	defer throttler.Disable()
 	assert.True(t, throttler.IsEnabled())
 
 	// Enabling again does nothing:
