@@ -33,9 +33,9 @@ func TestMarshalPB(t *testing.T) {
 	}
 	b, err := MarshalPB(col)
 
-	require.NoError(t, err, "MarshalPB(col) error")
+	require.NoErrorf(t, err, "MarshalPB(%+v) error", col)
 	want := "{\"name\":\"c1\",\"type\":\"VARCHAR\"}"
-	assert.Equal(t, want, string(b), "MarshalPB(col)")
+	assert.Equalf(t, want, string(b), "MarshalPB(%+v)", col)
 }
 
 func TestMarshalIndentPB(t *testing.T) {
@@ -46,7 +46,7 @@ func TestMarshalIndentPB(t *testing.T) {
 	indent := "  "
 	b, err := MarshalIndentPB(col, indent)
 
-	require.NoError(t, err, "MarshalIndentPB(col, indent) error")
+	require.NoErrorf(t, err, "MarshalIndentPB(%+v, %q) error", col, indent)
 	want := "{\n  \"name\": \"c1\",\n  \"type\": \"VARCHAR\"\n}"
-	assert.Equal(t, want, string(b), "MarshalIndentPB(col, indent)")
+	assert.Equal(t, want, string(b), "MarshalIndentPB(%+v, %q)", col, indent)
 }
