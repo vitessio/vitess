@@ -5229,7 +5229,6 @@ func TestFunctionCalls(t *testing.T) {
 		"select PI() from dual",
 		"select Point() from dual",
 		"select Polygon() from dual",
-		"select POSITION() from dual",
 		"select POW() from dual",
 		"select POWER() from dual",
 		"select PS_CURRENT_THREAD_ID() from dual",
@@ -5429,6 +5428,14 @@ func TestFunctionCalls(t *testing.T) {
 		{
 			input:  "SELECT CAST(foo AS FLOAT)",
 			output: "select CAST(foo as FLOAT)",
+		},
+		{
+			input:  "SELECT POSITION('abc' in 'xyz')",
+			output: "select LOCATE('abc', 'xyz')",
+		},
+		{
+			input:  "SELECT POSITION(1 + 1 in foo)",
+			output: "select LOCATE(1 + 1, foo)",
 		},
 	}
 
