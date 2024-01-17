@@ -446,6 +446,7 @@ var keywords = map[string]int{
 	"plugins":                       PLUGINS,
 	"point":                         POINT,
 	"polygon":                       POLYGON,
+	"position":                      POSITION,
 	"precedes":                      PRECEDES,
 	"preceding":                     PRECEDING,
 	"precision":                     PRECISION,

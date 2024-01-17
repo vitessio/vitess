@@ -2067,6 +2067,12 @@ type DDL struct {
 
 	// OptSelect is set for CREATE TABLE <> AS SELECT operations.
 	OptSelect *OptSelect
+
+	// User is set for ALTER USER operations.
+	User AccountName
+
+	// Authentication is set for ALTER USER operations.
+	Authentication *Authentication
 }
 
 // ColumnOrder is used in some DDL statements to specify or change the order of a column in a schema.
@@ -2295,8 +2301,18 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			} else {
 				buf.Myprintf("%s", sb.String())
 			}
-		} else {
+		} else if node.Table.IsEmpty() == false {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
+			node.alterFormat(buf)
+		} else if node.User.IsEmpty() == false {
+			ifExists := ""
+			if node.IfExists {
+				ifExists = "if exists "
+			}
+			buf.Myprintf("%s user %s%s %s", node.Action, ifExists, node.User.String(), node.Authentication.String())
+			node.alterFormat(buf)
+		} else {
+			buf.Myprintf(fmt.Sprintf("unsupported alter command: %v", node))
 			node.alterFormat(buf)
 		}
 	case FlushStr:
