@@ -20871,7 +20871,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:7909
 		{
-			colName, scope, err := VarScopeForColName(yyDollar[1].setVarExpr.Name)
+			colName, scope, _, err := VarScopeForColName(yyDollar[1].setVarExpr.Name)
 			if err != nil {
 				yylex.Error(err.Error())
 				return 1
@@ -20884,7 +20884,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:7920
 		{
-			_, scope, err := VarScopeForColName(yyDollar[2].setVarExpr.Name)
+			_, scope, _, err := VarScopeForColName(yyDollar[2].setVarExpr.Name)
 			if err != nil {
 				yylex.Error(err.Error())
 				return 1
@@ -20899,7 +20899,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:7933
 		{
-			_, scope, err := VarScopeForColName(yyDollar[2].setVarExpr.Name)
+			_, scope, _, err := VarScopeForColName(yyDollar[2].setVarExpr.Name)
 			if err != nil {
 				yylex.Error(err.Error())
 				return 1
