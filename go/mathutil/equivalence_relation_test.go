@@ -175,6 +175,41 @@ func TestEquivalenceRelation(t *testing.T) {
 	}
 }
 
+func TestEquivalenceRelationError(t *testing.T) {
+	type ttError struct {
+		name        string
+		element1    string
+		element2    string
+		expectedErr string
+	}
+
+	testsRelateErrorCases := []ttError{
+		{
+			name:        "UnknownElementError",
+			element1:    "x",
+			element2:    "b",
+			expectedErr: "unknown element x",
+		},
+		{
+			name:        "UnknownClassError",
+			element1:    "a",
+			element2:    "y",
+			expectedErr: "unknown element y",
+		},
+	}
+
+	for _, tc := range testsRelateErrorCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := NewEquivalenceRelation()
+			r.AddAll([]string{"a", "b", "c"})
+
+			_, err := r.Relate(tc.element1, tc.element2)
+			assert.Error(t, err)
+			assert.EqualError(t, err, tc.expectedErr)
+		})
+	}
+}
+
 func TestUnknownElementError(t *testing.T) {
 	err := &UnknownElementError{element: "test_element"}
 
