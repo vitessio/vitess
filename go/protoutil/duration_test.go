@@ -69,6 +69,16 @@ func TestDurationFromProto(t *testing.T) {
 			isOk:      true,
 			shouldErr: false,
 		},
+		{
+			name: "out of range nanoseconds",
+			in: &vttime.Duration{
+				Seconds: -1,
+				Nanos:   500000000,
+			},
+			expected:  0,
+			isOk:      true,
+			shouldErr: true,
+		},
 	}
 
 	for _, tt := range tests {
