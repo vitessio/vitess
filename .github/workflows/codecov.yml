@@ -106,6 +106,9 @@ jobs:
 
         eatmydata -- make unit_test_cover
 
+        # Restore the files we deleted as codecov tries to fix their paths.
+        git reset --hard HEAD
+
     - name: Upload coverage reports to codecov.io
       if: steps.changes.outputs.changed_files == 'true'
       uses: codecov/codecov-action@v4-beta
