@@ -24,6 +24,17 @@ import (
 )
 
 func TestCompareAndSwap(t *testing.T) {
+	runCompareAndSwap(t)
+}
+
+func TestCompareAndSwapWriteBarrier(t *testing.T) {
+	writeBarrier.enabled = true
+	require.True(t, writeBarrier.enabled, "writeBarrier should be enabled")
+
+	runCompareAndSwap(t)
+}
+
+func runCompareAndSwap(t *testing.T) {
 	i1 := new(int)
 	i2 := new(int)
 	n := &PointerAndUint64[int]{p: unsafe.Pointer(i1), u: 12345}
