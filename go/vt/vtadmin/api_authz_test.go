@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin"
@@ -68,7 +69,7 @@ func TestCreateKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -133,7 +134,7 @@ func TestCreateShard(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -200,7 +201,7 @@ func TestDeleteKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -265,7 +266,7 @@ func TestDeleteShards(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -340,7 +341,7 @@ func TestDeleteTablet(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -407,7 +408,7 @@ func TestEmergencyFailoverShard(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -483,7 +484,7 @@ func TestFindSchema(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -504,7 +505,7 @@ func TestFindSchema(t *testing.T) {
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -524,7 +525,7 @@ func TestFindSchema(t *testing.T) {
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -573,7 +574,7 @@ func TestGetBackups(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -646,7 +647,7 @@ func TestGetCellInfos(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -725,7 +726,7 @@ func TestGetCellsAliases(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -792,7 +793,7 @@ func TestGetClusters(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -866,7 +867,7 @@ func TestGetGates(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -885,7 +886,7 @@ func TestGetGates(t *testing.T) {
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -905,7 +906,7 @@ func TestGetGates(t *testing.T) {
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -946,7 +947,7 @@ func TestGetKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1013,7 +1014,7 @@ func TestGetKeyspaces(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1097,7 +1098,7 @@ func TestGetSchema(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1120,7 +1121,7 @@ func TestGetSchema(t *testing.T) {
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1173,7 +1174,7 @@ func TestGetSchemas(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1192,7 +1193,7 @@ func TestGetSchemas(t *testing.T) {
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1218,7 +1219,7 @@ func TestGetSchemas(t *testing.T) {
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1271,7 +1272,7 @@ func TestGetShardReplicationPositions(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1352,7 +1353,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1419,7 +1420,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1500,7 +1501,7 @@ func TestGetTablet(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1571,7 +1572,7 @@ func TestGetTablets(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1652,7 +1653,7 @@ func TestGetVSchema(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1719,7 +1720,7 @@ func TestGetVSchemas(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1809,7 +1810,7 @@ func TestGetVtctlds(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1828,7 +1829,7 @@ func TestGetVtctlds(t *testing.T) {
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1848,7 +1849,7 @@ func TestGetVtctlds(t *testing.T) {
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -1889,7 +1890,7 @@ func TestGetWorkflow(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -1958,7 +1959,7 @@ func TestGetWorkflows(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2025,7 +2026,7 @@ func TestPingTablet(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2090,7 +2091,7 @@ func TestPlannedFailoverShard(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2157,7 +2158,7 @@ func TestRefreshState(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2222,7 +2223,7 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2293,7 +2294,7 @@ func TestReloadSchemas(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2373,7 +2374,7 @@ func TestRunHealthCheck(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2438,7 +2439,7 @@ func TestSetReadOnly(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2503,7 +2504,7 @@ func TestSetReadWrite(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2568,7 +2569,7 @@ func TestStartReplication(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2633,7 +2634,7 @@ func TestStopReplication(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2698,7 +2699,7 @@ func TestTabletExternallyPromoted(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2766,7 +2767,7 @@ func TestVTExplain(t *testing.T) {
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -2788,7 +2789,7 @@ func TestVTExplain(t *testing.T) {
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
 
-		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+		api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 		t.Cleanup(func() {
 			if err := api.Close(); err != nil {
 				t.Logf("api did not close cleanly: %s", err.Error())
@@ -2831,7 +2832,7 @@ func TestValidateKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2892,7 +2893,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
@@ -2953,7 +2954,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser())
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())

@@ -52,7 +52,7 @@
   {
     "comment": "Group by column number, used with non-aliased expression (duplicated code)",
     "query": "select * from user group by 1",
-    "plan": "cannot use column offsets in group statement when using `*`"
+    "plan": "cannot use column offsets in group clause when using `*`"
   },
   {
     "comment": "create view with Cannot auto-resolve for cross-shard joins",

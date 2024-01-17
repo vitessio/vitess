@@ -32,6 +32,7 @@ var (
 	ts           *topo.Server
 	collationEnv *collations.Environment
 	parser       *sqlparser.Parser
+	mysqlVersion string
 	Main         = &cobra.Command{
 		Use:   "vtctld",
 		Short: "The Vitess cluster management daemon.",
@@ -65,9 +66,10 @@ func run(cmd *cobra.Command, args []string) error {
 	defer ts.Close()
 
 	var err error
-	collationEnv = collations.NewEnvironment(servenv.MySQLServerVersion())
+	mysqlVersion = servenv.MySQLServerVersion()
+	collationEnv = collations.NewEnvironment(mysqlVersion)
 	parser, err = sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
+		MySQLServerVersion: mysqlVersion,
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
@@ -75,7 +77,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	// Init the vtctld core
-	if err := vtctld.InitVtctld(ts, collationEnv, parser); err != nil {
+	if err := vtctld.InitVtctld(ts, collationEnv, parser, mysqlVersion); err != nil {
 		return err
 	}
 

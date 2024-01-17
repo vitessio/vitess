@@ -196,12 +196,13 @@ func printCallerDetails() {
 }
 
 type schemaInit struct {
-	ctx       context.Context
-	exec      Exec
-	dbCreated bool // The first upgrade/create query will also create the sidecar database if required.
-	parser    *sqlparser.Parser
-	collEnv   *collations.Environment
-	coll      collations.ID
+	ctx          context.Context
+	exec         Exec
+	dbCreated    bool // The first upgrade/create query will also create the sidecar database if required.
+	parser       *sqlparser.Parser
+	collEnv      *collations.Environment
+	coll         collations.ID
+	mysqlVersion string
 }
 
 // Exec is a callback that has to be passed to Init() to
@@ -233,7 +234,7 @@ func getDDLErrorHistory() []*ddlError {
 
 // Init creates or upgrades the sidecar database based on
 // the declarative schema defined for all tables.
-func Init(ctx context.Context, exec Exec, collEnv *collations.Environment, parser *sqlparser.Parser) error {
+func Init(ctx context.Context, exec Exec, collEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) error {
 	printCallerDetails() // for debug purposes only, remove in v17
 	log.Infof("Starting sidecardb.Init()")
 
@@ -242,10 +243,11 @@ func Init(ctx context.Context, exec Exec, collEnv *collations.Environment, parse
 	})
 
 	si := &schemaInit{
-		ctx:     ctx,
-		exec:    exec,
-		collEnv: collEnv,
-		parser:  parser,
+		ctx:          ctx,
+		exec:         exec,
+		collEnv:      collEnv,
+		parser:       parser,
+		mysqlVersion: mysqlVersion,
 	}
 
 	// There are paths in the tablet initialization where we
@@ -400,7 +402,7 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreAlways,
 		AlterTableAlgorithmStrategy: schemadiff.AlterTableAlgorithmStrategyCopy,
 	}
-	env := schemadiff.NewEnv(si.collEnv, si.coll, si.parser)
+	env := schemadiff.NewEnv(si.collEnv, si.coll, si.parser, si.mysqlVersion)
 	diff, err := schemadiff.DiffCreateTablesQueries(env, current, desired, hints)
 	if err != nil {
 		return "", err

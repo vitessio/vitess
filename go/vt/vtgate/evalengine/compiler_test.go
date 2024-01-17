@@ -27,6 +27,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -102,7 +103,7 @@ func TestCompilerReference(t *testing.T) {
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			var supported, total int
-			env := evalengine.EmptyExpressionEnv(collations.MySQL8())
+			env := evalengine.EmptyExpressionEnv(collations.MySQL8(), config.DefaultMySQLVersion)
 
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
@@ -119,6 +120,7 @@ func TestCompilerReference(t *testing.T) {
 					ResolveType:       fields.Type,
 					Collation:         collations.CollationUtf8mb4ID,
 					CollationEnv:      collations.MySQL8(),
+					MySQLVersion:      config.DefaultMySQLVersion,
 					NoConstantFolding: true,
 				}
 
@@ -605,6 +607,7 @@ func TestCompilerSingle(t *testing.T) {
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
+	mysqlVersion := config.DefaultMySQLVersion
 	parser := sqlparser.NewTestParser()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
@@ -619,6 +622,7 @@ func TestCompilerSingle(t *testing.T) {
 				ResolveType:       fields.Type,
 				Collation:         collations.CollationUtf8mb4ID,
 				CollationEnv:      collations.MySQL8(),
+				MySQLVersion:      config.DefaultMySQLVersion,
 				NoConstantFolding: true,
 			}
 
@@ -627,7 +631,7 @@ func TestCompilerSingle(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			env := evalengine.NewExpressionEnv(context.Background(), nil, evalengine.NewEmptyVCursor(collations.MySQL8(), tz))
+			env := evalengine.NewExpressionEnv(context.Background(), nil, evalengine.NewEmptyVCursor(collations.MySQL8(), tz, mysqlVersion))
 			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 0, tz))
 			env.Row = tc.values
 
@@ -701,6 +705,7 @@ func TestBindVarLiteral(t *testing.T) {
 				ResolveType:       fields.Type,
 				Collation:         collations.CollationUtf8mb4ID,
 				CollationEnv:      collations.MySQL8(),
+				MySQLVersion:      config.DefaultMySQLVersion,
 				NoConstantFolding: true,
 			}
 
@@ -711,7 +716,7 @@ func TestBindVarLiteral(t *testing.T) {
 
 			result := `VARCHAR("ÿ")`
 
-			env := evalengine.EmptyExpressionEnv(collations.MySQL8())
+			env := evalengine.EmptyExpressionEnv(collations.MySQL8(), config.DefaultMySQLVersion)
 			env.BindVars = map[string]*querypb.BindVariable{
 				"vtg1": tc.bindVar,
 			}
@@ -762,6 +767,7 @@ func TestCompilerNonConstant(t *testing.T) {
 			cfg := &evalengine.Config{
 				Collation:         collations.CollationUtf8mb4ID,
 				CollationEnv:      collations.MySQL8(),
+				MySQLVersion:      config.DefaultMySQLVersion,
 				NoConstantFolding: true,
 			}
 
@@ -770,7 +776,7 @@ func TestCompilerNonConstant(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			env := evalengine.EmptyExpressionEnv(collations.MySQL8())
+			env := evalengine.EmptyExpressionEnv(collations.MySQL8(), config.DefaultMySQLVersion)
 			var prev string
 			for i := 0; i < 1000; i++ {
 				expected, err := env.EvaluateAST(converted)

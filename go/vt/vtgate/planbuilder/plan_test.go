@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -233,12 +232,7 @@ func addPKs(t *testing.T, vschema *vindexes.VSchema, ks string, tbls []string) {
 
 func TestSystemTables57(t *testing.T) {
 	// first we move everything to use 5.7 logic
-	oldVer := servenv.MySQLServerVersion()
-	servenv.SetMySQLServerVersionForTest("5.7")
-	defer func() {
-		servenv.SetMySQLServerVersionForTest(oldVer)
-	}()
-	vschemaWrapper := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true)}
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true), MySQLServerVersion: "5.7.9"}
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "info_schema57_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
@@ -333,12 +327,7 @@ func TestOneWithTPCHVSchema(t *testing.T) {
 
 func TestOneWith57Version(t *testing.T) {
 	// first we move everything to use 5.7 logic
-	oldVer := servenv.MySQLServerVersion()
-	servenv.SetMySQLServerVersionForTest("5.7")
-	defer func() {
-		servenv.SetMySQLServerVersionForTest(oldVer)
-	}()
-	vschema := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true)}
+	vschema := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true), MySQLServerVersion: "5.7.9"}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }

@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -78,7 +79,7 @@ func NewVtctlPipe(t *testing.T, ts *topo.Server) *VtctlPipe {
 
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
-	grpcvtctlserver.StartServer(server, ts, collations.MySQL8(), sqlparser.NewTestParser())
+	grpcvtctlserver.StartServer(server, ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	go server.Serve(listener)
 
 	// Create a VtctlClient gRPC client to talk to the fake server

@@ -118,9 +118,9 @@ type replica struct {
 	wg       sync.WaitGroup
 }
 
-func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Duration, ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser) *replica {
+func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Duration, ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *replica {
 	t := &testing.T{}
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv, parser)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv, parser, mysqlVersion)
 	fakeTablet := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topodatapb.TabletType_REPLICA, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	fakeTablet.StartActionLoop(t, wr)
@@ -312,16 +312,17 @@ func main() {
 
 	log.Infof("start rate set to: %v", rate)
 	ts := memorytopo.NewServer(context.Background(), "cell1")
-	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
+	mysqlVersion := servenv.MySQLServerVersion()
+	collationEnv := collations.NewEnvironment(mysqlVersion)
 	parser, err := sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
+		MySQLServerVersion: mysqlVersion,
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	replica := newReplica(lagUpdateInterval, replicaDegrationInterval, replicaDegrationDuration, ts, collationEnv, parser)
+	replica := newReplica(lagUpdateInterval, replicaDegrationInterval, replicaDegrationDuration, ts, collationEnv, parser, mysqlVersion)
 	primary := &primary{replica: replica}
 	client := newClient(context.Background(), primary, replica, ts)
 	client.run()
