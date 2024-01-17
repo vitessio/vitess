@@ -24,6 +24,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -881,6 +882,67 @@ func TestSplitStatementToPieces(t *testing.T) {
 		if out != tcase.output {
 			t.Errorf("out: %s, want %s", out, tcase.output)
 		}
+	}
+}
+
+func TestVarScopeForColName(t *testing.T) {
+	testcases := []struct {
+		colName ColName
+		expectedName ColName
+		expectedScope string
+		expectedExplicit bool
+	}{
+		{
+			// Regular column name
+			colName: ColName{Name: ColIdent{val: "a"}},
+			expectedName: ColName{Name: ColIdent{val: "a"}},
+			expectedExplicit: false,
+		},
+		{
+			// User variable
+			colName: ColName{Name: ColIdent{val: "@aaa"}},
+			expectedName: ColName{Name: ColIdent{val: "aaa"}},
+			expectedExplicit: false,
+			expectedScope: "user",
+		},
+		{
+			// System variable without an explicit scope (defaults to session)
+			colName: ColName{Name: ColIdent{val: "@@max_allowed_packets"}},
+			expectedName: ColName{Name: ColIdent{val: "max_allowed_packets"}},
+			expectedExplicit: false,
+			expectedScope: "session",
+		},
+		{
+			// System variable with an explicit session scope
+			colName: ColName{Name: ColIdent{val: "@@session.max_allowed_packets"}},
+			expectedName: ColName{Name: ColIdent{val: "max_allowed_packets"}},
+			expectedExplicit: true,
+			expectedScope: "session",
+		},
+		{
+			// System variable with an explicit global scope
+			colName: ColName{Name: ColIdent{val: "@@global.max_allowed_packets"}},
+			expectedName: ColName{Name: ColIdent{val: "max_allowed_packets"}},
+			expectedExplicit: true,
+			expectedScope: "global",
+		},
+		{
+			// System variable with an explicit persist scope
+			colName: ColName{Name: ColIdent{val: "@@persist.max_allowed_packets"}},
+			expectedName: ColName{Name: ColIdent{val: "max_allowed_packets"}},
+			expectedExplicit: true,
+			expectedScope: "persist",
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.colName.String(), func(t *testing.T) {
+			name, scope, b, err := VarScopeForColName(&tt.colName)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedName, *name)
+			assert.Equal(t, tt.expectedScope, string(scope))
+			assert.Equal(t, tt.expectedExplicit, b)
+		})
 	}
 }
 
