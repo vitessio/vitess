@@ -264,11 +264,16 @@ func (aj *ApplyJoin) addOffset(offset int) {
 }
 
 func (aj *ApplyJoin) ShortDescription() string {
-	mapping := func(from applyJoinColumn) string {
-		return sqlparser.String(from.Original)
-	}
-	columns := slice.Map(aj.JoinColumns.columns, mapping)
-	predicates := slice.Map(aj.JoinPredicates.columns, mapping)
+	columns := slice.Map(aj.JoinColumns.columns, func(jc applyJoinColumn) string {
+		return sqlparser.String(jc.Original)
+	})
+	predicates := slice.Map(aj.JoinPredicates.columns, func(jc applyJoinColumn) string {
+		rhs := sqlparser.String(jc.RHSExpr)
+		lhs := slice.Map(jc.LHSExprs, func(e BindVarExpr) string {
+			return sqlparser.String(e.Expr)
+		})
+		return fmt.Sprintf("[%s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original))
+	})
 	firstPart := fmt.Sprintf("on %s columns: %s", strings.Join(predicates, ", "), strings.Join(columns, ", "))
 	if len(aj.ExtraLHSVars) == 0 {
 		return firstPart
