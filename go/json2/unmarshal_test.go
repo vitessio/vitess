@@ -17,8 +17,10 @@ limitations under the License.
 package json2
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
 )
 
@@ -47,5 +49,23 @@ func TestUnmarshal(t *testing.T) {
 			got = err.Error()
 		}
 		assert.Equal(t, tcase.err, got, "Unmarshal(%v) err", tcase.in)
+	}
+}
+
+func TestAnnotate(t *testing.T) {
+	tcases := []struct {
+		data []byte
+		err  error
+	}{
+		{
+			data: []byte("invalid JSON"),
+			err:  fmt.Errorf("line: 1, position 1: invalid character 'i' looking for beginning of value"),
+		},
+	}
+
+	for _, tcase := range tcases {
+		err := annotate(tcase.data, tcase.err)
+
+		require.Equal(t, tcase.err, err, "annotate(%s, %v) error", string(tcase.data), tcase.err)
 	}
 }
