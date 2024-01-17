@@ -335,7 +335,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP
 %token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
 %token <bytes> REPLACE
-%token <bytes> CONVERT CAST
+%token <bytes> CONVERT CAST POSITION
 %token <bytes> SUBSTR SUBSTRING
 %token <bytes> TRIM LEADING TRAILING BOTH
 %token <bytes> GROUP_CONCAT SEPARATOR
@@ -6988,6 +6988,10 @@ function_call_keyword:
 | CONVERT openb expression USING charset closeb
   {
     $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
+  }
+| POSITION openb value_expression IN value_expression closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("LOCATE"), Exprs: []SelectExpr{&AliasedExpr{Expr: $3}, &AliasedExpr{Expr: $5}}}
   }
 | INSERT openb argument_expression_list closeb
   {
