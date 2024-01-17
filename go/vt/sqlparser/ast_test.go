@@ -889,59 +889,66 @@ func TestVarScopeForColName(t *testing.T) {
 	testcases := []struct {
 		colName ColName
 		expectedName ColName
-		expectedScope string
-		expectedExplicit bool
+		expectedScope          string
+		expectedSpecifiedScope string
 	}{
 		{
 			// Regular column name
-			colName: ColName{Name: ColIdent{val: "a"}},
-			expectedName: ColName{Name: ColIdent{val: "a"}},
-			expectedExplicit: false,
+			colName:                ColName{Name: ColIdent{val: "a"}},
+			expectedName:           ColName{Name: ColIdent{val: "a"}},
+			expectedSpecifiedScope: "",
 		},
 		{
 			// User variable
-			colName: ColName{Name: ColIdent{val: "@aaa"}},
-			expectedName: ColName{Name: ColIdent{val: "aaa"}},
-			expectedExplicit: false,
-			expectedScope: "user",
+			colName:                ColName{Name: ColIdent{val: "@aaa"}},
+			expectedName:           ColName{Name: ColIdent{val: "aaa"}},
+			expectedSpecifiedScope: "",
+			expectedScope:          "user",
 		},
 		{
 			// System variable without an explicit scope (defaults to session)
-			colName: ColName{Name: ColIdent{val: "@@max_allowed_packets"}},
-			expectedName: ColName{Name: ColIdent{val: "max_allowed_packets"}},
-			expectedExplicit: false,
-			expectedScope: "session",
+			colName:                ColName{Name: ColIdent{val: "@@max_allowed_packets"}},
+			expectedName:           ColName{Name: ColIdent{val: "max_allowed_packets"}},
+			expectedSpecifiedScope: "",
+			expectedScope:          "session",
 		},
 		{
 			// System variable with an explicit session scope
-			colName: ColName{Name: ColIdent{val: "@@session.max_allowed_packets"}},
-			expectedName: ColName{Name: ColIdent{val: "max_allowed_packets"}},
-			expectedExplicit: true,
-			expectedScope: "session",
+			colName:                ColName{Name: ColIdent{val: "@@session.max_allowed_packets"}},
+			expectedName:           ColName{Name: ColIdent{val: "max_allowed_packets"}},
+			expectedSpecifiedScope: "session",
+			expectedScope:          "session",
 		},
 		{
 			// System variable with an explicit global scope
-			colName: ColName{Name: ColIdent{val: "@@global.max_allowed_packets"}},
-			expectedName: ColName{Name: ColIdent{val: "max_allowed_packets"}},
-			expectedExplicit: true,
-			expectedScope: "global",
+			colName:                ColName{Name: ColIdent{val: "@@global.max_allowed_packets"}},
+			expectedName:           ColName{Name: ColIdent{val: "max_allowed_packets"}},
+			expectedSpecifiedScope: "global",
+			expectedScope:          "global",
+		},
+		{
+			// System variable with an explicit global scope (in all caps)
+			colName:                ColName{Name: ColIdent{val: "@@GLOBAL.max_allowed_packets"}},
+			expectedName:           ColName{Name: ColIdent{val: "max_allowed_packets"}},
+			expectedSpecifiedScope: "GLOBAL",
+			expectedScope:          "global",
 		},
 		{
 			// System variable with an explicit persist scope
-			colName: ColName{Name: ColIdent{val: "@@persist.max_allowed_packets"}},
-			expectedName: ColName{Name: ColIdent{val: "max_allowed_packets"}},
-			expectedExplicit: true,
-			expectedScope: "persist",
+			colName:                ColName{Name: ColIdent{val: "@@persist.max_allowed_packets"}},
+			expectedName:           ColName{Name: ColIdent{val: "max_allowed_packets"}},
+			expectedSpecifiedScope: "persist",
+			expectedScope:          "persist",
 		},
 	}
 
 	for _, tt := range testcases {
 		t.Run(tt.colName.String(), func(t *testing.T) {
-			name, scope, b, err := VarScopeForColName(&tt.colName)
+			name, scope, specifiedScope, err := VarScopeForColName(&tt.colName)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedName, *name)
 			assert.Equal(t, tt.expectedScope, string(scope))
-			assert.Equal(t, tt.expectedExplicit, b)
+			assert.Equal(t, tt.expectedSpecifiedScope, specifiedScope)
 		})
 	}
 }

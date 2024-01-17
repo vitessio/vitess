@@ -6498,115 +6498,117 @@ const (
 )
 
 // VarScopeForColName returns the SetScope of the given ColName, along with a new ColName without the scope information,
-// and a boolean that indicates if the scope was explicitly specified, or inferred.
-func VarScopeForColName(colName *ColName) (*ColName, SetScope, bool, error) {
+// and a string indicating the exact scope that was specified in the original query or "" if no scope was explicitly
+// specified.
+func VarScopeForColName(colName *ColName) (*ColName, SetScope, string, error) {
 	if colName.Qualifier.IsEmpty() { // Forms are like `@@x` and `@x`
 		if strings.HasPrefix(colName.Name.val, "@") && strings.Index(colName.Name.val, ".") != -1 {
-			varName, scope, explicit, err := VarScope(strings.Split(colName.Name.val, ".")...)
+			varName, scope, specifiedScope, err := VarScope(strings.Split(colName.Name.val, ".")...)
 			if err != nil {
-				return nil, SetScope_None, false, err
+				return nil, SetScope_None, "", err
 			}
 			if scope == SetScope_None {
-				return colName, scope, false, nil
+				return colName, scope, "", nil
 			}
-			return &ColName{Name: ColIdent{val: varName}}, scope, explicit, nil
+			return &ColName{Name: ColIdent{val: varName}}, scope, specifiedScope, nil
 		} else {
-			varName, scope, explicit, err := VarScope(colName.Name.val)
+			varName, scope, specifiedScope, err := VarScope(colName.Name.val)
 			if err != nil {
-				return nil, SetScope_None, false, err
+				return nil, SetScope_None, "", err
 			}
 			if scope == SetScope_None {
-				return colName, scope, false, nil
+				return colName, scope, "", nil
 			}
-			return &ColName{Name: ColIdent{val: varName}}, scope, explicit, nil
+			return &ColName{Name: ColIdent{val: varName}}, scope, specifiedScope, nil
 		}
 	} else if colName.Qualifier.Qualifier.IsEmpty() { // Forms are like `@@GLOBAL.x` and `@@SESSION.x`
-		varName, scope, explicit, err := VarScope(colName.Qualifier.Name.v, colName.Name.val)
+		varName, scope, specifiedScope, err := VarScope(colName.Qualifier.Name.v, colName.Name.val)
 		if err != nil {
-			return nil, SetScope_None, false, err
+			return nil, SetScope_None, "", err
 		}
 		if scope == SetScope_None {
-			return colName, scope, false, nil
+			return colName, scope, "", nil
 		}
-		return &ColName{Name: ColIdent{val: varName}}, scope, explicit, nil
+		return &ColName{Name: ColIdent{val: varName}}, scope, specifiedScope, nil
 	} else { // Forms are like `@@GLOBAL.validate_password.length`, which is currently unsupported
 		_, _, _, err := VarScope(colName.Qualifier.Qualifier.v, colName.Qualifier.Name.v, colName.Name.val)
-		return colName, SetScope_None, false, err
+		return colName, SetScope_None, "", err
 	}
 }
 
 // VarScope returns the SetScope of the given name, broken into parts. For example, `@@GLOBAL.sys_var` would become
 // `[]string{"@@GLOBAL", "sys_var"}`. Returns the variable name without any scope specifiers, so the aforementioned
 // variable would simply return "sys_var". `[]string{"@@other_var"}` would return "other_var". If a scope is not
-// explicitly specified, then the boolean return parameter will be false. If the name parts do not
-// specify a variable (returns SetScope_None), then it is recommended to use the original non-broken string, as this
-// will always only return the last part. `[]string{"my_db", "my_tbl", "my_col"}` will return "my_col" with SetScope_None.
-func VarScope(nameParts ...string) (string, SetScope, bool, error) {
+// explicitly specified, then the requestedScope string will be empty, otherwise it will be the exact
+// scope that was explicitly specified, which can differ from the returned scope, when the returned scope is
+// inferred. If the name parts do not specify a variable (returns SetScope_None), then it is recommended to use the original non-broken string, as this will always only return the last part.
+// `[]string{"my_db", "my_tbl", "my_col"}` will return "my_col" with SetScope_None.
+func VarScope(nameParts ...string) (string, SetScope, string, error) {
 	switch len(nameParts) {
 	case 0:
-		return "", SetScope_None, false, nil
+		return "", SetScope_None, "", nil
 	case 1:
 		// First case covers `@@@`, `@@@@`, etc.
 		if strings.HasPrefix(nameParts[0], "@@@") {
-			return "", SetScope_None, false, fmt.Errorf("invalid system variable declaration `%s`", nameParts[0])
+			return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[0])
 		} else if strings.HasPrefix(nameParts[0], "@@") {
 			dotIdx := strings.Index(nameParts[0], ".")
 			if dotIdx != -1 {
 				return VarScope(nameParts[0][:dotIdx], nameParts[0][dotIdx+1:])
 			}
 			// Session scope is inferred here, but not explicitly requested
-			return nameParts[0][2:], SetScope_Session, false, nil
+			return nameParts[0][2:], SetScope_Session, "", nil
 		} else if strings.HasPrefix(nameParts[0], "@") {
-			return nameParts[0][1:], SetScope_User, false, nil
+			return nameParts[0][1:], SetScope_User, "", nil
 		} else {
-			return nameParts[0], SetScope_None, false, nil
+			return nameParts[0], SetScope_None, "", nil
 		}
 	case 2:
 		// `@user.var` is valid, so we check for it here.
 		if len(nameParts[0]) >= 2 && nameParts[0][0] == '@' && nameParts[0][1] != '@' &&
 			!strings.HasPrefix(nameParts[1], "@") { // `@user.@var` is invalid though.
-			return fmt.Sprintf("%s.%s", nameParts[0][1:], nameParts[1]), SetScope_User, true, nil
+			return fmt.Sprintf("%s.%s", nameParts[0][1:], nameParts[1]), SetScope_User, "", nil
 		}
 		// We don't support variables such as `@@validate_password.length` right now, only `@@GLOBAL.sys_var`, etc.
 		// The `@` symbols are only valid on the first name_part. First case also catches `@@@`, etc.
 		if strings.HasPrefix(nameParts[1], "@@") {
-			return "", SetScope_None, false, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+			return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
 		} else if strings.HasPrefix(nameParts[1], "@") {
-			return "", SetScope_None, false, fmt.Errorf("invalid user variable declaration `%s`", nameParts[1])
+			return "", SetScope_None, "", fmt.Errorf("invalid user variable declaration `%s`", nameParts[1])
 		}
 		switch strings.ToLower(nameParts[0]) {
 		case "@@global":
 			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
-				return "", SetScope_None, false, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
 			}
-			return nameParts[1], SetScope_Global, true, nil
+			return nameParts[1], SetScope_Global, nameParts[0][2:], nil
 		case "@@persist":
 			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
-				return "", SetScope_None, false, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
 			}
-			return nameParts[1], SetScope_Persist, true, nil
+			return nameParts[1], SetScope_Persist, nameParts[0][2:], nil
 		case "@@persist_only":
 			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
-				return "", SetScope_None, false, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
 			}
-			return nameParts[1], SetScope_PersistOnly, true, nil
+			return nameParts[1], SetScope_PersistOnly, nameParts[0][2:], nil
 		case "@@session":
 			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
-				return "", SetScope_None, false, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
 			}
-			return nameParts[1], SetScope_Session, true, nil
+			return nameParts[1], SetScope_Session, nameParts[0][2:], nil
 		case "@@local":
 			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
-				return "", SetScope_None, false, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
 			}
-			return nameParts[1], SetScope_Session, true, nil
+			return nameParts[1], SetScope_Session, nameParts[0][2:], nil
 		default:
 			// This catches `@@@GLOBAL.sys_var`. Due to the earlier check, this does not error on `@user.var`.
 			if strings.HasPrefix(nameParts[0], "@") {
 				// Last value is column name, so we return that in the error
-				return "", SetScope_None, false, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
 			}
-			return nameParts[1], SetScope_None, false, nil
+			return nameParts[1], SetScope_None, "", nil
 		}
 	default:
 		// `@user.var.name` is valid, so we check for it here.
@@ -6615,20 +6617,20 @@ func VarScope(nameParts ...string) (string, SetScope, bool, error) {
 			for i := 1; i < len(nameParts); i++ {
 				if strings.HasPrefix(nameParts[i], "@") {
 					// Last value is column name, so we return that in the error
-					return "", SetScope_None, false, fmt.Errorf("invalid user variable declaration `%s`", nameParts[len(nameParts)-1])
+					return "", SetScope_None, "", fmt.Errorf("invalid user variable declaration `%s`", nameParts[len(nameParts)-1])
 				}
 			}
-			return strings.Join(append([]string{nameParts[0][1:]}, nameParts[1:]...), "."), SetScope_User, false, nil
+			return strings.Join(append([]string{nameParts[0][1:]}, nameParts[1:]...), "."), SetScope_User, "", nil
 		}
 		// As we don't support `@@GLOBAL.validate_password.length` or anything potentially longer, we error if any part
 		// starts with either `@@` or `@`. We can just check for `@` though.
 		for _, namePart := range nameParts {
 			if strings.HasPrefix(namePart, "@") {
 				// Last value is column name, so we return that in the error
-				return "", SetScope_None, false, fmt.Errorf("invalid system variable declaration `%s`", nameParts[len(nameParts)-1])
+				return "", SetScope_None, "", fmt.Errorf("invalid system variable declaration `%s`", nameParts[len(nameParts)-1])
 			}
 		}
-		return nameParts[len(nameParts)-1], SetScope_None, false, nil
+		return nameParts[len(nameParts)-1], SetScope_None, "", nil
 	}
 }
 
