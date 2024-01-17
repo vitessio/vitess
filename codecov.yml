@@ -4,6 +4,10 @@
 codecov:
   branch: main # Set the default branch
 
+parsers:
+  go:
+    partials_as_hits: true
+
 ignore:
   - "go/cmd/vttestserver"  # This relies on end-to-end test packages
 
