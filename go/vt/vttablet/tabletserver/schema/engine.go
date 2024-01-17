@@ -21,14 +21,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/replication"
@@ -589,7 +589,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 		}
 	}
 
-	return maps2.Values(dropped)
+	return maps.Values(dropped)
 }
 
 func getTableData(ctx context.Context, conn *connpool.Conn, includeStats bool) (*sqltypes.Result, error) {
