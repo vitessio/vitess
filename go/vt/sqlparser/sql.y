@@ -7892,7 +7892,7 @@ set_list:
 set_expression:
   set_expression_assignment
   {
-    colName, scope, err := VarScopeForColName($1.Name)
+    colName, scope, _, err := VarScopeForColName($1.Name)
     if err != nil {
       yylex.Error(err.Error())
       return 1
@@ -7903,7 +7903,7 @@ set_expression:
   }
 | set_scope_primary set_expression_assignment
   {
-    _, scope, err := VarScopeForColName($2.Name)
+    _, scope, _, err := VarScopeForColName($2.Name)
     if err != nil {
       yylex.Error(err.Error())
       return 1
@@ -7916,7 +7916,7 @@ set_expression:
   }
 | set_scope_secondary set_expression_assignment
   {
-    _, scope, err := VarScopeForColName($2.Name)
+    _, scope, _, err := VarScopeForColName($2.Name)
     if err != nil {
       yylex.Error(err.Error())
       return 1
