@@ -144,11 +144,11 @@ func (ctx *PlanningContext) ShouldSkip(expr sqlparser.Expr) bool {
 // AddJoinPredicates associates additional RHS predicates with an existing join predicate.
 // This is used to dynamically adjust the RHS predicates based on evolving join conditions.
 func (ctx *PlanningContext) AddJoinPredicates(joinPred sqlparser.Expr, predicates ...sqlparser.Expr) {
-	for key, values := range ctx.joinPredicates {
-		if ctx.SemTable.EqualsExpr(joinPred, key) {
-			ctx.joinPredicates[key] = append(values, predicates...)
-			return
-		}
+	fn := func(original sqlparser.Expr, rhsExprs []sqlparser.Expr) {
+		ctx.joinPredicates[original] = append(rhsExprs, predicates...)
+	}
+	if ctx.execOnJoinPredicateEqual(joinPred, fn) {
+		return
 	}
 
 	// we didn't find an existing entry
@@ -159,11 +159,11 @@ func (ctx *PlanningContext) AddJoinPredicates(joinPred sqlparser.Expr, predicate
 // for the current planning stage. This is used when a join has been pushed under a route and
 // the original predicate will be used.
 func (ctx *PlanningContext) SkipJoinPredicates(joinPred sqlparser.Expr) error {
-	for key, values := range ctx.joinPredicates {
-		if ctx.SemTable.EqualsExpr(joinPred, key) {
-			ctx.skipThesePredicates(values...)
-			return nil
-		}
+	fn := func(_ sqlparser.Expr, rhsExprs []sqlparser.Expr) {
+		ctx.skipThesePredicates(rhsExprs...)
+	}
+	if ctx.execOnJoinPredicateEqual(joinPred, fn) {
+		return nil
 	}
 	return vterrors.VT13001("predicate does not exist: " + sqlparser.String(joinPred))
 }
@@ -191,4 +191,24 @@ outer:
 		}
 		ctx.skipPredicates[expr] = nil
 	}
+}
+
+func (ctx *PlanningContext) CopyJoinPredicate(src, dest sqlparser.Expr) error {
+	fn := func(_ sqlparser.Expr, rhsExprs []sqlparser.Expr) {
+		ctx.joinPredicates[dest] = rhsExprs
+	}
+	if ctx.execOnJoinPredicateEqual(src, fn) {
+		return nil
+	}
+	return vterrors.VT13001("predicate does not exist: " + sqlparser.String(src))
+}
+
+func (ctx *PlanningContext) execOnJoinPredicateEqual(joinPred sqlparser.Expr, fn func(original sqlparser.Expr, rhsExprs []sqlparser.Expr)) bool {
+	for key, values := range ctx.joinPredicates {
+		if ctx.SemTable.EqualsExpr(joinPred, key) {
+			fn(key, values)
+			return true
+		}
+	}
+	return false
 }
