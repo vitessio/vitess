@@ -480,7 +480,7 @@ func findBackupPosition(ctx context.Context, params BackupParams, backupName str
 		}
 		return manifest.Position, nil
 	}
-	return pos, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "GetBackupManifest could not find backup: %v", backupName)
+	return pos, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "could not find backup %q for %s/%s", backupName, params.Keyspace, params.Shard)
 }
 
 // FindBackupToRestore returns a path, a sequence of backup handles, to be restored.
