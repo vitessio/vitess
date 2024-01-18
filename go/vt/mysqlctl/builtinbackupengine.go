@@ -303,7 +303,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		}
 		purgedGTIDSet, ok := gtidPurged.GTIDSet.(replication.Mysql56GTIDSet)
 		if !ok {
-			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", gtidPurged)
+			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "failed to parse a valid MySQL GTID set from value: %v", gtidPurged)
 		}
 		return gtidPurged, purgedGTIDSet, nil
 	}
