@@ -389,8 +389,6 @@ func TestProbesWhileOperating(t *testing.T) {
 }
 
 // TestProbesPostDisable runs the throttler for some time, and then investigates the internal throttler maps and values.
-// While the throttler is disabled, it is technically safe to iterate those structures. However, `go test -race` disagrees,
-// which is why this test is in this *exclude_race* file
 func TestProbesPostDisable(t *testing.T) {
 	throttler := newTestThrottler()
 	runThrottler(t, throttler, 2*time.Second, nil)
