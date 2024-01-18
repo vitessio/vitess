@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -227,6 +228,22 @@ func (p *Parser) SplitStatement(blob string) (string, string, error) {
 		return blob[:tokenizer.Pos-1], blob[tokenizer.Pos:], nil
 	}
 	return blob, "", nil
+}
+
+// SplitStatements splits a given blob into multiple SQL statements.
+func (p *Parser) SplitStatements(blob string) (statements []Statement, err error) {
+	tokenizer := p.NewStringTokenizer(blob)
+	for {
+		stmt, err := ParseNext(tokenizer)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, err
+		}
+		statements = append(statements, stmt)
+	}
+	return statements, nil
 }
 
 // SplitStatementToPieces split raw sql statement that may have multi sql pieces to sql pieces
