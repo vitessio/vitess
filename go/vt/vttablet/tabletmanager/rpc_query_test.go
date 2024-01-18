@@ -28,12 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
-<<<<<<< HEAD
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
-=======
-	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/sqlparser"
->>>>>>> 78006991dd (Protect `ExecuteFetchAsDBA` against multi-statements, excluding a sequence of `CREATE TABLE|VIEW`. (#14954))
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -102,8 +97,7 @@ func TestAnalyzeExecuteFetchAsDbaMultiQuery(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.query, func(t *testing.T) {
-			parser := sqlparser.NewTestParser()
-			queries, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(tcase.query, parser)
+			queries, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(tcase.query)
 			if tcase.expectErr {
 				assert.Error(t, err)
 			} else {

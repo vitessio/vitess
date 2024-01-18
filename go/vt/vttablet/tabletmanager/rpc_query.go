@@ -32,8 +32,8 @@ import (
 
 // analyzeExecuteFetchAsDbaMultiQuery reutrns 'true' when at least one of the queries
 // in the given SQL has a `/*vt+ allowZeroInDate=true */` directive.
-func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (queries []string, parseable bool, countCreate int, allowZeroInDate bool, err error) {
-	queries, err = parser.SplitStatementToPieces(sql)
+func analyzeExecuteFetchAsDbaMultiQuery(sql string) (queries []string, parseable bool, countCreate int, allowZeroInDate bool, err error) {
+	queries, err = sqlparser.SplitStatementToPieces(sql)
 	if err != nil {
 		return nil, false, 0, false, err
 	}
@@ -45,7 +45,7 @@ func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (q
 		// Some of the queries we receive here are legitimately non-parseable by our
 		// current parser, such as `CHANGE REPLICATION SOURCE TO...`. We must allow
 		// them and so we skip parsing errors.
-		stmt, err := parser.Parse(query)
+		stmt, err := sqlparser.Parse(query)
 		if err != nil {
 			parseable = false
 			continue
@@ -90,14 +90,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
-<<<<<<< HEAD
-	// Handle special possible directives
-	var directives *sqlparser.CommentDirectives
-	if stmt, err := sqlparser.Parse(string(req.Query)); err == nil {
-		if cmnt, ok := stmt.(sqlparser.Commented); ok {
-			directives = cmnt.GetParsedComments().Directives()
-=======
-	statements, _, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(string(req.Query), tm.SQLParser)
+	statements, _, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(string(req.Query))
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +101,6 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		// v20 will throw an error by virtua of using ExecuteFetch instead of ExecuteFetchMulti.
 		if countCreate != len(statements) {
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba unless all are CREATE TABLE or CREATE VIEW")
->>>>>>> 78006991dd (Protect `ExecuteFetchAsDBA` against multi-statements, excluding a sequence of `CREATE TABLE|VIEW`. (#14954))
 		}
 	}
 	if allowZeroInDate {
@@ -116,28 +108,16 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 			return nil, err
 		}
 	}
-<<<<<<< HEAD
-	// run the query
-	result, err := conn.ExecuteFetch(string(req.Query), int(req.MaxRows), true /*wantFields*/)
-=======
-	// Replace any provided sidecar database qualifiers with the correct one.
-	// TODO(shlomi): we use ReplaceTableQualifiersMultiQuery for backwards compatibility. In v20 we will not accept
-	// multi statement queries in ExecuteFetchAsDBA. This will be rewritten as ReplaceTableQualifiers()
-	uq, err := tm.SQLParser.ReplaceTableQualifiersMultiQuery(string(req.Query), sidecar.DefaultName, sidecar.GetName())
-	if err != nil {
-		return nil, err
-	}
 	// TODO(shlomi): we use ExecuteFetchMulti for backwards compatibility. In v20 we will not accept
 	// multi statement queries in ExecuteFetchAsDBA. This will be rewritten as:
 	//  (in v20): result, err := ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
-	result, more, err := conn.ExecuteFetchMulti(uq, int(req.MaxRows), true /*wantFields*/)
+	result, more, err := conn.ExecuteFetchMulti(string(req.Query), int(req.MaxRows), true /*wantFields*/)
 	for more {
 		_, more, _, err = conn.ReadQueryResult(0, false)
 		if err != nil {
 			return nil, err
 		}
 	}
->>>>>>> 78006991dd (Protect `ExecuteFetchAsDBA` against multi-statements, excluding a sequence of `CREATE TABLE|VIEW`. (#14954))
 
 	// re-enable binlogs if necessary
 	if req.DisableBinlogs && !conn.IsClosed() {

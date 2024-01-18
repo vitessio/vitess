@@ -712,77 +712,6 @@ func TestColumns_FindColumn(t *testing.T) {
 	}
 }
 
-func TestSplitStatements(t *testing.T) {
-	testcases := []struct {
-		input   string
-		stmts   int
-		wantErr bool
-	}{
-		{
-			input: "select * from table1; \t; \n; \n\t\t ;select * from table1;",
-			stmts: 2,
-		}, {
-			input: "select * from table1",
-			stmts: 1,
-		}, {
-			input: "select * from table1;",
-			stmts: 1,
-		}, {
-			input: "select * from table1;   ",
-			stmts: 1,
-		}, {
-			input: "select * from table1; select * from table2;",
-			stmts: 2,
-		}, {
-			input: "create /*vt+ directive=true */ table t1 (id int); create table t2 (id int); create table t3 (id int)",
-			stmts: 3,
-		}, {
-			input: "create /*vt+ directive=true */ table t1 (id int); create table t2 (id int); create table t3 (id int);",
-			stmts: 3,
-		}, {
-			input: "select * from /* comment ; */ table1;",
-			stmts: 1,
-		}, {
-			input: "select * from table1 where semi = ';';",
-			stmts: 1,
-		}, {
-			input: "CREATE TABLE `total_data` (`id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id', " +
-				"`region` varchar(32) NOT NULL COMMENT 'region name, like zh; th; kepler'," +
-				"`data_size` bigint NOT NULL DEFAULT '0' COMMENT 'data size;'," +
-				"`createtime` datetime NOT NULL DEFAULT NOW() COMMENT 'create time;'," +
-				"`comment` varchar(100) NOT NULL DEFAULT '' COMMENT 'comment'," +
-				"PRIMARY KEY (`id`))",
-			stmts: 1,
-		}, {
-			input: "create table t1 (id int primary key); create table t2 (id int primary key);",
-			stmts: 2,
-		}, {
-			input: ";;; create table t1 (id int primary key);;; ;create table t2 (id int primary key);",
-			stmts: 2,
-		}, {
-			input:   ";create table t1 ;create table t2 (id;",
-			wantErr: true,
-		}, {
-			// Ignore quoted semicolon
-			input:   ";create table t1 ';';;;create table t2 (id;",
-			wantErr: true,
-		},
-	}
-
-	parser := NewTestParser()
-	for _, tcase := range testcases {
-		t.Run(tcase.input, func(t *testing.T) {
-			statements, err := parser.SplitStatements(tcase.input)
-			if tcase.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tcase.stmts, len(statements))
-			}
-		})
-	}
-}
-
 func TestSplitStatementToPieces(t *testing.T) {
 	testcases := []struct {
 		input  string
@@ -817,9 +746,6 @@ func TestSplitStatementToPieces(t *testing.T) {
 			"`createtime` datetime NOT NULL DEFAULT NOW() COMMENT 'create time;'," +
 			"`comment` varchar(100) NOT NULL DEFAULT '' COMMENT 'comment'," +
 			"PRIMARY KEY (`id`))",
-<<<<<<< HEAD
-	}}
-=======
 	}, {
 		input:  "create table t1 (id int primary key); create table t2 (id int primary key);",
 		output: "create table t1 (id int primary key); create table t2 (id int primary key)",
@@ -840,7 +766,6 @@ func TestSplitStatementToPieces(t *testing.T) {
 		output: "stop replica; start replica",
 	},
 	}
->>>>>>> 78006991dd (Protect `ExecuteFetchAsDBA` against multi-statements, excluding a sequence of `CREATE TABLE|VIEW`. (#14954))
 
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {

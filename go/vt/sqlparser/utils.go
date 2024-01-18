@@ -19,7 +19,6 @@ package sqlparser
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -114,72 +113,3 @@ func NormalizeAlphabetically(query string) (normalized string, err error) {
 	}
 	return String(stmt), nil
 }
-<<<<<<< HEAD
-=======
-
-// ReplaceTableQualifiers takes a statement's table expressions and
-// replaces any cases of the provided database name with the
-// specified replacement name.
-// Note: both database names provided should be unescaped strings.
-func (p *Parser) ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
-	if newdb == olddb {
-		// Nothing to do here.
-		return query, nil
-	}
-	in, err := p.Parse(query)
-	if err != nil {
-		return "", err
-	}
-
-	oldQualifier := NewIdentifierCS(olddb)
-	newQualifier := NewIdentifierCS(newdb)
-
-	modified := false
-	upd := Rewrite(in, func(cursor *Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case TableName:
-			if node.Qualifier.NotEmpty() &&
-				node.Qualifier.String() == oldQualifier.String() {
-				node.Qualifier = newQualifier
-				cursor.Replace(node)
-				modified = true
-			}
-		case *ShowBasic: // for things like 'show tables from _vt'
-			if node.DbName.NotEmpty() &&
-				node.DbName.String() == oldQualifier.String() {
-				node.DbName = newQualifier
-				cursor.Replace(node)
-				modified = true
-			}
-		}
-		return true
-	}, nil)
-	// If we didn't modify anything, return the original query.
-	// This is particularly helpful with unit tests that
-	// execute a query which slightly differs from the parsed
-	// version: e.g. 'where id=1' becomes 'where id = 1'.
-	if modified {
-		return String(upd), nil
-	}
-	return query, nil
-}
-
-// ReplaceTableQualifiersMultiQuery accepts a multi-query string and modifies it
-// via ReplaceTableQualifiers, one query at a time.
-func (p *Parser) ReplaceTableQualifiersMultiQuery(multiQuery, olddb, newdb string) (string, error) {
-	queries, err := p.SplitStatementToPieces(multiQuery)
-	if err != nil {
-		return multiQuery, err
-	}
-	var modifiedQueries []string
-	for _, query := range queries {
-		// Replace any provided sidecar database qualifiers with the correct one.
-		query, err := p.ReplaceTableQualifiers(query, olddb, newdb)
-		if err != nil {
-			return query, err
-		}
-		modifiedQueries = append(modifiedQueries, query)
-	}
-	return strings.Join(modifiedQueries, ";"), nil
-}
->>>>>>> 78006991dd (Protect `ExecuteFetchAsDBA` against multi-statements, excluding a sequence of `CREATE TABLE|VIEW`. (#14954))
