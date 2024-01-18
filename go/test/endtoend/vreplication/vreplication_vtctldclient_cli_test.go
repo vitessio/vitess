@@ -56,11 +56,18 @@ func TestVtctldclientCLI(t *testing.T) {
 	workflowName := "wf1"
 	targetTabs := setupMinimalCustomerKeyspace(t)
 
-	testMoveTablesFlags1(t, &mt, sourceKeyspace, targetKeyspace, workflowName, targetTabs)
-	testMoveTablesFlags2(t, &mt, sourceKeyspace, targetKeyspace, workflowName, targetTabs)
-	testCompleteFlags(t, sourceKeyspace, targetKeyspace, targetTabs)
+	t.Run("MoveTablesCreateFlags1", func(t *testing.T) {
+		testMoveTablesFlags1(t, &mt, sourceKeyspace, targetKeyspace, workflowName, targetTabs)
+	})
+	t.Run("MoveTablesCreateFlags2", func(t *testing.T) {
+		testMoveTablesFlags2(t, &mt, sourceKeyspace, targetKeyspace, workflowName, targetTabs)
+	})
+	t.Run("MoveTablesCompleteFlags", func(t *testing.T) {
+		testMoveTablesFlags3(t, sourceKeyspace, targetKeyspace, targetTabs)
+	})
 }
 
+// Tests several create flags and some complete flags and validates that some of them are set correctly for the workflow.
 func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
 	tables := "customer,customer2"
 	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
@@ -98,6 +105,7 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	confirmNoRoutingRules(t)
 }
 
+// Validates some of the flags created from the previous test.
 func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
 	(*mt).Start() // Need to start because we set auto-start to false.
@@ -112,7 +120,7 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	confirmNoRoutingRules(t)
 	(*mt).Start() // Need to start because we set stop-after-copy to true.
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
-	(*mt).Stop()
+	(*mt).Stop() // Test stopping workflow.
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
 	(*mt).Start()
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
@@ -126,7 +134,8 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	require.True(t, checkTablesExist(t, "zone1-100", []string{"customer", "customer2"}))
 }
 
-func testCompleteFlags(t *testing.T, sourceKeyspace, targetKeyspace string, targetTabs map[string]*cluster.VttabletProcess) {
+// Tests SwitchTraffic and Complete flags
+func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, targetTabs map[string]*cluster.VttabletProcess) {
 	for _, tab := range targetTabs {
 		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, "drop table customer")
