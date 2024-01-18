@@ -1002,10 +1002,10 @@ func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, req
 }
 
 // CheckThrottler is part of the tmclient.TabletManagerClient interface.
-// It always uses a cached client and dialer pool as this is called very
-// frequently between tablets when the throttler is enabled in a keyspace
-// and the overhead of creating a new gRPC connection/channel and dialing
-// the other tablet every time is not practical.
+// It always tries to use a cached client via the dialer pool as this is
+// called very frequently between tablets when the throttler is enabled in
+// a keyspace and the overhead of creating a new gRPC connection/channel
+// and dialing the other tablet every time is not practical.
 func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
