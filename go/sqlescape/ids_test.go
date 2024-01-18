@@ -36,7 +36,7 @@ func TestEscapeID(t *testing.T) {
 
 	for _, tc := range testcases {
 		out := EscapeID(tc.in)
-		assert.Equal(t, tc.out, out, "EscapeID(%s) failed. Got %s, expected %s", tc.in, out, tc.out)
+		assert.Equal(t, tc.out, out)
 	}
 }
 
