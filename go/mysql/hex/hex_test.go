@@ -98,5 +98,5 @@ func TestDecodeBytes(t *testing.T) {
 	// DecodeBytes should return an error for "é" as
 	// hex.decode returns an error for non-ASCII characters
 	err = DecodeBytes([]byte("testDst"), []byte("é"))
-	assert.Errorf(t, err, "expected error to appear for invalid byte, got %v", err)
+	assert.Error(t, err)
 }
