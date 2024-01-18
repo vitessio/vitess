@@ -33,7 +33,7 @@ func TestEncodeBytes(t *testing.T) {
 
 	for _, tCase := range testCases {
 		got := EncodeBytes(tCase.input)
-		assert.Equalf(t, tCase.want, got, "got %v, want %v", got, tCase.want)
+		assert.Equal(t, tCase.want, got)
 	}
 }
 
@@ -50,7 +50,7 @@ func TestEncodeUint(t *testing.T) {
 
 	for _, tCase := range testCases {
 		got := EncodeUint(tCase.input)
-		assert.Equalf(t, tCase.want, got, "got %v, want %v", got, tCase.want)
+		assert.Equal(t, tCase.want, got)
 	}
 }
 
@@ -67,7 +67,7 @@ func TestDecodeUint(t *testing.T) {
 
 	for _, tCase := range testCases {
 		got := DecodeUint(tCase.input)
-		assert.Equalf(t, tCase.want, got, "got %v, want %v", got, tCase.want)
+		assert.Equal(t, tCase.want, got)
 	}
 }
 
@@ -84,16 +84,16 @@ func TestDecodedLen(t *testing.T) {
 
 	for _, tCase := range testCases {
 		got := DecodedLen(tCase.input)
-		assert.Equalf(t, tCase.want, got, "got %d, want %d", got, tCase.want)
+		assert.Equal(t, tCase.want, got)
 	}
 }
 
 func TestDecodeBytes(t *testing.T) {
 	err := DecodeBytes([]byte("testDst"), []byte("1"))
-	assert.NoErrorf(t, err, "expected no error, got %v", err)
+	assert.NoError(t, err)
 
 	err = DecodeBytes([]byte("testDst"), []byte("12"))
-	assert.NoErrorf(t, err, "expected no error, got %v", err)
+	assert.NoError(t, err)
 
 	// DecodeBytes should return an error for "é" as
 	// hex.decode returns an error for non-ASCII characters
