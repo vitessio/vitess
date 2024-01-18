@@ -98,5 +98,5 @@ func TestDecodeBytes(t *testing.T) {
 	// DecodeBytes should return an error for "é" as
 	// hex.decode returns an error for non-ASCII characters
 	err = DecodeBytes([]byte("testDst"), []byte("é"))
-	assert.Error(t, err, "DecodeBytes() should have errored as src contains non-ASCII character")
+	assert.Error(t, err)
 }
