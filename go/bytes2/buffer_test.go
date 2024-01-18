@@ -35,4 +35,10 @@ func TestBuffer(t *testing.T) {
 	if got := b.Len(); got != 5 {
 		t.Errorf("b.Len(): %d, want 5", got)
 	}
+	if got := b.StringUnsafe(); got != want {
+		t.Errorf("b.StringUnsafe(): %s, want %s", got, want)
+	}
+	if b.Reset(); len(b.bytes) != 0 {
+		t.Errorf("b.Reset(): got %s, want \"\"", b.bytes)
+	}
 }
