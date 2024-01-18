@@ -27,14 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type (
-	projector struct {
-		columns               []*ProjExpr
-		columnAliases         sqlparser.Columns
-		explicitColumnAliases bool
-	}
-)
-
 func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
 	output := runPhases(ctx, root)
 	output = planOffsets(ctx, output)

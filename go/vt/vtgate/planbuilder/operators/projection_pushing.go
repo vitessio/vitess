@@ -19,8 +19,52 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
+
+type (
+	projector struct {
+		columns               []*ProjExpr
+		columnAliases         sqlparser.Columns
+		explicitColumnAliases bool
+		tableName             sqlparser.TableName
+	}
+)
+
+// add will add a projection with a given alias
+func (p *projector) add(pe *ProjExpr, col *sqlparser.IdentifierCI) {
+	p.columns = append(p.columns, pe)
+	if col != nil {
+		p.columnAliases = append(p.columnAliases, *col)
+	}
+}
+
+func (p *projector) get(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
+	for _, column := range p.columns {
+		if ctx.SemTable.EqualsExprWithDeps(expr, column.EvalExpr) {
+			if column.Original.As.NotEmpty() {
+				// this is an aliased column - let's create a ColName that points to it
+				col := sqlparser.NewColName(column.Original.As.String())
+				if p.tableName.NonEmpty() {
+					col.Qualifier = p.tableName
+				}
+				return col
+			}
+
+			return column.ColExpr
+		}
+	}
+
+	// we could not find the expression, so we add it
+	alias := sqlparser.UnescapedString(expr)
+	pe := newProjExpr(sqlparser.NewAliasedExpr(expr, alias))
+	p.columns = append(p.columns, pe)
+	p.columnAliases = append(p.columnAliases, sqlparser.NewIdentifierCI(alias))
+
+	out := sqlparser.NewColName(alias)
+	out.Qualifier = p.tableName
+
+	return out
+}
 
 func tryPushProjection(
 	ctx *plancontext.PlanningContext,
@@ -115,13 +159,6 @@ func pushProjectionInVindex(
 	return src, Rewrote("push projection into vindex")
 }
 
-func (p *projector) add(pe *ProjExpr, col *sqlparser.IdentifierCI) {
-	p.columns = append(p.columns, pe)
-	if col != nil {
-		p.columnAliases = append(p.columnAliases, *col)
-	}
-}
-
 func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (Operator, *ApplyResult) {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {
@@ -178,7 +215,7 @@ func pushProjectionInApplyJoin(
 	}
 
 	if p.isDerived() {
-		exposeColumnsThroughDerivedTable(ctx, p, src, lhs)
+		exposeColumnsThroughDerivedTable(ctx, p, src, lhs, rhs)
 	}
 
 	// Create and update the Projection operators for the left and right children, if needed.
@@ -253,7 +290,7 @@ func splitUnexploredExpression(
 // The function iterates through each join predicate, rewriting the expressions in the predicate's
 // LHS expressions to include the derived table. This allows the expressions to be accessed outside
 // the derived table.
-func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin, lhs *projector) {
+func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin, lhs, rhs *projector) {
 	derivedTbl, err := ctx.SemTable.TableInfoFor(p.DT.TableID)
 	if err != nil {
 		panic(err)
@@ -262,31 +299,52 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 	if err != nil {
 		panic(err)
 	}
-	for _, predicate := range src.JoinPredicates.columns {
-		for idx, bve := range predicate.LHSExprs {
-			expr := bve.Expr
-			tbl, err := ctx.SemTable.TableInfoForExpr(expr)
-			if err != nil {
-				panic(err)
-			}
-			tblName, err := tbl.Name()
-			if err != nil {
-				panic(err)
-			}
+	lhs.tableName = derivedTblName
+	rhs.tableName = derivedTblName
 
-			expr = semantics.RewriteDerivedTableExpression(expr, derivedTbl)
-			out := prefixColNames(ctx, tblName, expr)
-
-			alias := sqlparser.UnescapedString(out)
-			predicate.LHSExprs[idx].Expr = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
-			identifierCI := sqlparser.NewIdentifierCI(alias)
-			projExpr := newProjExprWithInner(&sqlparser.AliasedExpr{Expr: out, As: identifierCI}, out)
-			var colAlias *sqlparser.IdentifierCI
-			if lhs.explicitColumnAliases {
-				colAlias = &identifierCI
-			}
-			lhs.add(projExpr, colAlias)
+	lhsIDs := TableID(src.LHS)
+	rhsIDs := TableID(src.RHS)
+	for colIdx, predicate := range src.JoinPredicates.columns {
+		for lhsIdx, bve := range predicate.LHSExprs {
+			// since this is on the LHSExprs, we know that dependencies are from that side of the join
+			col := lhs.get(ctx, bve.Expr)
+			predicate.LHSExprs[lhsIdx].Expr = col
 		}
+
+		// now we need to go over the predicate and find
+		var rewriteTo sqlparser.Expr
+
+		pre := func(node, _ sqlparser.SQLNode) bool {
+			expr, ok := node.(sqlparser.Expr)
+			if !ok {
+				return true
+			}
+			deps := ctx.SemTable.RecursiveDeps(expr)
+
+			switch {
+			case deps.IsEmpty():
+				return true
+			case deps.IsSolvedBy(lhsIDs):
+				rewriteTo = lhs.get(ctx, expr)
+				return false
+			case deps.IsSolvedBy(rhsIDs):
+				rewriteTo = rhs.get(ctx, expr)
+				return false
+			default:
+				return true
+			}
+		}
+
+		post := func(cursor *sqlparser.CopyOnWriteCursor) {
+			if rewriteTo != nil {
+				cursor.Replace(rewriteTo)
+				rewriteTo = nil
+				return
+			}
+		}
+		newOriginal := sqlparser.CopyOnRewrite(predicate.Original, pre, post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
+		predicate.Original = newOriginal
+		src.JoinPredicates.columns[colIdx] = predicate
 	}
 }
 
