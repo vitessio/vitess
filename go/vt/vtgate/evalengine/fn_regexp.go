@@ -218,7 +218,7 @@ func compileConstantRegex(c *compiler, args TupleExpr, pat, mt int, cs collation
 		return nil, errNonConstantRegexp
 	}
 	var err error
-	staticEnv := EmptyExpressionEnv(c.collationEnv)
+	staticEnv := EmptyExpressionEnv(c.collationEnv, c.mysqlVersion)
 	pattern, err = simplifyExpr(staticEnv, pattern)
 	if err != nil {
 		return nil, err

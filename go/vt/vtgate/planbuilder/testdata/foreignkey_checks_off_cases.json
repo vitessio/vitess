@@ -123,7 +123,7 @@
           {
             "InputName": "CascadeChild-1",
             "OperatorType": "Delete",
-            "Variant": "Scatter",
+            "Variant": "MultiEqual",
             "Keyspace": {
               "Name": "sharded_fk_allow",
               "Sharded": true
@@ -138,7 +138,13 @@
               4
             ],
             "Query": "delete /*+ SET_VAR(foreign_key_checks=ON) */ from multicol_tbl2 where (colb, cola, x, colc, y) in ::fkc_vals",
-            "Table": "multicol_tbl2"
+            "Table": "multicol_tbl2",
+            "Values": [
+              "fkc_vals:1",
+              "fkc_vals:0",
+              "fkc_vals:3"
+            ],
+            "Vindex": "multicolIdx"
           },
           {
             "InputName": "Parent",

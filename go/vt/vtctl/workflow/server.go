@@ -147,16 +147,18 @@ type Server struct {
 	sem          *semaphore.Weighted
 	collationEnv *collations.Environment
 	parser       *sqlparser.Parser
+	mysqlVersion string
 }
 
 // NewServer returns a new server instance with the given topo.Server and
 // TabletManagerClient.
-func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient, collationEnv *collations.Environment, parser *sqlparser.Parser) *Server {
+func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *Server {
 	return &Server{
 		ts:           ts,
 		tmc:          tmc,
 		collationEnv: collationEnv,
 		parser:       parser,
+		mysqlVersion: mysqlVersion,
 	}
 }
 
@@ -166,6 +168,10 @@ func (s *Server) SQLParser() *sqlparser.Parser {
 
 func (s *Server) CollationEnv() *collations.Environment {
 	return s.collationEnv
+}
+
+func (s *Server) MySQLVersion() string {
+	return s.mysqlVersion
 }
 
 // CheckReshardingJournalExistsOnTablet returns the journal (or an empty
@@ -1329,6 +1335,7 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		ms:           ms,
 		parser:       s.SQLParser(),
 		collationEnv: s.CollationEnv(),
+		mysqlVersion: s.MySQLVersion(),
 	}
 
 	err := mz.createMaterializerStreams()
@@ -1470,6 +1477,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		workflowType: workflowType,
 		collationEnv: s.CollationEnv(),
 		parser:       s.SQLParser(),
+		mysqlVersion: s.MySQLVersion(),
 	}
 	err = mz.createMoveTablesStreams(req)
 	if err != nil {

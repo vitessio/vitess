@@ -1129,7 +1129,7 @@
           "Sharded": true
         },
         "FieldQuery": "select user0_.col as col0_ from `user` as user0_ where 1 != 1",
-        "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc limit 3",
+        "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col desc limit 3",
         "Table": "`user`",
         "Values": [
           "1"
@@ -2023,73 +2023,7 @@
   {
     "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
-            "PulloutVars": [
-              "__sq1"
-            ],
-            "Inputs": [
-              {
-                "InputName": "SubQuery",
-                "OperatorType": "Limit",
-                "Count": "1",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select col from `user` where 1 != 1",
-                    "Query": "select col from `user` limit :__upper_limit",
-                    "Table": "`user`"
-                  }
-                ]
-              },
-              {
-                "InputName": "Outer",
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select :__sq1 as a, weight_string(:__sq1) from `user` where 1 != 1",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select :__sq1 as a, weight_string(:__sq1) from `user` order by a asc",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
@@ -4809,7 +4743,7 @@
             },
             "FieldQuery": "select u.foo, weight_string(u.foo) from `user` as u where 1 != 1",
             "OrderBy": "(0|1) ASC",
-            "Query": "select u.foo, weight_string(u.foo) from `user` as u order by foo asc",
+            "Query": "select u.foo, weight_string(u.foo) from `user` as u order by u.foo asc",
             "Table": "`user`"
           },
           {

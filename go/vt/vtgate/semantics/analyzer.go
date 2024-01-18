@@ -62,6 +62,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 		binder:          b,
 		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
 		collationEnv:    si.CollationEnv(),
+		mysqlVersion:    si.MySQLVersion(),
 	}
 	s.binder = b
 	return a

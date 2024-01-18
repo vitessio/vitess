@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -95,15 +94,6 @@ func rewriteHavingClause(node *sqlparser.Select) {
 		return
 	}
 
-	selectExprMap := map[string]sqlparser.Expr{}
-	for _, selectExpr := range node.SelectExprs {
-		aliasedExpr, isAliased := selectExpr.(*sqlparser.AliasedExpr)
-		if !isAliased || aliasedExpr.As.IsEmpty() {
-			continue
-		}
-		selectExprMap[aliasedExpr.As.Lowered()] = aliasedExpr.Expr
-	}
-
 	// for each expression in the having clause, we check if it contains aggregation.
 	// if it does, we keep the expression in the having clause ; and if it does not
 	// and the expression is in the select list, we replace the expression by the one
@@ -111,40 +101,10 @@ func rewriteHavingClause(node *sqlparser.Select) {
 	exprs := sqlparser.SplitAndExpression(nil, node.Having.Expr)
 	node.Having = nil
 	for _, expr := range exprs {
-		hasAggr := sqlparser.ContainsAggregation(expr)
-		if !hasAggr {
-			sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
-				visitColName(cursor.Node(), selectExprMap, func(original sqlparser.Expr) {
-					if sqlparser.ContainsAggregation(original) {
-						hasAggr = true
-					}
-				})
-				return true
-			}, nil)
-		}
-		if hasAggr {
+		if sqlparser.ContainsAggregation(expr) {
 			node.AddHaving(expr)
 		} else {
-			sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
-				visitColName(cursor.Node(), selectExprMap, func(original sqlparser.Expr) {
-					cursor.Replace(original)
-				})
-				return true
-			}, nil)
 			node.AddWhere(expr)
 		}
-	}
-}
-func visitColName(cursor sqlparser.SQLNode, selectExprMap map[string]sqlparser.Expr, f func(original sqlparser.Expr)) {
-	switch x := cursor.(type) {
-	case *sqlparser.ColName:
-		if !x.Qualifier.IsEmpty() {
-			return
-		}
-		originalExpr, isInMap := selectExprMap[x.Name.Lowered()]
-		if isInMap {
-			f(originalExpr)
-		}
-		return
 	}
 }

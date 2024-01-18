@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -732,9 +733,9 @@ func verifySubcomponent(t *testing.T, order int64, component any, state testStat
 
 func newTestStateManager(t *testing.T) *stateManager {
 	order.Store(0)
-	config := tabletenv.NewDefaultConfig()
-	env := tabletenv.NewEnv(config, "StateManagerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	cfg := tabletenv.NewDefaultConfig()
 	parser := sqlparser.NewTestParser()
+	env := tabletenv.NewEnv(cfg, "StateManagerTest", collations.MySQL8(), parser, config.DefaultMySQLVersion)
 	sm := &stateManager{
 		statelessql: NewQueryList("stateless", parser),
 		statefulql:  NewQueryList("stateful", parser),

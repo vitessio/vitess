@@ -21,15 +21,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
@@ -162,7 +163,7 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 		}
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
-	if err := sidecardb.Init(ctx, exec, se.env.CollationEnv(), se.env.SQLParser()); err != nil {
+	if err := sidecardb.Init(ctx, exec, se.env.CollationEnv(), se.env.SQLParser(), se.env.MySQLVersion()); err != nil {
 		log.Errorf("Error in sidecardb.Init: %+v", err)
 		if se.env.Config().DB.HasGlobalSettings() {
 			log.Warning("Ignoring sidecardb.Init error for unmanaged tablets")
@@ -588,7 +589,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 		}
 	}
 
-	return maps2.Values(dropped)
+	return maps.Values(dropped)
 }
 
 func getTableData(ctx context.Context, conn *connpool.Conn, includeStats bool) (*sqltypes.Result, error) {
@@ -828,7 +829,7 @@ func NewEngineForTests() *Engine {
 		isOpen:    true,
 		tables:    make(map[string]*Table),
 		historian: newHistorian(false, 0, nil),
-		env:       tabletenv.NewEnv(tabletenv.NewDefaultConfig(), "SchemaEngineForTests", collations.MySQL8(), sqlparser.NewTestParser()),
+		env:       tabletenv.NewEnv(tabletenv.NewDefaultConfig(), "SchemaEngineForTests", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion),
 	}
 	return se
 }
@@ -850,6 +851,10 @@ func (se *Engine) CollationEnv() *collations.Environment {
 
 func (se *Engine) SQLParser() *sqlparser.Parser {
 	return se.env.SQLParser()
+}
+
+func (se *Engine) MySQLVersion() string {
+	return se.env.MySQLVersion()
 }
 
 func extractNamesFromTablesList(tables []*Table) []string {

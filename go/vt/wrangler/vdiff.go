@@ -113,6 +113,7 @@ type vdiff struct {
 
 	collationEnv *collations.Environment
 	parser       *sqlparser.Parser
+	mysqlVersion string
 }
 
 // compareColInfo contains the metadata for a column of the table being diffed
@@ -226,6 +227,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		targetTimeZone: ts.targetTimeZone,
 		collationEnv:   wr.collationEnv,
 		parser:         wr.parser,
+		mysqlVersion:   wr.mysqlVersion,
 	}
 	for shard, source := range ts.Sources() {
 		df.sources[shard] = &shardStreamer{
@@ -493,8 +495,8 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 
 // findPKs identifies PKs, determines any collations to be used for
 // them, and removes them from the columns used for data comparison.
-func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer, collationEnv *collations.Environment, parser *sqlparser.Parser) (sqlparser.OrderBy, error) {
-	columnCollations, err := getColumnCollations(table, collationEnv, parser)
+func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) (sqlparser.OrderBy, error) {
+	columnCollations, err := getColumnCollations(table, collationEnv, parser, mysqlVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -538,7 +540,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 // getColumnCollations determines the proper collation to use for each
 // column in the table definition leveraging MySQL's collation inheritance
 // rules.
-func getColumnCollations(table *tabletmanagerdatapb.TableDefinition, collationEnv *collations.Environment, parser *sqlparser.Parser) (map[string]collations.ID, error) {
+func getColumnCollations(table *tabletmanagerdatapb.TableDefinition, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) (map[string]collations.ID, error) {
 	createstmt, err := parser.Parse(table.Schema)
 	if err != nil {
 		return nil, err
@@ -547,7 +549,7 @@ func getColumnCollations(table *tabletmanagerdatapb.TableDefinition, collationEn
 	if !ok {
 		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
 	}
-	env := schemadiff.NewEnv(collationEnv, collationEnv.DefaultConnectionCharset(), parser)
+	env := schemadiff.NewEnv(collationEnv, collationEnv.DefaultConnectionCharset(), parser, mysqlVersion)
 	tableschema, err := schemadiff.NewCreateTableEntity(env, createtable)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "invalid table schema %s for table %s", table.Schema, table.Name)
@@ -745,7 +747,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		},
 	}
 
-	orderby, err := findPKs(table, targetSelect, td, df.collationEnv, df.parser)
+	orderby, err := findPKs(table, targetSelect, td, df.collationEnv, df.parser, df.mysqlVersion)
 	if err != nil {
 		return nil, err
 	}

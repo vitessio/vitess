@@ -30,13 +30,14 @@ import (
 func RemovedForeignKeyNames(
 	parser *sqlparser.Parser,
 	collEnv *collations.Environment,
+	mysqlVersion string,
 	originalCreateTable string,
 	vreplCreateTable string,
 ) (names []string, err error) {
 	if originalCreateTable == "" || vreplCreateTable == "" {
 		return nil, nil
 	}
-	env := schemadiff.NewEnv(collEnv, collEnv.DefaultConnectionCharset(), parser)
+	env := schemadiff.NewEnv(collEnv, collEnv.DefaultConnectionCharset(), parser, mysqlVersion)
 	diffHints := schemadiff.DiffHints{ConstraintNamesStrategy: schemadiff.ConstraintNamesIgnoreAll}
 	diff, err := schemadiff.DiffCreateTablesQueries(env, originalCreateTable, vreplCreateTable, &diffHints)
 	if err != nil {

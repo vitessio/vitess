@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
@@ -333,7 +334,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := NewConn(context.Background(), params, connPool.dbaPool, nil, tabletenv.NewEnv(nil, "TestDBNoPoolConnKill", collations.MySQL8(), sqlparser.NewTestParser()))
+	dbConn, err := NewConn(context.Background(), params, connPool.dbaPool, nil, tabletenv.NewEnv(nil, "TestDBNoPoolConnKill", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion))
 	if dbConn != nil {
 		defer dbConn.Close()
 	}

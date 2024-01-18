@@ -51,7 +51,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -3369,7 +3368,7 @@ func (asm *assembler) Fn_Database() {
 func (asm *assembler) Fn_Version() {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
-		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText([]byte(servenv.MySQLServerVersion()), collationUtf8mb3)
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText([]byte(env.currentVersion()), collationUtf8mb3)
 		env.vm.sp++
 		return 1
 	}, "FN VERSION")

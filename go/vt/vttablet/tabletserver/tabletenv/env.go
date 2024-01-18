@@ -36,6 +36,7 @@ type Env interface {
 	SQLParser() *sqlparser.Parser
 	LogError()
 	CollationEnv() *collations.Environment
+	MySQLVersion() string
 }
 
 type testEnv struct {
@@ -44,11 +45,12 @@ type testEnv struct {
 	stats        *Stats
 	collationEnv *collations.Environment
 	parser       *sqlparser.Parser
+	mysqlVersion string
 }
 
 // NewEnv creates an Env that can be used for tabletserver subcomponents
 // without an actual TabletServer.
-func NewEnv(config *TabletConfig, exporterName string, collationEnv *collations.Environment, parser *sqlparser.Parser) Env {
+func NewEnv(config *TabletConfig, exporterName string, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) Env {
 	exporter := servenv.NewExporter(exporterName, "Tablet")
 	return &testEnv{
 		config:       config,
@@ -56,6 +58,7 @@ func NewEnv(config *TabletConfig, exporterName string, collationEnv *collations.
 		stats:        NewStats(exporter),
 		collationEnv: collationEnv,
 		parser:       parser,
+		mysqlVersion: mysqlVersion,
 	}
 }
 
@@ -65,6 +68,7 @@ func (te *testEnv) Exporter() *servenv.Exporter           { return te.exporter }
 func (te *testEnv) Stats() *Stats                         { return te.stats }
 func (te *testEnv) CollationEnv() *collations.Environment { return te.collationEnv }
 func (te *testEnv) SQLParser() *sqlparser.Parser          { return te.parser }
+func (te *testEnv) MySQLVersion() string                  { return te.mysqlVersion }
 
 func (te *testEnv) LogError() {
 	if x := recover(); x != nil {

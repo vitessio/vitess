@@ -32,6 +32,7 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -832,9 +833,9 @@ type fakeTabletServer struct {
 }
 
 func newFakeTabletServer() *fakeTabletServer {
-	config := tabletenv.NewDefaultConfig()
+	cfg := tabletenv.NewDefaultConfig()
 	return &fakeTabletServer{
-		Env: tabletenv.NewEnv(config, "MessagerTest", collations.MySQL8(), sqlparser.NewTestParser()),
+		Env: tabletenv.NewEnv(cfg, "MessagerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion),
 	}
 }
 
