@@ -140,7 +140,7 @@ func (rs *rowStreamer) Stream() error {
 func (rs *rowStreamer) buildPlan() error {
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
-	sel, fromTable, err := analyzeSelect(rs.query, rs.se.SQLParser())
+	sel, fromTable, err := analyzeSelect(rs.query, rs.se.Environment().Parser())
 	if err != nil {
 		return err
 	}
@@ -177,7 +177,7 @@ func (rs *rowStreamer) buildPlan() error {
 	// This is because the row format of a read is identical
 	// to the row format of a binlog event. So, the same
 	// filtering will work.
-	rs.plan, err = buildTablePlan(ti, rs.vschema, rs.query, rs.se.CollationEnv(), rs.se.SQLParser(), rs.se.MySQLVersion())
+	rs.plan, err = buildTablePlan(rs.se.Environment(), ti, rs.vschema, rs.query)
 	if err != nil {
 		log.Errorf("%s", err.Error())
 		return err

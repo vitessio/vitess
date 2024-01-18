@@ -108,8 +108,8 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 
 		if c.columnDefinition.Type.Charset.Name == "" && c.columnDefinition.Type.Options.Collate != "" {
 			// Column has explicit collation but no charset. We can infer the charset from the collation.
-			collationID := env.CollationEnv.LookupByName(c.columnDefinition.Type.Options.Collate)
-			charset := env.CollationEnv.LookupCharsetName(collationID)
+			collationID := env.CollationEnv().LookupByName(c.columnDefinition.Type.Options.Collate)
+			charset := env.CollationEnv().LookupCharsetName(collationID)
 			if charset == "" {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot match charset to collation %v", c.columnDefinition.Type.Options.Collate)
 			}
@@ -131,17 +131,17 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 				c.columnDefinition.Type.Options.Collate = t1cc.collate
 			}
 			if c.columnDefinition.Type.Options.Collate = t1cc.collate; c.columnDefinition.Type.Options.Collate == "" {
-				collation := env.CollationEnv.DefaultCollationForCharset(t1cc.charset)
+				collation := env.CollationEnv().DefaultCollationForCharset(t1cc.charset)
 				if collation == collations.Unknown {
 					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot match collation to charset %v", t1cc.charset)
 				}
-				c.columnDefinition.Type.Options.Collate = env.CollationEnv.LookupName(collation)
+				c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
 			}
 		}
 		if other.columnDefinition.Type.Charset.Name == "" && other.columnDefinition.Type.Options.Collate != "" {
 			// Column has explicit collation but no charset. We can infer the charset from the collation.
-			collationID := env.CollationEnv.LookupByName(other.columnDefinition.Type.Options.Collate)
-			charset := env.CollationEnv.LookupCharsetName(collationID)
+			collationID := env.CollationEnv().LookupByName(other.columnDefinition.Type.Options.Collate)
+			charset := env.CollationEnv().LookupCharsetName(collationID)
 			if charset == "" {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot match charset to collation %v", other.columnDefinition.Type.Options.Collate)
 			}
@@ -158,11 +158,11 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 			}()
 			other.columnDefinition.Type.Charset.Name = t2cc.charset
 			if other.columnDefinition.Type.Options.Collate = t2cc.collate; other.columnDefinition.Type.Options.Collate == "" {
-				collation := env.CollationEnv.DefaultCollationForCharset(t2cc.charset)
+				collation := env.CollationEnv().DefaultCollationForCharset(t2cc.charset)
 				if collation == collations.Unknown {
 					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot match collation to charset %v", t2cc.charset)
 				}
-				other.columnDefinition.Type.Options.Collate = env.CollationEnv.LookupName(collation)
+				other.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
 			}
 		}
 	}

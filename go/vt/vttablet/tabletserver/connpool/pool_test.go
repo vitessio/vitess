@@ -24,14 +24,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -61,7 +59,7 @@ func TestConnPoolTimeout(t *testing.T) {
 	}
 	cfg.Timeout = time.Second
 	cfg.IdleTimeout = 10 * time.Second
-	connPool := NewPool(tabletenv.NewEnv(nil, "PoolTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion), "TestPool", cfg)
+	connPool := NewPool(tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "PoolTest"), "TestPool", cfg)
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
@@ -338,7 +336,7 @@ func newPool() *Pool {
 }
 
 func newPoolWithCapacity(capacity int) *Pool {
-	return NewPool(tabletenv.NewEnv(nil, "PoolTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion), "TestPool", tabletenv.ConnPoolConfig{
+	return NewPool(tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
 		Size:        capacity,
 		IdleTimeout: 10 * time.Second,
 	})

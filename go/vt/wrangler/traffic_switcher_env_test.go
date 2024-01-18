@@ -29,8 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqlescape"
@@ -44,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -122,7 +121,7 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards, targetShards []string, fmtQuery string) *testMigraterEnv {
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
-	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	tme.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.wr.sem = semaphore.NewWeighted(1)
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
@@ -392,7 +391,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 	require.Greater(t, len(shards), 1, "shard by shard migrations can only be done on sharded keyspaces")
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
-	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	tme.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.wr.sem = semaphore.NewWeighted(1)
 	tme.sourceShards = shards
 	tme.targetShards = shards
@@ -555,7 +554,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targetShards []string) *testShardMigraterEnv {
 	tme := &testShardMigraterEnv{}
 	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
-	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	tme.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)

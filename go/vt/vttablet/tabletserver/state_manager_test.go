@@ -29,9 +29,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -735,7 +734,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 	order.Store(0)
 	cfg := tabletenv.NewDefaultConfig()
 	parser := sqlparser.NewTestParser()
-	env := tabletenv.NewEnv(cfg, "StateManagerTest", collations.MySQL8(), parser, config.DefaultMySQLVersion)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "StateManagerTest")
 	sm := &stateManager{
 		statelessql: NewQueryList("stateless", parser),
 		statefulql:  NewQueryList("stateful", parser),

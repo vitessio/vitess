@@ -27,6 +27,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -334,7 +335,7 @@ func (ast *astCompiler) translateCollateExpr(collate *sqlparser.CollateExpr) (IR
 	if err != nil {
 		return nil, err
 	}
-	coll := ast.cfg.CollationEnv.LookupByName(collate.Collation)
+	coll := ast.cfg.Environment.CollationEnv().LookupByName(collate.Collation)
 	if coll == collations.Unknown {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown collation: '%s'", collate.Collation)
 	}
@@ -345,7 +346,7 @@ func (ast *astCompiler) translateCollateExpr(collate *sqlparser.CollateExpr) (IR
 			Coercibility: collations.CoerceExplicit,
 			Repertoire:   collations.RepertoireUnicode,
 		},
-		CollationEnv: ast.cfg.CollationEnv,
+		CollationEnv: ast.cfg.Environment.CollationEnv(),
 	}, nil
 }
 
@@ -359,7 +360,7 @@ func (ast *astCompiler) translateIntroducerExpr(introduced *sqlparser.Introducer
 	if strings.ToLower(introduced.CharacterSet) == "_binary" {
 		collation = collations.CollationBinaryID
 	} else {
-		defaultCollation := ast.cfg.CollationEnv.DefaultCollationForCharset(introduced.CharacterSet[1:])
+		defaultCollation := ast.cfg.Environment.CollationEnv().DefaultCollationForCharset(introduced.CharacterSet[1:])
 		if defaultCollation == collations.Unknown {
 			panic(fmt.Sprintf("unknown character set: %s", introduced.CharacterSet))
 		}
@@ -390,7 +391,7 @@ func (ast *astCompiler) translateIntroducerExpr(introduced *sqlparser.Introducer
 				Coercibility: collations.CoerceExplicit,
 				Repertoire:   collations.RepertoireUnicode,
 			},
-			CollationEnv: ast.cfg.CollationEnv,
+			CollationEnv: ast.cfg.Environment.CollationEnv(),
 		}, nil
 	default:
 		panic("character set introducers are only supported for literals and arguments")
@@ -422,7 +423,7 @@ func (ast *astCompiler) translateUnaryExpr(unary *sqlparser.UnaryExpr) (IR, erro
 	case sqlparser.TildaOp:
 		return &BitwiseNotExpr{UnaryExpr: UnaryExpr{expr}}, nil
 	case sqlparser.NStringOp:
-		return &ConvertExpr{UnaryExpr: UnaryExpr{expr}, Type: "NCHAR", Collation: collations.CollationUtf8mb3ID, CollationEnv: ast.cfg.CollationEnv}, nil
+		return &ConvertExpr{UnaryExpr: UnaryExpr{expr}, Type: "NCHAR", Collation: collations.CollationUtf8mb3ID, CollationEnv: ast.cfg.Environment.CollationEnv()}, nil
 	default:
 		return nil, translateExprNotSupported(unary)
 	}
@@ -572,8 +573,7 @@ type Config struct {
 	NoConstantFolding bool
 	NoCompilation     bool
 	SQLMode           SQLMode
-	CollationEnv      *collations.Environment
-	MySQLVersion      string
+	Environment       *vtenv.Environment
 }
 
 func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
@@ -589,7 +589,7 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 	}
 
 	if !cfg.NoConstantFolding {
-		staticEnv := EmptyExpressionEnv(cfg.CollationEnv, cfg.MySQLVersion)
+		staticEnv := EmptyExpressionEnv(cfg.Environment)
 		expr, err = simplifyExpr(staticEnv, expr)
 		if err != nil {
 			return nil, err
@@ -601,15 +601,15 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 	}
 
 	if len(ast.untyped) == 0 && !cfg.NoCompilation {
-		comp := compiler{collation: cfg.Collation, collationEnv: cfg.CollationEnv, sqlmode: cfg.SQLMode, mysqlVersion: cfg.MySQLVersion}
+		comp := compiler{collation: cfg.Collation, env: cfg.Environment, sqlmode: cfg.SQLMode}
 		return comp.compile(expr)
 	}
 
 	return &UntypedExpr{
-		ir:           expr,
-		collation:    cfg.Collation,
-		collationEnv: cfg.CollationEnv,
-		needTypes:    ast.untyped,
+		env:       cfg.Environment,
+		ir:        expr,
+		collation: cfg.Collation,
+		needTypes: ast.untyped,
 	}, nil
 }
 
@@ -625,11 +625,11 @@ type typedExpr struct {
 	err      error
 }
 
-func (typed *typedExpr) compile(expr IR, collation collations.ID, collationEnv *collations.Environment, sqlmode SQLMode) (*CompiledExpr, error) {
+func (typed *typedExpr) compile(env *vtenv.Environment, expr IR, collation collations.ID, sqlmode SQLMode) (*CompiledExpr, error) {
 	typed.once.Do(func() {
 		comp := compiler{
+			env:          env,
 			collation:    collation,
-			collationEnv: collationEnv,
 			dynamicTypes: typed.types,
 			sqlmode:      sqlmode,
 		}
@@ -646,11 +646,11 @@ type typedIR interface {
 // UntypedExpr is a translated expression that cannot be compiled ahead of time because it
 // contains dynamic types.
 type UntypedExpr struct {
+	env *vtenv.Environment
 	// ir is the translated IR for the expression
 	ir IR
 	// collation is the default collation for the translated expression
-	collation    collations.ID
-	collationEnv *collations.Environment
+	collation collations.ID
 	// needTypes are the IR nodes in ir that could not be typed ahead of time: these must
 	// necessarily be either Column or BindVariable nodes, as all other nodes can always
 	// be statically typed. The dynamicTypeOffset field on each node is the offset of
@@ -700,7 +700,7 @@ func (u *UntypedExpr) Compile(env *ExpressionEnv) (*CompiledExpr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return typed.compile(u.ir, u.collation, u.collationEnv, env.sqlmode)
+	return typed.compile(u.env, u.ir, u.collation, env.sqlmode)
 }
 
 func (u *UntypedExpr) typeof(env *ExpressionEnv) (ctype, error) {

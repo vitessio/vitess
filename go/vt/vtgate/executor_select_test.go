@@ -28,10 +28,9 @@ import (
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/streamlog"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"github.com/google/go-cmp/cmp"
@@ -1625,7 +1624,7 @@ func TestSelectListArg(t *testing.T) {
 func createExecutor(ctx context.Context, serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	ex := NewExecutor(ctx, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	ex := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
 	ex.SetQueryLogger(queryLogger)
 	return ex
 }
@@ -3251,7 +3250,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	}
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	executor := NewExecutor(ctx, serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
 	executor.SetQueryLogger(queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start

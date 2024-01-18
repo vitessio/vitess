@@ -29,10 +29,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -1491,7 +1490,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	}
 	dbconfigs := newDBConfigs(db)
 	cfg.DB = dbconfigs
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
 	if cfg.TwoPCEnable {

@@ -71,11 +71,11 @@ func initSchema() {
 				return
 			}
 			ctx := context.Background()
-			wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv, parser, mysqlVersion)
+			wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 			_, err = schemamanager.Run(
 				ctx,
 				controller,
-				schemamanager.NewTabletExecutor("vtctld/schema", wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), schemaChangeReplicasTimeout, 0, parser),
+				schemamanager.NewTabletExecutor("vtctld/schema", wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), schemaChangeReplicasTimeout, 0, env.Parser()),
 			)
 			if err != nil {
 				log.Errorf("Schema change failed, error: %v", err)

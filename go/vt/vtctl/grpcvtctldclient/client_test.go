@@ -23,15 +23,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -44,7 +42,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
@@ -91,7 +89,7 @@ func TestGetKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
@@ -120,7 +118,7 @@ func TestGetKeyspaces(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {

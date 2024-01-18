@@ -36,6 +36,7 @@ package tabletmanager
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/rand"
 	"regexp"
@@ -63,11 +64,11 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -91,7 +92,6 @@ var (
 	skipBuildInfoTags  = "/.*/"
 	initTags           flagutil.StringMapValue
 
-	initPopulateMetadata bool
 	initTimeout          = 1 * time.Minute
 	mysqlShutdownTimeout = 5 * time.Minute
 )
@@ -156,9 +156,7 @@ type TabletManager struct {
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
 	VDiffEngine         *vdiff.Engine
-	CollationEnv        *collations.Environment
-	SQLParser           *sqlparser.Parser
-	MySQLVersion        string
+	Env                 *vtenv.Environment
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
@@ -369,7 +367,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	if err := tm.checkPrimaryShip(ctx, si); err != nil {
 		return err
 	}
-	if err := tm.checkMysql(ctx); err != nil {
+	if err := tm.checkMysql(); err != nil {
 		return err
 	}
 	if err := tm.initTablet(ctx); err != nil {
@@ -468,7 +466,7 @@ func (tm *TabletManager) Close() {
 // Stop shuts down the tm. Normally this is not necessary, since we use
 // servenv OnTerm and OnClose hooks to coordinate shutdown automatically,
 // while taking lameduck into account. However, this may be useful for tests,
-// when you want to clean up an tm immediately.
+// when you want to clean up a tm immediately.
 func (tm *TabletManager) Stop() {
 	// Stop the shard sync loop and wait for it to exit. This needs to be done
 	// here in addition to in Close() because tests do not call Close().
@@ -705,7 +703,7 @@ func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInf
 	return nil
 }
 
-func (tm *TabletManager) checkMysql(ctx context.Context) error {
+func (tm *TabletManager) checkMysql() error {
 	appConfig, err := tm.DBConfigs.AppWithDB().MysqlParams()
 	if err != nil {
 		return err
@@ -902,7 +900,7 @@ func (tm *TabletManager) withRetry(ctx context.Context, description string, work
 	backoff := 1 * time.Second
 	for {
 		err := work()
-		if err == nil || err == context.Canceled || err == context.DeadlineExceeded {
+		if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return err
 		}
 

@@ -25,12 +25,10 @@ import (
 	"github.com/spf13/cobra"
 
 	_flag "vitess.io/vitess/go/internal/flag"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -38,6 +36,7 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 var (
@@ -139,23 +138,21 @@ func run(cmd *cobra.Command, args []string) {
 		log.Warningf("no cache-refresh-key set; forcing cache refreshes will not be possible")
 	}
 	cache.SetCacheRefreshKey(cacheRefreshKey)
-	mysqlServerVersion := servenv.MySQLServerVersion()
-	collationEnv := collations.NewEnvironment(mysqlServerVersion)
 
-	parser, err := sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: mysqlServerVersion,
+	env, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
 		fatal(err)
 	}
-	s := vtadmin.NewAPI(clusters, vtadmin.Options{
+	s := vtadmin.NewAPI(env, clusters, vtadmin.Options{
 		GRPCOpts:              opts,
 		HTTPOpts:              httpOpts,
 		RBAC:                  rbacConfig,
 		EnableDynamicClusters: enableDynamicClusters,
-	}, collationEnv, parser, mysqlServerVersion)
+	})
 	bootSpan.Finish()
 
 	if err := s.ListenAndServe(); err != nil {

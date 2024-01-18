@@ -23,9 +23,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logutil"
@@ -83,26 +81,22 @@ type actionTabletRecord struct {
 // ActionRepository is a repository of actions that can be performed
 // on a {Keyspace,Shard,Tablet}.
 type ActionRepository struct {
+	env             *vtenv.Environment
 	keyspaceActions map[string]actionKeyspaceMethod
 	shardActions    map[string]actionShardMethod
 	tabletActions   map[string]actionTabletRecord
 	ts              *topo.Server
-	collationEnv    *collations.Environment
-	parser          *sqlparser.Parser
-	mysqlVersion    string
 }
 
 // NewActionRepository creates and returns a new ActionRepository,
 // with no actions.
-func NewActionRepository(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *ActionRepository {
+func NewActionRepository(env *vtenv.Environment, ts *topo.Server) *ActionRepository {
 	return &ActionRepository{
+		env:             env,
 		keyspaceActions: make(map[string]actionKeyspaceMethod),
 		shardActions:    make(map[string]actionShardMethod),
 		tabletActions:   make(map[string]actionTabletRecord),
 		ts:              ts,
-		collationEnv:    collationEnv,
-		parser:          parser,
-		mysqlVersion:    mysqlVersion,
 	}
 }
 
@@ -135,7 +129,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(ctx context.Context, actionName,
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), ar.collationEnv, ar.parser, ar.mysqlVersion)
+	wr := wrangler.New(ar.env, logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
 	output, err := action(ctx, wr, keyspace)
 	cancel()
 	if err != nil {
@@ -162,7 +156,7 @@ func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, ke
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), ar.collationEnv, ar.parser, ar.mysqlVersion)
+	wr := wrangler.New(ar.env, logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
 	output, err := action(ctx, wr, keyspace, shard)
 	cancel()
 	if err != nil {
@@ -196,7 +190,7 @@ func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName st
 
 	// run the action
 	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), ar.collationEnv, ar.parser, ar.mysqlVersion)
+	wr := wrangler.New(ar.env, logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
 	output, err := action.method(ctx, wr, tabletAlias)
 	cancel()
 	if err != nil {

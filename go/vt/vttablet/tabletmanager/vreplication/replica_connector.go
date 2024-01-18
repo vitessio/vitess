@@ -18,9 +18,8 @@ package vreplication
 
 import (
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
@@ -36,8 +35,7 @@ import (
 // This is used by binlog server to make vstream connection
 // using the vstream connection, it will parse the events from binglog
 // to fetch the corresponding GTID for required recovery time
-func NewReplicaConnector(connParams *mysql.ConnParams, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *ReplicaConnector {
-
+func NewReplicaConnector(venv *vtenv.Environment, connParams *mysql.ConnParams) *ReplicaConnector {
 	// Construct
 	config := tabletenv.NewDefaultConfig()
 	dbCfg := &dbconfigs.DBConfigs{
@@ -47,7 +45,7 @@ func NewReplicaConnector(connParams *mysql.ConnParams, collationEnv *collations.
 	dbCfg.SetDbParams(*connParams, *connParams, *connParams)
 	config.DB = dbCfg
 	c := &ReplicaConnector{conn: connParams}
-	env := tabletenv.NewEnv(config, "source", collationEnv, parser, mysqlVersion)
+	env := tabletenv.NewEnv(venv, config, "source")
 	c.se = schema.NewEngine(env)
 	c.se.SkipMetaCheck = true
 	c.vstreamer = vstreamer.NewEngine(env, nil, c.se, nil, "")

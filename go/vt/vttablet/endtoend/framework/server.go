@@ -23,12 +23,10 @@ import (
 	"net/http"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/yaml2"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -80,7 +78,7 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 	}
 	TopoServer = memorytopo.NewServer(ctx, "")
 
-	Server = tabletserver.NewTabletServer(ctx, "", cfg, TopoServer, &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	Server = tabletserver.NewTabletServer(ctx, vtenv.NewTestEnv(), "", cfg, TopoServer, &topodatapb.TabletAlias{})
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs, nil /* mysqld */)
 	if err != nil {

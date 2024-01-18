@@ -29,15 +29,13 @@ import (
 
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
@@ -212,9 +210,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 		VREngine:            vreplication.NewTestEngine(wr.TopoServer(), ft.Tablet.Alias.Cell, ft.FakeMysqlDaemon, binlogplayer.NewFakeDBClient, binlogplayer.NewFakeDBClient, topoproto.TabletDbName(ft.Tablet), nil),
-		CollationEnv:        collations.MySQL8(),
-		SQLParser:           sqlparser.NewTestParser(),
-		MySQLVersion:        config.DefaultMySQLVersion,
+		Env:                 vtenv.NewTestEnv(),
 	}
 	if err := ft.TM.Start(ft.Tablet, nil); err != nil {
 		t.Fatalf("Error in tablet - %v, err - %v", topoproto.TabletAliasString(ft.Tablet.Alias), err.Error())

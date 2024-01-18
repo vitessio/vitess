@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -104,9 +105,9 @@ type explainTablet struct {
 
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
-func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatapb.Tablet, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *explainTablet {
+func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
-	sidecardb.AddSchemaInitQueries(db, true, vte.parser)
+	sidecardb.AddSchemaInitQueries(db, true, env.Parser())
 
 	config := tabletenv.NewCurrentConfig()
 	config.TrackSchemaVersions = false
@@ -119,9 +120,9 @@ func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatap
 	config.EnableTableGC = false
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(ctx, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias, collationEnv, parser, mysqlVersion)
+	tsv := tabletserver.NewTabletServer(ctx, env, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias)
 
-	tablet := explainTablet{db: db, tsv: tsv, vte: vte, collationEnv: collationEnv}
+	tablet := explainTablet{db: db, tsv: tsv, vte: vte, collationEnv: env.CollationEnv()}
 	db.Handler = &tablet
 
 	tablet.QueryService = queryservice.Wrap(
@@ -592,7 +593,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 	// Parse the select statement to figure out the table and columns
 	// that were referenced so that the synthetic response has the
 	// expected field names and types.
-	stmt, err := t.vte.parser.Parse(query)
+	stmt, err := t.vte.env.Parser().Parse(query)
 	if err != nil {
 		return nil, err
 	}

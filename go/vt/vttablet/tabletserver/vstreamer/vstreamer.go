@@ -503,7 +503,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
-			if mustSendDDL(q, vs.cp.DBName(), vs.filter, vs.vse.env.SQLParser()) {
+			if mustSendDDL(q, vs.cp.DBName(), vs.filter, vs.vse.env.Environment().Parser()) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: replication.EncodePosition(vs.pos),
@@ -520,7 +520,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
-			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.SQLParser()) {
+			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.Environment().Parser()) {
 				vs.se.ReloadAt(context.Background(), vs.pos)
 			}
 		case sqlparser.StmtSavepoint:
@@ -682,7 +682,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling is done when we actually
 	// receive the row event. We'll build a JOURNAL event instead.
-	plan, err := buildREPlan(table, nil, "", vs.se.CollationEnv(), vs.se.MySQLVersion())
+	plan, err := buildREPlan(vs.se.Environment(), table, nil, "")
 	if err != nil {
 		return err
 	}
@@ -716,7 +716,7 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling is done when we actually
 	// receive the row event. We'll build a JOURNAL event instead.
-	plan, err := buildREPlan(table, nil, "", vs.se.CollationEnv(), vs.se.MySQLVersion())
+	plan, err := buildREPlan(vs.se.Environment(), table, nil, "")
 	if err != nil {
 		return err
 	}
@@ -738,7 +738,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		Name:   tm.Name,
 		Fields: cols,
 	}
-	plan, err := buildPlan(table, vs.vschema, vs.filter, vs.se.CollationEnv(), vs.se.SQLParser(), vs.se.MySQLVersion())
+	plan, err := buildPlan(vs.se.Environment(), table, vs.vschema, vs.filter)
 	if err != nil {
 		return nil, err
 	}
@@ -768,7 +768,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		if err != nil {
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
-		coll := collations.CollationForType(t, vs.se.CollationEnv().DefaultConnectionCharset())
+		coll := collations.CollationForType(t, vs.se.Environment().CollationEnv().DefaultConnectionCharset())
 		fields = append(fields, &querypb.Field{
 			Name:    fmt.Sprintf("@%d", i+1),
 			Type:    t,
@@ -957,7 +957,7 @@ func (vs *vstreamer) rebuildPlans() error {
 			// cause that to change.
 			continue
 		}
-		newPlan, err := buildPlan(plan.Table, vs.vschema, vs.filter, vs.se.CollationEnv(), vs.se.SQLParser(), vs.se.MySQLVersion())
+		newPlan, err := buildPlan(vs.se.Environment(), plan.Table, vs.vschema, vs.filter)
 		if err != nil {
 			return err
 		}
