@@ -23,18 +23,20 @@ import (
 func TestEscapeID(t *testing.T) {
 	testcases := []struct {
 		in, out string
-	}{{
-		in:  "aa",
-		out: "`aa`",
-	}, {
-		in:  "a`a",
-		out: "`a``a`",
-	}}
+	}{
+		{
+			in:  "aa",
+			out: "`aa`",
+		},
+		{
+			in:  "a`a",
+			out: "`a``a`",
+		},
+	}
+
 	for _, tc := range testcases {
 		out := EscapeID(tc.in)
-		if out != tc.out {
-			t.Errorf("EscapeID(%s): %s, want %s", tc.in, out, tc.out)
-		}
+		assert.Equal(t, tc.out, out, "EscapeID(%s) failed. Got %s, expected %s", tc.in, out, tc.out)
 	}
 }
 
@@ -44,6 +46,7 @@ func BenchmarkEscapeID(b *testing.B) {
 	testcases := []string{
 		"aa", "a`a", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}
+
 	for _, tc := range testcases {
 		name := tc
 		if len(name) > 10 {
@@ -67,8 +70,8 @@ func TestEscapeIDs(t *testing.T) {
 			expected: []string{"`abc`", "`def`", "`ghi`"},
 		},
 		{
-			input:    []string{"abc", "a`a", "ghi"},
-			expected: []string{"`abc`", "`a``a`", "`ghi`"},
+			input:    []string{"abc", "a`a", "`ghi`"},
+			expected: []string{"`abc`", "`a``a`", "```ghi```"},
 		},
 		{
 			input:    []string{},
@@ -95,6 +98,10 @@ func TestUnescapeID(t *testing.T) {
 		{
 			in:  "`a``a`",
 			out: "a``a",
+		},
+		{
+			in:  "```aa```",
+			out: "``aa``",
 		},
 		{
 			in:  "aa",
