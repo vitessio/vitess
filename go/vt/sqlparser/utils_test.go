@@ -331,10 +331,9 @@ func TestReplaceTableQualifiersMultiQuery(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	parser := NewTestParser()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parser.ReplaceTableQualifiersMultiQuery(tt.in, origDB, tt.newdb)
+			got, err := ReplaceTableQualifiersMultiQuery(tt.in, origDB, tt.newdb)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
