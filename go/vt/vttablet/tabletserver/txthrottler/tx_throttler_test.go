@@ -22,6 +22,7 @@ package txthrottler
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -86,10 +87,7 @@ func TestEnabledThrottler(t *testing.T) {
 	call := mockThrottler.EXPECT().UpdateConfiguration(gomock.Any(), true /* copyZeroValues */)
 	calls = append(calls, call)
 
-	// No underlying throttling & lag present
-	call = mockThrottler.EXPECT().LastMaxLagNotIgnoredForTabletType(topodatapb.TabletType_REPLICA)
-	call.Return(uint32(20))
-	calls = append(calls, call)
+	// 1
 	call = mockThrottler.EXPECT().Throttle(0)
 	call.Return(0 * time.Second)
 	calls = append(calls, call)
@@ -104,26 +102,17 @@ func TestEnabledThrottler(t *testing.T) {
 	call = mockThrottler.EXPECT().RecordReplicationLag(gomock.Any(), tabletStats)
 	calls = append(calls, call)
 
-	// Underlying throttling & lag present
-	call = mockThrottler.EXPECT().LastMaxLagNotIgnoredForTabletType(topodatapb.TabletType_REPLICA)
-	call.Return(uint32(20))
-	calls = append(calls, call)
+	// 2
 	call = mockThrottler.EXPECT().Throttle(0)
 	call.Return(1 * time.Second)
 	calls = append(calls, call)
 
-	// Underlying throttling & lag present
-	call = mockThrottler.EXPECT().LastMaxLagNotIgnoredForTabletType(topodatapb.TabletType_REPLICA)
-	call.Return(uint32(20))
-	calls = append(calls, call)
+	// 3
 	call = mockThrottler.EXPECT().Throttle(0)
 	call.Return(1 * time.Second)
 	calls = append(calls, call)
 
-	// Underlying throttling & no lag present
-	call = mockThrottler.EXPECT().LastMaxLagNotIgnoredForTabletType(topodatapb.TabletType_REPLICA)
-	call.Return(uint32(1))
-	calls = append(calls, call)
+	// 4
 	call = mockThrottler.EXPECT().Throttle(0)
 	call.Return(1 * time.Second)
 	calls = append(calls, call)
@@ -150,11 +139,17 @@ func TestEnabledThrottler(t *testing.T) {
 	})
 
 	assert.Nil(t, throttlerImpl.Open())
-	throttlerStateImpl := throttlerImpl.state.(*txThrottlerStateImpl)
+	throttlerStateImpl, ok := throttlerImpl.state.(*txThrottlerStateImpl)
+	assert.True(t, ok)
 	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)
 	assert.Equal(t, int64(1), throttlerImpl.throttlerRunning.Get())
 
-	// No underlying throttling & lag present - Don't throttle despite priority
+	// Stop the go routine that keeps updating the cached  shard's max lag to prevent it from changing the value in a
+	// way that will interfere with how we manipulate that value in our tests to evaluate different cases:
+	throttlerStateImpl.endChannel <- true
+
+	// 1 should not throttle due to return value of underlying Throttle(), despite high lag
+	atomic.StoreInt64(&throttlerStateImpl.shardMaxLag, 20)
 	assert.False(t, throttlerImpl.Throttle(100, "some-workload"))
 	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Zero(t, throttlerImpl.requestsThrottled.Counts()["some-workload"])
@@ -173,17 +168,18 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1, "cell2.RDONLY": 1}, throttlerImpl.healthChecksReadTotal.Counts())
 	assert.Equal(t, map[string]int64{"cell1.REPLICA": 1}, throttlerImpl.healthChecksRecordedTotal.Counts())
 
-	// Underlying throttling & lag present - Throttle due to priority
+	// 2 should throttle due to return value of underlying Throttle(), high lag & priority = 100
 	assert.True(t, throttlerImpl.Throttle(100, "some-workload"))
 	assert.Equal(t, int64(2), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])
 
-	// Underlying throttling & lag present - Do not throttle due to priority
+	// 3 should not throttle despite return value of underlying Throttle() and high lag, due to priority = 0
 	assert.False(t, throttlerImpl.Throttle(0, "some-workload"))
 	assert.Equal(t, int64(3), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])
 
-	// Underlying throttling & no lag present - Do no throttle despite priority
+	// 4 should not throttle despite return value of underlying Throttle() and priority = 100, due to low lag
+	atomic.StoreInt64(&throttlerStateImpl.shardMaxLag, 1)
 	assert.False(t, throttler.Throttle(100, "some-workload"))
 	assert.Equal(t, int64(4), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])
