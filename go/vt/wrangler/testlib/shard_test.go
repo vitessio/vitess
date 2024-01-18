@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -37,7 +38,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 

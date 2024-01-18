@@ -642,7 +642,7 @@ func overlaps(ctx *plancontext.PlanningContext, order []OrderBy, grouping []Grou
 ordering:
 	for _, orderBy := range order {
 		for _, groupBy := range grouping {
-			if ctx.SemTable.EqualsExprWithDeps(orderBy.SimplifiedExpr, groupBy.SimplifiedExpr) {
+			if ctx.SemTable.EqualsExprWithDeps(orderBy.SimplifiedExpr, groupBy.Inner) {
 				continue ordering
 			}
 		}
@@ -674,7 +674,7 @@ func pushOrderingUnderAggr(ctx *plancontext.PlanningContext, order *Ordering, ag
 	used := make([]bool, len(aggregator.Grouping))
 	for _, orderExpr := range order.Order {
 		for grpIdx, by := range aggregator.Grouping {
-			if !used[grpIdx] && ctx.SemTable.EqualsExprWithDeps(by.SimplifiedExpr, orderExpr.SimplifiedExpr) {
+			if !used[grpIdx] && ctx.SemTable.EqualsExprWithDeps(by.Inner, orderExpr.SimplifiedExpr) {
 				newGrouping = append(newGrouping, by)
 				used[grpIdx] = true
 			}

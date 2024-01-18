@@ -56,6 +56,7 @@ type noopVCursor struct {
 	inTx bool
 }
 
+// MySQLVersion implements VCursor.
 func (t *noopVCursor) Commit(ctx context.Context) error {
 	return nil
 }
@@ -140,6 +141,10 @@ func (t *noopVCursor) CollationEnv() *collations.Environment {
 // SQLParser implements VCursor
 func (t *noopVCursor) SQLParser() *sqlparser.Parser {
 	return sqlparser.NewTestParser()
+}
+
+func (*noopVCursor) MySQLVersion() string {
+	return config.DefaultMySQLVersion
 }
 
 func (t *noopVCursor) TimeZone() *time.Location {

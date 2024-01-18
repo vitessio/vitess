@@ -158,6 +158,7 @@ type TabletManager struct {
 	VDiffEngine         *vdiff.Engine
 	CollationEnv        *collations.Environment
 	SQLParser           *sqlparser.Parser
+	MySQLVersion        string
 
 	// tmState manages the TabletManager state.
 	tmState *tmState

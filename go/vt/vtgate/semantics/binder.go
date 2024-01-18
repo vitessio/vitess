@@ -269,7 +269,7 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	for _, table := range current.tables {
-		if !expr.Qualifier.IsEmpty() && !table.matches(expr.Qualifier) {
+		if !expr.Qualifier.IsEmpty() && !table.matches(expr.Qualifier) && !current.isUnion {
 			continue
 		}
 		thisDeps, err := table.dependencies(expr.Name.String(), b.org)

@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -53,6 +54,7 @@ func TestConversion(t *testing.T) {
 			ec := &expressionConverter{
 				collationEnv: collations.MySQL8(),
 				collation:    collations.MySQL8().DefaultConnectionCharset(),
+				mysqlVersion: config.DefaultMySQLVersion,
 			}
 			var result []evalengine.Expr
 			for _, expr := range exprs {

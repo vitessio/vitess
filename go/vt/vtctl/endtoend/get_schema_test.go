@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -163,7 +164,7 @@ func TestGetSchema(t *testing.T) {
 
 	logger := logutil.NewMemoryLogger()
 
-	err := vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc, collations.MySQL8(), sqlparser.NewTestParser()), []string{
+	err := vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion), []string{
 		"GetSchema",
 		topoproto.TabletAliasString(tablet.Alias),
 	})
@@ -203,7 +204,7 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	err = vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc, collations.MySQL8(), sqlparser.NewTestParser()), []string{
+	err = vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion), []string{
 		"GetSchema",
 		"--table_sizes_only",
 		topoproto.TabletAliasString(tablet.Alias),

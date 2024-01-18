@@ -23,10 +23,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -98,7 +99,7 @@ func TestGenerateFullQuery(t *testing.T) {
 
 func TestGetCreateStatement(t *testing.T) {
 	db := fakesqldb.New(t)
-	env := tabletenv.NewEnv(nil, "TestGetCreateStatement", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(nil, "TestGetCreateStatement", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
@@ -134,7 +135,7 @@ func TestGetCreateStatement(t *testing.T) {
 
 func TestGetChangedViewNames(t *testing.T) {
 	db := fakesqldb.New(t)
-	env := tabletenv.NewEnv(nil, "TestGetChangedViewNames", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(nil, "TestGetChangedViewNames", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
@@ -149,7 +150,7 @@ func TestGetChangedViewNames(t *testing.T) {
 	got, err := getChangedViewNames(context.Background(), conn, true)
 	require.NoError(t, err)
 	require.Len(t, got, 3)
-	require.ElementsMatch(t, maps2.Keys(got), []string{"v1", "v2", "lead"})
+	require.ElementsMatch(t, maps.Keys(got), []string{"v1", "v2", "lead"})
 	require.NoError(t, db.LastError())
 
 	// Not serving primary
@@ -168,7 +169,7 @@ func TestGetChangedViewNames(t *testing.T) {
 
 func TestGetViewDefinition(t *testing.T) {
 	db := fakesqldb.New(t)
-	env := tabletenv.NewEnv(nil, "TestGetViewDefinition", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(nil, "TestGetViewDefinition", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
@@ -186,7 +187,7 @@ func TestGetViewDefinition(t *testing.T) {
 	got, err := collectGetViewDefinitions(conn, bv)
 	require.NoError(t, err)
 	require.Len(t, got, 2)
-	require.ElementsMatch(t, maps2.Keys(got), []string{"v1", "lead"})
+	require.ElementsMatch(t, maps.Keys(got), []string{"v1", "lead"})
 	require.Equal(t, "create_view_v1", got["v1"])
 	require.Equal(t, "create_view_lead", got["lead"])
 	require.NoError(t, db.LastError())
@@ -341,7 +342,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser())
+			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
@@ -357,7 +358,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 			} else {
-				require.ElementsMatch(t, maps2.Keys(mismatchedTableNames), tc.expectedTableNames)
+				require.ElementsMatch(t, maps.Keys(mismatchedTableNames), tc.expectedTableNames)
 				require.NoError(t, db.LastError())
 			}
 		})
@@ -462,7 +463,7 @@ func TestReloadTablesInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser())
+			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
@@ -595,7 +596,7 @@ func TestReloadViewsInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser())
+			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
@@ -886,7 +887,7 @@ func TestReloadDataInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser())
+			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 

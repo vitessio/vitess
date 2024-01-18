@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -68,7 +69,7 @@ func newTestLoadTable(tableName, comment string, db *fakesqldb.DB) (*schema.Tabl
 		IdleTimeout: 10 * time.Second,
 	}
 
-	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest", collations.MySQL8(), sqlparser.NewTestParser()), "", cfg)
+	connPool := connpool.NewPool(tabletenv.NewEnv(nil, "SchemaTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion), "", cfg)
 	connPool.Open(appParams, dbaParams, appParams)
 	conn, err := connPool.Get(ctx, nil)
 	if err != nil {

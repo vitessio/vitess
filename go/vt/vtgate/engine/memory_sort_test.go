@@ -26,16 +26,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
-
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.SetMySQLServerVersionForTest(mySQLVersion)
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-}
 
 func TestMemorySortExecute(t *testing.T) {
 	fields := sqltypes.MakeTestFields(

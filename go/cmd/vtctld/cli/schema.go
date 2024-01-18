@@ -71,7 +71,7 @@ func initSchema() {
 				return
 			}
 			ctx := context.Background()
-			wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv, parser)
+			wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv, parser, mysqlVersion)
 			_, err = schemamanager.Run(
 				ctx,
 				controller,

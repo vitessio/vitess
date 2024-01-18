@@ -250,35 +250,9 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 
 // supportsCapability is part of the Flavor interface.
 func (f mysqlGRFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
-	serverVersionAtLeast := func(parts ...int) (bool, error) {
-		return ServerVersionAtLeast(f.serverVersion, parts...)
-	}
-	switch capability {
-	case capabilities.InstantDDLFlavorCapability,
-		capabilities.InstantExpandEnumCapability,
-		capabilities.InstantAddLastColumnFlavorCapability,
-		capabilities.InstantAddDropVirtualColumnFlavorCapability,
-		capabilities.InstantChangeColumnDefaultFlavorCapability:
-		return serverVersionAtLeast(8, 0, 0)
-	case capabilities.InstantAddDropColumnFlavorCapability:
-		return serverVersionAtLeast(8, 0, 29)
-	case capabilities.TransactionalGtidExecutedFlavorCapability:
-		return serverVersionAtLeast(8, 0, 17)
-	case capabilities.FastDropTableFlavorCapability:
-		return serverVersionAtLeast(8, 0, 23)
-	case capabilities.MySQLJSONFlavorCapability:
-		return serverVersionAtLeast(5, 7, 0)
-	case capabilities.MySQLUpgradeInServerFlavorCapability:
-		return serverVersionAtLeast(8, 0, 16)
-	case capabilities.DynamicRedoLogCapacityFlavorCapability:
-		return serverVersionAtLeast(8, 0, 30)
-	case capabilities.CheckConstraintsCapability:
-		return serverVersionAtLeast(8, 0, 16)
-	default:
-		return false, nil
-	}
+	return capabilities.MySQLVersionHasCapability(f.serverVersion, capability)
 }
 
 func init() {
-	flavors[GRFlavorID] = newMysqlGRFlavor
+	flavorFuncs[GRFlavorID] = newMysqlGRFlavor
 }

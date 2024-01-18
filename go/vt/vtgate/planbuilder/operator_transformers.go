@@ -289,11 +289,11 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		oa.aggregates = append(oa.aggregates, aggrParam)
 	}
 	for _, groupBy := range op.Grouping {
-		typ, _ := ctx.SemTable.TypeForExpr(groupBy.SimplifiedExpr)
+		typ, _ := ctx.SemTable.TypeForExpr(groupBy.Inner)
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			KeyCol:          groupBy.ColOffset,
 			WeightStringCol: groupBy.WSOffset,
-			Expr:            groupBy.SimplifiedExpr,
+			Expr:            groupBy.Inner,
 			Type:            typ,
 			CollationEnv:    ctx.VSchema.CollationEnv(),
 		})
@@ -828,14 +828,15 @@ func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logi
 		return nil, err
 	}
 
-	return createLimit(plan, op.AST, ctx.VSchema.CollationEnv())
+	return createLimit(plan, op.AST, ctx.VSchema.CollationEnv(), ctx.VSchema.MySQLVersion())
 }
 
-func createLimit(input logicalPlan, limit *sqlparser.Limit, collationEnv *collations.Environment) (logicalPlan, error) {
+func createLimit(input logicalPlan, limit *sqlparser.Limit, collationEnv *collations.Environment, mysqlVersion string) (logicalPlan, error) {
 	plan := newLimit(input)
 	cfg := &evalengine.Config{
 		Collation:    collationEnv.DefaultConnectionCharset(),
 		CollationEnv: collationEnv,
+		MySQLVersion: mysqlVersion,
 	}
 	pv, err := evalengine.Translate(limit.Rowcount, cfg)
 	if err != nil {

@@ -457,7 +457,7 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) {
 
 	for _, by := range op.Grouping {
 		qb.addGroupBy(by.Inner)
-		simplified := by.SimplifiedExpr
+		simplified := by.Inner
 		if by.WSOffset != -1 {
 			qb.addGroupBy(weightStringFor(simplified))
 		}

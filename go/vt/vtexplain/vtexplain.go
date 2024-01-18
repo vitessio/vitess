@@ -149,6 +149,7 @@ type (
 
 		collationEnv *collations.Environment
 		parser       *sqlparser.Parser
+		mysqlVersion string
 	}
 )
 
@@ -184,7 +185,7 @@ type TabletActions struct {
 }
 
 // Init sets up the fake execution environment
-func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options, collationEnv *collations.Environment, parser *sqlparser.Parser) (*VTExplain, error) {
+func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) (*VTExplain, error) {
 	// Verify options
 	if opts.ReplicationMode != "ROW" && opts.ReplicationMode != "STATEMENT" {
 		return nil, fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
@@ -206,6 +207,7 @@ func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts
 		},
 		collationEnv: collationEnv,
 		parser:       parser,
+		mysqlVersion: mysqlVersion,
 	}
 	vte.setGlobalTabletEnv(tabletEnv)
 	err = vte.initVtgateExecutor(ctx, vSchemaStr, ksShardMapStr, opts)

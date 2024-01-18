@@ -104,7 +104,7 @@ type explainTablet struct {
 
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
-func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatapb.Tablet, collationEnv *collations.Environment, parser *sqlparser.Parser) *explainTablet {
+func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatapb.Tablet, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *explainTablet {
 	db := fakesqldb.New(nil)
 	sidecardb.AddSchemaInitQueries(db, true, vte.parser)
 
@@ -119,7 +119,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatap
 	config.EnableTableGC = false
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(ctx, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias, collationEnv, parser)
+	tsv := tabletserver.NewTabletServer(ctx, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias, collationEnv, parser, mysqlVersion)
 
 	tablet := explainTablet{db: db, tsv: tsv, vte: vte, collationEnv: collationEnv}
 	db.Handler = &tablet

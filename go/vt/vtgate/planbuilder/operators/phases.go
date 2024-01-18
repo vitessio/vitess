@@ -168,7 +168,7 @@ func addOrderingFor(aggrOp *Aggregator) {
 
 func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) bool {
 	requiredOrder := slice.Map(in.Grouping, func(from GroupBy) sqlparser.Expr {
-		return from.SimplifiedExpr
+		return from.Inner
 	})
 	if in.DistinctExpr != nil {
 		requiredOrder = append(requiredOrder, in.DistinctExpr)
@@ -209,7 +209,7 @@ func addLiteralGroupingToRHS(in *ApplyJoin) (Operator, *ApplyResult) {
 		}
 		if len(aggr.Grouping) == 0 {
 			gb := sqlparser.NewIntLiteral(".0")
-			aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb, gb))
+			aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb))
 		}
 		return nil
 	})

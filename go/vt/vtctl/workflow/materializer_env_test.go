@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -84,7 +85,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		tmc:      newTestMaterializerTMClient(),
 	}
 	parser := sqlparser.NewTestParser()
-	env.ws = NewServer(env.topoServ, env.tmc, collations.MySQL8(), parser)
+	env.ws = NewServer(env.topoServ, env.tmc, collations.MySQL8(), parser, config.DefaultMySQLVersion)
 	tabletID := 100
 	for _, shard := range sources {
 		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
