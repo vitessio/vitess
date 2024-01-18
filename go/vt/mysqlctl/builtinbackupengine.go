@@ -270,7 +270,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		}
 		fromBackupName = backupName
 		params.IncrementalFromPos = replication.EncodePosition(pos)
-		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
+		params.Logger.Infof("evaluated incremental_from_pos using backup name %q: %s", backupName, params.IncrementalFromPos)
 	}
 
 	// params.IncrementalFromPos is a string. We want to turn that into a MySQL GTID
