@@ -657,10 +657,12 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		defer throttler.aggregatedMetrics.Flush()
-		defer throttler.recentApps.Flush()
-		defer throttler.nonLowPriorityAppRequestsThrottled.Flush()
+		defer func() {
+			throttler.aggregatedMetrics.Flush()
+			throttler.recentApps.Flush()
+			throttler.nonLowPriorityAppRequestsThrottled.Flush()
+			wg.Done()
+		}()
 		// we do not flush throttler.throttledApps because this is data submitted by the user; the user expects the data to survive a disable+enable
 
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
