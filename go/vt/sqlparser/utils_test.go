@@ -275,3 +275,71 @@ func TestReplaceTableQualifiers(t *testing.T) {
 		})
 	}
 }
+
+func TestReplaceTableQualifiersMultiQuery(t *testing.T) {
+	origDB := "_vt"
+	tests := []struct {
+		name    string
+		in      string
+		newdb   string
+		out     string
+		wantErr bool
+	}{
+		{
+			name:    "invalid select",
+			in:      "select frog bar person",
+			out:     "",
+			wantErr: true,
+		},
+		{
+			name: "simple select",
+			in:   "select * from _vt.foo",
+			out:  "select * from foo",
+		},
+		{
+			name:  "simple select with new db",
+			in:    "select * from _vt.foo",
+			newdb: "_vt_test",
+			out:   "select * from _vt_test.foo",
+		},
+		{
+			name:  "simple select with new db same",
+			in:    "select * from _vt.foo where id=1", // should be unchanged
+			newdb: "_vt",
+			out:   "select * from _vt.foo where id=1",
+		},
+		{
+			name:  "simple select with new db needing escaping",
+			in:    "select * from _vt.foo",
+			newdb: "1_vt-test",
+			out:   "select * from `1_vt-test`.foo",
+		},
+		{
+			name: "multi query",
+			in:   "select * from _vt.foo ; select * from _vt.bar",
+			out:  "select * from foo;select * from bar",
+		},
+		{
+			name:  "multi query with new db",
+			in:    "select * from _vt.foo ; select * from _vt.bar",
+			newdb: "_vt_test",
+			out:   "select * from _vt_test.foo;select * from _vt_test.bar",
+		},
+		{
+			name:    "multi query with error",
+			in:      "select * from _vt.foo ; select * from _vt.bar ; sel ect fr om wh at",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ReplaceTableQualifiersMultiQuery(tt.in, origDB, tt.newdb)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.out, got, "RemoveTableQualifiers(); in: %s, out: %s", tt.in, got)
+		})
+	}
+}
