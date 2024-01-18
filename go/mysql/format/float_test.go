@@ -55,6 +55,11 @@ func TestFormatFloat(t *testing.T) {
 			expected: []byte("1.23456789e15"),
 		},
 		{
+			name:     "large negative exponent",
+			input:    1.23456789e-15,
+			expected: []byte("0.00000000000000123456789"),
+		},
+		{
 			name:     "zero",
 			input:    0.0,
 			expected: []byte("0"),
