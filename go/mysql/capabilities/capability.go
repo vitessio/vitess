@@ -20,12 +20,12 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
-	ErrUnspecifiedServerVersion = vterrors.Errorf(vtrpc.Code_INTERNAL, "server version unspecified")
+	ErrUnspecifiedServerVersion = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "server version unspecified")
 )
 
 type FlavorCapability int
