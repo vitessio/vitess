@@ -103,6 +103,11 @@ func TestBadWriter(t *testing.T) {
 	if !strings.Contains(tl.getLog().level, wantLevel) {
 		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
 	}
+	ev = &TestEvent{priority: syslog.LOG_EMERG, message: wantMsg}
+	event.Dispatch(ev)
+	if !strings.Contains(tl.getLog().level, wantLevel) {
+		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
+	}
 
 	wantLevel = "WARNING"
 	ev = &TestEvent{priority: syslog.LOG_WARNING, message: wantMsg}

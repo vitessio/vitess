@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/mysql/replication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"

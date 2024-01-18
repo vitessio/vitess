@@ -374,11 +374,10 @@ func (mysqlFlavor56) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlFlavor56) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
-	switch capability {
-	default:
-		return false, nil
-	}
+func (f mysqlFlavor56) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	// We do not support MySQL 5.6. Also, for consistency, and seeing that MySQL56 is the default
+	// flavor if no version specified, we return false for all capabilities.
+	return false, nil
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -387,13 +386,8 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mysqlFlavor57) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
-	switch capability {
-	case capabilities.MySQLJSONFlavorCapability:
-		return true, nil
-	default:
-		return false, nil
-	}
+func (f mysqlFlavor57) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return capabilities.MySQLVersionHasCapability(f.serverVersion, capability)
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -403,35 +397,5 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 
 // supportsCapability is part of the Flavor interface.
 func (f mysqlFlavor80) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
-	serverVersionAtLeast := func(parts ...int) (bool, error) {
-		return ServerVersionAtLeast(f.serverVersion, parts...)
-	}
-	switch capability {
-	case capabilities.InstantDDLFlavorCapability,
-		capabilities.InstantExpandEnumCapability,
-		capabilities.InstantAddLastColumnFlavorCapability,
-		capabilities.InstantAddDropVirtualColumnFlavorCapability,
-		capabilities.InstantChangeColumnDefaultFlavorCapability:
-		return true, nil
-	case capabilities.InstantAddDropColumnFlavorCapability:
-		return serverVersionAtLeast(8, 0, 29)
-	case capabilities.TransactionalGtidExecutedFlavorCapability:
-		return serverVersionAtLeast(8, 0, 17)
-	case capabilities.FastDropTableFlavorCapability:
-		return serverVersionAtLeast(8, 0, 23)
-	case capabilities.MySQLJSONFlavorCapability:
-		return true, nil
-	case capabilities.MySQLUpgradeInServerFlavorCapability:
-		return serverVersionAtLeast(8, 0, 16)
-	case capabilities.DynamicRedoLogCapacityFlavorCapability:
-		return serverVersionAtLeast(8, 0, 30)
-	case capabilities.DisableRedoLogFlavorCapability:
-		return serverVersionAtLeast(8, 0, 21)
-	case capabilities.CheckConstraintsCapability:
-		return serverVersionAtLeast(8, 0, 16)
-	case capabilities.PerformanceSchemaDataLocksTableCapability:
-		return true, nil
-	default:
-		return false, nil
-	}
+	return capabilities.MySQLVersionHasCapability(f.serverVersion, capability)
 }

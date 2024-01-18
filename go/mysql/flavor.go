@@ -38,8 +38,6 @@ var (
 
 	// ErrNoPrimaryStatus means no status was returned by ShowPrimaryStatus().
 	ErrNoPrimaryStatus = errors.New("no master status")
-
-	ErrUnspecifiedServerVersion = vterrors.Errorf(vtrpc.Code_INTERNAL, "server version unspecified")
 )
 
 const (
@@ -141,44 +139,10 @@ type flavor interface {
 	supportsCapability(capability capabilities.FlavorCapability) (bool, error)
 }
 
-// flavors maps flavor names to their implementation.
+// flavorFuncs maps flavor names to their implementation.
 // Flavors need to register only if they support being specified in the
 // connection parameters.
-var flavors = make(map[string]func() flavor)
-
-// ServerVersionAtLeast returns true if current server is at least given value.
-// Example: if input is []int{8, 0, 23}... the function returns 'true' if we're
-// on MySQL 8.0.23, 8.0.24, ...
-func ServerVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
-	if serverVersion == "" {
-		return false, ErrUnspecifiedServerVersion
-	}
-	versionPrefix := strings.Split(serverVersion, "-")[0]
-	versionTokens := strings.Split(versionPrefix, ".")
-	for i, part := range parts {
-		if len(versionTokens) <= i {
-			return false, nil
-		}
-		tokenValue, err := strconv.Atoi(versionTokens[i])
-		if err != nil {
-			return false, err
-		}
-		if tokenValue > part {
-			return true, nil
-		}
-		if tokenValue < part {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
-// flavorCapableOf is a utility function that returns a CapableOf function for a given flavor
-func flavorCapableOf(f flavor) capabilities.CapableOf {
-	return func(capability capabilities.FlavorCapability) (bool, error) {
-		return f.supportsCapability(capability)
-	}
-}
+var flavorFuncs = make(map[string]func() flavor)
 
 // GetFlavor fills in c.Flavor. If the params specify the flavor,
 // that is used. Otherwise, we auto-detect.
@@ -212,9 +176,10 @@ func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capabl
 	case strings.HasPrefix(serverVersion, mysql80VersionPrefix):
 		f = mysqlFlavor80{mysqlFlavor{serverVersion: serverVersion}}
 	default:
+		// If unknown, return the most basic flavor: MySQL 56.
 		f = mysqlFlavor56{mysqlFlavor{serverVersion: serverVersion}}
 	}
-	return f, flavorCapableOf(f), canonicalVersion
+	return f, f.supportsCapability, canonicalVersion
 }
 
 // ServerVersionCapableOf is a convenience function that returns a CapableOf function given a server version.
@@ -237,14 +202,14 @@ func ServerVersionCapableOf(serverVersion string) (capableOf capabilities.Capabl
 // as well (not matching what c.ServerVersion is, but matching after we remove
 // the prefix).
 func (c *Conn) fillFlavor(params *ConnParams) {
-	flavorFunc := flavors[params.Flavor]
+	flavorFunc := flavorFuncs[params.Flavor]
 	c.flavor, _, c.ServerVersion = GetFlavor(c.ServerVersion, flavorFunc)
 }
 
 // ServerVersionAtLeast returns 'true' if server version is equal or greater than given parts. e.g.
 // "8.0.14-log" is at least [8, 0, 13] and [8, 0, 14], but not [8, 0, 15]
 func (c *Conn) ServerVersionAtLeast(parts ...int) (bool, error) {
-	return ServerVersionAtLeast(c.ServerVersion, parts...)
+	return capabilities.ServerVersionAtLeast(c.ServerVersion, parts...)
 }
 
 //
@@ -474,5 +439,5 @@ func (c *Conn) SupportsCapability(capability capabilities.FlavorCapability) (boo
 }
 
 func init() {
-	flavors[replication.FilePosFlavorID] = newFilePosFlavor
+	flavorFuncs[replication.FilePosFlavorID] = newFilePosFlavor
 }
