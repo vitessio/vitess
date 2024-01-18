@@ -49,81 +49,81 @@ func TestVtctldclientCLI(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, zone2)
 	defer vc.TearDown()
+
 	sourceKeyspace := "product"
 	targetKeyspace := "customer"
-	workflowName := "wf1"
-	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
-	targetTabs := setupMinimalCustomerKeyspace(t)
 	var mt iMoveTables
-	var createFlags, completeFlags, switchFlags []string
-	var tables string
+	workflowName := "wf1"
+	targetTabs := setupMinimalCustomerKeyspace(t)
 
-	t.Run("moveTablesFlags1", func(t *testing.T) {
-		tables = "customer,customer2"
-		createFlags = []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
-			"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
-			"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
-			"--all-cells",
-		}
-		completeFlags = []string{"--keep-routing-rules", "--keep-data"}
-		switchFlags = []string{}
-		mt = createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags, switchFlags)
-		mt.Show()
-		moveTablesOutput := mt.GetLastOutput()
-		// Test one set of MoveTable flags.
-
-		workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", "customer", "show", "--workflow", "wf1")
-		require.NoError(t, err)
-		var moveTablesResponse vtctldata.GetWorkflowsResponse
-		err = protojson.Unmarshal([]byte(moveTablesOutput), &moveTablesResponse)
-		require.NoError(t, err)
-
-		var workflowResponse vtctldata.GetWorkflowsResponse
-		err = protojson.Unmarshal([]byte(workflowOutput), &workflowResponse)
-		require.NoError(t, err)
-
-		moveTablesResponse.Workflows[0].MaxVReplicationTransactionLag = 0
-		moveTablesResponse.Workflows[0].MaxVReplicationLag = 0
-		workflowResponse.Workflows[0].MaxVReplicationTransactionLag = 0
-		workflowResponse.Workflows[0].MaxVReplicationLag = 0
-		// also validates that MoveTables Show and Workflow Show return the same output.
-		require.EqualValues(t, moveTablesResponse.CloneVT(), workflowResponse.CloneVT())
-
-		// Validate that the flags are set correctly in the database.
-		validateWorkflow1(t, workflowResponse.Workflows)
-		// Since we used --no-routing-rules, there should be no routing rules.
-		confirmNoRoutingRules(t)
-	})
-
-	// More tests for the
-	t.Run("moveTablesFlags2", func(t *testing.T) {
-		mt.Start() // Need to start because we set auto-start to false.
-		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
-		confirmNoRoutingRules(t)
-		for _, tab := range targetTabs {
-			alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
-			query := "update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_customer' and workflow = 'wf1'"
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, query)
-			require.NoError(t, err, output)
-		}
-		confirmNoRoutingRules(t)
-		mt.Start() // Need to start because we set stop-after-copy to true.
-		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
-		mt.Stop()
-		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
-		mt.Start()
-		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
-		for _, tab := range targetTabs {
-			catchup(t, tab, workflowName, "MoveTables")
-		}
-		mt.SwitchReadsAndWrites()
-		mt.Complete()
-		confirmRoutingRulesExist(t)
-		// Confirm that --keep-data was honored.
-		require.True(t, checkTablesExist(t, "zone1-100", []string{"customer", "customer2"}))
-	})
-
+	testMoveTablesFlags1(t, &mt, sourceKeyspace, targetKeyspace, workflowName, targetTabs)
+	testMoveTablesFlags2(t, &mt, sourceKeyspace, targetKeyspace, workflowName, targetTabs)
 	testCompleteFlags(t, sourceKeyspace, targetKeyspace, targetTabs)
+}
+
+func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
+	tables := "customer,customer2"
+	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
+		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
+		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
+		"--all-cells",
+	}
+	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
+	switchFlags := []string{}
+	*mt = createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags, switchFlags)
+	(*mt).Show()
+	moveTablesOutput := (*mt).GetLastOutput()
+	// Test one set of MoveTable flags.
+
+	workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", "customer", "show", "--workflow", "wf1")
+	require.NoError(t, err)
+	var moveTablesResponse vtctldata.GetWorkflowsResponse
+	err = protojson.Unmarshal([]byte(moveTablesOutput), &moveTablesResponse)
+	require.NoError(t, err)
+
+	var workflowResponse vtctldata.GetWorkflowsResponse
+	err = protojson.Unmarshal([]byte(workflowOutput), &workflowResponse)
+	require.NoError(t, err)
+
+	moveTablesResponse.Workflows[0].MaxVReplicationTransactionLag = 0
+	moveTablesResponse.Workflows[0].MaxVReplicationLag = 0
+	workflowResponse.Workflows[0].MaxVReplicationTransactionLag = 0
+	workflowResponse.Workflows[0].MaxVReplicationLag = 0
+	// also validates that MoveTables Show and Workflow Show return the same output.
+	require.EqualValues(t, moveTablesResponse.CloneVT(), workflowResponse.CloneVT())
+
+	// Validate that the flags are set correctly in the database.
+	validateWorkflow1(t, workflowResponse.Workflows)
+	// Since we used --no-routing-rules, there should be no routing rules.
+	confirmNoRoutingRules(t)
+}
+
+func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
+	(*mt).Start() // Need to start because we set auto-start to false.
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
+	confirmNoRoutingRules(t)
+	for _, tab := range targetTabs {
+		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
+		query := "update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_customer' and workflow = 'wf1'"
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, query)
+		require.NoError(t, err, output)
+	}
+	confirmNoRoutingRules(t)
+	(*mt).Start() // Need to start because we set stop-after-copy to true.
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+	(*mt).Stop()
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
+	(*mt).Start()
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+	for _, tab := range targetTabs {
+		catchup(t, tab, workflowName, "MoveTables")
+	}
+	(*mt).SwitchReadsAndWrites()
+	(*mt).Complete()
+	confirmRoutingRulesExist(t)
+	// Confirm that --keep-data was honored.
+	require.True(t, checkTablesExist(t, "zone1-100", []string{"customer", "customer2"}))
 }
 
 func testCompleteFlags(t *testing.T, sourceKeyspace, targetKeyspace string, targetTabs map[string]*cluster.VttabletProcess) {
