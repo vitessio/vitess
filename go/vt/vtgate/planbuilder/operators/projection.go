@@ -142,7 +142,7 @@ func (sp StarProjections) GetSelectExprs() sqlparser.SelectExprs {
 
 func (ap AliasedProjections) GetColumns() []*sqlparser.AliasedExpr {
 	return slice.Map(ap, func(from *ProjExpr) *sqlparser.AliasedExpr {
-		return aeWrap(from.ColExpr)
+		return from.Original
 	})
 }
 
