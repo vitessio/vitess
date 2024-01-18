@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/stats"
@@ -168,6 +169,9 @@ type txThrottlerStateImpl struct {
 
 	// tabletTypes stores the tablet types for throttling
 	tabletTypes map[topodatapb.TabletType]bool
+
+	shardMaxLag int64
+	endChannel  chan bool
 }
 
 // NewTxThrottler tries to construct a txThrottler from the relevant
@@ -285,6 +289,7 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 		tabletTypes:      tabletTypes,
 		throttler:        t,
 		txThrottler:      txThrottler,
+		endChannel:       make(chan bool),
 	}
 
 	// get cells from topo if none defined in tabletenv config
@@ -299,6 +304,7 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 	state.stopHealthCheck = cancel
 	state.initHealthCheckStream(txThrottler.topoServer, target)
 	go state.healthChecksProcessor(ctx, txThrottler.topoServer, target)
+	go state.updateMaxShardLag()
 
 	return state, nil
 }
@@ -358,17 +364,31 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 	ts.throttleMu.Lock()
 	defer ts.throttleMu.Unlock()
 
-	var maxLag uint32
-
-	for tabletType := range ts.tabletTypes {
-		maxLagPerTabletType := ts.throttler.LastMaxLagNotIgnoredForTabletType(tabletType)
-		if maxLagPerTabletType > maxLag {
-			maxLag = maxLagPerTabletType
-		}
-	}
+	maxLag := atomic.LoadInt64(&ts.shardMaxLag)
 
 	return ts.throttler.Throttle(0 /* threadId */) > 0 &&
-		int64(maxLag) > ts.config.TxThrottlerConfig.TargetReplicationLagSec
+		maxLag > ts.config.TxThrottlerConfig.TargetReplicationLagSec
+}
+
+func (ts *txThrottlerStateImpl) updateMaxShardLag() {
+	// We use half of the target lag to ensure we have enough resolution to see changes in lag below that value
+	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec/2) * time.Second)
+	for {
+		select {
+		case _ = <-ticker.C:
+			var maxLag uint32
+
+			for tabletType := range ts.tabletTypes {
+				maxLagPerTabletType := ts.throttler.LastMaxLagNotIgnoredForTabletType(tabletType)
+				if maxLagPerTabletType > maxLag {
+					maxLag = maxLagPerTabletType
+				}
+			}
+			atomic.StoreInt64(&ts.shardMaxLag, int64(maxLag))
+		case _ = <-ts.endChannel:
+			break
+		}
+	}
 }
 
 func (ts *txThrottlerStateImpl) deallocateResources() {
