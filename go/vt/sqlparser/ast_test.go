@@ -746,7 +746,26 @@ func TestSplitStatementToPieces(t *testing.T) {
 			"`createtime` datetime NOT NULL DEFAULT NOW() COMMENT 'create time;'," +
 			"`comment` varchar(100) NOT NULL DEFAULT '' COMMENT 'comment'," +
 			"PRIMARY KEY (`id`))",
-	}}
+	}, {
+		input:  "create table t1 (id int primary key); create table t2 (id int primary key);",
+		output: "create table t1 (id int primary key); create table t2 (id int primary key)",
+	}, {
+		input:  ";;; create table t1 (id int primary key);;; ;create table t2 (id int primary key);",
+		output: " create table t1 (id int primary key);create table t2 (id int primary key)",
+	}, {
+		// The input doesn't have to be valid SQL statements!
+		input:  ";create table t1 ;create table t2 (id;",
+		output: "create table t1 ;create table t2 (id",
+	}, {
+		// Ignore quoted semicolon
+		input:  ";create table t1 ';';;;create table t2 (id;",
+		output: "create table t1 ';';create table t2 (id",
+	}, {
+		// Ignore quoted semicolon
+		input:  "stop replica; start replica",
+		output: "stop replica; start replica",
+	},
+	}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {

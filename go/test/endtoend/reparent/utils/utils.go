@@ -262,6 +262,15 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	return connParams
 }
 
+// RunSQLs is used to run SQL commands directly on the MySQL instance of a vttablet
+func RunSQLs(ctx context.Context, t *testing.T, sqls []string, tablet *cluster.Vttablet) (results []*sqltypes.Result) {
+	for _, sql := range sqls {
+		result := RunSQL(ctx, t, sql, tablet)
+		results = append(results, result)
+	}
+	return results
+}
+
 // RunSQL is used to run a SQL command directly on the MySQL instance of a vttablet
 func RunSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttablet) *sqltypes.Result {
 	tabletParams := getMysqlConnParam(tablet)

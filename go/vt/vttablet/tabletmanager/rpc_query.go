@@ -23,10 +23,49 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// analyzeExecuteFetchAsDbaMultiQuery reutrns 'true' when at least one of the queries
+// in the given SQL has a `/*vt+ allowZeroInDate=true */` directive.
+func analyzeExecuteFetchAsDbaMultiQuery(sql string) (queries []string, parseable bool, countCreate int, allowZeroInDate bool, err error) {
+	queries, err = sqlparser.SplitStatementToPieces(sql)
+	if err != nil {
+		return nil, false, 0, false, err
+	}
+	if len(queries) == 0 {
+		return nil, false, 0, false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no statements found in query: %s", sql)
+	}
+	parseable = true
+	for _, query := range queries {
+		// Some of the queries we receive here are legitimately non-parseable by our
+		// current parser, such as `CHANGE REPLICATION SOURCE TO...`. We must allow
+		// them and so we skip parsing errors.
+		stmt, err := sqlparser.Parse(query)
+		if err != nil {
+			parseable = false
+			continue
+		}
+		switch stmt.(type) {
+		case *sqlparser.CreateTable, *sqlparser.CreateView:
+			countCreate++
+		default:
+		}
+
+		if cmnt, ok := stmt.(sqlparser.Commented); ok {
+			directives := cmnt.GetParsedComments().Directives()
+			if directives.IsSet("allowZeroInDate") {
+				allowZeroInDate = true
+			}
+		}
+
+	}
+	return queries, parseable, countCreate, allowZeroInDate, nil
+}
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
 func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
@@ -51,20 +90,34 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
-	// Handle special possible directives
-	var directives *sqlparser.CommentDirectives
-	if stmt, err := sqlparser.Parse(string(req.Query)); err == nil {
-		if cmnt, ok := stmt.(sqlparser.Commented); ok {
-			directives = cmnt.GetParsedComments().Directives()
+	statements, _, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(string(req.Query))
+	if err != nil {
+		return nil, err
+	}
+	if len(statements) > 1 {
+		// Up to v19, we allow multi-statement SQL in ExecuteFetchAsDba, but only for the specific case
+		// where all statements are CREATE TABLE or CREATE VIEW. This is to support `ApplySchema --batch-size`.
+		// In v20, we will not support multi statements whatsoever.
+		// v20 will throw an error by virtua of using ExecuteFetch instead of ExecuteFetchMulti.
+		if countCreate != len(statements) {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba unless all are CREATE TABLE or CREATE VIEW")
 		}
 	}
-	if directives.IsSet("allowZeroInDate") {
+	if allowZeroInDate {
 		if _, err := conn.ExecuteFetch("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 1, false); err != nil {
 			return nil, err
 		}
 	}
-	// run the query
-	result, err := conn.ExecuteFetch(string(req.Query), int(req.MaxRows), true /*wantFields*/)
+	// TODO(shlomi): we use ExecuteFetchMulti for backwards compatibility. In v20 we will not accept
+	// multi statement queries in ExecuteFetchAsDBA. This will be rewritten as:
+	//  (in v20): result, err := ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
+	result, more, err := conn.ExecuteFetchMulti(string(req.Query), int(req.MaxRows), true /*wantFields*/)
+	for more {
+		_, more, _, err = conn.ReadQueryResult(0, false)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// re-enable binlogs if necessary
 	if req.DisableBinlogs && !conn.IsClosed() {
