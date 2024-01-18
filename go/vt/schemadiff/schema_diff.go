@@ -18,12 +18,10 @@ package schemadiff
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 
 	"vitess.io/vitess/go/mathutil"
-	"vitess.io/vitess/go/mysql/capabilities"
 )
 
 type DiffDependencyType int
@@ -346,23 +344,24 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 	return orderedDiffs, nil
 }
 
-// CapableOfInstantDDL returns `true` if all diffs are capable of instant DDL, or are otherwise trivially
-// instantaneously applicable (such as `CREATE TABLE` or `ALTER VIEW`). The answer essentially indicates whether
-// the entire set of changes can be applied as an immediate operation.
-func (d *SchemaDiff) CapableOfInstantDDL(ctx context.Context, capableOf capabilities.CapableOf) (bool, error) {
-	if capableOf == nil {
-		return false, nil
-	}
-	var errs error
-	allCapable := true
+// InstantDDLCapability returns an overall summary of the ability of the diffs to run with ALGORITHM=INSTANT.
+// It is a convenience method, whose logic anyone can reimplement.
+func (d *SchemaDiff) InstantDDLCapability() InstantDDLCapability {
+	// The general logic: we return "InstantDDLCapabilityPossible" if there is one or more diffs that is capable of
+	// ALGORITHM=INSTANT, and zero or more diffs that are irrelevant, and no diffs that are impossible to run with
+	// ALGORITHM=INSTANT.
+	capability := InstantDDLCapabilityIrrelevant
 	for _, diff := range d.UnorderedDiffs() {
-		capable, err := diffCapableOfInstantDDL(diff, capableOf)
-		if err != nil {
-			errs = errors.Join(errs, err)
-		}
-		if !capable {
-			allCapable = false
+		switch diff.InstantDDLCapability() {
+		case InstantDDLCapabilityUnknown:
+			return InstantDDLCapabilityUnknown // Early break
+		case InstantDDLCapabilityImpossible:
+			return InstantDDLCapabilityImpossible // Early break
+		case InstantDDLCapabilityPossible:
+			capability = InstantDDLCapabilityPossible
+		case InstantDDLCapabilityIrrelevant:
+			// do nothing
 		}
 	}
-	return allCapable, errs
+	return capability
 }
