@@ -90,6 +90,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 	}
 	tsp := common.GetTabletSelectionPreference(cmd)
 	cli.FinishedParsing(cmd)
+
 	req := &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:                  common.BaseOptions.Workflow,
 		TargetKeyspace:            common.BaseOptions.TargetKeyspace,

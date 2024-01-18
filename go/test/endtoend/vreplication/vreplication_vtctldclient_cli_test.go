@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
+
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -52,20 +54,24 @@ func TestVtctldclientCLI(t *testing.T) {
 	workflowName := "wf1"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
 	targetTabs := setupMinimalCustomerKeyspace(t)
-	tables := "customer,customer2"
-	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
-		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
-		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
-		"--all-cells",
-	}
-	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
-	switchFlags := []string{}
+	var mt iMoveTables
+	var createFlags, completeFlags, switchFlags []string
+	var tables string
 
-	mt := createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags, switchFlags)
-	mt.Show()
-	moveTablesOutput := mt.GetLastOutput()
-	// Test one set of MoveTable flags.
 	t.Run("moveTablesFlags1", func(t *testing.T) {
+		tables = "customer,customer2"
+		createFlags = []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
+			"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
+			"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
+			"--all-cells",
+		}
+		completeFlags = []string{"--keep-routing-rules", "--keep-data"}
+		switchFlags = []string{}
+		mt = createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags, switchFlags)
+		mt.Show()
+		moveTablesOutput := mt.GetLastOutput()
+		// Test one set of MoveTable flags.
+
 		workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", "customer", "show", "--workflow", "wf1")
 		require.NoError(t, err)
 		var moveTablesResponse vtctldata.GetWorkflowsResponse
@@ -116,32 +122,35 @@ func TestVtctldclientCLI(t *testing.T) {
 		// Confirm that --keep-data was honored.
 		require.True(t, checkTablesExist(t, "zone1-100", []string{"customer", "customer2"}))
 	})
-	t.Run("completeFlags", func(t *testing.T) {
-		for _, tab := range targetTabs {
-			alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, "drop table customer")
-			require.NoError(t, err, output)
-		}
-		createFlags = []string{}
-		completeFlags = []string{"--rename-tables"}
-		tables = "customer2"
-		switchFlags = []string{"--enable-reverse-replication=false"}
-		mt = createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags, switchFlags)
-		mt.Start() // Need to start because we set stop-after-copy to true.
-		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
-		mt.Stop() // Test stopping workflow.
-		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
-		mt.Start()
-		waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
-		for _, tab := range targetTabs {
-			catchup(t, tab, workflowName, "MoveTables")
-		}
-		mt.SwitchReadsAndWrites()
-		mt.Complete()
-		// Confirm that the source tables were renamed.
-		require.True(t, checkTablesExist(t, "zone1-100", []string{"_customer2_old"}))
-		require.False(t, checkTablesExist(t, "zone1-100", []string{"customer2"}))
-	})
+
+	testCompleteFlags(t, sourceKeyspace, targetKeyspace, targetTabs)
+}
+
+func testCompleteFlags(t *testing.T, sourceKeyspace, targetKeyspace string, targetTabs map[string]*cluster.VttabletProcess) {
+	for _, tab := range targetTabs {
+		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, "drop table customer")
+		require.NoError(t, err, output)
+	}
+	createFlags := []string{}
+	completeFlags := []string{"--rename-tables"}
+	tables := "customer2"
+	switchFlags := []string{"--enable-reverse-replication=false"}
+	mt := createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags, switchFlags)
+	mt.Start() // Need to start because we set stop-after-copy to true.
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+	mt.Stop() // Test stopping workflow.
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
+	mt.Start()
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+	for _, tab := range targetTabs {
+		catchup(t, tab, workflowName, "MoveTables")
+	}
+	mt.SwitchReadsAndWrites()
+	mt.Complete()
+	// Confirm that the source tables were renamed.
+	require.True(t, checkTablesExist(t, "zone1-100", []string{"_customer2_old"}))
+	require.False(t, checkTablesExist(t, "zone1-100", []string{"customer2"}))
 }
 
 func createMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, tables string,
