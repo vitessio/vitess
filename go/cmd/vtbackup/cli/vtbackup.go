@@ -204,7 +204,7 @@ func init() {
 	Main.Flags().StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
 	Main.Flags().StringVar(&initShard, "init_shard", initShard, "(init parameter) shard to use for this tablet")
 	Main.Flags().IntVar(&concurrency, "concurrency", concurrency, "(init restore parameter) how many concurrent files to restore at once")
-	Main.Flags().StringVar(&incrementalFromPos, "incremental_from_pos", incrementalFromPos, "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', backup taken from last successful backup position")
+	Main.Flags().StringVar(&incrementalFromPos, "incremental_from_pos", incrementalFromPos, "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', backup taken from last successful backup position.")
 
 	// mysqlctld-like flags
 	Main.Flags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "mysql port")
