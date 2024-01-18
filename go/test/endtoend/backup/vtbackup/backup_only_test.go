@@ -326,12 +326,12 @@ func tearDown(t *testing.T, initMysql bool) {
 	}
 	caughtUp := waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
 	require.True(t, caughtUp, "Timed out waiting for all replicas to catch up")
-	promoteCommands := "STOP SLAVE; RESET SLAVE ALL; RESET MASTER;"
-	disableSemiSyncCommands := "SET GLOBAL rpl_semi_sync_master_enabled = false; SET GLOBAL rpl_semi_sync_slave_enabled = false"
+	promoteCommands := []string{"STOP SLAVE", "RESET SLAVE ALL", "RESET MASTER"}
+	disableSemiSyncCommands := []string{"SET GLOBAL rpl_semi_sync_master_enabled = false", " SET GLOBAL rpl_semi_sync_slave_enabled = false"}
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-		_, err := tablet.VttabletProcess.QueryTablet(promoteCommands, keyspaceName, true)
+		err := tablet.VttabletProcess.QueryTabletMultiple(promoteCommands, keyspaceName, true)
 		require.Nil(t, err)
-		_, err = tablet.VttabletProcess.QueryTablet(disableSemiSyncCommands, keyspaceName, true)
+		err = tablet.VttabletProcess.QueryTabletMultiple(disableSemiSyncCommands, keyspaceName, true)
 		require.Nil(t, err)
 	}
 

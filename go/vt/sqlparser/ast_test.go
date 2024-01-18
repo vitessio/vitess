@@ -735,6 +735,10 @@ func TestSplitStatementToPieces(t *testing.T) {
 		// Ignore quoted semicolon
 		input:  ";create table t1 ';';;;create table t2 (id;",
 		output: "create table t1 ';';create table t2 (id",
+	}, {
+		// Ignore quoted semicolon
+		input:  "stop replica; start replica",
+		output: "stop replica; start replica",
 	},
 	}
 
