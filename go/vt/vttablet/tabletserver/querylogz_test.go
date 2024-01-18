@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -76,7 +77,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	response := httptest.NewRecorder()
 	ch := make(chan *tabletenv.LogStats, 1)
 	ch <- logStats
-	querylogzHandler(ch, response, req)
+	querylogzHandler(ch, response, req, sqlparser.NewTestParser())
 	close(ch)
 	body, _ := io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, fastQueryPattern, logStats, body)
@@ -107,7 +108,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	response = httptest.NewRecorder()
 	ch = make(chan *tabletenv.LogStats, 1)
 	ch <- logStats
-	querylogzHandler(ch, response, req)
+	querylogzHandler(ch, response, req, sqlparser.NewTestParser())
 	close(ch)
 	body, _ = io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, mediumQueryPattern, logStats, body)
@@ -137,7 +138,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	logStats.EndTime = logStats.StartTime.Add(500 * time.Millisecond)
 	ch = make(chan *tabletenv.LogStats, 1)
 	ch <- logStats
-	querylogzHandler(ch, response, req)
+	querylogzHandler(ch, response, req, sqlparser.NewTestParser())
 	close(ch)
 	body, _ = io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
@@ -147,7 +148,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	defer func() { streamlog.SetQueryLogFilterTag("") }()
 	ch = make(chan *tabletenv.LogStats, 1)
 	ch <- logStats
-	querylogzHandler(ch, response, req)
+	querylogzHandler(ch, response, req, sqlparser.NewTestParser())
 	close(ch)
 	body, _ = io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)

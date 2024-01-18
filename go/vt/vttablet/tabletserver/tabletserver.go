@@ -238,6 +238,8 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 	tsv.registerHealthzHealthHandler()
 	tsv.registerDebugHealthHandler()
 	tsv.registerQueryzHandler()
+	tsv.registerQuerylogzHandler()
+	tsv.registerTxlogzHandler()
 	tsv.registerQueryListHandlers([]*QueryList{tsv.statelessql, tsv.statefulql, tsv.olapql})
 	tsv.registerTwopczHandler()
 	tsv.registerMigrationStatusHandler()
@@ -1849,6 +1851,18 @@ func (tsv *TabletServer) registerQueryzHandler() {
 	tsv.exporter.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
 		queryzHandler(tsv.qe, w, r)
 	})
+}
+
+func (tsv *TabletServer) registerQuerylogzHandler() {
+	tsv.exporter.HandleFunc("/querylogz", func(w http.ResponseWriter, r *http.Request) {
+		ch := tabletenv.StatsLogger.Subscribe("querylogz")
+		defer tabletenv.StatsLogger.Unsubscribe(ch)
+		querylogzHandler(ch, w, r, tsv.parser)
+	})
+}
+
+func (tsv *TabletServer) registerTxlogzHandler() {
+	tsv.exporter.HandleFunc("/txlogz", txlogzHandler)
 }
 
 func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
