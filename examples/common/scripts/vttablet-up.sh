@@ -53,10 +53,6 @@ vttablet \
  --grpc_port $grpc_port \
  --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
  --pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
-<<<<<<< HEAD
- --heartbeat_enable --heartbeat_interval=250ms --heartbeat_on_demand_duration=5s \
-=======
->>>>>>> 22809e497e (examples: rm heartbeat flags (#14980))
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
 # Block waiting for the tablet to be listening
