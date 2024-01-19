@@ -123,6 +123,9 @@ func ParseInt64(s string, base int) (int64, error) {
 		i++
 	}
 
+	if i >= uint(len(s)) {
+		return 0, fmt.Errorf("cannot parse int64 from %q", s)
+	}
 	minus := s[i] == '-'
 	if minus {
 		i++
