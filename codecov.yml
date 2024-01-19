@@ -9,7 +9,11 @@ parsers:
     partials_as_hits: true
 
 ignore:
-  - "go/cmd/vttestserver"  # This relies on end-to-end test packages
+  # Ignore our end-to-end test code
+  - "go/test/endtoend"
+  - "go/*/endtoend"
+  - "go/vt/*/endtoend"
+  - "go/cmd/vttestserver" # This relies on end-to-end test packages
 
 comment: # https://docs.codecov.com/docs/pull-request-comments
     hide_project_coverage: false
