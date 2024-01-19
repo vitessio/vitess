@@ -4217,7 +4217,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id, col from (select id, col from `user` where 1 != 1) as u where 1 != 1",
-                "Query": "select id, col from (select id, col from `user`) as u",
+                "Query": "select distinct id, col from (select id, col from `user`) as u",
                 "Table": "`user`"
               },
               {
@@ -4310,7 +4310,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select subquery_for_count.`m.id`, 1 from (select m.id as `m.id` from music as m where 1 != 1) as subquery_for_count where 1 != 1",
-                        "Query": "select subquery_for_count.`m.id`, 1 from (select m.id as `m.id` from music as m) as subquery_for_count",
+                        "Query": "select distinct subquery_for_count.`m.id`, 1 from (select m.id as `m.id` from music as m) as subquery_for_count",
                         "Table": "music"
                       },
                       {
@@ -4321,7 +4321,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select subquery_for_count.user_id, subquery_for_count.`u.id`, weight_string(subquery_for_count.user_id) from (select u.user_id, u.id as `u.id` from `user` as u, user_extra as ue where 1 != 1) as subquery_for_count where 1 != 1",
-                        "Query": "select subquery_for_count.user_id, subquery_for_count.`u.id`, weight_string(subquery_for_count.user_id) from (select u.user_id, u.id as `u.id` from `user` as u, user_extra as ue where u.id = :m_id and u.id = ue.user_id) as subquery_for_count",
+                        "Query": "select distinct subquery_for_count.user_id, subquery_for_count.`u.id`, weight_string(subquery_for_count.user_id) from (select u.user_id, u.id as `u.id` from `user` as u, user_extra as ue where u.id = :m_id and u.id = ue.user_id) as subquery_for_count",
                         "Table": "`user`, user_extra",
                         "Values": [
                           ":m_id"

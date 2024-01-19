@@ -576,7 +576,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user` where 1 != 1",
-                    "Query": "select `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user`",
+                    "Query": "select distinct `user`.id, `user`.`name`, weight_string(`user`.id), weight_string(`user`.`name`) from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -587,7 +587,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra where user_extra.extra = 'asdf'",
+                    "Query": "select distinct 1 from user_extra where user_extra.extra = 'asdf'",
                     "Table": "user_extra"
                   }
                 ]
@@ -654,7 +654,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select `user`.id, `user`.`name` from `user` where 1 != 1",
-                    "Query": "select `user`.id, `user`.`name` from `user`",
+                    "Query": "select distinct `user`.id, `user`.`name` from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -665,7 +665,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra where user_extra.extra = 'asdf'",
+                    "Query": "select distinct 1 from user_extra where user_extra.extra = 'asdf'",
                     "Table": "user_extra"
                   }
                 ]
@@ -1333,7 +1333,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select `user`.intcol, `user`.textcol2, weight_string(`user`.intcol), weight_string(`user`.textcol2) from `user` where 1 != 1",
-                    "Query": "select `user`.intcol, `user`.textcol2, weight_string(`user`.intcol), weight_string(`user`.textcol2) from `user`",
+                    "Query": "select distinct `user`.intcol, `user`.textcol2, weight_string(`user`.intcol), weight_string(`user`.textcol2) from `user`",
                     "Table": "`user`"
                   },
                   {
@@ -1344,7 +1344,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select authoritative.col2, weight_string(authoritative.col2) from authoritative where 1 != 1",
-                    "Query": "select authoritative.col2, weight_string(authoritative.col2) from authoritative",
+                    "Query": "select distinct authoritative.col2, weight_string(authoritative.col2) from authoritative",
                     "Table": "authoritative"
                   }
                 ]

@@ -615,16 +615,18 @@ type selectExpressions interface {
 	derivedName() string
 }
 
-// addColumnToInput adds a column to an operator without pushing it down.
-// It will return a bool indicating whether the addition was successful or not,
-// and an offset to where the column can be found
+// addColumnToInput adds columns to an operator without pushing them down
 func addMultipleColumnsToInput(
 	ctx *plancontext.PlanningContext,
 	operator Operator,
 	reuse bool,
 	addToGroupBy []bool,
 	exprs []*sqlparser.AliasedExpr,
-) (derivedName string, projection Operator, found bool, offsets []int) {
+) (derivedName string, // if we found a derived table, this will contain its name
+	projection Operator, // if an operator needed to be built, it will be returned here
+	found bool, // whether a matching op was found or not
+	offsets []int, // the offsets the expressions received
+) {
 	switch op := operator.(type) {
 	case *SubQuery:
 		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Outer, reuse, addToGroupBy, exprs)

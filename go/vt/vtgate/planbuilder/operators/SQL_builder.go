@@ -525,7 +525,7 @@ func buildProjection(op *Projection, qb *queryBuilder) {
 
 func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
 	predicates := slice.Map(op.JoinPredicates.columns, func(jc applyJoinColumn) sqlparser.Expr {
-		// since we are adding these join predicates, we need to mark to broken up version of it as done
+		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
 		err := qb.ctx.SkipJoinPredicates(jc.Original)
 		if err != nil {
 			panic(err)

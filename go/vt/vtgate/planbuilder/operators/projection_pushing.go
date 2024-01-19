@@ -36,7 +36,7 @@ type (
 	}
 )
 
-// add will add a projection with a given alias
+// add introduces a new projection with the specified alias to the projector.
 func (p *projector) add(pe *ProjExpr, alias string) {
 	p.columns = append(p.columns, pe)
 	if alias != "" && slices.Index(p.columnAliases, alias) > -1 {
@@ -45,6 +45,7 @@ func (p *projector) add(pe *ProjExpr, alias string) {
 	p.columnAliases = append(p.columnAliases, alias)
 }
 
+// get finds or adds an expression in the projector, returning its SQL representation with the appropriate alias
 func (p *projector) get(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
 	for _, column := range p.columns {
 		if ctx.SemTable.EqualsExprWithDeps(expr, column.EvalExpr) {
@@ -71,6 +72,7 @@ func (p *projector) get(ctx *plancontext.PlanningContext, expr sqlparser.Expr) s
 	return out
 }
 
+// claimUnusedAlias generates a unique alias based on the provided expression, ensuring no duplication in the projector
 func (p *projector) claimUnusedAlias(ae *sqlparser.AliasedExpr) string {
 	bare := ae.ColumnName()
 	alias := bare
@@ -83,6 +85,7 @@ func (p *projector) claimUnusedAlias(ae *sqlparser.AliasedExpr) string {
 	return alias
 }
 
+// tryPushProjection attempts to optimize a projection by pushing it down in the query plan
 func tryPushProjection(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
@@ -119,6 +122,7 @@ func tryPushProjection(
 	}
 }
 
+// pushProjectionThroughHashJoin optimizes projection operations within a hash join
 func pushProjectionThroughHashJoin(ctx *plancontext.PlanningContext, p *Projection, hj *HashJoin) (Operator, *ApplyResult) {
 	cols := p.Columns.(AliasedProjections)
 	for _, col := range cols {

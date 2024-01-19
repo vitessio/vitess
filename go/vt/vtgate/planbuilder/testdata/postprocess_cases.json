@@ -1720,7 +1720,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
-                "Query": "select `user`.a, weight_string(`user`.a) from `user`",
+                "Query": "select distinct `user`.a, weight_string(`user`.a) from `user`",
                 "Table": "`user`"
               },
               {
@@ -1731,7 +1731,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
+                "Query": "select distinct 1 from user_extra",
                 "Table": "user_extra"
               }
             ]

@@ -116,20 +116,6 @@ func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
 	return bvName
 }
 
-// GetArgumentFor retrieves or assigns a new argument name for a given expression.
-// It uses a provided function to generate a new name if the expression doesn't
-// have an existing argument name in the context.
-func (ctx *PlanningContext) GetArgumentFor(expr sqlparser.Expr, f func() string) string {
-	for key, name := range ctx.ReservedArguments {
-		if ctx.SemTable.EqualsExpr(key, expr) {
-			return name
-		}
-	}
-	bvName := f()
-	ctx.ReservedArguments[expr] = bvName
-	return bvName
-}
-
 // ShouldSkip determines if a given expression should be ignored in the SQL output building.
 // It checks against expressions that have been marked to be excluded from further processing.
 func (ctx *PlanningContext) ShouldSkip(expr sqlparser.Expr) bool {
@@ -191,16 +177,6 @@ outer:
 		}
 		ctx.skipPredicates[expr] = nil
 	}
-}
-
-func (ctx *PlanningContext) CopyJoinPredicate(src, dest sqlparser.Expr) error {
-	fn := func(_ sqlparser.Expr, rhsExprs []sqlparser.Expr) {
-		ctx.joinPredicates[dest] = rhsExprs
-	}
-	if ctx.execOnJoinPredicateEqual(src, fn) {
-		return nil
-	}
-	return vterrors.VT13001("predicate does not exist: " + sqlparser.String(src))
 }
 
 func (ctx *PlanningContext) execOnJoinPredicateEqual(joinPred sqlparser.Expr, fn func(original sqlparser.Expr, rhsExprs []sqlparser.Expr)) bool {
