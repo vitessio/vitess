@@ -1725,6 +1725,15 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	if req.MaxDiffDuration == nil {
 		req.MaxDiffDuration = &vttimepb.Duration{}
 	}
+	// The other vttime.Duration vars should not be nil as the
+	// client should always provide them, but we check anyway to
+	// be safe.
+	if req.FilteredReplicationWaitTime == nil {
+		req.FilteredReplicationWaitTime = &vttimepb.Duration{}
+	}
+	if req.WaitUpdateInterval == nil {
+		req.WaitUpdateInterval = &vttimepb.Duration{}
+	}
 
 	options := &tabletmanagerdatapb.VDiffOptions{
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{

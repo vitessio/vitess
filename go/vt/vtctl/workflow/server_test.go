@@ -27,16 +27,16 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 type fakeTMC struct {
@@ -164,6 +164,39 @@ func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 
 			assert.Equal(t, tt.shouldExist, exists, existAssertionMsg)
 			utils.MustMatch(t, tt.journal, journal, "journal in resharding_journal did not match")
+		})
+	}
+}
+
+// TestVDiffCreate performs some basic tests of the VDiffCreate function
+// to ensure that it behaves as expected given a specific request.
+func TestVDiffCreate(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer(ctx, "cell")
+	tmc := &fakeTMC{}
+	s := NewServer(ts, tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+
+	tests := []struct {
+		name    string
+		req     *vtctldatapb.VDiffCreateRequest
+		wantErr string
+	}{
+		{
+			name:    "no values",
+			req:     &vtctldatapb.VDiffCreateRequest{},
+			wantErr: "node doesn't exist: keyspaces/shards", // We did not provide any keyspace or shard
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.VDiffCreate(ctx, tt.req)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			require.NotEmpty(t, got.UUID)
 		})
 	}
 }
