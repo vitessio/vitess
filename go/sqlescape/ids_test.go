@@ -32,6 +32,10 @@ func TestEscapeID(t *testing.T) {
 			in:  "a`a",
 			out: "`a``a`",
 		},
+		{
+			in:  "`aa`",
+			out: "```aa```",
+		},
 	}
 
 	for _, tc := range testcases {
@@ -97,11 +101,11 @@ func TestUnescapeID(t *testing.T) {
 		},
 		{
 			in:  "`a``a`",
-			out: "a``a",
+			out: "a`a",
 		},
 		{
 			in:  "```aa```",
-			out: "``aa``",
+			out: "`aa`",
 		},
 		{
 			in:  "aa",
