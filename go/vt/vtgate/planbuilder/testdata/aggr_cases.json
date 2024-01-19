@@ -3405,8 +3405,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select phone, id, city from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select phone, id, city from (select phone, id, city from `user` where id > 12) as x limit :__upper_limit",
+                    "FieldQuery": "select x.phone, x.id, x.city from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
+                    "Query": "select x.phone, x.id, x.city from (select phone, id, city from `user` where id > 12) as x limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -3448,8 +3448,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select phone, id, city, 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select phone, id, city, 1 from (select phone, id, city from `user` where id > 12) as x limit :__upper_limit",
+                    "FieldQuery": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
+                    "Query": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where id > 12) as x limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -3553,9 +3553,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select id, val1, 1, weight_string(val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
+                    "FieldQuery": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
                     "OrderBy": "(1|3) ASC",
-                    "Query": "select id, val1, 1, weight_string(val1) from (select id, val1 from `user` where val2 < 4) as x order by val1 asc limit :__upper_limit",
+                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by val1 asc limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -5856,8 +5856,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select id, val2 from (select id, val2 from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select id, val2 from (select id, val2 from `user` where val2 is null) as x limit :__upper_limit",
+                    "FieldQuery": "select x.id, x.val2 from (select id, val2 from `user` where 1 != 1) as x where 1 != 1",
+                    "Query": "select x.id, x.val2 from (select id, val2 from `user` where val2 is null) as x limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -6467,74 +6467,59 @@
                 "OrderBy": "(4|6) ASC, (5|7) ASC",
                 "Inputs": [
                   {
-                    "OperatorType": "Projection",
-                    "Expressions": [
-                      "count(*) as count(*)",
-                      "count(*) as count(*)",
-                      "`user`.col as col",
-                      "ue.col as col",
-                      "`user`.foo as foo",
-                      "ue.bar as bar",
-                      "weight_string(`user`.foo) as weight_string(`user`.foo)",
-                      "weight_string(ue.bar) as weight_string(ue.bar)"
-                    ],
+                    "OperatorType": "Join",
+                    "Variant": "HashLeftJoin",
+                    "Collation": "binary",
+                    "ComparisonType": "INT16",
+                    "JoinColumnIndexes": "-1,1,-2,2,-3,3",
+                    "Predicate": "`user`.col = ue.col",
+                    "TableName": "`user`_user_extra",
                     "Inputs": [
                       {
-                        "OperatorType": "Join",
-                        "Variant": "HashLeftJoin",
-                        "Collation": "binary",
-                        "ComparisonType": "INT16",
-                        "JoinColumnIndexes": "-1,1,-2,2,-3,3",
-                        "Predicate": "`user`.col = ue.col",
-                        "TableName": "`user`_user_extra",
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), `user`.col, `user`.foo from `user` where 1 != 1 group by `user`.col, `user`.foo",
+                        "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Aggregate",
+                        "Variant": "Ordered",
+                        "Aggregates": "count_star(0)",
+                        "GroupBy": "1, (2|3)",
                         "Inputs": [
                           {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select count(*), `user`.col, `user`.foo from `user` where 1 != 1 group by `user`.col, `user`.foo",
-                            "Query": "select count(*), `user`.col, `user`.foo from `user` group by `user`.col, `user`.foo",
-                            "Table": "`user`"
-                          },
-                          {
-                            "OperatorType": "Aggregate",
-                            "Variant": "Ordered",
-                            "Aggregates": "count_star(0)",
-                            "GroupBy": "1, (2|3)",
+                            "OperatorType": "SimpleProjection",
+                            "Columns": [
+                              2,
+                              0,
+                              1,
+                              3
+                            ],
                             "Inputs": [
                               {
-                                "OperatorType": "SimpleProjection",
-                                "Columns": [
-                                  2,
-                                  0,
-                                  1,
-                                  3
-                                ],
+                                "OperatorType": "Sort",
+                                "Variant": "Memory",
+                                "OrderBy": "0 ASC, (1|3) ASC",
                                 "Inputs": [
                                   {
-                                    "OperatorType": "Sort",
-                                    "Variant": "Memory",
-                                    "OrderBy": "0 ASC, (1|3) ASC",
+                                    "OperatorType": "Limit",
+                                    "Count": "10",
                                     "Inputs": [
                                       {
-                                        "OperatorType": "Limit",
-                                        "Count": "10",
-                                        "Inputs": [
-                                          {
-                                            "OperatorType": "Route",
-                                            "Variant": "Scatter",
-                                            "Keyspace": {
-                                              "Name": "user",
-                                              "Sharded": true
-                                            },
-                                            "FieldQuery": "select col, bar, 1, weight_string(bar) from (select col, bar from user_extra where 1 != 1) as ue where 1 != 1",
-                                            "Query": "select col, bar, 1, weight_string(bar) from (select col, bar from user_extra) as ue limit :__upper_limit",
-                                            "Table": "user_extra"
-                                          }
-                                        ]
+                                        "OperatorType": "Route",
+                                        "Variant": "Scatter",
+                                        "Keyspace": {
+                                          "Name": "user",
+                                          "Sharded": true
+                                        },
+                                        "FieldQuery": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra where 1 != 1) as ue where 1 != 1",
+                                        "Query": "select ue.col, ue.bar, 1, weight_string(ue.bar) from (select col, bar from user_extra) as ue limit :__upper_limit",
+                                        "Table": "user_extra"
                                       }
                                     ]
                                   }

@@ -1901,8 +1901,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_extra.col = :user_col",
+            "FieldQuery": "select 1 from (select user_extra.col as `user_extra.col` from user_extra where 1 != 1) as t where 1 != 1",
+            "Query": "select 1 from (select user_extra.col as `user_extra.col` from user_extra where user_extra.col = :user_col) as t",
             "Table": "user_extra"
           }
         ]
@@ -4088,8 +4088,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select col from (select col from user_extra where 1 != 1) as ue where 1 != 1",
-                "Query": "select col from (select col from user_extra) as ue limit :__upper_limit",
+                "FieldQuery": "select ue.col from (select col from user_extra where 1 != 1) as ue where 1 != 1",
+                "Query": "select ue.col from (select col from user_extra) as ue limit :__upper_limit",
                 "Table": "user_extra"
               }
             ]
@@ -4128,8 +4128,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id, col from (select id, col from `user` where 1 != 1) as u where 1 != 1",
-                "Query": "select id, col from (select id, col from `user`) as u limit :__upper_limit",
+                "FieldQuery": "select u.id, u.col from (select id, col from `user` where 1 != 1) as u where 1 != 1",
+                "Query": "select u.id, u.col from (select id, col from `user`) as u limit :__upper_limit",
                 "Table": "`user`"
               }
             ]
@@ -4145,8 +4145,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select col, user_id from (select col, user_id from user_extra where 1 != 1) as ue where 1 != 1",
-                "Query": "select col, user_id from (select col, user_id from user_extra) as ue limit :__upper_limit",
+                "FieldQuery": "select ue.col, ue.user_id from (select col, user_id from user_extra where 1 != 1) as ue where 1 != 1",
+                "Query": "select ue.col, ue.user_id from (select col, user_id from user_extra) as ue limit :__upper_limit",
                 "Table": "user_extra"
               }
             ]
@@ -4201,22 +4201,28 @@
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "Projection",
-            "Expressions": [
-              "id as id",
-              "user_id as user_id",
-              "weight_string(id) as weight_string(id)",
-              "weight_string(user_id) as weight_string(user_id)"
-            ],
+            "OperatorType": "Join",
+            "Variant": "HashLeftJoin",
+            "Collation": "binary",
+            "ComparisonType": "INT16",
+            "JoinColumnIndexes": "-1,2",
+            "Predicate": "u.col = ue.col",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "HashLeftJoin",
-                "Collation": "binary",
-                "ComparisonType": "INT16",
-                "JoinColumnIndexes": "-1,2",
-                "Predicate": "u.col = ue.col",
-                "TableName": "`user`_user_extra",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, col from (select id, col from `user` where 1 != 1) as u where 1 != 1",
+                "Query": "select id, col from (select id, col from `user`) as u",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "10",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -4225,26 +4231,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select id, col from (select id, col from `user` where 1 != 1) as u where 1 != 1",
-                    "Query": "select distinct id, col from (select id, col from `user`) as u",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Limit",
-                    "Count": "10",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select col, user_id from (select col, user_id from user_extra where 1 != 1) as ue where 1 != 1",
-                        "Query": "select col, user_id from (select col, user_id from user_extra) as ue limit :__upper_limit",
-                        "Table": "user_extra"
-                      }
-                    ]
+                    "FieldQuery": "select ue.col, ue.user_id from (select col, user_id from user_extra where 1 != 1) as ue where 1 != 1",
+                    "Query": "select ue.col, ue.user_id from (select col, user_id from user_extra) as ue limit :__upper_limit",
+                    "Table": "user_extra"
                   }
                 ]
               }
@@ -4277,6 +4266,80 @@
       },
       "TablesUsed": [
         "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "pushing derived projection under the join should not cause problems",
+    "query": "SELECT count(*) FROM (SELECT DISTINCT u.user_id FROM user u JOIN user_extra ue ON u.id = ue.user_id JOIN music m ON m.id = u.id) subquery_for_count",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT count(*) FROM (SELECT DISTINCT u.user_id FROM user u JOIN user_extra ue ON u.id = ue.user_id JOIN music m ON m.id = u.id) subquery_for_count",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              1
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:2)",
+                  "1"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "R:0,L:1,R:2",
+                    "JoinVars": {
+                      "m_id": 0
+                    },
+                    "TableName": "music_`user`, user_extra",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select subquery_for_count.`m.id`, 1 from (select m.id as `m.id` from music as m where 1 != 1) as subquery_for_count where 1 != 1",
+                        "Query": "select subquery_for_count.`m.id`, 1 from (select m.id as `m.id` from music as m) as subquery_for_count",
+                        "Table": "music"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select subquery_for_count.user_id, subquery_for_count.`u.id`, weight_string(subquery_for_count.user_id) from (select u.user_id, u.id as `u.id` from `user` as u, user_extra as ue where 1 != 1) as subquery_for_count where 1 != 1",
+                        "Query": "select subquery_for_count.user_id, subquery_for_count.`u.id`, weight_string(subquery_for_count.user_id) from (select u.user_id, u.id as `u.id` from `user` as u, user_extra as ue where u.id = :m_id and u.id = ue.user_id) as subquery_for_count",
+                        "Table": "`user`, user_extra",
+                        "Values": [
+                          ":m_id"
+                        ],
+                        "Vindex": "user_index"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
       ]
     }
   }

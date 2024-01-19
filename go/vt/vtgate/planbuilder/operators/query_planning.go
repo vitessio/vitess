@@ -539,16 +539,16 @@ func tryPushDistinct(in *Distinct) (Operator, *ApplyResult) {
 		in.PushedPerformance = true
 
 		return in, Rewrote("push down distinct under union")
-	case JoinOp:
-		src.SetLHS(&Distinct{Source: src.GetLHS()})
-		src.SetRHS(&Distinct{Source: src.GetRHS()})
-		in.PushedPerformance = true
-
-		if in.Required {
-			return in, Rewrote("push distinct under join - kept original")
-		}
-
-		return in.Source, Rewrote("push distinct under join")
+	// case JoinOp:
+	// 	src.SetLHS(&Distinct{Source: src.GetLHS()})
+	// 	src.SetRHS(&Distinct{Source: src.GetRHS()})
+	// 	in.PushedPerformance = true
+	//
+	// 	if in.Required {
+	// 		return in, Rewrote("push distinct under join - kept original")
+	// 	}
+	//
+	// 	return in.Source, Rewrote("push distinct under join")
 	case *Ordering:
 		in.Source = src.Source
 		return in, Rewrote("remove ordering under distinct")

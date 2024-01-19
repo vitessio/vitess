@@ -229,6 +229,14 @@ func (p *Projection) isDerived() bool {
 	return p.DT != nil
 }
 
+func (p *Projection) derivedName() string {
+	if p.DT == nil {
+		return ""
+	}
+
+	return p.DT.Alias
+}
+
 func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	ap, err := p.GetAliasedProjections()
 	if err != nil {

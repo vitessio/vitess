@@ -28,6 +28,7 @@ import (
 // planOffsets will walk the tree top down, adding offset information to columns in the tree for use in further optimization,
 func planOffsets(ctx *plancontext.PlanningContext, root Operator) Operator {
 	type offsettable interface {
+		Operator
 		planOffsets(ctx *plancontext.PlanningContext) Operator
 	}
 
@@ -37,9 +38,16 @@ func planOffsets(ctx *plancontext.PlanningContext, root Operator) Operator {
 			panic(vterrors.VT13001(fmt.Sprintf("should not see %T here", in)))
 		case offsettable:
 			newOp := op.planOffsets(ctx)
-			if newOp != nil {
-				return newOp, Rewrote("new operator after offset planning")
+
+			if newOp == nil {
+				newOp = op
 			}
+
+			if DebugOperatorTree {
+				fmt.Println("Planned offsets for:")
+				fmt.Println(ToTree(newOp))
+			}
+			return newOp, nil
 		}
 		return in, NoRewrite
 	}

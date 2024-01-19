@@ -17,40 +17,43 @@ limitations under the License.
 package operators
 
 import (
+	"slices"
+	"strconv"
+
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
 	projector struct {
 		columns               []*ProjExpr
-		columnAliases         sqlparser.Columns
+		columnAliases         []string
 		explicitColumnAliases bool
 		tableName             sqlparser.TableName
 	}
 )
 
 // add will add a projection with a given alias
-func (p *projector) add(pe *ProjExpr, col *sqlparser.IdentifierCI) {
+func (p *projector) add(pe *ProjExpr, alias string) {
 	p.columns = append(p.columns, pe)
-	if col != nil {
-		p.columnAliases = append(p.columnAliases, *col)
+	if alias != "" && slices.Index(p.columnAliases, alias) > -1 {
+		panic("alias already used")
 	}
+	p.columnAliases = append(p.columnAliases, alias)
 }
 
 func (p *projector) get(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
 	for _, column := range p.columns {
 		if ctx.SemTable.EqualsExprWithDeps(expr, column.EvalExpr) {
-			if column.Original.As.NotEmpty() {
-				// this is an aliased column - let's create a ColName that points to it
-				col := sqlparser.NewColName(column.Original.As.String())
-				if p.tableName.NonEmpty() {
-					col.Qualifier = p.tableName
-				}
-				return col
-			}
+			alias := p.claimUnusedAlias(column.Original)
+			out := sqlparser.NewColName(alias)
+			out.Qualifier = p.tableName
 
-			return column.ColExpr
+			ctx.SemTable.CopySemanticInfo(expr, out)
+			return out
 		}
 	}
 
@@ -58,12 +61,26 @@ func (p *projector) get(ctx *plancontext.PlanningContext, expr sqlparser.Expr) s
 	alias := sqlparser.UnescapedString(expr)
 	pe := newProjExpr(sqlparser.NewAliasedExpr(expr, alias))
 	p.columns = append(p.columns, pe)
-	p.columnAliases = append(p.columnAliases, sqlparser.NewIdentifierCI(alias))
+	p.columnAliases = append(p.columnAliases, alias)
 
 	out := sqlparser.NewColName(alias)
 	out.Qualifier = p.tableName
 
+	ctx.SemTable.CopySemanticInfo(expr, out)
+
 	return out
+}
+
+func (p *projector) claimUnusedAlias(ae *sqlparser.AliasedExpr) string {
+	bare := ae.ColumnName()
+	alias := bare
+	var i int64 = 0
+
+	for slices.Index(p.columnAliases, alias) > -1 {
+		alias = bare + strconv.FormatInt(i, 10)
+		i++
+	}
+	return alias
 }
 
 func tryPushProjection(
@@ -207,11 +224,14 @@ func pushProjectionInApplyJoin(
 
 	src.JoinColumns = &applyJoinColumns{}
 	for idx, pe := range ap {
-		var col *sqlparser.IdentifierCI
-		if p.DT != nil && idx < len(p.DT.Columns) {
-			col = &p.DT.Columns[idx]
+		var alias string
+		if p.DT != nil && len(p.DT.Columns) > 0 {
+			if len(p.DT.Columns) <= idx {
+				panic(vterrors.VT13001("no such alias found for derived table"))
+			}
+			alias = p.DT.Columns[idx].String()
 		}
-		splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, col)
+		splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, alias)
 	}
 
 	if p.isDerived() {
@@ -232,7 +252,7 @@ func splitProjectionAcrossJoin(
 	join *ApplyJoin,
 	lhs, rhs *projector,
 	pe *ProjExpr,
-	colAlias *sqlparser.IdentifierCI,
+	colAlias string,
 ) {
 
 	// Check if the current expression can reuse an existing column in the ApplyJoin.
@@ -249,7 +269,7 @@ func splitUnexploredExpression(
 	join *ApplyJoin,
 	lhs, rhs *projector,
 	pe *ProjExpr,
-	colAlias *sqlparser.IdentifierCI,
+	alias string,
 ) applyJoinColumn {
 	// Get a applyJoinColumn for the current expression.
 	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
@@ -257,23 +277,22 @@ func splitUnexploredExpression(
 	// Update the left and right child columns and names based on the applyJoinColumn type.
 	switch {
 	case col.IsPureLeft():
-		lhs.add(pe, colAlias)
+		lhs.add(pe, alias)
 	case col.IsPureRight():
-		rhs.add(pe, colAlias)
+		rhs.add(pe, alias)
 	case col.IsMixedLeftAndRight():
 		for _, lhsExpr := range col.LHSExprs {
-			var lhsAlias *sqlparser.IdentifierCI
-			if colAlias != nil {
+			var lhsAlias string
+			if alias != "" {
 				// we need to add an explicit column alias here. let's try just the ColName as is first
-				ci := sqlparser.NewIdentifierCI(sqlparser.String(lhsExpr.Expr))
-				lhsAlias = &ci
+				lhsAlias = sqlparser.String(lhsExpr.Expr)
 			}
 			lhs.add(newProjExpr(aeWrap(lhsExpr.Expr)), lhsAlias)
 		}
 		innerPE := newProjExprWithInner(pe.Original, col.RHSExpr)
 		innerPE.ColExpr = col.RHSExpr
 		innerPE.Info = pe.Info
-		rhs.add(innerPE, colAlias)
+		rhs.add(innerPE, alias)
 	}
 	return col
 }
@@ -304,7 +323,12 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 	lhsIDs := TableID(src.LHS)
 	rhsIDs := TableID(src.RHS)
-	for colIdx, predicate := range src.JoinPredicates.columns {
+	rewriteColumnsForJoin(ctx, src.JoinPredicates.columns, lhsIDs, rhsIDs, lhs, rhs)
+	rewriteColumnsForJoin(ctx, src.JoinColumns.columns, lhsIDs, rhsIDs, lhs, rhs)
+}
+
+func rewriteColumnsForJoin(ctx *plancontext.PlanningContext, columns []applyJoinColumn, lhsIDs, rhsIDs semantics.TableSet, lhs, rhs *projector) {
+	for colIdx, predicate := range columns {
 		for lhsIdx, bve := range predicate.LHSExprs {
 			// since this is on the LHSExprs, we know that dependencies are from that side of the join
 			col := lhs.get(ctx, bve.Expr)
@@ -344,7 +368,8 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 		}
 		newOriginal := sqlparser.CopyOnRewrite(predicate.Original, pre, post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
 		predicate.Original = newOriginal
-		src.JoinPredicates.columns[colIdx] = predicate
+
+		columns[colIdx] = predicate
 	}
 }
 
@@ -369,11 +394,15 @@ func createProjectionWithTheseColumns(
 	if len(p.columns) == 0 {
 		return src
 	}
-	proj := createProjection(ctx, src)
+	proj := createProjection(ctx, src, "")
 	proj.Columns = AliasedProjections(p.columns)
 	if dt != nil {
 		kopy := *dt
-		kopy.Columns = p.columnAliases
+		if p.explicitColumnAliases {
+			kopy.Columns = slice.Map(p.columnAliases, func(s string) sqlparser.IdentifierCI {
+				return sqlparser.NewIdentifierCI(s)
+			})
+		}
 		proj.DT = &kopy
 	}
 
