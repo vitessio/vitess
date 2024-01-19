@@ -264,17 +264,14 @@ func (aj *ApplyJoin) addOffset(offset int) {
 }
 
 func (aj *ApplyJoin) ShortDescription() string {
-	columns := slice.Map(aj.JoinColumns.columns, func(jc applyJoinColumn) string {
-		return sqlparser.String(jc.Original)
-	})
-	predicates := slice.Map(aj.JoinPredicates.columns, func(jc applyJoinColumn) string {
-		rhs := sqlparser.String(jc.RHSExpr)
-		lhs := slice.Map(jc.LHSExprs, func(e BindVarExpr) string {
-			return sqlparser.String(e.Expr)
+	fn := func(cols *applyJoinColumns) string {
+		out := slice.Map(cols.columns, func(jc applyJoinColumn) string {
+			return jc.String()
 		})
-		return fmt.Sprintf("[%s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original))
-	})
-	firstPart := fmt.Sprintf("on %s columns: %s", strings.Join(predicates, ", "), strings.Join(columns, ", "))
+		return strings.Join(out, ", ")
+	}
+
+	firstPart := fmt.Sprintf("on %s columns: %s", fn(aj.JoinPredicates), fn(aj.JoinColumns))
 	if len(aj.ExtraLHSVars) == 0 {
 		return firstPart
 	}
@@ -363,6 +360,14 @@ func (a *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed s
 	}
 	needed = append(needed, slice.Map(a.ExtraLHSVars, f)...)
 	return ctx.SemTable.Uniquify(needed)
+}
+
+func (jc applyJoinColumn) String() string {
+	rhs := sqlparser.String(jc.RHSExpr)
+	lhs := slice.Map(jc.LHSExprs, func(e BindVarExpr) string {
+		return sqlparser.String(e.Expr)
+	})
+	return fmt.Sprintf("[%s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original))
 }
 
 func (jc applyJoinColumn) IsPureLeft() bool {
