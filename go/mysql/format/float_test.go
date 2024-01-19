@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,24 +14,29 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package maps2
+package format
 
-// Keys returns the keys of the map m.
-// The keys will be in an indeterminate order.
-func Keys[M ~map[K]V, K comparable, V any](m M) []K {
-	r := make([]K, 0, len(m))
-	for k := range m {
-		r = append(r, k)
-	}
-	return r
-}
+import (
+	"testing"
 
-// Values returns the values of the map m.
-// The values will be in an indeterminate order.
-func Values[M ~map[K]V, K comparable, V any](m M) []V {
-	r := make([]V, 0, len(m))
-	for _, v := range m {
-		r = append(r, v)
+	"github.com/stretchr/testify/assert"
+)
+
+func TestFormatFloat(t *testing.T) {
+	testCases := []struct {
+		input float64
+		want  []byte
+	}{
+		{123.456, []byte("123.456")},
+		{-1.13456e15, []byte("-1.13456e15")},
+		{2e15, []byte("2e15")},
+		{2e-15, []byte("0.000000000000002")},
+		{-1e-16, []byte("-1e-16")},
+		{0.0, []byte("0")},
 	}
-	return r
+
+	for _, tCase := range testCases {
+		got := FormatFloat(tCase.input)
+		assert.Equal(t, tCase.want, got)
+	}
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -99,8 +100,8 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 	return tokenizer.ParseTree, tokenizer.BindVars, nil
 }
 
-// convertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
-func convertMySQLVersionToCommentVersion(version string) (string, error) {
+// ConvertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
+func ConvertMySQLVersionToCommentVersion(version string) (string, error) {
 	var res = make([]int, 3)
 	idx := 0
 	val := ""
@@ -229,6 +230,22 @@ func (p *Parser) SplitStatement(blob string) (string, string, error) {
 	return blob, "", nil
 }
 
+// SplitStatements splits a given blob into multiple SQL statements.
+func (p *Parser) SplitStatements(blob string) (statements []Statement, err error) {
+	tokenizer := p.NewStringTokenizer(blob)
+	for {
+		stmt, err := ParseNext(tokenizer)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, err
+		}
+		statements = append(statements, stmt)
+	}
+	return statements, nil
+}
+
 // SplitStatementToPieces split raw sql statement that may have multi sql pieces to sql pieces
 // returns the sql pieces blob contains; or error if sql cannot be parsed
 func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error) {
@@ -306,7 +323,7 @@ func New(opts Options) (*Parser, error) {
 	if opts.MySQLServerVersion == "" {
 		opts.MySQLServerVersion = config.DefaultMySQLVersion
 	}
-	convVersion, err := convertMySQLVersionToCommentVersion(opts.MySQLServerVersion)
+	convVersion, err := ConvertMySQLVersionToCommentVersion(opts.MySQLServerVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +335,7 @@ func New(opts Options) (*Parser, error) {
 }
 
 func NewTestParser() *Parser {
-	convVersion, err := convertMySQLVersionToCommentVersion(config.DefaultMySQLVersion)
+	convVersion, err := ConvertMySQLVersionToCommentVersion(config.DefaultMySQLVersion)
 	if err != nil {
 		panic(err)
 	}
