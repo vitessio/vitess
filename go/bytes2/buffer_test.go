@@ -35,22 +35,20 @@ func TestBuffer(t *testing.T) {
 
 	// Test WriteByte function
 	b.WriteByte('e')
-	assert.Equal(t, "abcde", string(b.Bytes()), "WriteByte()")
-
-	// Test Bytes function
-	assert.Equal(t, "abcde", string(b.Bytes()))
-
-	// Test String function
-	assert.Equal(t, "abcde", b.String())
-
-	// Test StringUnsafe function
-	assert.Equal(t, "abcde", b.StringUnsafe())
-
-	// Test Len function
-	assert.Equal(t, 5, b.Len())
-
-	// Test Reset function
-	b.Reset()
-	assert.Equal(t, "", string(b.Bytes()))
-	assert.Equal(t, 0, b.Len())
+	want := "abcde"
+	if got := string(b.Bytes()); got != want {
+		t.Errorf("b.Bytes(): %s, want %s", got, want)
+	}
+	if got := b.String(); got != want {
+		t.Errorf("b.String(): %s, want %s", got, want)
+	}
+	if got := b.Len(); got != 5 {
+		t.Errorf("b.Len(): %d, want 5", got)
+	}
+	if got := b.StringUnsafe(); got != want {
+		t.Errorf("b.StringUnsafe(): %s, want %s", got, want)
+	}
+	if b.Reset(); len(b.bytes) != 0 {
+		t.Errorf("b.Reset(): got %s, want \"\"", b.bytes)
+	}
 }

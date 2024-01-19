@@ -100,8 +100,8 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 	return tokenizer.ParseTree, tokenizer.BindVars, nil
 }
 
-// convertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
-func convertMySQLVersionToCommentVersion(version string) (string, error) {
+// ConvertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
+func ConvertMySQLVersionToCommentVersion(version string) (string, error) {
 	var res = make([]int, 3)
 	idx := 0
 	val := ""
@@ -323,7 +323,7 @@ func New(opts Options) (*Parser, error) {
 	if opts.MySQLServerVersion == "" {
 		opts.MySQLServerVersion = config.DefaultMySQLVersion
 	}
-	convVersion, err := convertMySQLVersionToCommentVersion(opts.MySQLServerVersion)
+	convVersion, err := ConvertMySQLVersionToCommentVersion(opts.MySQLServerVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +335,7 @@ func New(opts Options) (*Parser, error) {
 }
 
 func NewTestParser() *Parser {
-	convVersion, err := convertMySQLVersionToCommentVersion(config.DefaultMySQLVersion)
+	convVersion, err := ConvertMySQLVersionToCommentVersion(config.DefaultMySQLVersion)
 	if err != nil {
 		panic(err)
 	}
