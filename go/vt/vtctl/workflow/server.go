@@ -1720,6 +1720,12 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 		tabletTypesStr = discovery.InOrderHint + tabletTypesStr
 	}
 
+	// This is a pointer so there's no ZeroValue in the message
+	// and an older v18 client will not provide it.
+	if req.MaxDiffDuration == nil {
+		req.MaxDiffDuration = &vttimepb.Duration{}
+	}
+
 	options := &tabletmanagerdatapb.VDiffOptions{
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			TabletTypes: tabletTypesStr,
