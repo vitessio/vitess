@@ -18,17 +18,21 @@ package vreplication
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // TestVtctldclientCLI tests the vreplication vtctldclient CLI commands, primarily to check that non-standard flags
@@ -84,11 +88,11 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 
 	workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", "customer", "show", "--workflow", "wf1")
 	require.NoError(t, err)
-	var moveTablesResponse vtctldata.GetWorkflowsResponse
+	var moveTablesResponse vtctldatapb.GetWorkflowsResponse
 	err = protojson.Unmarshal([]byte(moveTablesOutput), &moveTablesResponse)
 	require.NoError(t, err)
 
-	var workflowResponse vtctldata.GetWorkflowsResponse
+	var workflowResponse vtctldatapb.GetWorkflowsResponse
 	err = protojson.Unmarshal([]byte(workflowOutput), &workflowResponse)
 	require.NoError(t, err)
 
@@ -109,7 +113,7 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, workflowName string, targetTabs map[string]*cluster.VttabletProcess) {
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
 	(*mt).Start() // Need to start because we set auto-start to false.
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 	confirmNoRoutingRules(t)
 	for _, tab := range targetTabs {
 		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
@@ -119,11 +123,11 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	}
 	confirmNoRoutingRules(t)
 	(*mt).Start() // Need to start because we set stop-after-copy to true.
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	(*mt).Stop() // Test stopping workflow.
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 	(*mt).Start()
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	for _, tab := range targetTabs {
 		catchup(t, tab, workflowName, "MoveTables")
 	}
@@ -147,11 +151,11 @@ func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, t
 	switchFlags := []string{"--enable-reverse-replication=false"}
 	mt := createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags, switchFlags)
 	mt.Start() // Need to start because we set stop-after-copy to true.
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	mt.Stop() // Test stopping workflow.
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Stopped.String())
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 	mt.Start()
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdata.VReplicationWorkflowState_Running.String())
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	for _, tab := range targetTabs {
 		catchup(t, tab, workflowName, "MoveTables")
 	}
@@ -199,10 +203,10 @@ func checkTablesExist(t *testing.T, tabletAlias string, tables []string) bool {
 	return true
 }
 
-func getRoutingRules(t *testing.T) *vschema.RoutingRules {
+func getRoutingRules(t *testing.T) *vschemapb.RoutingRules {
 	routingRules, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
-	var routingRulesResponse vschema.RoutingRules
+	var routingRulesResponse vschemapb.RoutingRules
 	err = protojson.Unmarshal([]byte(routingRules), &routingRulesResponse)
 	require.NoError(t, err)
 	return &routingRulesResponse
@@ -219,11 +223,11 @@ func confirmRoutingRulesExist(t *testing.T) {
 
 // We only want to validate non-standard attributes that are set by the CLI. The other end-to-end tests validate the rest.
 // We also check some of the standard attributes to make sure they are set correctly.
-func validateWorkflow1(t *testing.T, workflows []*vtctldata.Workflow) {
+func validateWorkflow1(t *testing.T, workflows []*vtctldatapb.Workflow) {
 	require.Equal(t, 1, len(workflows))
 	wf := workflows[0]
 	require.Equal(t, "wf1", wf.Name)
-	require.Equal(t, "MoveTables", wf.WorkflowType)
+	require.Equal(t, binlogdatapb.VReplicationWorkflowType_MoveTables.String(), wf.WorkflowType)
 	require.Equal(t, "None", wf.WorkflowSubType)
 	require.Equal(t, "customer", wf.Target.Keyspace)
 	require.Equal(t, 2, len(wf.Target.Shards))
@@ -231,20 +235,18 @@ func validateWorkflow1(t *testing.T, workflows []*vtctldata.Workflow) {
 	require.Equal(t, 1, len(wf.Source.Shards))
 	require.False(t, wf.DeferSecondaryKeys)
 
-	var oneStream *vtctldata.Workflow_ShardStream
-	for _, stream := range wf.ShardStreams {
-		oneStream = stream
-		break
-	}
+	require.GreaterOrEqual(t, len(wf.ShardStreams), int(1))
+	oneStream := maps.Values(wf.ShardStreams)[0]
 	require.NotNil(t, oneStream)
 
 	stream := oneStream.Streams[0]
-	require.Equal(t, "Stopped", stream.State)
-	require.Equal(t, "in_order:primary,rdonly", stream.TabletTypes)
-	require.Equal(t, "zone1,zone2", stream.Cells)
+	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Stopped.String(), stream.State)
+	require.Equal(t, stream.TabletSelectionPreference, tabletmanagerdatapb.TabletSelectionPreference_INORDER)
+	require.True(t, slices.Equal([]topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_RDONLY}, stream.TabletTypes))
+	require.True(t, slices.Equal([]string{"zone1", "zone2"}, stream.Cells))
 
 	bls := stream.BinlogSource
 	require.Equalf(t, 1, len(bls.Filter.Rules), "Rules are %+v", bls.Filter.Rules) // only customer, customer2 should be excluded
-	require.Equal(t, binlogdata.OnDDLAction_STOP, bls.OnDdl)
+	require.Equal(t, binlogdatapb.OnDDLAction_STOP, bls.OnDdl)
 	require.True(t, bls.StopAfterCopy)
 }

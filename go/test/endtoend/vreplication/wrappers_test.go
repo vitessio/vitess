@@ -20,11 +20,10 @@ import (
 	"math/rand"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/wrangler"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/wrangler"
 )
 
 type iWorkflow interface {
