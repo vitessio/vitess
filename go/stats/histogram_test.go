@@ -20,7 +20,7 @@ import (
 	"expvar"
 	"testing"
 
-	"github.com/magiconair/properties/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHistogram(t *testing.T) {
@@ -70,6 +70,7 @@ func TestInvalidGenericHistogram(t *testing.T) {
 	// Use a deferred function to capture the panic that the code should throw
 	defer func() {
 		r := recover()
+		assert.NotNil(t, r)
 		assert.Equal(t, r, "mismatched cutoff and label lengths")
 	}()
 
