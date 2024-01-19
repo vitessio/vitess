@@ -190,6 +190,48 @@ func TestParseInt64(t *testing.T) {
 			expected: 42,
 			err:      `unparsed tail left after parsing int64 from "\t 42 \n": "\n"`,
 		},
+		{
+			input:    "",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse int64 from empty string`,
+		},
+		{
+			input:    "256",
+			base:     1,
+			expected: 0,
+			err:      `invalid base 1; must be in [2, 36]`,
+		},
+		{
+			input:    "256",
+			base:     37,
+			expected: 0,
+			err:      `invalid base 37; must be in [2, 36]`,
+		},
+		{
+			input:    "  -",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse int64 from "  -"`,
+		},
+		{
+			input:    "-18446744073709551615",
+			base:     10,
+			expected: -9223372036854775808,
+			err:      `cannot parse int64 from "-18446744073709551615": overflow`,
+		},
+		{
+			input:    "  ",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse int64 from "  "`,
+		},
+		{
+			input:    "  :",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse int64 from "  :"`,
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.input, func(t *testing.T) {
@@ -325,6 +367,36 @@ func TestParseUint64(t *testing.T) {
 			base:     10,
 			expected: 42,
 			err:      `unparsed tail left after parsing uint64 from "\t 42 \n": "\n"`,
+		},
+		{
+			input:    "",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from empty string`,
+		},
+		{
+			input:    "256",
+			base:     1,
+			expected: 0,
+			err:      `invalid base 1; must be in [2, 36]`,
+		},
+		{
+			input:    "256",
+			base:     37,
+			expected: 0,
+			err:      `invalid base 37; must be in [2, 36]`,
+		},
+		{
+			input:    "  ",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "  "`,
+		},
+		{
+			input:    "  :",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "  :"`,
 		},
 	}
 	for _, tc := range testcases {
