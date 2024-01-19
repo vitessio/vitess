@@ -6,8 +6,7 @@
   - **[Dropping Support for MySQL 5.7](#drop-support-mysql57)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [VTTablet Flags](#vttablet-flags)
-  - **[Docker](#docker)**
-    - [New MySQL Image](#mysql-image)
+    - [MySQL binary in vitess/lite Docker image](#mysql-binary-in-lite-image)
   - **[New Stats](#new-stats)**
     - [Stream Consolidations](#stream-consolidations)
     - [Build Version in `/debug/vars`](#build-version-in-debug-vars)
@@ -44,16 +43,24 @@ Vitess will however, continue to support importing from MySQL 5.7 into Vitess ev
 `--vreplication_healthcheck_topology_refresh`, `--vreplication_healthcheck_retry_delay`, and `--vreplication_healthcheck_timeout`.
 - The `--vreplication_tablet_type` flag is now deprecated and ignored.
 
+#### <a id="mysql-binary-in-lite-image"/>MySQL binary in vitess/lite Docker image
 
-### <a id="docker"/>Docker
+The `mysqld` binary is now deprecated in the `vitess/lite` Docker image and will be removed in a future release.
 
-#### <a id="mysql-image"/>New MySQL Image
+If you are currently using `vitess/lite` as your `mysqld` image in your vitess-operator deployment we invite you to use an official MySQL image such as `mysql:8.0.30`.
 
-In `v19.0` the Vitess team is shipping a new image: `vitess/mysql`.
-This lightweight image is a replacement of `vitess/lite` to only run `mysqld`.
+Below is an example of a kubernetes yaml file before and after upgrading to an official MySQL image:
 
-Several tags are available to let you choose what version of MySQL you want to use: `vitess/mysql:8.0.30`, `vitess/mysql:8.0.34`.
-
+```yaml
+# before
+    mysqld:
+      mysql80Compatible: vitess/lite:19.0.0
+```
+```yaml
+# after
+    mysqld:
+      mysql80Compatible: mysql:8.0.30 # or even mysql:8.0.34 for instance
+```
 
 ### <a id="new-stats"/>New Stats
 
