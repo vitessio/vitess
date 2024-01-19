@@ -112,8 +112,9 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to parse --tablet-path: %w", err)
 	}
 
+	mysqlVersion := servenv.MySQLServerVersion()
 	parser, err := sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
+		MySQLServerVersion: mysqlVersion,
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
@@ -121,7 +122,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot initialize sql parser: %w", err)
 	}
 
-	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
+	collationEnv := collations.NewEnvironment(mysqlVersion)
 	// config and mycnf initializations are intertwined.
 	config, mycnf, err := initConfig(tabletAlias, collationEnv)
 	if err != nil {
@@ -129,7 +130,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	ts := topo.Open()
-	qsc, err := createTabletServer(context.Background(), config, ts, tabletAlias, collationEnv, parser)
+	qsc, err := createTabletServer(context.Background(), config, ts, tabletAlias, collationEnv, parser, mysqlVersion)
 	if err != nil {
 		ts.Close()
 		return err
@@ -142,9 +143,8 @@ func run(cmd *cobra.Command, args []string) error {
 		ts.Close()
 		return fmt.Errorf("failed to extract online DDL binaries: %w", err)
 	}
-
 	parser, err = sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
+		MySQLServerVersion: mysqlVersion,
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
@@ -168,10 +168,11 @@ func run(cmd *cobra.Command, args []string) error {
 		DBConfigs:           config.DB.Clone(),
 		QueryServiceControl: qsc,
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine(), parser),
-		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler(), collationEnv, parser),
+		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler(), collationEnv, parser, mysqlVersion),
 		VDiffEngine:         vdiff.NewEngine(ts, tablet, collationEnv, parser),
 		CollationEnv:        collationEnv,
 		SQLParser:           parser,
+		MySQLVersion:        mysqlVersion,
 	}
 	if err := tm.Start(tablet, config); err != nil {
 		ts.Close()
@@ -259,7 +260,7 @@ func extractOnlineDDL() error {
 	return nil
 }
 
-func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser) (*tabletserver.TabletServer, error) {
+func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) (*tabletserver.TabletServer, error) {
 	if tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
@@ -268,7 +269,7 @@ func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts 
 	}
 
 	// creates and registers the query service
-	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias, collationEnv, parser)
+	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias, collationEnv, parser, mysqlVersion)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)

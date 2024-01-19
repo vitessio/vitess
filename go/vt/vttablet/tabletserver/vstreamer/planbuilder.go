@@ -58,6 +58,7 @@ type Plan struct {
 	Filters []Filter
 
 	collationEnv *collations.Environment
+	mysqlVersion string
 }
 
 // Opcode enumerates the operators supported in a where clause
@@ -346,7 +347,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 	return ruleMatches(table.Name.String(), filter)
 }
 
-func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter, collationEnv *collations.Environment, parser *sqlparser.Parser) (*Plan, error) {
+func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) (*Plan, error) {
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):
@@ -358,9 +359,9 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter, co
 			if !result {
 				continue
 			}
-			return buildREPlan(ti, vschema, rule.Filter, collationEnv)
+			return buildREPlan(ti, vschema, rule.Filter, collationEnv, mysqlVersion)
 		case rule.Match == ti.Name:
-			return buildTablePlan(ti, vschema, rule.Filter, collationEnv, parser)
+			return buildTablePlan(ti, vschema, rule.Filter, collationEnv, parser, mysqlVersion)
 		}
 	}
 	return nil, nil
@@ -368,10 +369,11 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter, co
 
 // buildREPlan handles cases where Match has a regular expression.
 // If so, the Filter can be an empty string or a keyrange, like "-80".
-func buildREPlan(ti *Table, vschema *localVSchema, filter string, collationEnv *collations.Environment) (*Plan, error) {
+func buildREPlan(ti *Table, vschema *localVSchema, filter string, collationEnv *collations.Environment, mysqlVersion string) (*Plan, error) {
 	plan := &Plan{
 		Table:        ti,
 		collationEnv: collationEnv,
+		mysqlVersion: mysqlVersion,
 	}
 	plan.ColExprs = make([]ColExpr, len(ti.Fields))
 	for i, col := range ti.Fields {
@@ -412,7 +414,7 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string, collationEnv *
 
 // BuildTablePlan handles cases where a specific table name is specified.
 // The filter must be a select statement.
-func buildTablePlan(ti *Table, vschema *localVSchema, query string, collationEnv *collations.Environment, parser *sqlparser.Parser) (*Plan, error) {
+func buildTablePlan(ti *Table, vschema *localVSchema, query string, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) (*Plan, error) {
 	sel, fromTable, err := analyzeSelect(query, parser)
 	if err != nil {
 		log.Errorf("%s", err.Error())
@@ -426,6 +428,7 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string, collationEnv
 	plan := &Plan{
 		Table:        ti,
 		collationEnv: collationEnv,
+		mysqlVersion: mysqlVersion,
 	}
 	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
 		log.Errorf("%s", err.Error())
@@ -539,11 +542,12 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			pv, err := evalengine.Translate(val, &evalengine.Config{
 				Collation:    plan.collationEnv.DefaultConnectionCharset(),
 				CollationEnv: plan.collationEnv,
+				MySQLVersion: plan.mysqlVersion,
 			})
 			if err != nil {
 				return err
 			}
-			env := evalengine.EmptyExpressionEnv(plan.collationEnv)
+			env := evalengine.EmptyExpressionEnv(plan.collationEnv, plan.mysqlVersion)
 			resolved, err := env.Evaluate(pv)
 			if err != nil {
 				return err

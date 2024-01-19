@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -49,6 +50,7 @@ type VSchemaWrapper struct {
 	Version               plancontext.PlannerVersion
 	EnableViews           bool
 	TestBuilder           func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
+	MySQLServerVersion    string
 }
 
 func (vw *VSchemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
@@ -132,6 +134,13 @@ func (vw *VSchemaWrapper) CollationEnv() *collations.Environment {
 
 func (vw *VSchemaWrapper) SQLParser() *sqlparser.Parser {
 	return sqlparser.NewTestParser()
+}
+
+func (vw *VSchemaWrapper) MySQLVersion() string {
+	if vw.MySQLServerVersion == "" {
+		return config.DefaultMySQLVersion
+	}
+	return vw.MySQLServerVersion
 }
 
 func (vw *VSchemaWrapper) PlannerWarning(_ string) {

@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -44,8 +45,8 @@ import (
 func TestHealthStreamerClosed(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	config := newConfig(db)
-	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	cfg := newConfig(db)
+	env := tabletenv.NewEnv(cfg, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -69,10 +70,10 @@ func newConfig(db *fakesqldb.DB) *tabletenv.TabletConfig {
 func TestNotServingPrimaryNoWrite(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	config := newConfig(db)
-	config.SignalWhenSchemaChange = true
+	cfg := newConfig(db)
+	cfg.SignalWhenSchemaChange = true
 
-	env := tabletenv.NewEnv(config, "TestNotServingPrimary", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(cfg, "TestNotServingPrimary", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -80,7 +81,7 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 	// Create a new health streamer and set it to a serving primary state
 	hs := newHealthStreamer(env, alias, &schema.Engine{})
 	hs.isServingPrimary = true
-	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
+	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, cfg.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
 	target := &querypb.Target{}
@@ -100,17 +101,17 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 func TestHealthStreamerBroadcast(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	config := newConfig(db)
-	config.SignalWhenSchemaChange = false
+	cfg := newConfig(db)
+	cfg.SignalWhenSchemaChange = false
 
-	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(cfg, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias, &schema.Engine{})
-	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
+	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, cfg.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
 	target := &querypb.Target{}
@@ -214,11 +215,11 @@ func TestReloadSchema(t *testing.T) {
 			defer cancel()
 			db := fakesqldb.New(t)
 			defer db.Close()
-			config := newConfig(db)
-			config.SignalWhenSchemaChange = testcase.enableSchemaChange
-			config.SchemaReloadInterval = 100 * time.Millisecond
+			cfg := newConfig(db)
+			cfg.SignalWhenSchemaChange = testcase.enableSchemaChange
+			cfg.SchemaReloadInterval = 100 * time.Millisecond
 
-			env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
+			env := tabletenv.NewEnv(cfg, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 			alias := &topodatapb.TabletAlias{
 				Cell: "cell",
 				Uid:  1,
@@ -228,7 +229,7 @@ func TestReloadSchema(t *testing.T) {
 			hs := newHealthStreamer(env, alias, se)
 
 			target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-			configs := config.DB
+			configs := cfg.DB
 
 			db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -329,18 +330,18 @@ func TestReloadView(t *testing.T) {
 	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
-	config := newConfig(db)
-	config.SignalWhenSchemaChange = true
-	config.SchemaReloadInterval = 100 * time.Millisecond
-	config.EnableViews = true
+	cfg := newConfig(db)
+	cfg.SignalWhenSchemaChange = true
+	cfg.SchemaReloadInterval = 100 * time.Millisecond
+	cfg.EnableViews = true
 
-	env := tabletenv.NewEnv(config, "TestReloadView", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(cfg, "TestReloadView", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
 	se := schema.NewEngine(env)
 	hs := newHealthStreamer(env, alias, se)
 
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	configs := config.DB
+	configs := cfg.DB
 
 	db.AddQueryPattern("SELECT UNIX_TIMESTAMP()"+".*", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(

@@ -363,7 +363,7 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPla
 	if err != nil {
 		return nil, err
 	}
-	splan, err := planbuilder.Build(statement, curSchema.tables, qe.env.Config().DB.DBName, qe.env.Config().EnableViews, qe.env.CollationEnv())
+	splan, err := planbuilder.Build(statement, curSchema.tables, qe.env.Config().DB.DBName, qe.env.Config().EnableViews, qe.env.CollationEnv(), qe.env.MySQLVersion())
 	if err != nil {
 		return nil, err
 	}

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -37,13 +38,13 @@ func TestReplTracker(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 
-	config := tabletenv.NewDefaultConfig()
-	config.ReplicationTracker.Mode = tabletenv.Heartbeat
-	config.ReplicationTracker.HeartbeatInterval = time.Second
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.ReplicationTracker.Mode = tabletenv.Heartbeat
+	cfg.ReplicationTracker.HeartbeatInterval = time.Second
 	params := db.ConnParams()
 	cp := *params
-	config.DB = dbconfigs.NewTestDBConfigs(cp, cp, "")
-	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	cfg.DB = dbconfigs.NewTestDBConfigs(cp, cp, "")
+	env := tabletenv.NewEnv(cfg, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -80,7 +81,7 @@ func TestReplTracker(t *testing.T) {
 	assert.False(t, rt.hw.isOpen)
 	assert.False(t, rt.hr.isOpen)
 
-	config.ReplicationTracker.Mode = tabletenv.Polling
+	cfg.ReplicationTracker.Mode = tabletenv.Polling
 	rt = NewReplTracker(env, alias)
 	rt.InitDBConfig(target, mysqld)
 	assert.Equal(t, tabletenv.Polling, rt.mode)

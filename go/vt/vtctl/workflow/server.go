@@ -147,16 +147,18 @@ type Server struct {
 	sem          *semaphore.Weighted
 	collationEnv *collations.Environment
 	parser       *sqlparser.Parser
+	mysqlVersion string
 }
 
 // NewServer returns a new server instance with the given topo.Server and
 // TabletManagerClient.
-func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient, collationEnv *collations.Environment, parser *sqlparser.Parser) *Server {
+func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *Server {
 	return &Server{
 		ts:           ts,
 		tmc:          tmc,
 		collationEnv: collationEnv,
 		parser:       parser,
+		mysqlVersion: mysqlVersion,
 	}
 }
 
@@ -166,6 +168,10 @@ func (s *Server) SQLParser() *sqlparser.Parser {
 
 func (s *Server) CollationEnv() *collations.Environment {
 	return s.collationEnv
+}
+
+func (s *Server) MySQLVersion() string {
+	return s.mysqlVersion
 }
 
 // CheckReshardingJournalExistsOnTablet returns the journal (or an empty
@@ -1346,6 +1352,7 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		ms:           ms,
 		parser:       s.SQLParser(),
 		collationEnv: s.CollationEnv(),
+		mysqlVersion: s.MySQLVersion(),
 	}
 
 	err := mz.createMaterializerStreams()
@@ -1486,6 +1493,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		workflowType: workflowType,
 		collationEnv: s.CollationEnv(),
 		parser:       s.SQLParser(),
+		mysqlVersion: s.MySQLVersion(),
 	}
 	err = mz.createMoveTablesStreams(req)
 	if err != nil {
@@ -1726,6 +1734,21 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	tabletTypesStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
 	if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
 		tabletTypesStr = discovery.InOrderHint + tabletTypesStr
+	}
+
+	// This is a pointer so there's no ZeroValue in the message
+	// and an older v18 client will not provide it.
+	if req.MaxDiffDuration == nil {
+		req.MaxDiffDuration = &vttimepb.Duration{}
+	}
+	// The other vttime.Duration vars should not be nil as the
+	// client should always provide them, but we check anyway to
+	// be safe.
+	if req.FilteredReplicationWaitTime == nil {
+		req.FilteredReplicationWaitTime = &vttimepb.Duration{}
+	}
+	if req.WaitUpdateInterval == nil {
+		req.WaitUpdateInterval = &vttimepb.Duration{}
 	}
 
 	options := &tabletmanagerdatapb.VDiffOptions{

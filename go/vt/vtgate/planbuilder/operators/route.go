@@ -121,7 +121,7 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 	}
 	nr := &NoneRouting{keyspace: ks}
 
-	if isConstantFalse(expr, ctx.VSchema.ConnCollation(), ctx.VSchema.CollationEnv()) {
+	if isConstantFalse(expr, ctx.VSchema.ConnCollation(), ctx.VSchema.CollationEnv(), ctx.VSchema.MySQLVersion()) {
 		return nr
 	}
 
@@ -165,11 +165,12 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 
 // isConstantFalse checks whether this predicate can be evaluated at plan-time. If it returns `false` or `null`,
 // we know that the query will not return anything, and this can be used to produce better plans
-func isConstantFalse(expr sqlparser.Expr, collation collations.ID, collationEnv *collations.Environment) bool {
-	eenv := evalengine.EmptyExpressionEnv(collationEnv)
+func isConstantFalse(expr sqlparser.Expr, collation collations.ID, collationEnv *collations.Environment, mysqlVersion string) bool {
+	eenv := evalengine.EmptyExpressionEnv(collationEnv, mysqlVersion)
 	eexpr, err := evalengine.Translate(expr, &evalengine.Config{
 		Collation:    collation,
 		CollationEnv: collationEnv,
+		MySQLVersion: mysqlVersion,
 	})
 	if err != nil {
 		return false
@@ -261,7 +262,9 @@ func (option *VindexOption) updateWithNewColumn(
 	opcode func(*vindexes.ColumnVindex) engine.Opcode,
 ) bool {
 	option.ColsSeen[colLoweredName] = true
-	option.ValueExprs = append(option.ValueExprs, valueExpr)
+	if valueExpr != nil {
+		option.ValueExprs = append(option.ValueExprs, valueExpr)
+	}
 	option.Values[indexOfCol] = value
 	option.Predicates[indexOfCol] = node
 	option.Ready = len(option.ColsSeen) == len(colVindex.Columns)

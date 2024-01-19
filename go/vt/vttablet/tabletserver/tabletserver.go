@@ -131,10 +131,15 @@ type TabletServer struct {
 
 	collationEnv *collations.Environment
 	parser       *sqlparser.Parser
+	mysqlVersion string
 }
 
 func (tsv *TabletServer) SQLParser() *sqlparser.Parser {
 	return tsv.parser
+}
+
+func (tsv *TabletServer) MySQLVersion() string {
+	return tsv.mysqlVersion
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -145,8 +150,8 @@ var _ queryservice.QueryService = (*TabletServer)(nil)
 var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(ctx context.Context, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser) *TabletServer {
-	return NewTabletServer(ctx, name, tabletenv.NewCurrentConfig(), topoServer, alias, collationEnv, parser)
+func NewServer(ctx context.Context, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *TabletServer {
+	return NewTabletServer(ctx, name, tabletenv.NewCurrentConfig(), topoServer, alias, collationEnv, parser, mysqlVersion)
 }
 
 var (
@@ -156,7 +161,7 @@ var (
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser) *TabletServer {
+func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *TabletServer {
 	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
 		exporter:               exporter,
@@ -169,6 +174,7 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		alias:                  alias.CloneVT(),
 		collationEnv:           collationEnv,
 		parser:                 parser,
+		mysqlVersion:           mysqlVersion,
 	}
 	tsv.QueryTimeout.Store(config.Oltp.QueryTimeout.Nanoseconds())
 
@@ -232,6 +238,8 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 	tsv.registerHealthzHealthHandler()
 	tsv.registerDebugHealthHandler()
 	tsv.registerQueryzHandler()
+	tsv.registerQuerylogzHandler()
+	tsv.registerTxlogzHandler()
 	tsv.registerQueryListHandlers([]*QueryList{tsv.statelessql, tsv.statefulql, tsv.olapql})
 	tsv.registerTwopczHandler()
 	tsv.registerMigrationStatusHandler()
@@ -1843,6 +1851,18 @@ func (tsv *TabletServer) registerQueryzHandler() {
 	tsv.exporter.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
 		queryzHandler(tsv.qe, w, r)
 	})
+}
+
+func (tsv *TabletServer) registerQuerylogzHandler() {
+	tsv.exporter.HandleFunc("/querylogz", func(w http.ResponseWriter, r *http.Request) {
+		ch := tabletenv.StatsLogger.Subscribe("querylogz")
+		defer tabletenv.StatsLogger.Unsubscribe(ch)
+		querylogzHandler(ch, w, r, tsv.parser)
+	})
+}
+
+func (tsv *TabletServer) registerTxlogzHandler() {
+	tsv.exporter.HandleFunc("/txlogz", txlogzHandler)
 }
 
 func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {

@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/discovery"
@@ -51,7 +52,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
@@ -205,7 +206,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
 
 	// Create a primary, a couple good replicas
 	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
