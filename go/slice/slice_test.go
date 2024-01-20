@@ -188,8 +188,12 @@ func TestMapWithError(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := MapWithError(tc.input, tc.fn)
-			assert.Equal(t, tc.expected, result, "MapWithError should return the expected result")
-			assert.Equal(t, tc.err, err, "MapWithError should return the expected error")
+			if err == nil {
+				assert.Equal(t, tc.expected, result, "MapWithError should return the expected result")
+			} else {
+				assert.Errorf(t, err, "MapWithError should return an error for test case %s", tc.name)
+				assert.Equal(t, tc.err, err, "MapWithError should return the expected error")
+			}
 		})
 	}
 }
