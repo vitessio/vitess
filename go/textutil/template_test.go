@@ -39,13 +39,13 @@ func TestExecuteTemplate(t *testing.T) {
 }
 
 func TestExecuteTemplateWithError(t *testing.T) {
-	invalidTemplate := "{{.UndefinedVariable}}"
-	inputData := struct{ Name string }{Name: "foo"}
+	templText := "{{.UndefinedVariable}}"
+	invalidInput := struct{ Name string }{Name: "foo"}
 
-	tmpl, err := template.New("test").Parse(invalidTemplate)
+	tmpl, err := template.New("test").Parse(templText)
 	require.NoError(t, err)
 
-	result, err := ExecuteTemplate(tmpl, inputData)
+	result, err := ExecuteTemplate(tmpl, invalidInput)
 	assert.Error(t, err)
 	assert.Equal(t, "", result)
 }
