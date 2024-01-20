@@ -48,7 +48,7 @@ func TestParsePermMode(t *testing.T) {
 	assert.Equal(t, int32(0), ParsePermMode("zk"))
 	assert.Equal(t, int32(zk.PermRead|zk.PermWrite), ParsePermMode("zkrw"))
 	assert.Equal(t, int32(zk.PermRead|zk.PermWrite|zk.PermAdmin), ParsePermMode("zkrwa"))
-	assert.PanicsWithError(t, "invalid mode", func() {
+	assert.PanicsWithValue(t, "invalid mode", func() {
 		ParsePermMode("")
 		ParsePermMode("z")
 	})
