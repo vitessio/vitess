@@ -76,11 +76,8 @@ func (p *projector) get(ctx *plancontext.PlanningContext, expr sqlparser.Expr) s
 func (p *projector) claimUnusedAlias(ae *sqlparser.AliasedExpr) string {
 	bare := ae.ColumnName()
 	alias := bare
-	var i int64 = 0
-
-	for slices.Index(p.columnAliases, alias) > -1 {
+	for i := int64(0); slices.Index(p.columnAliases, alias) > -1; i++ {
 		alias = bare + strconv.FormatInt(i, 10)
-		i++
 	}
 	return alias
 }
