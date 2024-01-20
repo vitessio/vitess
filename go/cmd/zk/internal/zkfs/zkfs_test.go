@@ -1,0 +1,79 @@
+package zkfs
+
+import (
+	"os"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/z-division/go-zookeeper/zk"
+)
+
+func TestFS_CopyContext(t *testing.T) {
+	// fs := &FS{}
+
+	// Create a temporary directories for testing
+	srcPath, err := os.MkdirTemp("", "source")
+	assert.NoError(t, err)
+	defer os.RemoveAll(srcPath)
+
+	dstPath, err := os.MkdirTemp("", "destination")
+	assert.NoError(t, err)
+	defer os.RemoveAll(dstPath)
+
+}
+
+func TestIsFile(t *testing.T) {
+	assert.True(t, IsFile("/zk/somepath"))
+	assert.False(t, IsFile("/nonzk/somepath"))
+	assert.False(t, IsFile("nonzkpath"))
+}
+
+func TestParsePermMode(t *testing.T) {
+	assert.Equal(t, int32(0), ParsePermMode("zk"))
+	assert.Equal(t, int32(zk.PermRead|zk.PermWrite), ParsePermMode("zkrw"))
+	assert.Equal(t, int32(zk.PermRead|zk.PermWrite|zk.PermAdmin), ParsePermMode("zkrwa"))
+	assert.PanicsWithError(t, "invalid mode", func() {
+		ParsePermMode("")
+		ParsePermMode("z")
+	})
+}
+
+func TestFormatACL(t *testing.T) {
+	testCases := []struct {
+		name     string
+		acl      zk.ACL
+		expected string
+	}{
+		{
+			name:     "Full Permissions",
+			acl:      zk.ACL{Perms: zk.PermAll},
+			expected: "rwdca",
+		},
+		{
+			name:     "Read and Write Permissions",
+			acl:      zk.ACL{Perms: zk.PermRead | zk.PermWrite},
+			expected: "rw---",
+		},
+		{
+			name:     "No Permissions",
+			acl:      zk.ACL{Perms: 0},
+			expected: "-----",
+		},
+		{
+			name:     "Create and Admin Permissions",
+			acl:      zk.ACL{Perms: zk.PermAdmin | zk.PermCreate},
+			expected: "---ca",
+		},
+		{
+			name:     "Mixed Permissions",
+			acl:      zk.ACL{Perms: zk.PermRead | zk.PermDelete | zk.PermAdmin},
+			expected: "r-d-a",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, FormatACL(tc.acl))
+		})
+	}
+}
