@@ -20,11 +20,10 @@ import (
 	"math/rand"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/wrangler"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/wrangler"
 )
 
 type iWorkflow interface {
@@ -37,6 +36,9 @@ type iWorkflow interface {
 	Cancel()
 	Complete()
 	Flavor() string
+	GetLastOutput() string
+	Start()
+	Stop()
 }
 
 type workflowFlavor int
@@ -72,6 +74,11 @@ type moveTablesWorkflow struct {
 	tables         string
 	atomicCopy     bool
 	sourceShards   string
+	createFlags    []string // currently only used by vtctld
+
+	lastOutput    string
+	completeFlags []string
+	switchFlags   []string
 }
 
 type iMoveTables interface {
@@ -157,6 +164,18 @@ func (vmt *VtctlMoveTables) Complete() {
 	vmt.exec(workflowActionComplete)
 }
 
+func (vmt *VtctlMoveTables) GetLastOutput() string {
+	return vmt.lastOutput
+}
+
+func (vmt *VtctlMoveTables) Start() {
+	panic("implement me")
+}
+
+func (vmt *VtctlMoveTables) Stop() {
+	panic("implement me")
+}
+
 var _ iMoveTables = (*VtctldMoveTables)(nil)
 
 type VtctldMoveTables struct {
@@ -174,8 +193,9 @@ func (v VtctldMoveTables) Flavor() string {
 func (v VtctldMoveTables) exec(args ...string) {
 	args2 := []string{"MoveTables", "--workflow=" + v.workflowName, "--target-keyspace=" + v.targetKeyspace}
 	args2 = append(args2, args...)
-	if err := vc.VtctldClient.ExecuteCommand(args2...); err != nil {
-		v.vc.t.Fatalf("failed to create MoveTables workflow: %v", err)
+	var err error
+	if v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...); err != nil {
+		require.FailNowf(v.vc.t, "failed MoveTables action", "%v: %s", err, v.lastOutput)
 	}
 }
 
@@ -192,11 +212,14 @@ func (v VtctldMoveTables) Create() {
 	if v.sourceShards != "" {
 		args = append(args, "--source-shards="+v.sourceShards)
 	}
+	args = append(args, v.createFlags...)
 	v.exec(args...)
 }
 
 func (v VtctldMoveTables) SwitchReadsAndWrites() {
-	v.exec("SwitchTraffic")
+	args := []string{"SwitchTraffic"}
+	args = append(args, v.switchFlags...)
+	v.exec(args...)
 }
 
 func (v VtctldMoveTables) ReverseReadsAndWrites() {
@@ -204,8 +227,7 @@ func (v VtctldMoveTables) ReverseReadsAndWrites() {
 }
 
 func (v VtctldMoveTables) Show() {
-	//TODO implement me
-	panic("implement me")
+	v.exec("Show")
 }
 
 func (v VtctldMoveTables) SwitchReads() {
@@ -223,7 +245,21 @@ func (v VtctldMoveTables) Cancel() {
 }
 
 func (v VtctldMoveTables) Complete() {
-	v.exec("Complete")
+	args := []string{"Complete"}
+	args = append(args, v.completeFlags...)
+	v.exec(args...)
+}
+
+func (v VtctldMoveTables) GetLastOutput() string {
+	return v.lastOutput
+}
+
+func (v VtctldMoveTables) Start() {
+	v.exec("Start")
+}
+
+func (v VtctldMoveTables) Stop() {
+	v.exec("Stop")
 }
 
 // Reshard wrappers
@@ -233,6 +269,8 @@ type reshardWorkflow struct {
 	sourceShards   string
 	targetShards   string
 	skipSchemaCopy bool
+
+	lastOutput string
 }
 
 type iReshard interface {
@@ -312,6 +350,18 @@ func (vrs *VtctlReshard) Complete() {
 	vrs.exec(workflowActionComplete)
 }
 
+func (vrs *VtctlReshard) GetLastOutput() string {
+	return vrs.lastOutput
+}
+
+func (vrs *VtctlReshard) Start() {
+	panic("implement me")
+}
+
+func (vrs *VtctlReshard) Stop() {
+	panic("implement me")
+}
+
 var _ iReshard = (*VtctldReshard)(nil)
 
 type VtctldReshard struct {
@@ -377,4 +427,16 @@ func (v VtctldReshard) Cancel() {
 
 func (v VtctldReshard) Complete() {
 	v.exec("Complete")
+}
+
+func (v VtctldReshard) GetLastOutput() string {
+	return v.lastOutput
+}
+
+func (vrs *VtctldReshard) Start() {
+	vrs.exec("Start")
+}
+
+func (vrs *VtctldReshard) Stop() {
+	vrs.exec("Stop")
 }

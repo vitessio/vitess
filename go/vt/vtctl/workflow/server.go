@@ -422,7 +422,9 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			defer_secondary_keys,
 			component_throttled,
 			time_throttled,
-			rows_copied
+			rows_copied,
+			tablet_types,
+			cell
 		FROM
 			_vt.vreplication
 		%s`,
@@ -533,7 +535,6 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
 			return err
 		}
-
 		// The value in the pos column can be compressed and thus not
 		// have a valid GTID consisting of valid UTF-8 characters so we
 		// have to decode it so that it's properly decompressed first
@@ -596,15 +597,31 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			return err
 		}
 
+		tabletTypes, inOrder, err := discovery.ParseTabletTypesAndOrder(row["tablet_types"].ToString())
+		if err != nil {
+			return err
+		}
+		tsp := tabletmanagerdatapb.TabletSelectionPreference_ANY
+		if inOrder {
+			tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+		}
+		cells := strings.Split(row["cell"].ToString(), ",")
+		for i, cell := range cells {
+			cells[i] = strings.TrimSpace(cell)
+		}
+
 		stream := &vtctldatapb.Workflow_Stream{
-			Id:           id,
-			Shard:        tablet.Shard,
-			Tablet:       tablet.Alias,
-			BinlogSource: &bls,
-			Position:     pos,
-			StopPosition: stopPos,
-			State:        state,
-			DbName:       dbName,
+			Id:                        id,
+			Shard:                     tablet.Shard,
+			Tablet:                    tablet.Alias,
+			BinlogSource:              &bls,
+			Position:                  pos,
+			StopPosition:              stopPos,
+			State:                     state,
+			DbName:                    dbName,
+			TabletTypes:               tabletTypes,
+			TabletSelectionPreference: tsp,
+			Cells:                     cells,
 			TransactionTimestamp: &vttimepb.Time{
 				Seconds: transactionTimeSeconds,
 			},
@@ -1434,7 +1451,6 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			return nil, err
 		}
 	}
-
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:                  req.Workflow,
 		MaterializationIntent:     vtctldatapb.MaterializationIntent_MOVETABLES,
@@ -3098,6 +3114,9 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	if len(cells) == 0 && ts.optCells != "" {
 		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
 	}
+	for i, cell := range cells {
+		cells[i] = strings.TrimSpace(cell)
+	}
 
 	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
 	// are updated for rdonly as well. Otherwise vitess will not know that the workflow has completed and will
@@ -3569,6 +3588,9 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex table name (%s) must be in the form <keyspace>.<table>", vindex.Params["table"])
 	}
 	vindexFromCols = strings.Split(vindex.Params["from"], ",")
+	for i, col := range vindexFromCols {
+		vindexFromCols[i] = strings.TrimSpace(col)
+	}
 	if strings.Contains(vindex.Type, "unique") {
 		if len(vindexFromCols) != 1 {
 			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unique vindex 'from' should have only one column")
