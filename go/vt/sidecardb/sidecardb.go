@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 
@@ -196,13 +197,11 @@ func printCallerDetails() {
 }
 
 type schemaInit struct {
-	ctx          context.Context
-	exec         Exec
-	dbCreated    bool // The first upgrade/create query will also create the sidecar database if required.
-	parser       *sqlparser.Parser
-	collEnv      *collations.Environment
-	coll         collations.ID
-	mysqlVersion string
+	ctx       context.Context
+	env       *vtenv.Environment
+	exec      Exec
+	dbCreated bool // The first upgrade/create query will also create the sidecar database if required.
+	coll      collations.ID
 }
 
 // Exec is a callback that has to be passed to Init() to
@@ -234,20 +233,18 @@ func getDDLErrorHistory() []*ddlError {
 
 // Init creates or upgrades the sidecar database based on
 // the declarative schema defined for all tables.
-func Init(ctx context.Context, exec Exec, collEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) error {
+func Init(ctx context.Context, env *vtenv.Environment, exec Exec) error {
 	printCallerDetails() // for debug purposes only, remove in v17
 	log.Infof("Starting sidecardb.Init()")
 
 	once.Do(func() {
-		loadSchemaDefinitions(parser)
+		loadSchemaDefinitions(env.Parser())
 	})
 
 	si := &schemaInit{
-		ctx:          ctx,
-		exec:         exec,
-		collEnv:      collEnv,
-		parser:       parser,
-		mysqlVersion: mysqlVersion,
+		ctx:  ctx,
+		exec: exec,
+		env:  env,
 	}
 
 	// There are paths in the tablet initialization where we
@@ -362,7 +359,7 @@ func (si *schemaInit) collation() (collations.ID, error) {
 
 	switch len(rs.Rows) {
 	case 1:
-		return si.collEnv.LookupByName(rs.Rows[0][0].ToString()), nil
+		return si.env.CollationEnv().LookupByName(rs.Rows[0][0].ToString()), nil
 	default:
 		// This should never happen.
 		return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid results for SidecarDB query %q as it produced %d rows", sidecarCollationQuery, len(rs.Rows))
@@ -402,7 +399,7 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreAlways,
 		AlterTableAlgorithmStrategy: schemadiff.AlterTableAlgorithmStrategyCopy,
 	}
-	env := schemadiff.NewEnv(si.collEnv, si.coll, si.parser, si.mysqlVersion)
+	env := schemadiff.NewEnv(si.env, si.coll)
 	diff, err := schemadiff.DiffCreateTablesQueries(env, current, desired, hints)
 	if err != nil {
 		return "", err

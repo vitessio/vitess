@@ -30,7 +30,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
@@ -243,13 +243,12 @@ var RegisterVTGates []RegisterVTGate
 // Init initializes VTGate server.
 func Init(
 	ctx context.Context,
+	env *vtenv.Environment,
 	hc discovery.HealthCheck,
 	serv srvtopo.Server,
 	cell string,
 	tabletTypesToWait []topodatapb.TabletType,
 	pv plancontext.PlannerVersion,
-	collationEnv *collations.Environment,
-	mysqlServerVersion string,
 ) *VTGate {
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
@@ -300,19 +299,10 @@ func Init(
 		log.Fatal("Failed to create a new sidecar database identifier cache during init as one already existed!")
 	}
 
-	parser, err := sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: mysqlServerVersion,
-		TruncateUILen:      servenv.TruncateUILen,
-		TruncateErrLen:     servenv.TruncateErrLen,
-	})
-	if err != nil {
-		log.Fatalf("unable to initialize sql parser: %v", err)
-	}
-
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews, parser)
+		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews, env.Parser())
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -321,6 +311,7 @@ func Init(
 
 	executor := NewExecutor(
 		ctx,
+		env,
 		serv,
 		cell,
 		resolver,
@@ -332,9 +323,6 @@ func Init(
 		noScatter,
 		pv,
 		warmingReadsPercent,
-		collationEnv,
-		parser,
-		mysqlServerVersion,
 	)
 
 	if err := executor.defaultQueryLogger(); err != nil {

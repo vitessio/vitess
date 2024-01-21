@@ -130,7 +130,7 @@ func buildSQLCalcFoundRowsPlan(
 		return nil, nil, err
 	}
 
-	statement2, reserved2, err := vschema.SQLParser().Parse2(originalQuery)
+	statement2, reserved2, err := vschema.Environment().Parser().Parse2(originalQuery)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -290,9 +290,8 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 			elem := &engine.LockFunc{Typ: expr.Expr.(*sqlparser.LockingFunc)}
 			if lFunc.Name != nil {
 				n, err := evalengine.Translate(lFunc.Name, &evalengine.Config{
-					Collation:    vschema.ConnCollation(),
-					CollationEnv: vschema.CollationEnv(),
-					MySQLVersion: vschema.MySQLVersion(),
+					Collation:   vschema.ConnCollation(),
+					Environment: vschema.Environment(),
 				})
 				if err != nil {
 					return nil, err
@@ -306,9 +305,8 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 			return nil, vterrors.VT12001(fmt.Sprintf("LOCK function and other expression: [%s] in same select query", sqlparser.String(expr)))
 		}
 		exprs[i], err = evalengine.Translate(expr.Expr, &evalengine.Config{
-			Collation:    vschema.ConnCollation(),
-			CollationEnv: vschema.CollationEnv(),
-			MySQLVersion: vschema.MySQLVersion(),
+			Collation:   vschema.ConnCollation(),
+			Environment: vschema.Environment(),
 		})
 		if err != nil {
 			return nil, nil

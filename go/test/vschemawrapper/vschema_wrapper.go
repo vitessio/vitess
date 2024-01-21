@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -31,6 +30,7 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -50,7 +50,7 @@ type VSchemaWrapper struct {
 	Version               plancontext.PlannerVersion
 	EnableViews           bool
 	TestBuilder           func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
-	MySQLServerVersion    string
+	Env                   *vtenv.Environment
 }
 
 func (vw *VSchemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
@@ -84,7 +84,7 @@ func (vw *VSchemaWrapper) PlanPrepareStatement(ctx context.Context, query string
 	if err != nil {
 		return nil, nil, err
 	}
-	stmt, _, err := vw.SQLParser().Parse2(query)
+	stmt, _, err := vw.Env.Parser().Parse2(query)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -125,22 +125,11 @@ func (vw *VSchemaWrapper) GetSrvVschema() *vschemapb.SrvVSchema {
 }
 
 func (vw *VSchemaWrapper) ConnCollation() collations.ID {
-	return collations.CollationUtf8mb4ID
+	return vw.Env.CollationEnv().DefaultConnectionCharset()
 }
 
-func (vw *VSchemaWrapper) CollationEnv() *collations.Environment {
-	return collations.MySQL8()
-}
-
-func (vw *VSchemaWrapper) SQLParser() *sqlparser.Parser {
-	return sqlparser.NewTestParser()
-}
-
-func (vw *VSchemaWrapper) MySQLVersion() string {
-	if vw.MySQLServerVersion == "" {
-		return config.DefaultMySQLVersion
-	}
-	return vw.MySQLServerVersion
+func (vw *VSchemaWrapper) Environment() *vtenv.Environment {
+	return vw.Env
 }
 
 func (vw *VSchemaWrapper) PlannerWarning(_ string) {

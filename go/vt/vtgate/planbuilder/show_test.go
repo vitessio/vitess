@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/vschemawrapper"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/require"
 
@@ -35,6 +36,7 @@ import (
 func TestBuildDBPlan(t *testing.T) {
 	vschema := &vschemawrapper.VSchemaWrapper{
 		Keyspace: &vindexes.Keyspace{Name: "main"},
+		Env:      vtenv.NewTestEnv(),
 	}
 
 	testCases := []struct {

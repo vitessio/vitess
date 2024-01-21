@@ -26,14 +26,12 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttest"
@@ -111,7 +109,7 @@ func Init(ctx context.Context) (*Env, error) {
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
 	conf := tabletenv.NewDefaultConfig()
 	conf.DB = te.Dbcfgs
-	te.TabletEnv = tabletenv.NewEnv(conf, "VStreamerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	te.TabletEnv = tabletenv.NewEnv(vtenv.NewTestEnv(), conf, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	pos, _ := te.Mysqld.PrimaryPosition()
 	if strings.HasPrefix(strings.ToLower(pos.GTIDSet.Flavor()), string(mysqlctl.FlavorMariaDB)) {

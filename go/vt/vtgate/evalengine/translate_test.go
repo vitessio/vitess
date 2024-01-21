@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -114,9 +114,10 @@ func TestTranslateSimplification(t *testing.T) {
 		{"json->>\"$.c\"", ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))"), ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))")},
 	}
 
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			stmt, err := sqlparser.NewTestParser().Parse("select " + tc.expression)
+			stmt, err := venv.Parser().Parse("select " + tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -127,9 +128,8 @@ func TestTranslateSimplification(t *testing.T) {
 
 			cfg := &Config{
 				ResolveColumn:     fields.Column,
-				Collation:         collations.MySQL8().DefaultConnectionCharset(),
-				CollationEnv:      collations.MySQL8(),
-				MySQLVersion:      config.DefaultMySQLVersion,
+				Collation:         venv.CollationEnv().DefaultConnectionCharset(),
+				Environment:       venv,
 				NoConstantFolding: true,
 				NoCompilation:     true,
 			}
@@ -299,6 +299,7 @@ func TestEvaluate(t *testing.T) {
 		expected:   False,
 	}}
 
+	venv := vtenv.NewTestEnv()
 	for _, test := range tests {
 		t.Run(test.expression, func(t *testing.T) {
 			// Given
@@ -306,9 +307,8 @@ func TestEvaluate(t *testing.T) {
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
 			sqltypesExpr, err := Translate(astExpr, &Config{
-				Collation:    collations.MySQL8().DefaultConnectionCharset(),
-				CollationEnv: collations.MySQL8(),
-				MySQLVersion: config.DefaultMySQLVersion,
+				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
+				Environment: venv,
 			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
@@ -319,7 +319,7 @@ func TestEvaluate(t *testing.T) {
 				"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
 				"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 				"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
-			}, NewEmptyVCursor(collations.MySQL8(), time.Local, config.DefaultMySQLVersion))
+			}, NewEmptyVCursor(venv, time.Local))
 
 			// When
 			r, err := env.Evaluate(sqltypesExpr)
@@ -348,23 +348,22 @@ func TestEvaluateTuple(t *testing.T) {
 		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("2"), sqltypes.NewDecimal("4.0")},
 	}}
 
+	venv := vtenv.NewTestEnv()
 	for _, test := range tests {
 		t.Run(test.expression, func(t *testing.T) {
 			// Given
 			stmt, err := sqlparser.NewTestParser().Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			collationEnv := collations.MySQL8()
 			sqltypesExpr, err := Translate(astExpr, &Config{
-				Collation:    collationEnv.DefaultConnectionCharset(),
-				CollationEnv: collationEnv,
-				MySQLVersion: config.DefaultMySQLVersion,
+				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
+				Environment: venv,
 			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 
 			// When
-			r, err := EmptyExpressionEnv(collationEnv, config.DefaultMySQLVersion).Evaluate(sqltypesExpr)
+			r, err := EmptyExpressionEnv(venv).Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
@@ -390,6 +389,7 @@ func TestTranslationFailures(t *testing.T) {
 		},
 	}
 
+	venv := vtenv.NewTestEnv()
 	for _, testcase := range testcases {
 		t.Run(testcase.expression, func(t *testing.T) {
 			// Given
@@ -397,9 +397,8 @@ func TestTranslationFailures(t *testing.T) {
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
 			_, err = Translate(astExpr, &Config{
-				Collation:    collations.MySQL8().DefaultConnectionCharset(),
-				CollationEnv: collations.MySQL8(),
-				MySQLVersion: config.DefaultMySQLVersion,
+				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
+				Environment: venv,
 			})
 			require.EqualError(t, err, testcase.expectedErr)
 		})
@@ -427,6 +426,7 @@ func TestCardinalityWithBindVariables(t *testing.T) {
 		{expr: `1 IN ::bar`},
 	}
 
+	venv := vtenv.NewTestEnv()
 	for _, testcase := range testcases {
 		t.Run(testcase.expr, func(t *testing.T) {
 			err := func() error {
@@ -437,9 +437,8 @@ func TestCardinalityWithBindVariables(t *testing.T) {
 
 				astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
 				_, err = Translate(astExpr, &Config{
-					Collation:     collations.MySQL8().DefaultConnectionCharset(),
-					CollationEnv:  collations.MySQL8(),
-					MySQLVersion:  config.DefaultMySQLVersion,
+					Collation:     venv.CollationEnv().DefaultConnectionCharset(),
+					Environment:   venv,
 					NoCompilation: true,
 				})
 				return err

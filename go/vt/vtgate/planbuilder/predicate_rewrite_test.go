@@ -27,10 +27,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -91,6 +91,7 @@ func TestFuzzRewriting(t *testing.T) {
 	// values - trying TRUE, FALSE and NULL. If the two expressions do not return the same value,
 	// this is considered a test failure.
 
+	venv := vtenv.NewTestEnv()
 	start := time.Now()
 	for time.Since(start) < 1*time.Second {
 		tc := testCase{
@@ -104,21 +105,19 @@ func TestFuzzRewriting(t *testing.T) {
 			simplified := sqlparser.RewritePredicate(predicate)
 
 			original, err := evalengine.Translate(predicate, &evalengine.Config{
+				Environment:   venv,
 				Collation:     collations.MySQL8().DefaultConnectionCharset(),
-				CollationEnv:  collations.MySQL8(),
-				MySQLVersion:  config.DefaultMySQLVersion,
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)
 			simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), &evalengine.Config{
+				Environment:   venv,
 				Collation:     collations.MySQL8().DefaultConnectionCharset(),
-				CollationEnv:  collations.MySQL8(),
-				MySQLVersion:  config.DefaultMySQLVersion,
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)
 
-			env := evalengine.EmptyExpressionEnv(collations.MySQL8(), config.DefaultMySQLVersion)
+			env := evalengine.EmptyExpressionEnv(venv)
 			env.Row = make([]sqltypes.Value, tc.nodes)
 			for i := range env.Row {
 				env.Row[i] = sqltypes.NewInt32(1)

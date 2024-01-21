@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/vschemawrapper"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/require"
 
@@ -45,6 +46,7 @@ func (tc *collationTestCase) run(t *testing.T) {
 		V:             loadSchema(t, "vschemas/schema.json", false),
 		SysVarEnabled: true,
 		Version:       Gen4,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	tc.addCollationsToSchema(vschemaWrapper)

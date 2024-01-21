@@ -30,9 +30,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -71,13 +71,13 @@ func (tc testCase) run(t *testing.T) {
 	for i, value := range tc.row {
 		fields[i] = &querypb.Field{Type: value.Type()}
 	}
-	env := NewExpressionEnv(context.Background(), tc.bv, NewEmptyVCursor(collations.MySQL8(), time.UTC, config.DefaultMySQLVersion))
+	venv := vtenv.NewTestEnv()
+	env := NewExpressionEnv(context.Background(), tc.bv, NewEmptyVCursor(venv, time.UTC))
 	env.Row = tc.row
 	ast := &astCompiler{
 		cfg: &Config{
-			Collation:    collations.CollationUtf8mb4ID,
-			CollationEnv: collations.MySQL8(),
-			MySQLVersion: config.DefaultMySQLVersion,
+			Collation:   collations.CollationUtf8mb4ID,
+			Environment: venv,
 		},
 	}
 	cmp, err := ast.translateComparisonExpr2(tc.op, tc.v1, tc.v2)

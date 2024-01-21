@@ -19,10 +19,8 @@ package txlimiter
 import (
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -50,7 +48,7 @@ func TestTxLimiter_DisabledAllowsAll(t *testing.T) {
 	cfg.TransactionLimitByPrincipal = false
 	cfg.TransactionLimitByComponent = false
 	cfg.TransactionLimitBySubcomponent = false
-	limiter := New(tabletenv.NewEnv(cfg, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion))
+	limiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	im, ef := createCallers("", "", "", "")
 	for i := 0; i < 5; i++ {
 		if got, want := limiter.Get(im, ef), true; got != want {
@@ -72,7 +70,7 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 	cfg.TransactionLimitBySubcomponent = false
 
 	// This should allow 3 slots to all users
-	newlimiter := New(tabletenv.NewEnv(cfg, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion))
+	newlimiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	limiter, ok := newlimiter.(*Impl)
 	if !ok {
 		t.Fatalf("New returned limiter of unexpected type: got %T, want %T", newlimiter, limiter)
@@ -138,7 +136,7 @@ func TestTxLimiterDryRun(t *testing.T) {
 	cfg.TransactionLimitBySubcomponent = false
 
 	// This should allow 3 slots to all users
-	newlimiter := New(tabletenv.NewEnv(cfg, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion))
+	newlimiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	limiter, ok := newlimiter.(*Impl)
 	if !ok {
 		t.Fatalf("New returned limiter of unexpected type: got %T, want %T", newlimiter, limiter)

@@ -2,31 +2,24 @@ package schemadiff
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 type Environment struct {
-	CollationEnv *collations.Environment
-	DefaultColl  collations.ID
-	Parser       *sqlparser.Parser
-	MySQLVersion string
+	*vtenv.Environment
+	DefaultColl collations.ID
 }
 
 func NewTestEnv() *Environment {
 	return &Environment{
-		CollationEnv: collations.MySQL8(),
-		DefaultColl:  collations.MySQL8().DefaultConnectionCharset(),
-		Parser:       sqlparser.NewTestParser(),
-		MySQLVersion: config.DefaultMySQLVersion,
+		Environment: vtenv.NewTestEnv(),
+		DefaultColl: collations.MySQL8().DefaultConnectionCharset(),
 	}
 }
 
-func NewEnv(collEnv *collations.Environment, defaultColl collations.ID, parser *sqlparser.Parser, mysqlVersion string) *Environment {
+func NewEnv(env *vtenv.Environment, defaultColl collations.ID) *Environment {
 	return &Environment{
-		CollationEnv: collEnv,
-		DefaultColl:  defaultColl,
-		Parser:       parser,
-		MySQLVersion: mysqlVersion,
+		Environment: env,
+		DefaultColl: defaultColl,
 	}
 }

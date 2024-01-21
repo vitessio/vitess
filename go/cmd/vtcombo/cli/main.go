@@ -31,20 +31,19 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtcombo"
 	"vitess.io/vitess/go/vt/vtctld"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -80,10 +79,9 @@ In particular, it contains:
 
 	tpb             vttestpb.VTTestTopology
 	ts              *topo.Server
-	collationEnv    *collations.Environment
 	resilientServer *srvtopo.ResilientServer
-	parser          *sqlparser.Parser
-	mysqlVersion    string
+
+	env *vtenv.Environment
 )
 
 func init() {
@@ -120,7 +118,15 @@ func init() {
 	// user know about this flag.
 	Main.Flags().MarkHidden("tablet_protocol")
 
-	collationEnv = collations.NewEnvironment(servenv.MySQLServerVersion())
+	var err error
+	env, err = vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		log.Fatalf("unable to initialize env: %v", err)
+	}
 }
 
 func startMysqld(uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err error) {
@@ -130,7 +136,7 @@ func startMysqld(uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err 
 	mycnfFile := mysqlctl.MycnfFile(uid)
 
 	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
-		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", mysqlPort, collationEnv)
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", mysqlPort, env.CollationEnv())
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to initialize mysql config :%w", err)
 		}
@@ -138,7 +144,7 @@ func startMysqld(uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err 
 			return nil, nil, fmt.Errorf("failed to initialize mysql :%w", err)
 		}
 	} else {
-		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(uid, collationEnv)
+		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(uid, env.CollationEnv())
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to find mysql config: %w", err)
 		}
@@ -193,16 +199,6 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	servenv.Init()
 	tabletenv.Init()
 
-	mysqlVersion = servenv.MySQLServerVersion()
-	parser, err = sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: mysqlVersion,
-		TruncateUILen:      servenv.TruncateUILen,
-		TruncateErrLen:     servenv.TruncateErrLen,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to initialize sql parser: %w", err)
-	}
-
 	var (
 		mysqld = &vtcomboMysqld{}
 		cnf    *mysqlctl.Mycnf
@@ -222,7 +218,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		mysqld.SetReadOnly(false)
 
 	} else {
-		dbconfigs.GlobalDBConfigs.InitWithSocket("", collationEnv)
+		dbconfigs.GlobalDBConfigs.InitWithSocket("", env.CollationEnv())
 		mysqld.Mysqld = mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)
 		servenv.OnClose(mysqld.Close)
 	}
@@ -234,7 +230,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	// to be the "internal" protocol that InitTabletMap registers.
 	cmd.Flags().Set("tablet_manager_protocol", "internal")
 	cmd.Flags().Set("tablet_protocol", "internal")
-	uid, err := vtcombo.InitTabletMap(ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql, collationEnv, parser, mysqlVersion)
+	uid, err := vtcombo.InitTabletMap(env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql)
 	if err != nil {
 		// ensure we start mysql in the event we fail here
 		if startMysql {
@@ -259,8 +255,8 @@ func run(cmd *cobra.Command, args []string) (err error) {
 			}
 		}
 
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil, collationEnv, parser, mysqlVersion)
-		newUID, err := vtcombo.CreateKs(ctx, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, ks, true, uid, wr, collationEnv, parser, mysqlVersion)
+		wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, nil)
+		newUID, err := vtcombo.CreateKs(ctx, env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, ks, true, uid, wr)
 		if err != nil {
 			return err
 		}
@@ -310,10 +306,10 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
 
 	// pass nil for healthcheck, it will get created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait, plannerVersion, collationEnv, mysqlVersion)
+	vtg := vtgate.Init(context.Background(), env, nil, resilientServer, tpb.Cells[0], tabletTypesToWait, plannerVersion)
 
 	// vtctld configuration and init
-	err = vtctld.InitVtctld(ts, collationEnv, parser, mysqlVersion)
+	err = vtctld.InitVtctld(env, ts)
 	if err != nil {
 		return err
 	}

@@ -61,7 +61,7 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			Col:          idx,
 			WsCol:        wsCol,
 			Type:         typ,
-			CollationEnv: ctx.VSchema.CollationEnv(),
+			CollationEnv: ctx.VSchema.Environment().CollationEnv(),
 		})
 	}
 	return nil

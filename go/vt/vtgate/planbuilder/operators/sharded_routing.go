@@ -653,10 +653,9 @@ func tryMergeJoinShardedRouting(
 func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) evalengine.Expr {
 	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
 		ee, _ := evalengine.Translate(expr, &evalengine.Config{
-			Collation:    ctx.SemTable.Collation,
-			ResolveType:  ctx.SemTable.TypeForExpr,
-			CollationEnv: ctx.VSchema.CollationEnv(),
-			MySQLVersion: ctx.VSchema.MySQLVersion(),
+			Collation:   ctx.SemTable.Collation,
+			ResolveType: ctx.SemTable.TypeForExpr,
+			Environment: ctx.VSchema.Environment(),
 		})
 		if ee != nil {
 			return ee

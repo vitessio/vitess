@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
 )
@@ -40,6 +41,7 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:       loadSchema(t, "vschemas/schema.json", true),
 		Version: Gen4,
+		Env:     vtenv.NewTestEnv(),
 	}
 	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
@@ -62,6 +64,7 @@ func TestSimplifyPanic(t *testing.T) {
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:       loadSchema(t, "vschemas/schema.json", true),
 		Version: Gen4,
+		Env:     vtenv.NewTestEnv(),
 	}
 	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
@@ -83,6 +86,7 @@ func TestUnsupportedFile(t *testing.T) {
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:       loadSchema(t, "vschemas/schema.json", true),
 		Version: Gen4,
+		Env:     vtenv.NewTestEnv(),
 	}
 	fmt.Println(vschema)
 	for _, tcase := range readJSONTests("unsupported_cases.txt") {
