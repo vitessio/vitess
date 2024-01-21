@@ -94,7 +94,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
-	statements, _, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(string(req.Query), tm.SQLParser)
+	statements, _, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(string(req.Query), tm.Env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 	// Replace any provided sidecar database qualifiers with the correct one.
 	// TODO(shlomi): we use ReplaceTableQualifiersMultiQuery for backwards compatibility. In v20 we will not accept
 	// multi statement queries in ExecuteFetchAsDBA. This will be rewritten as ReplaceTableQualifiers()
-	uq, err := tm.SQLParser.ReplaceTableQualifiersMultiQuery(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	uq, err := tm.Env.Parser().ReplaceTableQualifiersMultiQuery(string(req.Query), sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	}
 
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.SQLParser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	}
 	defer conn.Recycle()
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.SQLParser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdat
 	tablet := tm.Tablet()
 	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.SQLParser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}

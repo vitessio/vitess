@@ -104,7 +104,7 @@ func NewSchemaFromStatements(env *Environment, statements []sqlparser.Statement)
 func NewSchemaFromQueries(env *Environment, queries []string) (*Schema, error) {
 	statements := make([]sqlparser.Statement, 0, len(queries))
 	for _, q := range queries {
-		stmt, err := env.Parser.ParseStrictDDL(q)
+		stmt, err := env.Parser().ParseStrictDDL(q)
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +116,7 @@ func NewSchemaFromQueries(env *Environment, queries []string) (*Schema, error) {
 // NewSchemaFromSQL creates a valid and normalized schema based on a SQL blob that contains
 // CREATE statements for various objects (tables, views)
 func NewSchemaFromSQL(env *Environment, sql string) (*Schema, error) {
-	statements, err := env.Parser.SplitStatements(sql)
+	statements, err := env.Parser().SplitStatements(sql)
 	if err != nil {
 		return nil, err
 	}

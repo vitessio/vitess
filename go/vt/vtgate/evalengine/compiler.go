@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -34,8 +35,7 @@ type compiler struct {
 	dynamicTypes []ctype
 	asm          assembler
 	sqlmode      SQLMode
-	collationEnv *collations.Environment
-	mysqlVersion string
+	env          *vtenv.Environment
 }
 
 type CompilerLog interface {
@@ -421,7 +421,7 @@ func (c *compiler) compareNumericTypes(lt ctype, rt ctype) (swapped bool) {
 }
 
 func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
-	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type, c.collationEnv)
+	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type, c.env.CollationEnv())
 	if err != nil {
 		return err
 	}

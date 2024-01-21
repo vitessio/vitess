@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -126,6 +127,7 @@ func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 		DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, dbName),
 		QueryServiceControl:    tabletservermock.NewController(),
 		_waitForGrantsComplete: make(chan struct{}),
+		Env:                    vtenv.NewTestEnv(),
 	}
 	close(tm._waitForGrantsComplete)
 

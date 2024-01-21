@@ -346,12 +346,12 @@ func ignoreAutoIncrement(t *testing.T, createTable string) string {
 func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, allowSchemadiffNormalization bool, hints *schemadiff.DiffHints) {
 	// turn the "from" and "to" create statement strings (which we just read via SHOW CREATE TABLE into sqlparser.CreateTable statement)
 	env := schemadiff.NewTestEnv()
-	fromStmt, err := env.Parser.ParseStrictDDL(fromCreateTable)
+	fromStmt, err := env.Parser().ParseStrictDDL(fromCreateTable)
 	require.NoError(t, err)
 	fromCreateTableStatement, ok := fromStmt.(*sqlparser.CreateTable)
 	require.True(t, ok)
 
-	toStmt, err := env.Parser.ParseStrictDDL(toCreateTable)
+	toStmt, err := env.Parser().ParseStrictDDL(toCreateTable)
 	require.NoError(t, err)
 	toCreateTableStatement, ok := toStmt.(*sqlparser.CreateTable)
 	require.True(t, ok)
@@ -394,7 +394,7 @@ func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, al
 		// structure is identical. And so we accept that there can be a normalization issue.
 		if allowSchemadiffNormalization {
 			{
-				stmt, err := env.Parser.ParseStrictDDL(toCreateTable)
+				stmt, err := env.Parser().ParseStrictDDL(toCreateTable)
 				require.NoError(t, err)
 				createTableStatement, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
@@ -403,7 +403,7 @@ func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, al
 				toCreateTable = c.Create().CanonicalStatementString()
 			}
 			{
-				stmt, err := env.Parser.ParseStrictDDL(resultCreateTable)
+				stmt, err := env.Parser().ParseStrictDDL(resultCreateTable)
 				require.NoError(t, err)
 				createTableStatement, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
@@ -418,7 +418,7 @@ func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, al
 	assert.Equal(t, toCreateTable, resultCreateTable, "mismatched table structure. ALTER query was: %s", diffedAlterQuery)
 
 	// Also, let's see that our diff agrees there's no change:
-	resultStmt, err := env.Parser.ParseStrictDDL(resultCreateTable)
+	resultStmt, err := env.Parser().ParseStrictDDL(resultCreateTable)
 	require.NoError(t, err)
 	resultCreateTableStatement, ok := resultStmt.(*sqlparser.CreateTable)
 	require.True(t, ok)

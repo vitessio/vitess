@@ -24,13 +24,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -147,7 +145,7 @@ func newReader(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatReader {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 	cfg.DB = dbc
 
-	tr := newHeartbeatReader(tabletenv.NewEnv(cfg, "ReaderTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion))
+	tr := newHeartbeatReader(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReaderTest"))
 	tr.keyspaceShard = "test:0"
 
 	if frozenTime != nil {

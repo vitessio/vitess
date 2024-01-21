@@ -26,14 +26,12 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -147,7 +145,7 @@ func SetupLocalVtctldClient(t *testing.T, ctx context.Context, cells ...string) 
 	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
 		return nil
 	})
-	vtctld := grpcvtctldserver.NewVtctldServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	vtctld := grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	localvtctldclient.SetServer(vtctld)
 	command.VtctldClientProtocol = "local"
 	client, err := vtctldclient.New(command.VtctldClientProtocol, "")

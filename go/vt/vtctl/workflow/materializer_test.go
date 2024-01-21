@@ -28,9 +28,8 @@ import (
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -3017,7 +3016,7 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.ws = NewServer(env.topoServ, env.tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	env.ws = NewServer(vtenv.NewTestEnv(), env.topoServ, env.tmc)
 	defer env.close()
 
 	tabletID := 100
@@ -3567,6 +3566,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				tmc:          env.tmc,
 				ms:           ms,
 				workflowType: workflowType,
+				env:          vtenv.NewTestEnv(),
 			}
 			err = mz.createMoveTablesStreams(tc.moveTablesReq)
 			require.NoError(t, err, "createMoveTablesStreams failed: %v", err)

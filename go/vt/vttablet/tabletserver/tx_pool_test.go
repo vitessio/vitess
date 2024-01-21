@@ -23,12 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -826,7 +824,7 @@ func newEnv(exporterName string) tabletenv.Env {
 	cfg.OltpReadPool.IdleTimeout = 30 * time.Second
 	cfg.OlapReadPool.IdleTimeout = 30 * time.Second
 	cfg.TxPool.IdleTimeout = 30 * time.Second
-	env := tabletenv.NewEnv(cfg, exporterName, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, exporterName)
 	return env
 }
 

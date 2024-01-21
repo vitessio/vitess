@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vthash"
 
 	"vitess.io/vitess/go/acl"
@@ -93,6 +94,7 @@ func init() {
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
 type Executor struct {
+	env         *vtenv.Environment
 	serv        srvtopo.Server
 	cell        string
 	resolver    *Resolver
@@ -122,10 +124,6 @@ type Executor struct {
 
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
-
-	collEnv      *collations.Environment
-	parser       *sqlparser.Parser
-	mysqlVersion string
 }
 
 var executorOnce sync.Once
@@ -146,6 +144,7 @@ func DefaultPlanCache() *PlanCache {
 // NewExecutor creates a new Executor.
 func NewExecutor(
 	ctx context.Context,
+	env *vtenv.Environment,
 	serv srvtopo.Server,
 	cell string,
 	resolver *Resolver,
@@ -156,11 +155,9 @@ func NewExecutor(
 	noScatter bool,
 	pv plancontext.PlannerVersion,
 	warmingReadsPercent int,
-	collationEnv *collations.Environment,
-	parser *sqlparser.Parser,
-	mysqlVersion string,
 ) *Executor {
 	e := &Executor{
+		env:                 env,
 		serv:                serv,
 		cell:                cell,
 		resolver:            resolver,
@@ -175,9 +172,6 @@ func NewExecutor(
 		plans:               plans,
 		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
-		collEnv:             collationEnv,
-		parser:              parser,
-		mysqlVersion:        mysqlVersion,
 	}
 
 	vschemaacl.Init()
@@ -187,7 +181,7 @@ func NewExecutor(
 		serv:       serv,
 		cell:       cell,
 		schema:     e.schemaTracker,
-		parser:     parser,
+		parser:     env.Parser(),
 	}
 	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
@@ -234,7 +228,7 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	}
 	if result != nil && len(result.Rows) > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := e.parser.RedactSQLQuery(sql)
+		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -368,7 +362,7 @@ func (e *Executor) StreamExecute(
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.insertID, srr.rowsReturned, err)
 	if srr.rowsReturned > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := e.parser.RedactSQLQuery(sql)
+		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -510,16 +504,15 @@ func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlpars
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		default:
 			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
-				expr, err := e.parser.ParseExpr(value)
+				expr, err := e.env.Parser().ParseExpr(value)
 				if err != nil {
 					return err
 				}
 
 				evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
-					Collation:    vcursor.collation,
-					CollationEnv: e.collEnv,
-					MySQLVersion: e.mysqlVersion,
-					SQLMode:      evalengine.ParseSQLMode(vcursor.SQLMode()),
+					Collation:   vcursor.collation,
+					Environment: e.env,
+					SQLMode:     evalengine.ParseSQLMode(vcursor.SQLMode()),
 				})
 				if err != nil {
 					return err
@@ -1353,7 +1346,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.parser)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -1524,7 +1517,7 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *SafeSession) error 
 
 // planPrepareStmt implements the IExecutor interface
 func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.parser)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1558,14 +1551,6 @@ func (e *Executor) Close() {
 	e.plans.Close()
 }
 
-func (e *Executor) collationEnv() *collations.Environment {
-	return e.collEnv
-}
-
-func (e *Executor) sqlparser() *sqlparser.Parser {
-	return e.parser
-}
-
-func (e *Executor) mysqlServerVersion() string {
-	return e.mysqlVersion
+func (e *Executor) environment() *vtenv.Environment {
+	return e.env
 }

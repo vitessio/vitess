@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -273,14 +274,14 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 
 	oa := &orderedAggregate{
 		resultsBuilder: newResultsBuilder(plan, nil),
-		collationEnv:   ctx.VSchema.CollationEnv(),
+		collationEnv:   ctx.VSchema.Environment().CollationEnv(),
 	}
 
 	for _, aggr := range op.Aggregations {
 		if aggr.OpCode == opcode.AggregateUnassigned {
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 		}
-		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias, ctx.VSchema.CollationEnv())
+		aggrParam := engine.NewAggregateParam(aggr.OpCode, aggr.ColOffset, aggr.Alias, ctx.VSchema.Environment().CollationEnv())
 		aggrParam.Expr = aggr.Func
 		aggrParam.Original = aggr.Original
 		aggrParam.OrigOpcode = aggr.OriginalOpCode
@@ -295,7 +296,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			WeightStringCol: groupBy.WSOffset,
 			Expr:            groupBy.Inner,
 			Type:            typ,
-			CollationEnv:    ctx.VSchema.CollationEnv(),
+			CollationEnv:    ctx.VSchema.Environment().CollationEnv(),
 		})
 	}
 
@@ -336,7 +337,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src logicalPlan, orderin
 			WeightStringCol: ordering.WOffset[idx],
 			Desc:            order.Inner.Direction == sqlparser.DescOrder,
 			Type:            typ,
-			CollationEnv:    ctx.VSchema.CollationEnv(),
+			CollationEnv:    ctx.VSchema.Environment().CollationEnv(),
 		})
 	}
 
@@ -564,7 +565,7 @@ func buildRouteLogicalPlan(ctx *plancontext.PlanningContext, op *operators.Route
 			WeightStringCol: order.WOffset,
 			Desc:            order.Direction == sqlparser.DescOrder,
 			Type:            typ,
-			CollationEnv:    ctx.VSchema.CollationEnv(),
+			CollationEnv:    ctx.VSchema.Environment().CollationEnv(),
 		})
 	}
 	if err != nil {
@@ -828,15 +829,14 @@ func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logi
 		return nil, err
 	}
 
-	return createLimit(plan, op.AST, ctx.VSchema.CollationEnv(), ctx.VSchema.MySQLVersion())
+	return createLimit(plan, op.AST, ctx.VSchema.Environment(), ctx.VSchema.ConnCollation())
 }
 
-func createLimit(input logicalPlan, limit *sqlparser.Limit, collationEnv *collations.Environment, mysqlVersion string) (logicalPlan, error) {
+func createLimit(input logicalPlan, limit *sqlparser.Limit, env *vtenv.Environment, coll collations.ID) (logicalPlan, error) {
 	plan := newLimit(input)
 	cfg := &evalengine.Config{
-		Collation:    collationEnv.DefaultConnectionCharset(),
-		CollationEnv: collationEnv,
-		MySQLVersion: mysqlVersion,
+		Collation:   coll,
+		Environment: env,
 	}
 	pv, err := evalengine.Translate(limit.Rowcount, cfg)
 	if err != nil {
@@ -890,7 +890,7 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			fmt.Sprintf("missing type information for [%s]", strings.Join(missingTypes, ", ")))
 	}
 
-	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp, ctx.VSchema.CollationEnv())
+	comparisonType, err := evalengine.CoerceTypes(ltyp, rtyp, ctx.VSchema.Environment().CollationEnv())
 	if err != nil {
 		return nil, err
 	}
@@ -906,7 +906,7 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			ASTPred:        op.JoinPredicate(),
 			Collation:      comparisonType.Collation(),
 			ComparisonType: comparisonType.Type(),
-			CollationEnv:   ctx.VSchema.CollationEnv(),
+			CollationEnv:   ctx.VSchema.Environment().CollationEnv(),
 		},
 	}, nil
 }

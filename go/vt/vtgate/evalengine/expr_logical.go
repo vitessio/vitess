@@ -691,7 +691,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 
 		ta.add(then.Type, then.Flag)
-		if err := ca.add(then.Col, c.collationEnv); err != nil {
+		if err := ca.add(then.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -703,7 +703,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 
 		ta.add(els.Type, els.Flag)
-		if err := ca.add(els.Col, c.collationEnv); err != nil {
+		if err := ca.add(els.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}

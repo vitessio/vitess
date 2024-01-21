@@ -13,7 +13,7 @@ import (
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -27,13 +27,13 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 	tl := newTestLogger()
 	defer tl.Close()
 	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation")
-	parser, err := sqlparser.New(sqlparser.Options{
+	env, err := vtenv.New(vtenv.Options{
 		MySQLServerVersion: config.DefaultMySQLVersion,
 		TruncateErrLen:     32,
 	})
 	require.NoError(t, err)
 
-	db, tsv := setupTabletServerTestCustom(t, ctx, tabletenv.NewDefaultConfig(), "", parser)
+	db, tsv := setupTabletServerTestCustom(t, ctx, tabletenv.NewDefaultConfig(), "", env)
 	defer tsv.StopService()
 	defer db.Close()
 

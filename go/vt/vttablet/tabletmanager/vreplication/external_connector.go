@@ -20,7 +20,6 @@ import (
 	"context"
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -28,7 +27,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -59,21 +58,17 @@ type VStreamerClient interface {
 }
 
 type externalConnector struct {
-	mu           sync.Mutex
-	dbconfigs    map[string]*dbconfigs.DBConfigs
-	connectors   map[string]*mysqlConnector
-	collationEnv *collations.Environment
-	parser       *sqlparser.Parser
-	mysqlVersion string
+	env        *vtenv.Environment
+	mu         sync.Mutex
+	dbconfigs  map[string]*dbconfigs.DBConfigs
+	connectors map[string]*mysqlConnector
 }
 
-func newExternalConnector(dbcfgs map[string]*dbconfigs.DBConfigs, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *externalConnector {
+func newExternalConnector(env *vtenv.Environment, dbcfgs map[string]*dbconfigs.DBConfigs) *externalConnector {
 	return &externalConnector{
-		dbconfigs:    dbcfgs,
-		connectors:   make(map[string]*mysqlConnector),
-		collationEnv: collationEnv,
-		parser:       parser,
-		mysqlVersion: mysqlVersion,
+		env:        env,
+		dbconfigs:  dbcfgs,
+		connectors: make(map[string]*mysqlConnector),
 	}
 }
 
@@ -98,7 +93,7 @@ func (ec *externalConnector) Get(name string) (*mysqlConnector, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "external mysqlConnector %v not found", name)
 	}
 	c := &mysqlConnector{}
-	c.env = tabletenv.NewEnv(config, name, ec.collationEnv, ec.parser, ec.mysqlVersion)
+	c.env = tabletenv.NewEnv(ec.env, config, name)
 	c.se = schema.NewEngine(c.env)
 	c.vstreamer = vstreamer.NewEngine(c.env, nil, c.se, nil, "")
 	c.vstreamer.InitDBConfig("", "")

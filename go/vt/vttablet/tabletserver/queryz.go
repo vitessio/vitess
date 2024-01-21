@@ -156,7 +156,7 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			return true
 		}
 		Value := &queryzRow{
-			Query: logz.Wrappable(qe.env.SQLParser().TruncateForUI(plan.Original)),
+			Query: logz.Wrappable(qe.env.Environment().Parser().TruncateForUI(plan.Original)),
 			Table: plan.TableName().String(),
 			Plan:  plan.PlanID,
 		}

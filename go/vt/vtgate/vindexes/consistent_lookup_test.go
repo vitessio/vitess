@@ -40,6 +40,7 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -560,11 +561,11 @@ func (vc *loggingVCursor) InTransactionAndIsDML() bool {
 }
 
 func (vc *loggingVCursor) ConnCollation() collations.ID {
-	return vc.CollationEnv().DefaultConnectionCharset()
+	return vc.Environment().CollationEnv().DefaultConnectionCharset()
 }
 
-func (vc *loggingVCursor) CollationEnv() *collations.Environment {
-	return collations.MySQL8()
+func (vc *loggingVCursor) Environment() *vtenv.Environment {
+	return vtenv.NewTestEnv()
 }
 
 type bv struct {

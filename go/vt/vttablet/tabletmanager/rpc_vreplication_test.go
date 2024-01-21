@@ -25,8 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet"
 
 	"github.com/stretchr/testify/require"
@@ -113,7 +112,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
 	defer tenv.deleteTablet(targetTablet.tablet)
 
-	ws := workflow.NewServer(tenv.ts, tenv.tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	ws := workflow.NewServer(vtenv.NewTestEnv(), tenv.ts, tenv.tmc)
 
 	tests := []struct {
 		name   string
@@ -270,7 +269,7 @@ func TestMoveTables(t *testing.T) {
 		},
 	})
 
-	ws := workflow.NewServer(tenv.ts, tenv.tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	ws := workflow.NewServer(vtenv.NewTestEnv(), tenv.ts, tenv.tmc)
 
 	tenv.mysqld.Schema = defaultSchema
 	tenv.mysqld.Schema.DatabaseSchema = tenv.dbName
@@ -658,7 +657,7 @@ func TestSourceShardSelection(t *testing.T) {
 		defer tenv.deleteTablet(tt.tablet)
 	}
 
-	ws := workflow.NewServer(tenv.ts, tenv.tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	ws := workflow.NewServer(vtenv.NewTestEnv(), tenv.ts, tenv.tmc)
 
 	tenv.ts.SaveVSchema(ctx, sourceKs, &vschemapb.Keyspace{
 		Sharded: true,
@@ -857,7 +856,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 		sourceKs, shard, table, table)
 	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
 	defer tenv.close()
-	ws := workflow.NewServer(tenv.ts, tenv.tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	ws := workflow.NewServer(vtenv.NewTestEnv(), tenv.ts, tenv.tmc)
 
 	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
 	defer tenv.deleteTablet(sourceTablet.tablet)
