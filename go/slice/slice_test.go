@@ -56,7 +56,7 @@ func TestAll(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := All(tc.input, tc.fn)
-			assert.Equal(t, tc.expected, result, "All should return the expected result")
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
@@ -85,7 +85,7 @@ func TestAny(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := Any(tc.input, tc.fn)
-			assert.Equal(t, tc.expected, result, "Any should return the expected result")
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
@@ -114,7 +114,7 @@ func TestMap(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := Map(tc.input, tc.fn)
-			assert.Equal(t, tc.expected, result, "Map should return the expected result")
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
@@ -149,7 +149,7 @@ func TestFilter(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := Filter(tc.input, tc.fn)
-			assert.Equal(t, tc.expected, result, "Filter should return the expected result")
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
@@ -189,10 +189,10 @@ func TestMapWithError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := MapWithError(tc.input, tc.fn)
 			if err != nil {
-				assert.Error(t, err, "MapWithError should return an error for test case %s", tc.name)
-				assert.EqualError(t, err, tc.err.Error(), "MapWithError should return the expected error")
+				assert.Error(t, err)
+				assert.EqualError(t, err, tc.err.Error())
 			} else {
-				assert.Equal(t, tc.expected, result, "MapWithError should return the expected result")
+				assert.Equal(t, tc.expected, result)
 			}
 		})
 	}
