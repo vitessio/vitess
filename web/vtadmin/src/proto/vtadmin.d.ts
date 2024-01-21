@@ -43425,6 +43425,15 @@ export namespace vtctldata {
 
             /** Stream throttler_status */
             throttler_status?: (vtctldata.Workflow.Stream.IThrottlerStatus|null);
+
+            /** Stream tablet_types */
+            tablet_types?: (topodata.TabletType[]|null);
+
+            /** Stream tablet_selection_preference */
+            tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
+
+            /** Stream cells */
+            cells?: (string[]|null);
         }
 
         /** Represents a Stream. */
@@ -43486,6 +43495,15 @@ export namespace vtctldata {
 
             /** Stream throttler_status. */
             public throttler_status?: (vtctldata.Workflow.Stream.IThrottlerStatus|null);
+
+            /** Stream tablet_types. */
+            public tablet_types: topodata.TabletType[];
+
+            /** Stream tablet_selection_preference. */
+            public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+
+            /** Stream cells. */
+            public cells: string[];
 
             /**
              * Creates a new Stream instance using the specified properties.
