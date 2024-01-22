@@ -17,7 +17,10 @@ limitations under the License.
 package netutil
 
 import (
+	"net"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSplitHostPort(t *testing.T) {
@@ -87,4 +90,40 @@ func TestNormalizeIP(t *testing.T) {
 			t.Errorf("NormalizeIP(%#v) = %#v, want %#v", input, got, want)
 		}
 	}
+}
+
+func TestFullyQualifiedHostname(t *testing.T) {
+	_, err := FullyQualifiedHostname()
+	assert.NoError(t, err)
+}
+
+func TestDNSTracker(t *testing.T) {
+	refresh := DNSTracker("localhost")
+
+	_, err := refresh()
+	assert.NoError(t, err)
+
+	refresh = DNSTracker("")
+	val, err := refresh()
+	assert.NoError(t, err)
+	assert.False(t, val)
+}
+
+func TestFullyQualifiedHostnameOrPanic(t *testing.T) {
+	addr := FullyQualifiedHostnameOrPanic()
+	t.Log(addr)
+}
+
+func TestAddrEqual(t *testing.T) {
+	addr1 := net.ParseIP("1.2.3.4")
+	addr2 := net.ParseIP("127.0.0.1")
+
+	ok := addrEqual([]net.IP{addr1, addr2}, []net.IP{addr1})
+	assert.False(t, ok)
+
+	ok = addrEqual([]net.IP{addr2}, []net.IP{addr1})
+	assert.False(t, ok)
+
+	ok = addrEqual([]net.IP{addr1, addr2}, []net.IP{addr1, addr2})
+	assert.True(t, ok)
 }
