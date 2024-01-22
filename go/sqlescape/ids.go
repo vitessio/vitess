@@ -52,11 +52,21 @@ func EscapeIDs(identifiers []string) []string {
 	return result
 }
 
-// UnescapeID reverses any backticking in the input string.
+// UnescapeID reverses any backticking in the input string by EscapeID.
 func UnescapeID(in string) string {
 	l := len(in)
 	if l >= 2 && in[0] == '`' && in[l-1] == '`' {
-		return in[1 : l-1]
+		in = in[1 : l-1]
+		var buf strings.Builder
+		buf.Grow(len(in))
+
+		for i := 0; i < len(in); i++ {
+			buf.WriteByte(in[i])
+			if i < len(in)-1 && in[i] == '`' && in[i+1] == '`' {
+				i++ // halves the number of backticks
+			}
+		}
+		return buf.String()
 	}
 	return in
 }
