@@ -37,7 +37,7 @@ require (
 	github.com/klauspost/compress v1.17.4
 	github.com/klauspost/pgzip v1.2.6
 	github.com/krishicks/yaml-patch v0.0.10
-	github.com/magiconair/properties v1.8.7
+	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
 	github.com/montanaflynn/stats v0.7.1
 	github.com/olekukonko/tablewriter v0.0.5
@@ -88,7 +88,6 @@ require (
 	gopkg.in/DataDog/dd-trace-go.v1 v1.59.0
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/ldap.v2 v2.5.1
-	gotest.tools v2.2.0+incompatible
 	sigs.k8s.io/yaml v1.4.0
 )
 
