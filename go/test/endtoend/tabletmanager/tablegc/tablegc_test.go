@@ -147,11 +147,10 @@ func checkTableRows(t *testing.T, tableName string, expect int64) {
 }
 
 func populateTable(t *testing.T) {
-	for _, sql := range sqlSchema {
-		_, err := primaryTablet.VttabletProcess.QueryTablet(sql, keyspaceName, true)
-		require.NoError(t, err)
-	}
-	_, err := primaryTablet.VttabletProcess.QueryTablet("delete from t1", keyspaceName, true)
+	err := primaryTablet.VttabletProcess.QueryTabletMultiple(sqlSchema, keyspaceName, true)
+	require.NoError(t, err)
+
+	_, err = primaryTablet.VttabletProcess.QueryTablet("delete from t1", keyspaceName, true)
 	require.NoError(t, err)
 	_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) values (null, md5(rand()))", keyspaceName, true)
 	require.NoError(t, err)

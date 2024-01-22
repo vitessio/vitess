@@ -79,10 +79,8 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", "localhost", newPrimary.MySQLPort),
 		"START SLAVE",
 	}
-	for _, query := range changeSourceCommands {
-		_, err := oldPrimary.VttabletProcess.QueryTablet(query, keyspaceUnshardedName, true)
-		require.NoError(t, err)
-	}
+	err = oldPrimary.VttabletProcess.QueryTabletMultiple(changeSourceCommands, keyspaceUnshardedName, true)
+	require.NoError(t, err)
 
 	// Notify the new vttablet primary about the reparent.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newPrimary.Alias)
