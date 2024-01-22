@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var (
@@ -156,13 +155,7 @@ func TestMain(m *testing.M) {
 		}
 		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
-		parser := sqlparser.NewTestParser()
-		queries, err := parser.SplitStatementToPieces(schemaSQL)
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
-		connParams, closer, err := utils.NewMySQL(clusterInstance, shardedKs, queries...)
+		connParams, closer, err := utils.NewMySQL(clusterInstance, shardedKs, schemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1

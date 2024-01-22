@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -81,13 +80,7 @@ func TestMain(m *testing.M) {
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
 
 		// create mysql instance and connection parameters
-		parser := sqlparser.NewTestParser()
-		queries, err := parser.SplitStatementToPieces(schemaSQL)
-		if err != nil {
-			fmt.Println(err)
-			return 1
-		}
-		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, queries...)
+		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1
