@@ -97,53 +97,53 @@ CREATE TABLE allDefaults (
 }
 `
 
-	createProcSQL = `use vt_customer;
+	createProcSQL = []string{`
 CREATE PROCEDURE sp_insert()
 BEGIN
 	insert into allDefaults () values ();
 END;
-
+`, `
 CREATE PROCEDURE sp_delete()
 BEGIN
 	delete from allDefaults;
 END;
-
+`, `
 CREATE PROCEDURE sp_multi_dml()
 BEGIN
 	insert into allDefaults () values ();
 	delete from allDefaults;
 END;
-
+`, `
 CREATE PROCEDURE sp_variable()
 BEGIN
 	insert into allDefaults () values ();
 	SELECT min(id) INTO @myvar FROM allDefaults;
 	DELETE FROM allDefaults WHERE id = @myvar;
 END;
-
+`, `
 CREATE PROCEDURE sp_select()
 BEGIN
 	SELECT * FROM allDefaults;
 END;
-
+`, `
 CREATE PROCEDURE sp_all()
 BEGIN
 	insert into allDefaults () values ();
     select * from allDefaults;
 	delete from allDefaults;
 END;
-
+`, `
 CREATE PROCEDURE in_parameter(IN val int)
 BEGIN
 	insert into allDefaults(id) values(val);
 END;
-
+`, `
 CREATE PROCEDURE out_parameter(OUT val int)
 BEGIN
 	insert into allDefaults(id) values (128);
 	select 128 into val from dual;
 END;
-`
+`}
 )
 
 var enableSettingsPool bool
@@ -196,7 +196,7 @@ func runAllTests(m *testing.M) int {
 	}
 
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
-	if _, err := primaryTablet.QueryTablet(createProcSQL, KeyspaceName, false); err != nil {
+	if err := primaryTablet.QueryTabletMultiple(createProcSQL, KeyspaceName, true); err != nil {
 		log.Fatal(err.Error())
 		return 1
 	}
