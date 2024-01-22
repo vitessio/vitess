@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
@@ -686,7 +687,19 @@ func PermanentlyRemoveVttablet(clusterInfo *VTOrcClusterInfo, tablet *cluster.Vt
 // ChangePrivileges is used to change the privileges of the given user. These commands are executed such that they are not replicated
 func ChangePrivileges(t *testing.T, sql string, tablet *cluster.Vttablet, user string) {
 	err := RunSQLs(t, []string{"SET sql_log_bin = OFF", sql, "SET sql_log_bin = ON"}, tablet, "")
-	require.NoError(t, err)
+
+	ignoreError := false
+	if sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); isSQLErr {
+		switch sqlErr.Num {
+		case sqlerror.ERNonExistingGrant:
+			// We were attempting to revoke a privilege that didn't exist. This is fine.
+			// MySQL does not have a `REVOKE ... IF EXISTS` statement. So we're just brute-forcing it.
+			ignoreError = true
+		}
+	}
+	if !ignoreError {
+		require.NoError(t, err)
+	}
 
 	res, err := RunSQL(t, fmt.Sprintf("SELECT id FROM INFORMATION_SCHEMA.PROCESSLIST WHERE user = '%s'", user), tablet, "")
 	require.NoError(t, err)
