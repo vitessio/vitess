@@ -97,3 +97,63 @@ func TestUnwrap(t *testing.T) {
 		})
 	}
 }
+
+func TestUnwrappedIs(t *testing.T) {
+	var err1 = errors.New("err1")
+
+	tcases := []struct {
+		err    error
+		target error
+		expect bool
+	}{
+		{
+			err:    nil,
+			expect: false,
+		},
+		{
+			err:    nil,
+			target: errors.New("err1"),
+			expect: false,
+		},
+		{
+			err:    errors.New("err1"),
+			target: errors.New("err1"),
+			expect: false,
+		},
+		{
+			err:    errors.New("err1"),
+			target: err1,
+			expect: false,
+		},
+		{
+			err:    err1,
+			target: err1,
+			expect: true,
+		},
+		{
+			err:    errors.Join(err1, errors.New("err2")),
+			target: err1,
+			expect: true,
+		},
+		{
+			err:    errors.Join(errors.New("err2"), err1),
+			target: err1,
+			expect: true,
+		},
+		{
+			err:    errors.Join(errors.New("err2"), errors.Join(errors.New("err3"), err1)),
+			target: err1,
+			expect: true,
+		},
+	}
+	for _, tcase := range tcases {
+		name := "nil"
+		if tcase.err != nil {
+			name = tcase.err.Error()
+		}
+		t.Run(name, func(t *testing.T) {
+			is := UnwrappedIs(tcase.err, tcase.target)
+			assert.Equal(t, tcase.expect, is)
+		})
+	}
+}
