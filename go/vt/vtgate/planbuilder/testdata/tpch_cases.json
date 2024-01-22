@@ -643,8 +643,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select count(*), shipping.o_custkey from (select o_custkey as o_custkey, o_orderkey as o_orderkey from orders where 1 != 1) as shipping where 1 != 1 group by shipping.o_custkey",
-                                    "Query": "select count(*), shipping.o_custkey from (select o_custkey as o_custkey, o_orderkey as o_orderkey from orders where o_orderkey = :l_orderkey) as shipping group by shipping.o_custkey",
+                                    "FieldQuery": "select count(*), shipping.o_custkey from (select o_custkey as o_custkey from orders where 1 != 1) as shipping where 1 != 1 group by shipping.o_custkey",
+                                    "Query": "select count(*), shipping.o_custkey from (select o_custkey as o_custkey from orders where o_orderkey = :l_orderkey) as shipping group by shipping.o_custkey",
                                     "Table": "orders",
                                     "Values": [
                                       ":l_orderkey"
@@ -679,8 +679,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select count(*), shipping.s_nationkey from (select s_suppkey as s_suppkey, s_nationkey as s_nationkey from supplier where 1 != 1) as shipping where 1 != 1 group by shipping.s_nationkey",
-                                    "Query": "select count(*), shipping.s_nationkey from (select s_suppkey as s_suppkey, s_nationkey as s_nationkey from supplier where s_suppkey = :l_suppkey) as shipping group by shipping.s_nationkey",
+                                    "FieldQuery": "select count(*), shipping.s_nationkey from (select s_nationkey as s_nationkey from supplier where 1 != 1) as shipping where 1 != 1 group by shipping.s_nationkey",
+                                    "Query": "select count(*), shipping.s_nationkey from (select s_nationkey as s_nationkey from supplier where s_suppkey = :l_suppkey) as shipping group by shipping.s_nationkey",
                                     "Table": "supplier",
                                     "Values": [
                                       ":l_suppkey"
@@ -694,8 +694,8 @@
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select count(*), supp_nation, weight_string(supp_nation), n1.n_nationkey as `n1.n_nationkey` from (select n1.n_name as supp_nation, n1.n_name = 'FRANCE' as `n1.n_name = 'FRANCE'`, n1.n_name = 'GERMANY' as `n1.n_name = 'GERMANY'`, n1.n_nationkey as `n1.n_nationkey` from nation as n1 where 1 != 1) as shipping where 1 != 1 group by supp_nation, weight_string(supp_nation)",
-                                    "Query": "select count(*), supp_nation, weight_string(supp_nation), n1.n_nationkey as `n1.n_nationkey` from (select n1.n_name as supp_nation, n1.n_name = 'FRANCE' as `n1.n_name = 'FRANCE'`, n1.n_name = 'GERMANY' as `n1.n_name = 'GERMANY'`, n1.n_nationkey as `n1.n_nationkey` from nation as n1 where n1.n_nationkey = :s_nationkey) as shipping group by supp_nation, weight_string(supp_nation)",
+                                    "FieldQuery": "select count(*), supp_nation, weight_string(supp_nation) from (select n1.n_name as supp_nation, n1.n_name = 'FRANCE' as `n1.n_name = 'FRANCE'`, n1.n_name = 'GERMANY' as `n1.n_name = 'GERMANY'` from nation as n1 where 1 != 1) as shipping where 1 != 1 group by supp_nation, weight_string(supp_nation)",
+                                    "Query": "select count(*), supp_nation, weight_string(supp_nation) from (select n1.n_name as supp_nation, n1.n_name = 'FRANCE' as `n1.n_name = 'FRANCE'`, n1.n_name = 'GERMANY' as `n1.n_name = 'GERMANY'` from nation as n1 where n1.n_nationkey = :s_nationkey) as shipping group by supp_nation, weight_string(supp_nation)",
                                     "Table": "nation",
                                     "Values": [
                                       ":s_nationkey"
@@ -734,8 +734,8 @@
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select count(*), shipping.c_nationkey from (select c_custkey as c_custkey, c_nationkey as c_nationkey from customer where 1 != 1) as shipping where 1 != 1 group by shipping.c_nationkey",
-                            "Query": "select count(*), shipping.c_nationkey from (select c_custkey as c_custkey, c_nationkey as c_nationkey from customer where c_custkey = :o_custkey) as shipping group by shipping.c_nationkey",
+                            "FieldQuery": "select count(*), shipping.c_nationkey from (select c_nationkey as c_nationkey from customer where 1 != 1) as shipping where 1 != 1 group by shipping.c_nationkey",
+                            "Query": "select count(*), shipping.c_nationkey from (select c_nationkey as c_nationkey from customer where c_custkey = :o_custkey) as shipping group by shipping.c_nationkey",
                             "Table": "customer",
                             "Values": [
                               ":o_custkey"
@@ -749,8 +749,8 @@
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select count(*), cust_nation, weight_string(cust_nation), n2.n_nationkey as `n2.n_nationkey` from (select n2.n_name as cust_nation, n2.n_name = 'GERMANY' as `n2.n_name = 'GERMANY'`, n2.n_name = 'FRANCE' as `n2.n_name = 'FRANCE'`, n2.n_nationkey as `n2.n_nationkey` from nation as n2 where 1 != 1) as shipping where 1 != 1 group by cust_nation, weight_string(cust_nation)",
-                            "Query": "select count(*), cust_nation, weight_string(cust_nation), n2.n_nationkey as `n2.n_nationkey` from (select n2.n_name as cust_nation, n2.n_name = 'GERMANY' as `n2.n_name = 'GERMANY'`, n2.n_name = 'FRANCE' as `n2.n_name = 'FRANCE'`, n2.n_nationkey as `n2.n_nationkey` from nation as n2 where (:n1_n_name = 'FRANCE' and n2.n_name = 'GERMANY' or :n1_n_name = 'GERMANY' and n2.n_name = 'FRANCE') and n2.n_nationkey = :c_nationkey) as shipping group by cust_nation, weight_string(cust_nation)",
+                            "FieldQuery": "select count(*), cust_nation, weight_string(cust_nation) from (select n2.n_name as cust_nation from nation as n2 where 1 != 1) as shipping where 1 != 1 group by cust_nation, weight_string(cust_nation)",
+                            "Query": "select count(*), cust_nation, weight_string(cust_nation) from (select n2.n_name as cust_nation from nation as n2 where (:n1_n_name = 'FRANCE' and n2.n_name = 'GERMANY' or :n1_n_name = 'GERMANY' and n2.n_name = 'FRANCE') and n2.n_nationkey = :c_nationkey) as shipping group by cust_nation, weight_string(cust_nation)",
                             "Table": "nation",
                             "Values": [
                               ":c_nationkey"

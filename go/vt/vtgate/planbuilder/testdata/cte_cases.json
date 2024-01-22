@@ -1133,8 +1133,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from (select user_extra.col as `user_extra.col` from user_extra where 1 != 1) as t where 1 != 1",
-            "Query": "select 1 from (select user_extra.col as `user_extra.col` from user_extra where user_extra.col = :user_col) as t",
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col",
             "Table": "user_extra"
           }
         ]

@@ -324,11 +324,18 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 	lhsIDs := TableID(src.LHS)
 	rhsIDs := TableID(src.RHS)
-	rewriteColumnsForJoin(ctx, src.JoinPredicates.columns, lhsIDs, rhsIDs, lhs, rhs)
-	rewriteColumnsForJoin(ctx, src.JoinColumns.columns, lhsIDs, rhsIDs, lhs, rhs)
+	rewriteColumnsForJoin(ctx, src.JoinPredicates.columns, lhsIDs, rhsIDs, lhs, rhs, false)
+	rewriteColumnsForJoin(ctx, src.JoinColumns.columns, lhsIDs, rhsIDs, lhs, rhs, true)
 }
 
-func rewriteColumnsForJoin(ctx *plancontext.PlanningContext, columns []applyJoinColumn, lhsIDs, rhsIDs semantics.TableSet, lhs, rhs *projector) {
+func rewriteColumnsForJoin(
+	ctx *plancontext.PlanningContext,
+	columns []applyJoinColumn,
+	lhsIDs, rhsIDs semantics.TableSet,
+	lhs, rhs *projector,
+	exposeRHS bool, // we only want to expose the returned columns from the RHS.
+	// For predicates, we don't need to expose the RHS columns
+) {
 	for colIdx, predicate := range columns {
 		for lhsIdx, bve := range predicate.LHSExprs {
 			// since this is on the LHSExprs, we know that dependencies are from that side of the join
@@ -353,7 +360,9 @@ func rewriteColumnsForJoin(ctx *plancontext.PlanningContext, columns []applyJoin
 				rewriteTo = lhs.get(ctx, expr)
 				return false
 			case deps.IsSolvedBy(rhsIDs):
-				rewriteTo = rhs.get(ctx, expr)
+				if exposeRHS {
+					rewriteTo = rhs.get(ctx, expr)
+				}
 				return false
 			default:
 				return true

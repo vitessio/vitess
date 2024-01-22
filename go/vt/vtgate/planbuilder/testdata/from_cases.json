@@ -1901,8 +1901,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from (select user_extra.col as `user_extra.col` from user_extra where 1 != 1) as t where 1 != 1",
-            "Query": "select 1 from (select user_extra.col as `user_extra.col` from user_extra where user_extra.col = :user_col) as t",
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col",
             "Table": "user_extra"
           }
         ]
@@ -4296,7 +4296,7 @@
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "R:0,L:1,R:2",
+                    "JoinColumnIndexes": "R:0,L:1,R:1",
                     "JoinVars": {
                       "m_id": 0
                     },
@@ -4320,8 +4320,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select subquery_for_count.user_id, subquery_for_count.`u.id`, weight_string(subquery_for_count.user_id) from (select u.user_id, u.id as `u.id` from `user` as u, user_extra as ue where 1 != 1) as subquery_for_count where 1 != 1",
-                        "Query": "select distinct subquery_for_count.user_id, subquery_for_count.`u.id`, weight_string(subquery_for_count.user_id) from (select u.user_id, u.id as `u.id` from `user` as u, user_extra as ue where u.id = :m_id and u.id = ue.user_id) as subquery_for_count",
+                        "FieldQuery": "select subquery_for_count.user_id, weight_string(subquery_for_count.user_id) from (select u.user_id from `user` as u, user_extra as ue where 1 != 1) as subquery_for_count where 1 != 1",
+                        "Query": "select distinct subquery_for_count.user_id, weight_string(subquery_for_count.user_id) from (select u.user_id from `user` as u, user_extra as ue where u.id = :m_id and u.id = ue.user_id) as subquery_for_count",
                         "Table": "`user`, user_extra",
                         "Values": [
                           ":m_id"
