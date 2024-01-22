@@ -17,6 +17,8 @@ package fastparse
 
 import (
 	"math"
+	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -244,6 +246,69 @@ func TestParseInt64(t *testing.T) {
 				require.EqualError(t, err, tc.err)
 			}
 		})
+	}
+}
+
+func TestParseEdgeInt64(t *testing.T) {
+	for i := int64(math.MinInt64); i < math.MinInt64+1000; i++ {
+		for base := 2; base <= 36; base++ {
+			val, err := ParseInt64(strconv.FormatInt(i, base), base)
+			require.NoError(t, err, "base %d", base)
+			require.Equal(t, int64(i), val)
+		}
+	}
+	for i := int64(math.MaxInt64 - 1000); i < math.MaxInt64; i++ {
+		for base := 2; base <= 36; base++ {
+			val, err := ParseInt64(strconv.FormatInt(i, base), base)
+			require.NoError(t, err)
+			require.NoError(t, err, "base %d", base)
+			require.Equal(t, int64(i), val)
+		}
+	}
+}
+
+func TestParseOverflowInt64(t *testing.T) {
+	for i := int64(1); i <= 1000; i++ {
+		b := big.NewInt(math.MinInt64)
+		b.Sub(b, big.NewInt(i))
+		for base := 2; base <= 36; base++ {
+			val, err := ParseInt64(b.Text(base), base)
+			require.Error(t, err)
+			require.Equal(t, int64(math.MinInt64), val)
+		}
+	}
+
+	for i := int64(1); i <= 1000; i++ {
+		b := big.NewInt(math.MaxInt64)
+		b.Add(b, big.NewInt(i))
+		for base := 2; base <= 36; base++ {
+			val, err := ParseInt64(b.Text(base), base)
+			require.Error(t, err)
+			require.Equal(t, int64(math.MaxInt64), val)
+		}
+	}
+}
+
+func TestParseEdgeUint64(t *testing.T) {
+	for i := uint64(math.MaxUint64 - 1000); i < math.MaxUint64; i++ {
+		for base := 2; base <= 36; base++ {
+			val, err := ParseUint64(strconv.FormatUint(i, base), base)
+			require.NoError(t, err, "base %d", base)
+			require.Equal(t, uint64(i), val)
+		}
+	}
+}
+
+func TestParseOverflowUint64(t *testing.T) {
+	var b big.Int
+	for i := int64(1); i <= 1000; i++ {
+		b.SetUint64(math.MaxUint64)
+		b.Add(&b, big.NewInt(i))
+		for base := 2; base <= 36; base++ {
+			val, err := ParseUint64(b.Text(base), base)
+			require.Error(t, err)
+			require.Equal(t, uint64(math.MaxUint64), val)
+		}
 	}
 }
 
