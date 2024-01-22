@@ -685,7 +685,7 @@ func PermanentlyRemoveVttablet(clusterInfo *VTOrcClusterInfo, tablet *cluster.Vt
 
 // ChangePrivileges is used to change the privileges of the given user. These commands are executed such that they are not replicated
 func ChangePrivileges(t *testing.T, sql string, tablet *cluster.Vttablet, user string) {
-	_, err := RunSQL(t, "SET sql_log_bin = OFF;"+sql+";SET sql_log_bin = ON;", tablet, "")
+	err := RunSQLs(t, []string{"SET sql_log_bin = OFF", sql, "SET sql_log_bin = ON"}, tablet, "")
 	require.NoError(t, err)
 
 	res, err := RunSQL(t, fmt.Sprintf("SELECT id FROM INFORMATION_SCHEMA.PROCESSLIST WHERE user = '%s'", user), tablet, "")
