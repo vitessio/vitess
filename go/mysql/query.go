@@ -308,7 +308,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 	result, more, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
 	if more {
 		// Multiple results are unexpected. Prioritize this "unexpected" error over whatever error we got from the first result.
-		err = errors.Join(vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected multiple results. Use ExecuteFetchMulti instead"), err)
+		err = errors.Join(vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected multiple results. Use ExecuteFetchMulti instead for query %v", query), err)
 	}
 	// Even though we do not allow multiple result sets, we still prefer to drain them so as to clean the connection, as well as
 	// exhaust any further possible error.
