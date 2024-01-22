@@ -332,13 +332,11 @@ func TestCallProcedure(t *testing.T) {
 
 	utils.AssertMatches(t, conn, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("'CALL' not supported in sharded mode")]]`)
 
-	_, err = conn.ExecuteFetch(`CALL sp_select()`, 1000, true)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
+	err = conn.ExecuteFetchMultiDrain(`CALL sp_select()`)
+	require.ErrorContains(t, err, "Multi-Resultset not supported in stored procedure")
 
-	_, err = conn.ExecuteFetch(`CALL sp_all()`, 1000, true)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
+	err = conn.ExecuteFetchMultiDrain(`CALL sp_all()`)
+	require.ErrorContains(t, err, "Multi-Resultset not supported in stored procedure")
 
 	qr = utils.Exec(t, conn, `CALL sp_delete()`)
 	require.GreaterOrEqual(t, 1, int(qr.RowsAffected))
