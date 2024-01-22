@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
 	"vitess.io/vitess/go/mysql"
@@ -123,7 +124,13 @@ func TestMain(m *testing.M) {
 			Port: clusterInstance.VtgateMySQLPort,
 		}
 
-		conn, closer, err := utils.NewMySQL(clusterInstance, shardedKs, shardedSchemaSQL)
+		parser := sqlparser.NewTestParser()
+		queries, err := parser.SplitStatementToPieces(shardedSchemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		conn, closer, err := utils.NewMySQL(clusterInstance, shardedKs, queries...)
 		if err != nil {
 			fmt.Println(err)
 			return 1
