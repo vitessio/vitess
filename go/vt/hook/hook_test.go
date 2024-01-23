@@ -78,7 +78,6 @@ func TestExecuteOptional(t *testing.T) {
 			name:          "HookDoesNotExist",
 			hookName:      "nonexistent-hook",
 			parameters:    []string{"test"},
-			expectedError: "",
 		},
 	}
 
