@@ -1,7 +1,16 @@
-# Release of Vitess v16.0.8
-The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/16.0/16.0.8/changelog.md).
+## Summary
+
+### Table of Contents
+
+- **[Major Changes](#major-changes)**
+  - **[Breaking Changes](#breaking-changes)**
+    - [ExecuteFetchAsDBA rejects multi-statement SQL](#execute-fetch-as-dba-reject-multi)
+
+## <a id="major-changes"/>Major Changes
 
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="execute-fetch-as-dba-reject-multi"/>ExecuteFetchAsDBA rejects multi-statement SQL
 
 `vtctldclient ExecuteFetchAsDBA` (and similarly the `vtctl` and `vtctlclient` commands) now reject multi-statement SQL with error.
 
