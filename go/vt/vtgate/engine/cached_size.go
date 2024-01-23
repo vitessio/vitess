@@ -189,7 +189,7 @@ func (cached *Delete) CachedSize(alloc bool) int64 {
 	size += cached.DML.CachedSize(true)
 	return size
 }
-func (cached *DeleteMulti) CachedSize(alloc bool) int64 {
+func (cached *DeleteWithInput) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}

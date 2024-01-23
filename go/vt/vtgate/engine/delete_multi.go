@@ -26,36 +26,36 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-var _ Primitive = (*DeleteMulti)(nil)
+var _ Primitive = (*DeleteWithInput)(nil)
 
 const DM_VALS = "dm_vals"
 
-// DeleteMulti represents the instructions to perform a delete.
-type DeleteMulti struct {
+// DeleteWithInput represents the instructions to perform a delete operation based on the input result.
+type DeleteWithInput struct {
 	Delete Primitive
 	Input  Primitive
 
 	txNeeded
 }
 
-func (del *DeleteMulti) RouteType() string {
-	return "DELETEMULTI"
+func (del *DeleteWithInput) RouteType() string {
+	return "DeleteWithInput"
 }
 
-func (del *DeleteMulti) GetKeyspaceName() string {
+func (del *DeleteWithInput) GetKeyspaceName() string {
 	return del.Input.GetKeyspaceName()
 }
 
-func (del *DeleteMulti) GetTableName() string {
+func (del *DeleteWithInput) GetTableName() string {
 	return del.Input.GetTableName()
 }
 
-func (del *DeleteMulti) Inputs() ([]Primitive, []map[string]any) {
+func (del *DeleteWithInput) Inputs() ([]Primitive, []map[string]any) {
 	return []Primitive{del.Input, del.Delete}, nil
 }
 
 // TryExecute performs a non-streaming exec.
-func (del *DeleteMulti) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (del *DeleteWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	inputRes, err := vcursor.ExecutePrimitive(ctx, del.Input, bindVars, false)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (del *DeleteMulti) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 }
 
 // TryStreamExecute performs a streaming exec.
-func (del *DeleteMulti) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (del *DeleteWithInput) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	res, err := del.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
@@ -82,13 +82,13 @@ func (del *DeleteMulti) TryStreamExecute(ctx context.Context, vcursor VCursor, b
 }
 
 // GetFields fetches the field info.
-func (del *DeleteMulti) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (del *DeleteWithInput) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.VT13001("unreachable code for MULTI DELETE")
 }
 
-func (del *DeleteMulti) description() PrimitiveDescription {
+func (del *DeleteWithInput) description() PrimitiveDescription {
 	return PrimitiveDescription{
-		OperatorType:     "DeleteMulti",
+		OperatorType:     "DeleteWithInput",
 		TargetTabletType: topodatapb.TabletType_PRIMARY,
 	}
 }

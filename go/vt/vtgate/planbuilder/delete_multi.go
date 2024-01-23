@@ -31,7 +31,7 @@ var _ logicalPlan = (*deleteMulti)(nil)
 func (d *deleteMulti) Primitive() engine.Primitive {
 	inp := d.input.Primitive()
 	del := d.delete.Primitive()
-	return &engine.DeleteMulti{
+	return &engine.DeleteWithInput{
 		Delete: del,
 		Input:  inp,
 	}

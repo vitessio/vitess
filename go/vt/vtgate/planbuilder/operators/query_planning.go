@@ -109,11 +109,10 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
-	switch src := in.Source.(type) {
-	case *Route:
+	if src, ok := in.Source.(*Route); ok {
 		return pushDeleteUnderRoute(in, src)
 	}
-	return in, nil
+	return in, NoRewrite
 }
 
 func pushDeleteUnderRoute(in *Delete, src *Route) (Operator, *ApplyResult) {
@@ -159,11 +158,7 @@ func createDeleteWithInput(ctx *plancontext.PlanningContext, in *Delete, src Ope
 		panic(vterrors.VT13001("target DELETE table not found"))
 	}
 
-	var lhs sqlparser.Expr = leftComp
-	if len(leftComp) == 1 {
-		lhs = leftComp[0]
-	}
-	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DM_VALS), nil)
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, leftComp, sqlparser.ListArg(engine.DM_VALS), nil)
 	targetQT := targetTable.QTable
 	qt := &QueryTable{
 		ID:         targetQT.ID,

@@ -31,7 +31,7 @@ func TestDeleteMulti(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2", "3"),
 	}}
 
-	del := &DeleteMulti{
+	del := &DeleteWithInput{
 		Input: input,
 		Delete: &Delete{
 			DML: &DML{
