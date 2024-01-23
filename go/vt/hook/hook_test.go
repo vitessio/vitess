@@ -50,18 +50,18 @@ func TestExecuteOptional(t *testing.T) {
 	vtroot, err := vtenv.VtRoot()
 	require.NoError(t, err)
 
-	sleep, err := exec.LookPath("echo")
+	echo, err := exec.LookPath("echo")
 	require.NoError(t, err)
 
-	sleepHookPath := path.Join(vtroot, "vthook", "echo")
+	echoHookPath := path.Join(vtroot, "vthook", "echo")
 
-	if _, err := os.Lstat(sleepHookPath); err == nil {
-		require.NoError(t, os.Remove(sleepHookPath))
+	if _, err := os.Lstat(echoHookPath); err == nil {
+		require.NoError(t, os.Remove(echoHookPath))
 	}
 
-	require.NoError(t, os.Symlink(sleep, sleepHookPath))
+	require.NoError(t, os.Symlink(echo, echoHookPath))
 	defer func() {
-		require.NoError(t, os.Remove(sleepHookPath))
+		require.NoError(t, os.Remove(echoHookPath))
 	}()
 	tt := []struct {
 		name          string
