@@ -127,4 +127,16 @@ func TestDeleteWithLimit(t *testing.T) {
 		`[[INT64(4) INT64(20)] [INT64(6) INT64(15)] [INT64(8) INT64(80)]]`)
 	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
 		`[]`)
+
+	// remove all rows
+	mcmp.Exec(`delete from s_tbl`)
+	mcmp.Exec(`delete from order_tbl limit 5`)
+
+	// try with limit again on empty table.
+	qr = mcmp.Exec(`delete from s_tbl where num < 20 limit 2`)
+	require.EqualValues(t, 0, qr.RowsAffected)
+
+	qr = mcmp.Exec(`delete from order_tbl limit 5`)
+	require.EqualValues(t, 0, qr.RowsAffected)
+
 }

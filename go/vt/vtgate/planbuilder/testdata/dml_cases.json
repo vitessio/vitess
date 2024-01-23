@@ -5100,7 +5100,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "MultiEqual",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5108,11 +5108,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select `user`.Id, `user`.`Name`, `user`.Costly from `user` where (`user`.id) in ::dm_vals for update",
-            "Query": "delete from `user` where (`user`.id) in ::dm_vals",
+            "OwnedVindexQuery": "select `user`.Id, `user`.`Name`, `user`.Costly from `user` where `user`.id in ::dm_vals for update",
+            "Query": "delete from `user` where `user`.id in ::dm_vals",
             "Table": "user",
             "Values": [
-              "dm_vals:0"
+              "::dm_vals"
             ],
             "Vindex": "user_index"
           }
@@ -5172,7 +5172,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "MultiEqual",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5180,11 +5180,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where (u.id) in ::dm_vals for update",
-            "Query": "delete from `user` as u where (u.id) in ::dm_vals",
+            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dm_vals for update",
+            "Query": "delete from `user` as u where u.id in ::dm_vals",
             "Table": "user",
             "Values": [
-              "dm_vals:0"
+              "::dm_vals"
             ],
             "Vindex": "user_index"
           }
@@ -5244,7 +5244,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "MultiEqual",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5252,11 +5252,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where (u.id) in ::dm_vals for update",
-            "Query": "delete from `user` as u where (u.id) in ::dm_vals",
+            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dm_vals for update",
+            "Query": "delete from `user` as u where u.id in ::dm_vals",
             "Table": "user",
             "Values": [
-              "dm_vals:0"
+              "::dm_vals"
             ],
             "Vindex": "user_index"
           }
@@ -5342,7 +5342,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "MultiEqual",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5350,11 +5350,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where (u.id) in ::dm_vals for update",
-            "Query": "delete from `user` as u where (u.id) in ::dm_vals",
+            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dm_vals for update",
+            "Query": "delete from `user` as u where u.id in ::dm_vals",
             "Table": "user",
             "Values": [
-              "dm_vals:0"
+              "::dm_vals"
             ],
             "Vindex": "user_index"
           }
@@ -5415,7 +5415,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "MultiEqual",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5423,11 +5423,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select m.user_id, m.id from music as m where (m.id) in ::dm_vals for update",
-            "Query": "delete from music as m where (m.id) in ::dm_vals",
+            "OwnedVindexQuery": "select m.user_id, m.id from music as m where m.id in ::dm_vals for update",
+            "Query": "delete from music as m where m.id in ::dm_vals",
             "Table": "music",
             "Values": [
-              "dm_vals:0"
+              "::dm_vals"
             ],
             "Vindex": "music_user_map"
           }
@@ -5472,7 +5472,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "MultiEqual",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5480,11 +5480,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`user`.id) in ::dm_vals limit 10 for update",
-            "Query": "delete from `user` where (`user`.id) in ::dm_vals",
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dm_vals limit 10 for update",
+            "Query": "delete from `user` where `user`.id in ::dm_vals",
             "Table": "user",
             "Values": [
-              "dm_vals:0"
+              "::dm_vals"
             ],
             "Vindex": "user_index"
           }
@@ -5528,7 +5528,7 @@
           },
           {
             "OperatorType": "Delete",
-            "Variant": "MultiEqual",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -5536,11 +5536,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`user`.id) in ::dm_vals order by `name` asc, col asc limit 5 for update",
-            "Query": "delete from `user` where (`user`.id) in ::dm_vals",
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dm_vals order by `name` asc, col asc limit 5 for update",
+            "Query": "delete from `user` where `user`.id in ::dm_vals",
             "Table": "user",
             "Values": [
-              "dm_vals:0"
+              "::dm_vals"
             ],
             "Vindex": "user_index"
           }

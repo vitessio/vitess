@@ -159,7 +159,12 @@ func createDeleteWithInput(ctx *plancontext.PlanningContext, in *Delete, src Ope
 		panic(vterrors.VT13001("target DELETE table not found"))
 	}
 
-	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, leftComp, sqlparser.ListArg(engine.DM_VALS), nil)
+	// optimize for case when there is only single column on left hand side.
+	var lhs sqlparser.Expr = leftComp
+	if len(leftComp) == 1 {
+		lhs = leftComp[0]
+	}
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DM_VALS), nil)
 	targetQT := targetTable.QTable
 	qt := &QueryTable{
 		ID:         targetQT.ID,

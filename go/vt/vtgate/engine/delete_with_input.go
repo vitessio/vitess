@@ -63,19 +63,36 @@ func (del *DeleteWithInput) TryExecute(ctx context.Context, vcursor VCursor, bin
 		return nil, err
 	}
 
-	bv := &querypb.BindVariable{
-		Type: querypb.Type_TUPLE,
+	var bv *querypb.BindVariable
+	if len(del.OutputCols) == 1 {
+		bv = getBVSingle(inputRes, del.OutputCols[0])
+	} else {
+		bv = getBVMulti(inputRes, del.OutputCols)
 	}
-	outputVals := make([]sqltypes.Value, 0, len(del.OutputCols))
-	for _, row := range inputRes.Rows {
-		for _, offset := range del.OutputCols {
+
+	bindVars[DM_VALS] = bv
+	return vcursor.ExecutePrimitive(ctx, del.Delete, bindVars, false)
+}
+
+func getBVSingle(res *sqltypes.Result, offset int) *querypb.BindVariable {
+	bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
+	for _, row := range res.Rows {
+		bv.Values = append(bv.Values, sqltypes.ValueToProto(row[offset]))
+	}
+	return bv
+}
+
+func getBVMulti(res *sqltypes.Result, offsets []int) *querypb.BindVariable {
+	bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
+	outputVals := make([]sqltypes.Value, 0, len(offsets))
+	for _, row := range res.Rows {
+		for _, offset := range offsets {
 			outputVals = append(outputVals, row[offset])
 		}
 		bv.Values = append(bv.Values, sqltypes.TupleToProto(outputVals))
 		outputVals = outputVals[:0]
 	}
-	bindVars[DM_VALS] = bv
-	return vcursor.ExecutePrimitive(ctx, del.Delete, bindVars, false)
+	return bv
 }
 
 // TryStreamExecute performs a streaming exec.
