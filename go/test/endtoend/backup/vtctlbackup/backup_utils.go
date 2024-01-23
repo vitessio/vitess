@@ -1218,13 +1218,6 @@ func readManifestFile(t *testing.T, backupLocation string) (manifest *mysqlctl.B
 	return manifest
 }
 
-func expectNoManifest(t *testing.T, backupLocation string) {
-	// reading manifest
-	fullPath := backupLocation + "/MANIFEST"
-	_, err := os.ReadFile(fullPath)
-	assert.Truef(t, os.IsNotExist(err), "Expected ErrNotExist, got %v", err)
-}
-
 func TestReplicaFullBackup(t *testing.T, replicaIndex int) (manifest *mysqlctl.BackupManifest) {
 	backups := vtctlBackupReplicaNoDestroyNoWrites(t, replicaIndex)
 
@@ -1277,17 +1270,18 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 
+	if expectEmpty {
+		require.Contains(t, output, "backup is empty")
+		return nil, ""
+	}
+
 	backups := waitForNumBackups(t, numBackups+1)
 	require.NotEmptyf(t, backups, "output: %v", output)
 
 	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 	backupName = backups[len(backups)-1]
-	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backupName
 
-	if expectEmpty {
-		expectNoManifest(t, backupLocation)
-		return nil, backupName
-	}
+	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backupName
 	return readManifestFile(t, backupLocation), backupName
 }
 
