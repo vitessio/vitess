@@ -1641,6 +1641,12 @@ var (
 			input:  "alter table a rename column a as b",
 			output: "alter table a rename column a to b",
 		}, {
+			input:  "create table t1 (id serial primary key, c1 text not null);",
+			output: "create table t1 (\n\tid bigint not null auto_increment primary key,\n\tc1 text not null\n)",
+		}, {
+			input:  "create table t1 (id int primary key unique, c1 varchar(111) not null);",
+			output: "create table t1 (\n\tid int primary key,\n\tc1 varchar(111) not null\n)",
+		}, {
 			input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 			output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 		}, {
