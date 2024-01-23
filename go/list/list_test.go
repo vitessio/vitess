@@ -107,6 +107,19 @@ func TestRemoveOnlyElement(t *testing.T) {
 	}
 }
 
+func TestRemoveFromWrongList(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected Remove() to panic when removing from wrong List")
+		}
+	}()
+
+	l1 := New[int]()
+	l2 := New[int]()
+	e := l1.PushFront(1)
+	l2.Remove(e)
+}
+
 func TestGetFirstElement(t *testing.T) {
 	l := New[int]()
 	e := l.PushFront(1)
