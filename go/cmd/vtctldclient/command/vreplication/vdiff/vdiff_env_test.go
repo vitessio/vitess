@@ -27,10 +27,10 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -84,7 +84,7 @@ func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShar
 		tabletType:     topodatapb.TabletType_REPLICA,
 		tmc:            newTestVDiffTMClient(),
 	}
-	env.ws = workflow.NewServer(env.topoServ, env.tmc, sqlparser.NewTestParser())
+	env.ws = workflow.NewServer(vtenv.NewTestEnv(), env.topoServ, env.tmc)
 	env.tmc.testEnv = env
 
 	// Generate a unique dialer name.

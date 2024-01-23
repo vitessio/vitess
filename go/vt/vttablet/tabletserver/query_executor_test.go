@@ -29,9 +29,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -1452,48 +1452,48 @@ const (
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
-	config := tabletenv.NewDefaultConfig()
-	config.OltpReadPool.Size = 100
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.OltpReadPool.Size = 100
 	if flags&smallTxPool > 0 {
-		config.TxPool.Size = 3
+		cfg.TxPool.Size = 3
 	} else {
-		config.TxPool.Size = 100
+		cfg.TxPool.Size = 100
 	}
 	if flags&enableStrictTableACL > 0 {
-		config.StrictTableACL = true
+		cfg.StrictTableACL = true
 	} else {
-		config.StrictTableACL = false
+		cfg.StrictTableACL = false
 	}
 	if flags&noTwopc > 0 {
-		config.TwoPCEnable = false
+		cfg.TwoPCEnable = false
 	} else {
-		config.TwoPCEnable = true
+		cfg.TwoPCEnable = true
 	}
 	if flags&disableOnlineDDL > 0 {
-		config.EnableOnlineDDL = false
+		cfg.EnableOnlineDDL = false
 	} else {
-		config.EnableOnlineDDL = true
+		cfg.EnableOnlineDDL = true
 	}
-	config.TwoPCCoordinatorAddress = "fake"
+	cfg.TwoPCCoordinatorAddress = "fake"
 	if flags&shortTwopcAge > 0 {
-		config.TwoPCAbandonAge = 0.5
+		cfg.TwoPCAbandonAge = 0.5
 	} else {
-		config.TwoPCAbandonAge = 10
+		cfg.TwoPCAbandonAge = 10
 	}
 	if flags&smallResultSize > 0 {
-		config.Oltp.MaxRows = 2
+		cfg.Oltp.MaxRows = 2
 	}
 	if flags&enableConsolidator > 0 {
-		config.Consolidator = tabletenv.Enable
+		cfg.Consolidator = tabletenv.Enable
 	} else {
-		config.Consolidator = tabletenv.Disable
+		cfg.Consolidator = tabletenv.Disable
 	}
 	dbconfigs := newDBConfigs(db)
-	config.DB = dbconfigs
-	tsv := NewTabletServer(ctx, "TabletServerTest", config, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser())
+	cfg.DB = dbconfigs
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
-	if config.TwoPCEnable {
+	if cfg.TwoPCEnable {
 		tsv.TwoPCEngineWait()
 	}
 	if err != nil {

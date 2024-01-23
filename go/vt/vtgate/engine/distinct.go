@@ -183,7 +183,7 @@ func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 		InsertID: input.InsertID,
 	}
 
-	pt := newProbeTable(d.CheckCols, vcursor.CollationEnv())
+	pt := newProbeTable(d.CheckCols, vcursor.Environment().CollationEnv())
 
 	for _, row := range input.Rows {
 		exists, err := pt.exists(row)
@@ -204,7 +204,7 @@ func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 func (d *Distinct) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var mu sync.Mutex
 
-	pt := newProbeTable(d.CheckCols, vcursor.CollationEnv())
+	pt := newProbeTable(d.CheckCols, vcursor.Environment().CollationEnv())
 	err := vcursor.StreamExecutePrimitive(ctx, d.Source, bindVars, wantfields, func(input *sqltypes.Result) error {
 		result := &sqltypes.Result{
 			Fields:   input.Fields,

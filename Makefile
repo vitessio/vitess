@@ -282,7 +282,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=26
+BOOTSTRAP_VERSION=27
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -327,13 +327,6 @@ $(DOCKER_BASE_TARGETS): docker_base_%:
 	${call build_docker_image,docker/base/Dockerfile.$*,vitess/base:$*}
 
 docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
-
-DOCKER_MYSQL_VERSIONS = 8.0.30 8.0.34
-docker_mysql:
-	for i in $(DOCKER_MYSQL_VERSIONS); do echo "building vitess/mysql:$$i"; ${call build_docker_image,docker/mysql/Dockerfile.$$i,vitess/mysql:$$i} || exit 1; done
-
-docker_mysql_push:
-	for i in $(DOCKER_MYSQL_VERSIONS); do echo "pushing vitess/mysql:$$i"; docker push vitess/mysql:$$i || exit 1; done
 
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}

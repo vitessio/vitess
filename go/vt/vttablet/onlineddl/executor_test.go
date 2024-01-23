@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"vitess.io/vitess/go/vt/schema"
@@ -48,7 +48,7 @@ func TestGetConstraintType(t *testing.T) {
 
 func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	e := Executor{
-		env: tabletenv.NewEnv(nil, "ValidateAndEditCreateTableStatementTest", collations.MySQL8(), sqlparser.NewTestParser()),
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "ValidateAndEditCreateTableStatementTest"),
 	}
 	tt := []struct {
 		name                string
@@ -161,7 +161,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			stmt, err := e.env.SQLParser().ParseStrictDDL(tc.query)
+			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tc.query)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -192,7 +192,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 
 func TestValidateAndEditAlterTableStatement(t *testing.T) {
 	e := Executor{
-		env: tabletenv.NewEnv(nil, "TestValidateAndEditAlterTableStatementTest", collations.MySQL8(), sqlparser.NewTestParser()),
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestValidateAndEditAlterTableStatementTest"),
 	}
 	tt := []struct {
 		alter  string
@@ -263,7 +263,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
-			stmt, err := e.env.SQLParser().ParseStrictDDL(tc.alter)
+			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tc.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -286,7 +286,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 
 func TestAddInstantAlgorithm(t *testing.T) {
 	e := Executor{
-		env: tabletenv.NewEnv(nil, "AddInstantAlgorithmTest", collations.MySQL8(), sqlparser.NewTestParser()),
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "AddInstantAlgorithmTest"),
 	}
 	tt := []struct {
 		alter  string
@@ -311,7 +311,7 @@ func TestAddInstantAlgorithm(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
-			stmt, err := e.env.SQLParser().ParseStrictDDL(tc.alter)
+			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tc.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -321,7 +321,7 @@ func TestAddInstantAlgorithm(t *testing.T) {
 
 			assert.Equal(t, tc.expect, alterInstant)
 
-			stmt, err = e.env.SQLParser().ParseStrictDDL(alterInstant)
+			stmt, err = e.env.Environment().Parser().ParseStrictDDL(alterInstant)
 			require.NoError(t, err)
 			_, ok = stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -331,7 +331,7 @@ func TestAddInstantAlgorithm(t *testing.T) {
 
 func TestDuplicateCreateTable(t *testing.T) {
 	e := Executor{
-		env: tabletenv.NewEnv(nil, "DuplicateCreateTableTest", collations.MySQL8(), sqlparser.NewTestParser()),
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "DuplicateCreateTableTest"),
 	}
 	ctx := context.Background()
 	onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "something", Strategy: "vitess", Options: "--unsafe-allow-foreign-keys"}

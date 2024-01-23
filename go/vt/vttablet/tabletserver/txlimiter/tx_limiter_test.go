@@ -19,9 +19,8 @@ package txlimiter
 import (
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -40,16 +39,16 @@ func createCallers(username, principal, component, subcomponent string) (*queryp
 }
 
 func TestTxLimiter_DisabledAllowsAll(t *testing.T) {
-	config := tabletenv.NewDefaultConfig()
-	config.TxPool.Size = 10
-	config.TransactionLimitPerUser = 0.1
-	config.EnableTransactionLimit = false
-	config.EnableTransactionLimitDryRun = false
-	config.TransactionLimitByUsername = false
-	config.TransactionLimitByPrincipal = false
-	config.TransactionLimitByComponent = false
-	config.TransactionLimitBySubcomponent = false
-	limiter := New(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser()))
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.TxPool.Size = 10
+	cfg.TransactionLimitPerUser = 0.1
+	cfg.EnableTransactionLimit = false
+	cfg.EnableTransactionLimitDryRun = false
+	cfg.TransactionLimitByUsername = false
+	cfg.TransactionLimitByPrincipal = false
+	cfg.TransactionLimitByComponent = false
+	cfg.TransactionLimitBySubcomponent = false
+	limiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	im, ef := createCallers("", "", "", "")
 	for i := 0; i < 5; i++ {
 		if got, want := limiter.Get(im, ef), true; got != want {
@@ -60,18 +59,18 @@ func TestTxLimiter_DisabledAllowsAll(t *testing.T) {
 }
 
 func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
-	config := tabletenv.NewDefaultConfig()
-	config.TxPool.Size = 10
-	config.TransactionLimitPerUser = 0.3
-	config.EnableTransactionLimit = true
-	config.EnableTransactionLimitDryRun = false
-	config.TransactionLimitByUsername = true
-	config.TransactionLimitByPrincipal = false
-	config.TransactionLimitByComponent = false
-	config.TransactionLimitBySubcomponent = false
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.TxPool.Size = 10
+	cfg.TransactionLimitPerUser = 0.3
+	cfg.EnableTransactionLimit = true
+	cfg.EnableTransactionLimitDryRun = false
+	cfg.TransactionLimitByUsername = true
+	cfg.TransactionLimitByPrincipal = false
+	cfg.TransactionLimitByComponent = false
+	cfg.TransactionLimitBySubcomponent = false
 
 	// This should allow 3 slots to all users
-	newlimiter := New(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser()))
+	newlimiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	limiter, ok := newlimiter.(*Impl)
 	if !ok {
 		t.Fatalf("New returned limiter of unexpected type: got %T, want %T", newlimiter, limiter)
@@ -126,18 +125,18 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 }
 
 func TestTxLimiterDryRun(t *testing.T) {
-	config := tabletenv.NewDefaultConfig()
-	config.TxPool.Size = 10
-	config.TransactionLimitPerUser = 0.3
-	config.EnableTransactionLimit = true
-	config.EnableTransactionLimitDryRun = true
-	config.TransactionLimitByUsername = true
-	config.TransactionLimitByPrincipal = false
-	config.TransactionLimitByComponent = false
-	config.TransactionLimitBySubcomponent = false
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.TxPool.Size = 10
+	cfg.TransactionLimitPerUser = 0.3
+	cfg.EnableTransactionLimit = true
+	cfg.EnableTransactionLimitDryRun = true
+	cfg.TransactionLimitByUsername = true
+	cfg.TransactionLimitByPrincipal = false
+	cfg.TransactionLimitByComponent = false
+	cfg.TransactionLimitBySubcomponent = false
 
 	// This should allow 3 slots to all users
-	newlimiter := New(tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser()))
+	newlimiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	limiter, ok := newlimiter.(*Impl)
 	if !ok {
 		t.Fatalf("New returned limiter of unexpected type: got %T, want %T", newlimiter, limiter)

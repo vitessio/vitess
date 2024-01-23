@@ -35,7 +35,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
@@ -556,7 +556,7 @@ func (db *LocalCluster) createVTSchema() error {
 		return db.ExecuteFetch(query, "")
 	}
 
-	if err := sidecardb.Init(context.Background(), sidecardbExec, sqlparser.NewTestParser()); err != nil {
+	if err := sidecardb.Init(context.Background(), vtenv.NewTestEnv(), sidecardbExec); err != nil {
 		return err
 	}
 	return nil

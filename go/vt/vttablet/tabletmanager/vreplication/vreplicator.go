@@ -327,7 +327,13 @@ type ColumnInfo struct {
 }
 
 func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}, ExcludeTables: []string{"/" + schema.GCTableNameExpression + "/"}}
+	req := &tabletmanagerdatapb.GetSchemaRequest{
+		Tables: []string{"/.*/"},
+		ExcludeTables: []string{
+			"/" + schema.GCTableNameExpression + "/",
+			"/" + schema.NewGCTableNameExpression + "/",
+		},
+	}
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
 	if err != nil {
 		return nil, err
@@ -730,7 +736,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	}
 	tableSchema := schema.TableDefinitions[0].Schema
 	var secondaryKeys []*sqlparser.IndexDefinition
-	parsedDDL, err := vr.vre.parser.ParseStrictDDL(tableSchema)
+	parsedDDL, err := vr.vre.env.Parser().ParseStrictDDL(tableSchema)
 	if err != nil {
 		return secondaryKeys, err
 	}
@@ -977,7 +983,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 				// the table schema and if so move forward and delete the
 				// post_copy_action record.
 				if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERDupKeyName {
-					stmt, err := vr.vre.parser.ParseStrictDDL(action.Task)
+					stmt, err := vr.vre.env.Parser().ParseStrictDDL(action.Task)
 					if err != nil {
 						return failedAlterErr
 					}

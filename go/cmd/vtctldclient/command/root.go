@@ -32,11 +32,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	// These imports ensure init()s within them get called and they register their commands/subcommands.
@@ -82,7 +82,7 @@ var (
 	actionTimeout time.Duration
 	compactOutput bool
 
-	parser *sqlparser.Parser
+	env *vtenv.Environment
 
 	topoOptions = struct {
 		implementation        string
@@ -212,7 +212,7 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 				return nil
 			})
 		})
-		vtctld := grpcvtctldserver.NewVtctldServer(ts, parser)
+		vtctld := grpcvtctldserver.NewVtctldServer(env, ts)
 		localvtctldclient.SetServer(vtctld)
 		VtctldClientProtocol = "local"
 		server = ""
@@ -231,12 +231,12 @@ func init() {
 	vreplcommon.RegisterCommands(Root)
 
 	var err error
-	parser, err = sqlparser.New(sqlparser.Options{
+	env, err = vtenv.New(vtenv.Options{
 		MySQLServerVersion: servenv.MySQLServerVersion(),
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		log.Fatalf("failed to initialize sqlparser: %v", err)
+		log.Fatalf("failed to initialize vtenv: %v", err)
 	}
 }

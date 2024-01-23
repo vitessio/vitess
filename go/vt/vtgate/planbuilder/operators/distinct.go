@@ -48,11 +48,7 @@ type (
 func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
-		e, err := d.QP.TryGetSimplifiedExpr(ctx, col.Expr)
-		if err != nil {
-			// ambiguous columns are not a problem for DISTINCT
-			e = col.Expr
-		}
+		e := col.Expr
 		var wsCol *int
 		typ, _ := ctx.SemTable.TypeForExpr(e)
 
@@ -65,7 +61,7 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			Col:          idx,
 			WsCol:        wsCol,
 			Type:         typ,
-			CollationEnv: ctx.VSchema.CollationEnv(),
+			CollationEnv: ctx.VSchema.Environment().CollationEnv(),
 		})
 	}
 	return nil

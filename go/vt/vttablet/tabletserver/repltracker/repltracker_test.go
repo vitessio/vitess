@@ -23,13 +23,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -37,13 +36,13 @@ func TestReplTracker(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 
-	config := tabletenv.NewDefaultConfig()
-	config.ReplicationTracker.Mode = tabletenv.Heartbeat
-	config.ReplicationTracker.HeartbeatInterval = time.Second
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.ReplicationTracker.Mode = tabletenv.Heartbeat
+	cfg.ReplicationTracker.HeartbeatInterval = time.Second
 	params := db.ConnParams()
 	cp := *params
-	config.DB = dbconfigs.NewTestDBConfigs(cp, cp, "")
-	env := tabletenv.NewEnv(config, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	cfg.DB = dbconfigs.NewTestDBConfigs(cp, cp, "")
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReplTrackerTest")
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -80,7 +79,7 @@ func TestReplTracker(t *testing.T) {
 	assert.False(t, rt.hw.isOpen)
 	assert.False(t, rt.hr.isOpen)
 
-	config.ReplicationTracker.Mode = tabletenv.Polling
+	cfg.ReplicationTracker.Mode = tabletenv.Polling
 	rt = NewReplTracker(env, alias)
 	rt.InitDBConfig(target, mysqld)
 	assert.Equal(t, tabletenv.Polling, rt.mode)

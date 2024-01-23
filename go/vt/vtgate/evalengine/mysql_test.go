@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 func internalExpression(e Expr) IR {
@@ -69,7 +70,7 @@ func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 
 	cfg := &Config{
 		Collation:         collations.CollationUtf8mb4ID,
-		CollationEnv:      collations.MySQL8(),
+		Environment:       vtenv.NewTestEnv(),
 		NoConstantFolding: !simplify,
 	}
 
@@ -89,7 +90,7 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	return EmptyExpressionEnv(collations.MySQL8()).Evaluate(converted)
+	return EmptyExpressionEnv(vtenv.NewTestEnv()).Evaluate(converted)
 }
 
 func TestMySQLGolden(t *testing.T) {

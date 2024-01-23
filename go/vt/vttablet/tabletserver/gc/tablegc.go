@@ -639,6 +639,16 @@ func (collector *TableGC) addPurgingTable(tableName string) (added bool) {
 		// so we don't populate the purgingTables map.
 		return false
 	}
+	isGCTable, state, _, _, err := schema.AnalyzeGCTableName(tableName)
+	if err != nil {
+		return false
+	}
+	if !isGCTable {
+		return false
+	}
+	if state != schema.PurgeTableGCState {
+		return false
+	}
 
 	collector.purgeMutex.Lock()
 	defer collector.purgeMutex.Unlock()

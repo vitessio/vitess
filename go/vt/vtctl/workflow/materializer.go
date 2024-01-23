@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -65,7 +66,7 @@ type materializer struct {
 	primaryVindexesDiffer bool
 	workflowType          binlogdatapb.VReplicationWorkflowType
 
-	parser *sqlparser.Parser
+	env *vtenv.Environment
 }
 
 func (mz *materializer) getWorkflowType() binlogdatapb.VReplicationWorkflowType {
@@ -168,7 +169,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			}
 
 			// Validate non-empty query.
-			stmt, err := mz.parser.Parse(ts.SourceExpression)
+			stmt, err := mz.env.Parser().Parse(ts.SourceExpression)
 			if err != nil {
 				return nil, err
 			}
@@ -278,7 +279,7 @@ func (mz *materializer) deploySchema() error {
 			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropForeignKeys {
 				if ts.SourceExpression != "" {
 					// Check for table if non-empty SourceExpression.
-					sourceTableName, err := mz.parser.TableFromStatement(ts.SourceExpression)
+					sourceTableName, err := mz.env.Parser().TableFromStatement(ts.SourceExpression)
 					if err != nil {
 						return err
 					}
@@ -294,7 +295,7 @@ func (mz *materializer) deploySchema() error {
 				}
 
 				if createDDL == createDDLAsCopyDropConstraint {
-					strippedDDL, err := stripTableConstraints(ddl, mz.parser)
+					strippedDDL, err := stripTableConstraints(ddl, mz.env.Parser())
 					if err != nil {
 						return err
 					}
@@ -303,7 +304,7 @@ func (mz *materializer) deploySchema() error {
 				}
 
 				if createDDL == createDDLAsCopyDropForeignKeys {
-					strippedDDL, err := stripTableForeignKeys(ddl, mz.parser)
+					strippedDDL, err := stripTableForeignKeys(ddl, mz.env.Parser())
 					if err != nil {
 						return err
 					}
@@ -324,7 +325,8 @@ func (mz *materializer) deploySchema() error {
 				// We use schemadiff to normalize the schema.
 				// For now, and because this is could have wider implications, we ignore any errors in
 				// reading the source schema.
-				schema, err := schemadiff.NewSchemaFromQueries(applyDDLs, mz.parser)
+				env := schemadiff.NewEnv(mz.env, mz.env.CollationEnv().DefaultConnectionCharset())
+				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
 				if err != nil {
 					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
 				} else {
@@ -356,7 +358,7 @@ func (mz *materializer) buildMaterializer() error {
 	if err != nil {
 		return err
 	}
-	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace, mz.parser)
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace, mz.env.Parser())
 	if err != nil {
 		return err
 	}

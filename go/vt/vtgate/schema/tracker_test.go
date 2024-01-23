@@ -174,9 +174,9 @@ func TestTableTracking(t *testing.T) {
 		// initial load of view - kept empty
 	}, {
 		"t1": "create table t1(id bigint primary key, name varchar(50), email varchar(50) not null default 'a@b.com')",
-		"t2": "create table t2(id varchar(50) primary key)",
+		"T1": "create table T1(id varchar(50) primary key)",
 	}, {
-		"t2": "create table t2(id varchar(50) primary key, name varchar(50))",
+		"T1": "create table T1(id varchar(50) primary key, name varchar(50))",
 		"t3": "create table t3(id datetime primary key)",
 	}, {
 		"t4": "create table t4(name varchar(50) primary key)",
@@ -189,18 +189,18 @@ func TestTableTracking(t *testing.T) {
 		},
 	}, {
 		testName: "new tables",
-		updTbl:   []string{"t1", "t2"},
+		updTbl:   []string{"t1", "T1"},
 		expTbl: map[string][]vindexes.Column{
 			"prior": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32, CollationName: "binary", Nullable: true}},
 			"t1":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: false, Default: &sqlparser.Literal{Val: "a@b.com"}}},
-			"t2":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
+			"T1":    {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
 		},
 	}, {
-		testName: "delete prior, updated t2 and new t3",
-		updTbl:   []string{"prior", "t2", "t3"},
+		testName: "delete prior, updated T1 and new t3",
+		updTbl:   []string{"prior", "T1", "t3"},
 		expTbl: map[string][]vindexes.Column{
 			"t1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: false, Default: &sqlparser.Literal{Val: "a@b.com"}}},
-			"t2": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
+			"T1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
 			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME, CollationName: "binary", Size: 0, Nullable: true}},
 		},
 	}, {
@@ -208,7 +208,7 @@ func TestTableTracking(t *testing.T) {
 		updTbl:   []string{"t4"},
 		expTbl: map[string][]vindexes.Column{
 			"t1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: false, Default: &sqlparser.Literal{Val: "a@b.com"}}},
-			"t2": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
+			"T1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
 			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME, CollationName: "binary", Size: 0, Nullable: true}},
 			"t4": {{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
 		},
@@ -225,9 +225,9 @@ func TestViewsTracking(t *testing.T) {
 		"prior": "create view prior as select 1 from tbl",
 	}, {
 		"t1": "create view t1 as select 1 from tbl1",
-		"t2": "create view t2 as select 1 from tbl2",
+		"V1": "create view V1 as select 1 from tbl2",
 	}, {
-		"t2": "create view t2 as select 1,2 from tbl2",
+		"V1": "create view V1 as select 1,2 from tbl2",
 		"t3": "create view t3 as select 1 from tbl3",
 	}, {
 		"t4": "create view t4 as select 1 from tbl4",
@@ -238,25 +238,25 @@ func TestViewsTracking(t *testing.T) {
 		expView: map[string]string{
 			"prior": "select 1 from tbl"},
 	}, {
-		testName: "new view t1, t2",
-		updView:  []string{"t1", "t2"},
+		testName: "new view t1, V1",
+		updView:  []string{"t1", "V1"},
 		expView: map[string]string{
 			"t1":    "select 1 from tbl1",
-			"t2":    "select 1 from tbl2",
+			"V1":    "select 1 from tbl2",
 			"prior": "select 1 from tbl"},
 	}, {
-		testName: "delete prior, updated t2 and new t3",
-		updView:  []string{"prior", "t2", "t3"},
+		testName: "delete prior, updated V1 and new t3",
+		updView:  []string{"prior", "V1", "t3"},
 		expView: map[string]string{
 			"t1": "select 1 from tbl1",
-			"t2": "select 1, 2 from tbl2",
+			"V1": "select 1, 2 from tbl2",
 			"t3": "select 1 from tbl3"},
 	}, {
 		testName: "new t4",
 		updView:  []string{"t4"},
 		expView: map[string]string{
 			"t1": "select 1 from tbl1",
-			"t2": "select 1, 2 from tbl2",
+			"V1": "select 1, 2 from tbl2",
 			"t3": "select 1 from tbl3",
 			"t4": "select 1 from tbl4"},
 	}}

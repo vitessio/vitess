@@ -33,9 +33,9 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 	}
 
 	expr, err := evalengine.Translate(op.Value, &evalengine.Config{
-		Collation:    ctx.SemTable.Collation,
-		ResolveType:  ctx.SemTable.TypeForExpr,
-		CollationEnv: ctx.VSchema.CollationEnv(),
+		Collation:   ctx.SemTable.Collation,
+		ResolveType: ctx.SemTable.TypeForExpr,
+		Environment: ctx.VSchema.Environment(),
 	})
 	if err != nil {
 		return nil, err

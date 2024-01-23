@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/streamlog"
@@ -73,7 +74,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	response := httptest.NewRecorder()
 	ch := make(chan *logstats.LogStats, 1)
 	ch <- logStats
-	querylogzHandler(ch, response, req)
+	querylogzHandler(ch, response, req, sqlparser.NewTestParser())
 	close(ch)
 	body, _ := io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, fastQueryPattern, logStats, body)
@@ -103,7 +104,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	response = httptest.NewRecorder()
 	ch = make(chan *logstats.LogStats, 1)
 	ch <- logStats
-	querylogzHandler(ch, response, req)
+	querylogzHandler(ch, response, req, sqlparser.NewTestParser())
 	close(ch)
 	body, _ = io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, mediumQueryPattern, logStats, body)
@@ -132,7 +133,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	logStats.EndTime = logStats.StartTime.Add(500 * time.Millisecond)
 	ch = make(chan *logstats.LogStats, 1)
 	ch <- logStats
-	querylogzHandler(ch, response, req)
+	querylogzHandler(ch, response, req, sqlparser.NewTestParser())
 	close(ch)
 	body, _ = io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
@@ -142,7 +143,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	defer func() { streamlog.SetQueryLogFilterTag("") }()
 	ch = make(chan *logstats.LogStats, 1)
 	ch <- logStats
-	querylogzHandler(ch, response, req)
+	querylogzHandler(ch, response, req, sqlparser.NewTestParser())
 	close(ch)
 	body, _ = io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)

@@ -808,7 +808,7 @@
   {
     "comment": "scatter aggregate group by invalid column number",
     "query": "select col from user group by 2",
-    "plan": "Unknown column '2' in 'group statement'"
+    "plan": "Unknown column '2' in 'group clause'"
   },
   {
     "comment": "scatter aggregate order by null",
@@ -1054,8 +1054,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `user`.col1 as a from `user` where 1 != 1 group by a collate utf8_general_ci",
-        "Query": "select `user`.col1 as a from `user` where `user`.id = 5 group by a collate utf8_general_ci",
+        "FieldQuery": "select `user`.col1 as a from `user` where 1 != 1 group by `user`.col1 collate utf8_general_ci",
+        "Query": "select `user`.col1 as a from `user` where `user`.id = 5 group by `user`.col1 collate utf8_general_ci",
         "Table": "`user`",
         "Values": [
           "5"
@@ -1207,7 +1207,7 @@
   {
     "comment": "Group by out of range column number (code is duplicated from symab).",
     "query": "select id from user group by 2",
-    "plan": "Unknown column '2' in 'group statement'"
+    "plan": "Unknown column '2' in 'group clause'"
   },
   {
     "comment": "here it is safe to remove the order by on the derived table since it will not influence the output of the count(*)",
@@ -1602,9 +1602,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` where 1 != 1 group by v, weight_string(lower(textcol1))",
+            "FieldQuery": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` where 1 != 1 group by lower(textcol1), weight_string(lower(textcol1))",
             "OrderBy": "(0|2) ASC",
-            "Query": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` group by v, weight_string(lower(textcol1)) order by v asc",
+            "Query": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` group by lower(textcol1), weight_string(lower(textcol1)) order by lower(textcol1) asc",
             "Table": "`user`"
           }
         ]
@@ -1634,9 +1634,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` where 1 != 1 group by a, weight_string(char_length(texcol1))",
+            "FieldQuery": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` where 1 != 1 group by char_length(texcol1), weight_string(char_length(texcol1))",
             "OrderBy": "(0|2) ASC",
-            "Query": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` group by a, weight_string(char_length(texcol1)) order by a asc",
+            "Query": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` group by char_length(texcol1), weight_string(char_length(texcol1)) order by char_length(texcol1) asc",
             "Table": "`user`"
           }
         ]
@@ -2638,9 +2638,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` where 1 != 1 group by a, weight_string(ascii(val1))",
+            "FieldQuery": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` where 1 != 1 group by ascii(val1), weight_string(ascii(val1))",
             "OrderBy": "(0|2) ASC",
-            "Query": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` group by a, weight_string(ascii(val1)) order by a asc",
+            "Query": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` group by ascii(val1), weight_string(ascii(val1)) order by ascii(val1) asc",
             "Table": "`user`"
           }
         ]
@@ -3351,9 +3351,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by id, weight_string(`user`.id)",
+                "FieldQuery": "select `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by `user`.id, weight_string(`user`.id)",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select `user`.id, weight_string(`user`.id) from `user` group by id, weight_string(`user`.id) order by id asc",
+                "Query": "select `user`.id, weight_string(`user`.id) from `user` group by `user`.id, weight_string(`user`.id) order by `user`.id asc",
                 "Table": "`user`"
               },
               {
@@ -6409,8 +6409,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select count(*), cast(`user`.foo as datetime) as f1, weight_string(cast(`user`.foo as datetime)) from `user` where 1 != 1 group by f1, weight_string(cast(`user`.foo as datetime))",
-                        "Query": "select count(*), cast(`user`.foo as datetime) as f1, weight_string(cast(`user`.foo as datetime)) from `user` group by f1, weight_string(cast(`user`.foo as datetime))",
+                        "FieldQuery": "select count(*), cast(`user`.foo as datetime) as f1, weight_string(cast(`user`.foo as datetime)) from `user` where 1 != 1 group by cast(`user`.foo as datetime), weight_string(cast(`user`.foo as datetime))",
+                        "Query": "select count(*), cast(`user`.foo as datetime) as f1, weight_string(cast(`user`.foo as datetime)) from `user` group by cast(`user`.foo as datetime), weight_string(cast(`user`.foo as datetime))",
                         "Table": "`user`"
                       },
                       {
@@ -6420,8 +6420,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select count(*), cast(music.foo as datetime) as f2, weight_string(cast(music.foo as datetime)) from music where 1 != 1 group by f2, weight_string(cast(music.foo as datetime))",
-                        "Query": "select count(*), cast(music.foo as datetime) as f2, weight_string(cast(music.foo as datetime)) from music group by f2, weight_string(cast(music.foo as datetime))",
+                        "FieldQuery": "select count(*), cast(music.foo as datetime) as f2, weight_string(cast(music.foo as datetime)) from music where 1 != 1 group by cast(music.foo as datetime), weight_string(cast(music.foo as datetime))",
+                        "Query": "select count(*), cast(music.foo as datetime) as f2, weight_string(cast(music.foo as datetime)) from music group by cast(music.foo as datetime), weight_string(cast(music.foo as datetime))",
                         "Table": "music"
                       }
                     ]
@@ -6900,7 +6900,7 @@
     }
   },
   {
-    "comment": "",
+    "comment": "select count(distinct name, id) from user",
     "query": "select count(distinct name, id) from user",
     "plan": {
       "QueryType": "SELECT",
@@ -6922,6 +6922,30 @@
             "Table": "`user`"
           }
         ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "valid but slightly confusing query should work - col in the order by should not get expanded to the column alias col",
+    "query": "select id, from_unixtime(min(col)) as col from user group by id order by min(col)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, from_unixtime(min(col)) as col from user group by id order by min(col)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, from_unixtime(min(col)) as col, min(col) from `user` where 1 != 1 group by id",
+        "OrderBy": "2 ASC",
+        "Query": "select id, from_unixtime(min(col)) as col, min(col) from `user` group by id order by min(col) asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
       },
       "TablesUsed": [
         "user.user"

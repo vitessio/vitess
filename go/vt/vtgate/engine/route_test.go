@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -45,13 +44,6 @@ var defaultSelectResult = sqltypes.MakeTestResult(
 	),
 	"1",
 )
-
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.SetMySQLServerVersionForTest(mySQLVersion)
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-}
 
 func TestSelectUnsharded(t *testing.T) {
 	sel := NewRoute(
@@ -1715,4 +1707,47 @@ func TestBuildMultiColumnVindexValues(t *testing.T) {
 			require.EqualValues(t, testcase.output, out)
 		})
 	}
+}
+
+// TestSelectTupleMultiCol tests route execution having bind variable with multi column tuple.
+func TestSelectTupleMultiCol(t *testing.T) {
+	vindex, _ := vindexes.CreateVindex("multicol", "", map[string]string{
+		"column_count":  "2",
+		"column_vindex": "hash,binary",
+	})
+
+	sel := NewRoute(
+		MultiEqual,
+		&vindexes.Keyspace{Name: "user", Sharded: true},
+		"select 1 from multicol_tbl where (colb, colx, cola) in ::vals",
+		"select 1 from multicol_tbl where 1 != 1",
+	)
+	sel.Vindex = vindex
+	sel.Values = []evalengine.Expr{
+		&evalengine.TupleBindVariable{Key: "vals", Index: 0},
+		&evalengine.TupleBindVariable{Key: "vals", Index: 1},
+	}
+
+	v1 := sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.NewVarChar("a"))
+	v2 := sqltypes.TestTuple(sqltypes.NewInt64(4), sqltypes.NewVarChar("b"))
+	tupleBV := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: append([]*querypb.Value{sqltypes.ValueToProto(v1)}, sqltypes.ValueToProto(v2)),
+	}
+	vc := &loggingVCursor{
+		shards: []string{"-20", "20-"},
+	}
+	_, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{"vals": tupleBV}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol user [[INT64(1) VARCHAR("a")] [INT64(4) VARCHAR("b")]] Destinations:DestinationKeyspaceID(166b40b461),DestinationKeyspaceID(d2fd886762)`,
+		`ExecuteMultiShard user.-20: select 1 from multicol_tbl where (colb, colx, cola) in ::vals {vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x014\x950\x01b"}} false false`,
+	})
+
+	vc.Rewind()
+	_, _ = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{"vals": tupleBV}, false)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol user [[INT64(1) VARCHAR("a")] [INT64(4) VARCHAR("b")]] Destinations:DestinationKeyspaceID(166b40b461),DestinationKeyspaceID(d2fd886762)`,
+		`StreamExecuteMulti select 1 from multicol_tbl where (colb, colx, cola) in ::vals user.-20: {vals: type:TUPLE values:{type:TUPLE value:"\x89\x02\x011\x950\x01a"} values:{type:TUPLE value:"\x89\x02\x014\x950\x01b"}} `,
+	})
 }

@@ -412,7 +412,7 @@ func (expr *builtinCollation) compile(c *compiler) (ctype, error) {
 
 	skip := c.asm.jumpFrom()
 
-	c.asm.Fn_COLLATION(c.collationEnv, collationUtf8mb3)
+	c.asm.Fn_COLLATION(c.env.CollationEnv(), collationUtf8mb3)
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
@@ -800,7 +800,7 @@ func (expr *builtinStrcmp) compile(c *compiler) (ctype, error) {
 	if sqltypes.IsNumber(lt.Type) || sqltypes.IsNumber(rt.Type) {
 		mcol = collationNumeric
 	} else {
-		mcol, _, _, err = colldata.Merge(c.collationEnv, lt.Col, rt.Col, colldata.CoercionOptions{
+		mcol, _, _, err = colldata.Merge(c.env.CollationEnv(), lt.Col, rt.Col, colldata.CoercionOptions{
 			ConvertToSuperset:   true,
 			ConvertWithCoercion: true,
 		})
@@ -1133,7 +1133,7 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 		args = append(args, a)
 		tt = concatSQLType(a.Type, tt)
 
-		err = ca.add(a.Col, c.collationEnv)
+		err = ca.add(a.Col, c.env.CollationEnv())
 		if err != nil {
 			return ctype{}, err
 		}
@@ -1256,7 +1256,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 		}
 		tt = concatSQLType(a.Type, tt)
 
-		err = ca.add(a.Col, c.collationEnv)
+		err = ca.add(a.Col, c.env.CollationEnv())
 		if err != nil {
 			return ctype{}, err
 		}

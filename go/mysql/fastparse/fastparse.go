@@ -123,6 +123,9 @@ func ParseInt64(s string, base int) (int64, error) {
 		i++
 	}
 
+	if i >= uint(len(s)) {
+		return 0, fmt.Errorf("cannot parse int64 from %q", s)
+	}
 	minus := s[i] == '-'
 	if minus {
 		i++
@@ -160,21 +163,15 @@ next:
 		default:
 			cutoff = math.MaxInt64/uint64(base) + 1
 		}
-		if d >= cutoff {
-			if minus {
-				return math.MinInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
-			}
+		if !minus && d >= cutoff {
 			return math.MaxInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
 		}
 
-		v := d*uint64(base) + uint64(b)
-		if v < d {
-			if minus {
-				return math.MinInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
-			}
-			return math.MaxInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
+		if minus && d > cutoff {
+			return math.MinInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
 		}
-		d = v
+
+		d = d*uint64(base) + uint64(b)
 		i++
 	}
 

@@ -312,25 +312,25 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv) (eval, error) {
 func (expr *ComparisonExpr) compileAsTuple(c *compiler) (ctype, error) {
 	switch expr.Op.(type) {
 	case compareNullSafeEQ:
-		c.asm.CmpTupleNullsafe(c.collationEnv)
+		c.asm.CmpTupleNullsafe(c.env.CollationEnv())
 		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 	case compareEQ:
-		c.asm.CmpTuple(c.collationEnv, true)
+		c.asm.CmpTuple(c.env.CollationEnv(), true)
 		c.asm.Cmp_eq_n()
 	case compareNE:
-		c.asm.CmpTuple(c.collationEnv, true)
+		c.asm.CmpTuple(c.env.CollationEnv(), true)
 		c.asm.Cmp_ne_n()
 	case compareLT:
-		c.asm.CmpTuple(c.collationEnv, false)
+		c.asm.CmpTuple(c.env.CollationEnv(), false)
 		c.asm.Cmp_lt_n()
 	case compareLE:
-		c.asm.CmpTuple(c.collationEnv, false)
+		c.asm.CmpTuple(c.env.CollationEnv(), false)
 		c.asm.Cmp_le_n()
 	case compareGT:
-		c.asm.CmpTuple(c.collationEnv, false)
+		c.asm.CmpTuple(c.env.CollationEnv(), false)
 		c.asm.Cmp_gt_n()
 	case compareGE:
-		c.asm.CmpTuple(c.collationEnv, false)
+		c.asm.CmpTuple(c.env.CollationEnv(), false)
 		c.asm.Cmp_ge_n()
 	default:
 		panic("invalid comparison operator")
@@ -563,7 +563,7 @@ func (expr *InExpr) compile(c *compiler) (ctype, error) {
 			if err != nil {
 				return ctype{}, err
 			}
-			c.asm.In_slow(c.collationEnv, expr.Negate)
+			c.asm.In_slow(c.env.CollationEnv(), expr.Negate)
 		}
 
 		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean | (nullableFlags(lhs.Flag) | (rt.Flag & flagNullable))}, nil
@@ -645,7 +645,7 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	var coerceRight colldata.Coercion
 
 	if lt.Col.Collation != rt.Col.Collation {
-		merged, coerceLeft, coerceRight, err = colldata.Merge(c.collationEnv, lt.Col, rt.Col, colldata.CoercionOptions{
+		merged, coerceLeft, coerceRight, err = colldata.Merge(c.env.CollationEnv(), lt.Col, rt.Col, colldata.CoercionOptions{
 			ConvertToSuperset:   true,
 			ConvertWithCoercion: true,
 		})

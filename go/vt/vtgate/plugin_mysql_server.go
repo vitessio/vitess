@@ -421,7 +421,7 @@ func (vh *vtgateHandler) KillQuery(connectionID uint32) error {
 }
 
 func (vh *vtgateHandler) SQLParser() *sqlparser.Parser {
-	return vh.vtg.executor.parser
+	return vh.vtg.executor.env.Parser()
 }
 
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {

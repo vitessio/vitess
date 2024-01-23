@@ -80,9 +80,9 @@ func buildChangedVindexesValues(
 				}
 				found = true
 				pv, err := evalengine.Translate(assignment.Expr.EvalExpr, &evalengine.Config{
-					ResolveType:  ctx.SemTable.TypeForExpr,
-					Collation:    ctx.SemTable.Collation,
-					CollationEnv: ctx.VSchema.CollationEnv(),
+					ResolveType: ctx.SemTable.TypeForExpr,
+					Collation:   ctx.SemTable.Collation,
+					Environment: ctx.VSchema.Environment(),
 				})
 				if err != nil {
 					panic(invalidUpdateExpr(assignment.Name.Name.String(), assignment.Expr.EvalExpr))
