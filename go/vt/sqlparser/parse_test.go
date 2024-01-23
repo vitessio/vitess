@@ -1641,6 +1641,21 @@ var (
 			input:  "alter table a rename column a as b",
 			output: "alter table a rename column a to b",
 		}, {
+			input:  "create table t1 (id serial primary key, c1 text not null);",
+			output: "create table t1 (\n\tid bigint not null auto_increment primary key,\n\tc1 text not null\n)",
+		}, {
+			input:  "create table t1 (id int primary key unique, c1 varchar(111) not null);",
+			output: "create table t1 (\n\tid int primary key,\n\tc1 varchar(111) not null\n)",
+		}, {
+			input:  "create table t1 (id int primary key unique key, c1 varchar(111) not null);",
+			output: "create table t1 (\n\tid int primary key,\n\tc1 varchar(111) not null\n)",
+		}, {
+			input:  "create table t1 (id int primary key primary key, c1 varchar(111) not null);",
+			output: "create table t1 (\n\tid int primary key,\n\tc1 varchar(111) not null\n)",
+		}, {
+			input:  "create table t1 (id int unique unique unique unique, c1 varchar(111) not null);",
+			output: "create table t1 (\n\tid int unique,\n\tc1 varchar(111) not null\n)",
+		}, {
 			input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 			output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 		}, {
@@ -4656,8 +4671,8 @@ func TestInvalid(t *testing.T) {
 		input string
 		err   string
 	}{{
-		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique primary key)",
-		err:   "cannot include more than one key option for a column definition at position 130 near 'key'",
+		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' fulltext key primary key)",
+		err:   "cannot include more than one key option for a column definition at position 136 near 'key'",
 	}, {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique comment 'another')",
 		err:   "cannot include more than one comment for a column definition at position 136 near 'another'",
@@ -4677,8 +4692,8 @@ func TestInvalid(t *testing.T) {
 		input: "create table t (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
 		err:   "syntax error at position 26 near 'default'",
 	}, {
-		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique primary key)",
-		err:   "cannot include more than one key option for a column definition at position 133 near 'key'",
+		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' fulltext key primary key)",
+		err:   "cannot include more than one key option for a column definition at position 139 near 'key'",
 	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique comment 'another')",
 		err:   "cannot include more than one comment for a column definition at position 139 near 'another'",

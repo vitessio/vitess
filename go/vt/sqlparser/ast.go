@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"unicode"
@@ -2683,10 +2684,22 @@ func (ct *ColumnType) merge(other ColumnType) error {
 	}
 
 	if other.KeyOpt != colKeyNone {
-		if ct.KeyOpt != colKeyNone {
+		keyOptions := []ColumnKeyOption{ct.KeyOpt, other.KeyOpt}
+		sort.Slice(keyOptions, func(i, j int) bool {return keyOptions[i] < keyOptions[j]})
+		if other.KeyOpt == ct.KeyOpt {
+			// MySQL will deduplicate key options when they are repeated.
+		} else if keyOptions[0] == colKeyPrimary && (keyOptions[1] == colKeyUnique || keyOptions[1] == colKeyUniqueKey) {
+			// If UNIQUE is specified with PRIMARY KEY, we ignore UNIQUE for now since
+			// the PRIMARY KEY option will ensure uniqueness already. MySQL does still
+			// generate a UNIQUE index for the column, but we can add that later if needed.
+			ct.KeyOpt = colKeyPrimary
+		} else if ct.KeyOpt == colKeyNone {
+			// If this column doesn't have a key option yet, just use the new one.
+			ct.KeyOpt = other.KeyOpt
+		} else {
+			// Otherwise throw an error if there are multiple key options that need to be applied.
 			return errors.New("cannot include more than one key option for a column definition")
 		}
-		ct.KeyOpt = other.KeyOpt
 	}
 
 	if other.ForeignKeyDef != nil {
