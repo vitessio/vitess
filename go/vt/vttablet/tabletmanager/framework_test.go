@@ -432,41 +432,6 @@ func (tmc *fakeTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 	return nil, fmt.Errorf("query %q not found for tablet %d", query, tablet.Alias.Uid)
 }
 
-func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
-	return tmc.tablets[int(tablet.Alias.Uid)].tm.CreateVReplicationWorkflow(ctx, req)
-}
-
-func (tmc *fakeTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
-	resp := &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
-		Workflow:        req.Workflow,
-		WorkflowSubType: binlogdatapb.VReplicationWorkflowSubType_None,
-		WorkflowType:    binlogdatapb.VReplicationWorkflowType_MoveTables,
-		TabletTypes:     []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-		Streams:         make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, len(tmc.sourceShards)),
-	}
-	rules := make([]*binlogdatapb.Rule, len(defaultSchema.TableDefinitions))
-	for i, table := range defaultSchema.TableDefinitions {
-		rules[i] = &binlogdatapb.Rule{
-			Match:  table.Name,
-			Filter: tablet.Shard,
-		}
-	}
-	for i, shard := range tmc.sourceShards {
-		resp.Streams[i] = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
-			Id: int32(i + 1),
-			Bls: &binlogdatapb.BinlogSource{
-				Keyspace: tmc.sourceKeyspace,
-				Shard:    shard,
-				Filter: &binlogdatapb.Filter{
-					Rules: rules,
-				},
-			},
-		}
-	}
-
-	return resp, nil
-}
-
 func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	return fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), nil
 }
@@ -491,8 +456,16 @@ func (tmc *fakeTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, r
 	}, nil
 }
 
+func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.CreateVReplicationWorkflow(ctx, req)
+}
+
 func (tmc *fakeTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.HasVReplicationWorkflows(ctx, req)
+}
+
+func (tmc *fakeTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.ReadVReplicationWorkflow(ctx, req)
 }
 
 func (tmc *fakeTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {

@@ -368,7 +368,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			return nil, err
 		}
 
-		if len(wf.Streams) < 1 {
+		if wf == nil || len(wf.Streams) < 1 {
 			continue
 		}
 

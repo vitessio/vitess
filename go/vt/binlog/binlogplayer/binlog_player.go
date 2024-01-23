@@ -547,8 +547,7 @@ type VRSettings struct {
 	DeferSecondaryKeys bool
 }
 
-// ReadVRSettings retrieves the throttler settings for
-// vreplication from the checkpoint table.
+// ReadVRSettings retrieves the settings for a vreplication stream.
 func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)

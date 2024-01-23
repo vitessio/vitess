@@ -99,6 +99,12 @@ func NewMockDbaClient(t *testing.T) *MockDBClient {
 	}
 }
 
+func (dc *MockDBClient) AddInvariant(query string, result *sqltypes.Result) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+	dc.invariants[query] = result
+}
+
 // ExpectRequest adds an expected result to the mock.
 // This function should not be called conncurrently with other commands.
 func (dc *MockDBClient) ExpectRequest(query string, result *sqltypes.Result, err error) {
@@ -182,6 +188,10 @@ func (dc *MockDBClient) Close() {
 
 // ExecuteFetch is part of the DBClient interface
 func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+	// Serialize ExecuteFetch to enforce a strict order on shared dbClients.
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+
 	dc.t.Helper()
 	msg := "DBClient query: %v"
 	if dc.Tag != "" {
@@ -195,8 +205,6 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		}
 	}
 
-	dc.expectMu.Lock()
-	defer dc.expectMu.Unlock()
 	if dc.currentResult >= len(dc.expect) {
 		msg := "DBClientMock: query: %s, no more requests are expected"
 		if dc.Tag != "" {

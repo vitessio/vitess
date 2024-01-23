@@ -462,6 +462,9 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 	for _, row := range res.Named().Rows {
 		id := row.AsInt64("id", 0)
 		cells := strings.Split(row.AsString("cell", ""), ",")
+		for i := range cells {
+			cells[i] = strings.TrimSpace(cells[i])
+		}
 		tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(row.AsString("tablet_types", ""))
 		if err != nil {
 			return nil, err
@@ -484,7 +487,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 			tabletTypes = req.TabletTypes
 		}
 		tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
-		if inorder && req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN ||
+		if (inorder && req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN) ||
 			req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
 			tabletTypesStr = discovery.InOrderHint + tabletTypesStr
 		}
