@@ -430,6 +430,7 @@ install_kubectl_kind:
 PACKAGE ?= ./go/...
 
 coverage:
+	go install golang.org/x/tools/cmd/cover
 	go test -coverprofile=coverage.out $(PACKAGE)
 	go tool cover -html=coverage.out
 
