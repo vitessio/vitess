@@ -35,6 +35,8 @@ type DeleteWithInput struct {
 	Delete Primitive
 	Input  Primitive
 
+	OutputCols []int
+
 	txNeeded
 }
 
@@ -64,12 +66,16 @@ func (del *DeleteWithInput) TryExecute(ctx context.Context, vcursor VCursor, bin
 	bv := &querypb.BindVariable{
 		Type: querypb.Type_TUPLE,
 	}
+	outputVals := make([]sqltypes.Value, 0, len(del.OutputCols))
 	for _, row := range inputRes.Rows {
-		bv.Values = append(bv.Values, sqltypes.TupleToProto(row))
+		for _, offset := range del.OutputCols {
+			outputVals = append(outputVals, row[offset])
+		}
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(outputVals))
+		outputVals = outputVals[:0]
 	}
-	return vcursor.ExecutePrimitive(ctx, del.Delete, map[string]*querypb.BindVariable{
-		DM_VALS: bv,
-	}, false)
+	bindVars[DM_VALS] = bv
+	return vcursor.ExecutePrimitive(ctx, del.Delete, bindVars, false)
 }
 
 // TryStreamExecute performs a streaming exec.
@@ -87,8 +93,12 @@ func (del *DeleteWithInput) GetFields(context.Context, VCursor, map[string]*quer
 }
 
 func (del *DeleteWithInput) description() PrimitiveDescription {
+	other := map[string]any{
+		"Offset": del.OutputCols,
+	}
 	return PrimitiveDescription{
 		OperatorType:     "DeleteWithInput",
 		TargetTabletType: topodatapb.TabletType_PRIMARY,
+		Other:            other,
 	}
 }

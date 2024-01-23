@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func TestDeleteMulti(t *testing.T) {
+func TestDeleteWithInput(t *testing.T) {
 	input := &fakePrimitive{results: []*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2", "3"),
 	}}

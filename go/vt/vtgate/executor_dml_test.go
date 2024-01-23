@@ -3018,11 +3018,11 @@ func TestInsertReference(t *testing.T) {
 	require.NoError(t, err) // Gen4 planner can redirect the query to correct source for update when reference table is involved.
 }
 
-func TestDeleteMulti(t *testing.T) {
+func TestDeleteMultiTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 	executor.vschema.Keyspaces["TestExecutor"].Tables["user"].PrimaryKey = sqlparser.Columns{sqlparser.NewIdentifierCI("id")}
 
-	logChan := executor.queryLogger.Subscribe("TestDeleteMulti")
+	logChan := executor.queryLogger.Subscribe("TestDeleteMultiTable")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	session := &vtgatepb.Session{TargetString: "@primary"}

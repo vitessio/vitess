@@ -5057,6 +5057,9 @@
       "Instructions": {
         "OperatorType": "DeleteWithInput",
         "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -5130,6 +5133,9 @@
       "Instructions": {
         "OperatorType": "DeleteWithInput",
         "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -5199,6 +5205,9 @@
       "Instructions": {
         "OperatorType": "DeleteWithInput",
         "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -5294,6 +5303,9 @@
       "Instructions": {
         "OperatorType": "DeleteWithInput",
         "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -5364,6 +5376,9 @@
       "Instructions": {
         "OperatorType": "DeleteWithInput",
         "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -5434,6 +5449,9 @@
       "Instructions": {
         "OperatorType": "DeleteWithInput",
         "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
         "Inputs": [
           {
             "OperatorType": "Limit",
@@ -5463,6 +5481,62 @@
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`user`.id) in ::dm_vals limit 10 for update",
+            "Query": "delete from `user` where (`user`.id) in ::dm_vals",
+            "Table": "user",
+            "Values": [
+              "dm_vals:0"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded delete with order by and limit clause",
+    "query": "delete from user order by name, col limit 5",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user order by name, col limit 5",
+      "Instructions": {
+        "OperatorType": "DeleteWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "5",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, `name`, weight_string(`name`), col from `user` where 1 != 1",
+                "OrderBy": "(1|2) ASC, 3 ASC",
+                "Query": "select `user`.id, `name`, weight_string(`name`), col from `user` order by `name` asc, col asc limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Delete",
+            "Variant": "MultiEqual",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`user`.id) in ::dm_vals order by `name` asc, col asc limit 5 for update",
             "Query": "delete from `user` where (`user`.id) in ::dm_vals",
             "Table": "user",
             "Values": [

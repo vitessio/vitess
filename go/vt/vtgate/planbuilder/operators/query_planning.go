@@ -139,7 +139,8 @@ func createDeleteWithInput(ctx *plancontext.PlanningContext, in *Delete, src Ope
 	proj := newAliasedProjection(src)
 	for _, col := range in.Target.VTable.PrimaryKey {
 		colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
-		proj.AddColumn(ctx, true, false, sqlparser.NewAliasedExpr(colName, ""))
+		proj.AddColumn(ctx, true, false, aeWrap(colName))
+		dm.cols = append(dm.cols, colName)
 		leftComp = append(leftComp, colName)
 		ctx.SemTable.Recursive[colName] = in.Target.ID
 	}
