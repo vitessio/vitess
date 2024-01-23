@@ -85,7 +85,7 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 			name:          "last binlog excluded, no binlogs found",
 			previousGTIDs: basePreviousGTIDs,
 			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-331",
-			expectError:   "no binary logs to backup",
+			expectBinlogs: nil,
 		},
 		{
 			name:          "backup pos beyond all binlogs",
@@ -294,13 +294,14 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.NotEmpty(t, binlogsToBackup)
 			assert.Equal(t, tc.expectBinlogs, binlogsToBackup)
-			if tc.previousGTIDs[binlogsToBackup[0]] != "" {
-				assert.Equal(t, tc.previousGTIDs[binlogsToBackup[0]], fromGTID)
+			if len(binlogsToBackup) > 0 {
+				if tc.previousGTIDs[binlogsToBackup[0]] != "" {
+					assert.Equal(t, tc.previousGTIDs[binlogsToBackup[0]], fromGTID)
+				}
+				assert.Equal(t, tc.previousGTIDs[binlogs[len(binlogs)-1]], toGTID)
+				assert.NotEqual(t, fromGTID, toGTID)
 			}
-			assert.Equal(t, tc.previousGTIDs[binlogs[len(binlogs)-1]], toGTID)
-			assert.NotEqual(t, fromGTID, toGTID)
 		})
 	}
 }

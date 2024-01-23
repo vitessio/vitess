@@ -233,6 +233,7 @@ func getIncrementalFromPosGTIDSet(incrementalFromPos string) (replication.Mysql5
 // executeIncrementalBackup runs an incremental backup, based on given 'incremental_from_pos', which can be:
 // - A valid position
 // - "auto", indicating the incremental backup should begin with last successful backup end position.
+// The function returns a boolean that indicates if the backup is usable, and an overall error.
 func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
 	// Collect MySQL status:
 	// UUID
@@ -315,6 +316,10 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	binaryLogsToBackup, incrementalBackupFromGTID, incrementalBackupToGTID, err := ChooseBinlogsForIncrementalBackup(ctx, backupFromGTIDSet, purgedGTIDSet, binaryLogs, getBinlogPreviousGTIDs)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot get binary logs to backup in incremental backup")
+	}
+	if len(binaryLogsToBackup) == 0 {
+		// Empty backup.
+		return true, nil
 	}
 	incrementalBackupFromPosition, err := replication.ParsePosition(replication.Mysql56FlavorID, incrementalBackupFromGTID)
 	if err != nil {
