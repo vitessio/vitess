@@ -412,12 +412,11 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 						incrementalFromPos = fullBackupPos
 					}
 				}
-				expectEmpty := !tc.writeBeforeBackup
-				manifest, backupName := TestReplicaIncrementalBackup(t, 0, incrementalFromPos, expectEmpty, tc.expectError)
+				manifest, backupName := TestReplicaIncrementalBackup(t, 0, incrementalFromPos, tc.expectEmpty, tc.expectError)
 				if tc.expectError != "" {
 					return
 				}
-				if expectEmpty {
+				if tc.expectEmpty {
 					assert.Nil(t, manifest)
 					return
 				}

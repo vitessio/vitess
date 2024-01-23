@@ -168,14 +168,17 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := be.ExecuteBackup(ctx, beParams, bh)
+	backupResult, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger
 	var finishErr error
-	if usable {
-		finishErr = bh.EndBackup(ctx)
-	} else {
+	switch backupResult {
+	case BackupUnusable:
 		logger.Errorf2(err, "backup is not usable, aborting it")
 		finishErr = bh.AbortBackup(ctx)
+	case BackupEmpty:
+		finishErr = bh.EndBackup(ctx)
+	case BackupUsable:
+		finishErr = bh.EndBackup(ctx)
 	}
 	if err != nil {
 		if finishErr != nil {
