@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -239,6 +240,9 @@ func TestExecuteAsReadPipeErrorFindingHook(t *testing.T) {
 }
 
 func TestExecuteAsWritePipe(t *testing.T) {
+	var writer strings.Builder
+	var writerMutex sync.Mutex
+
 	vtroot, err := vtenv.VtRoot()
 	require.NoError(t, err)
 
@@ -257,13 +261,22 @@ func TestExecuteAsWritePipe(t *testing.T) {
 	}()
 
 	h := NewHook("echo", nil)
-	var writer strings.Builder
-	writerPtr := &writer
-	_, waitFunc, status, err := h.ExecuteAsWritePipe(writerPtr)
-	require.NoError(t, err)
-	defer writerPtr.Reset()
 
+	writerMutex.Lock()
+	var writerTemp strings.Builder
+	_, waitFunc, status, err := h.ExecuteAsWritePipe(&writerTemp)
+	writerMutex.Unlock()
+
+	require.NoError(t, err)
+	defer func() {
+		writerMutex.Lock()
+		writer.Reset()
+		writerMutex.Unlock()
+	}()
+
+	writerMutex.Lock()
 	_, err = writer.Write([]byte("Hello, World!\n"))
+	writerMutex.Unlock()
 	require.NoError(t, err)
 
 	stderr, waitErr := waitFunc()
