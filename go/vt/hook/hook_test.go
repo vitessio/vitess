@@ -75,9 +75,9 @@ func TestExecuteOptional(t *testing.T) {
 			parameters: []string{"test"},
 		},
 		{
-			name:          "HookDoesNotExist",
-			hookName:      "nonexistent-hook",
-			parameters:    []string{"test"},
+			name:       "HookDoesNotExist",
+			hookName:   "nonexistent-hook",
+			parameters: []string{"test"},
 		},
 	}
 
@@ -89,7 +89,7 @@ func TestExecuteOptional(t *testing.T) {
 				assert.NoError(t, err)
 			} else {
 				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tc.expectedError)
+				assert.ErrorContains(t, err, tc.expectedError)
 			}
 		})
 	}
