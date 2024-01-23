@@ -523,20 +523,28 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				pos = mpos.String()
 			}
 
+			cells := strings.Split(res.Cells, ",")
+			for i := range cells {
+				cells[i] = strings.TrimSpace(cells[i])
+			}
+
 			stream := &vtctldatapb.Workflow_Stream{
-				Id:                   int64(rstream.Id),
-				Shard:                tablet.Shard,
-				Tablet:               tablet.Alias,
-				BinlogSource:         rstream.Bls,
-				Position:             pos,
-				StopPosition:         rstream.StopPos,
-				State:                rstream.State.String(),
-				DbName:               tablet.DbName(),
-				TransactionTimestamp: rstream.TransactionTimestamp,
-				TimeUpdated:          rstream.TimeUpdated,
-				Message:              rstream.Message,
-				Tags:                 strings.Split(res.Tags, ","),
-				RowsCopied:           rstream.RowsCopied,
+				Id:                        int64(rstream.Id),
+				Shard:                     tablet.Shard,
+				Tablet:                    tablet.Alias,
+				BinlogSource:              rstream.Bls,
+				Position:                  pos,
+				StopPosition:              rstream.StopPos,
+				State:                     rstream.State.String(),
+				DbName:                    tablet.DbName(),
+				TabletTypes:               res.TabletTypes,
+				TabletSelectionPreference: res.TabletSelectionPreference,
+				Cells:                     cells,
+				TransactionTimestamp:      rstream.TransactionTimestamp,
+				TimeUpdated:               rstream.TimeUpdated,
+				Message:                   rstream.Message,
+				Tags:                      strings.Split(res.Tags, ","),
+				RowsCopied:                rstream.RowsCopied,
 				ThrottlerStatus: &vtctldatapb.Workflow_Stream_ThrottlerStatus{
 					ComponentThrottled: rstream.ComponentThrottled,
 					TimeThrottled:      rstream.TimeThrottled,
