@@ -1650,6 +1650,12 @@ var (
 			input:  "create table t1 (id int primary key unique key, c1 varchar(111) not null);",
 			output: "create table t1 (\n\tid int primary key,\n\tc1 varchar(111) not null\n)",
 		}, {
+			input:  "create table t1 (id int primary key primary key, c1 varchar(111) not null);",
+			output: "create table t1 (\n\tid int primary key,\n\tc1 varchar(111) not null\n)",
+		}, {
+			input:  "create table t1 (id int unique unique unique unique, c1 varchar(111) not null);",
+			output: "create table t1 (\n\tid int unique,\n\tc1 varchar(111) not null\n)",
+		}, {
 			input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 			output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 		}, {
