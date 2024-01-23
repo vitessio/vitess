@@ -176,7 +176,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 		logger.Errorf2(err, "backup is not usable, aborting it")
 		finishErr = bh.AbortBackup(ctx)
 	case BackupEmpty:
-		finishErr = bh.EndBackup(ctx)
+		finishErr = bh.AbortBackup(ctx)
 	case BackupUsable:
 		finishErr = bh.EndBackup(ctx)
 	}
