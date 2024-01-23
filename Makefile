@@ -423,3 +423,22 @@ generate-flag-testdata:
 
 install_kubectl_kind:
 	./tools/get_kubectl_kind.sh
+
+
+
+# Scripts related to test coverage
+PACKAGE ?= ./go/...
+
+coverage:
+	go test -coverprofile=coverage.out $(PACKAGE)
+	go tool cover -html=coverage.out
+
+coverage-clean:
+	rm -f coverage.out
+
+coverage-help:
+	@echo "Usage: make [OPTIONS] coverage"
+	@echo "Options:"
+	@echo "  PACKAGE=<name>			Specify the package to test (default: $(PACKAGE))"
+	@echo "  coverage				Run tests and generate coverage report"
+	@echo "  coverage-clean			Clean up generated files"
