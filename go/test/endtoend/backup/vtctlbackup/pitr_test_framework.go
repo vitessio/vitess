@@ -128,26 +128,33 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			writeBeforeBackup bool
 			fromFullPosition  bool
 			autoPosition      bool
+			expectEmpty       bool
 			expectError       string
 		}{
 			{
 				name: "first incremental backup",
 			},
 			{
-				name:        "fail1",
-				expectError: "no binary logs to backup",
+				name:        "empty1",
+				expectEmpty: true,
 			},
 			{
-				name:        "fail2",
-				expectError: "no binary logs to backup",
+				name:         "empty2",
+				autoPosition: true,
+				expectEmpty:  true,
+			},
+			{
+				name:        "empty3",
+				expectEmpty: true,
 			},
 			{
 				name:              "make writes, succeed",
 				writeBeforeBackup: true,
 			},
 			{
-				name:        "fail, no binary logs to backup",
-				expectError: "no binary logs to backup",
+				name:         "empty again",
+				autoPosition: true,
+				expectEmpty:  true,
 			},
 			{
 				name:              "make writes again, succeed",
@@ -159,9 +166,9 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				autoPosition:      true,
 			},
 			{
-				name:         "fail auto position, no binary logs to backup",
+				name:         "empty again, based on auto position",
 				autoPosition: true,
-				expectError:  "no binary logs to backup",
+				expectEmpty:  true,
 			},
 			{
 				name:              "auto position, make writes again, succeed",
@@ -200,10 +207,15 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 					}
 				}
 				// always use same 1st replica
-				manifest, backupName := TestReplicaIncrementalBackup(t, 0, incrementalFromPos, tc.expectError)
+				manifest, backupName := TestReplicaIncrementalBackup(t, 0, incrementalFromPos, tc.expectEmpty, tc.expectError)
 				if tc.expectError != "" {
 					return
 				}
+				if tc.expectEmpty {
+					assert.Nil(t, manifest)
+					return
+				}
+				require.NotNil(t, manifest)
 				defer func() {
 					lastBackupPos = manifest.Position
 				}()
@@ -324,26 +336,33 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 			writeBeforeBackup bool
 			fromFullPosition  bool
 			autoPosition      bool
+			expectEmpty       bool
 			expectError       string
 		}{
 			{
 				name: "first incremental backup",
 			},
 			{
-				name:        "fail1",
-				expectError: "no binary logs to backup",
+				name:        "empty1",
+				expectEmpty: true,
 			},
 			{
-				name:        "fail2",
-				expectError: "no binary logs to backup",
+				name:         "empty2",
+				autoPosition: true,
+				expectEmpty:  true,
+			},
+			{
+				name:        "empty3",
+				expectEmpty: true,
 			},
 			{
 				name:              "make writes, succeed",
 				writeBeforeBackup: true,
 			},
 			{
-				name:        "fail, no binary logs to backup",
-				expectError: "no binary logs to backup",
+				name:         "empty again",
+				autoPosition: true,
+				expectEmpty:  true,
 			},
 			{
 				name:              "make writes again, succeed",
@@ -355,9 +374,9 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 				autoPosition:      true,
 			},
 			{
-				name:         "fail auto position, no binary logs to backup",
+				name:         "empty again, based on auto position",
 				autoPosition: true,
-				expectError:  "no binary logs to backup",
+				expectEmpty:  true,
 			},
 			{
 				name:              "auto position, make writes again, succeed",
@@ -393,11 +412,17 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 						incrementalFromPos = fullBackupPos
 					}
 				}
-				manifest, backupName := TestReplicaIncrementalBackup(t, 0, incrementalFromPos, tc.expectError)
+				expectEmpty := !tc.writeBeforeBackup
+				manifest, backupName := TestReplicaIncrementalBackup(t, 0, incrementalFromPos, expectEmpty, tc.expectError)
 				if tc.expectError != "" {
 					return
 				}
-				// We wish to mark the current post-backup timestamp. We will later on retore to this point in time.
+				if expectEmpty {
+					assert.Nil(t, manifest)
+					return
+				}
+				require.NotNil(t, manifest)
+				// We wish to mark the current post-backup timestamp. We will later on restore to this point in time.
 				// However, the restore is up to and _exclusive_ of the timestamp. So for test's sake, we sleep
 				// an extra few milliseconds just to ensure the timestamp we read is strictly after the backup time.
 				// This is basicaly to avoid weird flakiness in CI.
@@ -664,10 +689,11 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 						lastBackupPos = fullBackupPos
 					case operationIncrementalBackup:
 						var incrementalFromPos replication.Position // keep zero, we will use "auto"
-						manifest, _ := TestReplicaIncrementalBackup(t, tc.replicaIndex, incrementalFromPos, tc.expectError)
+						manifest, _ := TestReplicaIncrementalBackup(t, tc.replicaIndex, incrementalFromPos, false /* expectEmpty */, tc.expectError)
 						if tc.expectError != "" {
 							return
 						}
+						require.NotNil(t, manifest)
 						defer func() {
 							lastBackupPos = manifest.Position
 						}()

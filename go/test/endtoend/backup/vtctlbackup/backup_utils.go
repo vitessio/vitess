@@ -1218,6 +1218,13 @@ func readManifestFile(t *testing.T, backupLocation string) (manifest *mysqlctl.B
 	return manifest
 }
 
+func expectNoManifest(t *testing.T, backupLocation string) {
+	// reading manifest
+	fullPath := backupLocation + "/MANIFEST"
+	_, err := os.ReadFile(fullPath)
+	assert.Truef(t, os.IsNotExist(err), "Expected ErrNotExist, got %v", err)
+}
+
 func TestReplicaFullBackup(t *testing.T, replicaIndex int) (manifest *mysqlctl.BackupManifest) {
 	backups := vtctlBackupReplicaNoDestroyNoWrites(t, replicaIndex)
 
@@ -1255,8 +1262,9 @@ func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
 	}
 }
 
-func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos replication.Position, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	numBackups := len(waitForNumBackups(t, -1))
+
 	incrementalFromPosArg := "auto"
 	if !incrementalFromPos.IsZero() {
 		incrementalFromPosArg = replication.EncodePosition(incrementalFromPos)
@@ -1275,12 +1283,17 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 	backupName = backups[len(backups)-1]
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backupName
+
+	if expectEmpty {
+		expectNoManifest(t, backupLocation)
+		return nil, backupName
+	}
 	return readManifestFile(t, backupLocation), backupName
 }
 
-func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos replication.Position, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	replica := getReplica(t, replicaIndex)
-	return testReplicaIncrementalBackup(t, replica, incrementalFromPos, expectError)
+	return testReplicaIncrementalBackup(t, replica, incrementalFromPos, expectEmpty, expectError)
 }
 
 func TestReplicaFullRestore(t *testing.T, replicaIndex int, expectError string) {
