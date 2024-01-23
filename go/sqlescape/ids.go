@@ -14,6 +14,7 @@ limitations under the License.
 package sqlescape
 
 import (
+	"errors"
 	"strings"
 )
 
@@ -53,20 +54,29 @@ func EscapeIDs(identifiers []string) []string {
 }
 
 // UnescapeID reverses any backticking in the input string by EscapeID.
-func UnescapeID(in string) string {
+func UnescapeID(in string) (string, error) {
 	l := len(in)
 	if l >= 2 && in[0] == '`' && in[l-1] == '`' {
 		in = in[1 : l-1]
+
+		if !strings.ContainsRune(in, '`') {
+			return in, nil
+		}
+
 		var buf strings.Builder
 		buf.Grow(len(in))
 
 		for i := 0; i < len(in); i++ {
 			buf.WriteByte(in[i])
-			if i < len(in)-1 && in[i] == '`' && in[i+1] == '`' {
-				i++ // halves the number of backticks
+			if i < len(in)-1 && in[i] == '`' {
+				if in[i+1] == '`' {
+					i++ // halves the number of backticks
+				} else {
+					return "", errors.New("Invalid identifier: " + in)
+				}
 			}
 		}
-		return buf.String()
+		return buf.String(), nil
 	}
-	return in
+	return "", errors.New("Invalid identifier: " + in)
 }
