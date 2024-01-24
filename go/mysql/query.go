@@ -308,8 +308,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 //	 2. if the server closes the connection when a command is in flight,
 //	    readComQueryResponse will fail, and we'll return CRServerLost(2013).
 func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
-	var more bool
-	result, more, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
+	result, more, err := c.ExecuteFetchMulti(query, maxrows, wantfields)
 	if more {
 		// Multiple results are unexpected. Prioritize this "unexpected" error over whatever error we got from the first result.
 		err = errors.Join(ErrExecuteFetchMultipleResults, err)
@@ -318,10 +317,8 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 	// exhaust any further possible error.
 	for more {
 		var moreErr error
-		_, more, _, moreErr = c.ReadQueryResult(0, false)
-		if err != nil {
-			err = errors.Join(err, moreErr)
-		}
+		_, more, _, moreErr = c.ReadQueryResult(-1, false)
+		err = errors.Join(err, moreErr)
 	}
 	return result, err
 }
@@ -334,10 +331,8 @@ func (c *Conn) ExecuteFetchMultiDrain(query string) (err error) {
 	// We ensure to drain all query results, even if there's an error. We collect all errors until we consume all results.
 	for more {
 		var moreErr error
-		_, more, _, moreErr = c.ReadQueryResult(0, false)
-		if err != nil {
-			err = errors.Join(err, moreErr)
-		}
+		_, more, _, moreErr = c.ReadQueryResult(-1, false)
+		err = errors.Join(err, moreErr)
 	}
 	return err
 }
