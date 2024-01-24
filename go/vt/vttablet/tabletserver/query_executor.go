@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	eschema "vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -65,8 +67,7 @@ type QueryExecutor struct {
 }
 
 const (
-	streamRowsSize           = 256
-	queryTimeoutMysqlMaxWait = time.Second
+	streamRowsSize = 256
 )
 
 var (
@@ -97,6 +98,15 @@ func returnStreamResult(result *sqltypes.Result) error {
 
 func allocStreamResult() *sqltypes.Result {
 	return streamResultPool.Get().(*sqltypes.Result)
+}
+
+func (qre *QueryExecutor) isSelect() bool {
+	switch qre.plan.PlanID {
+	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
+		return true
+	default:
+		return false
+	}
 }
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
@@ -822,7 +832,6 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
-	query = addMysqlOptimizerHintsToQuery(qre.tsv.config, qre.plan.PlanID, query)
 	if qre.tsv.config.AnnotateQueries {
 		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
 		if username == "" {
@@ -844,42 +853,46 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 		return query, query, nil
 	}
 
+	var mysqlOptimizerHints string
+	if qre.isSelect() {
+		mysqlOptimizerHints = buildMysqlOptimizerHints(qre.tsv)
+	}
+
 	var buf strings.Builder
-	buf.Grow(len(qre.marginComments.Leading) + len(query) + len(qre.marginComments.Trailing))
-	buf.WriteString(qre.marginComments.Leading)
-	buf.WriteString(query)
-	buf.WriteString(qre.marginComments.Trailing)
+	if mysqlOptimizerHints != "" {
+		fields := strings.SplitN(query, " ", 2)
+		queryPrefix := fields[0] + " "
+		queryNonPrefix := " " + fields[1]
+
+		buf.Grow(len(qre.marginComments.Leading) + len(queryPrefix) + len(mysqlOptimizerHints) + len(queryNonPrefix) + len(qre.marginComments.Trailing))
+		buf.WriteString(qre.marginComments.Leading)
+		buf.WriteString(queryPrefix)
+		buf.WriteString(mysqlOptimizerHints)
+		buf.WriteString(queryNonPrefix)
+		buf.WriteString(qre.marginComments.Trailing)
+	} else {
+		buf.Grow(len(qre.marginComments.Leading) + len(query) + len(qre.marginComments.Trailing))
+		buf.WriteString(qre.marginComments.Leading)
+		buf.WriteString(query)
+		buf.WriteString(qre.marginComments.Trailing)
+	}
 	return buf.String(), query, nil
 }
 
-func addMysqlOptimizerHintsToQuery(config *tabletenv.TabletConfig, planType p.PlanType, query string) string {
-	if planType != p.PlanSelect {
-		return query
-	}
-
-	hints := make([]string, 0)
-
-	switch config.Oltp.QueryTimeoutMethod.String() {
-	case tabletenv.QueryTimeoutMethodMysql:
+func buildMysqlOptimizerHints(tsv *TabletServer) string {
+	var buf strings.Builder
+	if tsv.config.Oltp.QueryTimeoutPushdown {
 		// The MAX_EXECUTION_TIME(N) hint sets a statement execution timeout of N milliseconds.
 		// https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-execution-time
-		hints = append(hints,
-			fmt.Sprintf("MAX_EXECUTION_TIME(%d)", config.Oltp.QueryTimeoutSeconds.Get().Milliseconds()),
-		)
+		queryTimeoutStr := strconv.FormatInt(tsv.loadQueryTimeout(), 64)
+		buf.Grow(len(queryTimeoutStr))
+		buf.WriteString(queryTimeoutStr)
 	}
 
-	if len(hints) > 0 {
-		// MySQL optimizer hints must come immediately after the 1st
-		// field/verb, which should always be "select" or "SELECT".
-		fields := strings.SplitN(query, " ", 2)
-		return strings.Join([]string{
-			fields[0],
-			"/*+ " + strings.Join(hints, " ") + " */",
-			fields[1],
-		}, " ")
+	if len(optimizerHints) == 0 {
+		return ""
 	}
-
-	return query
+	return "/*+ " + strings.Join(optimizerHints, " ") + " */"
 }
 
 func rewriteOUTParamError(err error) error {

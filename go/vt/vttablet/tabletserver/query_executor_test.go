@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -37,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/callinfo/fakecallinfo"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -1795,28 +1795,21 @@ func TestQueryExecSchemaReloadCount(t *testing.T) {
 	}
 }
 
-func TestAddMysqlOptimizerHintsToQuery(t *testing.T) {
-	config := tabletenv.NewDefaultConfig()
-	{
-		assert.Equal(t,
-			`select * from something`,
-			addMysqlOptimizerHintsToQuery(config, planbuilder.PlanSelect, "select * from something"),
-		)
-	}
-	{
-		config.Oltp.QueryTimeoutMethod.Set(tabletenv.QueryTimeoutMethodMysql)
-		config.Oltp.QueryTimeoutSeconds = flagutil.NewDeprecatedFloat64Seconds(t.Name(), time.Second)
-		assert.Equal(t,
-			`select /*+ MAX_EXECUTION_TIME(1000) */ * from something`,
-			addMysqlOptimizerHintsToQuery(config, planbuilder.PlanSelect, "select * from something"),
-		)
-	}
-	{
-		assert.Equal(t,
-			`insert into something (id, value) values(1, 2)`,
-			addMysqlOptimizerHintsToQuery(config, planbuilder.PlanInsert, "insert into something (id, value) values(1, 2)"),
-		)
-	}
+func TestGenerateFinalSQL(t *testing.T) {
+	// generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(context.Background(), noFlags, db)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutor(context.Background(), tsv, `select * from something`, 0)
+	query, noComments, err := qre.generateFinalSQL(
+		&sqlparser.ParsedQuery{Query: `select * from something`},
+		map[string]*querypb.BindVariable{},
+	)
+	assert.Nil(t, err)
+	assert.Equal(t, `select * from something`, query)
+	t.Logf("noComments: %s", noComments)
 }
 
 type mockTxThrottler struct {

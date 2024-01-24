@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -417,4 +418,22 @@ func GetWorkloadNameFromStatement(statement Statement) string {
 	workloadName, _ := directives.GetString(DirectiveWorkloadName, "")
 
 	return workloadName
+}
+
+func AddMysqlOptimizerHintsComment(query string, hints map[string]any) string {
+	hintsSlice := make([]string, 0, len(hints))
+	for hint, val := range hints {
+		hintsSlice = append(hintsSlice, fmt.Sprintf("%s(%v)", hint, val))
+	}
+	if len(hintsSlice) > 0 {
+		// MySQL optimizer hints must come immediately after the 1st
+		// field/verb, which should always be "select" or "SELECT".
+		fields := strings.SplitN(query, " ", 2)
+		return strings.Join([]string{
+			fields[0],
+			"/*+ " + strings.Join(hintsSlice, " ") + " */",
+			fields[1],
+		}, " ")
+	}
+	return query
 }

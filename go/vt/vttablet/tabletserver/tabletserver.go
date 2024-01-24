@@ -161,13 +161,7 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		topoServer:             topoServer,
 		alias:                  alias.CloneVT(),
 	}
-
-	queryTimeoutNanos := config.Oltp.QueryTimeoutSeconds.Get().Nanoseconds()
-	switch config.Oltp.QueryTimeoutMethod.String() {
-	case tabletenv.QueryTimeoutMethodMysql:
-		queryTimeoutNanos = queryTimeoutNanos + queryTimeoutMysqlMaxWait.Nanoseconds()
-	}
-	tsv.QueryTimeout.Store(queryTimeoutNanos)
+	tsv.QueryTimeout.Store(config.Oltp.QueryTimeoutSeconds.Get().Nanoseconds())
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(ctx, topoServer, "TabletSrvTopo") })
 
@@ -240,6 +234,13 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 
 func (tsv *TabletServer) loadQueryTimeout() time.Duration {
 	return time.Duration(tsv.QueryTimeout.Load())
+}
+
+func (tsv *TabletServer) loadQueryTimeoutWithPushdownWait() time.Duration {
+	if tsv.config.Oltp.QueryTimeoutPushdown {
+		return tsv.loadQueryTimeout() + tsv.config.Oltp.QueryTimeoutPushdownWait
+	}
+	return tsv.loadQueryTimeout()
 }
 
 // onlineDDLExecutorToggleTableBuffer is called by onlineDDLExecutor as a callback function. onlineDDLExecutor
@@ -494,7 +495,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, savepointQueries []string, reservedID int64, settings []string, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
 	state.TabletAlias = tsv.alias
 	err = tsv.execRequest(
-		ctx, tsv.loadQueryTimeout(),
+		ctx, tsv.loadQueryTimeoutWithPushdownWait(),
 		"Begin", "begin", nil,
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
@@ -766,6 +767,9 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	allowOnShutdown := false
 	timeout := tsv.loadQueryTimeout()
+	if tsv.config.Oltp.QueryTimeoutPushdown {
+		return timeout + tsv.config.Oltp.QueryTimeoutPushdownWait
+	}
 	if transactionID != 0 {
 		allowOnShutdown = true
 		// Execute calls happen for OLTP only, so we can directly fetch the
