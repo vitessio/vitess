@@ -134,6 +134,7 @@ func dropData(t *testing.T) {
 	defer conn.Close()
 
 	utils.Exec(t, conn, "drop table if exists test")
+	utils.Exec(t, conn, "drop table if exists test_idx")
 	utils.ExecMulti(t, conn, schema)
 }
 
