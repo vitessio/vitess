@@ -28,7 +28,7 @@ import (
 
 var _ Primitive = (*DeleteWithInput)(nil)
 
-const DM_VALS = "dm_vals"
+const DmVals = "dm_vals"
 
 // DeleteWithInput represents the instructions to perform a delete operation based on the input result.
 type DeleteWithInput struct {
@@ -70,7 +70,7 @@ func (del *DeleteWithInput) TryExecute(ctx context.Context, vcursor VCursor, bin
 		bv = getBVMulti(inputRes, del.OutputCols)
 	}
 
-	bindVars[DM_VALS] = bv
+	bindVars[DmVals] = bv
 	return vcursor.ExecutePrimitive(ctx, del.Delete, bindVars, false)
 }
 

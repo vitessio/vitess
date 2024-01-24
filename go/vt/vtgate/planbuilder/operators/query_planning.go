@@ -164,7 +164,7 @@ func createDeleteWithInput(ctx *plancontext.PlanningContext, in *Delete, src Ope
 	if len(leftComp) == 1 {
 		lhs = leftComp[0]
 	}
-	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DM_VALS), nil)
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmVals), nil)
 	targetQT := targetTable.QTable
 	qt := &QueryTable{
 		ID:         targetQT.ID,
