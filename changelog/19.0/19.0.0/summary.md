@@ -76,7 +76,7 @@ Previously, `ExecuteFetchAsDBA` silently accepted multi statement SQL. It would 
 
 - It would only indicate error for the first statement. Errors on 2nd, 3rd, ... statements were silently ignored.
 - It would not consume the result sets of the 2nd, 3rd, ... statements. It would then return the used connection to the pool in a dirty state. Any further query that happens to take that connection out of the pool could get unexpected results.
-- As another side effect, multi-statement schema changes would cause schema to be reloaded with only the 1st change, leaving the cached schema inconsistent with the underlying database.
+- As another side effect, multi-statement schema changes would cause schema to be reloaded with only the first change, leaving the cached schema inconsistent with the underlying database.
 
 `ExecuteFetchAsDBA` does allow a specific use case of multi-statement SQL, which is where all statements are in the form of `CREATE TABLE` or `CREATE VIEW`. This is to support a common pattern of schema initialization, formalized in `ApplySchema --batch-size` which uses `ExecuteFetchAsDBA` under the hood.
 
