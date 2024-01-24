@@ -316,6 +316,8 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 		}
 	case sqlparser.AggrFunc:
 		a.sig.Aggregation = true
+	case *sqlparser.Delete:
+		a.sig.Delete = true
 	}
 }
 
