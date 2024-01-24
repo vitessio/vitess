@@ -683,21 +683,6 @@ func PermanentlyRemoveVttablet(clusterInfo *VTOrcClusterInfo, tablet *cluster.Vt
 	}
 }
 
-// ChangePrivileges is used to change the privileges of the given user. These commands are executed such that they are not replicated
-func ChangePrivileges(t *testing.T, sql string, tablet *cluster.Vttablet, user string) {
-	err := RunSQLs(t, []string{"SET sql_log_bin = OFF", sql, "SET sql_log_bin = ON"}, tablet, "")
-	require.NoError(t, err)
-
-	res, err := RunSQL(t, fmt.Sprintf("SELECT id FROM INFORMATION_SCHEMA.PROCESSLIST WHERE user = '%s'", user), tablet, "")
-	require.NoError(t, err)
-	for _, row := range res.Rows {
-		id, err := row[0].ToInt64()
-		require.NoError(t, err)
-		_, err = RunSQL(t, fmt.Sprintf("kill %d", id), tablet, "")
-		require.NoError(t, err)
-	}
-}
-
 // ResetPrimaryLogs is used reset the binary logs
 func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 	_, err := RunSQL(t, "FLUSH BINARY LOGS", curPrimary, "")
@@ -1120,4 +1105,20 @@ func PrintVTOrcLogsOnFailure(t *testing.T, clusterInstance *cluster.LocalProcess
 		}
 		log.Errorf("%s", string(content))
 	}
+}
+
+// EnableGlobalRecoveries enables global recoveries for the given VTOrc.
+func EnableGlobalRecoveries(t *testing.T, vtorc *cluster.VTOrcProcess) {
+	status, resp, err := MakeAPICall(t, vtorc, "/api/enable-global-recoveries")
+	require.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "Global recoveries enabled\n", resp)
+}
+
+// DisableGlobalRecoveries disables global recoveries for the given VTOrc.
+func DisableGlobalRecoveries(t *testing.T, vtorc *cluster.VTOrcProcess) {
+	status, resp, err := MakeAPICall(t, vtorc, "/api/disable-global-recoveries")
+	require.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "Global recoveries disabled\n", resp)
 }
