@@ -352,25 +352,24 @@ func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement, fkCheck
 		}
 		// If only a certain set of columns are being updated, then there might be some child foreign keys that don't need any consideration since their columns aren't being updated.
 		// So, we filter these child foreign keys out. We can't filter any parent foreign keys because the statement will INSERT a row too, which requires validating all the parent foreign keys.
-		updatedChildFks, _, childFkToUpdExprs := a.filterForeignKeysUsingUpdateExpressions(allChildFks, nil, sqlparser.UpdateExprs(stmt.OnDup))
-		return updatedChildFks, allParentFKs, childFkToUpdExprs, nil
+		updatedChildFks, _, childFkToUpdExprs, err := a.filterForeignKeysUsingUpdateExpressions(allChildFks, nil, sqlparser.UpdateExprs(stmt.OnDup))
+		return updatedChildFks, allParentFKs, childFkToUpdExprs, err
 	case *sqlparser.Update:
 		// For UPDATE queries we get all the parent and child foreign keys, but we can filter some of them out if the columns that they consist off aren't being updated or are set to NULLs.
 		allChildFks, allParentFks, err := a.getAllManagedForeignKeys()
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		childFks, parentFks, childFkToUpdExprs := a.filterForeignKeysUsingUpdateExpressions(allChildFks, allParentFks, stmt.Exprs)
-		return childFks, parentFks, childFkToUpdExprs, nil
+		return a.filterForeignKeysUsingUpdateExpressions(allChildFks, allParentFks, stmt.Exprs)
 	default:
 		return nil, nil, nil, nil
 	}
 }
 
 // filterForeignKeysUsingUpdateExpressions filters the child and parent foreign key constraints that don't require any validations/cascades given the updated expressions.
-func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[TableSet][]vindexes.ChildFKInfo, allParentFks map[TableSet][]vindexes.ParentFKInfo, updExprs sqlparser.UpdateExprs) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, map[string]sqlparser.UpdateExprs) {
+func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[TableSet][]vindexes.ChildFKInfo, allParentFks map[TableSet][]vindexes.ParentFKInfo, updExprs sqlparser.UpdateExprs) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, map[string]sqlparser.UpdateExprs, error) {
 	if len(allChildFks) == 0 && len(allParentFks) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	pFksRequired := make(map[TableSet][]bool, len(allParentFks))
@@ -392,7 +391,10 @@ func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[Table
 	for _, updateExpr := range updExprs {
 		deps := a.binder.direct.dependencies(updateExpr.Name)
 		if deps.NumberOfTables() != 1 {
-			panic("expected to have single table dependency")
+			// If we don't get exactly one table for the given update expression, we would have definitely run into an error
+			// during the binder phase that we would have stored. We should return that error, since we can't safely proceed with
+			// foreign key related changes without having all the information.
+			return nil, nil, nil, a.getError()
 		}
 		updExprToTableSet[updateExpr.Name] = deps
 		// Get all the child and parent foreign keys for the given table that the update expression belongs to.
@@ -459,7 +461,18 @@ func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[Table
 		}
 		cFksNeedsHandling[ts] = cFKNeeded
 	}
-	return cFksNeedsHandling, pFksNeedsHandling, childFKToUpdExprs
+	return cFksNeedsHandling, pFksNeedsHandling, childFKToUpdExprs, nil
+}
+
+// getError gets the error stored in the analyzer during previous phases.
+func (a *analyzer) getError() error {
+	if a.projErr != nil {
+		return a.projErr
+	}
+	if a.unshardedErr != nil {
+		return a.unshardedErr
+	}
+	return a.err
 }
 
 // getAllManagedForeignKeys gets all the foreign keys for the query we are analyzing that Vitess is responsible for managing.
