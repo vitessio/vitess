@@ -273,8 +273,12 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 	// of the PK columns which are used in the ORDER BY clause below.
 	var indexHint string
 	if st.PKIndexName != "" {
+		sanitized, err := sqlescape.UnescapeID(st.PKIndexName)
+		if err != nil {
+			return "", err
+		}
 		indexHint = fmt.Sprintf(" force index (%s)",
-			sqlescape.EscapeID(sqlescape.UnescapeID(st.PKIndexName)))
+			sqlescape.EscapeID(sanitized))
 	}
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 {
