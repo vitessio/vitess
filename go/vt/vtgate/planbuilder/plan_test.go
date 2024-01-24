@@ -183,8 +183,10 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		// FK from tblrefDef referencing tbl20 that is shard scoped of SET-Default types.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tblrefDef", createFkDefinition([]string{"ref"}, "tbl20", []string{"col2"}, sqlparser.SetDefault, sqlparser.SetDefault))
 
+		// FK from tbl_auth referencing tbl20 that is shard scoped of CASCADE types.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl_auth", createFkDefinition([]string{"id"}, "tbl20", []string{"col2"}, sqlparser.Cascade, sqlparser.Cascade))
 		addPKs(t, vschema, "sharded_fk_allow", []string{"tbl1", "tbl2", "tbl3", "tbl4", "tbl5", "tbl6", "tbl7", "tbl9", "tbl10",
-			"multicol_tbl1", "multicol_tbl2", "tblrefDef", "tbl20"})
+			"multicol_tbl1", "multicol_tbl2", "tbl_auth", "tblrefDef", "tbl20"})
 	}
 	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
 		// u_tbl2(col2)  -> u_tbl1(col1)  Cascade.
