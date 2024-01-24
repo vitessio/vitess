@@ -14,7 +14,7 @@ limitations under the License.
 package sqlescape
 
 import (
-	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -72,11 +72,11 @@ func UnescapeID(in string) (string, error) {
 				if in[i+1] == '`' {
 					i++ // halves the number of backticks
 				} else {
-					return "", errors.New("Invalid identifier: " + in)
+					return "", fmt.Errorf("UnescapeID invalid identifier: unexpected single backtick at position %d in %s", i, in)
 				}
 			}
 		}
 		return buf.String(), nil
 	}
-	return "", errors.New("Invalid identifier: " + in)
+	return "", fmt.Errorf("UnescapeID invalid identifier: \"%s\" must be enclosed in backticks", in)
 }
