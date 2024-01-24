@@ -24,8 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type any = interface{}
-
 func TestRowMap(t *testing.T) {
 	tt := []struct {
 		name     string
