@@ -719,6 +719,20 @@
             }
           ]
         },
+        "tbl_auth": {
+          "columns": [
+            {
+              "name": "id"
+            }
+          ],
+          "column_vindexes": [
+            {
+              "column": "id",
+              "name": "hash_vin"
+            }
+          ],
+          "column_list_authoritative": true
+        },
         "tblrefDef": {
           "column_vindexes": [
             {
