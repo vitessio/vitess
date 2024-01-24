@@ -108,6 +108,12 @@ func (r *switcher) stopSourceWrites(ctx context.Context) error {
 	return r.ts.stopSourceWrites(ctx)
 }
 
+// Note: this is a legacy function that is only used by the legacy wrangler migrater and it
+// should be deleted along with the vtctl client / wrangler.
+func (r *switcher) legacyStopStreams(ctx context.Context, sm *workflow.StreamMigrator) ([]string, error) {
+	return sm.LegacyStopStreams(ctx)
+}
+
 func (r *switcher) stopStreams(ctx context.Context, sm *workflow.StreamMigrator) ([]string, error) {
 	return sm.StopStreams(ctx)
 }

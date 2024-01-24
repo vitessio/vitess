@@ -553,7 +553,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	}
 	if !journalsExist {
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm, err := workflow.BuildStreamMigrator(ctx, ts, cancel, wr.env.Parser())
+		sm, err := workflow.BuildLegacyStreamMigrator(ctx, ts, cancel, wr.env.Parser())
 		if err != nil {
 			return handleError("failed to migrate the workflow streams", err)
 		}
@@ -563,7 +563,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		}
 
 		ts.Logger().Infof("Stopping streams")
-		sourceWorkflows, err = sw.stopStreams(ctx, sm)
+		sourceWorkflows, err = sw.legacyStopStreams(ctx, sm)
 		if err != nil {
 			for key, streams := range sm.Streams() {
 				for _, stream := range streams {

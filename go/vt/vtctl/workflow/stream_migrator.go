@@ -23,7 +23,10 @@ import (
 	"sync"
 	"text/template"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
@@ -87,6 +90,42 @@ func BuildStreamMigrator(ctx context.Context, ts ITrafficSwitcher, cancelMigrate
 	var err error
 
 	sm.streams, err = sm.readSourceStreams(ctx, cancelMigrate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Loop executes only once.
+	for _, tabletStreams := range sm.streams {
+		tmpl, err := sm.templatize(ctx, tabletStreams)
+		if err != nil {
+			return nil, err
+		}
+
+		sm.workflows = VReplicationStreams(tmpl).Workflows()
+		break
+	}
+
+	return sm, nil
+}
+
+// BuildLegacyStreamMigrator creates a new StreamMigrator based on the given
+// TrafficSwitcher using the legacy VReplicationExec method.
+// Note: this should be removed along with the vtctl client code / wrangler.
+func BuildLegacyStreamMigrator(ctx context.Context, ts ITrafficSwitcher, cancelMigrate bool, parser *sqlparser.Parser) (*StreamMigrator, error) {
+	sm := &StreamMigrator{
+		ts:     ts,
+		logger: ts.Logger(),
+		parser: parser,
+	}
+
+	if sm.ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+		// Source streams should be stopped only for shard migrations.
+		return sm, nil
+	}
+
+	var err error
+
+	sm.streams, err = sm.legacyReadSourceStreams(ctx, cancelMigrate)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +230,25 @@ func (sm *StreamMigrator) MigrateStreams(ctx context.Context) error {
 	return sm.createTargetStreams(ctx, sm.templates)
 }
 
+// LegacyStopStreams stops streams using the legacy VReplicationExec method.
+// Note: this should be removed along with the vtctl client code / wrangler.
+func (sm *StreamMigrator) LegacyStopStreams(ctx context.Context) ([]string, error) {
+	if sm.streams == nil {
+		return nil, nil
+	}
+
+	if err := sm.legacyStopSourceStreams(ctx); err != nil {
+		return nil, err
+	}
+
+	positions, err := sm.syncSourceStreams(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return sm.legacyVerifyStreamPositions(ctx, positions)
+}
+
 // StopStreams stops streams
 func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 	if sm.streams == nil {
@@ -210,6 +268,92 @@ func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 }
 
 /* tablet streams */
+
+// readTabletStreams reads all of the VReplication workflow streams *except*
+// the Reshard workflow's reverse variant using the legacy VReplicationExec
+// method.
+// Note: this should be removed along with the vtctl client code / wrangler.
+func (sm *StreamMigrator) legacyReadTabletStreams(ctx context.Context, ti *topo.TabletInfo, constraint string) ([]*VReplicationStream, error) {
+	query := fmt.Sprintf("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name=%s and workflow != %s",
+		encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
+	if constraint != "" {
+		query += fmt.Sprintf(" and %s", constraint)
+	}
+
+	p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, ti.Tablet, query)
+	if err != nil {
+		return nil, err
+	}
+
+	qr := sqltypes.Proto3ToResult(p3qr)
+	tabletStreams := make([]*VReplicationStream, 0, len(qr.Rows))
+
+	for _, row := range qr.Named().Rows {
+		id, err := row["id"].ToInt32()
+		if err != nil {
+			return nil, err
+		}
+
+		workflowName := row["workflow"].ToString()
+		switch workflowName {
+		case "":
+			return nil, fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s, stream: %d",
+				ti.Keyspace, ti.Shard, id)
+		case sm.ts.WorkflowName():
+			return nil, fmt.Errorf("VReplication stream has the same workflow name as the resharding workflow: shard: %s:%s, stream: %d",
+				ti.Keyspace, ti.Shard, id)
+		}
+
+		workflowType, err := row["workflow_type"].ToInt32()
+		if err != nil {
+			return nil, err
+		}
+		workflowSubType, err := row["workflow_sub_type"].ToInt32()
+		if err != nil {
+			return nil, err
+		}
+
+		deferSecondaryKeys, err := row["defer_secondary_keys"].ToBool()
+		if err != nil {
+			return nil, err
+		}
+
+		var bls binlogdatapb.BinlogSource
+		rowBytes, err := row["source"].ToBytes()
+		if err != nil {
+			return nil, err
+		}
+		if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
+			return nil, err
+		}
+
+		isReference, err := sm.blsIsReference(&bls)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "blsIsReference")
+		}
+
+		if isReference {
+			sm.ts.Logger().Infof("readTabletStreams: ignoring reference table %+v", &bls)
+			continue
+		}
+
+		pos, err := replication.DecodePosition(row["pos"].ToString())
+		if err != nil {
+			return nil, err
+		}
+
+		tabletStreams = append(tabletStreams, &VReplicationStream{
+			ID:                 id,
+			Workflow:           workflowName,
+			BinlogSource:       &bls,
+			Position:           pos,
+			WorkflowType:       binlogdatapb.VReplicationWorkflowType(workflowType),
+			WorkflowSubType:    binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
+			DeferSecondaryKeys: deferSecondaryKeys,
+		})
+	}
+	return tabletStreams, nil
+}
 
 // readTabletStreams reads all of the VReplication workflow streams *except*
 // the Reshard workflow's reverse variant.
@@ -270,6 +414,115 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 }
 
 /* source streams */
+
+// legacyReadSourceStreams reads all of the VReplication workflow source streams using
+// the legacy VReplicationExec method.
+// Note: this should be removed along with the vtctl client code / wrangler.
+func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMigrate bool) (map[string][]*VReplicationStream, error) {
+	var (
+		mu      sync.Mutex
+		streams = make(map[string][]*VReplicationStream)
+	)
+
+	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
+		if !cancelMigrate {
+			// This flow protects us from the following scenario: When we create streams,
+			// we always do it in two phases. We start them off as Stopped, and then
+			// update them to Running. If such an operation fails, we may be left with
+			// lingering Stopped streams. They should actually be cleaned up by the user.
+			// In the current workflow, we stop streams and restart them.
+			// Once existing streams are stopped, there will be confusion about which of
+			// them can be restarted because they will be no different from the lingering streams.
+			// To prevent this confusion, we first check if there are any stopped streams.
+			// If so, we request the operator to clean them up, or restart them before going ahead.
+			// This allows us to assume that all stopped streams can be safely restarted
+			// if we cancel the operation.
+			stoppedStreams, err := sm.legacyReadTabletStreams(ctx, source.GetPrimary(), "state = 'Stopped' and message != 'FROZEN'")
+			if err != nil {
+				return err
+			}
+
+			if len(stoppedStreams) != 0 {
+				return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.GetShard().ShardName(), source.GetPrimary().Alias.Uid)
+			}
+		}
+
+		tabletStreams, err := sm.legacyReadTabletStreams(ctx, source.GetPrimary(), "")
+		if err != nil {
+			return err
+		}
+
+		if len(tabletStreams) == 0 {
+			// No VReplication is running. So, we have no work to do.
+			return nil
+		}
+
+		query := fmt.Sprintf("select distinct vrepl_id from _vt.copy_state where vrepl_id in %s", VReplicationStreams(tabletStreams).Values())
+		p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
+		switch {
+		case err != nil:
+			return err
+		case len(p3qr.Rows) != 0:
+			return fmt.Errorf("cannot migrate while vreplication streams in source shards are still copying: %s", source.GetShard().ShardName())
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		streams[source.GetShard().ShardName()] = tabletStreams
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate that streams match across source shards.
+	var (
+		reference []*VReplicationStream
+		refshard  string
+		streams2  = make(map[string][]*VReplicationStream)
+	)
+
+	for k, v := range streams {
+		if reference == nil {
+			refshard = k
+			reference = v
+			continue
+		}
+
+		streams2[k] = append([]*VReplicationStream(nil), v...)
+	}
+
+	for shard, tabletStreams := range streams2 {
+		for _, refStream := range reference {
+			err := func() error {
+				for i := 0; i < len(tabletStreams); i++ {
+					vrs := tabletStreams[i]
+
+					if refStream.Workflow == vrs.Workflow &&
+						refStream.BinlogSource.Keyspace == vrs.BinlogSource.Keyspace &&
+						refStream.BinlogSource.Shard == vrs.BinlogSource.Shard {
+						// Delete the matched item and scan for the next stream.
+						tabletStreams = append(tabletStreams[:i], tabletStreams[i+1:]...)
+						return nil
+					}
+				}
+
+				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
+			}()
+
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if len(tabletStreams) != 0 {
+			return nil, fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
+		}
+	}
+
+	return streams, nil
+}
 
 func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate bool) (map[string][]*VReplicationStream, error) {
 	var (
@@ -378,6 +631,47 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 	return streams, nil
 }
 
+// legacyStopSourceStreams stops the source streams using the legacy VReplicationExec
+// method.
+// Note: this should be removed along with the vtctl client code / wrangler.
+func (sm *StreamMigrator) legacyStopSourceStreams(ctx context.Context) error {
+	var (
+		mu             sync.Mutex
+		stoppedStreams = make(map[string][]*VReplicationStream)
+	)
+
+	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
+		tabletStreams := sm.streams[source.GetShard().ShardName()]
+		if len(tabletStreams) == 0 {
+			return nil
+		}
+
+		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in %s", VReplicationStreams(tabletStreams).Values())
+		_, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
+		if err != nil {
+			return err
+		}
+
+		tabletStreams, err = sm.legacyReadTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("id in %s", VReplicationStreams(tabletStreams).Values()))
+		if err != nil {
+			return err
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		stoppedStreams[source.GetShard().ShardName()] = tabletStreams
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	sm.streams = stoppedStreams
+	return nil
+}
+
 func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 	var (
 		mu             sync.Mutex
@@ -481,6 +775,72 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]rep
 	wg.Wait()
 
 	return stopPositions, allErrors.AggrError(vterrors.Aggregate)
+}
+
+// legacyVerifyStreamPositions verifies the stream positions using the legacy
+// VReplicationExec method.
+// Note: this should be removed along with the vtctl client code / wrangler.
+func (sm *StreamMigrator) legacyVerifyStreamPositions(ctx context.Context, stopPositions map[string]replication.Position) ([]string, error) {
+	var (
+		mu             sync.Mutex
+		stoppedStreams = make(map[string][]*VReplicationStream)
+	)
+
+	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
+		tabletStreams := sm.streams[source.GetShard().ShardName()]
+		if len(tabletStreams) == 0 {
+			return nil
+		}
+
+		tabletStreams, err := sm.legacyReadTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("id in %s", VReplicationStreams(tabletStreams).Values()))
+		if err != nil {
+			return err
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		stoppedStreams[source.GetShard().ShardName()] = tabletStreams
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// This is not really required because it's not used later.
+	// But we keep it up-to-date for good measure.
+	sm.streams = stoppedStreams
+
+	var (
+		oneSet    []*VReplicationStream
+		allErrors concurrency.AllErrorRecorder
+	)
+
+	for _, tabletStreams := range stoppedStreams {
+		if oneSet == nil {
+			oneSet = tabletStreams
+		}
+
+		for _, vrs := range tabletStreams {
+			key := fmt.Sprintf("%s:%s", vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard)
+			if pos := stopPositions[key]; !vrs.Position.Equal(pos) {
+				allErrors.RecordError(fmt.Errorf("%s: stream %d position: %s does not match %s", key, vrs.ID, replication.EncodePosition(vrs.Position), replication.EncodePosition(pos)))
+			}
+		}
+	}
+
+	if allErrors.HasErrors() {
+		return nil, allErrors.AggrError(vterrors.Aggregate)
+	}
+
+	sm.templates, err = sm.templatize(ctx, oneSet)
+	if err != nil {
+		// Unreachable: we've already templatized this before.
+		return nil, err
+	}
+
+	return VReplicationStreams(sm.templates).Workflows(), allErrors.AggrError(vterrors.Aggregate)
 }
 
 func (sm *StreamMigrator) verifyStreamPositions(ctx context.Context, stopPositions map[string]replication.Position) ([]string, error) {
