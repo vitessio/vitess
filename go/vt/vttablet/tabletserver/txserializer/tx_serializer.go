@@ -273,15 +273,18 @@ func (txs *TxSerializer) unlockLocked(key string, returnSlot bool) {
 		delete(txs.queues, key)
 
 		if q.max > 1 {
+			var formattedKey = key
 			var logMsg string
+
 			if txs.env.Config().SanitizeLogMessages {
-				logMsg = fmt.Sprintf("%v simultaneous transactions (%v in total) for the same row range (%v) would have been queued.", q.max, q.count, txs.sanitizeKey(key))
-			} else {
-				logMsg = fmt.Sprintf("%v simultaneous transactions (%v in total) for the same row range (%v) would have been queued.", q.max, q.count, key)
+				formattedKey = txs.sanitizeKey(key)
 			}
+
 			if txs.dryRun {
+				logMsg = fmt.Sprintf("%v simultaneous transactions (%v in total) for the same row range (%v) would have been queued.", q.max, q.count, formattedKey)
 				txs.logDryRun.Infof(logMsg)
 			} else {
+				logMsg = fmt.Sprintf("%v simultaneous transactions (%v in total) for the same row range (%v) have been queued.", q.max, q.count, formattedKey)
 				txs.log.Infof(logMsg)
 			}
 		}
