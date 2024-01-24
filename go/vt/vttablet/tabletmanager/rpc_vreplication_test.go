@@ -767,6 +767,7 @@ func TestSourceShardSelection(t *testing.T) {
 			targetKs, wf), &sqltypes.Result{})
 		tenv.tmc.setVReplicationExecResults(tt.tablet, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and message='FROZEN' and workflow_sub_type != 1",
 			targetKs), &sqltypes.Result{})
+		tenv.tmc.setVReplicationExecResults(tt.tablet, getCopyState, &sqltypes.Result{})
 	}
 
 	for _, tt := range tests {
@@ -793,8 +794,9 @@ func TestSourceShardSelection(t *testing.T) {
 
 			for uid, streams := range tt.streams {
 				tt := targetTablets[uid]
+				tt.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+				tt.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
 				for i, sourceShard := range streams {
-					tt.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 					var err error
 					if i == len(streams)-1 {
 						// errShortCircuit is intentionally injected into the MoveTables
@@ -802,6 +804,7 @@ func TestSourceShardSelection(t *testing.T) {
 						// everything we wanted to in the test.
 						err = errShortCircuit
 					}
+					tt.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 					tt.vrdbClient.ExpectRequest(
 						fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 0)`,
 							insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, tt.tablet.Shard, tenv.cells[0], tenv.dbName),
