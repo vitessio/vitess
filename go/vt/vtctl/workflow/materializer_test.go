@@ -450,12 +450,8 @@ func TestMigrateVSchema(t *testing.T) {
 	defer env.close()
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
-	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
-	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", &sqltypes.Result{})
 
 	_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:       ms.Workflow,

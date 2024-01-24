@@ -128,7 +128,7 @@ func (env *testMaterializerEnv) expectValidation() {
 		if tabletID < 200 {
 			continue
 		}
-		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.ms.TargetKeyspace, env.ms.Workflow), &sqltypes.Result{})
+		//env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.ms.TargetKeyspace, env.ms.Workflow), &sqltypes.Result{})
 	}
 }
 
@@ -377,6 +377,57 @@ func (tmc *testMaterializerTMClient) VDiff(ctx context.Context, tablet *topodata
 		Id:        1,
 		VdiffUuid: req.VdiffUuid,
 		Output: &querypb.QueryResult{
+			RowsAffected: 1,
+		},
+	}, nil
+}
+
+func (tmc *testMaterializerTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	return &tabletmanagerdatapb.HasVReplicationWorkflowsResponse{
+		Has: false,
+	}, nil
+}
+
+func (tmc *testMaterializerTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
+	if len(req.IncludeWorkflows) > 0 {
+		for _, wf := range req.IncludeWorkflows {
+			if strings.Contains(wf, "lookup") {
+				workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
+			}
+		}
+		return &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
+			Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+				{
+					Workflow:     req.IncludeWorkflows[0],
+					WorkflowType: workflowType,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: "sourceks",
+								Shard:    "0",
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{
+										{
+											Match: ".*",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil
+	} else {
+		return &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{}, nil
+	}
+}
+
+func (tmc *testMaterializerTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{
+		Result: &querypb.QueryResult{
 			RowsAffected: 1,
 		},
 	}, nil

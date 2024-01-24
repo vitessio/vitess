@@ -602,6 +602,9 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 			targetKeyspaceByWorkflow[workflow.Name] = tablet.Keyspace
 
+			if stream.TimeUpdated == nil {
+				stream.TimeUpdated = &vttimepb.Time{}
+			}
 			timeUpdated := time.Unix(stream.TimeUpdated.Seconds, 0)
 			vreplicationLag := time.Since(timeUpdated)
 
@@ -630,7 +633,13 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			if _, ok := maxVReplicationTransactionLagByWorkflow[workflow.Name]; !ok {
 				maxVReplicationTransactionLagByWorkflow[workflow.Name] = 0
 			}
+			if rstream.TransactionTimestamp == nil {
+				rstream.TransactionTimestamp = &vttimepb.Time{}
+			}
 			lastTransactionTime := rstream.TransactionTimestamp.Seconds
+			if rstream.TimeHeartbeat == nil {
+				rstream.TimeHeartbeat = &vttimepb.Time{}
+			}
 			lastHeartbeatTime := rstream.TimeHeartbeat.Seconds
 			if stream.State == binlogdatapb.VReplicationWorkflowState_Copying.String() {
 				maxVReplicationTransactionLagByWorkflow[workflow.Name] = math.MaxInt64
