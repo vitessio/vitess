@@ -189,7 +189,6 @@ func TestMapWithError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := MapWithError(tc.input, tc.fn)
 			if tc.expectedErr != "" {
-				assert.Error(t, err)
 				assert.EqualError(t, err, tc.expectedErr)
 			} else {
 				assert.Equal(t, tc.expected, result)
