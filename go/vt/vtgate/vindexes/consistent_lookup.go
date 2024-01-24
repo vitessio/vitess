@@ -489,7 +489,7 @@ func (lu *clCommon) GetCommitOrder() vtgatepb.CommitOrder {
 }
 
 // IsBackfilling implements the LookupBackfill interface
-func (lu *ConsistentLookupUnique) IsBackfilling() bool {
+func (lu *clCommon) IsBackfilling() bool {
 	return lu.writeOnly
 }
 
