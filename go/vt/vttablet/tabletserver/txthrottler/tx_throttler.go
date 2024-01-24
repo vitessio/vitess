@@ -251,7 +251,7 @@ func (t *txThrottler) Throttle(priority int, workload string) (result bool) {
 
 	// Throttle according to both what the throttler state says and the priority. Workloads with lower priority value
 	// are less likely to be throttled.
-	result = t.state.throttle() && rand.Intn(sqlparser.MaxPriorityValue) < priority
+	result = rand.Intn(sqlparser.MaxPriorityValue) < priority && t.state.throttle()
 
 	t.requestsTotal.Add(workload, 1)
 	if result {
@@ -368,14 +368,15 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 
 	maxLag := atomic.LoadInt64(&ts.shardMaxLag)
 
-	return ts.throttler.Throttle(0 /* threadId */) > 0 &&
-		maxLag > ts.config.TxThrottlerConfig.TargetReplicationLagSec
+	return maxLag > ts.config.TxThrottlerConfig.TargetReplicationLagSec &&
+		ts.throttler.Throttle(0 /* threadId */) > 0
 }
 
 func (ts *txThrottlerStateImpl) updateMaxShardLag() {
 	defer ts.endWaitGroup.Done()
 	// We use half of the target lag to ensure we have enough resolution to see changes in lag below that value
 	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec/2) * time.Second)
+	defer ticker.Stop()
 outerloop:
 	for {
 		select {
