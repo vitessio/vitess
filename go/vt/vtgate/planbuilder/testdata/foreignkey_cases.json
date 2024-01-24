@@ -3043,5 +3043,10 @@
         "unsharded_fk_allow.u_tbl3"
       ]
     }
+  },
+  {
+    "comment": "Unknown update column in foreign keys",
+    "query": "update tbl_auth set unknown_col = 'verified' where id = 1",
+    "plan": "column 'unknown_col' not found in table 'tbl_auth'"
   }
 ]
