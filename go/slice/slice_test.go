@@ -156,41 +156,38 @@ func TestFilter(t *testing.T) {
 
 func TestMapWithError(t *testing.T) {
 	testCases := []struct {
-		name     string
-		input    []int
-		fn       func(int) (int, error)
-		expected []int
-		err      error
+		name        string
+		input       []int
+		fn          func(int) (int, error)
+		expected    []int
+		expectedErr string
 	}{
 		{
 			name:     "SuccessfulMapping",
 			input:    []int{1, 2, 3},
 			fn:       func(i int) (int, error) { return i * 2, nil },
 			expected: []int{2, 4, 6},
-			err:      nil,
 		},
 		{
-			name:     "ErrorReturned",
-			input:    []int{1, 2, 3},
-			fn:       func(i int) (int, error) { return 0, errors.New("error") },
-			expected: nil,
-			err:      errors.New("error"),
+			name:        "ErrorReturned",
+			input:       []int{1, 2, 3},
+			fn:          func(i int) (int, error) { return 0, errors.New("error") },
+			expectedErr: "error",
 		},
 		{
 			name:     "EmptySliceInput",
 			input:    nil,
 			fn:       func(n int) (int, error) { return n, nil },
 			expected: nil,
-			err:      nil,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := MapWithError(tc.input, tc.fn)
-			if err != nil {
+			if tc.expectedErr != "" {
 				assert.Error(t, err)
-				assert.EqualError(t, err, tc.err.Error())
+				assert.EqualError(t, err, tc.expectedErr)
 			} else {
 				assert.Equal(t, tc.expected, result)
 			}
