@@ -25,9 +25,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -403,7 +405,8 @@ func (tmc *testMaterializerTMClient) ReadVReplicationWorkflows(ctx context.Conte
 					WorkflowType: workflowType,
 					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
 						{
-							Id: 1,
+							Id:    1,
+							State: binlogdatapb.VReplicationWorkflowState_Running,
 							Bls: &binlogdatapb.BinlogSource{
 								Keyspace: "sourceks",
 								Shard:    "0",
@@ -415,6 +418,9 @@ func (tmc *testMaterializerTMClient) ReadVReplicationWorkflows(ctx context.Conte
 									},
 								},
 							},
+							Pos:           "MySQL56/" + position,
+							TimeUpdated:   protoutil.TimeToProto(time.Now()),
+							TimeHeartbeat: protoutil.TimeToProto(time.Now()),
 						},
 					},
 				},

@@ -557,6 +557,10 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				stream.CopyStates = copyState
 			}
 
+			if rstream.TimeUpdated == nil {
+				rstream.TimeUpdated = &vttimepb.Time{}
+			}
+
 			switch {
 			case strings.Contains(strings.ToLower(stream.Message), "error"):
 				stream.State = binlogdatapb.VReplicationWorkflowState_Error.String()
@@ -1989,6 +1993,9 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 				updateLag := int64(now) - st.TimeUpdated.Seconds
 				if updateLag > 0*1e9 {
 					info = append(info, "VStream may not be running")
+				}
+				if st.TransactionTimestamp == nil {
+					st.TransactionTimestamp = &vttimepb.Time{}
 				}
 				txLag := int64(now) - st.TransactionTimestamp.Seconds
 				info = append(info, fmt.Sprintf("VStream Lag: %ds", txLag/1e9))
