@@ -15,169 +15,103 @@ package list
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// Can initialize an empty list
 func TestInitEmptyList(t *testing.T) {
 	l := New[int]()
-	if l.Len() != 0 {
-		t.Errorf("Expected length of 0, got %d", l.Len())
-	}
-	if l.Front() != nil {
-		t.Error("Expected Front() to be nil")
-	}
-	if l.Back() != nil {
-		t.Error("Expected Back() to be nil")
-	}
+	assert.Equal(t, 0, l.Len())
+	assert.Nil(t, l.Front())
+	assert.Nil(t, l.Back())
 }
 
-// Can insert an element at the front of the list
 func TestInsertFront(t *testing.T) {
 	l := New[int]()
 	e := l.PushFront(1)
-	if l.Len() != 1 {
-		t.Errorf("Expected length of 1, got %d", l.Len())
-	}
-	if l.Front() != e {
-		t.Error("Expected Front() to be the inserted element")
-	}
-	if l.Back() != e {
-		t.Error("Expected Back() to be the inserted element")
-	}
+	assert.Equal(t, 1, l.Len())
+	assert.Equal(t, e, l.Front())
+	assert.Equal(t, e, l.Back())
 }
 
-// Can insert an element at the back of the list
 func TestInsertBack(t *testing.T) {
 	l := New[int]()
 	e := l.PushBack(1)
-	if l.Len() != 1 {
-		t.Errorf("Expected length of 1, got %d", l.Len())
-	}
-	if l.Front() != e {
-		t.Error("Expected Front() to be the inserted element")
-	}
-	if l.Back() != e {
-		t.Error("Expected Back() to be the inserted element")
-	}
+	assert.Equal(t, 1, l.Len())
+	assert.Equal(t, e, l.Front())
+	assert.Equal(t, e, l.Back())
 }
 
-// Can insert an element at the front of an empty list
 func TestInsertFrontEmptyList(t *testing.T) {
 	l := New[int]()
 	e := l.PushFront(1)
-	if l.Len() != 1 {
-		t.Errorf("Expected length of 1, got %d", l.Len())
-	}
-	if l.Front() != e {
-		t.Error("Expected Front() to be the inserted element")
-	}
-	if l.Back() != e {
-		t.Error("Expected Back() to be the inserted element")
-	}
+	assert.Equal(t, 1, l.Len())
+	assert.Equal(t, e, l.Front())
+	assert.Equal(t, e, l.Back())
 }
 
-// Can insert an element at the back of an empty list
 func TestInsertBackEmptyList(t *testing.T) {
 	l := New[int]()
 	e := l.PushBack(1)
-	if l.Len() != 1 {
-		t.Errorf("Expected length of 1, got %d", l.Len())
-	}
-	if l.Front() != e {
-		t.Error("Expected Front() to be the inserted element")
-	}
-	if l.Back() != e {
-		t.Error("Expected Back() to be the inserted element")
-	}
+	assert.Equal(t, 1, l.Len())
+	assert.Equal(t, e, l.Front())
+	assert.Equal(t, e, l.Back())
 }
 
-// Can remove the only element from the list
 func TestRemoveOnlyElement(t *testing.T) {
 	l := New[int]()
 	e := l.PushFront(1)
 	l.Remove(e)
-	if l.Len() != 0 {
-		t.Errorf("Expected length of 0, got %d", l.Len())
-	}
-	if l.Front() != nil {
-		t.Error("Expected Front() to be nil")
-	}
-	if l.Back() != nil {
-		t.Error("Expected Back() to be nil")
-	}
+	assert.Equal(t, 0, l.Len())
+	assert.Nil(t, l.Front())
+	assert.Nil(t, l.Back())
 }
 
 func TestRemoveFromWrongList(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected Remove() to panic when removing from wrong List")
-		}
-	}()
-
 	l1 := New[int]()
 	l2 := New[int]()
 	e := l1.PushFront(1)
-	l2.Remove(e)
+	assert.Panics(t, func() { l2.Remove(e) })
 }
 
 func TestGetFirstElement(t *testing.T) {
 	l := New[int]()
 	e := l.PushFront(1)
-	if l.Front() != e {
-		t.Error("Expected Front() to be the first element")
-	}
+	assert.Equal(t, e, l.Front())
 }
 
 func TestGetLastElement(t *testing.T) {
 	l := New[int]()
 	e := l.PushBack(1)
-	if l.Back() != e {
-		t.Error("Expected Back() to be the last element")
-	}
+	assert.Equal(t, e, l.Back())
 }
 
 func TestGetNextElement(t *testing.T) {
 	l := New[int]()
 	e := l.PushBack(1)
-	if e.Next() != nil {
-		t.Error("Expected Next() to be nil")
-	}
+	assert.Nil(t, e.Next())
 	f := l.PushBack(2)
-	if e.Next() != f {
-		t.Error("Expected Next() to be the next element")
-	}
+	assert.Equal(t, f, e.Next())
 }
 
 func TestGetPrevElement(t *testing.T) {
 	l := New[int]()
 	e := l.PushBack(1)
-	if e.Prev() != nil {
-		t.Error("Expected Prev() to be nil")
-	}
+	assert.Nil(t, e.Prev())
 	f := l.PushBack(2)
-	if f.Prev() != e {
-		t.Error("Expected Prev() to be the previous element")
-	}
+	assert.Equal(t, e, f.Prev())
 }
 
 func TestMoveElement(t *testing.T) {
 	l := New[int]()
 	e := l.PushBack(1)
 	l.move(e, e)
-	if l.Front() != e {
-		t.Error("Expected Front() to be the first element")
-	}
+	assert.Equal(t, e, l.Front())
 	f := l.PushBack(2)
 	l.move(e, f)
-	if l.Front() != f {
-		t.Error("Expected Front() to be the second element")
-	}
-	if l.Back() != e {
-		t.Error("Expected Back() to be the first element")
-	}
-	if f.next != e {
-		t.Error("Expected next element to be e")
-	}
+	assert.Equal(t, f, l.Front())
+	assert.Equal(t, e, l.Back())
+	assert.Equal(t, e, f.next)
 }
 
 func TestPushBackValue(t *testing.T) {
@@ -186,12 +120,8 @@ func TestPushBackValue(t *testing.T) {
 	a := m.PushBack(5)
 	e := l.PushBack(1)
 	l.PushBackValue(a)
-	if l.Back() != a {
-		t.Error("Expected Back() to be the last element")
-	}
-	if e.next != a {
-		t.Error("Expected next element to be a")
-	}
+	assert.Equal(t, a, l.Back())
+	assert.Equal(t, a, e.next)
 }
 
 func TestPushFrontValue(t *testing.T) {
@@ -200,10 +130,6 @@ func TestPushFrontValue(t *testing.T) {
 	a := m.PushBack(5)
 	e := l.PushBack(1)
 	l.PushFrontValue(a)
-	if l.Front() != a {
-		t.Error("Expected Front() to be the first element")
-	}
-	if e.prev != a {
-		t.Error("Expected prev element to be a")
-	}
+	assert.Equal(t, a, l.Front())
+	assert.Equal(t, a, e.prev)
 }
