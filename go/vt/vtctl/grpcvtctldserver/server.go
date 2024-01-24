@@ -222,6 +222,8 @@ func (s *VtctldServer) ApplyShardRoutingRules(ctx context.Context, req *vtctldat
 
 // ApplySchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySchemaRequest) (resp *vtctldatapb.ApplySchemaResponse, err error) {
+	log.Infof("VtctldServer.ApplySchema: keyspace=%s, migrationContext=%v, ddlStrategy=%v, batchSize=%v", req.Keyspace, req.MigrationContext, req.DdlStrategy, req.BatchSize)
+
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplySchema")
 	defer span.Finish()
 
