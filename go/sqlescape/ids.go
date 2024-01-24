@@ -59,7 +59,7 @@ func UnescapeID(in string) (string, error) {
 	if l >= 2 && in[0] == '`' && in[l-1] == '`' {
 		in = in[1 : l-1]
 
-		if !strings.ContainsRune(in, '`') {
+		if idx := strings.IndexByte(in, '`'); idx == -1 {
 			return in, nil
 		}
 
