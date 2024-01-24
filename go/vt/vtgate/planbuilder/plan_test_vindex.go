@@ -72,7 +72,10 @@ func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 var _ vindexes.Lookup = (*lookupIndex)(nil)
 
 // nameLkpIndex satisfies Lookup, NonUnique.
-type nameLkpIndex struct{ name string }
+type nameLkpIndex struct {
+	name       string
+	inBackfill bool
+}
 
 func (v *nameLkpIndex) String() string                     { return v.name }
 func (*nameLkpIndex) Cost() int                            { return 3 }
@@ -102,13 +105,21 @@ func (*nameLkpIndex) Query() (string, []string) {
 func (*nameLkpIndex) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.Destination, error) {
 	return nil, nil
 }
-func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
-	return &nameLkpIndex{name: name}, nil
+
+func (v *nameLkpIndex) IsBackfilling() bool { return v.inBackfill }
+
+func newNameLkpIndex(name string, m map[string]string) (vindexes.Vindex, error) {
+	vdx := &nameLkpIndex{name: name}
+	if val, ok := m["write_only"]; ok {
+		vdx.inBackfill = val == "true"
+	}
+	return vdx, nil
 }
 
 var _ vindexes.Vindex = (*nameLkpIndex)(nil)
 var _ vindexes.Lookup = (*nameLkpIndex)(nil)
 var _ vindexes.LookupPlanable = (*nameLkpIndex)(nil)
+var _ vindexes.LookupBackfill = (*nameLkpIndex)(nil)
 
 // costlyIndex satisfies Lookup, NonUnique.
 type costlyIndex struct{ name string }
