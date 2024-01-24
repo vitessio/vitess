@@ -108,14 +108,12 @@ func TestEnabledThrottler(t *testing.T) {
 	calls = append(calls, call)
 
 	// 3
-	call = mockThrottler.EXPECT().Throttle(0)
-	call.Return(1 * time.Second)
-	calls = append(calls, call)
+	// Nothing gets mocked here because the order of evaluation in txThrottler.Throttle() evaluates first
+	// whether the priority allows for throttling or not, so no need to mock calls in mockThrottler.Throttle()
 
 	// 4
-	call = mockThrottler.EXPECT().Throttle(0)
-	call.Return(1 * time.Second)
-	calls = append(calls, call)
+	// Nothing gets mocked here because the order of evaluation in txThrottlerStateImpl.Throttle() evaluates first
+	// whether there is lag or not, so no call to the underlying mockThrottler is issued.
 
 	call = mockThrottler.EXPECT().Close()
 	calls = append(calls, call)
