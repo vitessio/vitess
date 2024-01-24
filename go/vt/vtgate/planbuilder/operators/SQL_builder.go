@@ -401,8 +401,8 @@ func buildDelete(op *Delete, qb *queryBuilder) {
 		Targets:    sqlparser.TableNames{op.Target.Name},
 		TableExprs: sel.From,
 		Where:      sel.Where,
-		OrderBy:    op.OrderBy,
-		Limit:      op.Limit,
+		Limit:      sel.Limit,
+		OrderBy:    sel.OrderBy,
 	}
 }
 
