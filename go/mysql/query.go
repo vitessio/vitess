@@ -313,13 +313,8 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 		// Multiple results are unexpected. Prioritize this "unexpected" error over whatever error we got from the first result.
 		err = errors.Join(ErrExecuteFetchMultipleResults, err)
 	}
-	// Even though we do not allow multiple result sets, we still prefer to drain them so as to clean the connection, as well as
-	// exhaust any further possible error.
-	for more {
-		var moreErr error
-		_, more, _, moreErr = c.ReadQueryResult(-1, false)
-		err = errors.Join(err, moreErr)
-	}
+	// draining to make the connection clean.
+	err = c.drainMoreResults(more, err)
 	return result, err
 }
 
@@ -328,7 +323,12 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 // The function drains the query results of all statements, even if there's an error.
 func (c *Conn) ExecuteFetchMultiDrain(query string) (err error) {
 	_, more, err := c.ExecuteFetchMulti(query, 0, false)
-	// We ensure to drain all query results, even if there's an error. We collect all errors until we consume all results.
+	return c.drainMoreResults(more, err)
+}
+
+// drainMoreResults ensures to drain all query results, even if there's an error.
+// We collect all errors until we consume all results.
+func (c *Conn) drainMoreResults(more bool, err error) error {
 	for more {
 		var moreErr error
 		_, more, _, moreErr = c.ReadQueryResult(-1, false)
