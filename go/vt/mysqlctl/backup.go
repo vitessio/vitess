@@ -86,6 +86,8 @@ var (
 	// backupCompressBlocks is the number of blocks that are processed
 	// once before the writer blocks
 	backupCompressBlocks = 2
+
+	EmptyBackupMessage = "no new data to backup, skipping it"
 )
 
 func init() {
@@ -176,7 +178,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 		logger.Errorf2(err, "backup is not usable, aborting it")
 		finishErr = bh.AbortBackup(ctx)
 	case BackupEmpty:
-		logger.Infof("no new data to backup, skipping it")
+		logger.Infof(EmptyBackupMessage)
 		finishErr = bh.AbortBackup(ctx)
 	case BackupUsable:
 		finishErr = bh.EndBackup(ctx)

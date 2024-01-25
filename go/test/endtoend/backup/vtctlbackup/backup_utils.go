@@ -1271,7 +1271,7 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	require.NoErrorf(t, err, "output: %v", output)
 
 	if expectEmpty {
-		require.Contains(t, output, "no new data to backup, skipping it")
+		require.Contains(t, output, mysqlctl.EmptyBackupMessage)
 		return nil, ""
 	}
 
