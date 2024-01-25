@@ -3638,7 +3638,7 @@ func (asm *assembler) Fn_MAKEDATE() {
 		y := env.vm.stack[env.vm.sp-1].(*evalInt64)
 		yd := env.vm.stack[env.vm.sp-2].(*evalInt64)
 
-		t := yearDayToTime(env, y.i, yd.i)
+		t := yearDayToTime(env.currentTimezone(), y.i, yd.i)
 		if t.IsZero() {
 			env.vm.stack[env.vm.sp-2] = nil
 		} else {
@@ -3784,7 +3784,7 @@ func (asm *assembler) Fn_LAST_DAY() {
 			return 1
 		}
 		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-		d := lastDay(env, arg.dt)
+		d := lastDay(env.currentTimezone(), arg.dt)
 		if d.IsZero() {
 			env.vm.stack[env.vm.sp-1] = nil
 			return 1

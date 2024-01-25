@@ -756,7 +756,7 @@ func (call *builtinHour) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
-func yearDayToTime(env *ExpressionEnv, y, yd int64) time.Time {
+func yearDayToTime(loc *time.Location, y, yd int64) time.Time {
 	if y >= 0 && y < 100 {
 		if y < 70 {
 			y += 2000
@@ -768,7 +768,7 @@ func yearDayToTime(env *ExpressionEnv, y, yd int64) time.Time {
 	if y < 0 || y > 9999 || yd < 1 || yd > math.MaxInt32 {
 		return time.Time{}
 	}
-	t := time.Date(int(y), time.January, 1, 0, 0, 0, 0, env.currentTimezone()).AddDate(0, 0, int(yd-1))
+	t := time.Date(int(y), time.January, 1, 0, 0, 0, 0, loc).AddDate(0, 0, int(yd-1))
 	if t.Year() > 9999 {
 		return time.Time{}
 	}
@@ -796,7 +796,7 @@ func (b *builtinMakedate) eval(env *ExpressionEnv) (eval, error) {
 	y := evalToInt64(year).i
 	yd := evalToInt64(yearDay).i
 
-	t := yearDayToTime(env, y, yd)
+	t := yearDayToTime(env.currentTimezone(), y, yd)
 	if t.IsZero() {
 		return nil, nil
 	}
@@ -1205,9 +1205,9 @@ func (call *builtinMonthName) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
 }
 
-func lastDay(env *ExpressionEnv, dt datetime.DateTime) datetime.Date {
-	ts := dt.Date.ToStdTime(env.currentTimezone())
-	firstDayOfMonth := time.Date(ts.Year(), ts.Month(), 1, 0, 0, 0, 0, env.currentTimezone())
+func lastDay(loc *time.Location, dt datetime.DateTime) datetime.Date {
+	ts := dt.Date.ToStdTime(loc)
+	firstDayOfMonth := time.Date(ts.Year(), ts.Month(), 1, 0, 0, 0, 0, loc)
 	lastDayOfMonth := firstDayOfMonth.AddDate(0, 1, -1)
 
 	date := datetime.NewDateFromStd(lastDayOfMonth)
@@ -1227,7 +1227,7 @@ func (b *builtinLastDay) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	d := lastDay(env, dt.dt)
+	d := lastDay(env.currentTimezone(), dt.dt)
 	if d.IsZero() {
 		return nil, nil
 	}
