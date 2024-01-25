@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInsert(t *testing.T) {
@@ -75,4 +76,10 @@ func TestEqual(t *testing.T) {
 func TestLen(t *testing.T) {
 	testSet := New[int](1, 2, 3)
 	assert.Equal(t, testSet.Len(), 3)
+}
+
+func TestList(t *testing.T) {
+	testSet := New[string]("a string", "testing", "Capital", "34")
+	list := List(testSet)
+	require.EqualValues(t, []string{"34", "Capital", "a string", "testing"}, list)
 }
