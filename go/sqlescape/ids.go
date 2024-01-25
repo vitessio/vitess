@@ -78,5 +78,5 @@ func UnescapeID(in string) (string, error) {
 		}
 		return buf.String(), nil
 	}
-	return "", fmt.Errorf("UnescapeID invalid identifier: \"%s\" must be enclosed in backticks", in)
+	return in, nil
 }
