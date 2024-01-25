@@ -72,6 +72,7 @@ func TestTxConnCommitFailure(t *testing.T) {
 
 	sc, sbcs, rssm, rssa := newTestTxConnEnvNShards(t, ctx, "TestTxConn", 3)
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	nonAtomicCommitCount := warnings.Counts()["NonAtomicCommit"]
 
 	// Sequence the executes to ensure commit order
 
@@ -163,6 +164,8 @@ func TestTxConnCommitFailure(t *testing.T) {
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	assert.EqualValues(t, 1, sbcs[0].CommitCount.Load(), "sbc0.CommitCount")
+
+	require.Equal(t, nonAtomicCommitCount+1, warnings.Counts()["NonAtomicCommit"])
 }
 
 func TestTxConnCommitFailureAfterNonAtomicCommitMaxShards(t *testing.T) {
@@ -170,6 +173,7 @@ func TestTxConnCommitFailureAfterNonAtomicCommitMaxShards(t *testing.T) {
 
 	sc, sbcs, rssm, _ := newTestTxConnEnvNShards(t, ctx, "TestTxConn", 18)
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	nonAtomicCommitCount := warnings.Counts()["NonAtomicCommit"]
 
 	// Sequence the executes to ensure commit order
 
@@ -214,6 +218,8 @@ func TestTxConnCommitFailureAfterNonAtomicCommitMaxShards(t *testing.T) {
 	for i := 0; i < 17; i++ {
 		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), fmt.Sprintf("sbc%d.CommitCount", i))
 	}
+
+	require.Equal(t, nonAtomicCommitCount+1, warnings.Counts()["NonAtomicCommit"])
 }
 
 func TestTxConnCommitFailureBeforeNonAtomicCommitMaxShards(t *testing.T) {
@@ -221,6 +227,7 @@ func TestTxConnCommitFailureBeforeNonAtomicCommitMaxShards(t *testing.T) {
 
 	sc, sbcs, rssm, _ := newTestTxConnEnvNShards(t, ctx, "TestTxConn", 17)
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	nonAtomicCommitCount := warnings.Counts()["NonAtomicCommit"]
 
 	// Sequence the executes to ensure commit order
 
@@ -265,6 +272,8 @@ func TestTxConnCommitFailureBeforeNonAtomicCommitMaxShards(t *testing.T) {
 	for i := 0; i < 16; i++ {
 		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), fmt.Sprintf("sbc%d.CommitCount", i))
 	}
+
+	require.Equal(t, nonAtomicCommitCount+1, warnings.Counts()["NonAtomicCommit"])
 }
 
 func TestTxConnCommitSuccess(t *testing.T) {
