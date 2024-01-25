@@ -493,7 +493,7 @@ func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
-	return newEvalInt64(int64(d.dt.Date.ToStdTime(time.Local).Weekday() + 1)), nil
+	return newEvalInt64(int64(d.dt.Date.ToStdTime(env.currentTimezone()).Weekday() + 1)), nil
 }
 
 func (call *builtinDayOfWeek) compile(c *compiler) (ctype, error) {
@@ -526,7 +526,7 @@ func (b *builtinDayOfYear) eval(env *ExpressionEnv) (eval, error) {
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
-	return newEvalInt64(int64(d.dt.Date.ToStdTime(time.Local).YearDay())), nil
+	return newEvalInt64(int64(d.dt.Date.ToStdTime(env.currentTimezone()).YearDay())), nil
 }
 
 func (call *builtinDayOfYear) compile(c *compiler) (ctype, error) {
@@ -756,7 +756,7 @@ func (call *builtinHour) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
-func yearDayToTime(y, yd int64) time.Time {
+func yearDayToTime(env *ExpressionEnv, y, yd int64) time.Time {
 	if y >= 0 && y < 100 {
 		if y < 70 {
 			y += 2000
@@ -768,7 +768,7 @@ func yearDayToTime(y, yd int64) time.Time {
 	if y < 0 || y > 9999 || yd < 1 || yd > math.MaxInt32 {
 		return time.Time{}
 	}
-	t := time.Date(int(y), time.January, 1, 0, 0, 0, 0, time.Local).AddDate(0, 0, int(yd-1))
+	t := time.Date(int(y), time.January, 1, 0, 0, 0, 0, env.currentTimezone()).AddDate(0, 0, int(yd-1))
 	if t.Year() > 9999 {
 		return time.Time{}
 	}
@@ -796,7 +796,7 @@ func (b *builtinMakedate) eval(env *ExpressionEnv) (eval, error) {
 	y := evalToInt64(year).i
 	yd := evalToInt64(yearDay).i
 
-	t := yearDayToTime(y, yd)
+	t := yearDayToTime(env, y, yd)
 	if t.IsZero() {
 		return nil, nil
 	}
@@ -1205,13 +1205,13 @@ func (call *builtinMonthName) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
 }
 
-func lastDay(dt datetime.DateTime) (datetime.Date, bool) {
-	ts := dt.Date.ToStdTime(time.Local)
-	firstDayOfNextMonth := time.Date(ts.Year(), ts.Month()+1, 1, 0, 0, 0, 0, time.Local)
-	lastDayOfMonth := firstDayOfNextMonth.AddDate(0, 0, -1)
+func lastDay(env *ExpressionEnv, dt datetime.DateTime) datetime.Date {
+	ts := dt.Date.ToStdTime(env.currentTimezone())
+	firstDayOfMonth := time.Date(ts.Year(), ts.Month(), 1, 0, 0, 0, 0, env.currentTimezone())
+	lastDayOfMonth := firstDayOfMonth.AddDate(0, 1, -1)
 
 	date := datetime.NewDateFromStd(lastDayOfMonth)
-	return date, true
+	return date
 }
 
 func (b *builtinLastDay) eval(env *ExpressionEnv) (eval, error) {
@@ -1227,8 +1227,8 @@ func (b *builtinLastDay) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	d, ok := lastDay(dt.dt)
-	if !ok {
+	d := lastDay(env, dt.dt)
+	if d.IsZero() {
 		return nil, nil
 	}
 

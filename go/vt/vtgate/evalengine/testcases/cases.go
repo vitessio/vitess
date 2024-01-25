@@ -1747,6 +1747,23 @@ func FnLastDay(yield Query) {
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("LAST_DAY(%s)", d), nil)
 	}
+
+	dates := []string{
+		`DATE'2024-02-18'`,
+		`DATE'2023-02-01'`,
+		`DATE'2100-02-01'`,
+		`TIMESTAMP'2020-12-31 23:59:59'`,
+		`TIMESTAMP'2025-01-01 00:00:00'`,
+		`'2000-02-01'`,
+		`'2020-12-31 23:59:59'`,
+		`'2025-01-01 00:00:00'`,
+		`20250101`,
+		`'20250101'`,
+	}
+
+	for _, d := range dates {
+		yield(fmt.Sprintf("LAST_DAY(%s)", d), nil)
+	}
 }
 
 func FnQuarter(yield Query) {
