@@ -64,14 +64,14 @@ func UnescapeID(in string) (string, error) {
 	first, last := in[0], in[l-1]
 
 	if l >= 2 && first == '`' && last != '`' {
-		return "", fmt.Errorf("UnescapeID err: unexpected single backtick at position %d in %s", 0, in)
+		return "", fmt.Errorf("UnescapeID err: unexpected single backtick at position %d in '%s'", 0, in)
 	}
 	if l >= 2 && first != '`' && last == '`' {
-		return "", fmt.Errorf("UnescapeID err: unexpected single backtick at position %d in %s", l, in)
+		return "", fmt.Errorf("UnescapeID err: unexpected single backtick at position %d in '%s'", l, in)
 	}
 	if l >= 2 && first != '`' && last != '`' {
 		if idx := strings.IndexByte(in, '`'); idx != -1 {
-			return "", fmt.Errorf("UnescapeID error: no outer backticks found in the identifier '%s'", in)
+			return "", fmt.Errorf("UnescapeID err: no outer backticks found in the identifier '%s'", in)
 		}
 		return in, nil
 	}
@@ -93,7 +93,7 @@ func UnescapeID(in string) (string, error) {
 				if in[i+1] == '`' {
 					i++ // halves the number of backticks
 				} else {
-					return "", fmt.Errorf("UnescapeID err: unexpected single backtick at position %d in %s", i, in)
+					return "", fmt.Errorf("UnescapeID err: unexpected single backtick at position %d in '%s'", i, in)
 				}
 			}
 		}
