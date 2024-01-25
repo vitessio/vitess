@@ -43,8 +43,10 @@ func TestYamlVars(t *testing.T) {
 	var unmarshaledData TestStruct
 	err = Unmarshal(marshaledData, &unmarshaledData)
 	assert.NoError(t, err)
-	if !reflect.DeepEqual(inputData, unmarshaledData) {
-		t.Errorf("Unmarshaled data does not match original data. Expected: %v, Got: %v", inputData, unmarshaledData)
-	}
+	assert.Equal(t, inputData, unmarshaledData)
+
+	unmarshaledData.StringField = "changed text"
+	unmarshaledData.BoolField = false
+	assert.NotEqual(t, inputData, unmarshaledData)
 
 }
