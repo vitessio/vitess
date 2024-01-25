@@ -65,12 +65,19 @@ If you are currently using `vitess/lite` as your `mysqld` image in your vitess-o
 Below is an example of a kubernetes yaml file before and after upgrading to an official MySQL image:
 
 ```yaml
-# before
+# before:
+
+# the image used here encapsulates MySQL 8.0.30 and its binaries
+
     mysqld:
-      mysql80Compatible: vitess/lite:v19.0.0
+      mysql80Compatible: vitess/lite:v19.0.0-mysql80
 ```
 ```yaml
-# after
+# after:
+
+# if we still want to use MySQL 8.0.30, we now have to use the
+# official MySQL image with the 8.0.30 tag as shown below 
+
     mysqld:
       mysql80Compatible: mysql:8.0.30 # or even mysql:8.0.34 for instance
 ```
