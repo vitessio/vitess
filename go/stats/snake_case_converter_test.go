@@ -36,7 +36,7 @@ func TestToSnakeCase(t *testing.T) {
 	}
 
 	for _, tt := range snakeCaseTest {
-		if got, want := toSnakeCase(tt.input), tt.output; got != want {
+		if got, want := GetSnakeName(tt.input), tt.output; got != want {
 			t.Errorf("want '%s', got '%s'", want, got)
 		}
 	}
