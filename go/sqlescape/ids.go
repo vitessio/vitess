@@ -56,27 +56,39 @@ func EscapeIDs(identifiers []string) []string {
 // UnescapeID reverses any backticking in the input string by EscapeID.
 func UnescapeID(in string) (string, error) {
 	l := len(in)
-	if l >= 2 && in[0] == '`' && in[l-1] == '`' {
-		in = in[1 : l-1]
 
-		if idx := strings.IndexByte(in, '`'); idx == -1 {
-			return in, nil
-		}
+	if idx := strings.IndexByte(in, '`'); idx == -1 && l >= 2 {
+		return in, nil
+	}
 
-		var buf strings.Builder
-		buf.Grow(len(in))
+	first, last := in[0], in[l-1]
+	if l >= 2 {
+		if first == '`' && last != '`' {
+			return "", fmt.Errorf("UnescapeID invalid identifier: unexpected single backtick at position %d in %s", 0, in)
+		} else if first != '`' && last == '`' {
+			return "", fmt.Errorf("UnescapeID invalid identifier: unexpected single backtick at position %d in %s", l, in)
+		} else if first == '`' && last == '`' {
+			in = in[1 : l-1]
 
-		for i := 0; i < len(in); i++ {
-			buf.WriteByte(in[i])
-			if i < len(in)-1 && in[i] == '`' {
-				if in[i+1] == '`' {
-					i++ // halves the number of backticks
-				} else {
-					return "", fmt.Errorf("UnescapeID invalid identifier: unexpected single backtick at position %d in %s", i, in)
+			if idx := strings.IndexByte(in, '`'); idx == -1 {
+				return in, nil
+			}
+
+			var buf strings.Builder
+			buf.Grow(len(in))
+
+			for i := 0; i < len(in); i++ {
+				buf.WriteByte(in[i])
+				if i < len(in)-1 && in[i] == '`' {
+					if in[i+1] == '`' {
+						i++ // halves the number of backticks
+					} else {
+						return "", fmt.Errorf("UnescapeID invalid identifier: unexpected single backtick at position %d in %s", i, in)
+					}
 				}
 			}
+			return buf.String(), nil
 		}
-		return buf.String(), nil
 	}
 	return in, nil
 }
