@@ -307,7 +307,7 @@
               "Sharded": false
             },
             "FieldQuery": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where 1 != 1",
-            "Query": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.referenced_column_name is not null order by ordinal_position asc",
+            "Query": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.referenced_column_name is not null order by kcu.ordinal_position asc",
             "SysTableTableSchema": "[:v1]",
             "Table": "information_schema.key_column_usage"
           },
@@ -748,8 +748,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select x.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
-        "Query": "select x.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a) as x",
+        "FieldQuery": "select x.table_name from (select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
+        "Query": "select x.table_name from (select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a) as x",
         "Table": "information_schema.key_column_usage"
       }
     }
@@ -776,8 +776,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select x.table_name, x.COLUMN_NAME from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
-            "Query": "select x.table_name, x.COLUMN_NAME from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a) as x",
+            "FieldQuery": "select x.table_name, x.COLUMN_NAME from (select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
+            "Query": "select x.table_name, x.COLUMN_NAME from (select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a) as x",
             "Table": "information_schema.key_column_usage"
           },
           {
@@ -834,8 +834,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select a.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as a, (select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, UNIQUE_CONSTRAINT_CATALOG, UNIQUE_CONSTRAINT_SCHEMA, UNIQUE_CONSTRAINT_NAME, MATCH_OPTION, UPDATE_RULE, DELETE_RULE, TABLE_NAME, REFERENCED_TABLE_NAME from information_schema.referential_constraints where 1 != 1) as b where 1 != 1",
-        "Query": "select a.table_name from (select a.CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME, a.TABLE_CATALOG, a.TABLE_SCHEMA, a.TABLE_NAME, a.COLUMN_NAME, a.ORDINAL_POSITION, a.POSITION_IN_UNIQUE_CONSTRAINT, a.REFERENCED_TABLE_SCHEMA, a.REFERENCED_TABLE_NAME, a.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where a.table_name = :a_table_name /* VARCHAR */) as a, (select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, UNIQUE_CONSTRAINT_CATALOG, UNIQUE_CONSTRAINT_SCHEMA, UNIQUE_CONSTRAINT_NAME, MATCH_OPTION, UPDATE_RULE, DELETE_RULE, TABLE_NAME, REFERENCED_TABLE_NAME from information_schema.referential_constraints where table_name = :table_name /* VARCHAR */) as b",
+        "FieldQuery": "select a.table_name from (select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where 1 != 1) as a, (select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, UNIQUE_CONSTRAINT_CATALOG, UNIQUE_CONSTRAINT_SCHEMA, UNIQUE_CONSTRAINT_NAME, MATCH_OPTION, UPDATE_RULE, DELETE_RULE, TABLE_NAME, REFERENCED_TABLE_NAME from information_schema.referential_constraints where 1 != 1) as b where 1 != 1",
+        "Query": "select a.table_name from (select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as a where a.table_name = :a_table_name /* VARCHAR */) as a, (select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, UNIQUE_CONSTRAINT_CATALOG, UNIQUE_CONSTRAINT_SCHEMA, UNIQUE_CONSTRAINT_NAME, MATCH_OPTION, UPDATE_RULE, DELETE_RULE, TABLE_NAME, REFERENCED_TABLE_NAME from information_schema.referential_constraints where table_name = :table_name /* VARCHAR */) as b",
         "SysTableTableName": "[a_table_name:VARCHAR(\"users\"), table_name:VARCHAR(\"users\")]",
         "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
       }

@@ -388,8 +388,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a.user_id, a.col1, a.col2 from authoritative as a where 1 != 1",
-        "Query": "select a.user_id, a.col1, a.col2 from authoritative as a",
+        "FieldQuery": "select user_id, col1, col2 from authoritative as a where 1 != 1",
+        "Query": "select user_id, col1, col2 from authoritative as a",
         "Table": "authoritative"
       },
       "TablesUsed": [
@@ -1129,7 +1129,7 @@
           "Sharded": true
         },
         "FieldQuery": "select user0_.col as col0_ from `user` as user0_ where 1 != 1",
-        "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc limit 3",
+        "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col desc limit 3",
         "Table": "`user`",
         "Values": [
           "INT64(1)"
@@ -1328,8 +1328,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select t.id1 from (select `user`.id as id1 from `user` where 1 != 1) as t where 1 != 1",
-            "Query": "select t.id1 from (select `user`.id as id1 from `user`) as t",
+            "FieldQuery": "select id1 from (select `user`.id as id1 from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select id1 from (select `user`.id as id1 from `user`) as t",
             "Table": "`user`"
           },
           {
@@ -1339,8 +1339,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select t.id2 from (select user_extra.id as id2 from user_extra where 1 != 1) as t where 1 != 1",
-            "Query": "select t.id2 from (select user_extra.id as id2 from user_extra) as t",
+            "FieldQuery": "select id2 from (select user_extra.id as id2 from user_extra where 1 != 1) as t where 1 != 1",
+            "Query": "select id2 from (select user_extra.id as id2 from user_extra) as t",
             "Table": "user_extra"
           }
         ]
@@ -1428,8 +1428,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select a.col1, a.col2 from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
-        "Query": "select a.col1, a.col2 from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
+        "FieldQuery": "select col1, col2 from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
+        "Query": "select col1, col2 from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
         "Table": "unsharded"
       },
       "TablesUsed": [
@@ -2023,73 +2023,7 @@
   {
     "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutValue",
-            "PulloutVars": [
-              "__sq1"
-            ],
-            "Inputs": [
-              {
-                "InputName": "SubQuery",
-                "OperatorType": "Limit",
-                "Count": "INT64(1)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select col from `user` where 1 != 1",
-                    "Query": "select col from `user` limit :__upper_limit",
-                    "Table": "`user`"
-                  }
-                ]
-              },
-              {
-                "InputName": "Outer",
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select :__sq1 as a, weight_string(:__sq1) from `user` where 1 != 1",
-                "OrderBy": "(0|1) ASC",
-                "Query": "select :__sq1 as a, weight_string(:__sq1) from `user` order by a asc",
-                "Table": "`user`"
-              }
-            ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
+    "plan": "VT13002: unexpected AST struct for query: (select col from `user` limit 1)"
   },
   {
     "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
@@ -3381,7 +3315,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select _inner.id from (select music.id from music where music.user_id in (1, 2, 3)) as _inner)",
+        "Query": "select music.id from music where music.id in (select id from (select music.id from music where music.user_id in (1, 2, 3)) as _inner)",
         "Table": "music",
         "Values": [
           "(INT64(1), INT64(2), INT64(3))"
@@ -3901,7 +3835,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id = 5 limit 10) as subquery_for_limit) as subquery_for_limit)",
+        "Query": "select music.id from music where music.id in (select id from (select id from (select music.id from music where music.user_id = 5 limit 10) as subquery_for_limit) as subquery_for_limit)",
         "Table": "music",
         "Values": [
           "INT64(5)"
@@ -3927,7 +3861,7 @@
           "Sharded": true
         },
         "FieldQuery": "select music.id from music where 1 != 1",
-        "Query": "select music.id from music where music.id in (select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id in (5) limit 10) as subquery_for_limit) as subquery_for_limit)",
+        "Query": "select music.id from music where music.id in (select id from (select id from (select music.id from music where music.user_id in (5) limit 10) as subquery_for_limit) as subquery_for_limit)",
         "Table": "music",
         "Values": [
           "INT64(5)"
@@ -3965,8 +3899,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
-                "Query": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where music.user_id in ::__vals) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
+                "FieldQuery": "select id from (select id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
+                "Query": "select id from (select id from (select music.id from music where music.user_id in ::__vals) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
                 "Table": "music",
                 "Values": [
                   "(INT64(5), INT64(6))"
@@ -4024,8 +3958,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
-                "Query": "select subquery_for_limit.id from (select subquery_for_limit.id from (select music.id from music) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
+                "FieldQuery": "select id from (select id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
+                "Query": "select id from (select id from (select music.id from music) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
                 "Table": "music"
               }
             ]
@@ -4787,7 +4721,7 @@
             },
             "FieldQuery": "select u.foo, weight_string(u.foo) from `user` as u where 1 != 1",
             "OrderBy": "(0|1) ASC",
-            "Query": "select u.foo, weight_string(u.foo) from `user` as u order by foo asc",
+            "Query": "select u.foo, weight_string(u.foo) from `user` as u order by u.foo asc",
             "Table": "`user`"
           },
           {

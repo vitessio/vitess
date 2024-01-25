@@ -52,16 +52,11 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 		return err
 	}
 	for idx, col := range columns {
-		e, err := d.QP.GetSimplifiedExpr(ctx, col.Expr)
-		if err != nil {
-			// ambiguous columns are not a problem for DISTINCT
-			e = col.Expr
-		}
 		var wsCol *int
-		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
+		typ, coll, _ := ctx.SemTable.TypeForExpr(col.Expr)
 
-		if ctx.SemTable.NeedsWeightString(e) {
-			offset, err := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
+		if ctx.SemTable.NeedsWeightString(col.Expr) {
+			offset, err := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(col.Expr)))
 			if err != nil {
 				return err
 			}

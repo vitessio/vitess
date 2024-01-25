@@ -585,9 +585,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select u.a, convert(a, binary), weight_string(convert(a, binary)) from `user` as u where 1 != 1",
+            "FieldQuery": "select u.a, convert(u.a, binary), weight_string(convert(u.a, binary)) from `user` as u where 1 != 1",
             "OrderBy": "(1|2) DESC",
-            "Query": "select u.a, convert(a, binary), weight_string(convert(a, binary)) from `user` as u order by convert(a, binary) desc",
+            "Query": "select u.a, convert(u.a, binary), weight_string(convert(u.a, binary)) from `user` as u order by convert(u.a, binary) desc",
             "Table": "`user`"
           },
           {

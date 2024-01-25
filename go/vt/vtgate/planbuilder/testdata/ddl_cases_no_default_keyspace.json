@@ -163,7 +163,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "create view view_a as select a.user_id, a.col1, a.col2 from authoritative as a"
+        "Query": "create view view_a as select user_id, col1, col2 from authoritative as a"
       },
       "TablesUsed": [
         "user.view_a"
@@ -472,7 +472,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc"
+        "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col desc"
       },
       "TablesUsed": [
         "user.view_a"
