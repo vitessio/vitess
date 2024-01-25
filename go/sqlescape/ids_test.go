@@ -15,6 +15,9 @@ package sqlescape
 
 import (
 	"testing"
+
+	"github.com/magiconair/properties/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEscapeID(t *testing.T) {
@@ -26,12 +29,97 @@ func TestEscapeID(t *testing.T) {
 	}, {
 		in:  "a`a",
 		out: "`a``a`",
+	}, {
+		in:  "`fo`o`",
+		out: "```fo``o```",
+	}, {
+		in:  "",
+		out: "``",
 	}}
 	for _, tc := range testcases {
-		out := EscapeID(tc.in)
-		if out != tc.out {
-			t.Errorf("EscapeID(%s): %s, want %s", tc.in, out, tc.out)
-		}
+		t.Run(tc.in, func(t *testing.T) {
+			out := EscapeID(tc.in)
+			if out != tc.out {
+				assert.Equal(t, out, tc.out)
+			}
+		})
+	}
+}
+
+func TestUnescapeID(t *testing.T) {
+	testcases := []struct {
+		in, out string
+		err     bool
+	}{
+		{
+			in:  "``",
+			out: "",
+			err: false,
+		},
+		{
+			in:  "a",
+			out: "a",
+			err: false,
+		},
+		{
+			in:  "`aa`",
+			out: "aa",
+			err: false,
+		},
+		{
+			in:  "`a``a`",
+			out: "a`a",
+			err: false,
+		},
+		{
+			in:  "`foo",
+			out: "",
+			err: true,
+		},
+		{
+			in:  "foo`",
+			out: "",
+			err: true,
+		},
+		{
+			in:  "`fo`o",
+			out: "",
+			err: true,
+		},
+		{
+			in:  "``fo``o``",
+			out: "",
+			err: true,
+		},
+		{
+			in:  "```fo``o```",
+			out: "`fo`o`",
+			err: false,
+		},
+		{
+			in:  "```fo`o```",
+			out: "",
+			err: true,
+		},
+		{
+			in:  "foo",
+			out: "foo",
+			err: false,
+		},
+		{
+			in:  "",
+			out: "",
+			err: false,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			out, err := UnescapeID(tc.in)
+			assert.Equal(t, tc.out, out, "output mismatch")
+			if tc.err {
+				require.Error(t, err)
+			}
+		})
 	}
 }
 
