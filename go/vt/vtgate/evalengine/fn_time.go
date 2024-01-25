@@ -107,6 +107,10 @@ type (
 		collate collations.ID
 	}
 
+	builtinLastDay struct {
+		CallExpr
+	}
+
 	builtinQuarter struct {
 		CallExpr
 	}
@@ -168,6 +172,7 @@ var _ IR = (*builtinMicrosecond)(nil)
 var _ IR = (*builtinMinute)(nil)
 var _ IR = (*builtinMonth)(nil)
 var _ IR = (*builtinMonthName)(nil)
+var _ IR = (*builtinLastDay)(nil)
 var _ IR = (*builtinQuarter)(nil)
 var _ IR = (*builtinSecond)(nil)
 var _ IR = (*builtinTime)(nil)
@@ -1198,6 +1203,54 @@ func (call *builtinMonthName) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_MONTHNAME(col)
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
+}
+
+func lastDay(dt datetime.DateTime) (datetime.Date, bool) {
+	ts := dt.Date.ToStdTime(time.Local)
+	firstDayOfNextMonth := time.Date(ts.Year(), ts.Month()+1, 1, 0, 0, 0, 0, time.Local)
+	lastDayOfMonth := firstDayOfNextMonth.AddDate(0, 0, -1)
+
+	date := datetime.NewDateFromStd(lastDayOfMonth)
+	return date, true
+}
+
+func (b *builtinLastDay) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	dt := evalToDateTime(date, -1, env.now, env.sqlmode.AllowZeroDate())
+	if dt == nil || dt.isZero() {
+		return nil, nil
+	}
+
+	d, ok := lastDay(dt.dt)
+	if !ok {
+		return nil, nil
+	}
+
+	return newEvalDate(d, env.sqlmode.AllowZeroDate()), nil
+}
+
+func (call *builtinLastDay) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1, c.sqlmode.AllowZeroDate())
+	}
+	c.asm.Fn_LAST_DAY()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {

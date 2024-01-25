@@ -3778,6 +3778,22 @@ func (asm *assembler) Fn_MONTHNAME(col collations.TypedCollation) {
 	}, "FN MONTHNAME DATE(SP-1)")
 }
 
+func (asm *assembler) Fn_LAST_DAY() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		d, ok := lastDay(arg.dt)
+		if !ok {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(d)
+		return 1
+	}, "FN LAST_DAY DATETIME(SP-1)")
+}
+
 func (asm *assembler) Fn_QUARTER() {
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-1] == nil {

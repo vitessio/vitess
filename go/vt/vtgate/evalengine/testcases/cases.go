@@ -130,6 +130,7 @@ var Cases = []TestCase{
 	{Run: FnMinute},
 	{Run: FnMonth},
 	{Run: FnMonthName},
+	{Run: FnLastDay},
 	{Run: FnQuarter},
 	{Run: FnSecond},
 	{Run: FnTime},
@@ -1739,6 +1740,12 @@ func FnMonth(yield Query) {
 func FnMonthName(yield Query) {
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("MONTHNAME(%s)", d), nil)
+	}
+}
+
+func FnLastDay(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("LAST_DAY(%s)", d), nil)
 	}
 }
 
