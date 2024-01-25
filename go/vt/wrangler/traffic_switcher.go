@@ -1776,11 +1776,11 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType w
 			if err != nil {
 				return err
 			}
-			tableName, err := sqlescape.EnsureEscaped(tableName)
+			tableNameEscaped, err := sqlescape.EnsureEscaped(tableName)
 			if err != nil {
 				return err
 			}
-			query := fmt.Sprintf("drop table %s.%s", PrimaryDbName, tableName)
+			query := fmt.Sprintf("drop table %s.%s", PrimaryDbName, tableNameEscaped)
 			if removalType == workflow.DropTable {
 				ts.Logger().Infof("%s: Dropping table %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
@@ -1791,7 +1791,7 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType w
 				}
 				ts.Logger().Infof("%s: Renaming table %s.%s to %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
-				query = fmt.Sprintf("rename table %s.%s TO %s.%s", PrimaryDbName, tableName, PrimaryDbName, renameName)
+				query = fmt.Sprintf("rename table %s.%s TO %s.%s", PrimaryDbName, tableNameEscaped, PrimaryDbName, renameName)
 			}
 			_, err = ts.wr.ExecuteFetchAsDba(ctx, source.GetPrimary().Alias, query, 1, false, true)
 			if err != nil {
