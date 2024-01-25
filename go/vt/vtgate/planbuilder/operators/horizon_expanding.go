@@ -242,7 +242,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	sqc := &SubQueryBuilder{}
 	outerID := TableID(src)
 	for _, ae := range aes {
-		org := sqlparser.CloneRefOfAliasedExpr(ae)
+		org := ctx.SemTable.Clone(ae).(*sqlparser.AliasedExpr)
 		expr := ae.Expr
 		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
 		if newExpr == nil {
