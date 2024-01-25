@@ -6,7 +6,7 @@
   - **[Dropping Support for MySQL 5.7](#drop-support-mysql57)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [VTTablet Flags](#vttablet-flags)
-    - [MySQL binary in vitess/lite Docker image](#mysql-binary-in-lite-image)
+    - [Docker Image vitess/lite](#deprecation-vitess-lite-mysqld)
   - **[Breaking Changes](#breaking-changes)**
      - [ExecuteFetchAsDBA rejects multi-statement SQL](#execute-fetch-as-dba-reject-multi)
   - **[New Stats](#new-stats)**
@@ -45,18 +45,29 @@ Vitess will however, continue to support importing from MySQL 5.7 into Vitess ev
 `--vreplication_healthcheck_topology_refresh`, `--vreplication_healthcheck_retry_delay`, and `--vreplication_healthcheck_timeout`.
 - The `--vreplication_tablet_type` flag is now deprecated and ignored.
 
-#### <a id="mysql-binary-in-lite-image"/>MySQL binary in vitess/lite Docker image
+#### <a id="deprecation-vitess-lite-mysqld"/>Docker Image vitess/lite
 
 The `mysqld` binary is now deprecated in the `vitess/lite` Docker image and will be removed in a future release.
+This means that the MySQL/Percona version specific image tags for the `vitess/lite` image are deprecated.
 
-If you are currently using `vitess/lite` as your `mysqld` image in your vitess-operator deployment we invite you to use an official MySQL image such as `mysql:8.0.30`.
+Below is a full list of available tags for `v19.0.0` and their deprecation status:
+
+| Image                           | Deprecated | 
+|---------------------------------|------------|
+| `vitess/lite:v19.0.0`           | NO         |
+| `vitess/lite:v19.0.0-mysql57`   | YES        |
+| `vitess/lite:v19.0.0-mysql80`   | YES        |
+| `vitess/lite:v19.0.0-percona57` | YES        |
+| `vitess/lite:v19.0.0-percona80` | YES        |
+
+If you are currently using `vitess/lite` as your `mysqld` image in your vitess-operator deployment we invite you to use an official MySQL image, such as `mysql:8.0.30`.
 
 Below is an example of a kubernetes yaml file before and after upgrading to an official MySQL image:
 
 ```yaml
 # before
     mysqld:
-      mysql80Compatible: vitess/lite:19.0.0
+      mysql80Compatible: vitess/lite:v19.0.0
 ```
 ```yaml
 # after
