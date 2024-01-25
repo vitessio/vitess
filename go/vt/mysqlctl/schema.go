@@ -346,17 +346,16 @@ func GetColumns(dbName, table string, exec func(string, int, bool) (*sqltypes.Re
 	if selectColumns == "" {
 		selectColumns = "*"
 	}
-	sanitizedTable, err := sqlescape.UnescapeID(table)
+	tableSpec, err := sqlescape.EnsureEscaped(table)
 	if err != nil {
 		return nil, nil, err
 	}
-	tableSpec := sqlescape.EscapeID(sanitizedTable)
 	if dbName != "" {
-		sanitizedDbName, err := sqlescape.UnescapeID(dbName)
+		dbName, err := sqlescape.EnsureEscaped(dbName)
 		if err != nil {
 			return nil, nil, err
 		}
-		tableSpec = fmt.Sprintf("%s.%s", sqlescape.EscapeID(sanitizedDbName), tableSpec)
+		tableSpec = fmt.Sprintf("%s.%s", dbName, tableSpec)
 	}
 	query := fmt.Sprintf(GetFieldsQuery, selectColumns, tableSpec)
 	qr, err := exec(query, 0, true)

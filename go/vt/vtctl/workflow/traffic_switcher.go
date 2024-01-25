@@ -487,27 +487,24 @@ func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Conte
 func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
 	err := ts.ForAllSources(func(source *MigrationSource) error {
 		for _, tableName := range ts.Tables() {
-			sanitizedPrimaryDbName, err := sqlescape.UnescapeID(source.GetPrimary().DbName())
+			primaryDbName, err := sqlescape.EnsureEscaped(source.GetPrimary().DbName())
 			if err != nil {
 				return err
 			}
-			primaryDbName := sqlescape.EscapeID(sanitizedPrimaryDbName)
-			sanitizedTableName, err := sqlescape.UnescapeID(tableName)
+			tableName, err := sqlescape.EnsureEscaped(tableName)
 			if err != nil {
 				return err
 			}
-			tableName := sqlescape.EscapeID(sanitizedTableName)
 
 			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
 			if removalType == DropTable {
 				ts.Logger().Infof("%s: Dropping table %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
 			} else {
-				sanitizedRename, err := sqlescape.UnescapeID(getRenameFileName(tableName))
+				renameName, err := sqlescape.EnsureEscaped(getRenameFileName(tableName))
 				if err != nil {
 					return err
 				}
-				renameName := sqlescape.EscapeID(sanitizedRename)
 				ts.Logger().Infof("%s: Renaming table %s.%s to %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
 				query = fmt.Sprintf("rename table %s.%s TO %s.%s", primaryDbName, tableName, primaryDbName, renameName)
@@ -1074,16 +1071,14 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 	err := ts.ForAllTargets(func(target *MigrationTarget) error {
 		log.Infof("ForAllTargets: %+v", target)
 		for _, tableName := range ts.Tables() {
-			sanitizedPrimaryDbName, err := sqlescape.UnescapeID(target.GetPrimary().DbName())
+			primaryDbName, err := sqlescape.EnsureEscaped(target.GetPrimary().DbName())
 			if err != nil {
 				return err
 			}
-			primaryDbName := sqlescape.EscapeID(sanitizedPrimaryDbName)
-			sanitizedTableName, err := sqlescape.UnescapeID(tableName)
+			tableName, err := sqlescape.EnsureEscaped(tableName)
 			if err != nil {
 				return err
 			}
-			tableName := sqlescape.EscapeID(sanitizedTableName)
 			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
 			ts.Logger().Infof("%s: Dropping table %s.%s\n",
 				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)

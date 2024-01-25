@@ -854,18 +854,16 @@ func escapeQualifiedTable(qualifiedTableName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sanitizedKeyspace, err := sqlescape.UnescapeID(keyspace)
+	// unescape() first in case an already escaped string was passed
+	keyspace, err = sqlescape.EnsureEscaped(keyspace)
 	if err != nil {
 		return "", err
 	}
-	sanitizedTableName, err := sqlescape.UnescapeID(tableName)
+	tableName, err = sqlescape.EnsureEscaped(tableName)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s.%s",
-		// unescape() first in case an already escaped string was passed
-		sqlescape.EscapeID(sanitizedKeyspace),
-		sqlescape.EscapeID(sanitizedTableName)), nil
+	return fmt.Sprintf("%s.%s", keyspace, tableName), nil
 }
 
 func extractTableParts(tableName string, allowUnqualified bool) (string, string, error) {
