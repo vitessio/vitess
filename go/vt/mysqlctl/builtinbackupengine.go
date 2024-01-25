@@ -203,7 +203,7 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 }
 
 // ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
-// The function returns a boolean that indicates if the backup is usable, and an overall error.
+// The function returns a BackupResult that indicates the usability of the backup, and an overall error.
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
 	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
 		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
@@ -233,7 +233,7 @@ func getIncrementalFromPosGTIDSet(incrementalFromPos string) (replication.Mysql5
 // executeIncrementalBackup runs an incremental backup, based on given 'incremental_from_pos', which can be:
 // - A valid position
 // - "auto", indicating the incremental backup should begin with last successful backup end position.
-// The function returns a boolean that indicates if the backup is usable, and an overall error.
+// The function returns a BackupResult that indicates the usability of the backup, and an overall error.
 func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
 	// Collect MySQL status:
 	// UUID
@@ -375,7 +375,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	return BackupUsable, nil
 }
 
-// executeFullBackup returns a boolean that indicates if the backup is usable,
+// executeFullBackup returns a BackupResult that indicates the usability of the backup,
 // and an overall error.
 func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
 

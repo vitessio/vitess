@@ -167,7 +167,7 @@ func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalE
 }
 
 // ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
-// The function returns a boolean that indicates if the backup is usable, and an overall error.
+// The function returns a BackupResult that indicates the usability of the backup, and an overall error.
 func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
 	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
 		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
@@ -175,7 +175,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	return be.executeFullBackup(ctx, params, bh)
 }
 
-// executeFullBackup returns a boolean that indicates if the backup is usable,
+// executeFullBackup returns a BackupResult that indicates the usability of the backup,
 // and an overall error.
 func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (backupResult BackupResult, finalErr error) {
 	if params.IncrementalFromPos != "" {
