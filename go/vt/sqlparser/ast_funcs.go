@@ -2150,8 +2150,8 @@ func (s SelectExprs) AllAggregation() bool {
 	return true
 }
 
-// RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
-func RemoveKeyspace(in SQLNode) {
+// RemoveKeyspaceInCol removes the Qualifier.Qualifier on all ColNames in the AST
+func RemoveKeyspaceInCol(in SQLNode) {
 	// Walk will only return an error if we return an error from the inner func. safe to ignore here
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		if col, ok := node.(*ColName); ok && col.Qualifier.Qualifier.NotEmpty() {
@@ -2171,6 +2171,24 @@ func RemoveKeyspaceInTables(in SQLNode) {
 			cursor.Replace(tbl)
 		}
 
+		return true
+	})
+}
+
+// RemoveKeyspace removes the Qualifier.Qualifier on all ColNames and Qualifier on all TableNames in the AST
+func RemoveKeyspace(in SQLNode) {
+	Rewrite(in, nil, func(cursor *Cursor) bool {
+		switch expr := cursor.Node().(type) {
+		case *ColName:
+			if expr.Qualifier.Qualifier.NotEmpty() {
+				expr.Qualifier.Qualifier = NewIdentifierCS("")
+			}
+		case TableName:
+			if expr.Qualifier.NotEmpty() {
+				expr.Qualifier = NewIdentifierCS("")
+				cursor.Replace(expr)
+			}
+		}
 		return true
 	})
 }

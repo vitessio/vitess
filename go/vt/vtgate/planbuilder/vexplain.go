@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func buildVExplainPlan(ctx context.Context, vexplainStmt *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
@@ -112,36 +111,35 @@ func buildExplainStmtPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
-	ksName := ""
-	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
-		ksName = ks.Name
+	switch explain.Statement.(type) {
+	case sqlparser.SelectStatement, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert:
+		return explainSelectPlan(explain, reservedVars, vschema)
+	default:
+		return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 	}
 
-	semTable, err := semantics.Analyze(explain.Statement, ksName, vschema)
+}
+
+func explainDefaultPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+	ctx, err := plancontext.CreatePlanningContext(explain.Statement, reservedVars, vschema, Gen4)
 	if err != nil {
 		return nil, err
 	}
 
-	ks := semTable.SingleKeyspace()
+	ks := ctx.SemTable.SingleKeyspace()
 	if ks == nil {
 		return nil, vterrors.VT03031()
 	}
 
-	if err = queryRewrite(semTable, reservedVars, explain.Statement); err != nil {
+	if err = queryRewrite(ctx.SemTable, reservedVars, explain.Statement); err != nil {
 		return nil, err
 	}
 
-	destination, keyspace, _, err := vschema.TargetDestination(ks.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	if destination == nil {
-		destination = key.DestinationAnyShard{}
-	}
+	// Remove keyspace qualifier from columns and tables.
+	sqlparser.RemoveKeyspace(explain.Statement)
 
 	var tables []string
-	for _, table := range semTable.Tables {
+	for _, table := range ctx.SemTable.Tables {
 		name, err := table.Name()
 		if err != nil {
 			// this is just for reporting which tables we are touching
@@ -152,9 +150,13 @@ func buildExplainStmtPlan(
 	}
 
 	return newPlanResult(&engine.Send{
-		Keyspace:          keyspace,
-		TargetDestination: destination,
+		Keyspace:          ks,
+		TargetDestination: key.DestinationAnyShard{},
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
 	}, tables...), nil
+}
+
+func explainSelectPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+	return explainDefaultPlan(explain, reservedVars, vschema)
 }
