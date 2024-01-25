@@ -2021,11 +2021,6 @@
     }
   },
   {
-    "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
-    "query": "select (select col from user limit 1) as a from user join user_extra order by a",
-    "plan": "VT13002: unexpected AST struct for query: (select col from `user` limit 1)"
-  },
-  {
     "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "plan": {
