@@ -87,6 +87,11 @@ func TestUnescapeID(t *testing.T) {
 			err: true,
 		},
 		{
+			in:  "`fo`o`",
+			out: "",
+			err: true,
+		},
+		{
 			in:  "``fo``o``",
 			out: "",
 			err: true,
