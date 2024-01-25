@@ -25,6 +25,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -34,6 +35,8 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -46,7 +49,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/proto/vttime"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 const (
@@ -199,10 +202,10 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			// This is our expected query, which will also short circuit
 			// the test with an error as at this point we've tested what
 			// we wanted to test.
-			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
-			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-			tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{}, errShortCircuit)
+			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+			targetTablet.vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{}, errShortCircuit)
 			_, err := ws.MoveTablesCreate(ctx, tt.req)
 			tenv.tmc.tablets[targetTabletUID].vrdbClient.Wait()
 			require.ErrorIs(t, err, errShortCircuit)
@@ -247,7 +250,7 @@ func TestMoveTables(t *testing.T) {
 	globalTablet := tenv.addTablet(t, 500, globalKs, globalShard)
 	defer tenv.deleteTablet(globalTablet.tablet)
 
-	tenv.ts.SaveVSchema(ctx, globalKs, &vschemapb.Keyspace{
+	err := tenv.ts.SaveVSchema(ctx, globalKs, &vschemapb.Keyspace{
 		Sharded: false,
 		Tables: map[string]*vschemapb.Table{
 			"t1_seq": {
@@ -255,7 +258,8 @@ func TestMoveTables(t *testing.T) {
 			},
 		},
 	})
-	tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+	require.NoError(t, err)
+	err = tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
 			"hash": {
@@ -275,6 +279,7 @@ func TestMoveTables(t *testing.T) {
 			},
 		},
 	})
+	require.NoError(t, err)
 
 	ws := workflow.NewServer(vtenv.NewTestEnv(), tenv.ts, tenv.tmc)
 
@@ -411,7 +416,7 @@ func TestMoveTables(t *testing.T) {
 		Keyspace:                  targetKs,
 		Workflow:                  wf,
 		Cells:                     tenv.cells,
-		MaxReplicationLagAllowed:  &vttime.Duration{Seconds: 922337203},
+		MaxReplicationLagAllowed:  &vttimepb.Duration{Seconds: 922337203},
 		EnableReverseReplication:  true,
 		InitializeTargetSequences: true,
 		Direction:                 int32(workflow.DirectionForward),
@@ -448,7 +453,7 @@ func TestMoveTables(t *testing.T) {
 		Keyspace:                 targetKs,
 		Workflow:                 wf,
 		Cells:                    tenv.cells,
-		MaxReplicationLagAllowed: &vttime.Duration{Seconds: 922337203},
+		MaxReplicationLagAllowed: &vttimepb.Duration{Seconds: 922337203},
 		EnableReverseReplication: true,
 		Direction:                int32(workflow.DirectionBackward),
 	})
@@ -660,7 +665,7 @@ func TestSourceShardSelection(t *testing.T) {
 
 	ws := workflow.NewServer(vtenv.NewTestEnv(), tenv.ts, tenv.tmc)
 
-	tenv.ts.SaveVSchema(ctx, sourceKs, &vschemapb.Keyspace{
+	err := tenv.ts.SaveVSchema(ctx, sourceKs, &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
 			"hash": {
@@ -676,7 +681,8 @@ func TestSourceShardSelection(t *testing.T) {
 			},
 		},
 	})
-	tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+	require.NoError(t, err)
+	err = tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
 		Sharded: true,
 		Vindexes: map[string]*vschemapb.Vindex{
 			"hash": {
@@ -692,6 +698,7 @@ func TestSourceShardSelection(t *testing.T) {
 			},
 		},
 	})
+	require.NoError(t, err)
 
 	tests := []struct {
 		name    string
@@ -789,7 +796,8 @@ func TestSourceShardSelection(t *testing.T) {
 			tenv.tmc.SetSchema(tt.schema)
 
 			if tt.vschema != nil {
-				tenv.ts.SaveVSchema(ctx, targetKs, tt.vschema)
+				err = tenv.ts.SaveVSchema(ctx, targetKs, tt.vschema)
+				require.NoError(t, err)
 			}
 
 			for uid, streams := range tt.streams {
@@ -1240,4 +1248,1735 @@ func addInvariants(dbClient *binlogplayer.MockDBClient, vreplID, sourceTabletUID
 		"0",
 	))
 	dbClient.AddInvariant(fmt.Sprintf(updatePickedSourceTablet, cell, sourceTabletUID, vreplID), &sqltypes.Result{})
+}
+
+func addMaterializeSettingsTablesToSchema(ms *vtctldatapb.MaterializeSettings, tenv *testEnv, venv *vtenv.Environment) {
+	schema := defaultSchema.CloneVT()
+	for _, ts := range ms.TableSettings {
+		tableName := ts.TargetTable
+		table, err := venv.Parser().TableFromStatement(ts.SourceExpression)
+		if err == nil {
+			tableName = table.Name.String()
+		}
+		schema.TableDefinitions = append(schema.TableDefinitions, &tabletmanagerdatapb.TableDefinition{
+			Name:   tableName,
+			Schema: fmt.Sprintf("%s_schema", tableName),
+		})
+		schema.TableDefinitions = append(schema.TableDefinitions, &tabletmanagerdatapb.TableDefinition{
+			Name:   ts.TargetTable,
+			Schema: fmt.Sprintf("%s_schema", ts.TargetTable),
+		})
+	}
+	tenv.tmc.SetSchema(schema)
+}
+
+func TestExternalizeLookupVindex(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	addInvariants(targetShards["-80"].vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+	addInvariants(targetShards["80-"].vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		// Keyspace where the vindex is created.
+		SourceKeyspace: sourceKs,
+		// Keyspace where the lookup table and VReplication workflow is created.
+		TargetKeyspace: targetKs,
+		Cell:           tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	sourceVschema := &vschemapb.Keyspace{
+		Sharded: false,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+			"owned_lookup": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table":      "targetks.owned_lookup",
+					"from":       "c1",
+					"to":         "c2",
+					"write_only": "true",
+				},
+				Owner: "t1",
+			},
+			"unowned_lookup": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table":      "targetks.unowned_lookup",
+					"from":       "c1",
+					"to":         "c2",
+					"write_only": "true",
+				},
+			},
+			"unqualified_lookup": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table": "unqualified",
+					"from":  "c1",
+					"to":    "c2",
+				},
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "xxhash",
+					Column: "col1",
+				}, {
+					Name:   "owned_lookup",
+					Column: "col2",
+				}},
+			},
+		},
+	}
+
+	trxTS := fmt.Sprintf("%d", time.Now().Unix())
+	fields := sqltypes.MakeTestFields(
+		"id|state|message|source|workflow_type|workflow_sub_type|max_tps|max_replication_lag|time_updated|time_heartbeat|time_throttled|transaction_timestamp|rows_copied",
+		"int64|varbinary|varbinary|blob|int64|int64|int64|int64|int64|int64|int64|int64|int64",
+	)
+	wftype := fmt.Sprintf("%d", binlogdatapb.VReplicationWorkflowType_CreateLookupIndex)
+	ownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}} stop_after_copy:true`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	ownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}}`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	ownedRunning := sqltypes.MakeTestResult(fields, "1|Running|msg|"+ownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5")
+	ownedStopped := sqltypes.MakeTestResult(fields, "1|Stopped|Stopped after copy|"+ownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5")
+	unownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}} stop_after_copy:true`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	unownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}}`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5")
+	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5")
+
+	testcases := []struct {
+		request         *vtctldatapb.LookupVindexExternalizeRequest
+		vrResponse      *sqltypes.Result
+		err             string
+		expectedVschema *vschemapb.Keyspace
+		expectDelete    bool
+	}{
+		{
+			request: &vtctldatapb.LookupVindexExternalizeRequest{
+				Name:          "owned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: ownedStopped,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"owned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.owned_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+						Owner: "t1",
+					},
+				},
+			},
+			expectDelete: true,
+		},
+		{
+			request: &vtctldatapb.LookupVindexExternalizeRequest{
+				Name:          "unowned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: unownedStopped,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"unowned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.unowned_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+					},
+				},
+			},
+			err: "is not in Running state",
+		},
+		{
+			request: &vtctldatapb.LookupVindexExternalizeRequest{
+				Name:          "owned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: ownedRunning,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"owned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.owned_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+						Owner: "t1",
+					},
+				},
+			},
+			expectDelete: true,
+		},
+		{
+			request: &vtctldatapb.LookupVindexExternalizeRequest{
+				Name:          "unowned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: unownedRunning,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"unowned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.unowned_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+					},
+				},
+			},
+		},
+		{
+			request: &vtctldatapb.LookupVindexExternalizeRequest{
+				Name:          "absent_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"absent_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.absent_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+					},
+				},
+			},
+			err: "vindex absent_lookup not found in the sourceks keyspace",
+		},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.request.Name, func(t *testing.T) {
+			// Resave the source schema for every iteration.
+			err := tenv.ts.SaveVSchema(ctx, tcase.request.Keyspace, sourceVschema)
+			require.NoError(t, err)
+			err = tenv.ts.RebuildSrvVSchema(ctx, []string{tenv.cells[0]})
+			require.NoError(t, err)
+
+			require.NotNil(t, tcase.request, "No request provided")
+
+			for _, targetTablet := range targetShards {
+				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, tcase.request.Name, tenv.dbName), tcase.vrResponse, nil)
+				if tcase.err == "" {
+					// We query the workflow again to build the status output when
+					// it's successfully created.
+					targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, tcase.request.Name, tenv.dbName), tcase.vrResponse, nil)
+				}
+			}
+
+			preWorkflowDeleteCalls := tenv.tmc.workflowDeleteCalls
+			_, err = ws.LookupVindexExternalize(ctx, tcase.request)
+			if tcase.err != "" {
+				if err == nil || !strings.Contains(err.Error(), tcase.err) {
+					require.FailNow(t, "LookupVindexExternalize error", "ExternalizeVindex(%v) err: %v, must contain %v", tcase.request, err, tcase.err)
+				}
+				return
+			}
+			require.NoError(t, err)
+			expectedWorkflowDeleteCalls := preWorkflowDeleteCalls
+			if tcase.expectDelete {
+				// We expect the RPC to be called on each target shard.
+				expectedWorkflowDeleteCalls = preWorkflowDeleteCalls + (len(targetShards))
+			}
+			require.Equal(t, expectedWorkflowDeleteCalls, tenv.tmc.workflowDeleteCalls)
+
+			aftervschema, err := tenv.ts.GetVSchema(ctx, ms.SourceKeyspace)
+			require.NoError(t, err)
+			vindex := aftervschema.Vindexes[tcase.request.Name]
+			expectedVindex := tcase.expectedVschema.Vindexes[tcase.request.Name]
+			require.NotNil(t, vindex, "vindex %s not found in vschema", tcase.request.Name)
+			require.NotContains(t, vindex.Params, "write_only", tcase.request)
+			require.Equal(t, expectedVindex, vindex, "vindex mismatch. expected: %+v, got: %+v", expectedVindex, vindex)
+		})
+	}
+}
+
+func TestMaterializerOneToOne(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetTabletUID := 300
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "t1",
+				SourceExpression: "select * from t1",
+				CreateDdl:        "t1ddl",
+			},
+			{
+				TargetTable:      "t2",
+				SourceExpression: "select * from t3",
+				CreateDdl:        "t2ddl",
+			},
+			{
+				TargetTable:      "t4",
+				SourceExpression: "", // empty
+				CreateDdl:        "t4ddl",
+			},
+		},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+
+	// This is our expected query, which will also short circuit
+	// the test with an error as at this point we've tested what
+	// we wanted to test.
+	insert := insertVReplicationPrefix +
+		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"} rules:{match:\"t4\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+			wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
+	targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{}, errShortCircuit)
+
+	err := ws.Materialize(ctx, ms)
+	targetTablet.vrdbClient.Wait()
+	require.ErrorIs(t, err, errShortCircuit)
+}
+
+func TestMaterializerManyToOne(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 200
+	sourceShards := make(map[string]*fakeTabletConn)
+	targetKs := "targetks"
+	targetTabletUID := 300
+	targetShard := "0"
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceShards["-80"] = tenv.addTablet(t, sourceTabletUID, sourceKs, "-80")
+	defer tenv.deleteTablet(sourceShards["-80"].tablet)
+	sourceShards["80-"] = tenv.addTablet(t, sourceTabletUID+10, sourceKs, "80-")
+	defer tenv.deleteTablet(sourceShards["80-"].tablet)
+
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, targetShard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "t1ddl",
+		}, {
+			TargetTable:      "t2",
+			SourceExpression: "select * from t3",
+			CreateDdl:        "t2ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+	targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+	// This is our expected query, which will also short circuit
+	// the test with an error as at this point we've tested what
+	// we wanted to test.
+	for _, sourceShard := range []string{"-80", "80-"} { // One insert per [binlog]source/stream
+		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+
+		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}}", sourceKs, sourceShard)
+		insert := insertVReplicationPrefix +
+			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+				wf, sourceKs, sourceShard, tenv.cells[0], tenv.dbName)
+		if vreplID == 1 {
+			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, nil)
+			targetTablet.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
+			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(getVReplicationRecord, vreplID),
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"id|source",
+						"int64|varchar",
+					),
+					fmt.Sprintf("%d|%s", vreplID, bls),
+				), nil)
+			vreplID++
+		} else {
+			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
+		}
+	}
+
+	err := ws.Materialize(ctx, ms)
+	targetTablet.vrdbClient.Wait()
+	require.ErrorIs(t, err, errShortCircuit)
+}
+
+func TestMaterializerOneToMany(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "t1ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "xxhash",
+				}},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// This is our expected query, which will also short circuit
+	// the test with an error as at this point we've tested what
+	// we wanted to test.
+	for _, targetShard := range []string{"-80", "80-"} {
+		targetTablet := targetShards[targetShard]
+		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+		targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, '%s.xxhash', '%s')\"}}",
+			sourceKs, sourceShard, targetKs, targetShard)
+		insert := insertVReplicationPrefix +
+			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, \'%s.xxhash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
+		if targetShard == "-80" {
+			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, nil)
+			targetTablet.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
+			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(getVReplicationRecord, vreplID),
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"id|source",
+						"int64|varchar",
+					),
+					fmt.Sprintf("%d|%s", vreplID, bls),
+				), nil)
+		} else {
+			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
+		}
+	}
+
+	err = ws.Materialize(ctx, ms)
+	for _, targetTablet := range targetShards {
+		targetTablet.vrdbClient.Wait()
+	}
+	require.ErrorIs(t, err, errShortCircuit)
+}
+
+func TestMaterializerManyToMany(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShards := make(map[string]*fakeTabletConn)
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceShards["-40"] = tenv.addTablet(t, sourceTabletUID, sourceKs, "-40")
+	defer tenv.deleteTablet(sourceShards["-40"].tablet)
+	sourceShards["40-"] = tenv.addTablet(t, sourceTabletUID+10, sourceKs, "40-")
+	defer tenv.deleteTablet(sourceShards["40-"].tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "t1ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "xxhash",
+				}},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// This is our expected query, which will also short circuit
+	// the test with an error as at this point we've tested what
+	// we wanted to test.
+	for _, targetShard := range []string{"-80", "80-"} {
+		targetTablet := targetShards[targetShard]
+		targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+		for i, sourceShard := range []string{"-40", "40-"} { // One insert per [binlog]source/stream
+			addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID+(i*10), position, wf, tenv.cells[0])
+			bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, '%s.xxhash', '%s')\"}}",
+				sourceKs, sourceShard, targetKs, targetShard)
+			insert := insertVReplicationPrefix +
+				fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, \'%s.xxhash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+					wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
+			if targetShard == "80-" && sourceShard == "40-" { // Last insert
+				targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
+			} else { // Can't short circuit as we will do more inserts
+				targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, nil)
+				targetTablet.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
+				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(getVReplicationRecord, vreplID),
+					sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields(
+							"id|source",
+							"int64|varchar",
+						),
+						fmt.Sprintf("%d|%s", vreplID, bls),
+					), nil)
+			}
+		}
+	}
+
+	err = ws.Materialize(ctx, ms)
+	for _, targetTablet := range targetShards {
+		targetTablet.vrdbClient.Wait()
+	}
+	require.ErrorIs(t, err, errShortCircuit)
+}
+
+func TestMaterializerMulticolumnVindex(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "t1ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"region": {
+				Type: "region_experimental",
+				Params: map[string]string{
+					"region_bytes": "1",
+				},
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Columns: []string{"c1", "c2"},
+					Name:    "region",
+				}},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// This is our expected query, which will also short circuit
+	// the test with an error as at this point we've tested what
+	// we wanted to test.
+	for _, targetShard := range []string{"-80", "80-"} {
+		targetTablet := targetShards[targetShard]
+		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+		targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, c2, '%s.region', '%s')\"}}",
+			sourceKs, sourceShard, targetKs, targetShard)
+		insert := insertVReplicationPrefix +
+			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, c2, \'%s.region\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
+		if targetShard == "-80" {
+			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, nil)
+			targetTablet.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
+			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(getVReplicationRecord, vreplID),
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"id|source",
+						"int64|varchar",
+					),
+					fmt.Sprintf("%d|%s", vreplID, bls),
+				), nil)
+		} else {
+			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
+		}
+	}
+
+	err = ws.Materialize(ctx, ms)
+	for _, targetTablet := range targetShards {
+		targetTablet.vrdbClient.Wait()
+	}
+	require.ErrorIs(t, err, errShortCircuit)
+}
+
+func TestMaterializerDeploySchema(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 100
+	targetKs := "targetks"
+	targetTabletUID := 200
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "t1ddl",
+		}, {
+			TargetTable:      "t2",
+			SourceExpression: "select * from t3",
+			CreateDdl:        "t2ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// Remove t2 from the target tablet's schema so that it must
+	// be deployed.
+	schema := tenv.tmc.schema.CloneVT()
+	for i, sd := range schema.TableDefinitions {
+		if sd.Name == "t2" {
+			schema.TableDefinitions = append(schema.TableDefinitions[:i], schema.TableDefinitions[i+1:]...)
+		}
+	}
+	tenv.tmc.tabletSchemas[targetTabletUID] = schema
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, `t2ddl`, &sqltypes.Result{}) // Execute the fake CreateDdl
+
+	// This is our expected query, which will also short circuit
+	// the test with an error as at this point we've tested what
+	// we wanted to test.
+	insert := insertVReplicationPrefix +
+		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+			wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
+	targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{}, errShortCircuit)
+
+	err := ws.Materialize(ctx, ms)
+	targetTablet.vrdbClient.Wait()
+	require.ErrorIs(t, err, errShortCircuit)
+	require.Equal(t, 1, tenv.tmc.getSchemaRequestCount(sourceTabletUID))
+	require.Equal(t, 1, tenv.tmc.getSchemaRequestCount(targetTabletUID))
+}
+
+func TestMaterializerCopySchema(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 100
+	targetKs := "targetks"
+	targetTabletUID := 200
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "copy",
+		}, {
+			TargetTable:      "t2",
+			SourceExpression: "select * from t3",
+			CreateDdl:        "t2ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// Remove t1 from the target tablet's schema so that it must
+	// be copied. The workflow should still succeed w/o it existing
+	// when we start.
+	schema := tenv.tmc.schema.CloneVT()
+	for i, sd := range schema.TableDefinitions {
+		if sd.Name == "t1" {
+			schema.TableDefinitions = append(schema.TableDefinitions[:i], schema.TableDefinitions[i+1:]...)
+		}
+	}
+	tenv.tmc.tabletSchemas[targetTabletUID] = schema
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+
+	// This is our expected query, which will also short circuit
+	// the test with an error as at this point we've tested what
+	// we wanted to test.
+	insert := insertVReplicationPrefix +
+		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+			wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
+	targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{}, errShortCircuit)
+
+	err := ws.Materialize(ctx, ms)
+	targetTablet.vrdbClient.Wait()
+	require.ErrorIs(t, err, errShortCircuit)
+	require.Equal(t, 0, tenv.tmc.getSchemaRequestCount(sourceTabletUID))
+	require.Equal(t, 1, tenv.tmc.getSchemaRequestCount(targetTabletUID))
+}
+
+func TestMaterializerExplicitColumns(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select c1, c1+c2, c2 from t1",
+			CreateDdl:        "t1ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"region": {
+				Type: "region_experimental",
+				Params: map[string]string{
+					"region_bytes": "1",
+				},
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Columns: []string{"c1", "c2"},
+					Name:    "region",
+				}},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// This is our expected query, which will also short circuit
+	// the test with an error as at this point we've tested what
+	// we wanted to test.
+	for _, targetShard := range []string{"-80", "80-"} {
+		targetTablet := targetShards[targetShard]
+		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+		targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c1, c1 + c2, c2 from t1 where in_keyrange(c1, c2, '%s.region', '%s')\"}}",
+			sourceKs, sourceShard, targetKs, targetShard)
+		insert := insertVReplicationPrefix +
+			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c1, c1 + c2, c2 from t1 where in_keyrange(c1, c2, \'%s.region\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
+		if targetShard == "-80" {
+			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, nil)
+			targetTablet.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
+			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(getVReplicationRecord, vreplID),
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"id|source",
+						"int64|varchar",
+					),
+					fmt.Sprintf("%d|%s", vreplID, bls),
+				), nil)
+		} else {
+			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
+		}
+	}
+
+	err = ws.Materialize(ctx, ms)
+	for _, targetTablet := range targetShards {
+		targetTablet.vrdbClient.Wait()
+	}
+	require.ErrorIs(t, err, errShortCircuit)
+}
+
+func TestMaterializerRenamedColumns(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select c3 as c1, c1+c2, c4 as c2 from t1",
+			CreateDdl:        "t1ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"region": {
+				Type: "region_experimental",
+				Params: map[string]string{
+					"region_bytes": "1",
+				},
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Columns: []string{"c1", "c2"},
+					Name:    "region",
+				}},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// This is our expected query, which will also short circuit
+	// the test with an error as at this point we've tested what
+	// we wanted to test.
+	for _, targetShard := range []string{"-80", "80-"} {
+		targetTablet := targetShards[targetShard]
+		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+		targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c3 as c1, c1 + c2, c4 as c2 from t1 where in_keyrange(c3, c4, '%s.region', '%s')\"}}",
+			sourceKs, sourceShard, targetKs, targetShard)
+		insert := insertVReplicationPrefix +
+			fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c3 as c1, c1 + c2, c4 as c2 from t1 where in_keyrange(c3, c4, \'%s.region\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+				wf, sourceKs, sourceShard, targetKs, targetShard, tenv.cells[0], tenv.dbName)
+		if targetShard == "-80" {
+			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, nil)
+			targetTablet.vrdbClient.ExpectRequest(getAutoIncrementStep, &sqltypes.Result{}, nil)
+			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(getVReplicationRecord, vreplID),
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"id|source",
+						"int64|varchar",
+					),
+					fmt.Sprintf("%d|%s", vreplID, bls),
+				), nil)
+		} else {
+			targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: uint64(vreplID)}, errShortCircuit)
+		}
+	}
+
+	err = ws.Materialize(ctx, ms)
+	for _, targetTablet := range targetShards {
+		targetTablet.vrdbClient.Wait()
+	}
+	require.ErrorIs(t, err, errShortCircuit)
+}
+
+func TestMaterializerStopAfterCopy(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetTabletUID := 300
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		StopAfterCopy:  true,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "t1ddl",
+		}, {
+			TargetTable:      "t2",
+			SourceExpression: "select * from t3",
+			CreateDdl:        "t2ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+
+	// This is our expected query, which will also short circuit
+	// the test with an error as at this point we've tested what
+	// we wanted to test.
+	insert := insertVReplicationPrefix +
+		fmt.Sprintf(` values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"t2\" filter:\"select * from t3\"}} stop_after_copy:true', '', 0, 0, '%s', 'primary,rdonly', now(), 0, 'Stopped', '%s', 0, 0, 0)`,
+			wf, sourceKs, shard, tenv.cells[0], tenv.dbName)
+	targetTablet.vrdbClient.ExpectRequest(insert, &sqltypes.Result{}, errShortCircuit)
+
+	err := ws.Materialize(ctx, ms)
+	targetTablet.vrdbClient.Wait()
+	require.ErrorIs(t, err, errShortCircuit)
+}
+
+func TestMaterializerNoTargetVSchema(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 100
+	targetKs := "targetks"
+	targetTabletUID := 200
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "t1ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+	})
+	require.NoError(t, err)
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+	err = ws.Materialize(ctx, ms)
+	targetTablet.vrdbClient.Wait()
+	require.EqualError(t, err, fmt.Sprintf("table t1 not found in vschema for keyspace %s", targetKs))
+}
+
+func TestMaterializerNoDDL(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 100
+	targetKs := "targetks"
+	targetTabletUID := 200
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	// Clear out the schema on the target tablet.
+	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+	err := ws.Materialize(ctx, ms)
+	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
+	require.Equal(t, tenv.tmc.getSchemaRequestCount(100), 0)
+	require.Equal(t, tenv.tmc.getSchemaRequestCount(200), 1)
+
+}
+
+func TestMaterializerNoSourcePrimary(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 100
+	targetKs := "targetks"
+	targetTabletUID := 200
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "copy",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
+	targetTablet.tablet.Type = topodatapb.TabletType_REPLICA
+	_, _ = tenv.ts.UpdateShardFields(tenv.ctx, targetKs, shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = nil
+		return nil
+	})
+
+	err := ws.Materialize(ctx, ms)
+	require.EqualError(t, err, "shard has no primary: 0")
+}
+
+func TestMaterializerTableMismatchNonCopy(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 100
+	targetKs := "targetks"
+	targetTabletUID := 200
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t2",
+			CreateDdl:        "",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// Clear out the schema on the target tablet.
+	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+	err := ws.Materialize(ctx, ms)
+	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
+}
+
+func TestMaterializerTableMismatchCopy(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 100
+	targetKs := "targetks"
+	targetTabletUID := 200
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t2",
+			CreateDdl:        "copy",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// Clear out the schema on the target tablet.
+	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+	err := ws.Materialize(ctx, ms)
+	require.EqualError(t, err, "source and target table names must match for copying schema: t2 vs t1")
+}
+
+func TestMaterializerNoSourceTable(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 100
+	targetKs := "targetks"
+	targetTabletUID := 200
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "copy",
+		}},
+	}
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// Clear out the schema on the source and target tablet.
+	tenv.tmc.tabletSchemas[sourceTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
+	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+	err := ws.Materialize(ctx, ms)
+	require.EqualError(t, err, "source table t1 does not exist")
+}
+
+func TestMaterializerSyntaxError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 100
+	targetKs := "targetks"
+	targetTabletUID := 200
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "bad query",
+			CreateDdl:        "t1ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// Clear out the schema on the source and target tablet.
+	tenv.tmc.tabletSchemas[sourceTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
+	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
+	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, ms.TableSettings[0].CreateDdl, &sqltypes.Result{})
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+	err := ws.Materialize(ctx, ms)
+	require.EqualError(t, err, "syntax error at position 4 near 'bad'")
+}
+
+func TestMaterializerNotASelect(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceTabletUID := 100
+	targetKs := "targetks"
+	targetTabletUID := 200
+	shard := "0"
+	wf := "testwf"
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, shard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+	targetTablet := tenv.addTablet(t, targetTabletUID, targetKs, shard)
+	defer tenv.deleteTablet(targetTablet.tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "update t1 set val=1",
+			CreateDdl:        "t1ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// Clear out the schema on the source and target tablet.
+	tenv.tmc.tabletSchemas[sourceTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
+	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
+	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, ms.TableSettings[0].CreateDdl, &sqltypes.Result{})
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+
+	err := ws.Materialize(ctx, ms)
+	require.EqualError(t, err, "unrecognized statement: update t1 set val=1")
+}
+
+func TestMaterializerNoGoodVindex(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "t1ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"lookup_unique": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table": "t1",
+					"from":  "c1",
+					"to":    "c2",
+				},
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "lookup_unique",
+				}},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// This is aggregated from the two target shards.
+	errNoVindex := "could not find a vindex to compute keyspace id for table t1"
+	errs := make([]string, 0, len(targetShards))
+
+	for _, targetShard := range []string{"-80", "80-"} {
+		targetTablet := targetShards[targetShard]
+		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		errs = append(errs, errNoVindex)
+	}
+
+	err = ws.Materialize(ctx, ms)
+	require.EqualError(t, err, strings.Join(errs, "\n"))
+}
+
+func TestMaterializerComplexVindexExpression(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select a+b as c1 from t1",
+			CreateDdl:        "t1ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "xxhash",
+				}},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// This is aggregated from the two target shards.
+	errNoVindex := "vindex column cannot be a complex expression: a + b as c1"
+	errs := make([]string, 0, len(targetShards))
+
+	for _, targetShard := range []string{"-80", "80-"} {
+		targetTablet := targetShards[targetShard]
+		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		errs = append(errs, errNoVindex)
+	}
+
+	err = ws.Materialize(ctx, ms)
+	require.EqualError(t, err, strings.Join(errs, "\n"))
+}
+
+func TestMaterializerNoVindexInExpression(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       wf,
+		SourceKeyspace: sourceKs,
+		TargetKeyspace: targetKs,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select c2 from t1",
+			CreateDdl:        "t1ddl",
+		}},
+		Cell: tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "xxhash",
+				}},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
+
+	// This is aggregated from the two target shards.
+	errNoVindex := "could not find vindex column c1"
+	errs := make([]string, 0, len(targetShards))
+
+	for _, targetShard := range []string{"-80", "80-"} {
+		targetTablet := targetShards[targetShard]
+		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		errs = append(errs, errNoVindex)
+	}
+
+	err = ws.Materialize(ctx, ms)
+	require.EqualError(t, err, strings.Join(errs, "\n"))
 }

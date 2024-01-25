@@ -1250,6 +1250,11 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		return err
 	}
 
+	cells := strings.Split(ms.Cell, ",")
+	for i := range cells {
+		cells[i] = strings.TrimSpace(cells[i])
+	}
+
 	err = mz.createWorkflowStreams(&tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 		Workflow:                  ms.Workflow,
 		Cells:                     strings.Split(ms.Cell, ","),

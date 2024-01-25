@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -118,20 +117,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 			}},
 		}
 	}
-	if ms.Workflow != "" {
-		env.expectValidation()
-	}
 	return env
-}
-
-func (env *testMaterializerEnv) expectValidation() {
-	for _, tablet := range env.tablets {
-		tabletID := int(tablet.Alias.Uid)
-		if tabletID < 200 {
-			continue
-		}
-		//env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.ms.TargetKeyspace, env.ms.Workflow), &sqltypes.Result{})
-	}
 }
 
 func (env *testMaterializerEnv) close() {
@@ -186,8 +172,6 @@ type testMaterializerTMClient struct {
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest
-	getSchemaCounts                    map[string]int
-	muSchemaCount                      sync.Mutex
 
 	// Used to confirm the number of times WorkflowDelete was called.
 	workflowDeleteCalls int
@@ -198,19 +182,6 @@ func newTestMaterializerTMClient() *testMaterializerTMClient {
 		schema:                             make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*tabletmanagerdatapb.CreateVReplicationWorkflowRequest),
-		getSchemaCounts:                    make(map[string]int),
-	}
-}
-
-func (tmc *testMaterializerTMClient) schemaRequested(uid uint32) {
-	tmc.muSchemaCount.Lock()
-	defer tmc.muSchemaCount.Unlock()
-	key := strconv.Itoa(int(uid))
-	n, ok := tmc.getSchemaCounts[key]
-	if !ok {
-		tmc.getSchemaCounts[key] = 1
-	} else {
-		tmc.getSchemaCounts[key] = n + 1
 	}
 }
 
@@ -262,15 +233,7 @@ func (tmc *testMaterializerTMClient) DeleteVReplicationWorkflow(ctx context.Cont
 	}, nil
 }
 
-func (tmc *testMaterializerTMClient) getSchemaRequestCount(uid uint32) int {
-	tmc.muSchemaCount.Lock()
-	defer tmc.muSchemaCount.Unlock()
-	key := strconv.Itoa(int(uid))
-	return tmc.getSchemaCounts[key]
-}
-
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	tmc.schemaRequested(tablet.Alias.Uid)
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
 	for _, table := range request.Tables {
 		if table == "/.*/" {
