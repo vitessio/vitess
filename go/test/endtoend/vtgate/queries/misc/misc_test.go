@@ -287,6 +287,8 @@ func TestAnalyze(t *testing.T) {
 
 // TestTransactionModeVar executes SELECT on `transaction_mode` variable
 func TestTransactionModeVar(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+
 	mcmp, closer := start(t)
 	defer closer()
 
