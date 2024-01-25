@@ -115,9 +115,11 @@ func TestUnescapeID(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
 			out, err := UnescapeID(tc.in)
-			assert.Equal(t, tc.out, out, "output mismatch")
 			if tc.err {
 				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.out, out, "output mismatch")
 			}
 		})
 	}
