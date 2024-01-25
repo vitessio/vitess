@@ -106,21 +106,18 @@ func buildVExplainLoggingPlan(ctx context.Context, explain *sqlparser.VExplainSt
 }
 
 // buildExplainStmtPlan takes an EXPLAIN query and if possible sends the whole query to a single shard
-func buildExplainStmtPlan(
-	explain *sqlparser.ExplainStmt,
-	reservedVars *sqlparser.ReservedVars,
-	vschema plancontext.VSchema,
-) (*planResult, error) {
+func buildExplainStmtPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+	explain := stmt.(*sqlparser.ExplainStmt)
 	switch explain.Statement.(type) {
 	case sqlparser.SelectStatement, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert:
-		return explainSelectPlan(explain, reservedVars, vschema)
+		return explainPlan(explain, reservedVars, vschema)
 	default:
 		return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 	}
 
 }
 
-func explainDefaultPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	ctx, err := plancontext.CreatePlanningContext(explain.Statement, reservedVars, vschema, Gen4)
 	if err != nil {
 		return nil, err
@@ -155,8 +152,4 @@ func explainDefaultPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
 	}, tables...), nil
-}
-
-func explainSelectPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	return explainDefaultPlan(explain, reservedVars, vschema)
 }
