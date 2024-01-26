@@ -3638,7 +3638,7 @@ func (asm *assembler) Fn_MAKEDATE() {
 		y := env.vm.stack[env.vm.sp-1].(*evalInt64)
 		yd := env.vm.stack[env.vm.sp-2].(*evalInt64)
 
-		t := yearDayToTime(y.i, yd.i)
+		t := yearDayToTime(env.currentTimezone(), y.i, yd.i)
 		if t.IsZero() {
 			env.vm.stack[env.vm.sp-2] = nil
 		} else {
@@ -3776,6 +3776,23 @@ func (asm *assembler) Fn_MONTHNAME(col collations.TypedCollation) {
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(mb, col)
 		return 1
 	}, "FN MONTHNAME DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_LAST_DAY() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		if arg.dt.IsZero() {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		d := lastDay(env.currentTimezone(), arg.dt)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(d)
+		return 1
+	}, "FN LAST_DAY DATETIME(SP-1)")
 }
 
 func (asm *assembler) Fn_QUARTER() {
