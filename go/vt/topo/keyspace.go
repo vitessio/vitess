@@ -193,9 +193,44 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 		opt.Concurrency = 1
 	}
 
+	// First try to get all shards using List if we can.
+	shardsPath := path.Join(KeyspacesPath, keyspace, ShardsPath)
+	listResults, err := ts.globalCell.List(ctx, shardsPath)
+	if err != nil || len(listResults) == 0 {
+		if IsErrType(err, NoNode) {
+			return make(map[string]*ShardInfo, 0), nil // No shards
+		}
+		// Currently the ZooKeeper implementation does not support scans
+		// so we fall back to concurrently fetching the shards one by one.
+		// It is possible that the response is too large in which case we
+		// also fall back to the one by one fetch in that case.
+		if !IsErrType(err, NoImplementation) && !IsErrType(err, ResourceExhausted) {
+			return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%v): List", keyspace)
+		}
+		// Continue on with the shard by shard method.
+	} else {
+		result := make(map[string]*ShardInfo, len(listResults))
+		for _, entry := range listResults {
+			// The key looks like this: /vitess/global/keyspaces/commerce/shards/-80/Shard
+			shardName := path.Base(path.Dir(string(entry.Key))) // The base part of the dir is "-80"
+			shard := &topodatapb.Shard{}
+			if err = shard.UnmarshalVT(entry.Value); err != nil {
+				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%v): bad shard data", keyspace)
+			}
+			result[shardName] = &ShardInfo{
+				keyspace:  keyspace,
+				shardName: shardName,
+				version:   entry.Version,
+				Shard:     shard,
+			}
+		}
+		return result, nil
+	}
+
+	// Fall back to the shard by shard method.
 	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
+		return nil, vterrors.Wrapf(err, "failed to get list of shard names for keyspace '%v'", keyspace)
 	}
 
 	// Keyspaces with a large number of shards and geographically distributed
