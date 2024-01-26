@@ -19,11 +19,13 @@ package topo
 import (
 	"context"
 	"path"
+	"sort"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -245,25 +247,26 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 
 // GetServingShards returns all shards where the primary is serving.
 func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*ShardInfo, error) {
-	shards, err := ts.GetShardNames(ctx, keyspace)
+	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
 	}
 
 	result := make([]*ShardInfo, 0, len(shards))
 	for _, shard := range shards {
-		si, err := ts.GetShard(ctx, keyspace, shard)
-		if err != nil {
-			return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
-		}
-		if !si.IsPrimaryServing {
+		if !shard.IsPrimaryServing {
 			continue
 		}
-		result = append(result, si)
+		result = append(result, shard)
 	}
 	if len(result) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v has no serving shards", keyspace)
 	}
+	// Sort the shards by KeyRange for deterministic results.
+	sort.Slice(result, func(i, j int) bool {
+		return key.KeyRangeLess(result[i].KeyRange, result[j].KeyRange)
+	})
+
 	return result, nil
 }
 
