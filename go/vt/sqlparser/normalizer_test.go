@@ -26,7 +26,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -59,9 +58,14 @@ func TestNormalize(t *testing.T) {
 		outstmt: "select * from t where col = :v1",
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
-		// str val in select
+		// str val in select is not normalized unless it's an aliased expression
 		in:      "select 'aa' from t",
-		outstmt: "select :bv1 /* VARCHAR */ from t",
+		outstmt: "select 'aa' from t",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
+		// str val in select is not normalized unless it's an aliased expression
+		in:      "select 'aa' as X from t",
+		outstmt: "select :bv1 /* VARCHAR */ as X from t",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.StringBindVariable("aa"),
 		},
@@ -119,8 +123,8 @@ func TestNormalize(t *testing.T) {
 		},
 	}, {
 		// val should be reused only in subqueries of DMLs
-		in:      "update a set v1=(select 5 from t), v2=5, v3=(select 5 from t), v4=5",
-		outstmt: "update a set v1 = (select :bv1 /* INT64 */ from t), v2 = :bv1 /* INT64 */, v3 = (select :bv1 /* INT64 */ from t), v4 = :bv1 /* INT64 */",
+		in:      "update a set v1=(select 5 as X from t), v2=5, v3=(select 5 as Y from t), v4=5",
+		outstmt: "update a set v1 = (select :bv1 /* INT64 */ as X from t), v2 = :bv1 /* INT64 */, v3 = (select :bv1 /* INT64 */ as Y from t), v4 = :bv1 /* INT64 */",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.Int64BindVariable(5),
 		},
@@ -176,8 +180,8 @@ func TestNormalize(t *testing.T) {
 		},
 	}, {
 		// Ensure that hex notation bind vars work with collation based conversions
-		in:      "select convert(x'7b7d' using utf8mb4) from dual",
-		outstmt: "select convert(:bv1 /* HEXVAL */ using utf8mb4) from dual",
+		in:      "select convert(x'7b7d' using utf8mb4) as x from dual",
+		outstmt: "select convert(:bv1 /* HEXVAL */ using utf8mb4) as x from dual",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.HexValBindVariable([]byte("x'7B7D'")),
 		},
@@ -293,8 +297,8 @@ func TestNormalize(t *testing.T) {
 		},
 	}, {
 		// Do not normalize cast/convert types
-		in:      `select CAST("test" AS CHAR(60))`,
-		outstmt: `select cast(:bv1 /* VARCHAR */ as CHAR(60)) from dual`,
+		in:      `select CAST("test" AS CHAR(60)) as x`,
+		outstmt: `select cast(:bv1 /* VARCHAR */ as CHAR(60)) as x from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.StringBindVariable("test"),
 		},
@@ -309,8 +313,8 @@ func TestNormalize(t *testing.T) {
 		},
 	}, {
 		// BitNum should also be normalized
-		in:      `select b'1', 0b01, b'1010', 0b1111111`,
-		outstmt: `select :bv1 /* BITNUM */, :bv2 /* BITNUM */, :bv3 /* BITNUM */, :bv4 /* BITNUM */ from dual`,
+		in:      `select b'1' as a1, 0b01 as a2, b'1010' as a3, 0b1111111 as a4`,
+		outstmt: `select :bv1 /* BITNUM */ as a1, :bv2 /* BITNUM */ as a2, :bv3 /* BITNUM */ as a3, :bv4 /* BITNUM */ as a4 from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.BitNumBindVariable([]byte("0b1")),
 			"bv2": sqltypes.BitNumBindVariable([]byte("0b01")),
@@ -319,22 +323,22 @@ func TestNormalize(t *testing.T) {
 		},
 	}, {
 		// DateVal should also be normalized
-		in:      `select date'2022-08-06'`,
-		outstmt: `select :bv1 /* DATE */ from dual`,
+		in:      `select date'2022-08-06' as x`,
+		outstmt: `select :bv1 /* DATE */ as x from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Date, []byte("2022-08-06"))),
 		},
 	}, {
 		// TimeVal should also be normalized
-		in:      `select time'17:05:12'`,
-		outstmt: `select :bv1 /* TIME */ from dual`,
+		in:      `select time'17:05:12' as x`,
+		outstmt: `select :bv1 /* TIME */ as x from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Time, []byte("17:05:12"))),
 		},
 	}, {
 		// TimestampVal should also be normalized
-		in:      `select timestamp'2022-08-06 17:05:12'`,
-		outstmt: `select :bv1 /* DATETIME */ from dual`,
+		in:      `select timestamp'2022-08-06 17:05:12' as x`,
+		outstmt: `select :bv1 /* DATETIME */ as x from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
 		},
@@ -408,13 +412,13 @@ func TestNormalizeInvalidDates(t *testing.T) {
 		in  string
 		err error
 	}{{
-		in:  "select date'foo'",
+		in:  "select date'foo' as x",
 		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATE value: '%s'", "foo"),
 	}, {
-		in:  "select time'foo'",
+		in:  "select time'foo' as x",
 		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIME value: '%s'", "foo"),
 	}, {
-		in:  "select timestamp'foo'",
+		in:  "select timestamp'foo' as x",
 		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATETIME value: '%s'", "foo"),
 	}}
 	parser := NewTestParser()

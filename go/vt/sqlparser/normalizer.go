@@ -21,10 +21,9 @@ import (
 
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // BindVars is a set of reserved bind variables from a SQL statement
@@ -133,6 +132,9 @@ func (nz *normalizer) walkDownSelect(node, parent SQLNode) bool {
 	case *ConvertType:
 		// we should not rewrite the type description
 		return false
+	case *AliasedExpr:
+		// we don't want to rewrite literals in select expressions if the column is not aliased
+		return node.As.NotEmpty()
 	}
 	return nz.err == nil // only continue if we haven't found any errors
 }
