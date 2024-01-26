@@ -19,6 +19,7 @@ package topo
 import (
 	"context"
 	"path"
+	"runtime"
 	"sort"
 	"sync"
 
@@ -37,6 +38,12 @@ import (
 )
 
 // This file contains keyspace utility functions
+
+// Default concurrency to use in order to avoid overhwelming the topo server.
+// This uses a heuristic based on the number of vCPUs available -- where it's
+// assumed that as larger machines are used for Vitess deployments they will
+// be able to do more concurrently.
+var defaultConcurrency = runtime.NumCPU()
 
 // KeyspaceInfo is a meta struct that contains metadata to give the
 // data more context and convenience. This is the main way we interact
@@ -198,12 +205,11 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	listResults, err := ts.globalCell.List(ctx, shardsPath)
 	if err != nil || len(listResults) == 0 {
 		if IsErrType(err, NoNode) {
-			// The path doesn't exist, let's see if the keyspace
-			// is here or not.
+			// The path doesn't exist, let's see if the keyspace exists.
 			_, kerr := ts.GetKeyspace(ctx, keyspace)
 			if kerr == nil {
-				// Keyspace is here, means no shards.
-				return make(map[string]*ShardInfo, 0), nil // No shards
+				// We simply have no shards.
+				return make(map[string]*ShardInfo, 0), nil
 			}
 			return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%v): List", keyspace)
 		}
@@ -289,7 +295,9 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 
 // GetServingShards returns all shards where the primary is serving.
 func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*ShardInfo, error) {
-	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
+	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, &FindAllShardsInKeyspaceOptions{
+		Concurrency: defaultConcurrency, // Limit concurrency to avoid overwhelming the topo server.
+	})
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
 	}
