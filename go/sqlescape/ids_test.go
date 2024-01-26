@@ -119,6 +119,11 @@ func TestUnescapeID(t *testing.T) {
 			out: "",
 			err: false,
 		},
+		{
+			in:  "`",
+			out: "",
+			err: true,
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
