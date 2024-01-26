@@ -28,16 +28,15 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Plan represents the plan for a table.
@@ -770,9 +769,9 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 // analyzeInKeyRange allows the following constructs: "in_keyrange('-80')",
 // "in_keyrange(col, 'hash', '-80')", "in_keyrange(col, 'local_vindex', '-80')", or
 // "in_keyrange(col, 'ks.external_vindex', '-80')".
-func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.SelectExprs) error {
+func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Exprs) error {
 	var colnames []sqlparser.IdentifierCI
-	var krExpr sqlparser.SelectExpr
+	var krExpr sqlparser.Expr
 	whereFilter := Filter{
 		Opcode: VindexMatch,
 	}
@@ -787,13 +786,9 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 		krExpr = exprs[0]
 	case len(exprs) >= 3:
 		for _, expr := range exprs[:len(exprs)-2] {
-			aexpr, ok := expr.(*sqlparser.AliasedExpr)
+			qualifiedName, ok := expr.(*sqlparser.ColName)
 			if !ok {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected: %T %s", expr, sqlparser.String(expr))
-			}
-			qualifiedName, ok := aexpr.Expr.(*sqlparser.ColName)
-			if !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected: %T %s", aexpr.Expr, sqlparser.String(aexpr.Expr))
 			}
 			if !qualifiedName.Qualifier.IsEmpty() {
 				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
@@ -838,16 +833,12 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 	return nil
 }
 
-func selString(expr sqlparser.SelectExpr) (string, error) {
-	aexpr, ok := expr.(*sqlparser.AliasedExpr)
+func selString(expr sqlparser.Expr) (string, error) {
+	val, ok := expr.(*sqlparser.Literal)
 	if !ok {
 		return "", fmt.Errorf("unsupported: %v", sqlparser.String(expr))
 	}
-	val, ok := aexpr.Expr.(*sqlparser.Literal)
-	if !ok {
-		return "", fmt.Errorf("unsupported: %v", sqlparser.String(expr))
-	}
-	return string(val.Val), nil
+	return val.Val, nil
 }
 
 // buildVindexColumns builds the list of column numbers of the table

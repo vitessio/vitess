@@ -46,11 +46,7 @@ func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]IR, error)
 func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 	var args TupleExpr
 	for _, expr := range fn.Exprs {
-		aliased, ok := expr.(*sqlparser.AliasedExpr)
-		if !ok {
-			return nil, translateExprNotSupported(fn)
-		}
-		convertedExpr, err := ast.translateExpr(aliased.Expr)
+		convertedExpr, err := ast.translateExpr(expr)
 		if err != nil {
 			return nil, err
 		}

@@ -841,10 +841,10 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 				if fieldType == querypb.Type_DATETIME {
 					convertTZFuncExpr = &sqlparser.FuncExpr{
 						Name: sqlparser.NewIdentifierCI("convert_tz"),
-						Exprs: sqlparser.SelectExprs{
-							expr,
-							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone)},
-							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone)},
+						Exprs: sqlparser.Exprs{
+							selExpr.Expr,
+							sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone),
+							sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone),
 						},
 					}
 					log.Infof("converting datetime column %s using convert_tz()", colName)

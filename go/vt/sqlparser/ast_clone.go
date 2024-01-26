@@ -1405,7 +1405,7 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	out := *n
 	out.Qualifier = CloneIdentifierCS(n.Qualifier)
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Exprs = CloneSelectExprs(n.Exprs)
+	out.Exprs = CloneExprs(n.Exprs)
 	return &out
 }
 

@@ -29,11 +29,9 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/vtenv"
-
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -42,6 +40,10 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -49,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -56,11 +59,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // At most how many samples we should show for row differences in the final report
@@ -611,10 +609,10 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs
 				if fieldType == querypb.Type_DATETIME {
 					convertTZFuncExpr = &sqlparser.FuncExpr{
 						Name: sqlparser.NewIdentifierCI("convert_tz"),
-						Exprs: sqlparser.SelectExprs{
-							expr,
-							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(df.targetTimeZone)},
-							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(df.sourceTimeZone)},
+						Exprs: sqlparser.Exprs{
+							colAs,
+							sqlparser.NewStrLiteral(df.targetTimeZone),
+							sqlparser.NewStrLiteral(df.sourceTimeZone),
 						},
 					}
 					log.Infof("converting datetime column %s using convert_tz()", colName)

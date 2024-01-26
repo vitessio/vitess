@@ -2631,7 +2631,7 @@ func (cmp *Comparator) RefOfFuncExpr(a, b *FuncExpr) bool {
 	}
 	return cmp.IdentifierCS(a.Qualifier, b.Qualifier) &&
 		cmp.IdentifierCI(a.Name, b.Name) &&
-		cmp.SelectExprs(a.Exprs, b.Exprs)
+		cmp.Exprs(a.Exprs, b.Exprs)
 }
 
 // RefOfGTIDFuncExpr does deep equals between the two objects.

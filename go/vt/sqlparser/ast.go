@@ -2398,7 +2398,7 @@ type (
 	FuncExpr struct {
 		Qualifier IdentifierCS
 		Name      IdentifierCI
-		Exprs     SelectExprs
+		Exprs     Exprs
 	}
 
 	// ValuesFuncExpr represents a function call.

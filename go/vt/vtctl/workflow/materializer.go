@@ -29,6 +29,10 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -38,11 +42,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 const (
@@ -222,13 +221,13 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 					}
 					mappedCols = append(mappedCols, colName)
 				}
-				subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
+				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
 				for _, mappedCol := range mappedCols {
-					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
+					subExprs = append(subExprs, mappedCol)
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
+				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
+				subExprs = append(subExprs, sqlparser.NewStrLiteral("{{.keyrange}}"))
 				inKeyRange := &sqlparser.FuncExpr{
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,
@@ -321,13 +320,13 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 					}
 					mappedCols = append(mappedCols, colName)
 				}
-				subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
+				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
 				for _, mappedCol := range mappedCols {
-					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
+					subExprs = append(subExprs, mappedCol)
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange))})
+				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
+				subExprs = append(subExprs, sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange)))
 				inKeyRange := &sqlparser.FuncExpr{
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,

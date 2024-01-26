@@ -2347,12 +2347,12 @@ func (c *cow) copyOnRewriteRefOfFuncExpr(n *FuncExpr, parent SQLNode) (out SQLNo
 	if c.pre == nil || c.pre(n, parent) {
 		_Qualifier, changedQualifier := c.copyOnRewriteIdentifierCS(n.Qualifier, n)
 		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
-		_Exprs, changedExprs := c.copyOnRewriteSelectExprs(n.Exprs, n)
+		_Exprs, changedExprs := c.copyOnRewriteExprs(n.Exprs, n)
 		if changedQualifier || changedName || changedExprs {
 			res := *n
 			res.Qualifier, _ = _Qualifier.(IdentifierCS)
 			res.Name, _ = _Name.(IdentifierCI)
-			res.Exprs, _ = _Exprs.(SelectExprs)
+			res.Exprs, _ = _Exprs.(Exprs)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

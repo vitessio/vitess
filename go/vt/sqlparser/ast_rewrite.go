@@ -3154,8 +3154,8 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 	}) {
 		return false
 	}
-	if !a.rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
-		parent.(*FuncExpr).Exprs = newNode.(SelectExprs)
+	if !a.rewriteExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+		parent.(*FuncExpr).Exprs = newNode.(Exprs)
 	}) {
 		return false
 	}
