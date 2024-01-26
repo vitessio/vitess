@@ -107,16 +107,15 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 		return nil
 	}
 	exec.keyspace = keyspace
-	shardNames, err := exec.ts.GetShardNames(ctx, keyspace)
+	shards, err := exec.ts.FindAllShardsInKeyspace(ctx, keyspace, &topo.FindAllShardsInKeyspaceOptions{
+		Concurrency: topo.DefaultConcurrency, // Limit concurrency to avoid overwhelming the topo server.
+	})
 	if err != nil {
-		return fmt.Errorf("unable to get shard names for keyspace: %s, error: %v", keyspace, err)
+		return fmt.Errorf("unable to get shards for keyspace: %s, error: %v", keyspace, err)
 	}
-	exec.tablets = make([]*topodatapb.Tablet, len(shardNames))
-	for i, shardName := range shardNames {
-		shardInfo, err := exec.ts.GetShard(ctx, keyspace, shardName)
-		if err != nil {
-			return fmt.Errorf("unable to get shard info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
-		}
+	exec.tablets = make([]*topodatapb.Tablet, len(shards))
+	i := 0
+	for shardName, shardInfo := range shards {
 		if !shardInfo.HasPrimary() {
 			return fmt.Errorf("shard: %s does not have a primary", shardName)
 		}
@@ -125,6 +124,7 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 			return fmt.Errorf("unable to get primary tablet info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
 		exec.tablets[i] = tabletInfo.Tablet
+		i++
 	}
 
 	if len(exec.tablets) == 0 {
