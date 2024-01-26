@@ -3784,11 +3784,12 @@ func (asm *assembler) Fn_LAST_DAY() {
 			return 1
 		}
 		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-		d := lastDay(env.currentTimezone(), arg.dt)
-		if d.IsZero() {
+		if arg.dt.IsZero() {
 			env.vm.stack[env.vm.sp-1] = nil
 			return 1
 		}
+
+		d := lastDay(env.currentTimezone(), arg.dt)
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(d)
 		return 1
 	}, "FN LAST_DAY DATETIME(SP-1)")

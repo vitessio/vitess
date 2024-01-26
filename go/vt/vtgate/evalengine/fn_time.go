@@ -1228,10 +1228,6 @@ func (b *builtinLastDay) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	d := lastDay(env.currentTimezone(), dt.dt)
-	if d.IsZero() {
-		return nil, nil
-	}
-
 	return newEvalDate(d, env.sqlmode.AllowZeroDate()), nil
 }
 
