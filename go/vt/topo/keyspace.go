@@ -198,7 +198,14 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	listResults, err := ts.globalCell.List(ctx, shardsPath)
 	if err != nil || len(listResults) == 0 {
 		if IsErrType(err, NoNode) {
-			return make(map[string]*ShardInfo, 0), nil // No shards
+			// The path doesn't exist, let's see if the keyspace
+			// is here or not.
+			_, kerr := ts.GetKeyspace(ctx, keyspace)
+			if kerr == nil {
+				// Keyspace is here, means no shards.
+				return make(map[string]*ShardInfo, 0), nil // No shards
+			}
+			return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%v): List", keyspace)
 		}
 		// Currently the ZooKeeper implementation does not support scans
 		// so we fall back to concurrently fetching the shards one by one.
