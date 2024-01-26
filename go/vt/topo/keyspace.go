@@ -203,32 +203,14 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	// First try to get all shards using List if we can.
 	shardsPath := path.Join(KeyspacesPath, keyspace, ShardsPath)
 	listResults, err := ts.globalCell.List(ctx, shardsPath)
-	if err != nil || len(listResults) == 0 {
-		if IsErrType(err, NoNode) {
-			// The path doesn't exist, let's see if the keyspace exists.
-			_, kerr := ts.GetKeyspace(ctx, keyspace)
-			if kerr == nil {
-				// We simply have no shards.
-				return make(map[string]*ShardInfo, 0), nil
-			}
-			return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%v): List", keyspace)
-		}
-		// Currently the ZooKeeper implementation does not support scans
-		// so we fall back to concurrently fetching the shards one by one.
-		// It is possible that the response is too large in which case we
-		// also fall back to the one by one fetch in that case.
-		if !IsErrType(err, NoImplementation) && !IsErrType(err, ResourceExhausted) {
-			return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%v): List", keyspace)
-		}
-		// Continue on with the shard by shard method.
-	} else {
+	if err == nil { // We have everything we need to build the result
 		result := make(map[string]*ShardInfo, len(listResults))
 		for _, entry := range listResults {
 			// The key looks like this: /vitess/global/keyspaces/commerce/shards/-80/Shard
 			shardName := path.Base(path.Dir(string(entry.Key))) // The base part of the dir is "-80"
 			shard := &topodatapb.Shard{}
 			if err = shard.UnmarshalVT(entry.Value); err != nil {
-				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%v): bad shard data", keyspace)
+				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): bad shard data", keyspace)
 			}
 			result[shardName] = &ShardInfo{
 				keyspace:  keyspace,
@@ -239,11 +221,27 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 		}
 		return result, nil
 	}
+	if IsErrType(err, NoNode) {
+		// The path doesn't exist, let's see if the keyspace exists.
+		_, kerr := ts.GetKeyspace(ctx, keyspace)
+		if kerr == nil {
+			// We simply have no shards.
+			return make(map[string]*ShardInfo, 0), nil
+		}
+		return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): List", keyspace)
+	}
+	// Currently the ZooKeeper implementation does not support scans so we
+	// fall back to concurrently fetching the shards one by one.
+	// It is also possible that the response containing all shards is too
+	// large in which case we also fall back to the one by one fetch.
+	if !IsErrType(err, NoImplementation) && !IsErrType(err, ResourceExhausted) {
+		return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): List", keyspace)
+	}
 
 	// Fall back to the shard by shard method.
 	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "failed to get list of shard names for keyspace '%v'", keyspace)
+		return nil, vterrors.Wrapf(err, "failed to get list of shard names for keyspace '%s'", keyspace)
 	}
 
 	// Keyspaces with a large number of shards and geographically distributed
@@ -272,7 +270,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 			si, err := ts.GetShard(ctx, keyspace, shard)
 			switch {
 			case IsErrType(err, NoNode):
-				log.Warningf("GetShard(%v, %v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
+				log.Warningf("GetShard(%s, %s) returned ErrNoNode, consider checking the topology.", keyspace, shard)
 				return nil
 			case err == nil:
 				mu.Lock()
@@ -281,7 +279,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 
 				return nil
 			default:
-				return vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
+				return vterrors.Wrapf(err, "GetShard(%s, %s) failed", keyspace, shard)
 			}
 		})
 	}
