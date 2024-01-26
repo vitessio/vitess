@@ -113,8 +113,7 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 	if err != nil {
 		return fmt.Errorf("unable to get shards for keyspace: %s, error: %v", keyspace, err)
 	}
-	exec.tablets = make([]*topodatapb.Tablet, len(shards))
-	i := 0
+	exec.tablets = make([]*topodatapb.Tablet, 0, len(shards))
 	for shardName, shardInfo := range shards {
 		if !shardInfo.HasPrimary() {
 			return fmt.Errorf("shard: %s does not have a primary", shardName)
@@ -123,8 +122,7 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 		if err != nil {
 			return fmt.Errorf("unable to get primary tablet info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
-		exec.tablets[i] = tabletInfo.Tablet
-		i++
+		exec.tablets = append(exec.tablets, tabletInfo.Tablet)
 	}
 
 	if len(exec.tablets) == 0 {
