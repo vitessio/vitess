@@ -18,16 +18,14 @@ package wrangler
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	"context"
 
-	"golang.org/x/exp/maps"
-
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -103,31 +101,32 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 // ValidatePermissionsKeyspace validates all the permissions are the same
 // in a keyspace
 func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace string) error {
-	// Find all the shards.
-	shards, err := wr.ts.FindAllShardsInKeyspace(ctx, keyspace, &topo.FindAllShardsInKeyspaceOptions{
-		Concurrency: topo.DefaultConcurrency, // Limit concurrency to avoid overwhelming the topo server.
-	})
+	// find all the shards
+	shards, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return err
 	}
 
-	// Corner cases.
+	// corner cases
 	if len(shards) == 0 {
 		return fmt.Errorf("no shards in keyspace %v", keyspace)
 	}
+	sort.Strings(shards)
 	if len(shards) == 1 {
-		return wr.ValidatePermissionsShard(ctx, keyspace, maps.Keys(shards)[0])
+		return wr.ValidatePermissionsShard(ctx, keyspace, shards[0])
 	}
 
-	// Find the reference permissions using the first shard's primary.
-	shardName := maps.Keys(shards)[0]
-	shard := shards[shardName]
-	if !shard.HasPrimary() {
-		return fmt.Errorf("no primary in shard %v/%v", keyspace, shardName)
+	// find the reference permissions using the first shard's primary
+	si, err := wr.ts.GetShard(ctx, keyspace, shards[0])
+	if err != nil {
+		return err
 	}
-	referenceAlias := shard.PrimaryAlias
+	if !si.HasPrimary() {
+		return fmt.Errorf("no primary in shard %v/%v", keyspace, shards[0])
+	}
+	referenceAlias := si.PrimaryAlias
 	log.Infof("Gathering permissions for reference primary %v", topoproto.TabletAliasString(referenceAlias))
-	referencePermissions, err := wr.GetPermissions(ctx, shard.PrimaryAlias)
+	referencePermissions, err := wr.GetPermissions(ctx, si.PrimaryAlias)
 	if err != nil {
 		return err
 	}
@@ -135,15 +134,15 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 	// then diff with all tablets but primary 0
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
-	for shardName, shard := range shards {
-		aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shardName)
+	for _, shard := range shards {
+		aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
 		}
 
 		for _, alias := range aliases {
-			if topoproto.TabletAliasEqual(alias, shard.PrimaryAlias) {
+			if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
 				continue
 			}
 
