@@ -421,16 +421,15 @@ func (a *Aggregator) introducesTableID() semantics.TableSet {
 func (a *Aggregator) checkForInvalidAggregations() {
 	for _, aggr := range a.Aggregations {
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			aggrFunc, isAggregate := node.(sqlparser.AggrFunc)
-			if !isAggregate {
-				return true, nil
-			}
-			args := aggrFunc.GetArgs()
-			if args != nil && len(args) != 1 {
-				panic(vterrors.VT03001(sqlparser.String(node)))
+			switch node := node.(type) {
+			case *sqlparser.GroupConcatExpr:
+				// can have multiple arguments
+			case sqlparser.AggrFunc:
+				if len(node.GetArgs()) > 1 {
+					panic(vterrors.VT03001(sqlparser.String(node)))
+				}
 			}
 			return true, nil
-
 		}, aggr.Original.Expr)
 	}
 }

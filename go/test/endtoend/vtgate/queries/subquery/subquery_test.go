@@ -170,7 +170,7 @@ func TestSubqueryInAggregation(t *testing.T) {
 	mcmp.Exec("insert into t1(id1, id2) values(0,0),(1,1)")
 	mcmp.Exec("insert into t2(id3, id4) values(1,2),(5,7)")
 	mcmp.Exec(`SELECT max((select min(id2) from t1)) FROM t2`)
-	mcmp.Exec(`SELECT max((select group_concat(id1, id2) from t1 where id1 = 1)) FROM t1 where id1 = 1`)
+	mcmp.Exec(`SELECT max((select group_concat(id1, id2) from t1 where id1 = 1)) as x FROM t1 where id1 = 1`)
 	mcmp.Exec(`SELECT max((select min(id2) from t1 where id2 = 1)) FROM dual`)
 	mcmp.Exec(`SELECT max((select min(id2) from t1)) FROM t2 where id4 = 7`)
 
