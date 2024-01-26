@@ -581,12 +581,6 @@ func TestDeleteTargetTableRewrite(t *testing.T) {
 		sql    string
 		target string
 	}{{
-		sql:    "delete from t",
-		target: "t",
-	}, {
-		sql:    "delete from t t1",
-		target: "t1",
-	}, {
 		sql:    "delete t2 from t t1, t t2",
 		target: "t2",
 	}, {
