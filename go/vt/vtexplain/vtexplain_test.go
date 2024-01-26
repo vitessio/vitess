@@ -26,15 +26,14 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/vtenv"
-
 	"vitess.io/vitess/go/test/utils"
-
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
 )
 
@@ -259,14 +258,15 @@ func TestJSONOutput(t *testing.T) {
             {
                 "BindVars": {
                     "#maxLimit": "10001",
-                    "vtg1": "1"
+                    "id": "1"
                 },
-                "SQL": "select :vtg1 /* INT64 */ from ` + "`user`" + ` where id = :vtg1 /* INT64 */",
+                "SQL": "select 1 from ` + "`user`" + ` where id = :id /* INT64 */",
                 "Time": 1
             }
         ]
     }
 }`
+	assert.Equal(t, wantJSON, string(actionsJSON))
 	diff := cmp.Diff(wantJSON, string(actionsJSON))
 	if diff != "" {
 		t.Errorf(diff)

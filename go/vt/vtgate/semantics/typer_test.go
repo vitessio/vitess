@@ -32,11 +32,11 @@ func TestNormalizerAndSemanticAnalysisIntegration(t *testing.T) {
 	tests := []struct {
 		query, typ string
 	}{
-		{query: "select 1", typ: "INT64"},
-		{query: "select 1.2", typ: "DECIMAL"},
-		{query: "select 'text'", typ: "VARCHAR"},
-		{query: "select 0x1234", typ: "HEXNUM"},
-		{query: "select x'7b7d'", typ: "HEXVAL"},
+		{query: "select 1 as x", typ: "INT64"},
+		{query: "select 1.2 as x", typ: "DECIMAL"},
+		{query: "select 'text' as x", typ: "VARCHAR"},
+		{query: "select 0x1234 as x", typ: "HEXNUM"},
+		{query: "select x'7b7d' as x", typ: "HEXVAL"},
 	}
 
 	for _, test := range tests {
