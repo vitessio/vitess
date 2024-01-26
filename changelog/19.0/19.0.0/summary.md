@@ -67,7 +67,7 @@ Below is an example of a kubernetes yaml file before and after upgrading to an o
 ```yaml
 # before:
 
-# the image used here encapsulates MySQL 8.0.30 and its binaries
+# the image used here includes MySQL 8.0.30 and its binaries
 
     mysqld:
       mysql80Compatible: vitess/lite:v19.0.0-mysql80
