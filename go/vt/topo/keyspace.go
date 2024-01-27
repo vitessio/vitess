@@ -208,6 +208,10 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 		for _, entry := range listResults {
 			// The key looks like this: /vitess/global/keyspaces/commerce/shards/-80/Shard
 			shardName := path.Base(path.Dir(string(entry.Key))) // The base part of the dir is "-80"
+			if !key.IsValidKeyRange(shardName) {
+				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): unexpected shard key/path %q contains invalid shard name/range %q",
+					keyspace, string(entry.Key), shardName)
+			}
 			shard := &topodatapb.Shard{}
 			if err = shard.UnmarshalVT(entry.Value); err != nil {
 				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): bad shard data", keyspace)
