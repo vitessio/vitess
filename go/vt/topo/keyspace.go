@@ -210,13 +210,14 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 			shardKey := string(entry.Key)
 			shardName := path.Base(path.Dir(shardKey)) // The base part of the dir is "-80"
 			// Validate the extracted shard name.
-			if _, _, err := ValidateShardName(shardName); err != nil {
+			if _, _, err = ValidateShardName(shardName); err != nil {
 				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): unexpected shard key/path %q contains invalid shard name/range %q",
 					keyspace, shardKey, shardName)
 			}
 			shard := &topodatapb.Shard{}
 			if err = shard.UnmarshalVT(entry.Value); err != nil {
-				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): bad shard data", keyspace)
+				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): invalid data found for shard %q in %q",
+					keyspace, shardName, shardKey)
 			}
 			result[shardName] = &ShardInfo{
 				keyspace:  keyspace,

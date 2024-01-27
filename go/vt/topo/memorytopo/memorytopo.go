@@ -249,7 +249,7 @@ func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *F
 	f := &Factory{
 		cells:      make(map[string]*node),
 		generation: uint64(rand.Int63n(1 << 60)),
-		callstats:  stats.NewCountersWithMultiLabels("", "", []string{"calls"}),
+		callstats:  stats.NewCountersWithMultiLabels("", "", []string{"Call"}),
 	}
 	f.cells[topo.GlobalCell] = f.newDirectory(topo.GlobalCell, nil)
 

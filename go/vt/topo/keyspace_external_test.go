@@ -126,6 +126,7 @@ func TestServerGetServingShards(t *testing.T) {
 			ts, factory := memorytopo.NewServerAndFactory(ctx)
 			defer ts.Close()
 			stats := factory.GetCallStats()
+			require.NotNil(t, stats)
 
 			if tt.fallback {
 				factory.SetListError(errNoListImpl)
@@ -150,30 +151,32 @@ func TestServerGetServingShards(t *testing.T) {
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)
 				return
-			} else {
-				require.NoError(t, err)
 			}
+			require.NoError(t, err)
 			require.Len(t, shardInfos, tt.shards)
 			for _, shardName := range shardNames {
 				f := func(si *topo.ShardInfo) bool {
 					return key.KeyRangeString(si.Shard.KeyRange) == shardName
 				}
-				require.True(t, slices.ContainsFunc(shardInfos, f), "shard %q was not found", shardName)
+				require.True(t, slices.ContainsFunc(shardInfos, f), "shard %q was not found in the results",
+					shardName)
 			}
 
 			// Now we check the stats based on the number of shards and whether or not
 			// we should have had a List error and fell back to the shard by shard method.
-			require.Equal(t, int64(1), stats.Counts()["List"]) // We should always try
+			callcounts := stats.Counts()
+			require.NotNil(t, callcounts)
+			require.Equal(t, int64(1), callcounts["List"]) // We should always try
 			switch {
 			case tt.fallback: // We get the shards one by one from the list
-				require.Equal(t, int64(1), stats.Counts()["ListDir"])     // GetShardNames
-				require.Equal(t, int64(tt.shards), stats.Counts()["Get"]) // GetShard
+				require.Equal(t, int64(1), callcounts["ListDir"])     // GetShardNames
+				require.Equal(t, int64(tt.shards), callcounts["Get"]) // GetShard
 			case tt.shards < 1: // We use a Get to check that the keyspace exists
-				require.Equal(t, int64(0), stats.Counts()["ListDir"])
-				require.Equal(t, int64(1), stats.Counts()["Get"])
+				require.Equal(t, int64(0), callcounts["ListDir"])
+				require.Equal(t, int64(1), callcounts["Get"])
 			default: // We should not make any ListDir or Get calls
-				require.Equal(t, int64(0), stats.Counts()["ListDir"])
-				require.Equal(t, int64(0), stats.Counts()["Get"])
+				require.Equal(t, int64(0), callcounts["ListDir"])
+				require.Equal(t, int64(0), callcounts["Get"])
 			}
 		})
 	}
