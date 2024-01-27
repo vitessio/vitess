@@ -111,6 +111,10 @@ type (
 		CallExpr
 	}
 
+	builtinFromDays struct {
+		CallExpr
+	}
+
 	builtinQuarter struct {
 		CallExpr
 	}
@@ -173,6 +177,7 @@ var _ IR = (*builtinMinute)(nil)
 var _ IR = (*builtinMonth)(nil)
 var _ IR = (*builtinMonthName)(nil)
 var _ IR = (*builtinLastDay)(nil)
+var _ IR = (*builtinFromDays)(nil)
 var _ IR = (*builtinQuarter)(nil)
 var _ IR = (*builtinSecond)(nil)
 var _ IR = (*builtinTime)(nil)
@@ -1245,6 +1250,53 @@ func (call *builtinLastDay) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xD(1, c.sqlmode.AllowZeroDate())
 	}
 	c.asm.Fn_LAST_DAY()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
+}
+
+func fromDays(loc *time.Location, d int64) *datetime.Date {
+	// 3652424 days corresponds to maximum date i.e. 9999-12-31
+	// mysql returns 0000-00-00 for days below 366
+	if d > 3652424 || d < 366 {
+		return nil
+	}
+
+	t := time.Date(1, time.January, 1, 0, 0, 0, 0, loc).AddDate(0, 0, int(d-366))
+	dt := datetime.NewDateFromStd(t)
+	return &dt
+}
+
+func (b *builtinFromDays) eval(env *ExpressionEnv) (eval, error) {
+	d, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if d == nil {
+		return nil, nil
+	}
+	days := evalToInt64(d).i
+	dt := fromDays(env.currentTimezone(), days)
+
+	if dt == nil {
+		return nil, nil
+	}
+	return newEvalDate(*dt, env.sqlmode.AllowZeroDate()), nil
+}
+
+func (call *builtinFromDays) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+	switch arg.Type {
+	case sqltypes.Int64:
+	default:
+		c.asm.Convert_xi(1)
+	}
+
+	c.asm.Fn_FROM_DAYS()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
 }

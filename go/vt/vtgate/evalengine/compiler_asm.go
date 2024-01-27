@@ -3795,6 +3795,23 @@ func (asm *assembler) Fn_LAST_DAY() {
 	}, "FN LAST_DAY DATETIME(SP-1)")
 }
 
+func (asm *assembler) Fn_FROM_DAYS() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		if arg == nil {
+			return 1
+		}
+
+		d := fromDays(env.currentTimezone(), arg.i)
+		if d == nil || d.IsZero() {
+			env.vm.stack[env.vm.sp-1] = nil
+		} else {
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(*d)
+		}
+		return 1
+	}, "FN FROM_DAYS INT64(SP-1)")
+}
+
 func (asm *assembler) Fn_QUARTER() {
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-1] == nil {
