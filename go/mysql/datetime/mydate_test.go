@@ -49,7 +49,7 @@ func TestDayNumberFields(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, tc := range expected {
-		y, m, d := mysqlDateFromDayNumber(tc[0])
+		y, m, d := MysqlDateFromDayNumber(tc[0])
 		assert.Equal(t, tc[1], int(y))
 		assert.Equal(t, tc[2], int(m))
 		assert.Equal(t, tc[3], int(d))

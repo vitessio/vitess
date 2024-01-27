@@ -615,13 +615,13 @@ func (dt *DateTime) addInterval(itv *Interval) bool {
 			return false
 		}
 
-		dt.Date.year, dt.Date.month, dt.Date.day = mysqlDateFromDayNumber(daynum)
+		dt.Date.year, dt.Date.month, dt.Date.day = MysqlDateFromDayNumber(daynum)
 		return true
 
 	case itv.unit.HasDayParts():
 		daynum := mysqlDayNumber(dt.Date.Year(), dt.Date.Month(), dt.Date.Day())
 		daynum += itv.day
-		dt.Date.year, dt.Date.month, dt.Date.day = mysqlDateFromDayNumber(daynum)
+		dt.Date.year, dt.Date.month, dt.Date.day = MysqlDateFromDayNumber(daynum)
 		return true
 
 	case itv.unit.HasMonthParts():
