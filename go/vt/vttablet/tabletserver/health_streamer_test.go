@@ -30,14 +30,12 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -46,7 +44,7 @@ func TestHealthStreamerClosed(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	cfg := newConfig(db)
-	env := tabletenv.NewEnv(cfg, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReplTrackerTest")
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -73,7 +71,7 @@ func TestNotServingPrimaryNoWrite(t *testing.T) {
 	cfg := newConfig(db)
 	cfg.SignalWhenSchemaChange = true
 
-	env := tabletenv.NewEnv(cfg, "TestNotServingPrimary", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TestNotServingPrimary")
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -104,7 +102,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	cfg := newConfig(db)
 	cfg.SignalWhenSchemaChange = false
 
-	env := tabletenv.NewEnv(cfg, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReplTrackerTest")
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
@@ -219,7 +217,7 @@ func TestReloadSchema(t *testing.T) {
 			cfg.SignalWhenSchemaChange = testcase.enableSchemaChange
 			cfg.SchemaReloadInterval = 100 * time.Millisecond
 
-			env := tabletenv.NewEnv(cfg, "ReplTrackerTest", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+			env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReplTrackerTest")
 			alias := &topodatapb.TabletAlias{
 				Cell: "cell",
 				Uid:  1,
@@ -335,7 +333,7 @@ func TestReloadView(t *testing.T) {
 	cfg.SchemaReloadInterval = 100 * time.Millisecond
 	cfg.EnableViews = true
 
-	env := tabletenv.NewEnv(cfg, "TestReloadView", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TestReloadView")
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
 	se := schema.NewEngine(env)
 	hs := newHealthStreamer(env, alias, se)

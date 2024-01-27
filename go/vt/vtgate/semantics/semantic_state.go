@@ -26,6 +26,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -76,11 +77,12 @@ type (
 
 	// QuerySignature is used to identify shortcuts in the planning process
 	QuerySignature struct {
-		Union,
-		Aggregation,
-		Distinct,
-		SubQueries,
-		HashJoin bool
+		Aggregation bool
+		Delete      bool
+		Distinct    bool
+		HashJoin    bool
+		SubQueries  bool
+		Union       bool
 	}
 
 	// SemTable contains semantic analysis information about the query.
@@ -152,8 +154,7 @@ type (
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 		ConnCollation() collations.ID
-		CollationEnv() *collations.Environment
-		MySQLVersion() string
+		Environment() *vtenv.Environment
 		// ForeignKeyMode returns the foreign_key flag value
 		ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 		GetForeignKeyChecksState() *bool

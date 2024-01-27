@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -84,9 +85,7 @@ type iExecute interface {
 	VSchema() *vindexes.VSchema
 	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
 
-	collationEnv() *collations.Environment
-	sqlparser() *sqlparser.Parser
-	mysqlServerVersion() string
+	environment() *vtenv.Environment
 }
 
 // VSchemaOperator is an interface to Vschema Operations
@@ -166,7 +165,7 @@ func newVCursorImpl(
 		}
 	}
 	if connCollation == collations.Unknown {
-		connCollation = executor.collEnv.DefaultConnectionCharset()
+		connCollation = executor.env.CollationEnv().DefaultConnectionCharset()
 	}
 
 	warmingReadsPct := 0
@@ -210,18 +209,9 @@ func (vc *vcursorImpl) ConnCollation() collations.ID {
 	return vc.collation
 }
 
-// ConnCollation returns the collation of this session
-func (vc *vcursorImpl) CollationEnv() *collations.Environment {
-	return vc.executor.collationEnv()
-}
-
-// ConnCollation returns the collation of this session
-func (vc *vcursorImpl) MySQLVersion() string {
-	return vc.executor.mysqlServerVersion()
-}
-
-func (vc *vcursorImpl) SQLParser() *sqlparser.Parser {
-	return vc.executor.sqlparser()
+// Environment returns the vtenv associated with this session
+func (vc *vcursorImpl) Environment() *vtenv.Environment {
+	return vc.executor.environment()
 }
 
 func (vc *vcursorImpl) TimeZone() *time.Location {
@@ -1100,7 +1090,7 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	_, _ = buf.WriteString(vc.keyspace)
 	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
 	_, _ = buf.WriteString("+Collate:")
-	_, _ = buf.WriteString(vc.CollationEnv().LookupName(vc.collation))
+	_, _ = buf.WriteString(vc.Environment().CollationEnv().LookupName(vc.collation))
 
 	if vc.destination != nil {
 		switch vc.destination.(type) {
@@ -1258,7 +1248,7 @@ func (vc *vcursorImpl) ThrottleApp(ctx context.Context, throttledAppRule *topoda
 }
 
 func (vc *vcursorImpl) CanUseSetVar() bool {
-	return vc.SQLParser().IsMySQL80AndAbove() && setVarEnabled
+	return vc.Environment().Parser().IsMySQL80AndAbove() && setVarEnabled
 }
 
 func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {
@@ -1287,7 +1277,7 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 }
 
 func (vc *vcursorImpl) VExplainLogging() {
-	vc.safeSession.EnableLogging(vc.SQLParser())
+	vc.safeSession.EnableLogging(vc.Environment().Parser())
 }
 
 func (vc *vcursorImpl) GetVExplainLogs() []engine.ExecuteEntry {

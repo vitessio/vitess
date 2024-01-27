@@ -478,11 +478,6 @@ func TestClientFoundRows(t *testing.T) {
 func TestConnCounts(t *testing.T) {
 	th := &testHandler{}
 
-	initialNumUsers := len(connCountPerUser.Counts())
-
-	// FIXME: we should be able to ResetAll counters instead of computing a delta, but it doesn't work for some reason
-	// connCountPerUser.ResetAll()
-
 	user := "anotherNotYetConnectedUser1"
 	passwd := "password1"
 
@@ -510,29 +505,26 @@ func TestConnCounts(t *testing.T) {
 	c, err := Connect(context.Background(), params)
 	require.NoError(t, err, "Connect failed")
 
-	connCounts := connCountPerUser.Counts()
-	assert.Equal(t, 1, len(connCounts)-initialNumUsers)
 	checkCountsForUser(t, user, 1)
 
 	// Test with a second new connection.
 	c2, err := Connect(context.Background(), params)
 	require.NoError(t, err)
-	connCounts = connCountPerUser.Counts()
-	// There is still only one new user.
-	assert.Equal(t, 1, len(connCounts)-initialNumUsers)
 	checkCountsForUser(t, user, 2)
 
-	// Test after closing connections. time.Sleep lets it work, but seems flakey.
+	// Test after closing connections.
 	c.Close()
-	// time.Sleep(10 * time.Millisecond)
-	// checkCountsForUser(t, user, 1)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		checkCountsForUser(t, user, 1)
+	}, 1*time.Second, 10*time.Millisecond)
 
 	c2.Close()
-	// time.Sleep(10 * time.Millisecond)
-	// checkCountsForUser(t, user, 0)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		checkCountsForUser(t, user, 0)
+	}, 1*time.Second, 10*time.Millisecond)
 }
 
-func checkCountsForUser(t *testing.T, user string, expected int64) {
+func checkCountsForUser(t assert.TestingT, user string, expected int64) {
 	connCounts := connCountPerUser.Counts()
 
 	userCount, ok := connCounts[user]

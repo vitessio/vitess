@@ -23,9 +23,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -120,17 +120,17 @@ func TestSimplifyEvalEngineExpr(t *testing.T) {
 	// L0
 	p0 := plus(p11, p12)
 
+	venv := vtenv.NewTestEnv()
 	expr := SimplifyExpr(p0, func(expr sqlparser.Expr) bool {
 		collationEnv := collations.MySQL8()
 		local, err := evalengine.Translate(expr, &evalengine.Config{
-			CollationEnv: collationEnv,
-			Collation:    collationEnv.DefaultConnectionCharset(),
-			MySQLVersion: config.DefaultMySQLVersion,
+			Environment: venv,
+			Collation:   collationEnv.DefaultConnectionCharset(),
 		})
 		if err != nil {
 			return false
 		}
-		res, err := evalengine.EmptyExpressionEnv(collationEnv, config.DefaultMySQLVersion).Evaluate(local)
+		res, err := evalengine.EmptyExpressionEnv(venv).Evaluate(local)
 		if err != nil {
 			return false
 		}

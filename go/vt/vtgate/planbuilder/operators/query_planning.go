@@ -99,7 +99,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		case *LockAndComment:
 			return pushLockAndComment(in)
 		case *Delete:
-			return tryPushDelete(ctx, in)
+			return tryPushDelete(in)
 		default:
 			return in, NoRewrite
 		}
@@ -108,21 +108,14 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func tryPushDelete(ctx *plancontext.PlanningContext, in *Delete) (Operator, *ApplyResult) {
-	switch src := in.Source.(type) {
-	case *Route:
+func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
+	if src, ok := in.Source.(*Route); ok {
 		return pushDeleteUnderRoute(in, src)
-	case *ApplyJoin:
-		return pushDeleteUnderJoin(ctx, in, src)
 	}
-	return in, nil
+	return in, NoRewrite
 }
 
 func pushDeleteUnderRoute(in *Delete, src *Route) (Operator, *ApplyResult) {
-	if in.Limit != nil && !src.IsSingleShardOrByDestination() {
-		panic(vterrors.VT12001("multi shard DELETE with LIMIT"))
-	}
-
 	switch r := src.Routing.(type) {
 	case *SequenceRouting:
 		// Sequences are just unsharded routes
@@ -137,27 +130,22 @@ func pushDeleteUnderRoute(in *Delete, src *Route) (Operator, *ApplyResult) {
 	return Swap(in, src, "pushed delete under route")
 }
 
-func pushDeleteUnderJoin(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
+func createDeleteWithInput(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
 	if len(in.Target.VTable.PrimaryKey) == 0 {
 		panic(vterrors.VT09015())
 	}
-	dm := &DeleteMulti{}
-	var selExprs sqlparser.SelectExprs
+	dm := &DeleteWithInput{}
 	var leftComp sqlparser.ValTuple
+	proj := newAliasedProjection(src)
 	for _, col := range in.Target.VTable.PrimaryKey {
 		colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
-		selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
+		proj.AddColumn(ctx, true, false, aeWrap(colName))
+		dm.cols = append(dm.cols, colName)
 		leftComp = append(leftComp, colName)
 		ctx.SemTable.Recursive[colName] = in.Target.ID
 	}
 
-	sel := &sqlparser.Select{
-		SelectExprs: selExprs,
-		OrderBy:     in.OrderBy,
-		Limit:       in.Limit,
-		Lock:        sqlparser.ForUpdateLock,
-	}
-	dm.Source = newHorizon(src, sel)
+	dm.Source = proj
 
 	var targetTable *Table
 	_ = Visit(src, func(operator Operator) error {
@@ -170,7 +158,13 @@ func pushDeleteUnderJoin(ctx *plancontext.PlanningContext, in *Delete, src Opera
 	if targetTable == nil {
 		panic(vterrors.VT13001("target DELETE table not found"))
 	}
-	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, leftComp, sqlparser.ListArg(engine.DM_VALS), nil)
+
+	// optimize for case when there is only single column on left hand side.
+	var lhs sqlparser.Expr = leftComp
+	if len(leftComp) == 1 {
+		lhs = leftComp[0]
+	}
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmVals), nil)
 	targetQT := targetTable.QTable
 	qt := &QueryTable{
 		ID:         targetQT.ID,
@@ -188,7 +182,7 @@ func pushDeleteUnderJoin(ctx *plancontext.PlanningContext, in *Delete, src Opera
 	}
 	dm.Delete = in
 
-	return dm, Rewrote("Delete Multi on top of Delete and ApplyJoin")
+	return dm, Rewrote("changed Delete to DeleteWithInput")
 }
 
 func pushLockAndComment(l *LockAndComment) (Operator, *ApplyResult) {
@@ -543,7 +537,7 @@ func tryPushLimit(in *Limit) (Operator, *ApplyResult) {
 }
 
 func tryPushingDownLimitInRoute(in *Limit, src *Route) (Operator, *ApplyResult) {
-	if src.IsSingleShard() {
+	if src.IsSingleShardOrByDestination() {
 		return Swap(in, src, "push limit under route")
 	}
 

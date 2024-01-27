@@ -4,9 +4,8 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -23,9 +22,9 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 		{"comparison_f", "column0 = 12", []sqltypes.Value{sqltypes.NewFloat64(420.0)}},
 	}
 
-	parser := sqlparser.NewTestParser()
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testCases {
-		expr, err := parser.ParseExpr(tc.expression)
+		expr, err := venv.Parser().ParseExpr(tc.expression)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -35,8 +34,7 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 			ResolveColumn: fields.Column,
 			ResolveType:   fields.Type,
 			Collation:     collations.CollationUtf8mb4ID,
-			CollationEnv:  collations.MySQL8(),
-			MySQLVersion:  config.DefaultMySQLVersion,
+			Environment:   venv,
 		}
 
 		translated, err := evalengine.Translate(expr, cfg)

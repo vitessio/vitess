@@ -426,7 +426,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos replicati
 		Port: connParams.Port,
 	}
 	dbCfgs.SetDbParams(*connParams, *connParams, *connParams)
-	vsClient := vreplication.NewReplicaConnector(connParams, tm.CollationEnv, tm.SQLParser, tm.MySQLVersion)
+	vsClient := vreplication.NewReplicaConnector(tm.Env, connParams)
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{

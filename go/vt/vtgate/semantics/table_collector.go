@@ -235,7 +235,7 @@ func (tc *tableCollector) createTable(
 		ASTNode:      alias,
 		Table:        tbl,
 		isInfSchema:  isInfSchema,
-		collationEnv: tc.si.CollationEnv(),
+		collationEnv: tc.si.Environment().CollationEnv(),
 	}
 
 	if alias.As.IsEmpty() {

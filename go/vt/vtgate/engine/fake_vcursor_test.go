@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -134,17 +135,8 @@ func (t *noopVCursor) ConnCollation() collations.ID {
 }
 
 // CollationEnv implements VCursor
-func (t *noopVCursor) CollationEnv() *collations.Environment {
-	return collations.MySQL8()
-}
-
-// SQLParser implements VCursor
-func (t *noopVCursor) SQLParser() *sqlparser.Parser {
-	return sqlparser.NewTestParser()
-}
-
-func (*noopVCursor) MySQLVersion() string {
-	return config.DefaultMySQLVersion
+func (t *noopVCursor) Environment() *vtenv.Environment {
+	return vtenv.NewTestEnv()
 }
 
 func (t *noopVCursor) TimeZone() *time.Location {

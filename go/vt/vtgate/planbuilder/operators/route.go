@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
@@ -121,7 +122,7 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 	}
 	nr := &NoneRouting{keyspace: ks}
 
-	if isConstantFalse(expr, ctx.VSchema.ConnCollation(), ctx.VSchema.CollationEnv(), ctx.VSchema.MySQLVersion()) {
+	if isConstantFalse(ctx.VSchema.Environment(), expr, ctx.VSchema.ConnCollation()) {
 		return nr
 	}
 
@@ -165,12 +166,11 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 
 // isConstantFalse checks whether this predicate can be evaluated at plan-time. If it returns `false` or `null`,
 // we know that the query will not return anything, and this can be used to produce better plans
-func isConstantFalse(expr sqlparser.Expr, collation collations.ID, collationEnv *collations.Environment, mysqlVersion string) bool {
-	eenv := evalengine.EmptyExpressionEnv(collationEnv, mysqlVersion)
+func isConstantFalse(env *vtenv.Environment, expr sqlparser.Expr, collation collations.ID) bool {
+	eenv := evalengine.EmptyExpressionEnv(env)
 	eexpr, err := evalengine.Translate(expr, &evalengine.Config{
-		Collation:    collation,
-		CollationEnv: collationEnv,
-		MySQLVersion: mysqlVersion,
+		Collation:   collation,
+		Environment: env,
 	})
 	if err != nil {
 		return false

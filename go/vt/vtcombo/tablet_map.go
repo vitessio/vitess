@@ -23,7 +23,6 @@ import (
 	"path"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -32,10 +31,10 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -77,6 +76,7 @@ var tabletMap map[uint32]*comboTablet
 // it to the map. If it's a primary tablet, it also issues a TER.
 func CreateTablet(
 	ctx context.Context,
+	env *vtenv.Environment,
 	ts *topo.Server,
 	cell string,
 	uid uint32,
@@ -84,9 +84,6 @@ func CreateTablet(
 	tabletType topodatapb.TabletType,
 	mysqld mysqlctl.MysqlDaemon,
 	dbcfgs *dbconfigs.DBConfigs,
-	collationEnv *collations.Environment,
-	parser *sqlparser.Parser,
-	mysqlVersion string,
 ) error {
 	alias := &topodatapb.TabletAlias{
 		Cell: cell,
@@ -94,7 +91,7 @@ func CreateTablet(
 	}
 	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
 
-	controller := tabletserver.NewServer(ctx, topoproto.TabletAliasString(alias), ts, alias, collationEnv, parser, mysqlVersion)
+	controller := tabletserver.NewServer(ctx, env, topoproto.TabletAliasString(alias), ts, alias)
 	initTabletType := tabletType
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		initTabletType = topodatapb.TabletType_REPLICA
@@ -105,13 +102,11 @@ func CreateTablet(
 	}
 	tm := &tabletmanager.TabletManager{
 		BatchCtx:            context.Background(),
+		Env:                 env,
 		TopoServer:          ts,
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
 		QueryServiceControl: controller,
-		CollationEnv:        collationEnv,
-		SQLParser:           parser,
-		MySQLVersion:        mysqlVersion,
 	}
 	tablet := &topodatapb.Tablet{
 		Alias: alias,
@@ -171,15 +166,13 @@ func InitRoutingRules(
 // InitTabletMap creates the action tms and associated data structures
 // for all tablets, based on the vttest proto parameter.
 func InitTabletMap(
+	env *vtenv.Environment,
 	ts *topo.Server,
 	tpb *vttestpb.VTTestTopology,
 	mysqld mysqlctl.MysqlDaemon,
 	dbcfgs *dbconfigs.DBConfigs,
 	schemaDir string,
 	ensureDatabase bool,
-	collationEnv *collations.Environment,
-	parser *sqlparser.Parser,
-	mysqlVersion string,
 ) (uint32, error) {
 	tabletMap = make(map[uint32]*comboTablet)
 
@@ -195,11 +188,11 @@ func InitTabletMap(
 	})
 
 	// iterate through the keyspaces
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil, collationEnv, parser, mysqlVersion)
+	wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, nil)
 	var uid uint32 = 1
 	for _, kpb := range tpb.Keyspaces {
 		var err error
-		uid, err = CreateKs(ctx, ts, tpb, mysqld, dbcfgs, schemaDir, kpb, ensureDatabase, uid, wr, collationEnv, parser, mysqlVersion)
+		uid, err = CreateKs(ctx, env, ts, tpb, mysqld, dbcfgs, schemaDir, kpb, ensureDatabase, uid, wr)
 		if err != nil {
 			return 0, err
 		}
@@ -290,6 +283,7 @@ func DeleteKs(
 // CreateKs creates keyspace, shards and tablets with mysql database
 func CreateKs(
 	ctx context.Context,
+	env *vtenv.Environment,
 	ts *topo.Server,
 	tpb *vttestpb.VTTestTopology,
 	mysqld mysqlctl.MysqlDaemon,
@@ -299,9 +293,6 @@ func CreateKs(
 	ensureDatabase bool,
 	uid uint32,
 	wr *wrangler.Wrangler,
-	collationEnv *collations.Environment,
-	parser *sqlparser.Parser,
-	mysqlVersion string,
 ) (uint32, error) {
 	keyspace := kpb.Name
 
@@ -351,7 +342,7 @@ func CreateKs(
 				replicas--
 
 				// create the primary
-				if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_PRIMARY, mysqld, dbcfgs.Clone(), collationEnv, parser, mysqlVersion); err != nil {
+				if err := CreateTablet(ctx, env, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_PRIMARY, mysqld, dbcfgs.Clone()); err != nil {
 					return 0, err
 				}
 				uid++
@@ -359,7 +350,7 @@ func CreateKs(
 
 			for i := 0; i < replicas; i++ {
 				// create a replica tablet
-				if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs.Clone(), collationEnv, parser, mysqlVersion); err != nil {
+				if err := CreateTablet(ctx, env, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_REPLICA, mysqld, dbcfgs.Clone()); err != nil {
 					return 0, err
 				}
 				uid++
@@ -367,7 +358,7 @@ func CreateKs(
 
 			for i := 0; i < rdonlys; i++ {
 				// create a rdonly tablet
-				if err := CreateTablet(ctx, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs.Clone(), collationEnv, parser, mysqlVersion); err != nil {
+				if err := CreateTablet(ctx, env, ts, cell, uid, keyspace, shard, dbname, topodatapb.TabletType_RDONLY, mysqld, dbcfgs.Clone()); err != nil {
 					return 0, err
 				}
 				uid++

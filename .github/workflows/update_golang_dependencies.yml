@@ -2,7 +2,7 @@ name: Update Golang Dependencies
 
 on:
   schedule:
-    - cron: "0 0 * * 0" # Runs every week at midnight UTC
+    - cron: "0 0 1,15 * *" # Runs every month on the 1st and 15th days at midnight UTC
   workflow_dispatch:
 
 permissions: read-all

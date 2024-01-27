@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -33,8 +33,7 @@ type earlyRewriter struct {
 	clause          string
 	warning         string
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
-	collationEnv    *collations.Environment
-	mysqlVersion    string
+	env             *vtenv.Environment
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -54,9 +53,9 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 
 		return r.handleOrderByAndGroupBy(cursor.Parent(), iter)
 	case *sqlparser.OrExpr:
-		rewriteOrExpr(cursor, node, r.collationEnv, r.mysqlVersion)
+		rewriteOrExpr(r.env, cursor, node)
 	case *sqlparser.AndExpr:
-		rewriteAndExpr(cursor, node, r.collationEnv, r.mysqlVersion)
+		rewriteAndExpr(r.env, cursor, node)
 	case *sqlparser.NotExpr:
 		rewriteNotExpr(cursor, node)
 	case sqlparser.GroupBy:
@@ -481,35 +480,34 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 }
 
 // rewriteOrExpr rewrites OR expressions when the right side is FALSE.
-func rewriteOrExpr(cursor *sqlparser.Cursor, node *sqlparser.OrExpr, collationEnv *collations.Environment, mysqlVersion string) {
-	newNode := rewriteOrFalse(*node, collationEnv, mysqlVersion)
+func rewriteOrExpr(env *vtenv.Environment, cursor *sqlparser.Cursor, node *sqlparser.OrExpr) {
+	newNode := rewriteOrFalse(env, *node)
 	if newNode != nil {
 		cursor.ReplaceAndRevisit(newNode)
 	}
 }
 
 // rewriteAndExpr rewrites AND expressions when either side is TRUE.
-func rewriteAndExpr(cursor *sqlparser.Cursor, node *sqlparser.AndExpr, collationEnv *collations.Environment, mysqlVersion string) {
-	newNode := rewriteAndTrue(*node, collationEnv, mysqlVersion)
+func rewriteAndExpr(env *vtenv.Environment, cursor *sqlparser.Cursor, node *sqlparser.AndExpr) {
+	newNode := rewriteAndTrue(env, *node)
 	if newNode != nil {
 		cursor.ReplaceAndRevisit(newNode)
 	}
 }
 
-func rewriteAndTrue(andExpr sqlparser.AndExpr, collationEnv *collations.Environment, mysqlVersion string) sqlparser.Expr {
+func rewriteAndTrue(env *vtenv.Environment, andExpr sqlparser.AndExpr) sqlparser.Expr {
 	// we are looking for the pattern `WHERE c = 1 AND 1 = 1`
 	isTrue := func(subExpr sqlparser.Expr) bool {
-		coll := collationEnv.DefaultConnectionCharset()
+		coll := env.CollationEnv().DefaultConnectionCharset()
 		evalEnginePred, err := evalengine.Translate(subExpr, &evalengine.Config{
-			CollationEnv: collationEnv,
-			Collation:    coll,
-			MySQLVersion: mysqlVersion,
+			Environment: env,
+			Collation:   coll,
 		})
 		if err != nil {
 			return false
 		}
 
-		env := evalengine.EmptyExpressionEnv(collationEnv, mysqlVersion)
+		env := evalengine.EmptyExpressionEnv(env)
 		res, err := env.Evaluate(evalEnginePred)
 		if err != nil {
 			return false
@@ -597,20 +595,19 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	}, nil).(sqlparser.Expr)
 }
 
-func rewriteOrFalse(orExpr sqlparser.OrExpr, collationEnv *collations.Environment, mysqlVersion string) sqlparser.Expr {
+func rewriteOrFalse(env *vtenv.Environment, orExpr sqlparser.OrExpr) sqlparser.Expr {
 	// we are looking for the pattern `WHERE c = 1 OR 1 = 0`
 	isFalse := func(subExpr sqlparser.Expr) bool {
-		coll := collationEnv.DefaultConnectionCharset()
+		coll := env.CollationEnv().DefaultConnectionCharset()
 		evalEnginePred, err := evalengine.Translate(subExpr, &evalengine.Config{
-			CollationEnv: collationEnv,
-			Collation:    coll,
-			MySQLVersion: mysqlVersion,
+			Environment: env,
+			Collation:   coll,
 		})
 		if err != nil {
 			return false
 		}
 
-		env := evalengine.EmptyExpressionEnv(collationEnv, mysqlVersion)
+		env := evalengine.EmptyExpressionEnv(env)
 		res, err := env.Evaluate(evalEnginePred)
 		if err != nil {
 			return false

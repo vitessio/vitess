@@ -6,8 +6,9 @@
   - **[Dropping Support for MySQL 5.7](#drop-support-mysql57)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [VTTablet Flags](#vttablet-flags)
-  - **[Docker](#docker)**
-    - [New MySQL Image](#mysql-image)
+    - [MySQL binary in vitess/lite Docker image](#mysql-binary-in-lite-image)
+  - **[Breaking Changes](#breaking-changes)**
+     - [ExecuteFetchAsDBA rejects multi-statement SQL](#execute-fetch-as-dba-reject-multi)
   - **[New Stats](#new-stats)**
     - [Stream Consolidations](#stream-consolidations)
     - [Build Version in `/debug/vars`](#build-version-in-debug-vars)
@@ -44,16 +45,40 @@ Vitess will however, continue to support importing from MySQL 5.7 into Vitess ev
 `--vreplication_healthcheck_topology_refresh`, `--vreplication_healthcheck_retry_delay`, and `--vreplication_healthcheck_timeout`.
 - The `--vreplication_tablet_type` flag is now deprecated and ignored.
 
+#### <a id="mysql-binary-in-lite-image"/>MySQL binary in vitess/lite Docker image
 
-### <a id="docker"/>Docker
+The `mysqld` binary is now deprecated in the `vitess/lite` Docker image and will be removed in a future release.
 
-#### <a id="mysql-image"/>New MySQL Image
+If you are currently using `vitess/lite` as your `mysqld` image in your vitess-operator deployment we invite you to use an official MySQL image such as `mysql:8.0.30`.
 
-In `v19.0` the Vitess team is shipping a new image: `vitess/mysql`.
-This lightweight image is a replacement of `vitess/lite` to only run `mysqld`.
+Below is an example of a kubernetes yaml file before and after upgrading to an official MySQL image:
 
-Several tags are available to let you choose what version of MySQL you want to use: `vitess/mysql:8.0.30`, `vitess/mysql:8.0.34`.
+```yaml
+# before
+    mysqld:
+      mysql80Compatible: vitess/lite:19.0.0
+```
+```yaml
+# after
+    mysqld:
+      mysql80Compatible: mysql:8.0.30 # or even mysql:8.0.34 for instance
+```
 
+### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="execute-fetch-as-dba-reject-multi"/>ExecuteFetchAsDBA rejects multi-statement SQL
+
+`vtctldclient ExecuteFetchAsDBA` (and similarly the `vtctl` and `vtctlclient` commands) now reject multi-statement SQL with error.
+
+For example, `vtctldclient ExecuteFetchAsDBA my-tablet "stop replica; change replication source to auto_position=1; start replica` will return an error, without attempting to execute any of these queries.
+
+Previously, `ExecuteFetchAsDBA` silently accepted multi statement SQL. It would (attempt to) execute all of them, but:
+
+- It would only indicate error for the first statement. Errors on 2nd, 3rd, ... statements were silently ignored.
+- It would not consume the result sets of the 2nd, 3rd, ... statements. It would then return the used connection to the pool in a dirty state. Any further query that happens to take that connection out of the pool could get unexpected results.
+- As another side effect, multi-statement schema changes would cause schema to be reloaded with only the first change, leaving the cached schema inconsistent with the underlying database.
+
+`ExecuteFetchAsDBA` does allow a specific use case of multi-statement SQL, which is where all statements are in the form of `CREATE TABLE` or `CREATE VIEW`. This is to support a common pattern of schema initialization, formalized in `ApplySchema --batch-size` which uses `ExecuteFetchAsDBA` under the hood.
 
 ### <a id="new-stats"/>New Stats
 

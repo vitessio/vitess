@@ -6,6 +6,7 @@ import (
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -41,8 +42,7 @@ type VSchema interface {
 	Planner() PlannerVersion
 	SetPlannerVersion(pv PlannerVersion)
 	ConnCollation() collations.ID
-	CollationEnv() *collations.Environment
-	MySQLVersion() string
+	Environment() *vtenv.Environment
 
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so
@@ -93,9 +93,6 @@ type VSchema interface {
 
 	// StorePrepareData stores the prepared data in the session.
 	StorePrepareData(name string, v *vtgatepb.PrepareData)
-
-	// SQLParser returns the proper sqlparser instance with the right version.
-	SQLParser() *sqlparser.Parser
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner
