@@ -26,7 +26,7 @@ func TestSamplePercentile(t *testing.T) {
 }
 
 func TestBounds(t *testing.T) {
-	tests := []struct {
+	tt := []struct {
 		xs  []float64
 		min float64
 		max float64
@@ -36,21 +36,21 @@ func TestBounds(t *testing.T) {
 		{[]float64{10, 20, 5, 30, 15}, 5, 30},
 	}
 
-	for _, tt := range tests {
-		min, max := Bounds(tt.xs)
+	for _, tc := range tt {
+		min, max := Bounds(tc.xs)
 
-		if len(tt.xs) == 0 {
+		if len(tc.xs) == 0 {
 			assert.True(t, math.IsNaN(min), "min value should be NaN")
 			assert.True(t, math.IsNaN(max), "max value should be NaN")
 		} else {
-			assert.Equal(t, tt.min, min, "min value mismatch")
-			assert.Equal(t, tt.max, max, "max value mismatch")
+			assert.Equal(t, tc.min, min, "min value mismatch")
+			assert.Equal(t, tc.max, max, "max value mismatch")
 		}
 	}
 }
 
 func TestSampleBounds(t *testing.T) {
-	tests := []struct {
+	tt := []struct {
 		sample Sample
 		min    float64
 		max    float64
@@ -60,21 +60,21 @@ func TestSampleBounds(t *testing.T) {
 		{Sample{Xs: []float64{15, 20, 35, 40, 50}, Sorted: true}, 15, 50},
 	}
 
-	for _, tt := range tests {
-		min, max := tt.sample.Bounds()
+	for _, tc := range tt {
+		min, max := tc.sample.Bounds()
 
-		if len(tt.sample.Xs) == 0 {
+		if len(tc.sample.Xs) == 0 {
 			assert.True(t, math.IsNaN(min), "min value should be NaN")
 			assert.True(t, math.IsNaN(max), "max value should be NaN")
 		} else {
-			assert.Equal(t, tt.min, min, "min value mismatch")
-			assert.Equal(t, tt.max, max, "max value mismatch")
+			assert.Equal(t, tc.min, min, "min value mismatch")
+			assert.Equal(t, tc.max, max, "max value mismatch")
 		}
 	}
 }
 
 func TestVecSum(t *testing.T) {
-	tests := []struct {
+	tt := []struct {
 		xs  []float64
 		sum float64
 	}{
@@ -82,14 +82,14 @@ func TestVecSum(t *testing.T) {
 		{[]float64{}, 0},
 	}
 
-	for _, tt := range tests {
-		sum := vecSum(tt.xs)
-		assert.Equal(t, tt.sum, sum, "sum value mismatch")
+	for _, tc := range tt {
+		sum := vecSum(tc.xs)
+		assert.Equal(t, tc.sum, sum, "sum value mismatch")
 	}
 }
 
 func TestSampleSum(t *testing.T) {
-	tests := []struct {
+	tt := []struct {
 		sample Sample
 		sum    float64
 	}{
@@ -97,14 +97,14 @@ func TestSampleSum(t *testing.T) {
 		{Sample{Xs: []float64{}}, 0},
 	}
 
-	for _, tt := range tests {
-		sum := tt.sample.Sum()
-		assert.Equal(t, tt.sum, sum, "sum value mismatch")
+	for _, tc := range tt {
+		sum := tc.sample.Sum()
+		assert.Equal(t, tc.sum, sum, "sum value mismatch")
 	}
 }
 
 func TestMean(t *testing.T) {
-	tests := []struct {
+	tt := []struct {
 		xs       []float64
 		expected float64
 	}{
@@ -115,13 +115,13 @@ func TestMean(t *testing.T) {
 		{[]float64{-2, 2, -2, 2}, 0},
 	}
 
-	for _, tt := range tests {
-		mean := Mean(tt.xs)
+	for _, tc := range tt {
+		mean := Mean(tc.xs)
 
-		if math.IsNaN(tt.expected) {
+		if math.IsNaN(tc.expected) {
 			assert.True(t, math.IsNaN(mean), "Expected NaN")
 		} else {
-			assert.Equal(t, tt.expected, mean, "Mean value mismatch")
+			assert.Equal(t, tc.expected, mean, "Mean value mismatch")
 		}
 	}
 }
@@ -154,7 +154,7 @@ func TestSampleClear(t *testing.T) {
 }
 
 func TestSampleSort(t *testing.T) {
-	tests := []struct {
+	tt := []struct {
 		sample   Sample
 		expected []float64
 	}{
@@ -164,9 +164,9 @@ func TestSampleSort(t *testing.T) {
 		{Sample{Xs: []float64{10, 5, 30, 20, 15}, Sorted: false}, []float64{5, 10, 15, 20, 30}},
 	}
 
-	for _, tt := range tests {
-		sortedSample := tt.sample.Sort()
+	for _, tc := range tt {
+		sortedSample := tc.sample.Sort()
 
-		assert.Equal(t, tt.expected, sortedSample.Xs, "Sorted values mismatch")
+		assert.Equal(t, tc.expected, sortedSample.Xs, "Sorted values mismatch")
 	}
 }
