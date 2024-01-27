@@ -52,7 +52,7 @@ func TestUnescapeID(t *testing.T) {
 		{
 			in:  "``",
 			out: "",
-			err: false,
+			err: true,
 		},
 		{
 			in:  "a",
@@ -117,7 +117,7 @@ func TestUnescapeID(t *testing.T) {
 		{
 			in:  "",
 			out: "",
-			err: false,
+			err: true,
 		},
 		{
 			in:  "`",
@@ -146,8 +146,8 @@ func TestEnsureEscaped(t *testing.T) {
 	}{
 		{
 			in:  "",
-			out: "``",
-			err: false,
+			out: "",
+			err: true,
 		},
 		{
 			in:  "foo",

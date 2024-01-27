@@ -57,8 +57,9 @@ func EscapeIDs(identifiers []string) []string {
 func UnescapeID(in string) (string, error) {
 	l := len(in)
 
-	if l == 0 {
-		return in, nil
+	if l == 0 || in == "``" {
+		return "", fmt.Errorf("UnescapeID err: invalid input identifier '%s'", in)
+
 	}
 
 	if l == 1 {
