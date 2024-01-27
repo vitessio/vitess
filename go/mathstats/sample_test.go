@@ -25,6 +25,21 @@ func TestSamplePercentile(t *testing.T) {
 	})
 }
 
+func TestSamplePercentileEmpty(t *testing.T) {
+	s := Sample{Xs: []float64{}}
+	assert.True(t, math.IsNaN(s.Percentile(0.5)), "Percentile should return NaN for empty sample")
+}
+
+func TestSampleStdDev(t *testing.T) {
+	values := []float64{2, 4, 4, 4, 5, 5, 7, 9}
+	expected := 2.138089935299395
+
+	sample := Sample{Xs: values}
+	result := sample.StdDev()
+
+	assert.Equal(t, expected, result)
+}
+
 func TestBounds(t *testing.T) {
 	tt := []struct {
 		xs  []float64
@@ -168,5 +183,47 @@ func TestSampleSort(t *testing.T) {
 		sortedSample := tc.sample.Sort()
 
 		assert.Equal(t, tc.expected, sortedSample.Xs, "Sorted values mismatch")
+	}
+}
+
+func TestGeoMean(t *testing.T) {
+	tt := []struct {
+		name     string
+		values   []float64
+		expected float64
+	}{
+		{
+			name:     "Valid_case",
+			values:   []float64{2, 4, 8, 16},
+			expected: 5.65685424949238,
+		},
+		{
+			name:     "Empty_values",
+			values:   []float64{},
+			expected: math.NaN(),
+		},
+		{
+			name:     "Zero_value",
+			values:   []float64{1, 0, 3},
+			expected: math.NaN(),
+		},
+		{
+			name:     "Negative_value",
+			values:   []float64{2, -4, 8, 16},
+			expected: math.NaN(),
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			sample := Sample{Xs: tc.values}
+			result := sample.GeoMean()
+
+			if math.IsNaN(tc.expected) {
+				assert.True(t, math.IsNaN(result))
+			} else {
+				assert.Equal(t, tc.expected, result)
+			}
+		})
 	}
 }
