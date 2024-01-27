@@ -75,7 +75,7 @@ func TestBuild(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := Build(tc.bits...)
 
-			assert.Equal(t, tc.want, got, "Build() result does not match expected value")
+			assert.Equal(t, tc.want, got)
 		})
 	}
 }
@@ -168,7 +168,7 @@ func TestAndNot(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.bs1.AndNot(tc.bs2)
-			assert.Equal(t, tc.result, got, "AndNot() result does not match expected value")
+			assert.Equal(t, tc.result, got)
 		})
 	}
 }
@@ -221,7 +221,7 @@ func TestOr(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.bs1.Or(tc.bs2)
-			assert.Equal(t, tc.result, got, "Or() result does not match expected value")
+			assert.Equal(t, tc.result, got)
 		})
 	}
 }
@@ -256,7 +256,7 @@ func TestSet(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.bs.Set(tc.offset)
-			assert.Equal(t, tc.result, got, "Set() result does not match expected value")
+			assert.Equal(t, tc.result, got)
 		})
 	}
 }
@@ -309,7 +309,7 @@ func TestIsContainedBy(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.bs1.IsContainedBy(tc.bs2)
-			assert.Equal(t, tc.expected, got, "IsContainedBy() result does not match expected value")
+			assert.Equal(t, tc.expected, got)
 		})
 	}
 }
@@ -368,7 +368,7 @@ func TestOverlaps(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.bs1.Overlaps(tc.bs2)
-			assert.Equal(t, tc.expected, got, "Overlaps() result does not match expected value")
+			assert.Equal(t, tc.expected, got)
 		})
 	}
 }
