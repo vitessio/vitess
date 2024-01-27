@@ -152,8 +152,8 @@ func (c *Conn) dial(ctx context.Context) error {
 // Close is part of the topo.Conn interface.
 func (c *Conn) Close() {
 	c.closed = true
-	if c.factory != nil {
-		c.factory.stats = nil
+	if c.factory != nil && c.factory.stats != nil {
+		c.factory.stats.ResetAll()
 	}
 }
 
