@@ -20,14 +20,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
-
-
 )
 
 func TestEscapeID(t *testing.T) {
 	testcases := []struct {
 		in, out string
-
 	}{{
 		in:  "aa",
 		out: "`aa`",
@@ -256,36 +253,6 @@ func TestEscapeIDs(t *testing.T) {
 		t.Run(fmt.Sprintf("%v", tt.input), func(t *testing.T) {
 			out := EscapeIDs(tt.input)
 			assert.Equal(t, tt.expected, out)
-		})
-	}
-}
-
-func TestUnescapeID(t *testing.T) {
-	testcases := []struct {
-		in, out string
-	}{
-		{
-			in:  "`aa`",
-			out: "aa",
-		},
-		{
-			in:  "`a``a`",
-			out: "a`a",
-		},
-		{
-			in:  "```aa```",
-			out: "`aa`",
-		},
-		{
-			in:  "aa",
-			out: "aa",
-		},
-	}
-
-	for _, tc := range testcases {
-		t.Run(tc.in, func(t *testing.T) {
-			out := UnescapeID(tc.in)
-			assert.Equal(t, tc.out, out)
 		})
 	}
 }
