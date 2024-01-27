@@ -50,7 +50,7 @@ func TestSingleBitReturnsNegativeOne(t *testing.T) {
 func TestToBitsetPanic(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
-			t.Errorf("Expected panic, but none occurred")
+			require.NotNil(t, r, "Expected panic, but none occurred")
 		}
 	}()
 
