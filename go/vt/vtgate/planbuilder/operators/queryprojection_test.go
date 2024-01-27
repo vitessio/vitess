@@ -47,7 +47,7 @@ func TestQP(t *testing.T) {
 		{
 			sql: "select 1, count(1) from user order by 1",
 			expOrder: []ops.OrderBy{
-				{Inner: &sqlparser.Order{Expr: sqlparser.NewIntLiteral("1")}, SimplifiedExpr: sqlparser.NewIntLiteral("1")},
+				{Inner: &sqlparser.Order{Expr: sqlparser.NewStrLiteral("")}, SimplifiedExpr: sqlparser.NewStrLiteral("")},
 			},
 		},
 		{
@@ -61,7 +61,14 @@ func TestQP(t *testing.T) {
 			sql: "SELECT CONCAT(last_name,', ',first_name) AS full_name FROM mytable ORDER BY full_name", // alias in order not supported
 			expOrder: []ops.OrderBy{
 				{
-					Inner: &sqlparser.Order{Expr: sqlparser.NewColName("full_name")},
+					Inner: &sqlparser.Order{Expr: &sqlparser.FuncExpr{
+						Name: sqlparser.NewIdentifierCI("CONCAT"),
+						Exprs: sqlparser.SelectExprs{
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("last_name")},
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(", ")},
+							&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("first_name")},
+						},
+					}},
 					SimplifiedExpr: &sqlparser.FuncExpr{
 						Name: sqlparser.NewIdentifierCI("CONCAT"),
 						Exprs: sqlparser.SelectExprs{

@@ -432,17 +432,12 @@ var errAbortAggrPushing = fmt.Errorf("abort aggregation pushing")
 func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs *joinPusher) error {
 	for _, pred := range join.JoinPredicates {
 		for _, bve := range pred.LHSExprs {
-			expr := bve.Expr
-			wexpr, err := rootAggr.QP.GetSimplifiedExpr(ctx, expr)
-			if err != nil {
-				return err
-			}
-			idx, found := canReuseColumn(ctx, lhs.pushed.Columns, expr, extractExpr)
+			idx, found := canReuseColumn(ctx, lhs.pushed.Columns, bve.Expr, extractExpr)
 			if !found {
 				idx = len(lhs.pushed.Columns)
-				lhs.pushed.Columns = append(lhs.pushed.Columns, aeWrap(expr))
+				lhs.pushed.Columns = append(lhs.pushed.Columns, aeWrap(bve.Expr))
 			}
-			_, found = canReuseColumn(ctx, lhs.pushed.Grouping, wexpr, func(by GroupBy) sqlparser.Expr {
+			_, found = canReuseColumn(ctx, lhs.pushed.Grouping, bve.Expr, func(by GroupBy) sqlparser.Expr {
 				return by.SimplifiedExpr
 			})
 
@@ -451,8 +446,8 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAgg
 			}
 
 			lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
-				Inner:          expr,
-				SimplifiedExpr: wexpr,
+				Inner:          bve.Expr,
+				SimplifiedExpr: bve.Expr,
 				ColOffset:      idx,
 				WSOffset:       -1,
 			})

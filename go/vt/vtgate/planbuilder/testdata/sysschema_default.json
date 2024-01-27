@@ -77,8 +77,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select x.`1` from (select 1 from information_schema.schemata where 1 != 1) as x where 1 != 1",
-        "Query": "select x.`1` from (select 1 from information_schema.schemata where schema_name = :__vtschemaname /* VARCHAR */ limit 1) as x",
+        "FieldQuery": "select `1` from (select 1 from information_schema.schemata where 1 != 1) as x where 1 != 1",
+        "Query": "select `1` from (select 1 from information_schema.schemata where schema_name = :__vtschemaname /* VARCHAR */ limit 1) as x",
         "SysTableTableSchema": "[VARCHAR(\"MyDatabase\")]",
         "Table": "information_schema.schemata"
       }
