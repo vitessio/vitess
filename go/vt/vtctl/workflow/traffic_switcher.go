@@ -491,12 +491,12 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 			if err != nil {
 				return err
 			}
-			tableName, err := sqlescape.EnsureEscaped(tableName)
+			tableNameEscaped, err := sqlescape.EnsureEscaped(tableName)
 			if err != nil {
 				return err
 			}
 
-			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
+			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableNameEscaped)
 			if removalType == DropTable {
 				ts.Logger().Infof("%s: Dropping table %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
@@ -507,7 +507,7 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 				}
 				ts.Logger().Infof("%s: Renaming table %s.%s to %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
-				query = fmt.Sprintf("rename table %s.%s TO %s.%s", primaryDbName, tableName, primaryDbName, renameName)
+				query = fmt.Sprintf("rename table %s.%s TO %s.%s", primaryDbName, tableNameEscaped, primaryDbName, renameName)
 			}
 			_, err = ts.ws.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 				Query:        []byte(query),
