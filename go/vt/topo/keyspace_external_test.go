@@ -93,7 +93,8 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 
 func TestServerGetServingShards(t *testing.T) {
 	keyspace := "ks1"
-	noListImplErr := topo.NewError(topo.NoImplementation, "don't be doing no listing round here")
+	errNoListImpl := topo.NewError(topo.NoImplementation, "don't be doing no listing round here")
+
 	tests := []struct {
 		shards   int    // Number of shards to create
 		err      string // Error message we expect, if any
@@ -124,10 +125,10 @@ func TestServerGetServingShards(t *testing.T) {
 			defer cancel()
 			ts, factory := memorytopo.NewServerAndFactory(ctx)
 			defer ts.Close()
-			stats := factory.GetStats()
+			stats := factory.GetCallStats()
 
 			if tt.fallback {
-				factory.SetListError(noListImplErr)
+				factory.SetListError(errNoListImpl)
 			}
 
 			err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})

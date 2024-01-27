@@ -24,8 +24,10 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// NewLeaderParticipation is part of the topo.Server interface
+// NewLeaderParticipation is part of the topo.Conn interface.
 func (c *Conn) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
+	c.factory.callstats.Add([]string{"NewLeaderParticipation"}, 1)
+
 	if c.closed {
 		return nil, ErrConnectionClosed
 	}
