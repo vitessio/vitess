@@ -454,10 +454,18 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 	indexRows := make([][]sqltypes.Value, 0, 4)
 	for _, ddl := range ddls {
 		table := sqlparser.String(ddl.GetTable().Name)
-		backtickedTable := sqlescape.EscapeID(sqlescape.UnescapeID(table))
+		sanitizedTable, err := sqlescape.UnescapeID(table)
+		if err != nil {
+			return nil, err
+		}
+		backtickedTable := sqlescape.EscapeID(sanitizedTable)
 		if ddl.GetOptLike() != nil {
 			likeTable := ddl.GetOptLike().LikeTable.Name.String()
-			backtickedLikeTable := sqlescape.EscapeID(sqlescape.UnescapeID(likeTable))
+			sanitizedLikeTable, err := sqlescape.UnescapeID(likeTable)
+			if err != nil {
+				return nil, err
+			}
+			backtickedLikeTable := sqlescape.EscapeID(sanitizedLikeTable)
 
 			likeQuery := "SELECT * FROM " + backtickedLikeTable + " WHERE 1 != 1"
 			query := "SELECT * FROM " + backtickedTable + " WHERE 1 != 1"
@@ -466,8 +474,8 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 			}
 			tEnv.addResult(query, tEnv.getResult(likeQuery))
 
-			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(likeTable))
-			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sanitizedLikeTable)
+			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sanitizedTable)
 			if tEnv.getResult(likeQuery) == nil {
 				return nil, fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
@@ -508,7 +516,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 		tEnv.addResult("SELECT * FROM "+backtickedTable+" WHERE 1 != 1", &sqltypes.Result{
 			Fields: rowTypes,
 		})
-		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sanitizedTable)
 		tEnv.addResult(query, &sqltypes.Result{
 			Fields: colTypes,
 			Rows:   colValues,
