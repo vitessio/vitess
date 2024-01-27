@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
+	mysqldt "vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -1254,33 +1255,27 @@ func (call *builtinLastDay) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
 }
 
-func fromDays(loc *time.Location, d int64) *datetime.Date {
-	// 3652424 days corresponds to maximum date i.e. 9999-12-31
-	// mysql returns 0000-00-00 for days below 366
-	if d > 3652424 || d < 366 {
-		return nil
-	}
-
-	t := time.Date(1, time.January, 1, 0, 0, 0, 0, loc).AddDate(0, 0, int(d-366))
-	dt := datetime.NewDateFromStd(t)
-	return &dt
-}
-
 func (b *builtinFromDays) eval(env *ExpressionEnv) (eval, error) {
-	d, err := b.arg1(env)
-	if err != nil {
-		return nil, err
-	}
-	if d == nil {
+	arg, err := b.arg1(env)
+	if arg == nil || err != nil {
 		return nil, nil
 	}
-	days := evalToInt64(d).i
-	dt := fromDays(env.currentTimezone(), days)
 
-	if dt == nil {
+	days := evalToInt64(arg).i
+	y, m, d := mysqldt.MysqlDateFromDayNumber(int(days))
+
+	// mysql returns 0000-00-00 for days below 366 and above 3652499
+	if y == 0 && m == 0 && d == 0 {
 		return nil, nil
 	}
-	return newEvalDate(*dt, env.sqlmode.AllowZeroDate()), nil
+
+	// mysql returns NULL if y is greater than 9999
+	if y > 9999 {
+		return nil, nil
+	}
+
+	dt := datetime.NewDateFromStd(time.Date(int(y), time.Month(m), int(d), 0, 0, 0, 0, env.currentTimezone()))
+	return newEvalDate(dt, true), nil
 }
 
 func (call *builtinFromDays) compile(c *compiler) (ctype, error) {

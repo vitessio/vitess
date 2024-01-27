@@ -37,6 +37,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations/charset/types"
 	"vitess.io/vitess/go/mysql/collations/colldata"
+	mysqldt "vitess.io/vitess/go/mysql/datetime"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
@@ -3799,14 +3800,18 @@ func (asm *assembler) Fn_FROM_DAYS() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
 		if arg == nil {
+			env.vm.stack[env.vm.sp-1] = nil
 			return 1
 		}
 
-		d := fromDays(env.currentTimezone(), arg.i)
-		if d == nil || d.IsZero() {
+		y, m, d := mysqldt.MysqlDateFromDayNumber(int(arg.i))
+		if y == 0 && m == 0 && d == 0 {
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(datetime.Date{})
+		} else if y > 9999 {
 			env.vm.stack[env.vm.sp-1] = nil
 		} else {
-			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(*d)
+			dt := datetime.NewDateFromStd(time.Date(int(y), time.Month(m), int(d), 0, 0, 0, 0, env.currentTimezone()))
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(dt)
 		}
 		return 1
 	}, "FN FROM_DAYS INT64(SP-1)")

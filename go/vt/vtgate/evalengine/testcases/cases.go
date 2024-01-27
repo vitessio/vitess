@@ -1779,6 +1779,7 @@ func FnFromDays(yield Query) {
 		"365242",
 		"3652424",
 		"3652425",
+		"730669",
 	}
 
 	for _, d := range days {
