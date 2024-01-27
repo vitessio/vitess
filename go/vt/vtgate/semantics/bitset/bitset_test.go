@@ -41,7 +41,7 @@ func TestSingletons(t *testing.T) {
 }
 
 func TestSingleBitReturnsNegativeOne(t *testing.T) {
-	bs := Bitset("\x0F") // Binary: 00001111
+	bs := Bitset("\x0F")
 
 	result := bs.SingleBit()
 
