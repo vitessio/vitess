@@ -21,7 +21,6 @@ import (
 	"path"
 	"runtime"
 	"sort"
-	"strconv"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -207,17 +206,13 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	if err == nil { // We have everything we need to build the result
 		result := make(map[string]*ShardInfo, len(listResults))
 		for _, entry := range listResults {
-			// The key looks like this: /vitess/global/keyspaces/commerce/shards/-80/Shard
-			shardName := path.Base(path.Dir(string(entry.Key))) // The base part of the dir is "-80"
-			// Validate the shard name.
-			if !key.IsValidKeyRange(shardName) {
-				// Accept legacy shard names that are not valid key ranges but instead use
-				// names that are simply numbered sequences: 0,1,2,3... This is e.g. used
-				// in various tests today.
-				if _, err := strconv.Atoi(shardName); err != nil {
-					return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): unexpected shard key/path %q contains invalid shard name/range %q",
-						keyspace, string(entry.Key), shardName)
-				}
+			// The shard key looks like this: /vitess/global/keyspaces/commerce/shards/-80/Shard
+			shardKey := string(entry.Key)
+			shardName := path.Base(path.Dir(shardKey)) // The base part of the dir is "-80"
+			// Validate the extracted shard name.
+			if _, _, err := ValidateShardName(shardName); err != nil {
+				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): unexpected shard key/path %q contains invalid shard name/range %q",
+					keyspace, shardKey, shardName)
 			}
 			shard := &topodatapb.Shard{}
 			if err = shard.UnmarshalVT(entry.Value); err != nil {
