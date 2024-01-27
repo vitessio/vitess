@@ -18,87 +18,85 @@ package jsonutil
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestMarshalNoEscape(t *testing.T) {
-	cases := []struct {
-		name     string
-		v        any
-		expected string
+	tests := []struct {
+		name        string
+		obj         any
+		expectedStr string
+		expectedErr string
 	}{
 		{
-			name: "normal",
-			v: struct {
-				Usr string
-				Pwd string
+			name: "valid json",
+			obj: struct {
+				User string
+				Pass string
 			}{
-				Usr: "vitess",
-				Pwd: "vitess",
+				User: "new-user",
+				Pass: "password",
 			},
-			expected: "{\"Usr\":\"vitess\",\"Pwd\":\"vitess\"}",
+			expectedStr: "{\"User\":\"new-user\",\"Pass\":\"password\"}\n",
 		},
 		{
-			name: "not exported",
-			v: struct {
-				usr string
-				pwd string
-			}{
-				usr: "vitess",
-				pwd: "vitess",
-			},
-			expected: "{}",
+			name:        "invalid json",
+			obj:         func() {},
+			expectedStr: "",
+			expectedErr: "json: unsupported type: func()",
 		},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			json, _ := MarshalNoEscape(c.v)
-			sjson := string(json[:len(json)-1])
-			if sjson != c.expected {
-				t.Errorf("expected: %v, got: %v", c.expected, sjson)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			json, err := MarshalNoEscape(tt.obj)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedStr, string(json))
+			} else {
+				require.ErrorContains(t, err, tt.expectedErr)
 			}
 		})
 	}
 }
 
 func TestMarshalIndentNoEscape(t *testing.T) {
-	cases := []struct {
-		name     string
-		v        any
-		prefix   string
-		ident    string
-		expected string
+	tests := []struct {
+		name        string
+		obj         any
+		prefix      string
+		ident       string
+		expectedStr string
+		expectedErr string
 	}{
 		{
-			name: "normal",
-			v: struct {
-				Usr string
-				Pwd string
+			name: "valid json",
+			obj: struct {
+				User string
+				Pass string
 			}{
-				Usr: "vitess",
-				Pwd: "vitess",
+				User: "new-user",
+				Pass: "password",
 			},
-			prefix:   "test",
-			ident:    "\t",
-			expected: "{\ntest\t\"Usr\": \"vitess\",\ntest\t\"Pwd\": \"vitess\"\ntest}",
+			prefix:      "test",
+			ident:       "\t",
+			expectedStr: "{\ntest\t\"User\": \"new-user\",\ntest\t\"Pass\": \"password\"\ntest}\n",
 		},
 		{
-			name: "not exported",
-			v: struct {
-				usr string
-				pwd string
-			}{
-				usr: "vitess",
-				pwd: "vitess",
-			},
-			expected: "{}",
+			name:        "invalid json",
+			obj:         func() {},
+			expectedStr: "",
+			expectedErr: "json: unsupported type: func()",
 		},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			json, _ := MarshalIndentNoEscape(c.v, c.prefix, c.ident)
-			sjson := string(json[:len(json)-1])
-			if sjson != c.expected {
-				t.Errorf("expected: %v, got: %v", c.expected, sjson)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			json, err := MarshalIndentNoEscape(tt.obj, tt.prefix, tt.ident)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedStr, string(json))
+			} else {
+				require.ErrorContains(t, err, tt.expectedErr)
 			}
 		})
 	}
