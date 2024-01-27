@@ -42,7 +42,6 @@ func TestSingletons(t *testing.T) {
 
 func TestSingleBitReturnsNegativeOne(t *testing.T) {
 	bs := Bitset("\x0F")
-
 	result := bs.SingleBit()
 
 	assert.Equal(t, -1, result)
@@ -68,8 +67,8 @@ func TestBuild(t *testing.T) {
 	}{
 		{"Empty Bits", []int{}, ""},
 		{"Single Bit", []int{3}, "\x08"},
-		{"Multiple Bits", []int{1, 3, 5, 7}, "\xAA"},  // 0b10101010
-		{"Large Bits", []int{10, 11, 12}, "\x00\x1C"}, // 0b1110000000000
+		{"Multiple Bits", []int{1, 3, 5, 7}, "\xAA"},
+		{"Large Bits", []int{10, 11, 12}, "\x00\x1C"},
 	}
 
 	for _, tc := range tt {
