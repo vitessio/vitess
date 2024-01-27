@@ -41,13 +41,10 @@ func TestSingletons(t *testing.T) {
 }
 
 func TestSingleBitReturnsNegativeOne(t *testing.T) {
-	// Create a Bitset with multiple bits set
 	bs := Bitset("\x0F") // Binary: 00001111
 
-	// Call the SingleBit method with the Bitset
 	result := bs.SingleBit()
 
-	// Ensure that the result is -1, indicating that the line return -1 was reached
 	assert.Equal(t, -1, result)
 }
 
@@ -137,11 +134,36 @@ func TestAndNot(t *testing.T) {
 		bs2    Bitset
 		result Bitset
 	}{
-		{"Empty AndNot Empty", "", Build(1, 2, 3), ""},
-		{"NonEmpty And Empty", Build(1, 2, 3), "", Build(1, 2, 3)},
-		{"NonEmpty And NotEmpty", Build(1, 2, 3), Build(2, 3, 4), Build(1)},
-		{"Common BitsSet AndNot", Build(1, 2, 3, 4, 5, 6, 7, 8), Build(3, 4, 5, 6, 7, 8, 9, 10), Build(1, 2)},
-		{"bs1 Greater than bs2", Build(1, 2, 3, 4, 5, 6, 7, 8), Build(2, 3, 4), Build(1, 5, 6, 7, 8)},
+		{
+			"Empty AndNot Empty",
+			"",
+			Build(1, 2, 3),
+			"",
+		},
+		{
+			"NonEmpty And Empty",
+			Build(1, 2, 3),
+			"",
+			Build(1, 2, 3),
+		},
+		{
+			"NonEmpty And NotEmpty",
+			Build(1, 2, 3),
+			Build(2, 3, 4),
+			Build(1),
+		},
+		{
+			"Common BitsSet AndNot",
+			Build(1, 2, 3, 4, 5, 6, 7, 8),
+			Build(3, 4, 5, 6, 7, 8, 9, 10),
+			Build(1, 2),
+		},
+		{
+			"bs1 Greater than bs2",
+			Build(1, 2, 3, 4, 5, 6, 7, 8),
+			Build(2, 3, 4),
+			Build(1, 5, 6, 7, 8),
+		},
 	}
 
 	for _, tc := range tt {
@@ -159,12 +181,42 @@ func TestOr(t *testing.T) {
 		bs2    Bitset
 		result Bitset
 	}{
-		{"Empty Or Empty", "", "", ""},
-		{"Empty Or NonEmpty", "", Build(1, 2, 3), Build(1, 2, 3)},
-		{"NonEmpty Or Empty", Build(1, 2, 3), "", Build(1, 2, 3)},
-		{"NonEmpty Or NonEmpty", Build(1, 2, 3), Build(4, 5, 6), Build(1, 2, 3, 4, 5, 6)},
-		{"Common BitsSet", Build(1, 2, 3, 4), Build(3, 4, 5, 6), Build(1, 2, 3, 4, 5, 6)},
-		{"Bs1 Larger Than Bs2", Build(3, 4, 5, 6, 7, 8, 9, 10), Build(1, 2), Build(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)},
+		{
+			"Empty Or Empty",
+			"",
+			"",
+			"",
+		},
+		{
+			"Empty Or NonEmpty",
+			"",
+			Build(1, 2, 3),
+			Build(1, 2, 3),
+		},
+		{
+			"NonEmpty Or Empty",
+			Build(1, 2, 3),
+			"",
+			Build(1, 2, 3),
+		},
+		{
+			"NonEmpty Or NonEmpty",
+			Build(1, 2, 3),
+			Build(4, 5, 6),
+			Build(1, 2, 3, 4, 5, 6),
+		},
+		{
+			"Common BitsSet",
+			Build(1, 2, 3, 4),
+			Build(3, 4, 5, 6),
+			Build(1, 2, 3, 4, 5, 6),
+		},
+		{
+			"Bs1 Larger Than Bs2",
+			Build(3, 4, 5, 6, 7, 8, 9, 10),
+			Build(1, 2),
+			Build(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+		},
 	}
 
 	for _, tc := range tt {
@@ -182,9 +234,24 @@ func TestSet(t *testing.T) {
 		offset int
 		result Bitset
 	}{
-		{"Set On Empty Bitset", "", 3, Build(3)},
-		{"Set On NonEmpty Bitset", Build(1, 2, 3), 10, Build(1, 2, 3, 10)},
-		{"Set On Existing Bit", Build(1, 2, 3, 4), 3, Build(1, 2, 3, 4)},
+		{
+			"Set On Empty Bitset",
+			"",
+			3,
+			Build(3),
+		},
+		{
+			"Set On NonEmpty Bitset",
+			Build(1, 2, 3),
+			10,
+			Build(1, 2, 3, 10),
+		},
+		{
+			"Set On Existing Bit",
+			Build(1, 2, 3, 4),
+			3,
+			Build(1, 2, 3, 4),
+		},
 	}
 
 	for _, tc := range tt {
@@ -202,12 +269,42 @@ func TestIsContainedBy(t *testing.T) {
 		bs2      Bitset
 		expected bool
 	}{
-		{"Empty Is Contained By Empty", "", "", true},
-		{"Empty Is Contained By NonEmpty", "", Build(1, 2, 3), true},
-		{"NonEmpty Is Contained By Empty", Build(1, 2, 3), "", false},
-		{"Subset Is Contained By Superset", Build(1, 2, 3), Build(1, 2, 3, 4, 5, 6), true},
-		{"Not Contained", Build(1, 2, 3), Build(4, 5, 6), false},
-		{"Equal Bitsets", Build(1, 2, 3), Build(1, 2, 3), true},
+		{
+			"Empty Is Contained By Empty",
+			"",
+			"",
+			true,
+		},
+		{
+			"Empty Is Contained By NonEmpty",
+			"",
+			Build(1, 2, 3),
+			true,
+		},
+		{
+			"NonEmpty Is Contained By Empty",
+			Build(1, 2, 3),
+			"",
+			false,
+		},
+		{
+			"Subset Is Contained By Superset",
+			Build(1, 2, 3),
+			Build(1, 2, 3, 4, 5, 6),
+			true,
+		},
+		{
+			"Not Contained",
+			Build(1, 2, 3),
+			Build(4, 5, 6),
+			false,
+		},
+		{
+			"Equal Bitsets",
+			Build(1, 2, 3),
+			Build(1, 2, 3),
+			true,
+		},
 	}
 
 	for _, tc := range tt {
@@ -225,13 +322,48 @@ func TestOverlaps(t *testing.T) {
 		bs2      Bitset
 		expected bool
 	}{
-		{"Empty Does Not Overlap Empty", "", "", false},
-		{"Empty Does Not Overlap NonEmpty", "", Build(1, 2, 3), false},
-		{"NonEmpty Does Not Overlap Empty", Build(1, 2, 3), "", false},
-		{"Common Bits Overlap", Build(1, 2, 3, 4), Build(3, 4, 5, 6), true},
-		{"No Common Bits Do Not Overlap", Build(1, 2, 3, 4), Build(5, 6, 7, 8), false},
-		{"Partial Overlap", Build(1, 2, 3, 4, 5), Build(4, 5, 6), true},
-		{"Equal Bitsets Overlap", Build(1, 2, 3), Build(1, 2, 3), true},
+		{
+			"Empty Does Not Overlap Empty",
+			"",
+			"",
+			false,
+		},
+		{
+			"Empty Does Not Overlap NonEmpty",
+			"",
+			Build(1, 2, 3),
+			false,
+		},
+		{
+			"NonEmpty Does Not Overlap Empty",
+			Build(1, 2, 3),
+			"",
+			false,
+		},
+		{
+			"Common Bits Overlap",
+			Build(1, 2, 3, 4),
+			Build(3, 4, 5, 6),
+			true,
+		},
+		{
+			"No Common Bits Do Not Overlap",
+			Build(1, 2, 3, 4),
+			Build(5, 6, 7, 8),
+			false,
+		},
+		{
+			"Partial Overlap",
+			Build(1, 2, 3, 4, 5),
+			Build(4, 5, 6),
+			true,
+		},
+		{
+			"Equal Bitsets Overlap",
+			Build(1, 2, 3),
+			Build(1, 2, 3),
+			true,
+		},
 	}
 
 	for _, tc := range tt {
