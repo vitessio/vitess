@@ -74,7 +74,6 @@ func TestBuild(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			got := Build(tc.bits...)
-
 			assert.Equal(t, tc.want, got)
 		})
 	}
