@@ -3799,11 +3799,6 @@ func (asm *assembler) Fn_LAST_DAY() {
 func (asm *assembler) Fn_FROM_DAYS() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
-		if arg == nil {
-			env.vm.stack[env.vm.sp-1] = nil
-			return 1
-		}
-
 		y, m, d := mysqldt.MysqlDateFromDayNumber(int(arg.i))
 		if y == 0 && m == 0 && d == 0 {
 			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(datetime.Date{})
