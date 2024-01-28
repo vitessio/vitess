@@ -166,9 +166,7 @@ func (s *Schema) findForeignKeyLoop(tableName string, seen []string) (loop []str
 			// It's possible for one table to participate in more than one foreign key loop, but
 			// we suffice with one loop, since we already only ever report one foreign key error
 			// per table.
-			if _, ok := s.foreignKeyLoopMap[tableName]; !ok {
-				s.foreignKeyLoopMap[tableName] = loop
-			}
+			s.foreignKeyLoopMap[tableName] = loop
 			return loop
 		}
 	}
