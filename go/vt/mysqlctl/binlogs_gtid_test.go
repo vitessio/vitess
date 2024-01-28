@@ -91,7 +91,7 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 			name:          "backup pos beyond all binlogs",
 			previousGTIDs: basePreviousGTIDs,
 			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-630000",
-			expectError:   "no binary logs to backup",
+			expectError:   "cannot find binary logs that cover requested GTID range",
 		},
 		{
 			name:          "missing GTID entries",
