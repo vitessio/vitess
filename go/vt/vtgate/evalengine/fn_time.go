@@ -111,6 +111,10 @@ type (
 		CallExpr
 	}
 
+	builtinToDays struct {
+		CallExpr
+	}
+
 	builtinQuarter struct {
 		CallExpr
 	}
@@ -173,6 +177,7 @@ var _ IR = (*builtinMinute)(nil)
 var _ IR = (*builtinMonth)(nil)
 var _ IR = (*builtinMonthName)(nil)
 var _ IR = (*builtinLastDay)(nil)
+var _ IR = (*builtinToDays)(nil)
 var _ IR = (*builtinQuarter)(nil)
 var _ IR = (*builtinSecond)(nil)
 var _ IR = (*builtinTime)(nil)
@@ -1247,6 +1252,41 @@ func (call *builtinLastDay) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_LAST_DAY()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (b *builtinToDays) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	dt := evalToDateTime(date, -1, env.now, env.sqlmode.AllowZeroDate())
+	if dt == nil || dt.isZero() {
+		return nil, nil
+	}
+
+	numDays := datetime.MysqlDayNumber(dt.dt.Date.Year(), dt.dt.Date.Month(), dt.dt.Date.Day())
+	return newEvalInt64(int64(numDays)), nil
+}
+
+func (call *builtinToDays) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1, true)
+	}
+	c.asm.Fn_TO_DAYS()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {

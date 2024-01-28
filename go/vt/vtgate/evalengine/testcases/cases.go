@@ -131,6 +131,7 @@ var Cases = []TestCase{
 	{Run: FnMonth},
 	{Run: FnMonthName},
 	{Run: FnLastDay},
+	{Run: FnToDays},
 	{Run: FnQuarter},
 	{Run: FnSecond},
 	{Run: FnTime},
@@ -1763,6 +1764,27 @@ func FnLastDay(yield Query) {
 
 	for _, d := range dates {
 		yield(fmt.Sprintf("LAST_DAY(%s)", d), nil)
+	}
+}
+
+func FnToDays(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("TO_DAYS(%s)", d), nil)
+	}
+
+	dates := []string{
+		`DATE'0000-00-00'`,
+		`0`,
+		`'0000-00-00'`,
+		`DATE'2023-09-03 00:00:00'`,
+		`DATE'2023-09-03 07:00:00'`,
+		`DATE'0000-00-00 00:00:00'`,
+		`950501`,
+		`'2007-10-07'`,
+	}
+
+	for _, d := range dates {
+		yield(fmt.Sprintf("TO_DAYS(%s)", d), nil)
 	}
 }
 
