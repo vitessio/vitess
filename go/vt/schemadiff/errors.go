@@ -282,7 +282,7 @@ type ForeignKeyDependencyUnresolvedError struct {
 }
 
 func (e *ForeignKeyDependencyUnresolvedError) Error() string {
-	return fmt.Sprintf("table %s has unresolved/loop foreign key dependencies",
+	return fmt.Sprintf("table %s has unresolved foreign key dependencies",
 		sqlescape.EscapeID(e.Table))
 }
 
