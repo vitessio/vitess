@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
-	mysqldt "vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -1257,16 +1256,19 @@ func (call *builtinLastDay) compile(c *compiler) (ctype, error) {
 
 func (b *builtinFromDays) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := b.arg1(env)
-	if arg == nil || err != nil {
+	if arg == nil {
 		return nil, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	days := evalToInt64(arg).i
-	y, m, d := mysqldt.MysqlDateFromDayNumber(int(days))
+	y, m, d := datetime.MysqlDateFromDayNumber(int(days))
 
 	// mysql returns 0000-00-00 for days below 366 and above 3652499
 	if y == 0 && m == 0 && d == 0 {
-		return nil, nil
+		return newEvalDate(datetime.Date{}, true), nil
 	}
 
 	// mysql returns NULL if y is greater than 9999

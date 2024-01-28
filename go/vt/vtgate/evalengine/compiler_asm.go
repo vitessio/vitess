@@ -37,7 +37,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations/charset/types"
 	"vitess.io/vitess/go/mysql/collations/colldata"
-	mysqldt "vitess.io/vitess/go/mysql/datetime"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
@@ -3799,7 +3798,7 @@ func (asm *assembler) Fn_LAST_DAY() {
 func (asm *assembler) Fn_FROM_DAYS() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
-		y, m, d := mysqldt.MysqlDateFromDayNumber(int(arg.i))
+		y, m, d := datetime.MysqlDateFromDayNumber(int(arg.i))
 		if y == 0 && m == 0 && d == 0 {
 			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(datetime.Date{})
 		} else if y > 9999 {
