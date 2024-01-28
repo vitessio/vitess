@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStringList(t *testing.T) {
@@ -105,4 +106,18 @@ func TestStringMap(t *testing.T) {
 			t.Errorf("v.String(): want %#v, got %#v", want.in, vs)
 		}
 	}
+}
+
+func TestStringListValue(t *testing.T) {
+	strListVal := StringListValue{"temp", "val"}
+	require.Equal(t, []string([]string{"temp", "val"}), strListVal.Get())
+	require.Equal(t, "strings", strListVal.Type())
+}
+
+func TestStringMapValue(t *testing.T) {
+	strMapVal := StringMapValue{
+		"key": "val",
+	}
+	require.Equal(t, "StringMap", strMapVal.Type())
+	require.Equal(t, map[string]string(map[string]string{"key": "val"}), strMapVal.Get())
 }
