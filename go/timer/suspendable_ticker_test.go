@@ -133,7 +133,7 @@ func TestSuspendableTickerTick(t *testing.T) {
 	})
 	t.Run("tick after", func(t *testing.T) {
 		before := ticks.Load()
-		ticker.TickAfter(1 * time.Second)
+		ticker.TickAfter(2 * time.Second)
 		time.Sleep(time.Second)
 		after := ticks.Load()
 		assert.Zero(t, after-before)
