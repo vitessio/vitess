@@ -1263,21 +1263,13 @@ func (b *builtinFromDays) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	days := evalToInt64(arg).i
-	y, m, d := datetime.MysqlDateFromDayNumber(int(days))
+	d := datetime.DateFromDayNumber(int(evalToInt64(arg).i))
 
-	// mysql returns 0000-00-00 for days below 366 and above 3652499
-	if y == 0 && m == 0 && d == 0 {
-		return newEvalDate(datetime.Date{}, true), nil
-	}
-
-	// mysql returns NULL if y is greater than 9999
-	if y > 9999 {
+	// mysql returns NULL if year is greater than 9999
+	if d.Year() > 9999 {
 		return nil, nil
 	}
-
-	dt := datetime.NewDateFromStd(time.Date(int(y), time.Month(m), int(d), 0, 0, 0, 0, env.currentTimezone()))
-	return newEvalDate(dt, true), nil
+	return newEvalDate(d, true), nil
 }
 
 func (call *builtinFromDays) compile(c *compiler) (ctype, error) {

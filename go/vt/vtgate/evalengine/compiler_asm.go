@@ -3798,15 +3798,13 @@ func (asm *assembler) Fn_LAST_DAY() {
 func (asm *assembler) Fn_FROM_DAYS() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
-		y, m, d := datetime.MysqlDateFromDayNumber(int(arg.i))
-		if y == 0 && m == 0 && d == 0 {
-			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(datetime.Date{})
-		} else if y > 9999 {
+		d := datetime.DateFromDayNumber(int(arg.i))
+		if d.Year() > 9999 {
 			env.vm.stack[env.vm.sp-1] = nil
-		} else {
-			dt := datetime.NewDateFromStd(time.Date(int(y), time.Month(m), int(d), 0, 0, 0, 0, env.currentTimezone()))
-			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(dt)
+			return 1
 		}
+
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(d)
 		return 1
 	}, "FN FROM_DAYS INT64(SP-1)")
 }
