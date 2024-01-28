@@ -23,8 +23,8 @@ package datetime
 // day count that traditional datetime systems use (e.g. the daycount
 // algorithm in the Go standard library). It is often off by one, possibly
 // because of incorrect leap year handling, but the inverse of the algorithm
-// in MysqlDateFromDayNumber takes this into account. Hence, the results
-// of this function can ONLY be passed to MysqlDateFromDayNumber; using
+// in mysqlDateFromDayNumber takes this into account. Hence, the results
+// of this function can ONLY be passed to mysqlDateFromDayNumber; using
 // a day number with one of Go's datetime APIs will return incorrect results.
 // This API should only be used when performing datetime calculations (addition
 // and subtraction), so that the results match MySQL's. All other date handling
@@ -46,7 +46,7 @@ func mysqlDayNumber(year, month, day int) int {
 	return days + year/4 - leapAdjust
 }
 
-// MysqlDateFromDayNumber converts an absolute day number into a date (a year, month, day triplet).
+// mysqlDateFromDayNumber converts an absolute day number into a date (a year, month, day triplet).
 // This is an algorithm that has been reverse engineered from MySQL;
 // the tables used as a reference can be found in `testdata/daynr_to_date.json`.
 // See the warning from mysqlDayNumber: the day number used as an argument to
@@ -54,7 +54,7 @@ func mysqlDayNumber(year, month, day int) int {
 // This API should only be used when performing datetime calculations (addition
 // and subtraction), so that the results match MySQL's. All other date handling
 // operations must use our helpers based on Go's standard library.
-func MysqlDateFromDayNumber(daynr int) (uint16, uint8, uint8) {
+func mysqlDateFromDayNumber(daynr int) (uint16, uint8, uint8) {
 	if daynr <= 365 || daynr >= 3652500 {
 		return 0, 0, 0
 	}
@@ -80,4 +80,12 @@ func MysqlDateFromDayNumber(daynr int) (uint16, uint8, uint8) {
 	}
 
 	panic("unreachable: yday is too large?")
+}
+
+// DateFromDayNumber converts an absolute day number into a Date.
+// Returns zero date if day number exceeds 3652499 or is less than 366.
+func DateFromDayNumber(daynr int) Date {
+	var d Date
+	d.year, d.month, d.day = mysqlDateFromDayNumber(daynr)
+	return d
 }
