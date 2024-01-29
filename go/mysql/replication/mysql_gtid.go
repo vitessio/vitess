@@ -26,11 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// Mysql56FlavorID is the string identifier for the Mysql56 flavor.
-const Mysql56FlavorID = "MySQL56"
+// MysqlFlavorID is the string identifier for the Mysql flavor.
+const MysqlFlavorID = "MySQL"
 
-// parseMysql56GTID is registered as a GTID parser.
-func parseMysql56GTID(s string) (GTID, error) {
+// parseMysqlGTID is registered as a GTID parser.
+func parseMysqlGTID(s string) (GTID, error) {
 	// Split into parts.
 	parts := strings.Split(s, ":")
 	if len(parts) != 2 {
@@ -49,7 +49,7 @@ func parseMysql56GTID(s string) (GTID, error) {
 		return nil, vterrors.Wrapf(err, "invalid MySQL 5.6 GTID Sequence number (%v)", parts[1])
 	}
 
-	return Mysql56GTID{Server: sid, Sequence: seq}, nil
+	return MysqlGTID{Server: sid, Sequence: seq}, nil
 }
 
 // SID is the 16-byte unique ID of a MySQL 5.6 server.
@@ -86,8 +86,8 @@ func ParseSID(s string) (sid SID, err error) {
 	return sid, nil
 }
 
-// Mysql56GTID implements GTID
-type Mysql56GTID struct {
+// MysqlGTID implements GTID
+type MysqlGTID struct {
 	// Server is the SID of the server that originally committed the transaction.
 	Server SID
 	// Sequence is the sequence number of the transaction within a given Server's
@@ -96,35 +96,35 @@ type Mysql56GTID struct {
 }
 
 // String implements GTID.String().
-func (gtid Mysql56GTID) String() string {
+func (gtid MysqlGTID) String() string {
 	return fmt.Sprintf("%s:%d", gtid.Server, gtid.Sequence)
 }
 
 // Flavor implements GTID.Flavor().
-func (gtid Mysql56GTID) Flavor() string {
-	return Mysql56FlavorID
+func (gtid MysqlGTID) Flavor() string {
+	return MysqlFlavorID
 }
 
 // SequenceDomain implements GTID.SequenceDomain().
-func (gtid Mysql56GTID) SequenceDomain() any {
+func (gtid MysqlGTID) SequenceDomain() any {
 	return nil
 }
 
 // SourceServer implements GTID.SourceServer().
-func (gtid Mysql56GTID) SourceServer() any {
+func (gtid MysqlGTID) SourceServer() any {
 	return gtid.Server
 }
 
 // SequenceNumber implements GTID.SequenceNumber().
-func (gtid Mysql56GTID) SequenceNumber() any {
+func (gtid MysqlGTID) SequenceNumber() any {
 	return gtid.Sequence
 }
 
 // GTIDSet implements GTID.GTIDSet().
-func (gtid Mysql56GTID) GTIDSet() GTIDSet {
-	return Mysql56GTIDSet{}.AddGTID(gtid)
+func (gtid MysqlGTID) GTIDSet() GTIDSet {
+	return MysqlGTIDSet{}.AddGTID(gtid)
 }
 
 func init() {
-	gtidParsers[Mysql56FlavorID] = parseMysql56GTID
+	gtidParsers[MysqlFlavorID] = parseMysqlGTID
 }

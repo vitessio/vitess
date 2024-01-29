@@ -56,11 +56,11 @@ func parseInterval(s string) (interval, error) {
 	return interval{start: int64(start), end: int64(start)}, nil
 }
 
-// ParseMysql56GTIDSet is registered as a GTIDSet parser.
+// ParseMysqlGTIDSet is registered as a GTIDSet parser.
 //
 // https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html
-func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
-	set := make(Mysql56GTIDSet)
+func ParseMysqlGTIDSet(s string) (MysqlGTIDSet, error) {
+	set := make(MysqlGTIDSet)
 	input := s
 
 	// gtid_set: uuid_set [, uuid_set] ...
@@ -144,11 +144,11 @@ func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
 	return set, nil
 }
 
-// Mysql56GTIDSet implements GTIDSet for MySQL 5.6.
-type Mysql56GTIDSet map[SID][]interval
+// MysqlGTIDSet implements GTIDSet for MySQL 5.6.
+type MysqlGTIDSet map[SID][]interval
 
 // SIDs returns a sorted list of SIDs in the set.
-func (set Mysql56GTIDSet) SIDs() []SID {
+func (set MysqlGTIDSet) SIDs() []SID {
 	sids := make([]SID, 0, len(set))
 	for sid := range set {
 		sids = append(sids, sid)
@@ -164,7 +164,7 @@ func sortSIDs(sids []SID) {
 }
 
 // String implements GTIDSet.
-func (set Mysql56GTIDSet) String() string {
+func (set MysqlGTIDSet) String() string {
 	var buf strings.Builder
 	for i, sid := range set.SIDs() {
 		if i != 0 {
@@ -188,7 +188,7 @@ func (set Mysql56GTIDSet) String() string {
 // Last returns the last gtid as string
 // For gtidset having multiple SIDs or multiple intervals
 // it just returns the last SID with last interval
-func (set Mysql56GTIDSet) Last() string {
+func (set MysqlGTIDSet) Last() string {
 	var buf strings.Builder
 	if len(set.SIDs()) > 0 {
 		sid := set.SIDs()[len(set.SIDs())-1]
@@ -204,11 +204,11 @@ func (set Mysql56GTIDSet) Last() string {
 }
 
 // Flavor implements GTIDSet.
-func (Mysql56GTIDSet) Flavor() string { return Mysql56FlavorID }
+func (MysqlGTIDSet) Flavor() string { return MysqlFlavorID }
 
 // ContainsGTID implements GTIDSet.
-func (set Mysql56GTIDSet) ContainsGTID(gtid GTID) bool {
-	gtid56, ok := gtid.(Mysql56GTID)
+func (set MysqlGTIDSet) ContainsGTID(gtid GTID) bool {
+	gtid56, ok := gtid.(MysqlGTID)
 	if !ok {
 		return false
 	}
@@ -228,12 +228,12 @@ func (set Mysql56GTIDSet) ContainsGTID(gtid GTID) bool {
 }
 
 // Contains implements GTIDSet.
-func (set Mysql56GTIDSet) Contains(other GTIDSet) bool {
+func (set MysqlGTIDSet) Contains(other GTIDSet) bool {
 	if other == nil {
 		return false
 	}
 
-	other56, ok := other.(Mysql56GTIDSet)
+	other56, ok := other.(MysqlGTIDSet)
 	if !ok {
 		return false
 	}
@@ -268,8 +268,8 @@ func (set Mysql56GTIDSet) Contains(other GTIDSet) bool {
 }
 
 // Equal implements GTIDSet.
-func (set Mysql56GTIDSet) Equal(other GTIDSet) bool {
-	other56, ok := other.(Mysql56GTIDSet)
+func (set MysqlGTIDSet) Equal(other GTIDSet) bool {
+	other56, ok := other.(MysqlGTIDSet)
 	if !ok {
 		return false
 	}
@@ -302,8 +302,8 @@ func (set Mysql56GTIDSet) Equal(other GTIDSet) bool {
 }
 
 // AddGTID implements GTIDSet.
-func (set Mysql56GTIDSet) AddGTID(gtid GTID) GTIDSet {
-	gtid56, ok := gtid.(Mysql56GTID)
+func (set MysqlGTIDSet) AddGTID(gtid GTID) GTIDSet {
+	gtid56, ok := gtid.(MysqlGTID)
 	if !ok {
 		return set
 	}
@@ -316,7 +316,7 @@ func (set Mysql56GTIDSet) AddGTID(gtid GTID) GTIDSet {
 
 	// Make a copy and add the new GTID in the proper place.
 	// This function is not supposed to modify the original set.
-	newSet := make(Mysql56GTIDSet)
+	newSet := make(MysqlGTIDSet)
 
 	added := false
 
@@ -371,21 +371,21 @@ func (set Mysql56GTIDSet) AddGTID(gtid GTID) GTIDSet {
 }
 
 // Union implements GTIDSet.Union().
-func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
+func (set MysqlGTIDSet) Union(other GTIDSet) GTIDSet {
 	if set == nil && other != nil {
 		return other
 	}
 	if set == nil || other == nil {
 		return set
 	}
-	mydbOther, ok := other.(Mysql56GTIDSet)
+	mydbOther, ok := other.(MysqlGTIDSet)
 	if !ok {
 		return set
 	}
 
 	// Make a copy and add the new GTID in the proper place.
 	// This function is not supposed to modify the original set.
-	newSet := make(Mysql56GTIDSet)
+	newSet := make(MysqlGTIDSet)
 
 	for otherSID, otherIntervals := range mydbOther {
 		intervals, ok := set[otherSID]
@@ -443,7 +443,7 @@ func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 // by internal commands that refer to an "SID block".
 //
 // e.g. https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
-func (set Mysql56GTIDSet) SIDBlock() []byte {
+func (set MysqlGTIDSet) SIDBlock() []byte {
 	buf := &bytes.Buffer{}
 
 	// Number of SIDs.
@@ -467,16 +467,16 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 	return buf.Bytes()
 }
 
-// Difference will supply the difference between the receiver and supplied Mysql56GTIDSets, and supply the result
-// as a Mysql56GTIDSet.
-func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
+// Difference will supply the difference between the receiver and supplied MysqlGTIDSets, and supply the result
+// as a MysqlGTIDSet.
+func (set MysqlGTIDSet) Difference(other MysqlGTIDSet) MysqlGTIDSet {
 	if other == nil || set == nil {
 		return set
 	}
 
 	// Make a fresh, empty set to hold the new value.
 	// This function is not supposed to modify the original set.
-	differenceSet := make(Mysql56GTIDSet)
+	differenceSet := make(MysqlGTIDSet)
 
 	for sid, intervals := range set {
 		otherIntervals, ok := other[sid]
@@ -595,7 +595,7 @@ func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 	return differenceSet
 }
 
-// NewMysql56GTIDSetFromSIDBlock builds a Mysql56GTIDSet from parsing a SID Block.
+// NewMysqlGTIDSetFromSIDBlock builds a MysqlGTIDSet from parsing a SID Block.
 // This is the reverse of the SIDBlock method.
 //
 // Expected format:
@@ -612,9 +612,9 @@ func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 //
 //	8       start
 //	8       end
-func NewMysql56GTIDSetFromSIDBlock(data []byte) (Mysql56GTIDSet, error) {
+func NewMysqlGTIDSetFromSIDBlock(data []byte) (MysqlGTIDSet, error) {
 	buf := bytes.NewReader(data)
-	var set Mysql56GTIDSet = make(map[SID][]interval)
+	var set MysqlGTIDSet = make(map[SID][]interval)
 	var nSIDs uint64
 	if err := binary.Read(buf, binary.LittleEndian, &nSIDs); err != nil {
 		return nil, vterrors.Wrapf(err, "cannot read nSIDs")
@@ -668,20 +668,20 @@ func popInterval(dst *interval, s1, s2 *[]interval) bool {
 }
 
 func init() {
-	gtidSetParsers[Mysql56FlavorID] = func(s string) (GTIDSet, error) {
-		return ParseMysql56GTIDSet(s)
+	gtidSetParsers[MysqlFlavorID] = func(s string) (GTIDSet, error) {
+		return ParseMysqlGTIDSet(s)
 	}
 }
 
-// Subtract takes in two Mysql56GTIDSets as strings and subtracts the second from the first
+// Subtract takes in two MysqlGTIDSets as strings and subtracts the second from the first
 // The result is also a string.
 // An error is thrown if parsing is not possible for either GTIDSets
 func Subtract(lhs, rhs string) (string, error) {
-	lhsSet, err := ParseMysql56GTIDSet(lhs)
+	lhsSet, err := ParseMysqlGTIDSet(lhs)
 	if err != nil {
 		return "", err
 	}
-	rhsSet, err := ParseMysql56GTIDSet(rhs)
+	rhsSet, err := ParseMysqlGTIDSet(rhs)
 	if err != nil {
 		return "", err
 	}

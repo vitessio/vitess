@@ -83,7 +83,7 @@ func TestHistorian(t *testing.T) {
 
 	se.EnableHistorian(false)
 	require.Nil(t, se.RegisterVersionEvent())
-	gtidPrefix := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:"
+	gtidPrefix := "MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:"
 	gtid1 := gtidPrefix + "1-10"
 	ddl1 := "create table tracker_test (id int)"
 	ts1 := int64(1427325876)
@@ -187,7 +187,7 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 	se, db, cancel := getTestSchemaEngine(t, int64(schemaVersionMaxAgeSeconds))
 	defer cancel()
 
-	gtidPrefix := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:"
+	gtidPrefix := "MySQL/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:"
 	gtid1 := gtidPrefix + "1-10"
 	ddl1 := "create table tracker_test (id int)"
 	// create the first record 1 day ago so it gets purged from memory

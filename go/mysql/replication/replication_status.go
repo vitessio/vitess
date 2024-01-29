@@ -179,30 +179,30 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 
 // FindErrantGTIDs can be used to find errant GTIDs in the receiver's relay log, by comparing it against all known replicas,
 // provided as a list of ReplicationStatus's. This method only works if the flavor for all retrieved ReplicationStatus's is MySQL.
-// The result is returned as a Mysql56GTIDSet, each of whose elements is a found errant GTID.
+// The result is returned as a MysqlGTIDSet, each of whose elements is a found errant GTID.
 // This function is best effort in nature. If it marks something as errant, then it is for sure errant. But there may be cases of errant GTIDs, which aren't caught by this function.
-func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationStatus) (Mysql56GTIDSet, error) {
+func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationStatus) (MysqlGTIDSet, error) {
 	if len(otherReplicaStatuses) == 0 {
 		// If there is nothing to compare this replica against, then we must assume that its GTID set is the correct one.
 		return nil, nil
 	}
 
-	relayLogSet, ok := s.RelayLogPosition.GTIDSet.(Mysql56GTIDSet)
+	relayLogSet, ok := s.RelayLogPosition.GTIDSet.(MysqlGTIDSet)
 	if !ok {
 		return nil, fmt.Errorf("errant GTIDs can only be computed on the MySQL flavor")
 	}
 
-	otherSets := make([]Mysql56GTIDSet, 0, len(otherReplicaStatuses))
+	otherSets := make([]MysqlGTIDSet, 0, len(otherReplicaStatuses))
 	for _, status := range otherReplicaStatuses {
-		otherSet, ok := status.RelayLogPosition.GTIDSet.(Mysql56GTIDSet)
+		otherSet, ok := status.RelayLogPosition.GTIDSet.(MysqlGTIDSet)
 		if !ok {
-			panic("The receiver ReplicationStatus contained a Mysql56GTIDSet in its relay log, but a replica's ReplicationStatus is of another flavor. This should never happen.")
+			panic("The receiver ReplicationStatus contained a MysqlGTIDSet in its relay log, but a replica's ReplicationStatus is of another flavor. This should never happen.")
 		}
 		otherSets = append(otherSets, otherSet)
 	}
 
 	// Copy set for final diffSet so we don't mutate receiver.
-	diffSet := make(Mysql56GTIDSet, len(relayLogSet))
+	diffSet := make(MysqlGTIDSet, len(relayLogSet))
 	for sid, intervals := range relayLogSet {
 		if sid == s.SourceUUID {
 			continue
@@ -234,11 +234,11 @@ func ParseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	}
 
 	var err error
-	status.Position.GTIDSet, err = ParseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
+	status.Position.GTIDSet, err = ParseMysqlGTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
 		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
-	relayLogGTIDSet, err := ParseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
+	relayLogGTIDSet, err := ParseMysqlGTIDSet(resultMap["Retrieved_Gtid_Set"])
 	if err != nil {
 		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Retrieved_Gtid_Set: %#v)", resultMap["Retrieved_Gtid_Set"])
 	}

@@ -2778,17 +2778,17 @@ func TestGetShardReplicationPositions(t *testing.T) {
 									"zone1-001": {
 										IoState:  int32(replication.ReplicationStateStopped),
 										SqlState: int32(replication.ReplicationStateStopped),
-										Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+										Position: "MySQL/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 									},
 									"zone1-002": { // Note: in reality other fields will be set on replicating hosts as well, but this is sufficient to illustrate in the testing.
 										IoState:  int32(replication.ReplicationStateRunning),
 										SqlState: int32(replication.ReplicationStateRunning),
-										Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+										Position: "MySQL/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 									},
 									"zone1-003": {
 										IoState:  int32(replication.ReplicationStateRunning),
 										SqlState: int32(replication.ReplicationStateRunning),
-										Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+										Position: "MySQL/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 									},
 								},
 								TabletMap: map[string]*topodatapb.Tablet{
@@ -2841,17 +2841,17 @@ func TestGetShardReplicationPositions(t *testing.T) {
 							"zone1-001": {
 								IoState:  int32(replication.ReplicationStateStopped),
 								SqlState: int32(replication.ReplicationStateStopped),
-								Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+								Position: "MySQL/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 							},
 							"zone1-002": {
 								IoState:  int32(replication.ReplicationStateRunning),
 								SqlState: int32(replication.ReplicationStateRunning),
-								Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+								Position: "MySQL/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 							},
 							"zone1-003": {
 								IoState:  int32(replication.ReplicationStateRunning),
 								SqlState: int32(replication.ReplicationStateRunning),
-								Position: "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+								Position: "MySQL/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
 							},
 						},
 						TabletMap: map[string]*topodatapb.Tablet{

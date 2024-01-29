@@ -273,18 +273,18 @@ func TestDecodePosition(t *testing.T) {
 }
 
 func TestDecodePositionDefaultFlavor(t *testing.T) {
-	gtidSetParsers[Mysql56FlavorID] = func(s string) (GTIDSet, error) {
-		return ParseMysql56GTIDSet(s)
+	gtidSetParsers[MysqlFlavorID] = func(s string) (GTIDSet, error) {
+		return ParseMysqlGTIDSet(s)
 	}
 	{
-		pos := "MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615"
+		pos := "MySQL/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615"
 		rp, err := DecodePositionDefaultFlavor(pos, "foo")
 		assert.NoError(t, err)
 		assert.Equal(t, "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615", rp.GTIDSet.String())
 	}
 	{
 		pos := "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615"
-		rp, err := DecodePositionDefaultFlavor(pos, Mysql56FlavorID)
+		rp, err := DecodePositionDefaultFlavor(pos, MysqlFlavorID)
 		assert.NoError(t, err)
 		assert.Equal(t, "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615", rp.GTIDSet.String())
 	}

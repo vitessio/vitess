@@ -352,7 +352,7 @@ func TestMoveTables(t *testing.T) {
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys|rows_copied",
 						"int64|varchar|varchar|varchar|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|varchar|int64|int64|int64|int64"),
-						fmt.Sprintf("%d|%s|MySQL56/4ec30b1e-8ee2-11ed-a1eb-0242ac120002:1-15||0|Running|vt_%s|%d|%d|%d|0||||%d|%d|0",
+						fmt.Sprintf("%d|%s|MySQL/4ec30b1e-8ee2-11ed-a1eb-0242ac120002:1-15||0|Running|vt_%s|%d|%d|%d|0||||%d|%d|0",
 							vrID, bls, sourceKs, now, now, now, binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowSubType_None),
 					),
 				)

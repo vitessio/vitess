@@ -442,7 +442,7 @@ func TestMessageManagerStreamerSimple(t *testing.T) {
 	fvs.setStreamerResponse([][]*binlogdatapb.VEvent{{{
 		// Event set 1.
 		Type: binlogdatapb.VEventType_GTID,
-		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+		Gtid: "MySQL/33333333-3333-3333-3333-333333333333:1-100",
 	}, {
 		Type: binlogdatapb.VEventType_OTHER,
 	}}, {{
@@ -463,7 +463,7 @@ func TestMessageManagerStreamerSimple(t *testing.T) {
 		},
 	}, {
 		Type: binlogdatapb.VEventType_GTID,
-		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-101",
+		Gtid: "MySQL/33333333-3333-3333-3333-333333333333:1-101",
 	}, {
 		Type: binlogdatapb.VEventType_COMMIT,
 	}}})
@@ -490,7 +490,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 	fvs := newFakeVStreamer()
 	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
 		Fields: testDBFields,
-		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+		Gtid:   "MySQL/33333333-3333-3333-3333-333333333333:1-100",
 	}})
 	mm := newMessageManager(newFakeTabletServer(), fvs, newMMTable(), semaphore.NewWeighted(1))
 	mm.Open()
@@ -528,7 +528,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 		},
 	}, {
 		Type: binlogdatapb.VEventType_GTID,
-		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-99",
+		Gtid: "MySQL/33333333-3333-3333-3333-333333333333:1-99",
 	}, {
 		Type: binlogdatapb.VEventType_COMMIT,
 	}}, {{
@@ -543,7 +543,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 		},
 	}, {
 		Type: binlogdatapb.VEventType_GTID,
-		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+		Gtid: "MySQL/33333333-3333-3333-3333-333333333333:1-100",
 	}, {
 		Type: binlogdatapb.VEventType_COMMIT,
 	}}, {{
@@ -558,7 +558,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 		},
 	}, {
 		Type: binlogdatapb.VEventType_GTID,
-		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-101",
+		Gtid: "MySQL/33333333-3333-3333-3333-333333333333:1-101",
 	}, {
 		Type: binlogdatapb.VEventType_COMMIT,
 	}}})
@@ -581,7 +581,7 @@ func TestMessageManagerPoller(t *testing.T) {
 	fvs := newFakeVStreamer()
 	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
 		Fields: testDBFields,
-		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+		Gtid:   "MySQL/33333333-3333-3333-3333-333333333333:1-100",
 	}, {
 		Rows: []*querypb.Row{
 			newMMRow(1),
@@ -664,7 +664,7 @@ func TestMessagesPending1(t *testing.T) {
 
 	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
 		Fields: testDBFields,
-		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+		Gtid:   "MySQL/33333333-3333-3333-3333-333333333333:1-100",
 	}, {
 		Rows: []*querypb.Row{newMMRow(1)},
 	}})
@@ -690,7 +690,7 @@ func TestMessagesPending2(t *testing.T) {
 	fvs := newFakeVStreamer()
 	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
 		Fields: testDBFields,
-		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+		Gtid:   "MySQL/33333333-3333-3333-3333-333333333333:1-100",
 	}, {
 		Rows: []*querypb.Row{newMMRow(1)},
 	}})

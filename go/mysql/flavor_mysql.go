@@ -58,7 +58,7 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
 	}
-	return replication.ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
+	return replication.ParseMysqlGTIDSet(qr.Rows[0][0].ToString())
 }
 
 // purgedGTIDSet is part of the Flavor interface.
@@ -71,7 +71,7 @@ func (mysqlFlavor) purgedGTIDSet(c *Conn) (replication.GTIDSet, error) {
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
 	}
-	return replication.ParseMysql56GTIDSet(qr.Rows[0][0].ToString())
+	return replication.ParseMysqlGTIDSet(qr.Rows[0][0].ToString())
 }
 
 // serverUUID is part of the Flavor interface.
@@ -137,9 +137,9 @@ func (mysqlFlavor) startSQLThreadCommand() string {
 
 // sendBinlogDumpCommand is part of the Flavor interface.
 func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos replication.Position) error {
-	gtidSet, ok := startPos.GTIDSet.(replication.Mysql56GTIDSet)
+	gtidSet, ok := startPos.GTIDSet.(replication.MysqlGTIDSet)
 	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected MysqlGTIDSet, got: %#v", startPos.GTIDSet)
 	}
 
 	// Build the command.
@@ -280,7 +280,7 @@ func (mysqlFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	if err != nil {
 		return nil, err
 	}
-	ev := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
+	ev := NewMysqlBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 	return ev, nil
 }
 

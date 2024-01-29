@@ -207,7 +207,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
 				PromoteReplicaResults: map[string]struct {
@@ -625,12 +625,12 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 				}{
 					"zone1-0000000100": { // most advanced position
 						Position: &replicationdatapb.Status{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 					},
 					"zone1-0000000101": {
 						Position: &replicationdatapb.Status{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 					},
 				},
@@ -881,12 +881,12 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 				}{
 					"zone1-0000000100": { // most advanced position
 						Position: &replicationdatapb.Status{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 					},
 					"zone1-0000000101": {
 						Position: &replicationdatapb.Status{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 					},
 				},
@@ -1039,7 +1039,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1113,7 +1113,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1149,7 +1149,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
 				SetReplicationSourceDelays: map[string]time.Duration{
@@ -1190,7 +1190,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1235,7 +1235,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1286,7 +1286,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1342,7 +1342,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1399,7 +1399,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1459,7 +1459,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1521,7 +1521,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
@@ -1951,19 +1951,19 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000101": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000102": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 						Error: nil,
 					},
@@ -2052,7 +2052,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
@@ -2089,7 +2089,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/this-is-nonsense",
+							Position: "MySQL/this-is-nonsense",
 						},
 						Error: nil,
 					},
@@ -2140,19 +2140,19 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000101": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000102": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10000",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10000",
 						},
 						Error: nil,
 					},
@@ -2204,19 +2204,19 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000101": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000102": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
@@ -2340,13 +2340,13 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000100": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
 					"zone1-0000000200": {
 						Status: &replicationdatapb.PrimaryStatus{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
@@ -2518,7 +2518,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					"zone1-0000000100": {
 						Status: &replicationdatapb.PrimaryStatus{
 							// a few more transactions happen after waiting for replication
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 						},
 						Error: nil,
 					},
@@ -2540,7 +2540,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-8",
+						Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-8",
 						Error:    nil,
 					},
 				},
@@ -2562,7 +2562,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000200": {
-						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10": nil,
+						"MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10": nil,
 					},
 				},
 			},
@@ -2718,7 +2718,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				}{
 					"zone1-0000000200": {
 						Position: &replicationdatapb.Status{
-							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
+							Position: "MySQL/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
 						},
 					},
 					"zone1-0000000100": {

@@ -47,11 +47,11 @@ func TestSortSIDList(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(input, want), "got %#v, want %#v", input, want)
 }
 
-func TestParseMysql56GTIDSet(t *testing.T) {
+func TestParseMysqlGTIDSet(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 255}
 
-	table := map[string]Mysql56GTIDSet{
+	table := map[string]MysqlGTIDSet{
 		// Empty
 		"": {},
 		// Simple case
@@ -101,14 +101,14 @@ func TestParseMysql56GTIDSet(t *testing.T) {
 
 	for input, want := range table {
 		t.Run(input, func(t *testing.T) {
-			got, err := ParseMysql56GTIDSet(input)
+			got, err := ParseMysqlGTIDSet(input)
 			require.NoError(t, err)
 			assert.Equal(t, want, got)
 		})
 	}
 }
 
-func TestParseMysql56GTIDSetInvalid(t *testing.T) {
+func TestParseMysqlGTIDSetInvalid(t *testing.T) {
 	table := []string{
 		// No intervals
 		"00010203-0405-0607-0809-0a0b0c0d0e0f",
@@ -122,16 +122,16 @@ func TestParseMysql56GTIDSetInvalid(t *testing.T) {
 	}
 
 	for _, input := range table {
-		_, err := ParseMysql56GTIDSet(input)
-		assert.Error(t, err, "ParseMysql56GTIDSet(%#v) expected error, got none", err)
+		_, err := ParseMysqlGTIDSet(input)
+		assert.Error(t, err, "ParseMysqlGTIDSet(%#v) expected error, got none", err)
 	}
 }
 
-func TestMysql56GTIDSetString(t *testing.T) {
+func TestMysqlGTIDSetString(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 255}
 
-	table := map[string]Mysql56GTIDSet{
+	table := map[string]MysqlGTIDSet{
 		// Simple case
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5": {
 			sid1: []interval{{1, 5}},
@@ -158,19 +158,19 @@ func TestMysql56GTIDSetString(t *testing.T) {
 	}
 }
 
-func TestMysql56GTIDSetFlavor(t *testing.T) {
-	input := Mysql56GTIDSet{}
-	if got, want := input.Flavor(), "MySQL56"; got != want {
+func TestMysqlGTIDSetFlavor(t *testing.T) {
+	input := MysqlGTIDSet{}
+	if got, want := input.Flavor(), "MySQL"; got != want {
 		t.Errorf("%#v.Flavor() = %#v, want %#v", input, got, want)
 	}
 }
 
-func TestMysql56GTIDSetContainsGTID(t *testing.T) {
+func TestMysqlGTIDSetContainsGTID(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
 
-	set := Mysql56GTIDSet{
+	set := MysqlGTIDSet{
 		sid1: []interval{{20, 30}, {35, 40}},
 		sid2: []interval{{1, 5}, {50, 50}},
 	}
@@ -178,19 +178,19 @@ func TestMysql56GTIDSetContainsGTID(t *testing.T) {
 	table := map[GTID]bool{
 		fakeGTID{}: false,
 
-		Mysql56GTID{sid1, 1}:  false,
-		Mysql56GTID{sid1, 19}: false,
-		Mysql56GTID{sid1, 20}: true,
-		Mysql56GTID{sid1, 23}: true,
-		Mysql56GTID{sid1, 30}: true,
-		Mysql56GTID{sid1, 31}: false,
+		MysqlGTID{sid1, 1}:  false,
+		MysqlGTID{sid1, 19}: false,
+		MysqlGTID{sid1, 20}: true,
+		MysqlGTID{sid1, 23}: true,
+		MysqlGTID{sid1, 30}: true,
+		MysqlGTID{sid1, 31}: false,
 
-		Mysql56GTID{sid2, 1}:  true,
-		Mysql56GTID{sid2, 10}: false,
-		Mysql56GTID{sid2, 50}: true,
-		Mysql56GTID{sid2, 51}: false,
+		MysqlGTID{sid2, 1}:  true,
+		MysqlGTID{sid2, 10}: false,
+		MysqlGTID{sid2, 50}: true,
+		MysqlGTID{sid2, 51}: false,
 
-		Mysql56GTID{sid3, 1}: false,
+		MysqlGTID{sid3, 1}: false,
 	}
 
 	for input, want := range table {
@@ -200,19 +200,19 @@ func TestMysql56GTIDSetContainsGTID(t *testing.T) {
 	}
 }
 
-func TestMysql56GTIDSetContains(t *testing.T) {
+func TestMysqlGTIDSetContains(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
 
 	// The set to test against.
-	set := Mysql56GTIDSet{
+	set := MysqlGTIDSet{
 		sid1: []interval{{20, 30}, {35, 40}},
 		sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 	}
 
 	// Test cases that should return Contains() = true.
-	contained := []Mysql56GTIDSet{
+	contained := []MysqlGTIDSet{
 		// The set should contain itself.
 		set,
 		// Every set contains the empty set.
@@ -240,22 +240,22 @@ func TestMysql56GTIDSetContains(t *testing.T) {
 		fakeGTID{},
 
 		// Simple cases
-		Mysql56GTIDSet{sid1: []interval{{1, 5}}},
-		Mysql56GTIDSet{sid1: []interval{{10, 19}}},
+		MysqlGTIDSet{sid1: []interval{{1, 5}}},
+		MysqlGTIDSet{sid1: []interval{{10, 19}}},
 		// Overlapping intervals
-		Mysql56GTIDSet{sid1: []interval{{10, 20}}},
-		Mysql56GTIDSet{sid1: []interval{{10, 25}}},
-		Mysql56GTIDSet{sid1: []interval{{25, 31}}},
-		Mysql56GTIDSet{sid1: []interval{{30, 31}}},
+		MysqlGTIDSet{sid1: []interval{{10, 20}}},
+		MysqlGTIDSet{sid1: []interval{{10, 25}}},
+		MysqlGTIDSet{sid1: []interval{{25, 31}}},
+		MysqlGTIDSet{sid1: []interval{{30, 31}}},
 		// Multiple intervals
-		Mysql56GTIDSet{sid1: []interval{{20, 30}, {34, 34}}},
+		MysqlGTIDSet{sid1: []interval{{20, 30}, {34, 34}}},
 		// Multiple SIDs
-		Mysql56GTIDSet{
+		MysqlGTIDSet{
 			sid1: []interval{{20, 30}, {36, 36}},
 			sid2: []interval{{3, 5}, {55, 60}},
 		},
 		// SID is missing entirely
-		Mysql56GTIDSet{sid3: []interval{{1, 5}}},
+		MysqlGTIDSet{sid3: []interval{{1, 5}}},
 	}
 
 	for _, other := range notContained {
@@ -265,19 +265,19 @@ func TestMysql56GTIDSetContains(t *testing.T) {
 	}
 }
 
-func TestMysql56GTIDSetContains2(t *testing.T) {
-	set1, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-243")
+func TestMysqlGTIDSetContains2(t *testing.T) {
+	set1, err := ParseMysqlGTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-243")
 	require.NoError(t, err)
-	set2, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+	set2, err := ParseMysqlGTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
 	require.NoError(t, err)
-	set3, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-632")
+	set3, err := ParseMysqlGTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-632")
 	require.NoError(t, err)
-	set4, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:20-664")
+	set4, err := ParseMysqlGTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:20-664")
 	require.NoError(t, err)
-	set5, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:20-243")
+	set5, err := ParseMysqlGTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:20-243")
 	require.NoError(t, err)
 
-	compareSet, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+	compareSet, err := ParseMysqlGTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
 	require.NoError(t, err)
 
 	assert.True(t, compareSet.Contains(set1))
@@ -287,19 +287,19 @@ func TestMysql56GTIDSetContains2(t *testing.T) {
 	assert.True(t, compareSet.Contains(set5))
 }
 
-func TestMysql56GTIDSetEqual(t *testing.T) {
+func TestMysqlGTIDSetEqual(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
 
 	// The set to test against.
-	set := Mysql56GTIDSet{
+	set := MysqlGTIDSet{
 		sid1: []interval{{20, 30}, {35, 40}},
 		sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 	}
 
 	// Test cases that should return Equal() = true.
-	equal := []Mysql56GTIDSet{
+	equal := []MysqlGTIDSet{
 		// Same underlying map instance
 		set,
 		// Different instance, same data
@@ -321,35 +321,35 @@ func TestMysql56GTIDSetEqual(t *testing.T) {
 		// Wrong flavor is not equal.
 		fakeGTID{},
 		// Empty set
-		Mysql56GTIDSet{},
+		MysqlGTIDSet{},
 		// Interval changed
-		Mysql56GTIDSet{
+		MysqlGTIDSet{
 			sid1: []interval{{20, 31}, {35, 40}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// Interval added
-		Mysql56GTIDSet{
+		MysqlGTIDSet{
 			sid1: []interval{{20, 30}, {32, 33}, {35, 40}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// Interval removed
-		Mysql56GTIDSet{
+		MysqlGTIDSet{
 			sid1: []interval{{20, 30}, {35, 40}},
 			sid2: []interval{{1, 5}, {60, 70}},
 		},
 		// Different SID, same intervals
-		Mysql56GTIDSet{
+		MysqlGTIDSet{
 			sid1: []interval{{20, 30}, {35, 40}},
 			sid3: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// SID added
-		Mysql56GTIDSet{
+		MysqlGTIDSet{
 			sid1: []interval{{20, 30}, {35, 40}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 			sid3: []interval{{1, 5}},
 		},
 		// SID removed
-		Mysql56GTIDSet{
+		MysqlGTIDSet{
 			sid1: []interval{{20, 30}, {35, 40}},
 		},
 	}
@@ -365,66 +365,66 @@ func TestMysql56GTIDSetEqual(t *testing.T) {
 	}
 }
 
-func TestMysql56GTIDSetAddGTID(t *testing.T) {
+func TestMysqlGTIDSetAddGTID(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
 
 	// The set to test against.
-	set := Mysql56GTIDSet{
+	set := MysqlGTIDSet{
 		sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 		sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 	}
 
-	table := map[GTID]Mysql56GTIDSet{
+	table := map[GTID]MysqlGTIDSet{
 		// Adding wrong flavor is a no-op.
 		fakeGTID{}: set,
 
 		// Adding GTIDs that are already in the set
-		Mysql56GTID{Server: sid1, Sequence: 20}: {
+		MysqlGTID{Server: sid1, Sequence: 20}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
-		Mysql56GTID{Server: sid1, Sequence: 30}: {
+		MysqlGTID{Server: sid1, Sequence: 30}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
-		Mysql56GTID{Server: sid1, Sequence: 25}: {
+		MysqlGTID{Server: sid1, Sequence: 25}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// New interval beginning
-		Mysql56GTID{Server: sid1, Sequence: 1}: {
+		MysqlGTID{Server: sid1, Sequence: 1}: {
 			sid1: []interval{{1, 1}, {20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// New interval middle
-		Mysql56GTID{Server: sid1, Sequence: 32}: {
+		MysqlGTID{Server: sid1, Sequence: 32}: {
 			sid1: []interval{{20, 30}, {32, 32}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// New interval end
-		Mysql56GTID{Server: sid1, Sequence: 50}: {
+		MysqlGTID{Server: sid1, Sequence: 50}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}, {50, 50}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// Extend interval start
-		Mysql56GTID{Server: sid2, Sequence: 49}: {
+		MysqlGTID{Server: sid2, Sequence: 49}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {49, 50}, {60, 70}},
 		},
 		// Extend interval end
-		Mysql56GTID{Server: sid2, Sequence: 51}: {
+		MysqlGTID{Server: sid2, Sequence: 51}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 51}, {60, 70}},
 		},
 		// Merge intervals
-		Mysql56GTID{Server: sid1, Sequence: 41}: {
+		MysqlGTID{Server: sid1, Sequence: 41}: {
 			sid1: []interval{{20, 30}, {35, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 		},
 		// Different SID
-		Mysql56GTID{Server: sid3, Sequence: 1}: {
+		MysqlGTID{Server: sid3, Sequence: 1}: {
 			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 			sid3: []interval{{1, 1}},
@@ -438,17 +438,17 @@ func TestMysql56GTIDSetAddGTID(t *testing.T) {
 	}
 }
 
-func TestMysql56GTIDSetUnion(t *testing.T) {
+func TestMysqlGTIDSetUnion(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
 
-	set1 := Mysql56GTIDSet{
+	set1 := MysqlGTIDSet{
 		sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
 		sid2: []interval{{1, 5}, {20, 50}, {60, 70}},
 	}
 
-	set2 := Mysql56GTIDSet{
+	set2 := MysqlGTIDSet{
 		sid1: []interval{{20, 31}, {35, 37}, {41, 46}},
 		sid2: []interval{{3, 6}, {22, 49}, {67, 72}},
 		sid3: []interval{{1, 45}},
@@ -456,7 +456,7 @@ func TestMysql56GTIDSetUnion(t *testing.T) {
 
 	got := set1.Union(set2)
 
-	want := Mysql56GTIDSet{
+	want := MysqlGTIDSet{
 		sid1: []interval{{20, 31}, {35, 46}},
 		sid2: []interval{{1, 6}, {20, 50}, {60, 72}},
 		sid3: []interval{{1, 45}},
@@ -465,21 +465,21 @@ func TestMysql56GTIDSetUnion(t *testing.T) {
 
 }
 
-func TestMysql56GTIDSetDifference(t *testing.T) {
+func TestMysqlGTIDSetDifference(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
 	sid4 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18}
 	sid5 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 19}
 
-	set1 := Mysql56GTIDSet{
+	set1 := MysqlGTIDSet{
 		sid1: []interval{{20, 30}, {35, 39}, {40, 53}, {55, 75}},
 		sid2: []interval{{1, 7}, {20, 50}, {60, 70}},
 		sid4: []interval{{1, 30}},
 		sid5: []interval{{1, 7}, {20, 30}},
 	}
 
-	set2 := Mysql56GTIDSet{
+	set2 := MysqlGTIDSet{
 		sid1: []interval{{20, 30}, {35, 37}, {50, 60}},
 		sid2: []interval{{3, 5}, {22, 25}, {32, 37}, {67, 70}},
 		sid3: []interval{{1, 45}},
@@ -488,7 +488,7 @@ func TestMysql56GTIDSetDifference(t *testing.T) {
 
 	got := set1.Difference(set2)
 
-	want := Mysql56GTIDSet{
+	want := MysqlGTIDSet{
 		sid1: []interval{{38, 39}, {40, 49}, {61, 75}},
 		sid2: []interval{{1, 2}, {6, 7}, {20, 21}, {26, 31}, {38, 50}, {60, 66}},
 		sid4: []interval{{1, 30}},
@@ -498,23 +498,23 @@ func TestMysql56GTIDSetDifference(t *testing.T) {
 
 	sid10 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid11 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	set10 := Mysql56GTIDSet{
+	set10 := MysqlGTIDSet{
 		sid10: []interval{{1, 30}},
 	}
-	set11 := Mysql56GTIDSet{
+	set11 := MysqlGTIDSet{
 		sid11: []interval{{1, 30}},
 	}
 	got = set10.Difference(set11)
-	want = Mysql56GTIDSet{}
+	want = MysqlGTIDSet{}
 	assert.True(t, got.Equal(want), "got %#v; want %#v", got, want)
 
 }
 
-func TestMysql56GTIDSetSIDBlock(t *testing.T) {
+func TestMysqlGTIDSetSIDBlock(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 
-	input := Mysql56GTIDSet{
+	input := MysqlGTIDSet{
 		sid1: []interval{{20, 30}, {35, 40}},
 		sid2: []interval{{1, 5}},
 	}
@@ -546,17 +546,17 @@ func TestMysql56GTIDSetSIDBlock(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(got, want), "%#v.SIDBlock() = %#v, want %#v", input, got, want)
 
 	// Testing the conversion back.
-	set, err := NewMysql56GTIDSetFromSIDBlock(want)
-	require.NoError(t, err, "Reconstructing Mysql56GTIDSet from SID block failed: %v", err)
-	assert.True(t, reflect.DeepEqual(set, input), "NewMysql56GTIDSetFromSIDBlock(%#v) = %#v, want %#v", want, set, input)
+	set, err := NewMysqlGTIDSetFromSIDBlock(want)
+	require.NoError(t, err, "Reconstructing MysqlGTIDSet from SID block failed: %v", err)
+	assert.True(t, reflect.DeepEqual(set, input), "NewMysqlGTIDSetFromSIDBlock(%#v) = %#v, want %#v", want, set, input)
 
 }
 
-func TestMySQL56GTIDSetLast(t *testing.T) {
+func TestMySQLGTIDSetLast(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 255}
 
-	table := map[string]Mysql56GTIDSet{
+	table := map[string]MysqlGTIDSet{
 		// Simple case
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:5": {
 			sid1: []interval{{1, 5}},
@@ -683,7 +683,7 @@ func TestSubtract(t *testing.T) {
 	}
 }
 
-func BenchmarkMySQL56GTIDParsing(b *testing.B) {
+func BenchmarkMySQLGTIDParsing(b *testing.B) {
 	var Inputs = []string{
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
@@ -700,7 +700,7 @@ func BenchmarkMySQL56GTIDParsing(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		for _, input := range Inputs {
-			_, _ = ParseMysql56GTIDSet(input)
+			_, _ = ParseMysqlGTIDSet(input)
 		}
 	}
 }

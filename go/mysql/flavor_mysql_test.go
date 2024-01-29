@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMysql56SetReplicationSourceCommand(t *testing.T) {
+func TestMysqlSetReplicationSourceCommand(t *testing.T) {
 	params := &ConnParams{
 		Uname: "username",
 		Pass:  "password",
@@ -44,7 +44,7 @@ func TestMysql56SetReplicationSourceCommand(t *testing.T) {
 
 }
 
-func TestMysql56SetReplicationSourceCommandSSL(t *testing.T) {
+func TestMysqlSetReplicationSourceCommandSSL(t *testing.T) {
 	params := &ConnParams{
 		Uname:     "username",
 		Pass:      "password",

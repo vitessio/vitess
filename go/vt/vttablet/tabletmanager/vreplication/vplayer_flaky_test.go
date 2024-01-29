@@ -1827,10 +1827,10 @@ func TestGTIDCompress(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		{"cleartext1", "MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092", false},
-		{"cleartext2", "MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092,320a5e98-6965-11ea-b949-eeafd34ae6e4:1-3,81cbdbf8-6969-11ea-aeb1-a6143b021f67:1-524891956,c9a0f301-6965-11ea-ba9d-02c229065569:1-3,cb698dac-6969-11ea-ac38-16e5d0ac5c3a:1-524441991,e39fca4d-6960-11ea-b4c2-1e895fd49fa0:1-3", false},
-		{"compress1", "MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092", true},
-		{"compress2", "MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092,320a5e98-6965-11ea-b949-eeafd34ae6e4:1-3,81cbdbf8-6969-11ea-aeb1-a6143b021f67:1-524891956,c9a0f301-6965-11ea-ba9d-02c229065569:1-3,cb698dac-6969-11ea-ac38-16e5d0ac5c3a:1-524441991,e39fca4d-6960-11ea-b4c2-1e895fd49fa0:1-3", true},
+		{"cleartext1", "MySQL/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092", false},
+		{"cleartext2", "MySQL/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092,320a5e98-6965-11ea-b949-eeafd34ae6e4:1-3,81cbdbf8-6969-11ea-aeb1-a6143b021f67:1-524891956,c9a0f301-6965-11ea-ba9d-02c229065569:1-3,cb698dac-6969-11ea-ac38-16e5d0ac5c3a:1-524441991,e39fca4d-6960-11ea-b4c2-1e895fd49fa0:1-3", false},
+		{"compress1", "MySQL/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092", true},
+		{"compress2", "MySQL/14b68925-696a-11ea-aee7-fec597a91f5e:1-308092,320a5e98-6965-11ea-b949-eeafd34ae6e4:1-3,81cbdbf8-6969-11ea-aeb1-a6143b021f67:1-524891956,c9a0f301-6965-11ea-ba9d-02c229065569:1-3,cb698dac-6969-11ea-ac38-16e5d0ac5c3a:1-524441991,e39fca4d-6960-11ea-b4c2-1e895fd49fa0:1-3", true},
 		{"nil-compress", "", true},
 		{"nil-clear", "", false},
 	}
@@ -3150,7 +3150,7 @@ func TestPlayerBatchMode(t *testing.T) {
 	// If the trx batch is split, then we only expect the end part.
 	trxLastBatchExpectRE := `%s;update _vt\.vreplication set pos=.*;commit$`
 	// The vreplication position update statement will look like this:
-	// update _vt.vreplication set pos='MySQL56/b213e4de-937a-11ee-b184-668979c675f4:1-38', time_updated=1701786574, transaction_timestamp=1701786574, rows_copied=0, message='' where id=1;
+	// update _vt.vreplication set pos='MySQL/b213e4de-937a-11ee-b184-668979c675f4:1-38', time_updated=1701786574, transaction_timestamp=1701786574, rows_copied=0, message='' where id=1;
 	// So it will use 182 bytes in the batch.
 	// This long value can be used to test the handling of bulk statements
 	// which bump up against the max batch size, as well as testing the trx

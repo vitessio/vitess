@@ -24,31 +24,31 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// mysql56BinlogEvent wraps a raw packet buffer and provides methods to examine
+// mysqlBinlogEvent wraps a raw packet buffer and provides methods to examine
 // it by implementing BinlogEvent. Some methods are pulled in from
 // binlogEvent.
-type mysql56BinlogEvent struct {
+type mysqlBinlogEvent struct {
 	binlogEvent
 	semiSyncAckRequested bool
 }
 
-// NewMysql56BinlogEventWithSemiSyncInfo creates a BinlogEvent from given byte array
-func NewMysql56BinlogEventWithSemiSyncInfo(buf []byte, semiSyncAckRequested bool) BinlogEvent {
-	return mysql56BinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: semiSyncAckRequested}
+// NewMysqlBinlogEventWithSemiSyncInfo creates a BinlogEvent from given byte array
+func NewMysqlBinlogEventWithSemiSyncInfo(buf []byte, semiSyncAckRequested bool) BinlogEvent {
+	return mysqlBinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: semiSyncAckRequested}
 }
 
-// NewMysql56BinlogEvent creates a BinlogEvent from given byte array
-func NewMysql56BinlogEvent(buf []byte) BinlogEvent {
-	return mysql56BinlogEvent{binlogEvent: binlogEvent(buf)}
+// NewMysqlBinlogEvent creates a BinlogEvent from given byte array
+func NewMysqlBinlogEvent(buf []byte) BinlogEvent {
+	return mysqlBinlogEvent{binlogEvent: binlogEvent(buf)}
 }
 
 // IsSemiSyncAckRequested implements BinlogEvent.IsSemiSyncAckRequested().
-func (ev mysql56BinlogEvent) IsSemiSyncAckRequested() bool {
+func (ev mysqlBinlogEvent) IsSemiSyncAckRequested() bool {
 	return ev.semiSyncAckRequested
 }
 
 // IsGTID implements BinlogEvent.IsGTID().
-func (ev mysql56BinlogEvent) IsGTID() bool {
+func (ev mysqlBinlogEvent) IsGTID() bool {
 	return ev.Type() == eGTIDEvent
 }
 
@@ -60,18 +60,18 @@ func (ev mysql56BinlogEvent) IsGTID() bool {
 //	1         flags
 //	16        SID (server UUID)
 //	8         GNO (sequence number, signed int)
-func (ev mysql56BinlogEvent) GTID(f BinlogFormat) (replication.GTID, bool, error) {
+func (ev mysqlBinlogEvent) GTID(f BinlogFormat) (replication.GTID, bool, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 	var sid replication.SID
 	copy(sid[:], data[1:1+16])
 	gno := int64(binary.LittleEndian.Uint64(data[1+16 : 1+16+8]))
-	return replication.Mysql56GTID{Server: sid, Sequence: gno}, false /* hasBegin */, nil
+	return replication.MysqlGTID{Server: sid, Sequence: gno}, false /* hasBegin */, nil
 }
 
 // PreviousGTIDs implements BinlogEvent.PreviousGTIDs().
-func (ev mysql56BinlogEvent) PreviousGTIDs(f BinlogFormat) (replication.Position, error) {
+func (ev mysqlBinlogEvent) PreviousGTIDs(f BinlogFormat) (replication.Position, error) {
 	data := ev.Bytes()[f.HeaderLength:]
-	set, err := replication.NewMysql56GTIDSetFromSIDBlock(data)
+	set, err := replication.NewMysqlGTIDSetFromSIDBlock(data)
 	if err != nil {
 		return replication.Position{}, err
 	}
@@ -81,7 +81,7 @@ func (ev mysql56BinlogEvent) PreviousGTIDs(f BinlogFormat) (replication.Position
 }
 
 // StripChecksum implements BinlogEvent.StripChecksum().
-func (ev mysql56BinlogEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, error) {
+func (ev mysqlBinlogEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, error) {
 	switch f.ChecksumAlgorithm {
 	case BinlogChecksumAlgOff, BinlogChecksumAlgUndef:
 		// There is no checksum.
@@ -92,7 +92,7 @@ func (ev mysql56BinlogEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte,
 		length := len(data)
 		checksum := data[length-BinlogCRC32ChecksumLen:]
 		data = data[:length-BinlogCRC32ChecksumLen]
-		return mysql56BinlogEvent{binlogEvent: binlogEvent(data)}, checksum, nil
+		return mysqlBinlogEvent{binlogEvent: binlogEvent(data)}, checksum, nil
 	default:
 		// MySQL 5.6 does not guarantee that future checksum algorithms will be
 		// 4 bytes, so we can't support them a priori.

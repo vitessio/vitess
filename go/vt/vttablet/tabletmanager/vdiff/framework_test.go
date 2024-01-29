@@ -60,7 +60,7 @@ const (
 	vdiffDBName = "vttest"
 
 	// vdiffSourceGtid should be the position reported by the source side VStreamResults.
-	vdiffSourceGtid            = "MySQL56/f69ed286-6909-11ed-8342-0a50724f3211:1-110"
+	vdiffSourceGtid            = "MySQL/f69ed286-6909-11ed-8342-0a50724f3211:1-110"
 	vdiffTargetPrimaryPosition = vdiffSourceGtid
 )
 
@@ -577,7 +577,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 	// But this is one statement per stream.
 	vdiffenv.tmc.setVRResults(
 		primary.tablet,
-		"/update _vt.vreplication set state='Running', stop_pos='MySQL56/.*', message='synchronizing for vdiff' where id=1",
+		"/update _vt.vreplication set state='Running', stop_pos='MySQL/.*', message='synchronizing for vdiff' where id=1",
 		noResults,
 	)
 

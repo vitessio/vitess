@@ -140,7 +140,7 @@ func TestFresher(t *testing.T) {
 		ev2: &querypb.EventToken{
 			Timestamp: 100,
 			Shard:     "s1",
-			Position:  "MySQL56/33333333-3333-3333-3333-333333333333:456-789",
+			Position:  "MySQL/33333333-3333-3333-3333-333333333333:456-789",
 		},
 		expected: -1,
 	}, {
@@ -181,40 +181,40 @@ func TestFresher(t *testing.T) {
 		},
 		expected: 0,
 	}, {
-		// MySQL56 test cases.
+		// MySQL test cases.
 		ev1: &querypb.EventToken{
 			Timestamp: 100,
 			Shard:     "s1",
-			Position:  "MySQL56/33333333-3333-3333-3333-333333333333:1-200",
+			Position:  "MySQL/33333333-3333-3333-3333-333333333333:1-200",
 		},
 		ev2: &querypb.EventToken{
 			Timestamp: 100,
 			Shard:     "s1",
-			Position:  "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+			Position:  "MySQL/33333333-3333-3333-3333-333333333333:1-100",
 		},
 		expected: 1,
 	}, {
 		ev1: &querypb.EventToken{
 			Timestamp: 100,
 			Shard:     "s1",
-			Position:  "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+			Position:  "MySQL/33333333-3333-3333-3333-333333333333:1-100",
 		},
 		ev2: &querypb.EventToken{
 			Timestamp: 100,
 			Shard:     "s1",
-			Position:  "MySQL56/33333333-3333-3333-3333-333333333333:1-200",
+			Position:  "MySQL/33333333-3333-3333-3333-333333333333:1-200",
 		},
 		expected: -1,
 	}, {
 		ev1: &querypb.EventToken{
 			Timestamp: 100,
 			Shard:     "s1",
-			Position:  "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+			Position:  "MySQL/33333333-3333-3333-3333-333333333333:1-100",
 		},
 		ev2: &querypb.EventToken{
 			Timestamp: 100,
 			Shard:     "s1",
-			Position:  "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+			Position:  "MySQL/33333333-3333-3333-3333-333333333333:1-100",
 		},
 		expected: 0,
 	}}

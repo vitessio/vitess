@@ -80,7 +80,7 @@ func sendTestEvents(channel chan<- mysql.BinlogEvent, events []mysql.BinlogEvent
 }
 
 func TestStreamerParseEventsXID(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 	s.ServerID = 62344
 
@@ -142,7 +142,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 }
 
 func TestStreamerParseEventsCommit(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 	s.ServerID = 62344
 
@@ -242,7 +242,7 @@ func TestStreamerStop(t *testing.T) {
 }
 
 func TestStreamerParseEventsClientEOF(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 
 	input := []mysql.BinlogEvent{
@@ -342,7 +342,7 @@ func TestStreamerParseEventsGTIDPurged(t *testing.T) {
 }
 
 func TestStreamerParseEventsSendErrorXID(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 
 	input := []mysql.BinlogEvent{
@@ -386,7 +386,7 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 }
 
 func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 
 	input := []mysql.BinlogEvent{
@@ -431,7 +431,7 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalid(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 
 	input := []mysql.BinlogEvent{
@@ -472,7 +472,7 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalidFormat(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 
 	input := []mysql.BinlogEvent{
@@ -515,7 +515,7 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 }
 
 func TestStreamerParseEventsNoFormat(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 
 	input := []mysql.BinlogEvent{
@@ -558,7 +558,7 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalidQuery(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 
 	input := []mysql.BinlogEvent{
@@ -599,7 +599,7 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 }
 
 func TestStreamerParseEventsRollback(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 	s.ServerID = 62344
 
@@ -686,7 +686,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 }
 
 func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 	s.ServerID = 62344
 
@@ -759,7 +759,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 }
 
 func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 	s.ServerID = 62344
 
@@ -835,7 +835,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 }
 
 func TestStreamerParseEventsSetInsertID(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 	s.ServerID = 62344
 
@@ -897,7 +897,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 
 	input := []mysql.BinlogEvent{
@@ -940,7 +940,7 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 }
 
 func TestStreamerParseEventsOtherDB(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 	s.ServerID = 62344
 
@@ -1003,7 +1003,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 }
 
 func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 	s.ServerID = 62344
 
@@ -1066,7 +1066,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 }
 
 func TestStreamerParseEventsBeginAgain(t *testing.T) {
-	f := mysql.NewMySQL56BinlogFormat()
+	f := mysql.NewMySQLBinlogFormat()
 	s := mysql.NewFakeBinlogStream()
 
 	input := []mysql.BinlogEvent{

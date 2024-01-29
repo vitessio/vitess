@@ -64,7 +64,7 @@ func FindValidEmergencyReparentCandidates(
 	)
 
 	for alias, status := range replicationStatusMap {
-		if _, ok := status.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet); ok {
+		if _, ok := status.RelayLogPosition.GTIDSet.(replication.MysqlGTIDSet); ok {
 			isGTIDBased = true
 		} else {
 			isNonGTIDBased = true
@@ -99,9 +99,9 @@ func FindValidEmergencyReparentCandidates(
 
 		// This condition should really never happen, since we did the same cast
 		// in the earlier loop, but let's be doubly sure.
-		relayLogGTIDSet, ok := status.RelayLogPosition.GTIDSet.(replication.Mysql56GTIDSet)
+		relayLogGTIDSet, ok := status.RelayLogPosition.GTIDSet.(replication.MysqlGTIDSet)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "we got a filled-in relay log position, but it's not of type Mysql56GTIDSet, even though we've determined we need to use GTID based assesment")
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "we got a filled-in relay log position, but it's not of type MysqlGTIDSet, even though we've determined we need to use GTID based assesment")
 		}
 
 		// We need to remove this alias's status from the list, otherwise the

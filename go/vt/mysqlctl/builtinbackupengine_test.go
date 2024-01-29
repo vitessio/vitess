@@ -32,7 +32,7 @@ func TestGetIncrementalFromPosGTIDSet(t *testing.T) {
 		expctError         bool
 	}{
 		{
-			"MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615",
+			"MySQL/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615",
 			"16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615",
 			false,
 		},
@@ -42,12 +42,12 @@ func TestGetIncrementalFromPosGTIDSet(t *testing.T) {
 			false,
 		},
 		{
-			"MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3",
+			"MySQL/16b1039f-22b6-11ed-b765-0a43f95f28a3",
 			"",
 			true,
 		},
 		{
-			"MySQL56/invalid",
+			"MySQL/invalid",
 			"",
 			true,
 		},
@@ -76,5 +76,5 @@ func TestShouldDrainForBackupBuiltIn(t *testing.T) {
 	assert.True(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "auto"}))
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "99ca8ed4-399c-11ee-861b-0a43f95f28a3:1-197"}))
-	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "MySQL56/99ca8ed4-399c-11ee-861b-0a43f95f28a3:1-197"}))
+	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{IncrementalFromPos: "MySQL/99ca8ed4-399c-11ee-861b-0a43f95f28a3:1-197"}))
 }
