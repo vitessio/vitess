@@ -310,9 +310,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 
 // GetServingShards returns all shards where the primary is serving.
 func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*ShardInfo, error) {
-	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, &FindAllShardsInKeyspaceOptions{
-		Concurrency: DefaultConcurrency, // Limit concurrency to avoid overwhelming the topo server.
-	})
+	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
 	}
