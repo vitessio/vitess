@@ -14,6 +14,7 @@ limitations under the License.
 package sqlescape
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -214,6 +215,7 @@ func BenchmarkEscapeID(b *testing.B) {
 	testcases := []string{
 		"aa", "a`a", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}
+
 	for _, tc := range testcases {
 		name := tc
 		if len(name) > 10 {
@@ -223,6 +225,33 @@ func BenchmarkEscapeID(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				scratch = EscapeID(tc)
 			}
+		})
+	}
+}
+
+func TestEscapeIDs(t *testing.T) {
+	testCases := []struct {
+		input    []string
+		expected []string
+	}{
+		{
+			input:    []string{"abc", "def", "ghi"},
+			expected: []string{"`abc`", "`def`", "`ghi`"},
+		},
+		{
+			input:    []string{"abc", "a`a", "`ghi`"},
+			expected: []string{"`abc`", "`a``a`", "```ghi```"},
+		},
+		{
+			input:    []string{},
+			expected: []string{},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(fmt.Sprintf("%v", tt.input), func(t *testing.T) {
+			out := EscapeIDs(tt.input)
+			assert.Equal(t, tt.expected, out)
 		})
 	}
 }
