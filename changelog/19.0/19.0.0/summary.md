@@ -7,6 +7,7 @@
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [VTTablet Flags](#vttablet-flags)
     - [Docker Image vitess/lite](#deprecation-vitess-lite-mysqld)
+    - [Explain Statement Format](#explain-stmt-format)
   - **[Breaking Changes](#breaking-changes)**
      - [ExecuteFetchAsDBA rejects multi-statement SQL](#execute-fetch-as-dba-reject-multi)
   - **[New Stats](#new-stats)**
@@ -18,6 +19,7 @@
     - [Multi Table Delete Support](#multi-table-delete)
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
+    - [Explain Statement](#explain-statement)
     - [Partial Multi-shard Commit Warnings](#partial-multi-shard-commit-warnings)
   - **[Vttestserver](#vttestserver)**
     - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
@@ -81,6 +83,11 @@ Below is an example of a kubernetes yaml file before and after upgrading to an o
     mysqld:
       mysql80Compatible: mysql:8.0.30 # or even mysql:8.0.34 for instance
 ```
+
+#### <a id="explain-stmt-format"/>Explain Statement Format
+
+Explain statement format `vitess` and `vexplain` were deprecated in v16 and removed in v19 version.
+Use [VExplain Statement](https://vitess.io/docs/19.0/user-guides/sql/vexplain/) for understanding Vitess plans.
 
 ### <a id="breaking-changes"/>Breaking Changes
 
@@ -148,6 +155,10 @@ mysql> show vschema keyspaces;
 #### <a id="fk-checks-vitess-aware"/>`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable
 
 When VTGate receives a query to change the `FOREIGN_KEY_CHECKS` value for a session, instead of sending the value down to MySQL, VTGate now keeps track of the value and changes the queries by adding `SET_VAR(FOREIGN_KEY_CHECKS=On/Off)` style query optimizer hints wherever required. 
+
+#### <a id="explain-statement"/>Explain Statement
+
+`Explain` statement can handle routed table queries now. `Explain` is unsupported when the tables involved in the query refers more than one keyspace. Users should use [VExplain Statement](https://vitess.io/docs/19.0/user-guides/sql/vexplain/) in those cases.
 
 #### <a id="partial-multi-shard-commit-warnings"/>Partial Multi-shard Commit Warnings
 

@@ -244,6 +244,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	bm := &xtraBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
+			BackupName:     bh.Name(),
 			BackupMethod:   xtrabackupEngineName,
 			Position:       replicationPosition,
 			PurgedPosition: replicationPosition,

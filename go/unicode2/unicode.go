@@ -117,7 +117,7 @@ func sortIter(t []tableIndex) {
 	}
 }
 
-// next16 finds the ranged to be added to the table. If ranges overlap between
+// next16 finds the range to be added to the table. If ranges overlap between
 // multiple tables it clips the result to a non-overlapping range if the
 // elements are not fully subsumed. It returns a zero range if there are no more
 // ranges.

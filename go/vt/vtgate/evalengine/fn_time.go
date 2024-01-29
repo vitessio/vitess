@@ -107,6 +107,14 @@ type (
 		collate collations.ID
 	}
 
+	builtinLastDay struct {
+		CallExpr
+	}
+
+	builtinFromDays struct {
+		CallExpr
+	}
+
 	builtinQuarter struct {
 		CallExpr
 	}
@@ -168,6 +176,8 @@ var _ IR = (*builtinMicrosecond)(nil)
 var _ IR = (*builtinMinute)(nil)
 var _ IR = (*builtinMonth)(nil)
 var _ IR = (*builtinMonthName)(nil)
+var _ IR = (*builtinLastDay)(nil)
+var _ IR = (*builtinFromDays)(nil)
 var _ IR = (*builtinQuarter)(nil)
 var _ IR = (*builtinSecond)(nil)
 var _ IR = (*builtinTime)(nil)
@@ -488,7 +498,7 @@ func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
-	return newEvalInt64(int64(d.dt.Date.ToStdTime(time.Local).Weekday() + 1)), nil
+	return newEvalInt64(int64(d.dt.Date.ToStdTime(env.currentTimezone()).Weekday() + 1)), nil
 }
 
 func (call *builtinDayOfWeek) compile(c *compiler) (ctype, error) {
@@ -521,7 +531,7 @@ func (b *builtinDayOfYear) eval(env *ExpressionEnv) (eval, error) {
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
-	return newEvalInt64(int64(d.dt.Date.ToStdTime(time.Local).YearDay())), nil
+	return newEvalInt64(int64(d.dt.Date.ToStdTime(env.currentTimezone()).YearDay())), nil
 }
 
 func (call *builtinDayOfYear) compile(c *compiler) (ctype, error) {
@@ -751,7 +761,7 @@ func (call *builtinHour) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
-func yearDayToTime(y, yd int64) time.Time {
+func yearDayToTime(loc *time.Location, y, yd int64) time.Time {
 	if y >= 0 && y < 100 {
 		if y < 70 {
 			y += 2000
@@ -763,7 +773,7 @@ func yearDayToTime(y, yd int64) time.Time {
 	if y < 0 || y > 9999 || yd < 1 || yd > math.MaxInt32 {
 		return time.Time{}
 	}
-	t := time.Date(int(y), time.January, 1, 0, 0, 0, 0, time.Local).AddDate(0, 0, int(yd-1))
+	t := time.Date(int(y), time.January, 1, 0, 0, 0, 0, loc).AddDate(0, 0, int(yd-1))
 	if t.Year() > 9999 {
 		return time.Time{}
 	}
@@ -791,7 +801,7 @@ func (b *builtinMakedate) eval(env *ExpressionEnv) (eval, error) {
 	y := evalToInt64(year).i
 	yd := evalToInt64(yearDay).i
 
-	t := yearDayToTime(y, yd)
+	t := yearDayToTime(env.currentTimezone(), y, yd)
 	if t.IsZero() {
 		return nil, nil
 	}
@@ -1198,6 +1208,86 @@ func (call *builtinMonthName) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_MONTHNAME(col)
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
+}
+
+func lastDay(loc *time.Location, dt datetime.DateTime) datetime.Date {
+	ts := dt.Date.ToStdTime(loc)
+	firstDayOfMonth := time.Date(ts.Year(), ts.Month(), 1, 0, 0, 0, 0, loc)
+	lastDayOfMonth := firstDayOfMonth.AddDate(0, 1, -1)
+
+	date := datetime.NewDateFromStd(lastDayOfMonth)
+	return date
+}
+
+func (b *builtinLastDay) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	dt := evalToDateTime(date, -1, env.now, env.sqlmode.AllowZeroDate())
+	if dt == nil || dt.isZero() {
+		return nil, nil
+	}
+
+	d := lastDay(env.currentTimezone(), dt.dt)
+	return newEvalDate(d, env.sqlmode.AllowZeroDate()), nil
+}
+
+func (call *builtinLastDay) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1, c.sqlmode.AllowZeroDate())
+	}
+	c.asm.Fn_LAST_DAY()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (b *builtinFromDays) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := b.arg1(env)
+	if arg == nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	d := datetime.DateFromDayNumber(int(evalToInt64(arg).i))
+
+	// mysql returns NULL if year is greater than 9999
+	if d.Year() > 9999 {
+		return nil, nil
+	}
+	return newEvalDate(d, true), nil
+}
+
+func (call *builtinFromDays) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+	switch arg.Type {
+	case sqltypes.Int64:
+	default:
+		c.asm.Convert_xi(1)
+	}
+
+	c.asm.Fn_FROM_DAYS()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {
