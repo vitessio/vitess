@@ -17,26 +17,11 @@ limitations under the License.
 package zkfs
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/z-division/go-zookeeper/zk"
 )
-
-func TestFS_CopyContext(t *testing.T) {
-	// fs := &FS{}
-
-	// Create a temporary directories for testing
-	srcPath, err := os.MkdirTemp("", "source")
-	assert.NoError(t, err)
-	defer os.RemoveAll(srcPath)
-
-	dstPath, err := os.MkdirTemp("", "destination")
-	assert.NoError(t, err)
-	defer os.RemoveAll(dstPath)
-
-}
 
 func TestIsFile(t *testing.T) {
 	assert.True(t, IsFile("/zk/somepath"))
@@ -50,6 +35,8 @@ func TestParsePermMode(t *testing.T) {
 	assert.Equal(t, int32(zk.PermRead|zk.PermWrite|zk.PermAdmin), ParsePermMode("zkrwa"))
 	assert.PanicsWithValue(t, "invalid mode", func() {
 		ParsePermMode("")
+	})
+	assert.PanicsWithValue(t, "invalid mode", func() {
 		ParsePermMode("z")
 	})
 }
@@ -88,8 +75,6 @@ func TestFormatACL(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, FormatACL(tc.acl))
-		})
+		assert.Equal(t, tc.expected, FormatACL(tc.acl), tc.name)
 	}
 }
