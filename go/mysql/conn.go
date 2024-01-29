@@ -1525,15 +1525,13 @@ type PacketOK struct {
 	sessionStateData string
 }
 
-func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
+func (c *Conn) parseOKPacket(packetOK *PacketOK, in []byte) error {
 	data := &coder{
 		data: in,
 		pos:  1, // We already read the type.
 	}
-	packetOK := &PacketOK{}
-
-	fail := func(format string, args ...any) (*PacketOK, error) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, format, args...)
+	fail := func(format string, args ...any) error {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, format, args...)
 	}
 
 	// Affected rows.
@@ -1578,7 +1576,7 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 			if !ok || length == 0 {
 				// In case we have no more data or a zero length string, there's no additional information so
 				// we can return the packet.
-				return packetOK, nil
+				return nil
 			}
 
 			// Alright, now we need to read each sub packet from the session state change.
@@ -1615,7 +1613,7 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 		}
 	}
 
-	return packetOK, nil
+	return nil
 }
 
 // isErrorPacket determines whether or not the packet is an error packet. Mostly here for
