@@ -41,10 +41,10 @@ import (
 // This file contains keyspace utility functions.
 
 // Default concurrency to use in order to avoid overhwelming the topo server.
-var DefaultConcurrency int64
+var DefaultConcurrency int
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.Int64Var(&DefaultConcurrency, "topo_read_concurrency", 32, "Concurrency of topo reads.")
+	fs.IntVar(&DefaultConcurrency, "topo_read_concurrency", 32, "Concurrency of topo reads.")
 }
 
 func init() {
@@ -191,7 +191,7 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 type FindAllShardsInKeyspaceOptions struct {
 	// Concurrency controls the maximum number of concurrent calls to GetShard.
 	// If <= 0, Concurrency is set to 1.
-	Concurrency int64
+	Concurrency int
 }
 
 // FindAllShardsInKeyspace reads and returns all the existing shards in a
