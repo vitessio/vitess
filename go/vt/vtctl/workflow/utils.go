@@ -326,9 +326,7 @@ func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error)
 //
 // It returns ErrNoStreams if there are no targets found for the workflow.
 func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
-	targetShards, err := ts.FindAllShardsInKeyspace(ctx, targetKeyspace, &topo.FindAllShardsInKeyspaceOptions{
-		Concurrency: topo.DefaultConcurrency,
-	})
+	targetShards, err := ts.FindAllShardsInKeyspace(ctx, targetKeyspace, nil)
 	if err != nil {
 		return nil, err
 	}

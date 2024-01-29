@@ -107,9 +107,7 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 		return nil
 	}
 	exec.keyspace = keyspace
-	shards, err := exec.ts.FindAllShardsInKeyspace(ctx, keyspace, &topo.FindAllShardsInKeyspaceOptions{
-		Concurrency: topo.DefaultConcurrency, // Limit concurrency to avoid overwhelming the topo server.
-	})
+	shards, err := exec.ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil {
 		return fmt.Errorf("unable to get shards for keyspace: %s, error: %v", keyspace, err)
 	}

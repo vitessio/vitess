@@ -83,9 +83,7 @@ func checkShard(t *testing.T, ctx context.Context, ts *topo.Server) {
 
 	// Test FindAllShardsInKeyspace.
 	require.NoError(t, err)
-	_, err = ts.FindAllShardsInKeyspace(ctx, "test_keyspace", &topo.FindAllShardsInKeyspaceOptions{
-		Concurrency: topo.DefaultConcurrency,
-	})
+	_, err = ts.FindAllShardsInKeyspace(ctx, "test_keyspace", nil)
 	require.NoError(t, err)
 
 	// Test GetServingShards.

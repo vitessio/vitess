@@ -205,7 +205,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 		opt = &FindAllShardsInKeyspaceOptions{}
 	}
 	if opt.Concurrency <= 0 {
-		opt.Concurrency = 1
+		opt.Concurrency = DefaultConcurrency
 	}
 
 	// First try to get all shards using List if we can.
