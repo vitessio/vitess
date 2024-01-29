@@ -41,10 +41,10 @@ import (
 // This file contains keyspace utility functions.
 
 // Default concurrency to use in order to avoid overhwelming the topo server.
-var DefaultConcurrency int
+var DefaultConcurrency = 32
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.IntVar(&DefaultConcurrency, "topo_read_concurrency", 32, "Concurrency of topo reads.")
+	fs.IntVar(&DefaultConcurrency, "topo_read_concurrency", DefaultConcurrency, "Concurrency of topo reads.")
 }
 
 func init() {
