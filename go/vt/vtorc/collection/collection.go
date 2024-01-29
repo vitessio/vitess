@@ -61,7 +61,6 @@ package collection
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -147,8 +146,6 @@ func (c *Collection) StopAutoExpiration() {
 		return
 	}
 	c.monitoring = false
-	fmt.Print(c.monitoring)
-
 	c.Unlock()
 
 	// no locking here deliberately
