@@ -87,9 +87,6 @@ var (
 	// refreshKnownTablets tells us whether to process all tablets or only new tablets.
 	refreshKnownTablets = true
 
-	// topoReadConcurrency tells us how many topo reads are allowed in parallel.
-	topoReadConcurrency int64 = 32
-
 	// How much to sleep between each check.
 	waitAvailableTabletInterval = 100 * time.Millisecond
 
@@ -107,8 +104,6 @@ const (
 	DefaultHealthCheckRetryDelay = 5 * time.Second
 	DefaultHealthCheckTimeout    = 1 * time.Minute
 
-	// DefaultTopoReadConcurrency is used as the default value for the topoReadConcurrency parameter of a TopologyWatcher.
-	DefaultTopoReadConcurrency int = 5
 	// DefaultTopologyWatcherRefreshInterval is used as the default value for
 	// the refresh interval of a topology watcher.
 	DefaultTopologyWatcherRefreshInterval = 1 * time.Minute
@@ -176,7 +171,6 @@ func registerWebUIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&TabletURLTemplateString, "tablet_url_template", "http://{{.GetTabletHostPort}}", "Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this.")
 	fs.DurationVar(&refreshInterval, "tablet_refresh_interval", 1*time.Minute, "Tablet refresh interval.")
 	fs.BoolVar(&refreshKnownTablets, "tablet_refresh_known_tablets", true, "Whether to reload the tablet's address/port map from topo in case they change.")
-	fs.Int64Var(&topoReadConcurrency, "topo_read_concurrency", 32, "Concurrency of topo reads.")
 	ParseTabletURLTemplateFromFlag()
 }
 
@@ -362,7 +356,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		} else if len(KeyspacesToWatch) > 0 {
 			filter = NewFilterByKeyspace(KeyspacesToWatch)
 		}
-		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, topoReadConcurrency))
+		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, topo.DefaultConcurrency))
 	}
 
 	hc.topoWatchers = topoWatchers

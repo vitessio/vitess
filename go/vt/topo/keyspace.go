@@ -19,14 +19,15 @@ package topo
 import (
 	"context"
 	"path"
-	"runtime"
 	"sort"
 	"sync"
 
+	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -37,13 +38,20 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// This file contains keyspace utility functions
+// This file contains keyspace utility functions.
 
 // Default concurrency to use in order to avoid overhwelming the topo server.
-// This uses a heuristic based on the number of vCPUs available -- where it's
-// assumed that as larger machines are used for Vitess deployments they will
-// be able to do more concurrently.
-var DefaultConcurrency = runtime.NumCPU()
+var DefaultConcurrency int64
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.Int64Var(&DefaultConcurrency, "topo_read_concurrency", 32, "Concurrency of topo reads.")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerFlags)
+	servenv.OnParseFor("vtctld", registerFlags)
+	servenv.OnParseFor("vtgate", registerFlags)
+}
 
 // KeyspaceInfo is a meta struct that contains metadata to give the
 // data more context and convenience. This is the main way we interact
@@ -183,7 +191,7 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 type FindAllShardsInKeyspaceOptions struct {
 	// Concurrency controls the maximum number of concurrent calls to GetShard.
 	// If <= 0, Concurrency is set to 1.
-	Concurrency int
+	Concurrency int64
 }
 
 // FindAllShardsInKeyspace reads and returns all the existing shards in a
@@ -230,12 +238,11 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	}
 	if IsErrType(err, NoNode) {
 		// The path doesn't exist, let's see if the keyspace exists.
-		_, kerr := ts.GetKeyspace(ctx, keyspace)
-		if kerr == nil {
-			// We simply have no shards.
-			return make(map[string]*ShardInfo, 0), nil
+		if _, kerr := ts.GetKeyspace(ctx, keyspace); kerr != nil {
+			return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): List", keyspace)
 		}
-		return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): List", keyspace)
+		// We simply have no shards.
+		return make(map[string]*ShardInfo, 0), nil
 	}
 	// Currently the ZooKeeper implementation does not support scans so we
 	// fall back to concurrently fetching the shards one by one.
@@ -268,7 +275,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	)
 
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(opt.Concurrency)
+	eg.SetLimit(int(opt.Concurrency))
 
 	for _, shard := range shards {
 		shard := shard
