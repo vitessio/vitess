@@ -114,10 +114,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if len(qp.OrderExprs) > 0 {
-		op = &Ordering{
-			Source: op,
-			Order:  qp.OrderExprs,
-		}
+		op = expandOrderBy(ctx, op, qp)
 		extracted = append(extracted, "Ordering")
 	}
 
@@ -132,11 +129,50 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	return op, rewrite.NewTree(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")), op), nil
 }
 
+<<<<<<< HEAD
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) (out ops.Operator, err error) {
 	qp, err := horizon.getQP(ctx)
 	if err != nil {
 		return nil, err
 	}
+=======
+func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection) Operator {
+	proj := newAliasedProjection(op)
+	var newOrder []OrderBy
+	sqc := &SubQueryBuilder{}
+	for _, expr := range qp.OrderExprs {
+		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr.SimplifiedExpr, TableID(op), false)
+		if newExpr == nil {
+			// no subqueries found, let's move on
+			newOrder = append(newOrder, expr)
+			continue
+		}
+		proj.addSubqueryExpr(aeWrap(newExpr), newExpr, subqs...)
+		newOrder = append(newOrder, OrderBy{
+			Inner: &sqlparser.Order{
+				Expr:      newExpr,
+				Direction: expr.Inner.Direction,
+			},
+			SimplifiedExpr: newExpr,
+		})
+
+	}
+
+	if len(proj.Columns.GetColumns()) > 0 {
+		// if we had to project columns for the ordering,
+		// we need the projection as source
+		op = proj
+	}
+
+	return &Ordering{
+		Source: op,
+		Order:  newOrder,
+	}
+}
+
+func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) Operator {
+	qp := horizon.getQP(ctx)
+>>>>>>> fd99639e40 (Fix subquery cloning and dependencies (#15039))
 
 	var dt *DerivedTable
 	if horizon.TableId != nil {
@@ -271,7 +307,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	sqc := &SubQueryBuilder{}
 	outerID := TableID(src)
 	for _, ae := range aes {
-		org := sqlparser.CloneRefOfAliasedExpr(ae)
+		org := ctx.SemTable.Clone(ae).(*sqlparser.AliasedExpr)
 		expr := ae.Expr
 		newExpr, subqs, err := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
 		if err != nil {

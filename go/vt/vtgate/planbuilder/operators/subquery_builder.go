@@ -183,10 +183,15 @@ func createSubquery(
 	totalID := subqID.Merge(outerID)
 	sqc := &SubQueryBuilder{totalID: totalID, subqID: subqID, outerID: outerID}
 
+<<<<<<< HEAD
 	predicates, joinCols, err := sqc.inspectStatement(ctx, subq.Select)
 	if err != nil {
 		return nil, err
 	}
+=======
+	predicates, joinCols := sqc.inspectStatement(ctx, subq.Select)
+	correlated := !ctx.SemTable.RecursiveDeps(subq).IsEmpty()
+>>>>>>> fd99639e40 (Fix subquery cloning and dependencies (#15039))
 
 	stmt := rewriteRemainingColumns(ctx, subq.Select, subqID)
 

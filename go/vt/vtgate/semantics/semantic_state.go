@@ -592,3 +592,13 @@ func (st *SemTable) ASTEquals() *sqlparser.Comparator {
 	}
 	return st.comparator
 }
+
+func (st *SemTable) Clone(n sqlparser.SQLNode) sqlparser.SQLNode {
+	return sqlparser.CopyOnRewrite(n, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		expr, isExpr := cursor.Node().(sqlparser.Expr)
+		if !isExpr {
+			return
+		}
+		cursor.Replace(sqlparser.CloneExpr(expr))
+	}, st.CopySemanticInfo)
+}

@@ -206,7 +206,14 @@ func (sq *SubQuery) GetMergePredicates() []sqlparser.Expr {
 
 func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer ops.Operator) (ops.Operator, error) {
 	if !sq.TopLevel {
+<<<<<<< HEAD
 		return nil, subqueryNotAtTopErr
+=======
+		panic(subqueryNotAtTopErr)
+	}
+	if sq.correlated && sq.FilterType != opcode.PulloutExists {
+		panic(correlatedSubqueryErr)
+>>>>>>> fd99639e40 (Fix subquery cloning and dependencies (#15039))
 	}
 	if sq.IsProjection {
 		if len(sq.GetMergePredicates()) > 0 {

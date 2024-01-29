@@ -125,6 +125,7 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 	return
 }
 
+<<<<<<< HEAD
 func rewriteRemainingColumns(
 	ctx *plancontext.PlanningContext,
 	stmt sqlparser.SelectStatement,
@@ -144,6 +145,8 @@ func rewriteRemainingColumns(
 	}, nil).(sqlparser.SelectStatement)
 }
 
+=======
+>>>>>>> fd99639e40 (Fix subquery cloning and dependencies (#15039))
 // joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any
 // comparisons between the inner and the outer side.
 // They can be used for merging the two parts of the query together

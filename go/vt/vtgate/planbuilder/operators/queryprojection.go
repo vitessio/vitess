@@ -370,8 +370,13 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 		if !es.add(ctx, order.Expr) {
 			continue
 		}
+<<<<<<< HEAD
 		qp.OrderExprs = append(qp.OrderExprs, ops.OrderBy{
 			Inner:          sqlparser.CloneRefOfOrder(order),
+=======
+		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
+			Inner:          ctx.SemTable.Clone(order).(*sqlparser.Order),
+>>>>>>> fd99639e40 (Fix subquery cloning and dependencies (#15039))
 			SimplifiedExpr: order.Expr,
 		})
 		canPushSorting = canPushSorting && !containsAggr(order.Expr)
