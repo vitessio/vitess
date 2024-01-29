@@ -262,10 +262,8 @@ const (
 	EmptyStr       = ""
 	TreeStr        = "tree"
 	JSONStr        = "json"
-	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
-	VTExplainStr   = "vtexplain"
 	QueriesStr     = "queries"
 	AllVExplainStr = "all"
 	PlanStr        = "plan"
@@ -810,8 +808,6 @@ const (
 	EmptyType ExplainType = iota
 	TreeType
 	JSONType
-	VitessType
-	VTExplainType
 	TraditionalType
 	AnalyzeType
 )

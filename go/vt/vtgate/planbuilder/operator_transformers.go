@@ -911,3 +911,9 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 		},
 	}, nil
 }
+
+func generateQuery(statement sqlparser.Statement) string {
+	buf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	statement.Format(buf)
+	return buf.String()
+}

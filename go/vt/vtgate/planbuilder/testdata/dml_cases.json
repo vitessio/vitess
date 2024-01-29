@@ -4410,8 +4410,8 @@
     }
   },
   {
-    "comment": "explain dml without any directive should fail",
-    "query": "explain format=vtexplain delete from user",
+    "comment": "vexplain all dml without any directive should fail",
+    "query": "vexplain all delete from user",
     "plan": "VT09008: vexplain queries/all will actually run queries"
   },
   {

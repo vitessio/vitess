@@ -105,7 +105,7 @@ func getTableNames(semTable *semantics.SemTable) ([]sqlparser.TableName, error) 
 func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	switch expr := expr.(type) {
 	case *sqlparser.AliasedExpr:
-		sqlparser.RemoveKeyspace(expr.Expr)
+		sqlparser.RemoveKeyspaceInCol(expr.Expr)
 	case *sqlparser.StarExpr:
 		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
 	}
