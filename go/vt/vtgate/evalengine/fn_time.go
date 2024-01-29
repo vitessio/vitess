@@ -1262,7 +1262,7 @@ func (b *builtinToDays) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	dt := evalToDateTime(date, -1, env.now, env.sqlmode.AllowZeroDate())
+	dt := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
 	if dt == nil || dt.isZero() {
 		return nil, nil
 	}
