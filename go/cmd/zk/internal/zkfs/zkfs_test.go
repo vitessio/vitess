@@ -77,7 +77,7 @@ func TestFormatACL(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, FormatACL(tc.acl), tc.name)
+			assert.Equal(t, tc.expected, FormatACL(tc.acl))
 		})
 	}
 }
