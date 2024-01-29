@@ -1453,6 +1453,8 @@ func FnSubstr(yield Query) {
 		`SUBSTR('Sakila', -3)`,
 		`SUBSTR('Sakila', -5, 3)`,
 		`SUBSTR('Sakila' FROM -4 FOR 2)`,
+		`MID('Quadratically',5,6)`,
+		`MID('Sakila', -5, 3)`,
 	}
 
 	for _, q := range mysqlDocSamples {

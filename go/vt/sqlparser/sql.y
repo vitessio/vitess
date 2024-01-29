@@ -343,7 +343,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> SQL_TSI_DAY SQL_TSI_WEEK SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_MICROSECOND SQL_TSI_YEAR
 %token <str> REPLACE
 %token <str> CONVERT CAST
-%token <str> SUBSTR SUBSTRING
+%token <str> SUBSTR SUBSTRING MID
 %token <str> SEPARATOR
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
@@ -5871,6 +5871,10 @@ function_call_keyword:
   {
     $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
   }
+| MID openb expression ',' expression ',' expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
+  }
 | SUBSTRING openb expression ',' expression closeb
   {
     $$ = &SubstrExpr{Name: $3, From: $5}
@@ -8306,6 +8310,7 @@ non_reserved_keyword:
 | MEMORY
 | MEMBER
 | MERGE
+| MID %prec FUNCTION_CALL_NON_KEYWORD
 | MIN %prec FUNCTION_CALL_NON_KEYWORD
 | MIN_ROWS
 | MODE
