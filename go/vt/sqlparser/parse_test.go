@@ -5913,6 +5913,7 @@ func TestCreateTable(t *testing.T) {
 			"  max_rows 0x6,\n" +
 			"  min_rows 0x7,\n" +
 			"  pack_keys 0x8,\n" +
+			"  stats_auto_recalc 0x1,\n" +
 			"  stats_persistent 0x9,\n" +
 			"  stats_sample_pages 0x10\n",
 

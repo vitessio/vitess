@@ -4300,7 +4300,7 @@ table_option:
   {
     $$ = string($1) + " " + string($3)
   }
-| STATS_AUTO_RECALC equal_opt INTEGRAL
+| STATS_AUTO_RECALC equal_opt coericble_to_integral
   {
     $$ = string($1) + " " + string($3)
   }
