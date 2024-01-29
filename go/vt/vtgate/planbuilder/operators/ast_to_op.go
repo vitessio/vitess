@@ -72,7 +72,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 	outerID := TableID(op)
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, expr := range exprs {
-		sqlparser.RemoveKeyspace(expr)
+		sqlparser.RemoveKeyspaceInCol(expr)
 		subq := sqc.handleSubquery(ctx, expr, outerID)
 		if subq != nil {
 			continue
@@ -106,26 +106,6 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 		return true, nil
 	}, node)
 	return
-}
-
-func checkForCorrelatedSubqueries(
-	ctx *plancontext.PlanningContext,
-	stmt sqlparser.SelectStatement,
-	subqID semantics.TableSet,
-) (correlated bool) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		colname, isColname := node.(*sqlparser.ColName)
-		if !isColname {
-			return true, nil
-		}
-		deps := ctx.SemTable.RecursiveDeps(colname)
-		if deps.IsSolvedBy(subqID) {
-			return true, nil
-		}
-		correlated = true
-		return false, nil
-	}, stmt)
-	return correlated
 }
 
 // joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any

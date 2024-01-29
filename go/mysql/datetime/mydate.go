@@ -81,3 +81,11 @@ func mysqlDateFromDayNumber(daynr int) (uint16, uint8, uint8) {
 
 	panic("unreachable: yday is too large?")
 }
+
+// DateFromDayNumber converts an absolute day number into a Date.
+// Returns zero date if day number exceeds 3652499 or is less than 366.
+func DateFromDayNumber(daynr int) Date {
+	var d Date
+	d.year, d.month, d.day = mysqlDateFromDayNumber(daynr)
+	return d
+}

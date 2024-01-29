@@ -132,6 +132,7 @@ var Cases = []TestCase{
 	{Run: FnMonthName},
 	{Run: FnLastDay},
 	{Run: FnToDays},
+	{Run: FnFromDays},
 	{Run: FnQuarter},
 	{Run: FnSecond},
 	{Run: FnTime},
@@ -1453,6 +1454,8 @@ func FnSubstr(yield Query) {
 		`SUBSTR('Sakila', -3)`,
 		`SUBSTR('Sakila', -5, 3)`,
 		`SUBSTR('Sakila' FROM -4 FOR 2)`,
+		`MID('Quadratically',5,6)`,
+		`MID('Sakila', -5, 3)`,
 	}
 
 	for _, q := range mysqlDocSamples {
@@ -1788,6 +1791,28 @@ func FnToDays(yield Query) {
 
 	for _, d := range dates {
 		yield(fmt.Sprintf("TO_DAYS(%s)", d), nil)
+	}
+}
+
+func FnFromDays(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("FROM_DAYS(%s)", d), nil)
+	}
+
+	days := []string{
+		"0",
+		"1",
+		"366",
+		"365242",
+		"3652424",
+		"3652425",
+		"3652500",
+		"3652499",
+		"730669",
+	}
+
+	for _, d := range days {
+		yield(fmt.Sprintf("FROM_DAYS(%s)", d), nil)
 	}
 }
 

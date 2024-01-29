@@ -424,6 +424,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &builtinToDays{CallExpr: call}, nil
+	case "from_days":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinFromDays{CallExpr: call}, nil
 	case "quarter":
 		if len(args) != 1 {
 			return nil, argError(method)

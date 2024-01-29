@@ -6942,7 +6942,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id, from_unixtime(min(col)) as col, min(col) from `user` where 1 != 1 group by id",
-        "OrderBy": "2 ASC",
+        "OrderBy": "2 ASC COLLATE utf8mb4_0900_ai_ci",
         "Query": "select id, from_unixtime(min(col)) as col, min(col) from `user` group by id order by min(col) asc",
         "ResultColumns": 2,
         "Table": "`user`"

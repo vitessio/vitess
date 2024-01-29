@@ -50,7 +50,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	err = rewriteRoutedTables(deleteStmt, vschema)
+	err = queryRewrite(ctx.SemTable, reservedVars, deleteStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -69,11 +69,6 @@ func gen4DeleteStmtPlanner(
 	}
 
 	if err := checkIfDeleteSupported(deleteStmt, ctx.SemTable); err != nil {
-		return nil, err
-	}
-
-	err = queryRewrite(ctx.SemTable, reservedVars, deleteStmt)
-	if err != nil {
 		return nil, err
 	}
 

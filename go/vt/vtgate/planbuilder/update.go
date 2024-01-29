@@ -42,7 +42,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	err = rewriteRoutedTables(updStmt, vschema)
+	err = queryRewrite(ctx.SemTable, reservedVars, updStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -69,11 +69,6 @@ func gen4UpdateStmtPlanner(
 
 	if ctx.SemTable.NotUnshardedErr != nil {
 		return nil, ctx.SemTable.NotUnshardedErr
-	}
-
-	err = queryRewrite(ctx.SemTable, reservedVars, updStmt)
-	if err != nil {
-		return nil, err
 	}
 
 	op, err := operators.PlanQuery(ctx, updStmt)
