@@ -131,6 +131,7 @@ var Cases = []TestCase{
 	{Run: FnMonth},
 	{Run: FnMonthName},
 	{Run: FnLastDay},
+	{Run: FnFromDays},
 	{Run: FnQuarter},
 	{Run: FnSecond},
 	{Run: FnTime},
@@ -1763,6 +1764,28 @@ func FnLastDay(yield Query) {
 
 	for _, d := range dates {
 		yield(fmt.Sprintf("LAST_DAY(%s)", d), nil)
+	}
+}
+
+func FnFromDays(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("FROM_DAYS(%s)", d), nil)
+	}
+
+	days := []string{
+		"0",
+		"1",
+		"366",
+		"365242",
+		"3652424",
+		"3652425",
+		"3652500",
+		"3652499",
+		"730669",
+	}
+
+	for _, d := range days {
+		yield(fmt.Sprintf("FROM_DAYS(%s)", d), nil)
 	}
 }
 
