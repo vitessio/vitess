@@ -795,9 +795,11 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 
 	start := time.Now()
 	conn, err := qre.tsv.qe.streamConns.Get(ctx, qre.setting)
+
+	qre.logStats.WaitingForConnection += time.Since(start)
+
 	switch err {
 	case nil:
-		qre.logStats.WaitingForConnection += time.Since(start)
 		return conn, nil
 	case connpool.ErrConnPoolClosed:
 		return nil, err
