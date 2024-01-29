@@ -295,7 +295,6 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		return false, vterrors.Wrapf(err, "cannot get binary logs in incremental backup")
 	}
 
-	// @@gtid_purged
 	getPurgedGTIDSet := func() (replication.Position, replication.Mysql56GTIDSet, error) {
 		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
 		if err != nil {
