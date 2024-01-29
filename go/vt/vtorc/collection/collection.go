@@ -61,6 +61,7 @@ package collection
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -146,6 +147,8 @@ func (c *Collection) StopAutoExpiration() {
 		return
 	}
 	c.monitoring = false
+	fmt.Print(c.monitoring)
+
 	c.Unlock()
 
 	// no locking here deliberately
@@ -260,8 +263,8 @@ func (c *Collection) removeBefore(t time.Time) error {
 	// get the interval we need.
 	if first == len(c.collection) {
 		c.collection = nil // remove all entries
-	} else if first != -1 {
-		c.collection = c.collection[first:]
+	} else {
+		c.collection = c.collection[first+1:]
 	}
 	return nil // no errors
 }
