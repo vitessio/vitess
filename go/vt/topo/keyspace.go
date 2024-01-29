@@ -209,21 +209,19 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	}
 
 	// First try to get all shards using List if we can.
-	shardsPath := path.Join(KeyspacesPath, keyspace, ShardsPath)
-	listResults, err := ts.globalCell.List(ctx, shardsPath)
-	if err == nil { // We have everything we need to build the result
-		result := make(map[string]*ShardInfo, len(listResults))
-		for _, entry := range listResults {
+	buildResultFromList := func(kvpairs []KVInfo) (map[string]*ShardInfo, error) {
+		result := make(map[string]*ShardInfo, len(kvpairs))
+		for _, entry := range kvpairs {
 			// The shard key looks like this: /vitess/global/keyspaces/commerce/shards/-80/Shard
 			shardKey := string(entry.Key)
 			shardName := path.Base(path.Dir(shardKey)) // The base part of the dir is "-80"
 			// Validate the extracted shard name.
-			if _, _, err = ValidateShardName(shardName); err != nil {
+			if _, _, err := ValidateShardName(shardName); err != nil {
 				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): unexpected shard key/path %q contains invalid shard name/range %q",
 					keyspace, shardKey, shardName)
 			}
 			shard := &topodatapb.Shard{}
-			if err = shard.UnmarshalVT(entry.Value); err != nil {
+			if err := shard.UnmarshalVT(entry.Value); err != nil {
 				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): invalid data found for shard %q in %q",
 					keyspace, shardName, shardKey)
 			}
@@ -236,6 +234,11 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 		}
 		return result, nil
 	}
+	shardsPath := path.Join(KeyspacesPath, keyspace, ShardsPath)
+	listRes, err := ts.globalCell.List(ctx, shardsPath)
+	if err == nil { // We have everything we need to build the result
+		return buildResultFromList(listRes)
+	}
 	if IsErrType(err, NoNode) {
 		// The path doesn't exist, let's see if the keyspace exists.
 		if _, kerr := ts.GetKeyspace(ctx, keyspace); kerr != nil {
@@ -244,8 +247,8 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 		// We simply have no shards.
 		return make(map[string]*ShardInfo, 0), nil
 	}
-	// Currently the ZooKeeper implementation does not support scans so we
-	// fall back to concurrently fetching the shards one by one.
+	// Currently the ZooKeeper implementation does not support index prefix
+	// scans so we fall back to concurrently fetching the shards one by one.
 	// It is also possible that the response containing all shards is too
 	// large in which case we also fall back to the one by one fetch.
 	if !IsErrType(err, NoImplementation) && !IsErrType(err, ResourceExhausted) {
