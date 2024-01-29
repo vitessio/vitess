@@ -521,7 +521,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
-%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword non_reserved_keyword2 non_reserved_keyword3 all_non_reserved
+%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword function_call_keywords non_reserved_keyword2 non_reserved_keyword3 all_non_reserved
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -2874,6 +2874,14 @@ column_definition_for_create:
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
 | ESCAPE column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+| function_call_keywords column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
@@ -6407,6 +6415,10 @@ table_name:
   {
     $$ = TableName{Name: NewTableIdent(string($1))}
   }
+| function_call_keywords
+  {
+    $$ = TableName{Name: NewTableIdent(string($1))}
+  }
 | ACCOUNT
   {
     $$ = TableName{Name: NewTableIdent(string($1))}
@@ -7558,6 +7570,10 @@ column_name:
 | FORMAT '.' reserved_sql_id
   {
     $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
+  }
+| function_call_keywords
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
   }
 | table_id '.' reserved_table_id '.' reserved_sql_id
   {
@@ -9149,6 +9165,12 @@ column_name_safe_keyword:
 | MAX
 | MIN
 | SUM
+
+// Names of functions that require special grammar support. These aren't reserved or non-reserved in MySQL's docs, but are labeled as keywords in our grammar because of their custom syntax.
+function_call_keywords:
+  CAST
+| POSITION
+| TRIM
 
 openb:
   '('

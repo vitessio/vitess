@@ -6360,8 +6360,12 @@ func TestCreateTable(t *testing.T) {
 		})
 	}
 
+	// these are keywords in our grammar due to their special syntax, but they should parse unquoted in MySQL
 	nonsupportedKeywords := []string{
 		"comment",
+		"cast",
+		"position",
+		"trim",
 	}
 	nonsupported := map[string]bool{}
 	for _, x := range nonsupportedKeywords {
@@ -6369,12 +6373,12 @@ func TestCreateTable(t *testing.T) {
 	}
 
 	for key := range keywords {
-		//input := fmt.Sprintf("create table t {key} bigint)")
 		input := fmt.Sprintf("create table t (\n\t`%s` bigint\n)", key)
 		output := fmt.Sprintf("create table t (\n\t`%s` bigint\n)", key)
 		t.Run(input, func(t *testing.T) {
 			if _, ok := nonsupported[key]; ok {
-				t.Skipf("Keyword currently not supported as a column name: %s", key)
+				input = fmt.Sprintf("create table %s (\n\t%s bigint\n)", key, key)
+				output = fmt.Sprintf("create table `%s` (\n\t`%s` bigint\n)", key, key)
 			}
 			tree, err := Parse(input)
 			if err != nil {
