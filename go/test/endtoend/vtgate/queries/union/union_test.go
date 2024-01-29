@@ -130,4 +130,11 @@ func TestUnion(t *testing.T) {
 	if utils.BinaryIsAtLeastAtVersion(19, "vtgate") {
 		mcmp.AssertMatches(`(SELECT id2,'a' from t1 where id1 = 1) union (SELECT 'a',id2 from t1 where id1 = 2)`, `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("a") VARCHAR("2")]]`)
 	}
+	mcmp.AssertMatches(`SELECT 1 from t1 UNION SELECT 2 from t1`, `[[INT64(1)] [INT64(2)]]`)
+	mcmp.AssertMatches(`SELECT 4 from t1 UNION SELECT 3 from t1`, `[[INT64(4)] [INT64(3)]]`)
+	mcmp.AssertMatches(`SELECT id1 from t1 UNION SELECT id2 from t1`, `[[INT64(1)] [INT64(2)]]`)
+	mcmp.AssertMatches(`SELECT 1 from t1 UNION SELECT id2 from t1`, `[[INT64(1)] [INT64(2)]]`)
+	mcmp.AssertMatches(`SELECT 3 from t1 UNION SELECT id2 from t1`, `[[INT64(3)] [INT64(1)] [INT64(2)]]`)
+	mcmp.AssertMatches(`SELECT id1 from t1 UNION SELECT 2 from t1`, `[[INT64(1)] [INT64(2)]]`)
+	mcmp.AssertMatches(`SELECT id1 from t1 UNION SELECT 3 from t1`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
 }
