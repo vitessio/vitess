@@ -203,8 +203,8 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 }
 
 // ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
-// The function returns a boolean that indicates if the backup is usable, and an overall error.
-func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+// The function returns a BackupResult that indicates the usability of the backup, and an overall error.
+func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
 	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
 		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
 
@@ -233,16 +233,17 @@ func getIncrementalFromPosGTIDSet(incrementalFromPos string) (replication.Mysql5
 // executeIncrementalBackup runs an incremental backup, based on given 'incremental_from_pos', which can be:
 // - A valid position
 // - "auto", indicating the incremental backup should begin with last successful backup end position.
-func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+// The function returns a BackupResult that indicates the usability of the backup, and an overall error.
+func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
 	// Collect MySQL status:
 	// UUID
 	serverUUID, err := params.Mysqld.GetServerUUID(ctx)
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get server uuid")
+		return BackupUnusable, vterrors.Wrap(err, "can't get server uuid")
 	}
 	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get MySQL version")
+		return BackupUnusable, vterrors.Wrap(err, "can't get MySQL version")
 	}
 
 	// We now need to figure out the GTIDSet from which we want to take the incremental backup. The user may have
@@ -254,7 +255,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		params.Logger.Infof("auto evaluating incremental_from_pos")
 		backupName, pos, err := findLatestSuccessfulBackupPosition(ctx, params, bh.Name())
 		if err != nil {
-			return false, err
+			return BackupUnusable, err
 		}
 		fromBackupName = backupName
 		params.IncrementalFromPos = replication.EncodePosition(pos)
@@ -266,7 +267,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		backupName := params.IncrementalFromPos
 		pos, err := findBackupPosition(ctx, params, backupName)
 		if err != nil {
-			return false, err
+			return BackupUnusable, err
 		}
 		fromBackupName = backupName
 		params.IncrementalFromPos = replication.EncodePosition(pos)
@@ -276,7 +277,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// params.IncrementalFromPos is a string. We want to turn that into a MySQL GTID
 	backupFromGTIDSet, err := getIncrementalFromPosGTIDSet(params.IncrementalFromPos)
 	if err != nil {
-		return false, err
+		return BackupUnusable, err
 	}
 	// OK, we now have the formal MySQL GTID from which we want to take the incremental backup.
 
@@ -288,11 +289,11 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// ignore the purged GTIDs:
 
 	if err := params.Mysqld.FlushBinaryLogs(ctx); err != nil {
-		return false, vterrors.Wrapf(err, "cannot flush binary logs in incremental backup")
+		return BackupUnusable, vterrors.Wrapf(err, "cannot flush binary logs in incremental backup")
 	}
 	binaryLogs, err := params.Mysqld.GetBinaryLogs(ctx)
 	if err != nil {
-		return false, vterrors.Wrapf(err, "cannot get binary logs in incremental backup")
+		return BackupUnusable, vterrors.Wrapf(err, "cannot get binary logs in incremental backup")
 	}
 
 	getPurgedGTIDSet := func() (replication.Position, replication.Mysql56GTIDSet, error) {
@@ -311,7 +312,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// command may also purge old logs, hence affecting the value of gtid_purged.
 	gtidPurged, purgedGTIDSet, err := getPurgedGTIDSet()
 	if err != nil {
-		return false, err
+		return BackupUnusable, err
 	}
 	previousGTIDs := map[string]string{}
 	getBinlogPreviousGTIDs := func(ctx context.Context, binlog string) (gtids string, err error) {
@@ -329,15 +330,19 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	}
 	binaryLogsToBackup, incrementalBackupFromGTID, incrementalBackupToGTID, err := ChooseBinlogsForIncrementalBackup(ctx, backupFromGTIDSet, purgedGTIDSet, binaryLogs, getBinlogPreviousGTIDs)
 	if err != nil {
-		return false, vterrors.Wrapf(err, "cannot get binary logs to backup in incremental backup")
+		return BackupUnusable, vterrors.Wrapf(err, "cannot get binary logs to backup in incremental backup")
+	}
+	if len(binaryLogsToBackup) == 0 {
+		// Empty backup.
+		return BackupEmpty, nil
 	}
 	incrementalBackupFromPosition, err := replication.ParsePosition(replication.Mysql56FlavorID, incrementalBackupFromGTID)
 	if err != nil {
-		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupFromGTID)
+		return BackupUnusable, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupFromGTID)
 	}
 	incrementalBackupToPosition, err := replication.ParsePosition(replication.Mysql56FlavorID, incrementalBackupToGTID)
 	if err != nil {
-		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupToGTID)
+		return BackupUnusable, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupToGTID)
 	}
 	// The backup position is the GTISset of the last binary log (taken from Previous-GTIDs of the one-next binary log), and we
 	// also include gtid_purged ; this complies with the "standard" way MySQL "thinks" about GTIDs: there's gtid_executed, which includes
@@ -352,16 +357,16 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		fe := FileEntry{Base: backupBinlogDir, Name: binlogFile}
 		fullPath, err := fe.fullPath(params.Cnf)
 		if err != nil {
-			return false, err
+			return BackupUnusable, err
 		}
 		req.BinlogFileNames = append(req.BinlogFileNames, fullPath)
 	}
 	resp, err := params.Mysqld.ReadBinlogFilesTimestamps(ctx, req)
 	if err != nil {
-		return false, vterrors.Wrapf(err, "reading timestamps from binlog files %v", binaryLogsToBackup)
+		return BackupUnusable, vterrors.Wrapf(err, "reading timestamps from binlog files %v", binaryLogsToBackup)
 	}
 	if resp.FirstTimestampBinlog == "" || resp.LastTimestampBinlog == "" {
-		return false, vterrors.Errorf(vtrpc.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
+		return BackupUnusable, vterrors.Errorf(vtrpc.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
 	}
 	log.Infof("ReadBinlogFilesTimestampsResponse: %+v", resp)
 	incrDetails := &IncrementalBackupDetails{
@@ -380,14 +385,14 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	// It is a fact that incrementalBackupFromGTID is earlier or equal to params.IncrementalFromPos.
 	// In the backup manifest file, we document incrementalBackupFromGTID, not the user's requested position.
 	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, gtidPurged, incrementalBackupFromPosition, fromBackupName, binaryLogsToBackup, serverUUID, mysqlVersion, incrDetails); err != nil {
-		return false, err
+		return BackupUnusable, err
 	}
-	return true, nil
+	return BackupUsable, nil
 }
 
-// executeFullBackup returns a boolean that indicates if the backup is usable,
+// executeFullBackup returns a BackupResult that indicates the usability of the backup,
 // and an overall error.
-func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
 
 	if params.IncrementalFromPos != "" {
 		return be.executeIncrementalBackup(ctx, params, bh)
@@ -411,17 +416,17 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		// keep going if we're the primary, might be a degenerate case
 		sourceIsPrimary = true
 	default:
-		return false, vterrors.Wrap(err, "can't get replica status")
+		return BackupUnusable, vterrors.Wrap(err, "can't get replica status")
 	}
 
 	// get the read-only flag
 	readOnly, err = params.Mysqld.IsReadOnly()
 	if err != nil {
-		return false, vterrors.Wrap(err, "failed to get read_only status")
+		return BackupUnusable, vterrors.Wrap(err, "failed to get read_only status")
 	}
 	superReadOnly, err = params.Mysqld.IsSuperReadOnly()
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get super_read_only status")
+		return BackupUnusable, vterrors.Wrap(err, "can't get super_read_only status")
 	}
 	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%t", readOnly, superReadOnly)
 
@@ -431,7 +436,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		if !superReadOnly {
 			params.Logger.Infof("Enabling super_read_only on primary prior to backup")
 			if _, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
-				return false, vterrors.Wrap(err, "failed to enable super_read_only")
+				return BackupUnusable, vterrors.Wrap(err, "failed to enable super_read_only")
 			}
 			defer func() {
 				// Resetting super_read_only back to its original value
@@ -444,16 +449,16 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		}
 		replicationPosition, err = params.Mysqld.PrimaryPosition()
 		if err != nil {
-			return false, vterrors.Wrap(err, "can't get position on primary")
+			return BackupUnusable, vterrors.Wrap(err, "can't get position on primary")
 		}
 	} else {
 		// This is a replica
 		if err := params.Mysqld.StopReplication(params.HookExtraEnv); err != nil {
-			return false, vterrors.Wrapf(err, "can't stop replica")
+			return BackupUnusable, vterrors.Wrapf(err, "can't stop replica")
 		}
 		replicaStatus, err := params.Mysqld.ReplicationStatus()
 		if err != nil {
-			return false, vterrors.Wrap(err, "can't get replica status")
+			return BackupUnusable, vterrors.Wrap(err, "can't get replica status")
 		}
 		replicationPosition = replicaStatus.Position
 	}
@@ -461,23 +466,23 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 
 	gtidPurgedPosition, err := params.Mysqld.GetGTIDPurged(ctx)
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get gtid_purged")
+		return BackupUnusable, vterrors.Wrap(err, "can't get gtid_purged")
 	}
 
 	serverUUID, err := params.Mysqld.GetServerUUID(ctx)
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get server uuid")
+		return BackupUnusable, vterrors.Wrap(err, "can't get server uuid")
 	}
 
 	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get MySQL version")
+		return BackupUnusable, vterrors.Wrap(err, "can't get MySQL version")
 	}
 
 	// check if we need to set innodb_fast_shutdown=0 for a backup safe for upgrades
 	if params.UpgradeSafe {
 		if _, err := params.Mysqld.FetchSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
-			return false, vterrors.Wrapf(err, "failed to disable fast shutdown")
+			return BackupUnusable, vterrors.Wrapf(err, "failed to disable fast shutdown")
 		}
 	}
 
@@ -486,23 +491,26 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	err = params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true, params.MysqlShutdownTimeout)
 	defer cancel()
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't shutdown mysqld")
+		return BackupUnusable, vterrors.Wrap(err, "can't shutdown mysqld")
 	}
 
 	// Backup everything, capture the error.
 	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, replication.Position{}, "", nil, serverUUID, mysqlVersion, nil)
-	usable := backupErr == nil
+	backupResult := BackupUnusable
+	if backupErr == nil {
+		backupResult = BackupUsable
+	}
 
 	// Try to restart mysqld, use background context in case we timed out the original context
 	err = params.Mysqld.Start(context.Background(), params.Cnf)
 	if err != nil {
-		return usable, vterrors.Wrap(err, "can't restart mysqld")
+		return backupResult, vterrors.Wrap(err, "can't restart mysqld")
 	}
 
 	// Resetting super_read_only back to its original value
 	params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
 	if _, err := params.Mysqld.SetSuperReadOnly(superReadOnly); err != nil {
-		return usable, err
+		return backupResult, err
 	}
 
 	// Restore original mysqld state that we saved above.
@@ -513,18 +521,18 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 			semiSyncSource, semiSyncReplica)
 		err := params.Mysqld.SetSemiSyncEnabled(semiSyncSource, semiSyncReplica)
 		if err != nil {
-			return usable, err
+			return backupResult, err
 		}
 	}
 	if replicaStartRequired {
 		params.Logger.Infof("restarting mysql replication")
 		if err := params.Mysqld.StartReplication(params.HookExtraEnv); err != nil {
-			return usable, vterrors.Wrap(err, "cannot restart replica")
+			return backupResult, vterrors.Wrap(err, "cannot restart replica")
 		}
 
 		// this should be quick, but we might as well just wait
 		if err := WaitForReplicationStart(params.Mysqld, replicationStartDeadline); err != nil {
-			return usable, vterrors.Wrap(err, "replica is not restarting")
+			return backupResult, vterrors.Wrap(err, "replica is not restarting")
 		}
 
 		// Wait for a reliable value for ReplicationLagSeconds from ReplicationStatus()
@@ -542,16 +550,16 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		pos, err := getPrimaryPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
 		// If we are unable to get the primary's position, return error.
 		if err != nil {
-			return usable, err
+			return backupResult, err
 		}
 		if !replicationPosition.Equal(pos) {
 			for {
 				if err := ctx.Err(); err != nil {
-					return usable, err
+					return backupResult, err
 				}
 				status, err := params.Mysqld.ReplicationStatus()
 				if err != nil {
-					return usable, err
+					return backupResult, err
 				}
 				newPos := status.Position
 				if !newPos.Equal(replicationPosition) {
@@ -562,7 +570,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		}
 	}
 
-	return usable, backupErr
+	return backupResult, backupErr
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
