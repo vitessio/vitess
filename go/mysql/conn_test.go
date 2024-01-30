@@ -357,7 +357,7 @@ func TestOkPackets(t *testing.T) {
 		dataIn: `
 00000000  00 00 00 02 00                                    |.....|`,
 		cc:          CapabilityClientTransactions,
-		expectedErr: "invalid OK packet warnings: &{[0 0 0 2 0] 0}",
+		expectedErr: "invalid OK packet warnings: [0 0 0 2 0]",
 	}, {
 		dataIn: `
 00000000  FE 00 00 22 40 00 00                              |.....|`,
