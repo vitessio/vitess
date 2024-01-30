@@ -2551,6 +2551,23 @@ func IsLiteral(expr Expr) bool {
 	}
 }
 
+// AppendString appends a string to the expression provided.
+// This is intended to be used in the parser only for concatenating multiple strings together.
+func AppendString(expr Expr, in string) Expr {
+	switch node := expr.(type) {
+	case *Literal:
+		node.Val = node.Val + in
+		return node
+	case *UnaryExpr:
+		node.Expr = AppendString(node.Expr, in)
+		return node
+	case *IntroducerExpr:
+		node.Expr = AppendString(node.Expr, in)
+		return node
+	}
+	return nil
+}
+
 func (ct *ColumnType) Invisible() bool {
 	return ct.Options.Invisible != nil && *ct.Options.Invisible
 }
