@@ -4429,14 +4429,6 @@ explain_format_opt:
   {
     $$ = TreeType
   }
-| FORMAT '=' VITESS
-  {
-    $$ = VitessType
-  }
-| FORMAT '=' VTEXPLAIN
-  {
-    $$ = VTExplainType
-  }
 | FORMAT '=' TRADITIONAL
   {
     $$ = TraditionalType

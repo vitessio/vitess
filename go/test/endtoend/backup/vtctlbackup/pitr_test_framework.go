@@ -48,6 +48,14 @@ const (
 	operationFlushAndPurge
 )
 
+type incrementalFromPosType int
+
+const (
+	incrementalFromPosPosition incrementalFromPosType = iota
+	incrementalFromPosAuto
+	incrementalFromPosBackupName
+)
+
 type PITRTestCase struct {
 	Name           string
 	SetupType      int
@@ -106,6 +114,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		}
 
 		var fullBackupPos replication.Position
+		var lastBackupName string
 		t.Run("full backup", func(t *testing.T) {
 			InsertRowOnPrimary(t, "before-full-backup")
 			waitForReplica(t, 0)
@@ -118,6 +127,8 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			pos := replication.EncodePosition(fullBackupPos)
 			backupPositions = append(backupPositions, pos)
 			rowsPerPosition[pos] = len(msgs)
+
+			lastBackupName = manifest.BackupName
 		})
 
 		lastBackupPos := fullBackupPos
@@ -127,57 +138,63 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			name              string
 			writeBeforeBackup bool
 			fromFullPosition  bool
-			autoPosition      bool
 			expectEmpty       bool
+			incrementalFrom   incrementalFromPosType
 			expectError       string
 		}{
 			{
-				name: "first incremental backup",
+				name:            "first incremental backup",
+				incrementalFrom: incrementalFromPosPosition,
 			},
 			{
-				name:        "empty1",
-				expectEmpty: true,
+				name:            "empty1",
+				incrementalFrom: incrementalFromPosPosition,
+				expectEmpty:     true,
 			},
 			{
-				name:         "empty2",
-				autoPosition: true,
-				expectEmpty:  true,
+				name:            "empty2",
+				incrementalFrom: incrementalFromPosAuto,
+				expectEmpty:     true,
 			},
 			{
-				name:        "empty3",
-				expectEmpty: true,
+				name:            "empty3",
+				incrementalFrom: incrementalFromPosPosition,
+				expectEmpty:     true,
 			},
 			{
 				name:              "make writes, succeed",
 				writeBeforeBackup: true,
+				incrementalFrom:   incrementalFromPosPosition,
 			},
 			{
-				name:         "empty again",
-				autoPosition: true,
-				expectEmpty:  true,
+				name:            "empty again",
+				incrementalFrom: incrementalFromPosAuto,
+				expectEmpty:     true,
 			},
 			{
 				name:              "make writes again, succeed",
 				writeBeforeBackup: true,
+				incrementalFrom:   incrementalFromPosBackupName,
 			},
 			{
 				name:              "auto position, succeed",
 				writeBeforeBackup: true,
-				autoPosition:      true,
+				incrementalFrom:   incrementalFromPosAuto,
 			},
 			{
-				name:         "empty again, based on auto position",
-				autoPosition: true,
-				expectEmpty:  true,
+				name:            "empty again, based on auto position",
+				incrementalFrom: incrementalFromPosAuto,
+				expectEmpty:     true,
 			},
 			{
 				name:              "auto position, make writes again, succeed",
 				writeBeforeBackup: true,
-				autoPosition:      true,
+				incrementalFrom:   incrementalFromPosAuto,
 			},
 			{
 				name:             "from full backup position",
 				fromFullPosition: true,
+				incrementalFrom:  incrementalFromPosPosition,
 			},
 		}
 		var fromFullPositionBackups []string
@@ -199,11 +216,16 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				// - auto
 				// - explicit last backup pos
 				// - back in history to the original full backup
-				var incrementalFromPos replication.Position
-				if !tc.autoPosition {
-					incrementalFromPos = lastBackupPos
+				var incrementalFromPos string
+				switch tc.incrementalFrom {
+				case incrementalFromPosAuto:
+					incrementalFromPos = mysqlctl.AutoIncrementalFromPos
+				case incrementalFromPosBackupName:
+					incrementalFromPos = lastBackupName
+				case incrementalFromPosPosition:
+					incrementalFromPos = replication.EncodePosition(lastBackupPos)
 					if tc.fromFullPosition {
-						incrementalFromPos = fullBackupPos
+						incrementalFromPos = replication.EncodePosition(fullBackupPos)
 					}
 				}
 				// always use same 1st replica
@@ -218,6 +240,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				require.NotNil(t, manifest)
 				defer func() {
 					lastBackupPos = manifest.Position
+					lastBackupName = manifest.BackupName
 				}()
 				if tc.fromFullPosition {
 					fromFullPositionBackups = append(fromFullPositionBackups, backupName)
@@ -231,8 +254,10 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 
 				expectFromPosition := lastBackupPos.GTIDSet
-				if !incrementalFromPos.IsZero() {
-					expectFromPosition = incrementalFromPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
+				if tc.incrementalFrom == incrementalFromPosPosition {
+					pos, err := replication.DecodePosition(incrementalFromPos)
+					assert.NoError(t, err)
+					expectFromPosition = pos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				}
 				require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v, gtid_purged: %v,  manifest.Position: %v", expectFromPosition, fromPositionIncludingPurged, gtidPurgedPos, manifest.Position)
 			})
@@ -316,6 +341,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 		testedBackups := []testedBackupTimestampInfo{}
 
 		var fullBackupPos replication.Position
+		var lastBackupName string
 		t.Run("full backup", func(t *testing.T) {
 			insertRowOnPrimary(t, "before-full-backup")
 			waitForReplica(t, 0)
@@ -326,6 +352,8 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 			//
 			rows := ReadRowsFromReplica(t, 0)
 			testedBackups = append(testedBackups, testedBackupTimestampInfo{len(rows), time.Now()})
+
+			lastBackupName = manifest.BackupName
 		})
 
 		lastBackupPos := fullBackupPos
@@ -335,57 +363,63 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 			name              string
 			writeBeforeBackup bool
 			fromFullPosition  bool
-			autoPosition      bool
 			expectEmpty       bool
+			incrementalFrom   incrementalFromPosType
 			expectError       string
 		}{
 			{
-				name: "first incremental backup",
+				name:            "first incremental backup",
+				incrementalFrom: incrementalFromPosPosition,
 			},
 			{
-				name:        "empty1",
-				expectEmpty: true,
+				name:            "empty1",
+				incrementalFrom: incrementalFromPosPosition,
+				expectEmpty:     true,
 			},
 			{
-				name:         "empty2",
-				autoPosition: true,
-				expectEmpty:  true,
+				name:            "empty2",
+				incrementalFrom: incrementalFromPosAuto,
+				expectEmpty:     true,
 			},
 			{
-				name:        "empty3",
-				expectEmpty: true,
+				name:            "empty3",
+				incrementalFrom: incrementalFromPosPosition,
+				expectEmpty:     true,
 			},
 			{
 				name:              "make writes, succeed",
 				writeBeforeBackup: true,
+				incrementalFrom:   incrementalFromPosPosition,
 			},
 			{
-				name:         "empty again",
-				autoPosition: true,
-				expectEmpty:  true,
+				name:            "empty again",
+				incrementalFrom: incrementalFromPosAuto,
+				expectEmpty:     true,
 			},
 			{
 				name:              "make writes again, succeed",
 				writeBeforeBackup: true,
+				incrementalFrom:   incrementalFromPosBackupName,
 			},
 			{
 				name:              "auto position, succeed",
 				writeBeforeBackup: true,
-				autoPosition:      true,
+				incrementalFrom:   incrementalFromPosAuto,
 			},
 			{
-				name:         "empty again, based on auto position",
-				autoPosition: true,
-				expectEmpty:  true,
+				name:            "empty again, based on auto position",
+				incrementalFrom: incrementalFromPosAuto,
+				expectEmpty:     true,
 			},
 			{
 				name:              "auto position, make writes again, succeed",
 				writeBeforeBackup: true,
-				autoPosition:      true,
+				incrementalFrom:   incrementalFromPosAuto,
 			},
 			{
 				name:             "from full backup position",
 				fromFullPosition: true,
+				incrementalFrom:  incrementalFromPosPosition,
 			},
 		}
 		var fromFullPositionBackups []string
@@ -405,11 +439,16 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 				// - auto
 				// - explicit last backup pos
 				// - back in history to the original full backup
-				var incrementalFromPos replication.Position
-				if !tc.autoPosition {
-					incrementalFromPos = lastBackupPos
+				var incrementalFromPos string
+				switch tc.incrementalFrom {
+				case incrementalFromPosAuto:
+					incrementalFromPos = mysqlctl.AutoIncrementalFromPos
+				case incrementalFromPosBackupName:
+					incrementalFromPos = lastBackupName
+				case incrementalFromPosPosition:
+					incrementalFromPos = replication.EncodePosition(lastBackupPos)
 					if tc.fromFullPosition {
-						incrementalFromPos = fullBackupPos
+						incrementalFromPos = replication.EncodePosition(fullBackupPos)
 					}
 				}
 				manifest, backupName := TestReplicaIncrementalBackup(t, 0, incrementalFromPos, tc.expectEmpty, tc.expectError)
@@ -429,6 +468,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 				testedBackups = append(testedBackups, testedBackupTimestampInfo{len(rowsBeforeBackup), time.Now()})
 				defer func() {
 					lastBackupPos = manifest.Position
+					lastBackupName = manifest.BackupName
 				}()
 				if tc.fromFullPosition {
 					fromFullPositionBackups = append(fromFullPositionBackups, backupName)
@@ -458,8 +498,10 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 				fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 
 				expectFromPosition := lastBackupPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
-				if !incrementalFromPos.IsZero() {
-					expectFromPosition = incrementalFromPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
+				if tc.incrementalFrom == incrementalFromPosPosition {
+					pos, err := replication.DecodePosition(incrementalFromPos)
+					assert.NoError(t, err)
+					expectFromPosition = pos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				}
 				require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v, gtid_purged: %v,  manifest.Position: %v", expectFromPosition, fromPositionIncludingPurged, gtidPurgedPos, manifest.Position)
 			})
@@ -687,8 +729,7 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 
 						lastBackupPos = fullBackupPos
 					case operationIncrementalBackup:
-						var incrementalFromPos replication.Position // keep zero, we will use "auto"
-						manifest, _ := TestReplicaIncrementalBackup(t, tc.replicaIndex, incrementalFromPos, false /* expectEmpty */, tc.expectError)
+						manifest, _ := TestReplicaIncrementalBackup(t, tc.replicaIndex, "auto", false /* expectEmpty */, tc.expectError)
 						if tc.expectError != "" {
 							return
 						}

@@ -28,12 +28,11 @@ import (
 	"sync"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 var (
@@ -2524,16 +2523,6 @@ var (
 		input: "explain format = tree select * from t",
 	}, {
 		input: "explain format = json select * from t",
-	}, {
-		input: "explain format = vtexplain select * from t",
-	}, {
-		input: "explain format = vitess select * from t",
-	}, {
-		input:  "describe format = vitess select * from t",
-		output: "explain format = vitess select * from t",
-	}, {
-		input:  "describe format = vtexplain select * from t",
-		output: "explain format = vtexplain select * from t",
 	}, {
 		input: "explain delete from t",
 	}, {

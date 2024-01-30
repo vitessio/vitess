@@ -58,7 +58,7 @@ import (
 
 const (
 	builtinBackupEngineName = "builtin"
-	autoIncrementalFromPos  = "auto"
+	AutoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
 )
 
@@ -246,10 +246,14 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		return BackupUnusable, vterrors.Wrap(err, "can't get MySQL version")
 	}
 
+	// We now need to figure out the GTIDSet from which we want to take the incremental backup. The user may have
+	// specified a position, or they may have specified "auto", or they may have specified a backup name, in which
+	// case we need to find the position of that backup.
 	var fromBackupName string
-	if params.IncrementalFromPos == autoIncrementalFromPos {
+	if params.IncrementalFromPos == AutoIncrementalFromPos {
+		// User has supplied "auto".
 		params.Logger.Infof("auto evaluating incremental_from_pos")
-		backupName, pos, err := FindLatestSuccessfulBackupPosition(ctx, params, bh.Name())
+		backupName, pos, err := findLatestSuccessfulBackupPosition(ctx, params, bh.Name())
 		if err != nil {
 			return BackupUnusable, err
 		}
@@ -258,17 +262,16 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
 	}
 
-	// @@gtid_purged
-	getPurgedGTIDSet := func() (replication.Position, replication.Mysql56GTIDSet, error) {
-		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
+	if _, err := replication.DecodePositionDefaultFlavor(params.IncrementalFromPos, replication.Mysql56FlavorID); err != nil {
+		// This does not seem to be a valid position. Maybe it's a backup name?
+		backupName := params.IncrementalFromPos
+		pos, err := findBackupPosition(ctx, params, backupName)
 		if err != nil {
-			return gtidPurged, nil, vterrors.Wrap(err, "can't get @@gtid_purged")
+			return BackupUnusable, err
 		}
-		purgedGTIDSet, ok := gtidPurged.GTIDSet.(replication.Mysql56GTIDSet)
-		if !ok {
-			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", gtidPurged)
-		}
-		return gtidPurged, purgedGTIDSet, nil
+		fromBackupName = backupName
+		params.IncrementalFromPos = replication.EncodePosition(pos)
+		params.Logger.Infof("evaluated incremental_from_pos using backup name %q: %s", backupName, params.IncrementalFromPos)
 	}
 
 	// params.IncrementalFromPos is a string. We want to turn that into a MySQL GTID
@@ -276,7 +279,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return BackupUnusable, err
 	}
-	// OK, we now have the formal MySQL GTID from which we want to take the incremental backip.
+	// OK, we now have the formal MySQL GTID from which we want to take the incremental backup.
 
 	// binlogs may not contain information about purged GTIDs. e.g. some binlog.000003 may have
 	// previous GTIDs like 00021324-1111-1111-1111-111111111111:30-60, ie 1-29 range is missing. This can happen
@@ -291,6 +294,18 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	binaryLogs, err := params.Mysqld.GetBinaryLogs(ctx)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot get binary logs in incremental backup")
+	}
+
+	getPurgedGTIDSet := func() (replication.Position, replication.Mysql56GTIDSet, error) {
+		gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
+		if err != nil {
+			return gtidPurged, nil, vterrors.Wrap(err, "can't get @@gtid_purged")
+		}
+		purgedGTIDSet, ok := gtidPurged.GTIDSet.(replication.Mysql56GTIDSet)
+		if !ok {
+			return gtidPurged, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "failed to parse a valid MySQL GTID set from value: %v", gtidPurged)
+		}
+		return gtidPurged, purgedGTIDSet, nil
 	}
 	// gtid_purged is important information. The restore flow uses this info to to complement binary logs' Previous-GTIDs.
 	// It is important to only get gtid_purged _after_ we've rotated into the new binary log, because the `FLUSH BINARY LOGS`
@@ -655,6 +670,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	bm := &builtinBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
+			BackupName:         bh.Name(),
 			BackupMethod:       builtinBackupEngineName,
 			Position:           backupPosition,
 			PurgedPosition:     purgedPosition,

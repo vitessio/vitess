@@ -1255,14 +1255,10 @@ func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
 	}
 }
 
-func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos replication.Position, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos string, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	numBackups := len(waitForNumBackups(t, -1))
 
-	incrementalFromPosArg := "auto"
-	if !incrementalFromPos.IsZero() {
-		incrementalFromPosArg = replication.EncodePosition(incrementalFromPos)
-	}
-	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--incremental-from-pos", incrementalFromPosArg, replica.Alias)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--incremental-from-pos", incrementalFromPos, replica.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)
@@ -1285,7 +1281,7 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	return readManifestFile(t, backupLocation), backupName
 }
 
-func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos replication.Position, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos string, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	replica := getReplica(t, replicaIndex)
 	return testReplicaIncrementalBackup(t, replica, incrementalFromPos, expectEmpty, expectError)
 }

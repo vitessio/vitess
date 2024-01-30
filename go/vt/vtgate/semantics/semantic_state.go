@@ -77,11 +77,12 @@ type (
 
 	// QuerySignature is used to identify shortcuts in the planning process
 	QuerySignature struct {
-		Union,
-		Aggregation,
-		Distinct,
-		SubQueries,
-		HashJoin bool
+		Aggregation bool
+		Delete      bool
+		Distinct    bool
+		HashJoin    bool
+		SubQueries  bool
+		Union       bool
 	}
 
 	// SemTable contains semantic analysis information about the query.
@@ -761,6 +762,34 @@ func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*
 		tables = append(tables, vtbl)
 	}
 	return ks, tables
+}
+
+// SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same keyspace
+func (st *SemTable) SingleKeyspace() (ks *vindexes.Keyspace) {
+	validKS := func(this *vindexes.Keyspace) bool {
+		if this == nil {
+			return true
+		}
+		if ks == nil {
+			// first keyspace we see
+			ks = this
+		} else if ks != this {
+			return false
+		}
+		return true
+	}
+
+	for _, table := range st.Tables {
+		if _, isDT := table.(*DerivedTable); isDT {
+			continue
+		}
+
+		vtbl := table.GetVindexTable()
+		if !validKS(vtbl.Keyspace) {
+			return nil
+		}
+	}
+	return
 }
 
 // EqualsExpr compares two expressions using the semantic analysis information.

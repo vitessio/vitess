@@ -30,11 +30,6 @@
     "plan": "VT12001: unsupported: subqueries in DML"
   },
   {
-    "comment": "sharded delete with limit clasue",
-    "query": "delete from user_extra limit 10",
-    "plan": "VT12001: unsupported: multi shard DELETE with LIMIT"
-  },
-  {
     "comment": "sharded subquery in unsharded subquery in unsharded delete",
     "query": "delete from unsharded where col = (select id from unsharded where id = (select id from user))",
     "plan": "VT12001: unsupported: subqueries in DML"
@@ -283,6 +278,11 @@
     "comment": "Assignment expression in delete statement",
     "query": "delete from user where x = (@val := 42)",
     "plan": "VT12001: unsupported: Assignment expression"
+  },
+  {
+    "comment": "explain - routed table with join on different keyspace table",
+    "query": "explain select 1, second_user.foo.id, foo.col from second_user.foo join user.user join main.unsharded",
+    "plan": "VT03031: EXPLAIN is only supported for single keyspace"
   },
   {
     "comment": "extremum on input from both sides",

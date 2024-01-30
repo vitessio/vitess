@@ -309,7 +309,11 @@ func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sql
 	} else {
 		dbName2 = encodeEntityName(dbName)
 	}
-	query := fmt.Sprintf(GetColumnNamesQuery, dbName2, encodeEntityName(sqlescape.UnescapeID(tableName)))
+	sanitizedTableName, err := sqlescape.UnescapeID(tableName)
+	if err != nil {
+		return "", err
+	}
+	query := fmt.Sprintf(GetColumnNamesQuery, dbName2, encodeEntityName(sanitizedTableName))
 	qr, err := exec(query, -1, true)
 	if err != nil {
 		return "", err
@@ -342,9 +346,16 @@ func GetColumns(dbName, table string, exec func(string, int, bool) (*sqltypes.Re
 	if selectColumns == "" {
 		selectColumns = "*"
 	}
-	tableSpec := sqlescape.EscapeID(sqlescape.UnescapeID(table))
+	tableSpec, err := sqlescape.EnsureEscaped(table)
+	if err != nil {
+		return nil, nil, err
+	}
 	if dbName != "" {
-		tableSpec = fmt.Sprintf("%s.%s", sqlescape.EscapeID(sqlescape.UnescapeID(dbName)), tableSpec)
+		dbName, err := sqlescape.EnsureEscaped(dbName)
+		if err != nil {
+			return nil, nil, err
+		}
+		tableSpec = fmt.Sprintf("%s.%s", dbName, tableSpec)
 	}
 	query := fmt.Sprintf(GetFieldsQuery, selectColumns, tableSpec)
 	qr, err := exec(query, 0, true)

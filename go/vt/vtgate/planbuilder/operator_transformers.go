@@ -74,14 +74,14 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformHashJoin(ctx, op)
 	case *operators.Sequential:
 		return transformSequential(ctx, op)
-	case *operators.DeleteMulti:
-		return transformDeleteMulti(ctx, op)
+	case *operators.DeleteWithInput:
+		return transformDeleteWithInput(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
 }
 
-func transformDeleteMulti(ctx *plancontext.PlanningContext, op *operators.DeleteMulti) (logicalPlan, error) {
+func transformDeleteWithInput(ctx *plancontext.PlanningContext, op *operators.DeleteWithInput) (logicalPlan, error) {
 	input, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
@@ -91,9 +91,10 @@ func transformDeleteMulti(ctx *plancontext.PlanningContext, op *operators.Delete
 	if err != nil {
 		return nil, err
 	}
-	return &deleteMulti{
-		input:  input,
-		delete: del,
+	return &deleteWithInput{
+		input:      input,
+		delete:     del,
+		outputCols: op.Offsets,
 	}, nil
 }
 
@@ -909,4 +910,10 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			CollationEnv:   ctx.VSchema.Environment().CollationEnv(),
 		},
 	}, nil
+}
+
+func generateQuery(statement sqlparser.Statement) string {
+	buf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	statement.Format(buf)
+	return buf.String()
 }
