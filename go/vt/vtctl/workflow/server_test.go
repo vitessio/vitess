@@ -183,7 +183,7 @@ func TestVDiffCreate(t *testing.T) {
 		{
 			name:    "no values",
 			req:     &vtctldatapb.VDiffCreateRequest{},
-			wantErr: "node doesn't exist: keyspaces/shards", // We did not provide any keyspace or shard
+			wantErr: "FindAllShardsInKeyspace(): List: node doesn't exist: keyspaces/shards", // We did not provide any keyspace or shard
 		},
 	}
 	for _, tt := range tests {
