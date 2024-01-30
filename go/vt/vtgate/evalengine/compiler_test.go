@@ -604,8 +604,12 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `TIME("32:34:59")`,
 		},
 		{
-			expression: `current_timestamp + interval 1 day`,
-			result:     `DATETIME("2023-10-25 12:00:00")`,
+			expression: `now(6) + interval 1 day`,
+			result:     `DATETIME("2023-10-25 12:00:00.123456")`,
+		},
+		{
+			expression: `now() + interval 654321 microsecond`,
+			result:     `DATETIME("2023-10-24 12:00:00.654321")`,
 		},
 	}
 
@@ -633,7 +637,7 @@ func TestCompilerSingle(t *testing.T) {
 			}
 
 			env := evalengine.NewExpressionEnv(context.Background(), nil, evalengine.NewEmptyVCursor(venv, tz))
-			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 0, tz))
+			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 123456000, tz))
 			env.Row = tc.values
 
 			expected, err := env.EvaluateAST(converted)
