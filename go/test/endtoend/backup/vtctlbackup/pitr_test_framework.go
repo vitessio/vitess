@@ -48,6 +48,14 @@ const (
 	operationFlushAndPurge
 )
 
+type incrementalFromPosType int
+
+const (
+	incrementalFromPosPosition incrementalFromPosType = iota
+	incrementalFromPosAuto
+	incrementalFromPosBackupName
+)
+
 type PITRTestCase struct {
 	Name           string
 	SetupType      int
@@ -106,6 +114,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 		}
 
 		var fullBackupPos replication.Position
+		var lastBackupName string
 		t.Run("full backup", func(t *testing.T) {
 			InsertRowOnPrimary(t, "before-full-backup")
 			waitForReplica(t, 0)
@@ -118,6 +127,8 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			pos := replication.EncodePosition(fullBackupPos)
 			backupPositions = append(backupPositions, pos)
 			rowsPerPosition[pos] = len(msgs)
+
+			lastBackupName = manifest.BackupName
 		})
 
 		lastBackupPos := fullBackupPos
@@ -127,50 +138,57 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			name              string
 			writeBeforeBackup bool
 			fromFullPosition  bool
-			autoPosition      bool
+			incrementalFrom   incrementalFromPosType
 			expectError       string
 		}{
 			{
-				name: "first incremental backup",
+				name:            "first incremental backup",
+				incrementalFrom: incrementalFromPosPosition,
 			},
 			{
-				name:        "fail1",
-				expectError: "no binary logs to backup",
+				name:            "fail1",
+				incrementalFrom: incrementalFromPosPosition,
+				expectError:     "no binary logs to backup",
 			},
 			{
-				name:        "fail2",
-				expectError: "no binary logs to backup",
+				name:            "fail2",
+				incrementalFrom: incrementalFromPosPosition,
+				expectError:     "no binary logs to backup",
 			},
 			{
 				name:              "make writes, succeed",
 				writeBeforeBackup: true,
+				incrementalFrom:   incrementalFromPosPosition,
 			},
 			{
-				name:        "fail, no binary logs to backup",
-				expectError: "no binary logs to backup",
+				name:            "fail, no binary logs to backup",
+				incrementalFrom: incrementalFromPosPosition,
+				expectError:     "no binary logs to backup",
 			},
 			{
 				name:              "make writes again, succeed",
 				writeBeforeBackup: true,
+				incrementalFrom:   incrementalFromPosBackupName,
 			},
 			{
 				name:              "auto position, succeed",
 				writeBeforeBackup: true,
-				autoPosition:      true,
+				incrementalFrom:   incrementalFromPosAuto,
 			},
 			{
-				name:         "fail auto position, no binary logs to backup",
-				autoPosition: true,
-				expectError:  "no binary logs to backup",
+				name:            "fail auto position, no binary logs to backup",
+				incrementalFrom: incrementalFromPosAuto,
+				expectError:     "no binary logs to backup",
 			},
 			{
 				name:              "auto position, make writes again, succeed",
 				writeBeforeBackup: true,
-				autoPosition:      true,
+				incrementalFrom:   incrementalFromPosAuto,
 			},
 			{
 				name:             "from full backup position",
 				fromFullPosition: true,
+				incrementalFrom:  incrementalFromPosPosition,
 			},
 		}
 		var fromFullPositionBackups []string
@@ -192,11 +210,16 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				// - auto
 				// - explicit last backup pos
 				// - back in history to the original full backup
-				var incrementalFromPos replication.Position
-				if !tc.autoPosition {
-					incrementalFromPos = lastBackupPos
+				var incrementalFromPos string
+				switch tc.incrementalFrom {
+				case incrementalFromPosAuto:
+					incrementalFromPos = mysqlctl.AutoIncrementalFromPos
+				case incrementalFromPosBackupName:
+					incrementalFromPos = lastBackupName
+				case incrementalFromPosPosition:
+					incrementalFromPos = replication.EncodePosition(lastBackupPos)
 					if tc.fromFullPosition {
-						incrementalFromPos = fullBackupPos
+						incrementalFromPos = replication.EncodePosition(fullBackupPos)
 					}
 				}
 				// always use same 1st replica
@@ -206,6 +229,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				}
 				defer func() {
 					lastBackupPos = manifest.Position
+					lastBackupName = manifest.BackupName
 				}()
 				if tc.fromFullPosition {
 					fromFullPositionBackups = append(fromFullPositionBackups, backupName)
@@ -219,8 +243,10 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 
 				expectFromPosition := lastBackupPos.GTIDSet
-				if !incrementalFromPos.IsZero() {
-					expectFromPosition = incrementalFromPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
+				if tc.incrementalFrom == incrementalFromPosPosition {
+					pos, err := replication.DecodePosition(incrementalFromPos)
+					assert.NoError(t, err)
+					expectFromPosition = pos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				}
 				require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v, gtid_purged: %v,  manifest.Position: %v", expectFromPosition, fromPositionIncludingPurged, gtidPurgedPos, manifest.Position)
 			})
@@ -304,6 +330,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 		testedBackups := []testedBackupTimestampInfo{}
 
 		var fullBackupPos replication.Position
+		var lastBackupName string
 		t.Run("full backup", func(t *testing.T) {
 			insertRowOnPrimary(t, "before-full-backup")
 			waitForReplica(t, 0)
@@ -314,6 +341,8 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 			//
 			rows := ReadRowsFromReplica(t, 0)
 			testedBackups = append(testedBackups, testedBackupTimestampInfo{len(rows), time.Now()})
+
+			lastBackupName = manifest.BackupName
 		})
 
 		lastBackupPos := fullBackupPos
@@ -323,50 +352,57 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 			name              string
 			writeBeforeBackup bool
 			fromFullPosition  bool
-			autoPosition      bool
+			incrementalFrom   incrementalFromPosType
 			expectError       string
 		}{
 			{
-				name: "first incremental backup",
+				name:            "first incremental backup",
+				incrementalFrom: incrementalFromPosPosition,
 			},
 			{
-				name:        "fail1",
-				expectError: "no binary logs to backup",
+				name:            "fail1",
+				incrementalFrom: incrementalFromPosPosition,
+				expectError:     "no binary logs to backup",
 			},
 			{
-				name:        "fail2",
-				expectError: "no binary logs to backup",
+				name:            "fail2",
+				incrementalFrom: incrementalFromPosPosition,
+				expectError:     "no binary logs to backup",
 			},
 			{
 				name:              "make writes, succeed",
 				writeBeforeBackup: true,
+				incrementalFrom:   incrementalFromPosPosition,
 			},
 			{
-				name:        "fail, no binary logs to backup",
-				expectError: "no binary logs to backup",
+				name:            "fail, no binary logs to backup",
+				incrementalFrom: incrementalFromPosPosition,
+				expectError:     "no binary logs to backup",
 			},
 			{
 				name:              "make writes again, succeed",
 				writeBeforeBackup: true,
+				incrementalFrom:   incrementalFromPosBackupName,
 			},
 			{
 				name:              "auto position, succeed",
 				writeBeforeBackup: true,
-				autoPosition:      true,
+				incrementalFrom:   incrementalFromPosAuto,
 			},
 			{
-				name:         "fail auto position, no binary logs to backup",
-				autoPosition: true,
-				expectError:  "no binary logs to backup",
+				name:            "fail auto position, no binary logs to backup",
+				incrementalFrom: incrementalFromPosAuto,
+				expectError:     "no binary logs to backup",
 			},
 			{
 				name:              "auto position, make writes again, succeed",
 				writeBeforeBackup: true,
-				autoPosition:      true,
+				incrementalFrom:   incrementalFromPosAuto,
 			},
 			{
 				name:             "from full backup position",
 				fromFullPosition: true,
+				incrementalFrom:  incrementalFromPosPosition,
 			},
 		}
 		var fromFullPositionBackups []string
@@ -386,11 +422,16 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 				// - auto
 				// - explicit last backup pos
 				// - back in history to the original full backup
-				var incrementalFromPos replication.Position
-				if !tc.autoPosition {
-					incrementalFromPos = lastBackupPos
+				var incrementalFromPos string
+				switch tc.incrementalFrom {
+				case incrementalFromPosAuto:
+					incrementalFromPos = mysqlctl.AutoIncrementalFromPos
+				case incrementalFromPosBackupName:
+					incrementalFromPos = lastBackupName
+				case incrementalFromPosPosition:
+					incrementalFromPos = replication.EncodePosition(lastBackupPos)
 					if tc.fromFullPosition {
-						incrementalFromPos = fullBackupPos
+						incrementalFromPos = replication.EncodePosition(fullBackupPos)
 					}
 				}
 				manifest, backupName := TestReplicaIncrementalBackup(t, 0, incrementalFromPos, tc.expectError)
@@ -405,6 +446,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 				testedBackups = append(testedBackups, testedBackupTimestampInfo{len(rowsBeforeBackup), time.Now()})
 				defer func() {
 					lastBackupPos = manifest.Position
+					lastBackupName = manifest.BackupName
 				}()
 				if tc.fromFullPosition {
 					fromFullPositionBackups = append(fromFullPositionBackups, backupName)
@@ -434,8 +476,10 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 				fromPositionIncludingPurged := manifest.FromPosition.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 
 				expectFromPosition := lastBackupPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
-				if !incrementalFromPos.IsZero() {
-					expectFromPosition = incrementalFromPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
+				if tc.incrementalFrom == incrementalFromPosPosition {
+					pos, err := replication.DecodePosition(incrementalFromPos)
+					assert.NoError(t, err)
+					expectFromPosition = pos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				}
 				require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v, gtid_purged: %v,  manifest.Position: %v", expectFromPosition, fromPositionIncludingPurged, gtidPurgedPos, manifest.Position)
 			})
@@ -663,8 +707,7 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 
 						lastBackupPos = fullBackupPos
 					case operationIncrementalBackup:
-						var incrementalFromPos replication.Position // keep zero, we will use "auto"
-						manifest, _ := TestReplicaIncrementalBackup(t, tc.replicaIndex, incrementalFromPos, tc.expectError)
+						manifest, _ := TestReplicaIncrementalBackup(t, tc.replicaIndex, "auto", tc.expectError)
 						if tc.expectError != "" {
 							return
 						}

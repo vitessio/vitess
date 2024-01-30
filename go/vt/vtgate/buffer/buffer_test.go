@@ -20,8 +20,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -69,10 +73,18 @@ var (
 )
 
 func TestBuffering(t *testing.T) {
-	testAllImplementations(t, testBuffering1)
+	testAllImplementations(t, func(t *testing.T, fail failover) {
+		testBuffering1WithOptions(t, fail, 1)
+	})
 }
 
-func testBuffering1(t *testing.T, fail failover) {
+func TestBufferingConcurrent(t *testing.T) {
+	testAllImplementations(t, func(t *testing.T, fail failover) {
+		testBuffering1WithOptions(t, fail, 2)
+	})
+}
+
+func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 	resetVariables()
 	defer checkVariables(t)
 
@@ -86,6 +98,7 @@ func testBuffering1(t *testing.T, fail failover) {
 		topoproto.KeyspaceShardString(keyspace, shard): true,
 	}
 	cfg.now = func() time.Time { return now }
+	cfg.DrainConcurrency = concurrency
 
 	b := New(cfg)
 
@@ -780,5 +793,68 @@ func testShutdown1(t *testing.T, fail failover) {
 
 	if err := waitForPoolSlots(b, cfg.Size); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestParallelRangeIndex(t *testing.T) {
+	suite := []struct {
+		max         int
+		concurrency int
+		calls       []int
+	}{
+		{
+			max:         0,
+			concurrency: 0,
+			calls:       []int{},
+		},
+		{
+			max:         100,
+			concurrency: 0,
+			calls:       []int{},
+		},
+		{
+			max:         9,
+			concurrency: 3,
+			calls:       []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		},
+		{
+			max:         0,
+			concurrency: 10,
+			calls:       []int{0},
+		},
+		{
+			max:         9,
+			concurrency: 9,
+			calls:       []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		},
+	}
+
+	for idx, tc := range suite {
+		name := fmt.Sprintf("%d_max%d_concurrency%d", idx, tc.max, tc.concurrency)
+		t.Run(name, func(t *testing.T) {
+			var mu sync.Mutex
+			var wg sync.WaitGroup
+			var counter atomic.Int64
+
+			wg.Add(tc.concurrency)
+			var got []int
+			for i := 0; i < tc.concurrency; i++ {
+				go func() {
+					defer wg.Done()
+					for {
+						idx, ok := parallelRangeIndex(&counter, tc.max)
+						if !ok {
+							break
+						}
+
+						mu.Lock()
+						got = append(got, idx)
+						mu.Unlock()
+					}
+				}()
+			}
+			wg.Wait()
+			assert.ElementsMatch(t, got, tc.calls, "must call passed function with matching indexes")
+		})
 	}
 }

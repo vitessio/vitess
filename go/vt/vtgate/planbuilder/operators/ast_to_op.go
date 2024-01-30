@@ -108,26 +108,6 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 	return
 }
 
-func checkForCorrelatedSubqueries(
-	ctx *plancontext.PlanningContext,
-	stmt sqlparser.SelectStatement,
-	subqID semantics.TableSet,
-) (correlated bool) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		colname, isColname := node.(*sqlparser.ColName)
-		if !isColname {
-			return true, nil
-		}
-		deps := ctx.SemTable.RecursiveDeps(colname)
-		if deps.IsSolvedBy(subqID) {
-			return true, nil
-		}
-		correlated = true
-		return false, nil
-	}, stmt)
-	return correlated
-}
-
 // joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any
 // comparisons between the inner and the outer side.
 // They can be used for merging the two parts of the query together

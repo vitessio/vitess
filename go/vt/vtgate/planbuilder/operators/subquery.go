@@ -203,7 +203,7 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 	if !sq.TopLevel {
 		panic(subqueryNotAtTopErr)
 	}
-	if sq.correlated {
+	if sq.correlated && sq.FilterType != opcode.PulloutExists {
 		panic(correlatedSubqueryErr)
 	}
 	if sq.IsProjection {

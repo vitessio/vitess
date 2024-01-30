@@ -169,7 +169,7 @@ func createSubquery(
 	sqc := &SubQueryBuilder{totalID: totalID, subqID: subqID, outerID: outerID}
 
 	predicates, joinCols := sqc.inspectStatement(ctx, subq.Select)
-	correlated := checkForCorrelatedSubqueries(ctx, subq.Select, subqID)
+	correlated := !ctx.SemTable.RecursiveDeps(subq).IsEmpty()
 
 	opInner := translateQueryToOp(ctx, subq.Select)
 
