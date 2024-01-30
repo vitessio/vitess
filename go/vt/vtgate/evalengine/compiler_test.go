@@ -603,6 +603,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `CAST(time '32:34:58.5' AS TIME)`,
 			result:     `TIME("32:34:59")`,
 		},
+		{
+			expression: `current_timestamp + interval 1 day`,
+			result:     `DATETIME("2023-10-25 12:00:00")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
