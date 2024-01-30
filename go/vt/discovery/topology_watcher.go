@@ -70,7 +70,7 @@ type TopologyWatcher struct {
 	cell                string
 	refreshInterval     time.Duration
 	refreshKnownTablets bool
-	concurrency         int64
+	concurrency         int
 	ctx                 context.Context
 	cancelFunc          context.CancelFunc
 	// wg keeps track of all launched Go routines.
@@ -92,7 +92,7 @@ type TopologyWatcher struct {
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and reloads them as needed.
-func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int64) *TopologyWatcher {
+func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
 		healthcheck:         hc,

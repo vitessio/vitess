@@ -288,7 +288,7 @@ func (ts *Server) GetTabletAliasesByCell(ctx context.Context, cell string) ([]*t
 // Server.FindAllShardsInKeyspace.
 type GetTabletsByCellOptions struct {
 	// Concurrency controls the maximum number of concurrent calls to GetTablet.
-	Concurrency int64
+	Concurrency int
 }
 
 // GetTabletsByCell returns all the tablets in the cell.
@@ -527,14 +527,13 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 		wg        sync.WaitGroup
 		tabletMap = make(map[string]*TabletInfo)
 		returnErr error
-		// Previously this was always run with unlimited concurrency, so 32 should be fine.
-		concurrency int64 = 32
 	)
 
+	concurrency := DefaultConcurrency
 	if opt != nil && opt.Concurrency > 0 {
 		concurrency = opt.Concurrency
 	}
-	var sem = semaphore.NewWeighted(concurrency)
+	var sem = semaphore.NewWeighted(int64(concurrency))
 
 	for _, tabletAlias := range tabletAliases {
 		wg.Add(1)

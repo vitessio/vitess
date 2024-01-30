@@ -127,7 +127,7 @@ func onlineDDLTest(t *testing.T, args []string, expectedQuery string) {
 	assert.NotEmpty(t, err.Error())
 	containsExpectedError := false
 	expectedErrors := []string{
-		"unable to get shard names for keyspace",
+		"unable to get shards for keyspace",
 		"no ExecuteFetchAsDba results on fake TabletManagerClient",
 	}
 	for _, expect := range expectedErrors {
