@@ -39,6 +39,13 @@ var (
 	ErrExecuteFetchMultipleResults = vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected multiple results. Use ExecuteFetchMulti instead.")
 )
 
+const (
+	// Use as `maxrows` in `ExecuteFetch` and related functions, to indicate no rows should be fetched.
+	// This is different than specifying `0`, because `0` means "expect zero results", while this means
+	// "do not attempt to read any results into memory".
+	FETCH_NO_ROWS = math.MinInt
+)
+
 //
 // Client side methods.
 //
@@ -322,7 +329,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 // caring for any results. The function returns an error if any of the statements fail.
 // The function drains the query results of all statements, even if there's an error.
 func (c *Conn) ExecuteFetchMultiDrain(query string) (err error) {
-	_, more, err := c.ExecuteFetchMulti(query, 0, false)
+	_, more, err := c.ExecuteFetchMulti(query, FETCH_NO_ROWS, false)
 	return c.drainMoreResults(more, err)
 }
 
@@ -331,7 +338,7 @@ func (c *Conn) ExecuteFetchMultiDrain(query string) (err error) {
 func (c *Conn) drainMoreResults(more bool, err error) error {
 	for more {
 		var moreErr error
-		_, more, _, moreErr = c.ReadQueryResult(-1, false)
+		_, more, _, moreErr = c.ReadQueryResult(FETCH_NO_ROWS, false)
 		err = errors.Join(err, moreErr)
 	}
 	return err
@@ -450,6 +457,9 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		data, err := c.readEphemeralPacket()
 		if err != nil {
 			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+		}
+		if maxrows == FETCH_NO_ROWS {
+			return result, more, warnings, nil
 		}
 
 		if c.isEOFPacket(data) {
