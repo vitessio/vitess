@@ -173,11 +173,9 @@ var _ Expr = (*builtinYearWeek)(nil)
 func (call *builtinNow) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(call.utc)
 	if call.onlyTime {
-		buf := datetime.Time_hh_mm_ss.Format(now, call.prec)
-		return newEvalRaw(sqltypes.Time, buf, collationBinary), nil
+		return newEvalTime(now.Time, int(call.prec)), nil
 	} else {
-		buf := datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(now, call.prec)
-		return newEvalRaw(sqltypes.Datetime, buf, collationBinary), nil
+		return newEvalDateTime(now, int(call.prec)), nil
 	}
 }
 
@@ -189,17 +187,15 @@ func (call *builtinNow) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.T
 }
 
 func (call *builtinNow) compile(c *compiler) (ctype, error) {
-	var format *datetime.Strftime
 	var t sqltypes.Type
 
 	if call.onlyTime {
-		format = datetime.Time_hh_mm_ss
 		t = sqltypes.Time
+		c.asm.Fn_NowTime(call.prec, call.utc)
 	} else {
-		format = datetime.DateTime_YYYY_MM_DD_hh_mm_ss
 		t = sqltypes.Datetime
+		c.asm.Fn_Now(call.prec, call.utc)
 	}
-	c.asm.Fn_Now(t, format, call.prec, call.utc)
 	return ctype{Type: t, Col: collationBinary}, nil
 }
 
@@ -212,7 +208,7 @@ func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
 	if tz := env.currentTimezone(); tz != nil {
 		now = now.In(tz)
 	}
-	return newEvalRaw(sqltypes.Datetime, datetime.FromStdTime(now).Format(call.prec), collationBinary), nil
+	return newEvalDateTime(datetime.FromStdTime(now), int(call.prec)), nil
 }
 
 func (call *builtinSysdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -230,7 +226,7 @@ func (call *builtinSysdate) constant() bool {
 
 func (call *builtinCurdate) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(false)
-	return newEvalRaw(sqltypes.Date, datetime.Date_YYYY_MM_DD.Format(now, 0), collationBinary), nil
+	return newEvalDate(now.Date), nil
 }
 
 func (call *builtinCurdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -248,7 +244,7 @@ func (call *builtinCurdate) constant() bool {
 
 func (call *builtinUtcDate) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(true)
-	return newEvalRaw(sqltypes.Date, datetime.Date_YYYY_MM_DD.Format(now, 0), collationBinary), nil
+	return newEvalDate(now.Date), nil
 }
 
 func (call *builtinUtcDate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
