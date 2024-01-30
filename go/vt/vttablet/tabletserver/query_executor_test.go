@@ -1437,6 +1437,43 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 	}
 }
 
+func TestGetConnectionLogStats(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	input := "select * from test_table limit 1"
+
+	// getConn() happy path
+	qre := newTestQueryExecutor(ctx, tsv, input, 0)
+	conn, err := qre.getConn()
+	assert.NoError(t, err)
+	assert.NotNil(t, conn)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+
+	// getStreamConn() happy path
+	qre = newTestQueryExecutor(ctx, tsv, input, 0)
+	conn, err = qre.getStreamConn()
+	assert.NoError(t, err)
+	assert.NotNil(t, conn)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+
+	// Close the db connection to induce connection errors
+	db.Close()
+
+	// getConn() error path
+	qre = newTestQueryExecutor(ctx, tsv, input, 0)
+	_, err = qre.getConn()
+	assert.Error(t, err)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+
+	// getStreamConn() error path
+	qre = newTestQueryExecutor(ctx, tsv, input, 0)
+	_, err = qre.getStreamConn()
+	assert.Error(t, err)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+}
+
 type executorFlags int64
 
 const (
