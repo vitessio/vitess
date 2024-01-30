@@ -245,7 +245,7 @@ func daysIn(m time.Month, year int) int {
 }
 
 func isLeap(year int) bool {
-	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
+	return year%4 == 0 && (year%100 != 0 || year%400 == 0) && (year != 0)
 }
 
 func daysInYear(year int) int {
