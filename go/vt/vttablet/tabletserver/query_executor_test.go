@@ -1439,6 +1439,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 
 func TestGetConnectionLogStats(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
