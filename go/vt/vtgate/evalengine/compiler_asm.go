@@ -3286,31 +3286,32 @@ func cmpnum[N interface{ int64 | uint64 | float64 }](a, b N) int {
 	}
 }
 
-func (asm *assembler) Fn_Now(t querypb.Type, format *datetime.Strftime, prec uint8, utc bool) {
+func (asm *assembler) Fn_Now(prec uint8, utc bool) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
-		val := env.vm.arena.newEvalBytesEmpty()
-		val.tt = int16(t)
-		val.bytes = format.Format(env.time(utc), prec)
-		val.col = collationBinary
-		env.vm.stack[env.vm.sp] = val
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalDateTime(env.time(utc), int(prec))
 		env.vm.sp++
 		return 1
-	}, "FN NOW")
+	}, "FN NOW(DATETIME)")
+}
+
+func (asm *assembler) Fn_NowTime(prec uint8, utc bool) {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalTime(env.time(utc).Time, int(prec))
+		env.vm.sp++
+		return 1
+	}, "FN NOW(TIME)")
 }
 
 func (asm *assembler) Fn_Sysdate(prec uint8) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
-		val := env.vm.arena.newEvalBytesEmpty()
-		val.tt = int16(sqltypes.Datetime)
 		now := SystemTime()
 		if tz := env.currentTimezone(); tz != nil {
 			now = now.In(tz)
 		}
-		val.bytes = datetime.NewDateTimeFromStd(now).Format(prec)
-		val.col = collationBinary
-		env.vm.stack[env.vm.sp] = val
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalDateTime(datetime.NewDateTimeFromStd(now), int(prec))
 		env.vm.sp++
 		return 1
 	}, "FN SYSDATE")
@@ -3319,11 +3320,7 @@ func (asm *assembler) Fn_Sysdate(prec uint8) {
 func (asm *assembler) Fn_Curdate() {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
-		val := env.vm.arena.newEvalBytesEmpty()
-		val.tt = int16(sqltypes.Date)
-		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(false), 0)
-		val.col = collationBinary
-		env.vm.stack[env.vm.sp] = val
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalDate(env.time(false).Date)
 		env.vm.sp++
 		return 1
 	}, "FN CURDATE")
@@ -3332,11 +3329,7 @@ func (asm *assembler) Fn_Curdate() {
 func (asm *assembler) Fn_UtcDate() {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
-		val := env.vm.arena.newEvalBytesEmpty()
-		val.tt = int16(sqltypes.Date)
-		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(true), 0)
-		val.col = collationBinary
-		env.vm.stack[env.vm.sp] = val
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalDate(env.time(true).Date)
 		env.vm.sp++
 		return 1
 	}, "FN UTC_DATE")
