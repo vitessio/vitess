@@ -1106,7 +1106,7 @@ func (cached *Delete) CachedSize(alloc bool) int64 {
 	size += cached.With.CachedSize(true)
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
-	// field TableExprs vitess.io/vitess/go/vt/sqlparser.TableExprs
+	// field TableExprs []vitess.io/vitess/go/vt/sqlparser.TableExpr
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.TableExprs)) * int64(16))
 		for _, elem := range cached.TableExprs {
@@ -4238,7 +4238,7 @@ func (cached *Update) CachedSize(alloc bool) int64 {
 	size += cached.With.CachedSize(true)
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
-	// field TableExprs vitess.io/vitess/go/vt/sqlparser.TableExprs
+	// field TableExprs []vitess.io/vitess/go/vt/sqlparser.TableExpr
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.TableExprs)) * int64(16))
 		for _, elem := range cached.TableExprs {
