@@ -442,14 +442,15 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 				more = (statusFlags & ServerMoreResultsExists) != 0
 				result.StatusFlags = statusFlags
 			} else {
-				if err := c.parseOKPacket(&packetOk, data); err != nil {
+				var packetEof PacketOK
+				if err := c.parseOKPacket(&packetEof, data); err != nil {
 					return nil, false, 0, err
 				}
-				warnings = packetOk.warnings
-				more = (packetOk.statusFlags & ServerMoreResultsExists) != 0
-				result.SessionStateChanges = packetOk.sessionStateData
-				result.StatusFlags = packetOk.statusFlags
-				result.Info = packetOk.info
+				warnings = packetEof.warnings
+				more = (packetEof.statusFlags & ServerMoreResultsExists) != 0
+				result.SessionStateChanges = packetEof.sessionStateData
+				result.StatusFlags = packetEof.statusFlags
+				result.Info = packetEof.info
 			}
 			return result, more, warnings, nil
 

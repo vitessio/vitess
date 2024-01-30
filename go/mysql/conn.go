@@ -1530,28 +1530,25 @@ func (c *Conn) parseOKPacket(packetOK *PacketOK, in []byte) error {
 		data: in,
 		pos:  1, // We already read the type.
 	}
-	fail := func(format string, args ...any) error {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, format, args...)
-	}
 
 	// Affected rows.
 	affectedRows, ok := data.readLenEncInt()
 	if !ok {
-		return fail("invalid OK packet affectedRows: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet affectedRows: %v", data.data)
 	}
 	packetOK.affectedRows = affectedRows
 
 	// Last Insert ID.
 	lastInsertID, ok := data.readLenEncInt()
 	if !ok {
-		return fail("invalid OK packet lastInsertID: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet lastInsertID: %v", data.data)
 	}
 	packetOK.lastInsertID = lastInsertID
 
 	// Status flags.
 	statusFlags, ok := data.readUint16()
 	if !ok {
-		return fail("invalid OK packet statusFlags: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet statusFlags: %v", data.data)
 	}
 	packetOK.statusFlags = statusFlags
 
@@ -1559,7 +1556,7 @@ func (c *Conn) parseOKPacket(packetOK *PacketOK, in []byte) error {
 	// Warnings.
 	warnings, ok := data.readUint16()
 	if !ok {
-		return fail("invalid OK packet warnings: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet warnings: %v", data.data)
 	}
 	packetOK.warnings = warnings
 
@@ -1588,7 +1585,7 @@ func (c *Conn) parseOKPacket(packetOK *PacketOK, in []byte) error {
 				}
 				sessionLen, ok := data.readLenEncInt()
 				if !ok {
-					return fail("invalid OK packet session state change length for type %v", sscType)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet session state change length for type %v", sscType)
 				}
 
 				if sscType != SessionTrackGtids {
@@ -1601,12 +1598,12 @@ func (c *Conn) parseOKPacket(packetOK *PacketOK, in []byte) error {
 				// read (and ignore for now) the GTIDS encoding specification code: 1 byte
 				_, ok = data.readByte()
 				if !ok {
-					return fail("invalid OK packet gtids type: %v", data)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet gtids type: %v", data.data)
 				}
 
 				gtids, ok := data.readLenEncString()
 				if !ok {
-					return fail("invalid OK packet gtids: %v", data)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet gtids: %v", data.data)
 				}
 				packetOK.sessionStateData = gtids
 			}
