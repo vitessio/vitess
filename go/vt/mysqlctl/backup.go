@@ -179,6 +179,8 @@ func Backup(ctx context.Context, params BackupParams) error {
 		finishErr = bh.AbortBackup(ctx)
 	case BackupEmpty:
 		logger.Infof(EmptyBackupMessage)
+		// While an empty backup is considered "successful", it should leave no trace.
+		// We therefore ensire to clean up an backup files/directories/entries.
 		finishErr = bh.AbortBackup(ctx)
 	case BackupUsable:
 		finishErr = bh.EndBackup(ctx)

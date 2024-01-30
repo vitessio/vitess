@@ -168,7 +168,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 			},
 			{
 				name:            "empty again",
-				incrementalFrom: incrementalFromPosAuto,
+				incrementalFrom: incrementalFromPosPosition,
 				expectEmpty:     true,
 			},
 			{
@@ -393,7 +393,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 			},
 			{
 				name:            "empty again",
-				incrementalFrom: incrementalFromPosAuto,
+				incrementalFrom: incrementalFromPosPosition,
 				expectEmpty:     true,
 			},
 			{
