@@ -379,6 +379,43 @@ func (kss *keyspaceState) onSrvKeyspace(newKeyspace *topodatapb.SrvKeyspace, new
 	return true
 }
 
+<<<<<<< HEAD
+=======
+// isServing returns whether a keyspace has at least one serving shard or not.
+func (kss *keyspaceState) isServing() bool {
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+	for _, state := range kss.shards {
+		if state.serving {
+			return true
+		}
+	}
+	return false
+}
+
+// onSrvVSchema is called from a Watcher in the topo server whenever the SrvVSchema is updated by Vitess.
+// For the purposes here, we are interested in updates to the RoutingRules or ShardRoutingRules.
+// In addition, the traffic switcher updates SrvVSchema when the DeniedTables attributes in a Shard record is
+// modified.
+func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool {
+	// the vschema can be nil if the server is currently shutting down
+	if vs == nil {
+		return true
+	}
+
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+	kss.moveTablesState, _ = kss.getMoveTablesStatus(vs)
+	if kss.moveTablesState != nil && kss.moveTablesState.Typ != MoveTablesNone {
+		// mark the keyspace as inconsistent. ensureConsistentLocked() checks if the workflow is switched,
+		// and if so, it will send an event to the buffering subscribers to indicate that buffering can be stopped.
+		kss.consistent = false
+		kss.ensureConsistentLocked()
+	}
+	return true
+}
+
+>>>>>>> ee368e15f8 (discovery: fix crash with nil server vschema (#15086))
 // newKeyspaceState allocates the internal state required to keep track of availability incidents
 // in this keyspace, and starts up a SrvKeyspace watcher on our topology server which will update
 // our keyspaceState with any topology changes in real time.
