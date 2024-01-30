@@ -104,9 +104,6 @@ const (
 	DefaultHealthCheckRetryDelay = 5 * time.Second
 	DefaultHealthCheckTimeout    = 1 * time.Minute
 
-	// DefaultTopologyWatcherRefreshInterval is used as the default value for
-	// the refresh interval of a topology watcher.
-	DefaultTopologyWatcherRefreshInterval = 1 * time.Minute
 	// healthCheckTemplate is the HTML code to display a TabletsCacheStatusList, it takes a parameter for the title
 	// as the template can be used for both HealthCheck's cache and healthy tablets list.
 	healthCheckTemplate = `
