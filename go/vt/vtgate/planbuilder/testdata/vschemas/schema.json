@@ -862,6 +862,28 @@
             {"name": "bar", "default": "1"}
           ]
         },
+        "u_tbl10": {
+          "columns": [
+            {
+              "name": "col10",
+              "type": "VARCHAR"
+            },
+            {"name": "col"},
+            {"name": "id"}
+          ],
+          "column_list_authoritative": true
+        },
+        "u_tbl11": {
+          "columns": [
+            {
+              "name": "col11",
+              "type": "VARCHAR"
+            },
+            {"name": "col"},
+            {"name": "id"}
+          ],
+          "column_list_authoritative": true
+        },
         "u_tbl": {},
         "u_multicol_tbl1": {},
         "u_multicol_tbl2": {},

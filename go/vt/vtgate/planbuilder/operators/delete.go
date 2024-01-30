@@ -90,7 +90,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		}
 	}
 
-	childFks := ctx.SemTable.GetChildForeignKeysList()
+	childFks := ctx.SemTable.GetChildForeignKeysForTable(deleteStmt.Targets[0])
 	// If there are no foreign key constraints, then we don't need to do anything.
 	if len(childFks) == 0 {
 		return op
@@ -231,7 +231,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Opera
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
 		var offsets []int
-		offsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs)
+		offsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs, deletedTbl.GetTableName())
 
 		fkChildren = append(fkChildren,
 			createFkChildForDelete(ctx, fk, offsets))

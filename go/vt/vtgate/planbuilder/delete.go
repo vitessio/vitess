@@ -140,6 +140,7 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 	}
 
 	// Delete is only supported for single Target.
+	// TODO: Fix error message based on whether sharded keyspace or foreign keys.
 	if len(del.Targets) > 1 {
 		return vterrors.VT12001("multi-table DELETE statement in a sharded keyspace")
 	}

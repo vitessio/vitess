@@ -316,9 +316,9 @@ func (vx *VExec) WithWorkflow(workflow string) *VExec {
 func extractTableName(stmt sqlparser.Statement) (string, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Update:
-		return sqlparser.String(stmt.TableExprs), nil
+		return sqlparser.ToString(stmt.TableExprs), nil
 	case *sqlparser.Delete:
-		return sqlparser.String(stmt.TableExprs), nil
+		return sqlparser.ToString(stmt.TableExprs), nil
 	case *sqlparser.Insert:
 		return sqlparser.String(stmt.Table), nil
 	case *sqlparser.Select:
