@@ -149,7 +149,7 @@ func TestExecuteBackup(t *testing.T) {
 
 	fakeStats := backupstats.NewFakeStats()
 
-	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -167,7 +167,7 @@ func TestExecuteBackup(t *testing.T) {
 	}, bh)
 
 	require.NoError(t, err)
-	assert.True(t, ok)
+	assert.Equal(t, mysqlctl.BackupUsable, backupResult)
 
 	var destinationCloseStats int
 	var destinationOpenStats int
@@ -209,7 +209,7 @@ func TestExecuteBackup(t *testing.T) {
 	mysqld.ExpectedExecuteSuperQueryCurrent = 0 // resest the index of what queries we've run
 	mysqld.ShutdownTime = time.Minute           // reminder that shutdownDeadline is 1s
 
-	ok, err = be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+	backupResult, err = be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -225,7 +225,7 @@ func TestExecuteBackup(t *testing.T) {
 	}, bh)
 
 	assert.Error(t, err)
-	assert.False(t, ok)
+	assert.Equal(t, mysqlctl.BackupUnusable, backupResult)
 }
 
 func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
@@ -296,7 +296,7 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 		"SET GLOBAL innodb_fast_shutdown=0": {},
 	}
 
-	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -314,7 +314,7 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 	}, bh)
 
 	require.NoError(t, err)
-	assert.True(t, ok)
+	assert.Equal(t, mysqlctl.BackupUsable, backupResult)
 }
 
 // TestExecuteBackupWithCanceledContext tests the ability of the backup function to gracefully handle cases where errors
@@ -383,7 +383,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	cancelledCtx, cancelCtx := context.WithCancel(context.Background())
 	cancelCtx()
 
-	ok, err := be.ExecuteBackup(cancelledCtx, mysqlctl.BackupParams{
+	backupResult, err := be.ExecuteBackup(cancelledCtx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -403,7 +403,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	require.Error(t, err)
 	// all four files will fail
 	require.ErrorContains(t, err, "context canceled;context canceled;context canceled;context canceled")
-	assert.False(t, ok)
+	assert.Equal(t, mysqlctl.BackupUnusable, backupResult)
 }
 
 // TestExecuteRestoreWithCanceledContext tests the ability of the restore function to gracefully handle cases where errors
@@ -468,7 +468,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 
-	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -486,7 +486,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	}, bh)
 
 	require.NoError(t, err)
-	assert.True(t, ok)
+	assert.Equal(t, mysqlctl.BackupUsable, backupResult)
 
 	// Now try to restore the above backup.
 	bh = filebackupstorage.NewBackupHandle(nil, "", "", true)

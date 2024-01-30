@@ -45,9 +45,17 @@ var (
 	backupEngineImplementation = builtinBackupEngineName
 )
 
+type BackupResult int
+
+const (
+	BackupUnusable BackupResult = iota
+	BackupEmpty
+	BackupUsable
+)
+
 // BackupEngine is the interface to take a backup with a given engine.
 type BackupEngine interface {
-	ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error)
+	ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error)
 	ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool
 }
 
