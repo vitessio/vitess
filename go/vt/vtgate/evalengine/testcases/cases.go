@@ -133,6 +133,7 @@ var Cases = []TestCase{
 	{Run: FnLastDay},
 	{Run: FnToDays},
 	{Run: FnFromDays},
+	{Run: FnTimeToSec},
 	{Run: FnQuarter},
 	{Run: FnSecond},
 	{Run: FnTime},
@@ -1813,6 +1814,26 @@ func FnFromDays(yield Query) {
 
 	for _, d := range days {
 		yield(fmt.Sprintf("FROM_DAYS(%s)", d), nil)
+	}
+}
+
+func FnTimeToSec(yield Query) {
+	for _, d := range inputConversions {
+		yield(fmt.Sprintf("FROM_DAYS(%s)", d), nil)
+	}
+
+	time := []string{
+		`0`,
+		`'00:00:00'`,
+		`'22:23:00'`,
+		`'00:39:38'`,
+		`'000220`,
+		`'2003-09-03 00:39:38'`,
+		`'2003-09-03'`,
+	}
+
+	for _, t := range time {
+		yield(fmt.Sprintf("TIME_TO_SEC(%s)", t), nil)
 	}
 }
 
