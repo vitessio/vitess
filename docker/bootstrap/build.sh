@@ -65,5 +65,6 @@ if [ -f "docker/bootstrap/Dockerfile.$flavor" ]; then
       -t $image \
       --build-arg bootstrap_version=$version \
       --build-arg image=$base_image \
+      --platform linux/amd64 \
       .
 fi
