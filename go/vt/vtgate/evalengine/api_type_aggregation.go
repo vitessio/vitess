@@ -61,7 +61,7 @@ func AggregateEvalTypes(types []Type, env *collations.Environment) (Type, error)
 		size = max(typ.size, size)
 		scale = max(typ.scale, scale)
 	}
-	return NewTypeEx(typeAgg.result(), collAgg.result().Collation, typeAgg.nullable, 0, 0), nil
+	return NewTypeEx(typeAgg.result(), collAgg.result().Collation, typeAgg.nullable, size, scale), nil
 }
 
 func AggregateTypes(types []sqltypes.Type) sqltypes.Type {
