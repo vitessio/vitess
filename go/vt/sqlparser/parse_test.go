@@ -3680,6 +3680,21 @@ var (
 		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 	}, {
+		input:  "select 1 from dual where 'bac' = 'b' 'a' 'c'",
+		output: "select 1 from dual where 'bac' = 'bac'",
+	}, {
+		input:  "select 'b' 'a' 'c'",
+		output: "select 'bac' from dual",
+	}, {
+		input:  "select 1 where 'bac' = N'b' 'a' 'c'",
+		output: "select 1 from dual where 'bac' = N'bac'",
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  "select _ascii 'b' 'a' 'c'",
+		output: "select _ascii 'bac' from dual",
+	}, {
 		input: `kill connection 18446744073709551615`,
 	}, {
 		input: `kill query 18446744073709551615`,
