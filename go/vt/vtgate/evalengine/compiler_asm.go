@@ -3524,8 +3524,13 @@ func (asm *assembler) Fn_DAYOFWEEK() {
 		if env.vm.stack[env.vm.sp-1] == nil {
 			return 1
 		}
-		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(arg.dt.Date.Weekday() + 1))
+		d := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+
+		wd := d.dt.Date.ToStdTime(env.currentTimezone()).Weekday() + 1
+		if d.dt.Date.Year() == 0 && d.dt.Date.Month() <= 2 {
+			wd += 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(wd))
 		return 1
 	}, "FN DAYOFWEEK DATE(SP-1)")
 }

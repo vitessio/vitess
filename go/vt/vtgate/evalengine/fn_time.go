@@ -504,7 +504,12 @@ func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
-	return newEvalInt64(int64(d.dt.Date.ToStdTime(env.currentTimezone()).Weekday() + 1)), nil
+
+	wd := d.dt.Date.ToStdTime(env.currentTimezone()).Weekday() + 1
+	if d.dt.Date.Year() == 0 && d.dt.Date.Month() <= 2 {
+		wd += 1
+	}
+	return newEvalInt64(int64(wd)), nil
 }
 
 func (call *builtinDayOfWeek) compile(c *compiler) (ctype, error) {
@@ -1494,6 +1499,9 @@ func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
 	}
 
 	ts := dt.dt.ToStdTime(env.now)
+	if ts.Before(time.Date(1970, 01, 01, 0, 0, 0, 0, time.UTC)) || ts.After(time.Date(3001, 1, 19, 3, 14, 7, 99999, time.UTC)) {
+		return newEvalInt64(0)
+	}
 	if dt.prec == 0 {
 		return newEvalInt64(ts.Unix())
 	}
