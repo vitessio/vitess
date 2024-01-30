@@ -202,6 +202,15 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 // These precedence rules are there to handle shift-reduce conflicts.
 %nonassoc <str> MEMBER
+// MULTIPLE_TEXT_LITERAL is used to resolve shift-reduce conflicts occuring due to multiple STRING symbols occuring one after the other.
+// According to the ANSI standard, these strings should be concatenated together.
+// The shift-reduce conflict occurrs because after seeing a STRING, if we see another one, then we can either shift to concatenate them or
+// reduce the STRING into a text_literal, eventually into a simple_expr and use the coming string as an alias.
+// The way to fix this conflict is to give shifting higher precedence than reducing.
+// Adding no precedence also works, since shifting is the default, but it reports a conflict which we can avoid by adding this precedence rule.
+// In order to ensure lower precedence of reduction, this rule has to come before the precedence declaration of STRING.
+// This precedence should not be used anywhere else other than with rules where text_literal is being reduced.
+%nonassoc <str> MULTIPLE_TEXT_LITERAL
 // FUNCTION_CALL_NON_KEYWORD is used to resolve shift-reduce conflicts occuring due to function_call_generic symbol and
 // having special parsing for functions whose names are non-reserved keywords. The shift-reduce conflict occurrs because
 // after seeing a non-reserved keyword, if we see '(', then we can either shift to use the special parsing grammar rule or
@@ -464,7 +473,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
 %type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
-%type <expr> simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
+%type <expr> simple_expr literal NUM_literal text_start text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -1667,7 +1676,7 @@ NULL
    }
 
 literal:
-text_literal
+text_literal %prec MULTIPLE_TEXT_LITERAL
   {
    $$= $1
   }
@@ -1926,6 +1935,16 @@ INTEGRAL
   }
 
 text_literal:
+text_start
+  {
+  	$$ = $1
+  }
+| text_literal STRING
+  {
+  	$$ = AppendString($1, $2)
+  }
+
+text_start:
 STRING
   {
 	$$ = NewStrLiteral($1)
@@ -1940,7 +1959,7 @@ STRING
    }
 
 text_literal_or_arg:
-  text_literal
+  text_literal %prec MULTIPLE_TEXT_LITERAL
   {
     $$ = $1
   }

@@ -2996,7 +2996,7 @@ INPUT
 select concat(a, if(b>10, 'x' 'æ', 'y' 'ß')) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, 'x' as `æ`, 'y' as `ß`)) from t1
+select concat(a, if(b > 10, 'xæ', 'yß')) from t1
 END
 INPUT
 select * from (t1 natural join t2) natural join (t3 join (t4 natural join t5) on (b < z));
@@ -10376,7 +10376,7 @@ INPUT
 select concat(a, if(b>10, 'x' 'x', 'y' 'y')) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, 'x' as x, 'y' as y)) from t1
+select concat(a, if(b > 10, 'xx', 'yy')) from t1
 END
 INPUT
 select * from `information_schema`.`COLUMNS` where `TABLE_NAME` = NULL;
@@ -16772,7 +16772,7 @@ INPUT
 select 'The cost of accessing t1 (dont care if it changes' '^';
 END
 OUTPUT
-select 'The cost of accessing t1 (dont care if it changes' as `^` from dual
+select 'The cost of accessing t1 (dont care if it changes^' from dual
 END
 INPUT
 select * from t1 natural left join t2 where (i is not null)=0;
@@ -18872,7 +18872,7 @@ INPUT
 select 'hello' 'monty';
 END
 OUTPUT
-select 'hello' as monty from dual
+select 'hellomonty' from dual
 END
 INPUT
 select collation(bin(130)), coercibility(bin(130));
