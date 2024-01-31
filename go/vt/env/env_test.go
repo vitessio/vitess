@@ -77,8 +77,9 @@ func TestVtMysqlRoot(t *testing.T) {
 			vtMysqlRootEnvVal: "/home/mysql/binaries",
 		},
 		{
-			name:       "VT_MYSQL_ROOT empty; PATH set without /usr/sbin",
-			pathEnvVal: testDir + filepath.Dir(mysqldSbinPath) + ":/usr/bin:/sbin:/bin:/usr/local/bin:/usr/local/sbin:/home/mysql/binaries",
+			name: "VT_MYSQL_ROOT empty; PATH set without /usr/sbin",
+			pathEnvVal: testDir + filepath.Dir(mysqldSbinPath) +
+				":/usr/bin:/sbin:/bin:/usr/local/bin:/usr/local/sbin:/home/mysql/binaries",
 			preFunc: func() error {
 				return createExecutable(mysqldSbinPath)
 			},
