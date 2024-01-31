@@ -86,12 +86,13 @@ func TestVtMysqlRoot(t *testing.T) {
 		})
 	}
 
-	// Confirm the PATH value after all test runs.
+	// Confirm the PATH value now after all test runs.
+	currentPATH := os.Getenv("PATH")
 	if slices.Contains(strings.Split(originalPATH, ":"), sbinPath) {
 		// The PATH already had /usr/sbin and we should not have changed it.
-		require.Equal(t, originalPATH, os.Getenv("PATH"))
+		require.Equal(t, originalPATH, currentPATH)
 	} else {
 		// We should have prepended it exactly once.
-		require.Equal(t, fmt.Sprintf("%s:%s", sbinPath, originalPATH), os.Getenv("PATH"))
+		require.Equal(t, fmt.Sprintf("%s:%s", sbinPath, originalPATH), currentPATH)
 	}
 }
