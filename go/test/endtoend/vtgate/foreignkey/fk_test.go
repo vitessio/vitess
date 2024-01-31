@@ -687,6 +687,36 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_t17 order by id",
 				"select * from fk_t19 order by id",
 			},
+		}, {
+			name: "Delete with limit success",
+			dataQueries: []string{
+				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t17(id, col) values (1, 7)",
+				"insert into fk_t19(id, col) values (1, 7)",
+			},
+			dmlQuery: "delete from fk_t15 order by id limit 1",
+			assertionQueries: []string{
+				"select * from fk_t15 order by id",
+				"select * from fk_t16 order by id",
+				"select * from fk_t17 order by id",
+				"select * from fk_t19 order by id",
+			},
+		}, {
+			name: "Delete with limit 0 success",
+			dataQueries: []string{
+				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t17(id, col) values (1, 7)",
+				"insert into fk_t19(id, col) values (1, 7)",
+			},
+			dmlQuery: "delete from fk_t15 order by id limit 0",
+			assertionQueries: []string{
+				"select * from fk_t15 order by id",
+				"select * from fk_t16 order by id",
+				"select * from fk_t17 order by id",
+				"select * from fk_t19 order by id",
+			},
 		},
 	}
 
