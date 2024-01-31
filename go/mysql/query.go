@@ -458,9 +458,6 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		if err != nil {
 			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 		}
-		if maxrows == FETCH_NO_ROWS {
-			return result, more, warnings, nil
-		}
 
 		if c.isEOFPacket(data) {
 			defer c.recycleReadPacket()
@@ -497,6 +494,11 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			defer c.recycleReadPacket()
 			// Error packet.
 			return nil, false, 0, ParseErrorPacket(data)
+		}
+
+		if maxrows == FETCH_NO_ROWS {
+			c.recycleReadPacket()
+			continue
 		}
 
 		// Check we're not over the limit before we add more.
