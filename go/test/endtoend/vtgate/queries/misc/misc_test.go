@@ -284,3 +284,36 @@ func TestAnalyze(t *testing.T) {
 		})
 	}
 }
+
+// TestTransactionModeVar executes SELECT on `transaction_mode` variable
+func TestTransactionModeVar(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	tcases := []struct {
+		setStmt string
+		expRes  string
+	}{{
+		expRes: `[[VARCHAR("MULTI")]]`,
+	}, {
+		setStmt: `set transaction_mode = single`,
+		expRes:  `[[VARCHAR("SINGLE")]]`,
+	}, {
+		setStmt: `set transaction_mode = multi`,
+		expRes:  `[[VARCHAR("MULTI")]]`,
+	}, {
+		setStmt: `set transaction_mode = twopc`,
+		expRes:  `[[VARCHAR("TWOPC")]]`,
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.setStmt, func(t *testing.T) {
+			if tcase.setStmt != "" {
+				utils.Exec(t, mcmp.VtConn, tcase.setStmt)
+			}
+			utils.AssertMatches(t, mcmp.VtConn, "select @@transaction_mode", tcase.expRes)
+		})
+	}
+}
