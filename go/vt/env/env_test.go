@@ -17,7 +17,10 @@ limitations under the License.
 package env
 
 import (
+	"fmt"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -83,6 +86,12 @@ func TestVtMysqlRoot(t *testing.T) {
 		})
 	}
 
-	// After all of the test runs, the PATH should only have had /usr/sbin added once.
-	require.Equal(t, "/usr/sbin:"+originalPATH, os.Getenv("PATH"))
+	// Confirm the PATH after all test runs.
+	if slices.Contains(strings.Split(originalPATH, ":"), sbinPath) {
+		// The PATH already had /usr/sbin and we should not have changed it.
+		require.Equal(t, originalPATH, os.Getenv("PATH"))
+	} else {
+		// We should have prepended it exactly once.
+		require.Equal(t, fmt.Sprintf("%s:%s", sbinPath, originalPATH), os.Getenv("PATH"))
+	}
 }
