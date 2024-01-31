@@ -1622,5 +1622,96 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "Select literals from table union Select now() from table",
+    "query": "select 3 from user union select now() from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 3 from user union select now() from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 3 from `user` where 1 != 1 union select now() from `user` where 1 != 1",
+            "Query": "select 3 from `user` union select now() from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Select now() from table union Select literals from table",
+    "query": "select now() from user union select 3 from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select now() from user union select 3 from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select now() from `user` where 1 != 1 union select 3 from `user` where 1 != 1",
+            "Query": "select now() from `user` union select 3 from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Select now() from table union Select column from table",
+    "query": "select now() from user union select id from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select now() from user union select id from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `now()`, weight_string(`now()`) from (select now() from `user` where 1 != 1 union select id from `user` where 1 != 1) as dt where 1 != 1",
+            "Query": "select `now()`, weight_string(`now()`) from (select now() from `user` union select id from `user`) as dt",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

@@ -73,6 +73,21 @@ func TestUnionDistinct(t *testing.T) {
 				t.Skip()
 				mcmp.AssertMatches("select 1 from dual where 1 IN (select 1 as col union select 2)", "[[INT64(1)]]")
 			})
+			if utils.BinaryIsAtLeastAtVersion(19, "vtgate") {
+				mcmp.AssertMatches(`SELECT 1 from t1 UNION SELECT 2 from t1`, `[[INT64(1)] [INT64(2)]]`)
+				mcmp.AssertMatches(`SELECT 5 from t1 UNION SELECT 6 from t1`, `[[INT64(5)] [INT64(6)]]`)
+				mcmp.AssertMatchesNoOrder(`SELECT id1 from t1 UNION SELECT id2 from t1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
+				mcmp.AssertMatchesNoOrder(`SELECT 1 from t1 UNION SELECT id2 from t1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
+				mcmp.AssertMatchesNoOrder(`SELECT 5 from t1 UNION SELECT id2 from t1`, `[[INT64(5)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
+				mcmp.AssertMatchesNoOrder(`SELECT id1 from t1 UNION SELECT 2 from t1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
+				mcmp.AssertMatchesNoOrder(`SELECT id1 from t1 UNION SELECT 5 from t1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]`)
+				mcmp.AssertMatchesNoOrder(`select 3 from t1 union select DAY("2024-01-31") from t1`, `[[INT64(3)] [INT64(31)]]`)
+				mcmp.AssertMatchesNoOrder(`select DAY("2024-01-31") from t1 union select 3 from t1`, `[[INT64(31)] [INT64(3)]]`)
+				mcmp.AssertMatchesNoOrder(`select DAY("2024-01-31") from t1 union select id1 from t1`, `[[INT64(31)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
+				mcmp.Exec(`select 3 from t1 union select curdate() from t1`)
+				mcmp.Exec(`select curdate() from t1 union select 3 from t1`)
+				mcmp.Exec(`select curdate() from t1 union select id1 from t1`)
+			}
 		})
 
 	}
@@ -130,11 +145,4 @@ func TestUnion(t *testing.T) {
 	if utils.BinaryIsAtLeastAtVersion(19, "vtgate") {
 		mcmp.AssertMatches(`(SELECT id2,'a' from t1 where id1 = 1) union (SELECT 'a',id2 from t1 where id1 = 2)`, `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("a") VARCHAR("2")]]`)
 	}
-	mcmp.AssertMatches(`SELECT 1 from t1 UNION SELECT 2 from t1`, `[[INT64(1)] [INT64(2)]]`)
-	mcmp.AssertMatches(`SELECT 4 from t1 UNION SELECT 3 from t1`, `[[INT64(4)] [INT64(3)]]`)
-	mcmp.AssertMatches(`SELECT id1 from t1 UNION SELECT id2 from t1`, `[[INT64(1)] [INT64(2)]]`)
-	mcmp.AssertMatches(`SELECT 1 from t1 UNION SELECT id2 from t1`, `[[INT64(1)] [INT64(2)]]`)
-	mcmp.AssertMatches(`SELECT 3 from t1 UNION SELECT id2 from t1`, `[[INT64(3)] [INT64(1)] [INT64(2)]]`)
-	mcmp.AssertMatches(`SELECT id1 from t1 UNION SELECT 2 from t1`, `[[INT64(1)] [INT64(2)]]`)
-	mcmp.AssertMatches(`SELECT id1 from t1 UNION SELECT 3 from t1`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
 }
