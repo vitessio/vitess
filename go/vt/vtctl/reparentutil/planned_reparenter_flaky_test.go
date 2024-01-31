@@ -887,9 +887,12 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			shouldErr:      true,
 		},
 		{
-			name:      "primary-elect is not in tablet map",
-			ev:        &events.Reparent{},
-			tabletMap: map[string]*topo.TabletInfo{},
+			name: "primary-elect is not in tablet map",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: nil,
+				}, nil),
+			}, tabletMap: map[string]*topo.TabletInfo{},
 			opts: &PlannedReparentOptions{
 				NewPrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",

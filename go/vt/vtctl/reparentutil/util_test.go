@@ -71,6 +71,7 @@ func TestChooseNewPrimary(t *testing.T) {
 		tmc               *chooseNewPrimaryTestTMClient
 		shardInfo         *topo.ShardInfo
 		tabletMap         map[string]*topo.TabletInfo
+		newPrimaryAlias   *topodatapb.TabletAlias
 		avoidPrimaryAlias *topodatapb.TabletAlias
 		tolerableReplLag  time.Duration
 		expected          *topodatapb.TabletAlias
@@ -134,6 +135,156 @@ func TestChooseNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  102,
 			},
+			shouldErr: false,
+		},
+		{
+			name:             "new primary alias provided - no tolerable replication lag",
+			tolerableReplLag: 0,
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			newPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			shouldErr: false,
+		},
+		{
+			name: "new primary alias provided - with tolerable replication lag",
+			tmc: &chooseNewPrimaryTestTMClient{
+				// zone1-102 has a tolerable replication lag
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000102": {
+						Position:              "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ReplicationLagSeconds: 20,
+					},
+				},
+			},
+			tolerableReplLag: 50 * time.Second,
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			newPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			shouldErr: false,
+		},
+		{
+			name: "new primary alias provided - with intolerable replication lag",
+			tmc: &chooseNewPrimaryTestTMClient{
+				// zone1-102 has an intolerable replication lag
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000102": {
+						Position:              "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ReplicationLagSeconds: 100,
+					},
+				},
+			},
+			tolerableReplLag: 50 * time.Second,
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			newPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			expected:  nil,
 			shouldErr: false,
 		},
 		{
@@ -566,7 +717,7 @@ func TestChooseNewPrimary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual, err := ChooseNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.avoidPrimaryAlias, time.Millisecond*50, tt.tolerableReplLag, durability, logger)
+			actual, err := ChooseNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.newPrimaryAlias, tt.avoidPrimaryAlias, time.Millisecond*50, tt.tolerableReplLag, durability, logger)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

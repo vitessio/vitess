@@ -170,7 +170,6 @@ func (pr *PlannedReparenter) preflightChecks(
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is the same as the tablet to avoid", topoproto.TabletAliasString(opts.NewPrimaryAlias))
 	}
 
-	toCheckReplicationLag := true
 	if opts.NewPrimaryAlias == nil {
 		// We don't want to fail when both ShardInfo.PrimaryAlias and AvoidPrimaryAlias are nil.
 		// This happens when we are using PRS to initialize the cluster without specifying the NewPrimaryAlias
@@ -178,43 +177,26 @@ func (pr *PlannedReparenter) preflightChecks(
 			event.DispatchUpdate(ev, "current primary is different than tablet to avoid, nothing to do")
 			return true, nil
 		}
-
-		event.DispatchUpdate(ev, "searching for primary candidate")
-
-		opts.NewPrimaryAlias, err = ChooseNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
-		if err != nil {
-			return true, err
-		}
-
-		if opts.NewPrimaryAlias == nil {
-			return true, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to in the same cell as the current primary")
-		}
-
-		pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
-		event.DispatchUpdate(ev, "elected new primary candidate")
-		// ChooseNewPrimary already takes into account the replication lag and doesn't require any further verification.
-		toCheckReplicationLag = false
 	}
+
+	event.DispatchUpdate(ev, "searching for primary candidate")
+	opts.NewPrimaryAlias, err = ChooseNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.NewPrimaryAlias, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
+	if err != nil {
+		return true, err
+	}
+
+	if opts.NewPrimaryAlias == nil {
+		return true, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to in the same cell as the current primary")
+	}
+
+	pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+	event.DispatchUpdate(ev, "elected new primary candidate")
 
 	primaryElectAliasStr := topoproto.TabletAliasString(opts.NewPrimaryAlias)
 
 	newPrimaryTabletInfo, ok := tabletMap[primaryElectAliasStr]
 	if !ok {
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is not in the shard", primaryElectAliasStr)
-	}
-
-	// We check for replication lag if the primary was provided to us and tolerable replication lag is defined.
-	if toCheckReplicationLag && opts.TolerableReplLag > 0 {
-		// Find the replication lag for the primary-elect tablet.
-		_, replLag, err := findPositionAndLagForTablet(ctx, newPrimaryTabletInfo.Tablet, pr.logger, pr.tmc, opts.WaitReplicasTimeout)
-		if err != nil {
-			return true, err
-		}
-
-		// Check if the replication lag is more than that we can tolerate.
-		if replLag > opts.TolerableReplLag {
-			return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v has %v replication lag which is more than tolerable", primaryElectAliasStr, replLag)
-		}
 	}
 
 	// PRS is only meant to be called when all the tablets are healthy.
