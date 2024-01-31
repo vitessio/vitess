@@ -80,8 +80,9 @@ func VtMysqlRoot() (string, error) {
 		// the PATH by default and this is often the default location
 		// used by mysqld OS system packages (apt, dnf, etc).
 		fi, err := os.Stat(mysqldSbinPath)
-		if err == nil /* file exists */ && fi.Mode().IsRegular() /* is not a DIR or other special file */ && fi.Mode()&0111 != 0 /* is executable by anyone */ {
-			return "/usr", nil
+		if err == nil /* file exists */ && fi.Mode().IsRegular() /* is not a DIR or other special file */ &&
+			fi.Mode()&0111 != 0 /* is executable by anyone */ {
+			return "/usr", nil // Value is expected to be a base path without the mysqld and sbin parts
 		}
 		return "", errMysqldNotFound
 	}
