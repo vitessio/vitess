@@ -62,8 +62,14 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var (
+// The string we expect before the MySQL version number
+// in strings containing MySQL version information.
+const versionStringPrefix = "Ver "
 
+// How many bytes from MySQL error log to sample for error messages
+const maxLogFileSampleSize = 4096
+
+var (
 	// DisableActiveReparents is a flag to disable active
 	// reparents for safety reasons. It is used in three places:
 	// 1. in this file to skip registering the commands.
@@ -87,14 +93,14 @@ var (
 
 	replicationConnectRetry = 10 * time.Second
 
-	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	versionRegex = regexp.MustCompile(fmt.Sprintf(`%s([0-9]+)\.([0-9]+)\.([0-9]+)`, versionStringPrefix))
+	// The SQL query that will return a version string directly from
+	// a MySQL server that will comply with the versionRegex.
+	versionSQLQuery = fmt.Sprintf("select concat('%s', @@global.version, ' ', @@global.version_comment) as version", versionStringPrefix)
 
 	binlogEntryCommittedTimestampRegex = regexp.MustCompile("original_committed_timestamp=([0-9]+)")
 	binlogEntryTimestampGTIDRegexp     = regexp.MustCompile(`^#(.+) server id.*\bGTID\b`)
 )
-
-// How many bytes from MySQL error log to sample for error messages
-const maxLogFileSampleSize = 4096
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
@@ -1186,7 +1192,16 @@ func buildLdPaths() ([]string, error) {
 
 // GetVersionString is part of the MysqlExecutor interface.
 func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
-	// Execute as remote action on mysqlctld to ensure we get the actual running MySQL version.
+	// Try to query the mysqld instance directly.
+	// This query produces output that is compatible with what we expect from
+	// mysqld --version. For example: Ver 8.0.35 MySQL Community Server - GPL
+	qr, err := mysqld.FetchSuperQuery(ctx, versionSQLQuery)
+	if err == nil && len(qr.Rows) == 1 {
+		return qr.Rows[0][0].ToString(), nil
+
+	}
+	// Execute as remote action on mysqlctld to use the actual running MySQL
+	// version.
 	if socketFile != "" {
 		client, err := mysqlctlclient.New("unix", socketFile)
 		if err != nil {
@@ -1195,6 +1210,7 @@ func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
 		defer client.Close()
 		return client.VersionString(ctx)
 	}
+	// Fall back to the sys exec method using mysqld --version.
 	return GetVersionString()
 }
 

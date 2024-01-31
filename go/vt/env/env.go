@@ -24,6 +24,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 const (
@@ -32,6 +33,9 @@ const (
 	// DefaultVtRoot is only required for hooks
 	DefaultVtRoot = "/usr/local/vitess"
 )
+
+// Used to ensure that we only add /usr/sbin to the PATH once.
+var once sync.Once
 
 // VtRoot returns $VTROOT or tries to guess its value if it's not set.
 // This is the root for the 'vt' distribution, which contains bin/vttablet
@@ -72,11 +76,15 @@ func VtMysqlRoot() (string, error) {
 		return root, nil
 	}
 
-	// otherwise let's look for mysqld in the PATH.
-	// ensure that /usr/sbin is included, as it might not be by default
-	// This is the default location for mysqld from packages.
-	newPath := fmt.Sprintf("/usr/sbin:%s", os.Getenv("PATH"))
-	os.Setenv("PATH", newPath)
+	// Otherwise let's look for mysqld in the PATH env var.
+	// Ensure that /usr/sbin is included, as it might not be by default
+	// and this is often the default location used by mysqld system
+	// packages (apt, dnf, etc).
+	once.Do(func() {
+		newPath := fmt.Sprintf("/usr/sbin:%s", os.Getenv("PATH"))
+		os.Setenv("PATH", newPath)
+	})
+
 	path, err := exec.LookPath("mysqld")
 	if err != nil {
 		return "", errors.New("VT_MYSQL_ROOT is not set and no mysqld could be found in your PATH")
