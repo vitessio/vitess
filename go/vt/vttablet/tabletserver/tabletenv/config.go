@@ -252,6 +252,14 @@ func Init() {
 		heartbeatOnDemandDuration = 0
 	}
 	if heartbeatOnDemandDuration == 0 && !enableHeartbeat {
+		// Neither heartbeat-related flag was set. We want to always have some heartbeat capability,
+		// because the tablet throttler depends on the availability of a heartbeat.
+		// To that effect, we choose to set a minimal and relaxed heartbeat setup: a 5s on-demand lease.
+		// Ad on-demand heartbeats go, this has no impact when the throttler is disabled, and no impact
+		// when the throttler is enabled but otherwise not engaged with some consumer. Heartbeats are
+		// only leased and generated when the throttler is requested by some consumer (e.g. vreplication)
+		// to provide throttling advice. We keep the lease to a very low 5s, so that heartbeats are only
+		// generated while an active consumer is requesting them, and only up to 5s afterwards.
 		heartbeatOnDemandDuration = 5 * time.Second
 	}
 	currentConfig.ReplicationTracker.HeartbeatInterval = heartbeatInterval
