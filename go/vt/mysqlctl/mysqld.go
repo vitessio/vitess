@@ -1198,7 +1198,6 @@ func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
 	qr, err := mysqld.FetchSuperQuery(ctx, versionSQLQuery)
 	if err == nil && len(qr.Rows) == 1 {
 		return qr.Rows[0][0].ToString(), nil
-
 	}
 	// Execute as remote action on mysqlctld to use the actual running MySQL
 	// version.

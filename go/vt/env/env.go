@@ -23,8 +23,8 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
-	"sync"
 )
 
 const (
@@ -32,10 +32,8 @@ const (
 	DefaultVtDataRoot = "/vt"
 	// DefaultVtRoot is only required for hooks
 	DefaultVtRoot = "/usr/local/vitess"
+	sbinPath      = "/usr/sbin"
 )
-
-// Used to ensure that we only add /usr/sbin to the PATH once.
-var once sync.Once
 
 // VtRoot returns $VTROOT or tries to guess its value if it's not set.
 // This is the root for the 'vt' distribution, which contains bin/vttablet
@@ -68,10 +66,10 @@ func VtDataRoot() string {
 }
 
 // VtMysqlRoot returns the root for the mysql distribution,
-// which contains bin/mysql CLI for instance.
-// If it is not set, look for mysqld in the path.
+// which contains the bin/mysql CLI for instance.
+// If $VT_MYSQL_ROOT is not set, look for mysqld in the $PATH.
 func VtMysqlRoot() (string, error) {
-	// if the environment variable is set, use that
+	// If the environment variable is set, use that.
 	if root := os.Getenv("VT_MYSQL_ROOT"); root != "" {
 		return root, nil
 	}
@@ -80,17 +78,18 @@ func VtMysqlRoot() (string, error) {
 	// Ensure that /usr/sbin is included, as it might not be by default
 	// and this is often the default location used by mysqld system
 	// packages (apt, dnf, etc).
-	once.Do(func() {
-		newPath := fmt.Sprintf("/usr/sbin:%s", os.Getenv("PATH"))
-		os.Setenv("PATH", newPath)
-	})
+	envPath := os.Getenv("PATH")
+	if !slices.Contains(strings.Split(envPath, ":"), sbinPath) {
+		newEnvPath := fmt.Sprintf("%s:%s", sbinPath, envPath)
+		os.Setenv("PATH", newEnvPath)
+	}
 
-	path, err := exec.LookPath("mysqld")
+	binpath, err := exec.LookPath("mysqld")
 	if err != nil {
 		return "", errors.New("VT_MYSQL_ROOT is not set and no mysqld could be found in your PATH")
 	}
-	path = filepath.Dir(filepath.Dir(path)) // strip mysqld, and the sbin
-	return path, nil
+	binpath = filepath.Dir(filepath.Dir(binpath)) // Strip mysqld and [s]bin parts
+	return binpath, nil
 }
 
 // VtMysqlBaseDir returns the Mysql base directory, which
