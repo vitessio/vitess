@@ -19,6 +19,8 @@ package env
 import (
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestVtDataRoot(t *testing.T) {
@@ -41,5 +43,107 @@ func TestVtDataRoot(t *testing.T) {
 	root = VtDataRoot()
 	if root != passed {
 		t.Errorf("The value of VtDataRoot should be %v, not %v.", passed, root)
+	}
+}
+
+func TestVtRoot(t *testing.T) {
+	tests := []struct {
+		name          string
+		newVal        string
+		args          []string
+		expectedRoot  string
+		expectedError string
+	}{
+		{
+			name:         "empty env",
+			expectedRoot: "/usr/local/vitess",
+		},
+		{
+			name:         "root path already defined",
+			newVal:       "test-vtroot",
+			expectedRoot: "test-vtroot",
+		},
+		{
+			name:         "path unset and args modified",
+			args:         []string{"bin/arg1"},
+			expectedRoot: "vitess/go/vt/env",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			envVar := "VTROOT"
+			oldEnvVar := os.Getenv(envVar)
+			oldArgs := os.Args
+
+			defer func() {
+				os.Setenv(envVar, oldEnvVar)
+				os.Args = oldArgs
+			}()
+
+			os.Setenv(envVar, tt.newVal)
+			if tt.args != nil {
+				os.Args = tt.args
+			}
+
+			root, err := VtRoot()
+			if tt.expectedError == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.expectedError)
+			}
+
+			require.Contains(t, root, tt.expectedRoot)
+		})
+	}
+}
+
+func TestVtMysqlBaseDir(t *testing.T) {
+	tests := []struct {
+		name            string
+		newMySqlRoot    string
+		newMySqlBaseDir string
+		expectedRoot    string
+		expectedError   string
+	}{
+		{
+			name: "empty env",
+		},
+		{
+			name:            "only base dir set",
+			newMySqlBaseDir: "test-base-dir",
+			expectedRoot:    "test-base-dir",
+		},
+		{
+			name:         "root path already defined",
+			newMySqlRoot: "test-vtroot",
+			expectedRoot: "test-vtroot",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			envVar := "VT_MYSQL_BASEDIR"
+			envMySqlRoot := "VT_MYSQL_ROOT"
+			oldEnvVar := os.Getenv(envVar)
+			oldMySqlRoot := os.Getenv(envMySqlRoot)
+
+			defer func() {
+				os.Setenv(envVar, oldEnvVar)
+				os.Setenv(envMySqlRoot, oldMySqlRoot)
+			}()
+
+			os.Setenv(envVar, tt.newMySqlBaseDir)
+			os.Setenv(envMySqlRoot, tt.newMySqlRoot)
+
+			root, err := VtMysqlBaseDir()
+			if tt.expectedError == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.expectedError)
+			}
+
+			require.Contains(t, root, tt.expectedRoot)
+		})
 	}
 }
