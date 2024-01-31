@@ -214,6 +214,7 @@ func TestFlags(t *testing.T) {
 	want.Healthcheck.UnhealthyThreshold = 2 * time.Hour
 	want.ReplicationTracker.HeartbeatInterval = time.Second
 	want.ReplicationTracker.Mode = Disable
+	want.ReplicationTracker.HeartbeatOnDemand = 5 * time.Second
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)
 
@@ -266,21 +267,36 @@ func TestFlags(t *testing.T) {
 	assert.Equal(t, want, currentConfig)
 
 	enableHeartbeat = true
+	heartbeatOnDemandDuration = 0
 	heartbeatInterval = 1 * time.Second
 	currentConfig.ReplicationTracker.Mode = ""
 	currentConfig.ReplicationTracker.HeartbeatInterval = 0
 	Init()
 	want.ReplicationTracker.Mode = Heartbeat
 	want.ReplicationTracker.HeartbeatInterval = time.Second
+	want.ReplicationTracker.HeartbeatOnDemand = 0
 	assert.Equal(t, want, currentConfig)
 
 	enableHeartbeat = false
+	heartbeatOnDemandDuration = 0
 	heartbeatInterval = 1 * time.Second
 	currentConfig.ReplicationTracker.Mode = ""
 	currentConfig.ReplicationTracker.HeartbeatInterval = 0
 	Init()
 	want.ReplicationTracker.Mode = Disable
 	want.ReplicationTracker.HeartbeatInterval = time.Second
+	want.ReplicationTracker.HeartbeatOnDemand = 5 * time.Second
+	assert.Equal(t, want, currentConfig)
+
+	enableHeartbeat = false
+	heartbeatOnDemandDuration = 7 * time.Second
+	heartbeatInterval = 1 * time.Second
+	currentConfig.ReplicationTracker.Mode = ""
+	currentConfig.ReplicationTracker.HeartbeatInterval = 0
+	Init()
+	want.ReplicationTracker.Mode = Disable
+	want.ReplicationTracker.HeartbeatInterval = time.Second
+	want.ReplicationTracker.HeartbeatOnDemand = 7 * time.Second
 	assert.Equal(t, want, currentConfig)
 
 	enableReplicationReporter = true
