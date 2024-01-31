@@ -233,7 +233,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updS
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
 		var selectOffsets []int
-		selectOffsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs)
+		selectOffsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs, updatedTable.GetTableName())
 
 		// If we are updating a foreign key column to a non-literal value then, need information about
 		// 1. whether the new value is different from the old value
@@ -276,11 +276,11 @@ func hasNonLiteralUpdate(exprs sqlparser.UpdateExprs) bool {
 
 // addColumns adds the given set of columns to the select expressions provided. It tries to reuse the columns if already present in it.
 // It returns the list of offsets for the columns and the updated select expressions.
-func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exprs []sqlparser.SelectExpr) ([]int, []sqlparser.SelectExpr) {
+func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exprs []sqlparser.SelectExpr, tableName sqlparser.TableName) ([]int, []sqlparser.SelectExpr) {
 	var offsets []int
 	selectExprs := exprs
 	for _, column := range columns {
-		ae := aeWrap(sqlparser.NewColName(column.String()))
+		ae := aeWrap(sqlparser.NewColNameWithQualifier(column.String(), tableName))
 		exists := false
 		for idx, expr := range exprs {
 			if ctx.SemTable.EqualsExpr(expr.(*sqlparser.AliasedExpr).Expr, ae.Expr) {

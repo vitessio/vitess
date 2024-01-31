@@ -188,6 +188,11 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	}
 }
 
+// GetChildForeignKeysForTable gets the child foreign keys as a list for the specified table.
+func (st *SemTable) GetChildForeignKeysForTable(tableName sqlparser.TableName) []vindexes.ChildFKInfo {
+	return st.childForeignKeysInvolved[st.Targets[tableName.Name]]
+}
+
 // GetChildForeignKeysList gets the child foreign keys as a list.
 func (st *SemTable) GetChildForeignKeysList() []vindexes.ChildFKInfo {
 	var childFkInfos []vindexes.ChildFKInfo
