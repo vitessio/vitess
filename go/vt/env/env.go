@@ -18,27 +18,22 @@ package env
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
-	"slices"
 	"strings"
-	"sync"
 )
 
 const (
 	// DefaultVtDataRoot is the default value for VTROOT environment variable
 	DefaultVtDataRoot = "/vt"
 	// DefaultVtRoot is only required for hooks
-	DefaultVtRoot = "/usr/local/vitess"
-	sbinPath      = "/usr/sbin"
+	DefaultVtRoot  = "/usr/local/vitess"
+	mysqldSbinPath = "/usr/sbin/mysqld"
 )
 
-// sbinEnvOnce guards modifications to the PATH environment variable and
-// ensures that we only modify it once.
-var sbinEnvOnce sync.Once
+var errMysqldNotFound = errors.New("VT_MYSQL_ROOT is not set and no mysqld could be found in your PATH")
 
 // VtRoot returns $VTROOT or tries to guess its value if it's not set.
 // This is the root for the 'vt' distribution, which contains bin/vttablet
@@ -79,21 +74,16 @@ func VtMysqlRoot() (string, error) {
 		return root, nil
 	}
 
-	// Otherwise let's look for mysqld in the PATH env var.
-	// Ensure that /usr/sbin is included, as it might not be by default
-	// and this is often the default location used by mysqld system
-	// packages (apt, dnf, etc).
-	sbinEnvOnce.Do(func() {
-		envPath := os.Getenv("PATH")
-		if !slices.Contains(filepath.SplitList(envPath), sbinPath) {
-			newEnvPath := fmt.Sprintf("%s:%s", sbinPath, envPath)
-			os.Setenv("PATH", newEnvPath)
-		}
-	})
-
 	binpath, err := exec.LookPath("mysqld")
 	if err != nil {
-		return "", errors.New("VT_MYSQL_ROOT is not set and no mysqld could be found in your PATH")
+		// First see if /usr/sbin/mysqld exists as it might not be in
+		// the PATH by default and this is often the default location
+		// used by mysqld OS system packages (apt, dnf, etc).
+		fi, err := os.Stat(mysqldSbinPath)
+		if err == nil /* file exists */ && fi.Mode().IsRegular() /* is not a DIR or other special file */ && fi.Mode()&0111 != 0 /* is executable by anyone */ {
+			return "/usr", nil
+		}
+		return "", errMysqldNotFound
 	}
 	binpath = filepath.Dir(filepath.Dir(binpath)) // Strip mysqld and [s]bin parts
 	return binpath, nil

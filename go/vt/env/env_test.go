@@ -17,10 +17,8 @@ limitations under the License.
 package env
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -56,43 +54,74 @@ func TestVtMysqlRoot(t *testing.T) {
 	originalPATH := os.Getenv("PATH")
 	defer os.Setenv("PATH", originalPATH)
 
-	testcases := []struct {
-		name   string
-		envVal string
-	}{
+	// The test directory is used to create our fake mysqld binary.
+	testDir := t.TempDir() // This is automatically cleaned up
+	createExecutable := func(path string) error {
+		fullPath := testDir + path
+		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		require.NoError(t, err)
+		return os.WriteFile(fullPath, []byte("test"), 0755)
+	}
+
+	type testcase struct {
+		name              string
+		preFunc           func() error
+		vtMysqlRootEnvVal string
+		pathEnvVal        string
+		expect            string // The return value we expect from VtMysqlRoot()
+		expectErr         string
+	}
+	testcases := []testcase{
 		{
-			name:   "env var set",
-			envVal: "/home/mysql/binaries",
+			name:              "env var set",
+			vtMysqlRootEnvVal: "/home/mysql/binaries",
 		},
 		{
-			name: "env var unset",
+			name:       "VT_MYSQL_ROOT empty; PATH set without /usr/sbin",
+			pathEnvVal: testDir + filepath.Dir(mysqldSbinPath) + ":/usr/bin:/sbin:/bin:/usr/local/bin:/usr/local/sbin:/home/mysql/binaries",
+			preFunc: func() error {
+				return createExecutable(mysqldSbinPath)
+			},
+			expect: testDir + "/usr",
 		},
-		{ // Second call allows us to verify that we're not adding to the PATH multiple times.
-			name: "env var unset again",
+		{
+			name:       "VT_MYSQL_ROOT empty; PATH with /usr/sbin",
+			pathEnvVal: "",
+			expectErr:  errMysqldNotFound.Error(),
 		},
+	}
+
+	// If /usr/sbin/mysqld exists, confirm that we find it even
+	// when /usr/sbin is not in the PATH.
+	_, err := os.Stat(mysqldSbinPath)
+	if err == nil {
+		t.Logf("Found %s, confirming auto detection behavior", mysqldSbinPath)
+		tc := testcase{
+			name:   "VT_MYSQL_ROOT empty; PATH empty; mysqld in /usr/sbin",
+			expect: "/usr",
+		}
+		testcases = append(testcases, tc)
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			os.Setenv(envVar, tc.envVal)
-			defer os.Setenv(envVar, "")
-
-			path, err := VtMysqlRoot()
-			if tc.envVal != "" {
-				require.Equal(t, tc.envVal, path)
+			if tc.preFunc != nil {
+				err := tc.preFunc()
 				require.NoError(t, err)
 			}
-			// We don't require a nil error as the test env may not have MySQL installed.
+			os.Setenv(envVar, tc.vtMysqlRootEnvVal)
+			os.Setenv("PATH", tc.pathEnvVal)
+			path, err := VtMysqlRoot()
+			if tc.expectErr != "" {
+				require.EqualError(t, err, tc.expectErr)
+			} else {
+				require.NoError(t, err)
+			}
+			if tc.vtMysqlRootEnvVal != "" {
+				// This should always be returned.
+				tc.expect = tc.vtMysqlRootEnvVal
+			}
+			require.Equal(t, tc.expect, path)
 		})
-	}
-
-	// Confirm the PATH value now after all test runs.
-	currentPATH := os.Getenv("PATH")
-	if slices.Contains(filepath.SplitList(originalPATH), sbinPath) {
-		// The PATH already had /usr/sbin and we should not have changed it.
-		require.Equal(t, originalPATH, currentPATH)
-	} else {
-		// We should have prepended it exactly once.
-		require.Equal(t, fmt.Sprintf("%s:%s", sbinPath, originalPATH), currentPATH)
 	}
 }
