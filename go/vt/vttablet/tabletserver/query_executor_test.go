@@ -29,10 +29,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -1438,6 +1437,44 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 	}
 }
 
+func TestGetConnectionLogStats(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	input := "select * from test_table limit 1"
+
+	// getConn() happy path
+	qre := newTestQueryExecutor(ctx, tsv, input, 0)
+	conn, err := qre.getConn()
+	assert.NoError(t, err)
+	assert.NotNil(t, conn)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+
+	// getStreamConn() happy path
+	qre = newTestQueryExecutor(ctx, tsv, input, 0)
+	conn, err = qre.getStreamConn()
+	assert.NoError(t, err)
+	assert.NotNil(t, conn)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+
+	// Close the db connection to induce connection errors
+	db.Close()
+
+	// getConn() error path
+	qre = newTestQueryExecutor(ctx, tsv, input, 0)
+	_, err = qre.getConn()
+	assert.Error(t, err)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+
+	// getStreamConn() error path
+	qre = newTestQueryExecutor(ctx, tsv, input, 0)
+	_, err = qre.getStreamConn()
+	assert.Error(t, err)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+}
+
 type executorFlags int64
 
 const (
@@ -1491,7 +1528,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	}
 	dbconfigs := newDBConfigs(db)
 	cfg.DB = dbconfigs
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
 	if cfg.TwoPCEnable {

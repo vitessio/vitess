@@ -22,10 +22,9 @@ import (
 	"os"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtexplain"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -175,17 +174,15 @@ func parseAndRun() error {
 		Target:          dbName,
 	}
 
-	mysqlServerVersion := servenv.MySQLServerVersion()
-	collationEnv := collations.NewEnvironment(mysqlServerVersion)
-	parser, err := sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: mysqlServerVersion,
+	env, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
 		return err
 	}
-	vte, err := vtexplain.Init(context.Background(), vschema, schema, ksShardMap, opts, collationEnv, parser, mysqlServerVersion)
+	vte, err := vtexplain.Init(context.Background(), env, vschema, schema, ksShardMap, opts)
 	if err != nil {
 		return err
 	}

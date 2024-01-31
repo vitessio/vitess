@@ -40,6 +40,7 @@ type AlterTableEntityDiff struct {
 
 	canonicalStatementString string
 	subsequentDiff           *AlterTableEntityDiff
+	instantDDLCapability     InstantDDLCapability
 }
 
 // IsEmpty implements EntityDiff
@@ -123,6 +124,14 @@ func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
 	}
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *AlterTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	if d == nil {
+		return InstantDDLCapabilityUnknown
+	}
+	return d.instantDDLCapability
+}
+
 type CreateTableEntityDiff struct {
 	to          *CreateTableEntity
 	createTable *sqlparser.CreateTable
@@ -191,6 +200,11 @@ func (d *CreateTableEntityDiff) SubsequentDiff() EntityDiff {
 func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *CreateTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
 type DropTableEntityDiff struct {
 	from      *CreateTableEntity
 	dropTable *sqlparser.DropTable
@@ -257,6 +271,11 @@ func (d *DropTableEntityDiff) SubsequentDiff() EntityDiff {
 
 // SetSubsequentDiff implements EntityDiff
 func (d *DropTableEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
+// InstantDDLCapability implements EntityDiff
+func (d *DropTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
 }
 
 type RenameTableEntityDiff struct {
@@ -328,6 +347,11 @@ func (d *RenameTableEntityDiff) SubsequentDiff() EntityDiff {
 func (d *RenameTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *RenameTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
 type CreateTableEntity struct {
 	*sqlparser.CreateTable
@@ -365,12 +389,12 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 		switch opt.Name {
 		case "charset":
 			opt.String = strings.ToLower(opt.String)
-			if charset, ok := c.Env.CollationEnv.CharsetAlias(opt.String); ok {
+			if charset, ok := c.Env.CollationEnv().CharsetAlias(opt.String); ok {
 				opt.String = charset
 			}
 		case "collate":
 			opt.String = strings.ToLower(opt.String)
-			if collation, ok := c.Env.CollationEnv.CollationAlias(opt.String); ok {
+			if collation, ok := c.Env.CollationEnv().CollationAlias(opt.String); ok {
 				opt.String = collation
 			}
 		case "engine":
@@ -390,7 +414,7 @@ func (c *CreateTableEntity) GetCharset() string {
 	for _, opt := range c.CreateTable.TableSpec.Options {
 		if strings.ToLower(opt.Name) == "charset" {
 			opt.String = strings.ToLower(opt.String)
-			if charsetName, ok := c.Env.CollationEnv.CharsetAlias(opt.String); ok {
+			if charsetName, ok := c.Env.CollationEnv().CharsetAlias(opt.String); ok {
 				return charsetName
 			}
 			return opt.String
@@ -405,7 +429,7 @@ func (c *CreateTableEntity) GetCollation() string {
 	for _, opt := range c.CreateTable.TableSpec.Options {
 		if strings.ToLower(opt.Name) == "collate" {
 			opt.String = strings.ToLower(opt.String)
-			if collationName, ok := c.Env.CollationEnv.CollationAlias(opt.String); ok {
+			if collationName, ok := c.Env.CollationEnv().CollationAlias(opt.String); ok {
 				return collationName
 			}
 			return opt.String
@@ -420,8 +444,8 @@ func (c *CreateTableEntity) Clone() Entity {
 
 func getTableCharsetCollate(env *Environment, tableOptions *sqlparser.TableOptions) *charsetCollate {
 	cc := &charsetCollate{
-		charset: env.CollationEnv.LookupCharsetName(env.DefaultColl),
-		collate: env.CollationEnv.LookupName(env.DefaultColl),
+		charset: env.CollationEnv().LookupCharsetName(env.DefaultColl),
+		collate: env.CollationEnv().LookupName(env.DefaultColl),
 	}
 	for _, option := range *tableOptions {
 		if strings.EqualFold(option.Name, "charset") {
@@ -482,13 +506,13 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 
 		// Map any charset aliases to the real charset. This applies mainly right
 		// now to utf8 being an alias for utf8mb3.
-		if charset, ok := c.Env.CollationEnv.CharsetAlias(col.Type.Charset.Name); ok {
+		if charset, ok := c.Env.CollationEnv().CharsetAlias(col.Type.Charset.Name); ok {
 			col.Type.Charset.Name = charset
 		}
 
 		// Map any collation aliases to the real collation. This applies mainly right
 		// now to utf8 being an alias for utf8mb3 collations.
-		if collation, ok := c.Env.CollationEnv.CollationAlias(col.Type.Options.Collate); ok {
+		if collation, ok := c.Env.CollationEnv().CollationAlias(col.Type.Options.Collate); ok {
 			col.Type.Options.Collate = collation
 		}
 
@@ -580,7 +604,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			if col.Type.Charset.Name != "" {
 				col.Type.Charset.Name = ""
 				if col.Type.Options.Collate == "" {
-					col.Type.Options.Collate = c.Env.CollationEnv.LookupName(c.Env.DefaultColl)
+					col.Type.Options.Collate = c.Env.CollationEnv().LookupName(c.Env.DefaultColl)
 				}
 			}
 
@@ -994,7 +1018,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 			case "CHARSET":
 				switch hints.TableCharsetCollateStrategy {
 				case TableCharsetCollateStrict:
-					tableOption = &sqlparser.TableOption{Name: "CHARSET", String: c.Env.CollationEnv.LookupCharsetName(c.Env.DefaultColl), CaseSensitive: true}
+					tableOption = &sqlparser.TableOption{Name: "CHARSET", String: c.Env.CollationEnv().LookupCharsetName(c.Env.DefaultColl), CaseSensitive: true}
 					// in all other strategies we ignore the charset
 				}
 			case "CHECKSUM":

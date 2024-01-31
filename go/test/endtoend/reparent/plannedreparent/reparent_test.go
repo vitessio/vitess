@@ -98,7 +98,7 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// make tablets[1 lag from the other tablets by setting the delay to a large number
-	utils.RunSQL(context.Background(), t, `stop slave;CHANGE MASTER TO MASTER_DELAY = 1999;start slave;`, tablets[1])
+	utils.RunSQLs(context.Background(), t, []string{`stop slave`, `CHANGE MASTER TO MASTER_DELAY = 1999`, `start slave;`}, tablets[1])
 
 	// insert another row in tablets[1
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
@@ -226,26 +226,33 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	}
 
 	// commands to convert a replica to be writable
-	promoteReplicaCommands := "STOP SLAVE; RESET SLAVE ALL; SET GLOBAL read_only = OFF;"
-	utils.RunSQL(ctx, t, promoteReplicaCommands, tablets[1])
+	promoteReplicaCommands := []string{"STOP SLAVE", "RESET SLAVE ALL", "SET GLOBAL read_only = OFF"}
+	utils.RunSQLs(ctx, t, promoteReplicaCommands, tablets[1])
 
 	// Get primary position
 	_, gtID := cluster.GetPrimaryPosition(t, *tablets[1], utils.Hostname)
 
 	// tablets[0] will now be a replica of tablets[1
-	changeReplicationSourceCommands := fmt.Sprintf("RESET MASTER; RESET SLAVE; SET GLOBAL gtid_purged = '%s';"+
-		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
-		"START SLAVE;", gtID, utils.Hostname, tablets[1].MySQLPort)
-	utils.RunSQL(ctx, t, changeReplicationSourceCommands, tablets[0])
+	changeReplicationSourceCommands := []string{
+		"RESET MASTER",
+		"RESET SLAVE",
+		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
+		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
+	}
+	utils.RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[0])
 
 	// Capture time when we made tablets[1 writable
 	baseTime := time.Now().UnixNano() / 1000000000
 
 	// tablets[2 will be a replica of tablets[1
-	changeReplicationSourceCommands = fmt.Sprintf("STOP SLAVE; RESET MASTER; SET GLOBAL gtid_purged = '%s';"+
-		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
-		"START SLAVE;", gtID, utils.Hostname, tablets[1].MySQLPort)
-	utils.RunSQL(ctx, t, changeReplicationSourceCommands, tablets[2])
+	changeReplicationSourceCommands = []string{
+		"STOP SLAVE",
+		"RESET MASTER",
+		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
+		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
+		"START SLAVE",
+	}
+	utils.RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[2])
 
 	// To test the downPrimary, we kill the old primary first and delete its tablet record
 	if downPrimary {

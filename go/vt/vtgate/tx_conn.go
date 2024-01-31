@@ -158,6 +158,7 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 					Code:    uint32(sqlerror.ERNonAtomicCommit),
 					Message: fmt.Sprintf("multi-db commit failed after committing to %d shards: %s", i, strings.Join(sNames, ", ")),
 				})
+				warnings.Add("NonAtomicCommit", 1)
 			}
 			_ = txc.Release(ctx, session)
 			return err

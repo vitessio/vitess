@@ -86,11 +86,12 @@ func newStringEnum(name string, initialValue string, choices []string, caseInsen
 	}
 
 	return &StringEnum{
-		name:         name,
-		val:          initialValue,
-		choices:      choiceMap,
-		choiceNames:  choiceNames,
-		choiceMapper: choiceMapper,
+		name:            name,
+		val:             initialValue,
+		choices:         choiceMap,
+		choiceNames:     choiceNames,
+		choiceMapper:    choiceMapper,
+		caseInsensitive: caseInsensitive,
 	}
 }
 

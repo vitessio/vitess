@@ -352,7 +352,7 @@ type (
 		With       *With
 		Comments   *ParsedComments
 		Ignore     Ignore
-		TableExprs TableExprs
+		TableExprs []TableExpr
 		Exprs      UpdateExprs
 		Where      *Where
 		OrderBy    OrderBy
@@ -365,7 +365,7 @@ type (
 		With       *With
 		Ignore     Ignore
 		Comments   *ParsedComments
-		TableExprs TableExprs
+		TableExprs []TableExpr
 		Targets    TableNames
 		Partitions Partitions
 		Where      *Where

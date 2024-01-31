@@ -4,13 +4,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/capabilities"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-)
-
-var (
-	ErrUnexpectedDiffType = vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected diff type")
 )
 
 // alterOptionAvailableViaInstantDDL checks if the specific alter option is eligible to run via ALGORITHM=INSTANT
@@ -180,22 +174,4 @@ func AlterTableCapableOfInstantDDL(alterTable *sqlparser.AlterTable, createTable
 		}
 	}
 	return true, nil
-}
-
-// diffCapableOfInstantDDL checks whether the given diff is either trivially instantaneous (e.g. CREATE TABLE) or
-// is capable of `ALGORITHM=INSTANT`.
-func diffCapableOfInstantDDL(diff EntityDiff, capableOf capabilities.CapableOf) (bool, error) {
-	switch diff := diff.(type) {
-	case *CreateTableEntityDiff,
-		*RenameTableEntityDiff,
-		*DropTableEntityDiff,
-		*CreateViewEntityDiff,
-		*AlterViewEntityDiff,
-		*DropViewEntityDiff:
-		return true, nil
-	case *AlterTableEntityDiff:
-		return AlterTableCapableOfInstantDDL(diff.AlterTable(), diff.from.CreateTable, capableOf)
-	default:
-		return false, ErrUnexpectedDiffType
-	}
 }

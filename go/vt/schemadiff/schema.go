@@ -18,11 +18,10 @@ package schemadiff
 
 import (
 	"errors"
-	"fmt"
-	"io"
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -105,7 +104,7 @@ func NewSchemaFromStatements(env *Environment, statements []sqlparser.Statement)
 func NewSchemaFromQueries(env *Environment, queries []string) (*Schema, error) {
 	statements := make([]sqlparser.Statement, 0, len(queries))
 	for _, q := range queries {
-		stmt, err := env.Parser.ParseStrictDDL(q)
+		stmt, err := env.Parser().ParseStrictDDL(q)
 		if err != nil {
 			return nil, err
 		}
@@ -117,17 +116,9 @@ func NewSchemaFromQueries(env *Environment, queries []string) (*Schema, error) {
 // NewSchemaFromSQL creates a valid and normalized schema based on a SQL blob that contains
 // CREATE statements for various objects (tables, views)
 func NewSchemaFromSQL(env *Environment, sql string) (*Schema, error) {
-	var statements []sqlparser.Statement
-	tokenizer := env.Parser.NewStringTokenizer(sql)
-	for {
-		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, fmt.Errorf("could not parse statement in SQL: %v: %w", sql, err)
-		}
-		statements = append(statements, stmt)
+	statements, err := env.Parser().SplitStatements(sql)
+	if err != nil {
+		return nil, err
 	}
 	return NewSchemaFromStatements(env, statements)
 }
@@ -962,6 +953,25 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 			}, diff.Statement())
 		case *DropTableEntityDiff:
 			// No need to handle. Any dependencies will be resolved by any of the other cases
+		}
+	}
+
+	// Check and assign capabilities:
+	// Reminder: schemadiff assumes a MySQL flavor, so we only check for MySQL capabilities.
+	if capableOf := capabilities.MySQLVersionCapableOf(hints.MySQLServerVersion); capableOf != nil {
+		for _, diff := range schemaDiff.UnorderedDiffs() {
+			switch diff := diff.(type) {
+			case *AlterTableEntityDiff:
+				instantDDLCapable, err := AlterTableCapableOfInstantDDL(diff.AlterTable(), diff.from.CreateTable, capableOf)
+				if err != nil {
+					return nil, err
+				}
+				if instantDDLCapable {
+					diff.instantDDLCapability = InstantDDLCapabilityPossible
+				} else {
+					diff.instantDDLCapability = InstantDDLCapabilityImpossible
+				}
+			}
 		}
 	}
 	return schemaDiff, nil

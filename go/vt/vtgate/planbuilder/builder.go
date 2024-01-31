@@ -70,7 +70,7 @@ func singleTable(ks, tbl string) string {
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
 func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error) {
-	stmt, reserved, err := vschema.SQLParser().Parse2(query)
+	stmt, reserved, err := vschema.Environment().Parser().Parse2(query)
 	if err != nil {
 		return nil, err
 	}
@@ -157,25 +157,7 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 
 func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch stmt := stmt.(type) {
-	case *sqlparser.Select:
-		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
-		if err != nil {
-			return nil, err
-		}
-		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
-	case *sqlparser.Insert:
-		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
-		if err != nil {
-			return nil, err
-		}
-		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
-	case *sqlparser.Update:
-		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
-		if err != nil {
-			return nil, err
-		}
-		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
-	case *sqlparser.Delete:
+	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
 		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
 			return nil, err
@@ -203,8 +185,10 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt)
-	case sqlparser.Explain:
-		return buildExplainPlan(ctx, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	case *sqlparser.ExplainTab:
+		return explainTabPlan(stmt, vschema)
+	case *sqlparser.ExplainStmt:
+		return buildRoutePlan(stmt, reservedVars, vschema, buildExplainStmtPlan)
 	case *sqlparser.VExplainStmt:
 		return buildVExplainPlan(ctx, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.OtherAdmin:

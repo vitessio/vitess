@@ -28,13 +28,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclienttest"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
@@ -55,7 +53,7 @@ func TestVtctlServer(t *testing.T) {
 
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
-	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion))
+	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(vtenv.NewTestEnv(), ts))
 	go server.Serve(listener)
 
 	// Create a VtctlClient gRPC client to talk to the fake server
@@ -89,7 +87,7 @@ func TestVtctlAuthClient(t *testing.T) {
 	opts = append(opts, grpc.UnaryInterceptor(servenv.FakeAuthUnaryInterceptor))
 	server := grpc.NewServer(opts...)
 
-	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion))
+	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(vtenv.NewTestEnv(), ts))
 	go server.Serve(listener)
 
 	authJSON := `{

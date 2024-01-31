@@ -29,8 +29,6 @@ import (
 type Delete struct {
 	Target           TargetTable
 	OwnedVindexQuery *sqlparser.Select
-	OrderBy          sqlparser.OrderBy
-	Limit            *sqlparser.Limit
 	Ignore           bool
 	Source           Operator
 
@@ -76,16 +74,7 @@ func (d *Delete) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 }
 
 func (d *Delete) ShortDescription() string {
-	limit := ""
-	orderBy := ""
-	if d.Limit != nil {
-		limit = " " + sqlparser.String(d.Limit)
-	}
-	if len(d.OrderBy) > 0 {
-		orderBy = " " + sqlparser.String(d.OrderBy)
-	}
-
-	return fmt.Sprintf("%s.%s%s%s", d.Target.VTable.Keyspace.Name, d.Target.VTable.Name.String(), orderBy, limit)
+	return fmt.Sprintf("%s.%s", d.Target.VTable.Keyspace.Name, d.Target.VTable.Name.String())
 }
 
 func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (op Operator) {
@@ -101,7 +90,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		}
 	}
 
-	childFks := ctx.SemTable.GetChildForeignKeysList()
+	childFks := ctx.SemTable.GetChildForeignKeysForTable(deleteStmt.Targets[0])
 	// If there are no foreign key constraints, then we don't need to do anything.
 	if len(childFks) == 0 {
 		return op
@@ -157,13 +146,47 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 		}
 	}
 
-	return &Delete{
+	delOp := &Delete{
 		Target:           targetTbl,
 		Source:           op,
 		Ignore:           bool(del.Ignore),
-		Limit:            del.Limit,
-		OrderBy:          del.OrderBy,
 		OwnedVindexQuery: ovq,
+	}
+
+	if del.Limit == nil {
+		return delOp
+	}
+
+	addOrdering(ctx, del, delOp)
+
+	delOp.Source = &Limit{
+		Source: delOp.Source,
+		AST:    del.Limit,
+	}
+
+	return delOp
+}
+
+func addOrdering(ctx *plancontext.PlanningContext, del *sqlparser.Delete, delOp *Delete) {
+	es := &expressionSet{}
+	ordering := &Ordering{
+		Source: delOp.Source,
+	}
+	for _, order := range del.OrderBy {
+		if sqlparser.IsNull(order.Expr) {
+			// ORDER BY null can safely be ignored
+			continue
+		}
+		if !es.add(ctx, order.Expr) {
+			continue
+		}
+		ordering.Order = append(ordering.Order, OrderBy{
+			Inner:          sqlparser.CloneRefOfOrder(order),
+			SimplifiedExpr: order.Expr,
+		})
+	}
+	if len(ordering.Order) > 0 {
+		delOp.Source = ordering
 	}
 }
 
@@ -208,7 +231,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Opera
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
 		var offsets []int
-		offsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs)
+		offsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs, deletedTbl.GetTableName())
 
 		fkChildren = append(fkChildren,
 			createFkChildForDelete(ctx, fk, offsets))

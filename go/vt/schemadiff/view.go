@@ -91,6 +91,11 @@ func (d *AlterViewEntityDiff) SubsequentDiff() EntityDiff {
 func (d *AlterViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *AlterViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
 type CreateViewEntityDiff struct {
 	createView *sqlparser.CreateView
 
@@ -159,6 +164,11 @@ func (d *CreateViewEntityDiff) SubsequentDiff() EntityDiff {
 func (d *CreateViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *CreateViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
 type DropViewEntityDiff struct {
 	from     *CreateViewEntity
 	dropView *sqlparser.DropView
@@ -225,6 +235,11 @@ func (d *DropViewEntityDiff) SubsequentDiff() EntityDiff {
 
 // SetSubsequentDiff implements EntityDiff
 func (d *DropViewEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
+// InstantDDLCapability implements EntityDiff
+func (d *DropViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
 }
 
 // CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.

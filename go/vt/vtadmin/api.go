@@ -32,9 +32,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/trace"
@@ -82,9 +80,7 @@ type API struct {
 	// we're not super concerned because we will be deleting vtexplain Soon(TM).
 	vtexplainLock sync.Mutex
 
-	collationEnv       *collations.Environment
-	parser             *sqlparser.Parser
-	mysqlServerVersion string
+	env *vtenv.Environment
 }
 
 // Options wraps the configuration options for different components of the
@@ -100,7 +96,7 @@ type Options struct {
 
 // NewAPI returns a new API, configured to service the given set of clusters,
 // and configured with the given options.
-func NewAPI(clusters []*cluster.Cluster, opts Options, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlServerVersion string) *API {
+func NewAPI(env *vtenv.Environment, clusters []*cluster.Cluster, opts Options) *API {
 	clusterMap := make(map[string]*cluster.Cluster, len(clusters))
 	for _, cluster := range clusters {
 		clusterMap[cluster.ID] = cluster
@@ -143,12 +139,10 @@ func NewAPI(clusters []*cluster.Cluster, opts Options, collationEnv *collations.
 	}
 
 	api := &API{
-		clusters:           clusters,
-		clusterMap:         clusterMap,
-		authz:              authz,
-		collationEnv:       collationEnv,
-		parser:             parser,
-		mysqlServerVersion: mysqlServerVersion,
+		clusters:   clusters,
+		clusterMap: clusterMap,
+		authz:      authz,
+		env:        env,
 	}
 
 	if opts.EnableDynamicClusters {
@@ -303,13 +297,11 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 	defer api.clusterMu.Unlock()
 
 	dynamicAPI := &API{
-		router:             api.router,
-		serv:               api.serv,
-		authz:              api.authz,
-		options:            api.options,
-		collationEnv:       api.collationEnv,
-		parser:             api.parser,
-		mysqlServerVersion: api.mysqlServerVersion,
+		router:  api.router,
+		serv:    api.serv,
+		authz:   api.authz,
+		options: api.options,
+		env:     api.env,
 	}
 
 	if c != nil {
@@ -2162,7 +2154,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, er.Error()
 	}
 
-	vte, err := vtexplain.Init(ctx, srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"}, api.collationEnv, api.parser, api.mysqlServerVersion)
+	vte, err := vtexplain.Init(ctx, api.env, srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"})
 	if err != nil {
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}

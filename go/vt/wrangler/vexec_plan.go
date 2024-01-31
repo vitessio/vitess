@@ -120,9 +120,9 @@ const (
 func extractTableName(stmt sqlparser.Statement) (string, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Update:
-		return sqlparser.String(stmt.TableExprs), nil
+		return sqlparser.ToString(stmt.TableExprs), nil
 	case *sqlparser.Delete:
-		return sqlparser.String(stmt.TableExprs), nil
+		return sqlparser.ToString(stmt.TableExprs), nil
 	case *sqlparser.Insert:
 		return sqlparser.String(stmt.Table), nil
 	case *sqlparser.Select:
@@ -260,7 +260,7 @@ func (vx *vexec) buildUpdatePlan(ctx context.Context, planner vexecPlanner, upd 
 		}
 	}
 	if templates := plannerParams.updateTemplates; len(templates) > 0 {
-		match, err := vx.wr.parser.QueryMatchesTemplates(vx.query, templates)
+		match, err := vx.wr.env.Parser().QueryMatchesTemplates(vx.query, templates)
 		if err != nil {
 			return nil, err
 		}
@@ -312,7 +312,7 @@ func (vx *vexec) buildInsertPlan(ctx context.Context, planner vexecPlanner, ins 
 		return nil, fmt.Errorf("query not supported by vexec: %s", sqlparser.String(ins))
 	}
 	if len(templates) > 0 {
-		match, err := vx.wr.parser.QueryMatchesTemplates(vx.query, templates)
+		match, err := vx.wr.env.Parser().QueryMatchesTemplates(vx.query, templates)
 		if err != nil {
 			return nil, err
 		}

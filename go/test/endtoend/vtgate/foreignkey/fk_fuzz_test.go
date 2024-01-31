@@ -181,13 +181,32 @@ func (fz *fuzzer) generateUpdateDMLQuery() string {
 	}
 }
 
-// generateDeleteDMLQuery generates a DELETE query from the parameters for the fuzzer.
-func (fz *fuzzer) generateDeleteDMLQuery() string {
+// generateDeleteDMLQuery generates a DELETE query using 1 table from the parameters for the fuzzer.
+func (fz *fuzzer) generateSingleDeleteDMLQuery() string {
 	tableId := rand.Intn(len(fkTables))
 	idValue := 1 + rand.Intn(fz.maxValForId)
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
 	query := fmt.Sprintf("delete %vfrom %v where id = %v", setVarFkChecksVal, fkTables[tableId], idValue)
 	return query
+}
+
+// generateMultiDeleteDMLQuery generates a DELETE query using 2 tables from the parameters for the fuzzer.
+func (fz *fuzzer) generateMultiDeleteDMLQuery() string {
+	tableId := rand.Intn(len(fkTables))
+	tableId2 := rand.Intn(len(fkTables))
+	idValue := 1 + rand.Intn(fz.maxValForId)
+	setVarFkChecksVal := fz.getSetVarFkChecksVal()
+	query := fmt.Sprintf("delete %v%v from %v join %v using (id) where %v.id = %v", setVarFkChecksVal, fkTables[tableId], fkTables[tableId], fkTables[tableId2], fkTables[tableId], idValue)
+	return query
+}
+
+// generateDeleteDMLQuery generates a DELETE query from the parameters for the fuzzer.
+func (fz *fuzzer) generateDeleteDMLQuery() string {
+	multiTableDelete := rand.Intn(2) + 1
+	if multiTableDelete == 1 {
+		return fz.generateSingleDeleteDMLQuery()
+	}
+	return fz.generateMultiDeleteDMLQuery()
 }
 
 // start starts running the fuzzer.

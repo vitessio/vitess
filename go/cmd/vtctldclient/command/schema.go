@@ -122,7 +122,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 		allSQL = strings.Join(applySchemaOptions.SQL, ";")
 	}
 
-	parts, err := parser.SplitStatementToPieces(allSQL)
+	parts, err := env.Parser().SplitStatementToPieces(allSQL)
 	if err != nil {
 		return err
 	}

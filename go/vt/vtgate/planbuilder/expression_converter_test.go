@@ -21,9 +21,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -45,6 +44,7 @@ func TestConversion(t *testing.T) {
 		expressionsOut: e(evalengine.NewColumn(0, evalengine.Type{}, nil)),
 	}}
 
+	venv := vtenv.NewTestEnv()
 	for _, tc := range queries {
 		t.Run(tc.expressionsIn, func(t *testing.T) {
 			statement, err := sqlparser.NewTestParser().Parse("select " + tc.expressionsIn)
@@ -52,9 +52,8 @@ func TestConversion(t *testing.T) {
 			slct := statement.(*sqlparser.Select)
 			exprs := extract(slct.SelectExprs)
 			ec := &expressionConverter{
-				collationEnv: collations.MySQL8(),
-				collation:    collations.MySQL8().DefaultConnectionCharset(),
-				mysqlVersion: config.DefaultMySQLVersion,
+				env:       venv,
+				collation: venv.CollationEnv().DefaultConnectionCharset(),
 			}
 			var result []evalengine.Expr
 			for _, expr := range exprs {

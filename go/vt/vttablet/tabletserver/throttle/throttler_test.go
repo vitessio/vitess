@@ -28,10 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
-	cfg "vitess.io/vitess/go/mysql/config"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
@@ -111,7 +109,7 @@ func newTestThrottler() *Throttler {
 		s.ThrottleThreshold = &atomic.Uint64{}
 		s.ThrottleThreshold.Store(1)
 	}
-	env := tabletenv.NewEnv(nil, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser(), cfg.DefaultMySQLVersion)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TabletServerTest")
 	throttler := &Throttler{
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
@@ -331,10 +329,15 @@ func runThrottler(t *testing.T, throttler *Throttler, timeout time.Duration, f f
 	assert.True(t, throttler.IsOpen())
 	assert.False(t, throttler.IsEnabled())
 
-	ok := throttler.Enable()
+	wg := throttler.Enable()
+	require.NotNil(t, wg)
+	defer wg.Wait()
 	defer throttler.Disable()
-	assert.True(t, ok)
 	assert.True(t, throttler.IsEnabled())
+
+	// Enabling again does nothing:
+	wg2 := throttler.Enable()
+	assert.Nil(t, wg2)
 
 	if f != nil {
 		time.Sleep(timeout / 2)
@@ -380,5 +383,51 @@ func TestProbesWhileOperating(t *testing.T) {
 				}
 			}
 		})
+	})
+}
+
+// TestProbesPostDisable runs the throttler for some time, and then investigates the internal throttler maps and values.
+func TestProbesPostDisable(t *testing.T) {
+	throttler := newTestThrottler()
+	runThrottler(t, throttler, 2*time.Second, nil)
+
+	probes := throttler.mysqlInventory.ClustersProbes
+	assert.NotEmpty(t, probes)
+
+	selfProbes := probes[selfStoreName]
+	t.Run("self", func(t *testing.T) {
+		assert.NotEmpty(t, selfProbes)
+		require.Equal(t, 1, len(selfProbes)) // should always be true once refreshMySQLInventory() runs
+		probe, ok := selfProbes[""]
+		assert.True(t, ok)
+		assert.NotNil(t, probe)
+
+		assert.Equal(t, "", probe.Alias)
+		assert.Nil(t, probe.Tablet)
+		assert.Equal(t, "select 1", probe.MetricQuery)
+		assert.Zero(t, atomic.LoadInt64(&probe.QueryInProgress))
+	})
+
+	shardProbes := probes[shardStoreName]
+	t.Run("shard", func(t *testing.T) {
+		assert.NotEmpty(t, shardProbes)
+		assert.Equal(t, 2, len(shardProbes)) // see fake FindAllTabletAliasesInShard above
+		for _, probe := range shardProbes {
+			require.NotNil(t, probe)
+			assert.NotEmpty(t, probe.Alias)
+			assert.NotNil(t, probe.Tablet)
+			assert.Equal(t, "select 1", probe.MetricQuery)
+			assert.Zero(t, atomic.LoadInt64(&probe.QueryInProgress))
+		}
+	})
+
+	t.Run("metrics", func(t *testing.T) {
+		assert.Equal(t, 3, len(throttler.mysqlInventory.TabletMetrics)) // 1 self tablet + 2 shard tablets
+	})
+
+	t.Run("aggregated", func(t *testing.T) {
+		assert.Zero(t, throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
+		aggr := throttler.aggregatedMetricsSnapshot()
+		assert.Empty(t, aggr)
 	})
 }

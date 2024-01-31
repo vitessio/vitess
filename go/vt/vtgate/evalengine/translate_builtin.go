@@ -414,6 +414,21 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &builtinMonthName{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "last_day":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinLastDay{CallExpr: call}, nil
+	case "to_days":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinToDays{CallExpr: call}, nil
+	case "from_days":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinFromDays{CallExpr: call}, nil
 	case "quarter":
 		if len(args) != 1 {
 			return nil, argError(method)
