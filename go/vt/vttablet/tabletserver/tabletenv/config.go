@@ -183,7 +183,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&enableHeartbeat, "heartbeat_enable", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.")
 	fs.DurationVar(&heartbeatInterval, "heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
-	fs.DurationVar(&heartbeatOnDemandDuration, "heartbeat_on_demand_duration", 0, "If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests")
+	fs.DurationVar(&heartbeatOnDemandDuration, "heartbeat_on_demand_duration", 0, "If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently. Automatically set to 5s when --heartbeat_enable is unset.")
 
 	fs.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flagutil.DualFormatBoolVar(fs, &enableConsolidator, "enable_consolidator", true, "This option enables the query consolidator.")
@@ -250,6 +250,9 @@ func Init() {
 	}
 	if heartbeatOnDemandDuration < 0 {
 		heartbeatOnDemandDuration = 0
+	}
+	if !enableHeartbeat {
+		heartbeatOnDemandDuration = 5 * time.Second
 	}
 	currentConfig.ReplicationTracker.HeartbeatInterval = heartbeatInterval
 	currentConfig.ReplicationTracker.HeartbeatOnDemand = heartbeatOnDemandDuration
