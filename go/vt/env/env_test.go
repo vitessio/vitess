@@ -19,6 +19,8 @@ package env
 import (
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestVtDataRoot(t *testing.T) {
@@ -42,4 +44,45 @@ func TestVtDataRoot(t *testing.T) {
 	if root != passed {
 		t.Errorf("The value of VtDataRoot should be %v, not %v.", passed, root)
 	}
+}
+
+func TestVtMysqlRoot(t *testing.T) {
+	envVar := "VT_MYSQL_ROOT"
+	originalMySQLRoot := os.Getenv(envVar)
+	defer os.Setenv(envVar, originalMySQLRoot)
+	originalPATH := os.Getenv("PATH")
+	defer os.Setenv("PATH", originalPATH)
+
+	testcases := []struct {
+		name   string
+		envVal string
+	}{
+		{
+			name:   "env var set",
+			envVal: "/home/mysql/binaries",
+		},
+		{
+			name: "env var unset",
+		},
+		{ // Second call allows us to verify that we're not adding to the PATH multiple times.
+			name: "env var unset again",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			os.Setenv(envVar, tc.envVal)
+			defer os.Setenv(envVar, "")
+
+			path, err := VtMysqlRoot()
+			if tc.envVal != "" {
+				require.Equal(t, tc.envVal, path)
+				require.NoError(t, err)
+			}
+			// We don't require a non-error as the test env may not have mysql installed.
+		})
+	}
+
+	// After all of the test runs, the PATH should only have had /usr/sbin added once.
+	require.Equal(t, "/usr/sbin:"+originalPATH, os.Getenv("PATH"))
 }
