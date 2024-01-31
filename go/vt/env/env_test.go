@@ -82,11 +82,11 @@ func TestVtMysqlRoot(t *testing.T) {
 				require.Equal(t, tc.envVal, path)
 				require.NoError(t, err)
 			}
-			// We don't require a non-error as the test env may not have mysql installed.
+			// We don't require a nil error as the test env may not have MySQL installed.
 		})
 	}
 
-	// Confirm the PATH after all test runs.
+	// Confirm the PATH value after all test runs.
 	if slices.Contains(strings.Split(originalPATH, ":"), sbinPath) {
 		// The PATH already had /usr/sbin and we should not have changed it.
 		require.Equal(t, originalPATH, os.Getenv("PATH"))
