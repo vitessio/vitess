@@ -123,12 +123,11 @@ func deletePlanningForLimitFk(ctx *plancontext.PlanningContext, del *sqlparser.D
 	if err != nil {
 		panic(vterrors.VT13001(err.Error()))
 	}
-	viTable := ti.GetVindexTable()
+	vTbl := ti.GetVindexTable()
 
 	var leftComp sqlparser.ValTuple
-
-	cols := make([]*sqlparser.ColName, 0, len(viTable.PrimaryKey))
-	for _, col := range viTable.PrimaryKey {
+	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
+	for _, col := range vTbl.PrimaryKey {
 		colName := sqlparser.NewColName(col.String())
 		selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(colName))
 		cols = append(cols, colName)
