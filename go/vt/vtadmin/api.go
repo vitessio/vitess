@@ -438,6 +438,30 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)
 }
 
+// CancelSchemaMigration is part of the vtadminpb.VTAdminServer interface.
+func (api *API) CancelSchemaMigration(ctx context.Context, req *vtadminpb.CancelSchemaMigrationRequest) (*vtctldatapb.CancelSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.CancelSchemaMigration")
+	defer span.Finish()
+
+	panic("implement me!")
+}
+
+// CleanupSchemaMigration is part of the vtadminpb.VTAdminServer interface.
+func (api *API) CleanupSchemaMigration(ctx context.Context, req *vtadminpb.CleanupSchemaMigrationRequest) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.CleanupSchemaMigration")
+	defer span.Finish()
+
+	panic("implement me!")
+}
+
+// CompleteSchemaMigration is part of the vtadminpb.VTAdminServer interface.
+func (api *API) CompleteSchemaMigration(ctx context.Context, req *vtadminpb.CompleteSchemaMigrationRequest) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.CompleteSchemaMigration")
+	defer span.Finish()
+
+	panic("implement me!")
+}
+
 // CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
 func (api *API) CreateKeyspace(ctx context.Context, req *vtadminpb.CreateKeyspaceRequest) (*vtadminpb.CreateKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.CreateKeyspace")
@@ -1021,6 +1045,14 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 	}, nil
 }
 
+// GetSchemaMigrations is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchemaMigrationsRequest) (*vtadminpb.GetSchemaMigrationsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetSchemaMigrations")
+	defer span.Finish()
+
+	panic("implement me!")
+}
+
 // GetShardReplicationPositions is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetShardReplicationPositions(ctx context.Context, req *vtadminpb.GetShardReplicationPositionsRequest) (*vtadminpb.GetShardReplicationPositionsResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetShardReplicationPositions")
@@ -1521,6 +1553,14 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 	}, nil
 }
 
+// LaunchSchemaMigration is part of the vtadminpb.VTAdminServer interface.
+func (api *API) LaunchSchemaMigration(ctx context.Context, req *vtadminpb.LaunchSchemaMigrationRequest) (*vtctldatapb.LaunchSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.LaunchSchemaMigration")
+	defer span.Finish()
+
+	panic("implement me!")
+}
+
 // PingTablet is part of the vtadminpb.VTAdminServer interface.
 func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest) (*vtadminpb.PingTabletResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.PingTablet")
@@ -1726,6 +1766,14 @@ func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSche
 	return &vtadminpb.ReloadSchemaShardResponse{
 		Events: res.Events,
 	}, nil
+}
+
+// RetrySchemaMigration is part of the vtadminpb.VTAdminServer interface.
+func (api *API) RetrySchemaMigration(ctx context.Context, req *vtadminpb.RetrySchemaMigrationRequest) (*vtctldatapb.RetrySchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.RetrySchemaMigration")
+	defer span.Finish()
+
+	panic("implement me!")
 }
 
 // RunHealthCheck is part of the vtadminpb.VTAdminServer interface.
