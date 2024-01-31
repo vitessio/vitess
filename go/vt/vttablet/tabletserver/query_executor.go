@@ -775,12 +775,13 @@ func (qre *QueryExecutor) getConn() (*connpool.PooledConn, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getConn")
 	defer span.Finish()
 
-	start := time.Now()
+	defer func(start time.Time) {
+		qre.logStats.WaitingForConnection += time.Since(start)
+	}(time.Now())
 	conn, err := qre.tsv.qe.conns.Get(ctx, qre.setting)
 
 	switch err {
 	case nil:
-		qre.logStats.WaitingForConnection += time.Since(start)
 		return conn, nil
 	case connpool.ErrConnPoolClosed:
 		return nil, err
@@ -792,11 +793,13 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getStreamConn")
 	defer span.Finish()
 
-	start := time.Now()
+	defer func(start time.Time) {
+		qre.logStats.WaitingForConnection += time.Since(start)
+	}(time.Now())
 	conn, err := qre.tsv.qe.streamConns.Get(ctx, qre.setting)
+
 	switch err {
 	case nil:
-		qre.logStats.WaitingForConnection += time.Since(start)
 		return conn, nil
 	case connpool.ErrConnPoolClosed:
 		return nil, err
