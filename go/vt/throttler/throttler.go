@@ -227,7 +227,7 @@ func (t *Throttler) Throttle(threadID int) time.Duration {
 
 // LastMaxLagNotIgnoredForTabletType returns the max of all the last replication lag values seen across all tablets of
 // the provided type, excluding ignored tablets.
-func (t *Throttler) LastMaxLagNotIgnoredForTabletType(tabletType topodata.TabletType) uint32 {
+func (t *Throttler) MaxLag(tabletType topodata.TabletType) uint32 {
 	cache := t.maxReplicationLagModule.lagCacheByType(tabletType)
 
 	var maxLag uint32
