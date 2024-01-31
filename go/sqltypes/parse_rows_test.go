@@ -168,20 +168,123 @@ func TestRowParsing(t *testing.T) {
 }
 
 func TestRowsEquals(t *testing.T) {
-	var cases = []struct {
+	tests := []struct {
+		name        string
 		left, right string
+		expectedErr string
 	}{
-		{"[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]", "[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]"},
+		{
+			name:  "Both equal",
+			left:  "[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]",
+			right: "[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]",
+		},
+		{
+			name:        "length mismatch",
+			left:        "[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]",
+			right:       "[[INT64(2)] [INT64(2)] [INT64(1)]]",
+			expectedErr: "results differ: expected 4 rows in result, got 3\n\twant: [[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]\n\tgot:  [[INT64(2)] [INT64(2)] [INT64(1)]]",
+		},
+		{
+			name:        "elements mismatch",
+			left:        "[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]",
+			right:       "[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(4)]]",
+			expectedErr: "results differ: row [INT64(1)] is missing from result\n\twant: [[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]\n\tgot:  [[INT64(1)] [INT64(2)] [INT64(2)] [INT64(4)]]",
+		},
 	}
 
-	for _, tc := range cases {
-		left, err := ParseRows(tc.left)
-		require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			left, err := ParseRows(tt.left)
+			require.NoError(t, err)
 
-		right, err := ParseRows(tc.right)
-		require.NoError(t, err)
+			right, err := ParseRows(tt.right)
+			require.NoError(t, err)
 
-		err = RowsEquals(left, right)
-		require.NoError(t, err)
+			err = RowsEquals(left, right)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
+	}
+}
+
+func TestRowsEqualStr(t *testing.T) {
+	tests := []struct {
+		name        string
+		want        string
+		got         []Row
+		expectedErr string
+	}{
+		{
+			name: "Unknown type",
+			want: "[[RANDOM(1)]]",
+			got: []Row{
+				{
+					NewInt64(1),
+				},
+			},
+			expectedErr: "malformed row assertion: unknown SQL type \"RANDOM\" at <input>:1:3",
+		},
+		{
+			name: "Invalid row",
+			want: "[[INT64(1]]",
+			got: []Row{
+				{
+					NewInt64(1),
+				},
+			},
+			expectedErr: "malformed row assertion: unexpected token ']' at <input>:1:10",
+		},
+		{
+			name: "Both equal",
+			want: "[[INT64(1)]]",
+			got: []Row{
+				{
+					NewInt64(1),
+				},
+			},
+		},
+		{
+			name: "length mismatch",
+			want: "[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]",
+			got: []Row{
+				{
+					NewInt64(1),
+				},
+			},
+			expectedErr: "results differ: expected 4 rows in result, got 1\n\twant: [[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]\n\tgot:  [[INT64(1)]]",
+		},
+		{
+			name: "elements mismatch",
+			want: "[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]",
+			got: []Row{
+				{
+					NewInt64(1),
+				},
+				{
+					NewInt64(1),
+				},
+				{
+					NewInt64(1),
+				},
+				{
+					NewInt64(1),
+				},
+			},
+			expectedErr: "results differ: row [INT64(2)] is missing from result\n\twant: [[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]\n\tgot:  [[INT64(1)] [INT64(1)] [INT64(1)] [INT64(1)]]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := RowsEqualsStr(tt.want, tt.got)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
 	}
 }
