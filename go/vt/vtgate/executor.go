@@ -461,7 +461,11 @@ func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlpars
 			})
 			bindVars[key] = sqltypes.Int64BindVariable(v)
 		case sysvars.TransactionMode.Name:
-			bindVars[key] = sqltypes.StringBindVariable(session.TransactionMode.String())
+			txMode := session.TransactionMode
+			if txMode == vtgatepb.TransactionMode_UNSPECIFIED {
+				txMode = getTxMode()
+			}
+			bindVars[key] = sqltypes.StringBindVariable(txMode.String())
 		case sysvars.Workload.Name:
 			var v string
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {

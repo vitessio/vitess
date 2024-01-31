@@ -801,7 +801,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			sqltypes.NewInt64(0),
 			sqltypes.NewInt64(0),
 			sqltypes.NewInt64(0),
-			sqltypes.NewVarChar("UNSPECIFIED"),
+			sqltypes.NewVarChar("MULTI"),
 			sqltypes.NewVarChar(""),
 			// these have been set at the beginning of the test
 			sqltypes.NewVarChar("a fine gtid"),
