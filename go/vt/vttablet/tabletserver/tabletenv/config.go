@@ -251,7 +251,7 @@ func Init() {
 	if heartbeatOnDemandDuration < 0 {
 		heartbeatOnDemandDuration = 0
 	}
-	if !enableHeartbeat {
+	if heartbeatOnDemandDuration == 0 && !enableHeartbeat {
 		heartbeatOnDemandDuration = 5 * time.Second
 	}
 	currentConfig.ReplicationTracker.HeartbeatInterval = heartbeatInterval
