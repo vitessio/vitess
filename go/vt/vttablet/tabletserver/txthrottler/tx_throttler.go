@@ -170,7 +170,7 @@ type txThrottlerStateImpl struct {
 	// tabletTypes stores the tablet types for throttling
 	tabletTypes map[topodatapb.TabletType]bool
 
-	shardMaxLag        int64
+	maxLag             int64
 	done               chan bool
 	waitForTermination sync.WaitGroup
 }
@@ -366,7 +366,7 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 	ts.throttleMu.Lock()
 	defer ts.throttleMu.Unlock()
 
-	maxLag := atomic.LoadInt64(&ts.shardMaxLag)
+	maxLag := atomic.LoadInt64(&ts.maxLag)
 
 	return maxLag > ts.config.TxThrottlerConfig.TargetReplicationLagSec &&
 		ts.throttler.Throttle(0 /* threadId */) > 0
@@ -389,7 +389,7 @@ outerloop:
 					maxLag = maxLagPerTabletType
 				}
 			}
-			atomic.StoreInt64(&ts.shardMaxLag, int64(maxLag))
+			atomic.StoreInt64(&ts.maxLag, int64(maxLag))
 		case <-ts.done:
 			break outerloop
 		}
