@@ -153,6 +153,23 @@ func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag) {
 	ta.total++
 }
 
+func nextSignedTypeForUnsigned(t sqltypes.Type) sqltypes.Type {
+	switch t {
+	case sqltypes.Uint8:
+		return sqltypes.Int16
+	case sqltypes.Uint16:
+		return sqltypes.Int24
+	case sqltypes.Uint24:
+		return sqltypes.Int32
+	case sqltypes.Uint32:
+		return sqltypes.Int64
+	case sqltypes.Uint64:
+		return sqltypes.Decimal
+	default:
+		panic("bad unsigned integer type")
+	}
+}
+
 func (ta *typeAggregation) result() sqltypes.Type {
 	/*
 		If all types are numeric, the aggregated type is also numeric:
@@ -206,11 +223,14 @@ func (ta *typeAggregation) result() sqltypes.Type {
 		if ta.unsigned == ta.total {
 			return ta.unsignedMax
 		}
-		if ta.unsignedMax == sqltypes.Uint64 && ta.signed > 0 {
-			return sqltypes.Decimal
+		if ta.signed == 0 {
+			panic("bad type aggregation for signed/unsigned types")
 		}
-		// TODO
-		return sqltypes.Uint64
+		agtype := nextSignedTypeForUnsigned(ta.unsignedMax)
+		if sqltypes.IsSigned(agtype) {
+			return max(agtype, ta.signedMax)
+		}
+		return agtype
 	}
 
 	if ta.char == ta.total {
