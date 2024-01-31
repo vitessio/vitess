@@ -73,7 +73,7 @@ func TestVtMysqlRoot(t *testing.T) {
 	}
 	testcases := []testcase{
 		{
-			name:              "env var set",
+			name:              "VT_MYSQL_ROOT set",
 			vtMysqlRootEnvVal: "/home/mysql/binaries",
 		},
 		{
@@ -85,11 +85,6 @@ func TestVtMysqlRoot(t *testing.T) {
 			},
 			expect: testDir + "/usr",
 		},
-		{
-			name:       "VT_MYSQL_ROOT empty; PATH with /usr/sbin",
-			pathEnvVal: "",
-			expectErr:  errMysqldNotFound.Error(),
-		},
 	}
 
 	// If /usr/sbin/mysqld exists, confirm that we find it even
@@ -97,11 +92,15 @@ func TestVtMysqlRoot(t *testing.T) {
 	_, err := os.Stat(mysqldSbinPath)
 	if err == nil {
 		t.Logf("Found %s, confirming auto detection behavior", mysqldSbinPath)
-		tc := testcase{
+		testcases = append(testcases, testcase{
 			name:   "VT_MYSQL_ROOT empty; PATH empty; mysqld in /usr/sbin",
 			expect: "/usr",
-		}
-		testcases = append(testcases, tc)
+		})
+	} else {
+		testcases = append(testcases, testcase{ // Error expected
+			name:      "VT_MYSQL_ROOT empty; PATH empty; mysqld not in /usr/sbin",
+			expectErr: errMysqldNotFound.Error(),
+		})
 	}
 
 	for _, tc := range testcases {
