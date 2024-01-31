@@ -74,20 +74,22 @@ func VtMysqlRoot() (string, error) {
 		return root, nil
 	}
 
+	getRoot := func(path string) string {
+		return filepath.Dir(filepath.Dir(path)) // Strip mysqld and [s]bin parts
+	}
 	binpath, err := exec.LookPath("mysqld")
 	if err != nil {
 		// First see if /usr/sbin/mysqld exists as it might not be in
 		// the PATH by default and this is often the default location
 		// used by mysqld OS system packages (apt, dnf, etc).
 		fi, err := os.Stat(mysqldSbinPath)
-		if err == nil /* file exists */ && fi.Mode().IsRegular() /* is not a DIR or other special file */ &&
-			fi.Mode()&0111 != 0 /* is executable by anyone */ {
-			return "/usr", nil // Value is expected to be a base path without the mysqld and sbin parts
+		if err == nil /* file exists */ && fi.Mode().IsRegular() /* not a DIR or other special file */ &&
+			fi.Mode()&0111 != 0 /* executable by anyone */ {
+			return getRoot(mysqldSbinPath), nil
 		}
 		return "", errMysqldNotFound
 	}
-	binpath = filepath.Dir(filepath.Dir(binpath)) // Strip mysqld and [s]bin parts
-	return binpath, nil
+	return getRoot(binpath), nil
 }
 
 // VtMysqlBaseDir returns the Mysql base directory, which
