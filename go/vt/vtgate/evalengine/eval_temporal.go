@@ -151,7 +151,7 @@ func (e *evalTemporal) addInterval(interval *datetime.Interval, strcoll collatio
 		tmp.dt.Time, tmp.prec, ok = e.dt.Time.AddInterval(interval, strcoll.Valid())
 	case tt == sqltypes.Datetime || tt == sqltypes.Timestamp || (tt == sqltypes.Date && interval.Unit().HasTimeParts()) || (tt == sqltypes.Time && interval.Unit().HasDateParts()):
 		tmp = e.toDateTime(int(e.prec))
-		tmp.dt, tmp.prec, ok = e.dt.AddInterval(interval, strcoll.Valid())
+		tmp.dt, tmp.prec, ok = e.dt.AddInterval(interval, tmp.prec, strcoll.Valid())
 	}
 	if !ok {
 		return nil
