@@ -373,8 +373,9 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0"
+          "(0:1)"
         ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -383,8 +384,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1 union select id from music where 1 != 1 union select 1 from dual where 1 != 1",
-            "Query": "select id from `user` union select id from music union select 1 from dual",
+            "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select id from music where 1 != 1 union select 1 from dual where 1 != 1) as dt where 1 != 1",
+            "Query": "select id, weight_string(id) from (select id from `user` union select id from music union select 1 from dual) as dt",
             "Table": "`user`, dual, music"
           }
         ]
@@ -834,8 +835,9 @@
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "0"
+              "(0:1)"
             ],
+            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -844,8 +846,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id from `user` where 1 != 1 union select 3 from dual where 1 != 1",
-                "Query": "select id from `user` union select 3 from dual limit :__upper_limit",
+                "FieldQuery": "select id, weight_string(id) from (select id from `user` where 1 != 1 union select 3 from dual where 1 != 1) as dt where 1 != 1",
+                "Query": "select id, weight_string(id) from (select id from `user` union select 3 from dual limit :__upper_limit) as dt",
                 "Table": "`user`, dual"
               }
             ]
@@ -1042,7 +1044,7 @@
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "0",
+              "(0:1)",
               "1"
             ],
             "Inputs": [
@@ -1572,8 +1574,9 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0"
+          "(0:1)"
         ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1582,8 +1585,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1 from `user` where 1 != 1 union select 3 from `user` where 1 != 1",
-            "Query": "select col1 from `user` union select 3 from `user`",
+            "FieldQuery": "select col1, weight_string(col1) from (select col1 from `user` where 1 != 1 union select 3 from `user` where 1 != 1) as dt where 1 != 1",
+            "Query": "select col1, weight_string(col1) from (select col1 from `user` union select 3 from `user`) as dt",
             "Table": "`user`"
           }
         ]
@@ -1602,8 +1605,9 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0"
+          "(0:1)"
         ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1612,8 +1616,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 3 from `user` where 1 != 1 union select col1 from `user` where 1 != 1",
-            "Query": "select 3 from `user` union select col1 from `user`",
+            "FieldQuery": "select `3`, weight_string(`3`) from (select 3 from `user` where 1 != 1 union select col1 from `user` where 1 != 1) as dt where 1 != 1",
+            "Query": "select `3`, weight_string(`3`) from (select 3 from `user` union select col1 from `user`) as dt",
             "Table": "`user`"
           }
         ]
@@ -1632,8 +1636,9 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0"
+          "(0:1)"
         ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1642,8 +1647,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 3 from `user` where 1 != 1 union select now() from `user` where 1 != 1",
-            "Query": "select 3 from `user` union select now() from `user`",
+            "FieldQuery": "select `3`, weight_string(`3`) from (select 3 from `user` where 1 != 1 union select now() from `user` where 1 != 1) as dt where 1 != 1",
+            "Query": "select `3`, weight_string(`3`) from (select 3 from `user` union select now() from `user`) as dt",
             "Table": "`user`"
           }
         ]
@@ -1662,8 +1667,9 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "0"
+          "(0:1)"
         ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1672,8 +1678,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select now() from `user` where 1 != 1 union select 3 from `user` where 1 != 1",
-            "Query": "select now() from `user` union select 3 from `user`",
+            "FieldQuery": "select `now()`, weight_string(`now()`) from (select now() from `user` where 1 != 1 union select 3 from `user` where 1 != 1) as dt where 1 != 1",
+            "Query": "select `now()`, weight_string(`now()`) from (select now() from `user` union select 3 from `user`) as dt",
             "Table": "`user`"
           }
         ]

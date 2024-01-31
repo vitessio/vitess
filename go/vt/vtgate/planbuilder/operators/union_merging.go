@@ -208,9 +208,6 @@ func createMergedUnion(
 			types := []sqltypes.Type{rt.Type(), lt.Type()}
 			t := evalengine.AggregateTypes(types)
 			ctx.SemTable.ExprTypes[col] = evalengine.NewType(t, collations.Unknown)
-		} else {
-			ctx.SemTable.CopySemanticInfo(rae.Expr, col)
-			ctx.SemTable.CopySemanticInfo(lae.Expr, col)
 		}
 		ctx.SemTable.Recursive[col] = deps
 	}

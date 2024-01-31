@@ -81,10 +81,6 @@ func TestUnionDistinct(t *testing.T) {
 				mcmp.AssertMatchesNoOrder(`SELECT 5 from t1 UNION SELECT id2 from t1`, `[[INT64(5)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
 				mcmp.AssertMatchesNoOrder(`SELECT id1 from t1 UNION SELECT 2 from t1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
 				mcmp.AssertMatchesNoOrder(`SELECT id1 from t1 UNION SELECT 5 from t1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]`)
-				mcmp.AssertMatchesNoOrder(`select 3 from t1 union select DAY("2024-01-31") from t1`, `[[INT64(3)] [INT64(31)]]`)
-				mcmp.AssertMatchesNoOrder(`select DAY("2024-01-31") from t1 union select 3 from t1`, `[[INT64(31)] [INT64(3)]]`)
-				mcmp.AssertMatchesNoOrder(`select DAY("2024-01-31") from t1 union select id1 from t1`, `[[INT64(31)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]`)
-				mcmp.Exec(`select 3 from t1 union select curdate() from t1`)
 				mcmp.Exec(`select curdate() from t1 union select 3 from t1`)
 				mcmp.Exec(`select curdate() from t1 union select id1 from t1`)
 			}
