@@ -1246,9 +1246,81 @@
     "plan": "VT09016: Cannot delete or update a parent row: a foreign key constraint fails"
   },
   {
-    "comment": "delete in a table with limit - disallowed",
+    "comment": "delete in a table with limit",
     "query": "delete from u_tbl2 limit 2",
-    "plan": "VT12001: unsupported: foreign keys management at vitess with limit"
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from u_tbl2 limit 2",
+      "Instructions": {
+        "OperatorType": "DeleteWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select id from u_tbl2 where 1 != 1",
+            "Query": "select id from u_tbl2 limit 2 for update",
+            "Table": "u_tbl2"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where id in ::dm_vals for update",
+                "Table": "u_tbl2"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals",
+                "Table": "u_tbl3"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl2 where id in ::dm_vals",
+                "Table": "u_tbl2"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl2",
+        "unsharded_fk_allow.u_tbl3"
+      ]
+    }
   },
   {
     "comment": "update with fk on cross-shard with a update condition on non-literal value",
@@ -3252,6 +3324,118 @@
       "TablesUsed": [
         "unsharded_fk_allow.u_tbl1",
         "unsharded_fk_allow.u_tbl10",
+        "unsharded_fk_allow.u_tbl2",
+        "unsharded_fk_allow.u_tbl3"
+      ]
+    }
+  },
+  {
+    "comment": "Delete with limit",
+    "query": "delete from u_tbl1 order by id limit 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from u_tbl1 order by id limit 1",
+      "Instructions": {
+        "OperatorType": "DeleteWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select id from u_tbl1 where 1 != 1",
+            "Query": "select id from u_tbl1 order by id asc limit 1 for update",
+            "Table": "u_tbl1"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+                "Query": "select u_tbl1.col1 from u_tbl1 where id in ::dm_vals for update",
+                "Table": "u_tbl1"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "FkCascade",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "Selection",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                    "Table": "u_tbl2"
+                  },
+                  {
+                    "InputName": "CascadeChild-1",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "BvName": "fkc_vals1",
+                    "Cols": [
+                      0
+                    ],
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
+                    "Table": "u_tbl3"
+                  },
+                  {
+                    "InputName": "Parent",
+                    "OperatorType": "Delete",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
+                    "Table": "u_tbl2"
+                  }
+                ]
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl1 where id in ::dm_vals",
+                "Table": "u_tbl1"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
         "unsharded_fk_allow.u_tbl2",
         "unsharded_fk_allow.u_tbl3"
       ]
