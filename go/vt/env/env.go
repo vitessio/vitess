@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 )
 
 const (
@@ -34,6 +35,10 @@ const (
 	DefaultVtRoot = "/usr/local/vitess"
 	sbinPath      = "/usr/sbin"
 )
+
+// sbinEnvOnce guards modifications to the PATH environment variable and
+// ensures that we only modify it once.
+var sbinEnvOnce sync.Once
 
 // VtRoot returns $VTROOT or tries to guess its value if it's not set.
 // This is the root for the 'vt' distribution, which contains bin/vttablet
@@ -78,11 +83,13 @@ func VtMysqlRoot() (string, error) {
 	// Ensure that /usr/sbin is included, as it might not be by default
 	// and this is often the default location used by mysqld system
 	// packages (apt, dnf, etc).
-	envPath := os.Getenv("PATH")
-	if !slices.Contains(strings.Split(envPath, ":"), sbinPath) {
-		newEnvPath := fmt.Sprintf("%s:%s", sbinPath, envPath)
-		os.Setenv("PATH", newEnvPath)
-	}
+	sbinEnvOnce.Do(func() {
+		envPath := os.Getenv("PATH")
+		if !slices.Contains(strings.Split(envPath, ":"), sbinPath) {
+			newEnvPath := fmt.Sprintf("%s:%s", sbinPath, envPath)
+			os.Setenv("PATH", newEnvPath)
+		}
+	})
 
 	binpath, err := exec.LookPath("mysqld")
 	if err != nil {
