@@ -1819,7 +1819,7 @@ func FnFromDays(yield Query) {
 
 func FnTimeToSec(yield Query) {
 	for _, d := range inputConversions {
-		yield(fmt.Sprintf("FROM_DAYS(%s)", d), nil)
+		yield(fmt.Sprintf("TIME_TO_SEC(%s)", d), nil)
 	}
 
 	time := []string{
@@ -1827,6 +1827,10 @@ func FnTimeToSec(yield Query) {
 		`'00:00:00'`,
 		`'22:23:00'`,
 		`'00:39:38'`,
+		`TIME'00:39:38'`,
+		`TIME'102:39:38'`,
+		`TIME'838:59:59'`,
+		`TIME'-838:59:59'`,
 		`'000220`,
 		`'2003-09-03 00:39:38'`,
 		`'2003-09-03'`,
