@@ -81,8 +81,8 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "FieldQuery": "select colb, cola, y, colc, x from multicol_tbl1 where 1 != 1",
-            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
+            "FieldQuery": "select multicol_tbl1.colb, multicol_tbl1.cola, multicol_tbl1.y, multicol_tbl1.colc, multicol_tbl1.x from multicol_tbl1 where 1 != 1",
+            "Query": "select multicol_tbl1.colb, multicol_tbl1.cola, multicol_tbl1.y, multicol_tbl1.colc, multicol_tbl1.x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
             "Table": "multicol_tbl1",
             "Values": [
               "1",
@@ -160,8 +160,8 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "FieldQuery": "select col5, t5col5 from tbl5 where 1 != 1",
-            "Query": "select col5, t5col5 from tbl5 for update",
+            "FieldQuery": "select tbl5.col5, tbl5.t5col5 from tbl5 where 1 != 1",
+            "Query": "select tbl5.col5, tbl5.t5col5 from tbl5 for update",
             "Table": "tbl5"
           },
           {
@@ -242,8 +242,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-            "Query": "select col9 from u_tbl9 where col9 = 5 for update nowait",
+            "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+            "Query": "select u_tbl9.col9 from u_tbl9 where col9 = 5 for update nowait",
             "Table": "u_tbl9"
           },
           {
@@ -321,8 +321,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-            "Query": "select col2 from u_tbl2 where id = 1 for update",
+            "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+            "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update",
             "Table": "u_tbl2"
           },
           {
@@ -432,8 +432,8 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "FieldQuery": "select t5col5 from tbl5 where 1 != 1",
-            "Query": "select t5col5 from tbl5 for update",
+            "FieldQuery": "select tbl5.t5col5 from tbl5 where 1 != 1",
+            "Query": "select tbl5.t5col5 from tbl5 for update",
             "Table": "tbl5"
           },
           {
@@ -601,8 +601,8 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "FieldQuery": "select col9 from tbl9 where 1 != 1",
-            "Query": "select col9 from tbl9 where col9 = 34 for update",
+            "FieldQuery": "select tbl9.col9 from tbl9 where 1 != 1",
+            "Query": "select tbl9.col9 from tbl9 where col9 = 34 for update",
             "Table": "tbl9",
             "Values": [
               "34"
@@ -666,8 +666,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-            "Query": "select col1 from u_tbl1 for update",
+            "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+            "Query": "select u_tbl1.col1 from u_tbl1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -686,8 +686,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -736,8 +736,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR))) for update nowait",
+                "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR))) for update nowait",
                 "Table": "u_tbl9"
               },
               {
@@ -831,8 +831,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where 1 != 1",
-                "Query": "select col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where id = 1 for update",
+                "FieldQuery": "select u_tbl2.col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where id = 1 for update",
                 "Table": "u_tbl2"
               },
               {
@@ -898,8 +898,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where 1 != 1",
-            "Query": "select col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where id = 1 for update",
+            "FieldQuery": "select u_tbl1.col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where 1 != 1",
+            "Query": "select u_tbl1.col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where id = 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -925,8 +925,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -982,8 +982,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (col9) not in ((:fkc_upd1))) for update nowait",
+                "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (col9) not in ((:fkc_upd1))) for update nowait",
                 "Table": "u_tbl9"
               },
               {
@@ -1056,8 +1056,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-            "Query": "select col2 from u_tbl2 where id = 1 for update",
+            "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+            "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update",
             "Table": "u_tbl2"
           },
           {
@@ -1113,8 +1113,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-            "Query": "select col1 from u_tbl1 where id = 1 for update",
+            "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+            "Query": "select u_tbl1.col1 from u_tbl1 where id = 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -1133,8 +1133,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -1183,8 +1183,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR))) for update nowait",
+                "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR))) for update nowait",
                 "Table": "u_tbl9"
               },
               {
@@ -1430,8 +1430,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col6 from u_tbl6 where 1 != 1",
-            "Query": "select col6 from u_tbl6 for update",
+            "FieldQuery": "select u_tbl6.col6 from u_tbl6 where 1 != 1",
+            "Query": "select u_tbl6.col6 from u_tbl6 for update",
             "Table": "u_tbl6"
           },
           {
@@ -1506,8 +1506,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col7 from u_tbl7 where 1 != 1",
-            "Query": "select col7 from u_tbl7 for update",
+            "FieldQuery": "select u_tbl7.col7 from u_tbl7 where 1 != 1",
+            "Query": "select u_tbl7.col7 from u_tbl7 for update",
             "Table": "u_tbl7"
           },
           {
@@ -1595,8 +1595,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col7 from u_tbl7 where 1 != 1",
-            "Query": "select col7 from u_tbl7 for update",
+            "FieldQuery": "select u_tbl7.col7 from u_tbl7 where 1 != 1",
+            "Query": "select u_tbl7.col7 from u_tbl7 for update",
             "Table": "u_tbl7"
           },
           {
@@ -1702,8 +1702,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-                "Query": "select col1 from u_tbl1 where id = 1 for update",
+                "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+                "Query": "select u_tbl1.col1 from u_tbl1 where id = 1 for update",
                 "Table": "u_tbl1"
               },
               {
@@ -1722,8 +1722,8 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                    "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                     "Table": "u_tbl2"
                   },
                   {
@@ -1772,8 +1772,8 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                    "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR))) for update nowait",
+                    "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR))) for update nowait",
                     "Table": "u_tbl9"
                   },
                   {
@@ -1878,8 +1878,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-                "Query": "select col1 from u_tbl1 where (id) in ((1)) for update",
+                "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+                "Query": "select u_tbl1.col1 from u_tbl1 where (id) in ((1)) for update",
                 "Table": "u_tbl1"
               },
               {
@@ -1898,8 +1898,8 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                    "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                     "Table": "u_tbl2"
                   },
                   {
@@ -1984,8 +1984,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select cola, colb from u_multicol_tbl1 where 1 != 1",
-            "Query": "select cola, colb from u_multicol_tbl1 where id = 3 for update",
+            "FieldQuery": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where 1 != 1",
+            "Query": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where id = 3 for update",
             "Table": "u_multicol_tbl1"
           },
           {
@@ -2005,8 +2005,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2)) for update",
+                "FieldQuery": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where 1 != 1",
+                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2)) for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -2078,8 +2078,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select cola, colb from u_multicol_tbl1 where 1 != 1",
-            "Query": "select cola, colb from u_multicol_tbl1 where id = :v3 for update",
+            "FieldQuery": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where 1 != 1",
+            "Query": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where id = :v3 for update",
             "Table": "u_multicol_tbl1"
           },
           {
@@ -2099,8 +2099,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2)))) for update",
+                "FieldQuery": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where 1 != 1",
+                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2)))) for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -2178,8 +2178,8 @@
                   "Name": "sharded_fk_allow",
                   "Sharded": true
                 },
-                "FieldQuery": "select col5, t5col5 from tbl5 where 1 != 1",
-                "Query": "select col5, t5col5 from tbl5 where id = :v1 for update",
+                "FieldQuery": "select tbl5.col5, tbl5.t5col5 from tbl5 where 1 != 1",
+                "Query": "select tbl5.col5, tbl5.t5col5 from tbl5 where id = :v1 for update",
                 "Table": "tbl5"
               },
               {

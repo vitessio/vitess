@@ -268,6 +268,12 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 	return isSelect
 }
 
+func isParentDeleteOrUpdate(cursor *sqlparser.Cursor) bool {
+	_, isDelete := cursor.Parent().(*sqlparser.Delete)
+	_, isUpdate := cursor.Parent().(*sqlparser.Update)
+	return isDelete || isUpdate
+}
+
 func isParentSelectStatement(cursor *sqlparser.Cursor) bool {
 	_, isSelect := cursor.Parent().(sqlparser.SelectStatement)
 	return isSelect

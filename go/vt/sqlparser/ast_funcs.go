@@ -2583,7 +2583,7 @@ func (node *Delete) isSingleAliasExpr() bool {
 	return isAliasExpr
 }
 
-func (node TableExprs) MultiTable() bool {
+func MultiTable(node []TableExpr) bool {
 	if len(node) > 1 {
 		return true
 	}

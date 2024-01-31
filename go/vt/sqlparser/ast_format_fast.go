@@ -234,17 +234,17 @@ func (node *Update) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("update ")
 	node.Comments.FormatFast(buf)
 	buf.WriteString(node.Ignore.ToString())
-	node.TableExprs.FormatFast(buf)
+	prefix := ""
+	for _, expr := range node.TableExprs {
+		buf.WriteString(prefix)
+		expr.FormatFast(buf)
+		prefix = ", "
+	}
 	buf.WriteString(" set ")
-
 	node.Exprs.FormatFast(buf)
-
 	node.Where.FormatFast(buf)
-
 	node.OrderBy.FormatFast(buf)
-
 	node.Limit.FormatFast(buf)
-
 }
 
 // FormatFast formats the node.
@@ -261,8 +261,12 @@ func (node *Delete) FormatFast(buf *TrackedBuffer) {
 		node.Targets.FormatFast(buf)
 		buf.WriteByte(' ')
 	}
-	buf.WriteString("from ")
-	node.TableExprs.FormatFast(buf)
+	prefix := "from "
+	for _, expr := range node.TableExprs {
+		buf.WriteString(prefix)
+		expr.FormatFast(buf)
+		prefix = ", "
+	}
 	node.Partitions.FormatFast(buf)
 	node.Where.FormatFast(buf)
 	node.OrderBy.FormatFast(buf)
