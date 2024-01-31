@@ -85,7 +85,7 @@ func VtMysqlRoot() (string, error) {
 	// packages (apt, dnf, etc).
 	sbinEnvOnce.Do(func() {
 		envPath := os.Getenv("PATH")
-		if !slices.Contains(strings.Split(envPath, ":"), sbinPath) {
+		if !slices.Contains(filepath.SplitList(envPath), sbinPath) {
 			newEnvPath := fmt.Sprintf("%s:%s", sbinPath, envPath)
 			os.Setenv("PATH", newEnvPath)
 		}

@@ -19,8 +19,8 @@ package env
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -88,7 +88,7 @@ func TestVtMysqlRoot(t *testing.T) {
 
 	// Confirm the PATH value now after all test runs.
 	currentPATH := os.Getenv("PATH")
-	if slices.Contains(strings.Split(originalPATH, ":"), sbinPath) {
+	if slices.Contains(filepath.SplitList(originalPATH), sbinPath) {
 		// The PATH already had /usr/sbin and we should not have changed it.
 		require.Equal(t, originalPATH, currentPATH)
 	} else {
