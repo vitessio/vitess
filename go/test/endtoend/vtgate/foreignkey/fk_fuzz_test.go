@@ -186,8 +186,12 @@ func (fz *fuzzer) generateSingleDeleteDMLQuery() string {
 	tableId := rand.Intn(len(fkTables))
 	idValue := 1 + rand.Intn(fz.maxValForId)
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
-	query := fmt.Sprintf("delete %vfrom %v where id = %v", setVarFkChecksVal, fkTables[tableId], idValue)
-	return query
+	delWithLimit := rand.Intn(2)
+	if delWithLimit == 0 {
+		return fmt.Sprintf("delete %vfrom %v where id = %v", setVarFkChecksVal, fkTables[tableId], idValue)
+	}
+	limitCount := rand.Intn(3)
+	return fmt.Sprintf("delete %vfrom %v order by id limit %v", setVarFkChecksVal, fkTables[tableId], limitCount)
 }
 
 // generateMultiDeleteDMLQuery generates a DELETE query using 2 tables from the parameters for the fuzzer.
@@ -604,61 +608,65 @@ func TestFkFuzzTest(t *testing.T) {
 		insertShare    int
 		deleteShare    int
 		updateShare    int
-	}{{
-		name:           "Single Thread - Only Inserts",
-		concurrency:    1,
-		timeForTesting: 5 * time.Second,
-		maxValForCol:   5,
-		maxValForId:    10,
-		insertShare:    100,
-		deleteShare:    0,
-		updateShare:    0,
-	}, {
-		name:           "Single Thread - Balanced Inserts and Deletes",
-		concurrency:    1,
-		timeForTesting: 5 * time.Second,
-		maxValForCol:   5,
-		maxValForId:    10,
-		insertShare:    50,
-		deleteShare:    50,
-		updateShare:    0,
-	}, {
-		name:           "Single Thread - Balanced Inserts and Updates",
-		concurrency:    1,
-		timeForTesting: 5 * time.Second,
-		maxValForCol:   5,
-		maxValForId:    10,
-		insertShare:    50,
-		deleteShare:    0,
-		updateShare:    50,
-	}, {
-		name:           "Single Thread - Balanced Inserts, Updates and Deletes",
-		concurrency:    1,
-		timeForTesting: 5 * time.Second,
-		maxValForCol:   5,
-		maxValForId:    10,
-		insertShare:    50,
-		deleteShare:    50,
-		updateShare:    50,
-	}, {
-		name:           "Multi Thread - Only Inserts",
-		concurrency:    30,
-		timeForTesting: 5 * time.Second,
-		maxValForCol:   5,
-		maxValForId:    30,
-		insertShare:    100,
-		deleteShare:    0,
-		updateShare:    0,
-	}, {
-		name:           "Multi Thread - Balanced Inserts, Updates and Deletes",
-		concurrency:    30,
-		timeForTesting: 5 * time.Second,
-		maxValForCol:   5,
-		maxValForId:    30,
-		insertShare:    50,
-		deleteShare:    50,
-		updateShare:    50,
-	}}
+	}{
+		{
+			name:           "Single Thread - Only Inserts",
+			concurrency:    1,
+			timeForTesting: 5 * time.Second,
+			maxValForCol:   5,
+			maxValForId:    10,
+			insertShare:    100,
+			deleteShare:    0,
+			updateShare:    0,
+		}, {
+			name:           "Single Thread - Balanced Inserts and Deletes",
+			concurrency:    1,
+			timeForTesting: 5 * time.Second,
+			maxValForCol:   5,
+			maxValForId:    10,
+			insertShare:    50,
+			deleteShare:    50,
+			updateShare:    0,
+		}, {
+			name:           "Single Thread - Balanced Inserts and Updates",
+			concurrency:    1,
+			timeForTesting: 5 * time.Second,
+			maxValForCol:   5,
+			maxValForId:    10,
+			insertShare:    50,
+			deleteShare:    0,
+			updateShare:    50,
+		},
+		{
+			name:           "Single Thread - Balanced Inserts, Updates and Deletes",
+			concurrency:    1,
+			timeForTesting: 5 * time.Second,
+			maxValForCol:   5,
+			maxValForId:    10,
+			insertShare:    50,
+			deleteShare:    50,
+			updateShare:    50,
+		},
+		{
+			name:           "Multi Thread - Only Inserts",
+			concurrency:    30,
+			timeForTesting: 5 * time.Second,
+			maxValForCol:   5,
+			maxValForId:    30,
+			insertShare:    100,
+			deleteShare:    0,
+			updateShare:    0,
+		}, {
+			name:           "Multi Thread - Balanced Inserts, Updates and Deletes",
+			concurrency:    30,
+			timeForTesting: 5 * time.Second,
+			maxValForCol:   5,
+			maxValForId:    30,
+			insertShare:    50,
+			deleteShare:    50,
+			updateShare:    50,
+		},
+	}
 
 	valTrue := true
 	valFalse := false
