@@ -178,9 +178,8 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 	}
 	switch hints.EnumReorderStrategy {
 	case EnumReorderStrategyReject:
-		enumValuesMap := getEnumValuesMap(c.columnDefinition.Type.EnumValues)
 		otherEnumValuesMap := getEnumValuesMap(other.columnDefinition.Type.EnumValues)
-		for enumValue, ordinal := range enumValuesMap {
+		for ordinal, enumValue := range c.columnDefinition.Type.EnumValues {
 			if otherOrdinal, ok := otherEnumValuesMap[enumValue]; ok {
 				if ordinal != otherOrdinal {
 					return nil, &EnumValueOrdinalChangedError{Column: c.columnDefinition.Name.String(), Value: enumValue, Ordinal: ordinal, NewOrdinal: otherOrdinal}
