@@ -46,8 +46,10 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtadmin"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -349,6 +351,45 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	}
 
 	return tablet, nil
+}
+
+// CancelSchemaMigration cancels one or all migrations in a keyspace in this
+// cluster, terminating any running ones as needed.
+func (c *Cluster) CancelSchemaMigration(ctx context.Context, req *vtctldatapb.CancelSchemaMigrationRequest) (*vtctldatapb.CancelSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.CancelSchemaMigration")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("uuid", req.Uuid)
+
+	return c.Vtctld.CancelSchemaMigration(ctx, req)
+}
+
+// CleanupSchemaMigration marks a schema migration in this cluster as ready for
+// artifact cleanup.
+func (c *Cluster) CleanupSchemaMigration(ctx context.Context, req *vtctldatapb.CleanupSchemaMigrationRequest) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.CleanupSchemaMigration")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("uuid", req.Uuid)
+
+	return c.Vtctld.CleanupSchemaMigration(ctx, req)
+}
+
+// CompleteSchemaMigration completes one or all migrations in a keyspace
+// executed with --postpone-completion in this cluster.
+func (c *Cluster) CompleteSchemaMigration(ctx context.Context, req *vtctldatapb.CompleteSchemaMigrationRequest) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.CompleteSchemaMigration")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("uuid", req.Uuid)
+
+	return c.Vtctld.CompleteSchemaMigration(ctx, req)
 }
 
 // CreateKeyspace creates a keyspace in the given cluster, proxying a
@@ -1543,6 +1584,51 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	return schemas, nil
 }
 
+// GetSchemaMigrations returns one or more schema migrations for a keyspace in
+// this cluster.
+func (c *Cluster) GetSchemaMigrations(ctx context.Context, req *vtctldatapb.GetSchemaMigrationsRequest) ([]*vtadmin.SchemaMigration, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetSchemaMigrations")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("uuid", req.Uuid)
+	span.Annotate("migration_context", req.MigrationContext)
+
+	if req.Status != vtctldatapb.SchemaMigration_UNKNOWN {
+		span.Annotate("status", schematools.SchemaMigrationStatusName(req.Status))
+	}
+
+	if d, ok, err := protoutil.DurationFromProto(req.Recent); ok && err == nil {
+		span.Annotate("recent", d.String())
+	}
+
+	switch req.Order {
+	case vtctldatapb.QueryOrdering_ASCENDING:
+		span.Annotate("order", "asc")
+	default:
+		span.Annotate("order", "desc")
+	}
+
+	span.Annotate("skip", req.Skip)
+	span.Annotate("limit", req.Limit)
+
+	resp, err := c.Vtctld.GetSchemaMigrations(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	migrations := make([]*vtadminpb.SchemaMigration, len(resp.Migrations))
+	for i, m := range resp.Migrations {
+		migrations[i] = &vtadminpb.SchemaMigration{
+			Cluster:         c.ToProto(),
+			SchemaMigration: m,
+		}
+	}
+
+	return migrations, nil
+}
+
 // Note that for this function we use the tablets parameter, ignoring the
 // opts.Tablets value completely.
 func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tablets []*vtadminpb.Tablet, opts GetSchemaOptions) (*vtadminpb.Schema, error) {
@@ -1956,6 +2042,19 @@ func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts Get
 	})
 }
 
+// LaunchSchemaMigration starts a schema migration in the given keyspace in
+// this cluster that was started with --postpone-launch.
+func (c *Cluster) LaunchSchemaMigration(ctx context.Context, req *vtctldatapb.LaunchSchemaMigrationRequest) (*vtctldatapb.LaunchSchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.LaunchSchemaMigration")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("uuid", req.Uuid)
+
+	return c.Vtctld.LaunchSchemaMigration(ctx, req)
+}
+
 // PlannedFailoverShard fails over the shard either to a new primary or away
 // from an old primary. Both the current and candidate primaries must be
 // reachable and running.
@@ -2295,6 +2394,19 @@ func (c *Cluster) reloadTabletSchemas(ctx context.Context, req *vtadminpb.Reload
 	wg.Wait()
 
 	return results, nil
+}
+
+// RetrySchemaMigration retries a schema migration in the given keyspace in
+// this cluster.
+func (c *Cluster) RetrySchemaMigration(ctx context.Context, req *vtctldatapb.RetrySchemaMigrationRequest) (*vtctldatapb.RetrySchemaMigrationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.RetrySchemaMigration")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("uuid", req.Uuid)
+
+	return c.Vtctld.RetrySchemaMigration(ctx, req)
 }
 
 // SetWritable toggles the writability of a tablet, setting it to either

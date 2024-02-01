@@ -443,7 +443,12 @@ func (api *API) CancelSchemaMigration(ctx context.Context, req *vtadminpb.Cancel
 	span, ctx := trace.NewSpan(ctx, "API.CancelSchemaMigration")
 	defer span.Finish()
 
-	panic("implement me!")
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.CancelSchemaMigration(ctx, req.Request)
 }
 
 // CleanupSchemaMigration is part of the vtadminpb.VTAdminServer interface.
@@ -451,7 +456,12 @@ func (api *API) CleanupSchemaMigration(ctx context.Context, req *vtadminpb.Clean
 	span, ctx := trace.NewSpan(ctx, "API.CleanupSchemaMigration")
 	defer span.Finish()
 
-	panic("implement me!")
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.CleanupSchemaMigration(ctx, req.Request)
 }
 
 // CompleteSchemaMigration is part of the vtadminpb.VTAdminServer interface.
@@ -459,7 +469,12 @@ func (api *API) CompleteSchemaMigration(ctx context.Context, req *vtadminpb.Comp
 	span, ctx := trace.NewSpan(ctx, "API.CompleteSchemaMigration")
 	defer span.Finish()
 
-	panic("implement me!")
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.CompleteSchemaMigration(ctx, req.Request)
 }
 
 // CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
@@ -1050,7 +1065,53 @@ func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchem
 	span, ctx := trace.NewSpan(ctx, "API.GetSchemaMigrations")
 	defer span.Finish()
 
-	panic("implement me!")
+	clusterIDs := make([]string, 0, len(req.ClusterRequests))
+	requestsByCluster := make(map[string][]*vtctldatapb.GetSchemaMigrationsRequest, len(req.ClusterRequests))
+
+	for _, r := range req.ClusterRequests {
+		clusterIDs = append(clusterIDs, r.ClusterId)
+		requestsByCluster[r.ClusterId] = append(requestsByCluster[r.ClusterId], r.Request)
+	}
+
+	clusters, _ := api.getClustersForRequest(clusterIDs)
+
+	var (
+		m       sync.Mutex
+		wg      sync.WaitGroup
+		rec     concurrency.AllErrorRecorder
+		results = make([]*vtadminpb.SchemaMigration, 0, len(req.ClusterRequests))
+	)
+
+	for _, c := range clusters {
+		for _, r := range requestsByCluster[c.ID] {
+			wg.Add(1)
+
+			go func(c *cluster.Cluster, r *vtctldatapb.GetSchemaMigrationsRequest) {
+				defer wg.Done()
+
+				migrations, err := c.GetSchemaMigrations(ctx, r)
+				if err != nil {
+					rec.RecordError(err)
+					return
+				}
+
+				m.Lock()
+				defer m.Unlock()
+
+				results = append(results, migrations...)
+			}(c, r)
+		}
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetSchemaMigrationsResponse{
+		SchemaMigrations: results,
+	}, nil
 }
 
 // GetShardReplicationPositions is part of the vtadminpb.VTAdminServer interface.
@@ -1558,7 +1619,12 @@ func (api *API) LaunchSchemaMigration(ctx context.Context, req *vtadminpb.Launch
 	span, ctx := trace.NewSpan(ctx, "API.LaunchSchemaMigration")
 	defer span.Finish()
 
-	panic("implement me!")
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.LaunchSchemaMigration(ctx, req.Request)
 }
 
 // PingTablet is part of the vtadminpb.VTAdminServer interface.
@@ -1773,7 +1839,12 @@ func (api *API) RetrySchemaMigration(ctx context.Context, req *vtadminpb.RetrySc
 	span, ctx := trace.NewSpan(ctx, "API.RetrySchemaMigration")
 	defer span.Finish()
 
-	panic("implement me!")
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.RetrySchemaMigration(ctx, req.Request)
 }
 
 // RunHealthCheck is part of the vtadminpb.VTAdminServer interface.
