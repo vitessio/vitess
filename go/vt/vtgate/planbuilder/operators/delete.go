@@ -203,7 +203,7 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 		return delOp
 	}
 
-	addOrdering(ctx, del, delOp)
+	addOrdering(ctx, del.OrderBy, delOp)
 
 	delOp.Source = &Limit{
 		Source: delOp.Source,
@@ -213,12 +213,41 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 	return delOp
 }
 
-func addOrdering(ctx *plancontext.PlanningContext, del *sqlparser.Delete, delOp *Delete) {
-	es := &expressionSet{}
-	ordering := &Ordering{
-		Source: delOp.Source,
+func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table TargetTable, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
+	var selExprs sqlparser.SelectExprs
+	for _, col := range ksidCols {
+		colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
+		selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
 	}
-	for _, order := range del.OrderBy {
+	for _, cv := range table.VTable.Owned {
+		for _, col := range cv.Columns {
+			colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
+			selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
+		}
+	}
+	sqlparser.RemoveKeyspaceInTables(tblExpr)
+	return &sqlparser.Select{
+		SelectExprs: selExprs,
+		From:        del.TableExprs,
+		Where:       del.Where,
+		OrderBy:     del.OrderBy,
+		Limit:       del.Limit,
+		Lock:        sqlparser.ForUpdateLock,
+	}
+}
+
+func makeColName(col sqlparser.IdentifierCI, table TargetTable, isMultiTbl bool) *sqlparser.ColName {
+	if isMultiTbl {
+		return sqlparser.NewColNameWithQualifier(col.String(), table.Name)
+	}
+	return sqlparser.NewColName(col.String())
+}
+
+func addOrdering(ctx *plancontext.PlanningContext, orderBy sqlparser.OrderBy, op Operator) {
+	es := &expressionSet{}
+	ordering := &Ordering{}
+	ordering.SetInputs(op.Inputs())
+	for _, order := range orderBy {
 		if sqlparser.IsNull(order.Expr) {
 			// ORDER BY null can safely be ignored
 			continue
@@ -232,7 +261,7 @@ func addOrdering(ctx *plancontext.PlanningContext, del *sqlparser.Delete, delOp 
 		})
 	}
 	if len(ordering.Order) > 0 {
-		delOp.Source = ordering
+		op.SetInputs([]Operator{ordering})
 	}
 }
 

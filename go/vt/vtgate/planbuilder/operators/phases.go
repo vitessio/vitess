@@ -36,6 +36,7 @@ const (
 	addAggrOrdering
 	cleanOutPerfDistinct
 	deleteWithInput
+	updateWithSuq
 	subquerySettling
 	DONE
 )
@@ -58,6 +59,8 @@ func (p Phase) String() string {
 		return "settle subqueries"
 	case deleteWithInput:
 		return "expand delete to delete with input"
+	case updateWithSuq:
+		return "move update to outer side of subquery container"
 	default:
 		panic(vterrors.VT13001("unhandled default case"))
 	}
@@ -77,6 +80,8 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 		return s.SubQueries
 	case deleteWithInput:
 		return s.Delete
+	case updateWithSuq:
+		return s.Update
 	default:
 		return true
 	}
@@ -96,6 +101,8 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 		return settleSubqueries(ctx, op)
 	case deleteWithInput:
 		return findDeletesAboveRoute(ctx, op)
+	case updateWithSuq:
+		return findUpdateWithSubq(ctx, op)
 	default:
 		return op
 	}
@@ -128,6 +135,25 @@ func findDeletesAboveRoute(ctx *plancontext.PlanningContext, root Operator) Oper
 		}
 
 		return createDeleteWithInput(ctx, delOp, delOp.Source)
+	}
+
+	return BottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func findUpdateWithSubq(ctx *plancontext.PlanningContext, root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+		updOp, ok := in.(*Update)
+		if !ok {
+			return in, NoRewrite
+		}
+		switch src := updOp.Source.(type) {
+		case *SubQueryContainer:
+			updOp.Source, src.Outer = src.Outer, updOp
+			return src, Rewrote("moved update below subquery container")
+		case *Limit:
+			panic(vterrors.VT12001("multi shard UPDATE with LIMIT"))
+		}
+		return updOp, NoRewrite
 	}
 
 	return BottomUp(root, TableID, visitor, stopAtRoute)

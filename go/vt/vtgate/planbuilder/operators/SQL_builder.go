@@ -407,11 +407,6 @@ func buildDelete(op *Delete, qb *queryBuilder) {
 }
 
 func buildUpdate(op *Update, qb *queryBuilder) {
-	tblName := sqlparser.NewTableName(op.QTable.Table.Name.String())
-	aTblExpr := &sqlparser.AliasedTableExpr{
-		Expr: tblName,
-		As:   op.QTable.Alias.As,
-	}
 	updExprs := make(sqlparser.UpdateExprs, 0, len(op.Assignments))
 	for _, se := range op.Assignments {
 		updExprs = append(updExprs, &sqlparser.UpdateExpr{
@@ -420,19 +415,25 @@ func buildUpdate(op *Update, qb *queryBuilder) {
 		})
 	}
 
-	qb.stmt = &sqlparser.Update{
-		Ignore:     op.Ignore,
-		TableExprs: sqlparser.TableExprs{aTblExpr},
-		Exprs:      updExprs,
-		OrderBy:    op.OrderBy,
-		Limit:      op.Limit,
-	}
-
-	for _, pred := range op.QTable.Predicates {
-		qb.addPredicate(pred)
+	buildQuery(op.Source, qb)
+	// currently the qb builds a select query underneath.
+	// Will take the `From` and `Where` from this select
+	// and create a update statement.
+	// TODO: change it to directly produce `update` statement.
+	sel, ok := qb.stmt.(*sqlparser.Select)
+	if !ok {
+		panic(vterrors.VT13001("expected a select here"))
 	}
 
 	qb.dmlOperator = op
+	qb.stmt = &sqlparser.Update{
+		Ignore:     op.Ignore,
+		TableExprs: sel.From,
+		Exprs:      updExprs,
+		Where:      sel.Where,
+		Limit:      sel.Limit,
+		OrderBy:    sel.OrderBy,
+	}
 }
 
 type OpWithAST interface {

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -35,21 +34,19 @@ import (
 
 type (
 	Update struct {
-		QTable              *QueryTable
-		VTable              *vindexes.Table
+		Target              TargetTable
 		Assignments         []SetExpr
 		ChangedVindexValues map[string]*engine.VindexValues
-		OwnedVindexQuery    string
+		OwnedVindexQuery    *sqlparser.Select
 		Ignore              sqlparser.Ignore
-		OrderBy             sqlparser.OrderBy
-		Limit               *sqlparser.Limit
 
 		// these subqueries cannot be merged as they are part of the changed vindex values
 		// these values are needed to be sent over to lookup vindex for update.
 		// On merging this information will be lost, so subquery merge is blocked.
 		SubQueriesArgOnChangedVindex []string
 
-		noInputs
+		Source Operator
+
 		noColumns
 		noPredicates
 	}
@@ -60,20 +57,35 @@ type (
 	}
 )
 
+func (u *Update) Inputs() []Operator {
+	if u.Source == nil {
+		return nil
+	}
+	return []Operator{u.Source}
+}
+
+func (u *Update) SetInputs(inputs []Operator) {
+	if len(inputs) != 1 {
+		panic(vterrors.VT13001("unexpected number of inputs for Update operator"))
+	}
+	u.Source = inputs[0]
+}
+
 func (se SetExpr) String() string {
 	return fmt.Sprintf("%s = %s", sqlparser.String(se.Name), sqlparser.String(se.Expr.EvalExpr))
 }
 
 // Introduces implements the PhysicalOperator interface
 func (u *Update) introducesTableID() semantics.TableSet {
-	return u.QTable.ID
+	return u.Target.ID
 }
 
 // Clone implements the Operator interface
-func (u *Update) Clone([]Operator) Operator {
+func (u *Update) Clone(inputs []Operator) Operator {
 	upd := *u
 	upd.Assignments = slices.Clone(u.Assignments)
 	upd.ChangedVindexValues = maps.Clone(u.ChangedVindexValues)
+	upd.SetInputs(inputs)
 	return &upd
 }
 
@@ -82,35 +94,29 @@ func (u *Update) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 }
 
 func (u *Update) TablesUsed() []string {
-	if u.VTable != nil {
-		return SingleQualifiedIdentifier(u.VTable.Keyspace, u.VTable.Name)
-	}
-	return nil
+	return SingleQualifiedIdentifier(u.Target.VTable.Keyspace, u.Target.VTable.Name)
 }
 
 func (u *Update) ShortDescription() string {
-	s := []string{u.VTable.String()}
-	if u.Limit != nil {
-		s = append(s, sqlparser.String(u.Limit))
-	}
-	if len(u.OrderBy) > 0 {
-		s = append(s, sqlparser.String(u.OrderBy))
-	}
-	return strings.Join(s, " ")
+	return fmt.Sprintf("%s.%s", u.Target.VTable.Keyspace.Name, u.Target.VTable.Name.String())
 }
 
-func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) Operator {
-	tableInfo, qt := createQueryTableForDML(ctx, updStmt.TableExprs[0], updStmt.Where)
-
-	vindexTable, routing := buildVindexTableForDML(ctx, tableInfo, qt, "update")
-
+func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (op Operator) {
 	updClone := sqlparser.CloneRefOfUpdate(updStmt)
-	updOp := createUpdateOperator(ctx, updStmt, vindexTable, qt, routing)
+
+	updOp := createUpdateOperator(ctx, updStmt)
+	op = updOp
+
+	op = &LockAndComment{
+		Source:   op,
+		Comments: updStmt.Comments,
+		Lock:     sqlparser.ShareModeLock,
+	}
 
 	parentFks := ctx.SemTable.GetParentForeignKeysList()
 	childFks := ctx.SemTable.GetChildForeignKeysList()
 	if len(childFks) == 0 && len(parentFks) == 0 {
-		return updOp
+		return op
 	}
 
 	// If the delete statement has a limit, we don't support it yet.
@@ -124,14 +130,21 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		panic(err)
 	}
 
-	return buildFkOperator(ctx, updOp, updClone, parentFks, childFks, vindexTable)
+	return buildFkOperator(ctx, op, updClone, parentFks, childFks, updOp.Target.VTable)
 }
 
-func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, vindexTable *vindexes.Table, qt *QueryTable, routing Routing) Operator {
+func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) *Update {
+	op := crossJoin(ctx, updStmt.TableExprs)
+
 	sqc := &SubQueryBuilder{}
+	if updStmt.Where != nil {
+		op = addWherePredsToSubQueryBuilder(ctx, updStmt.Where.Expr, op, sqc)
+	}
+
+	outerID := TableID(op)
 	assignments := make([]SetExpr, len(updStmt.Exprs))
 	for idx, updExpr := range updStmt.Exprs {
-		expr, subqs := sqc.pullOutValueSubqueries(ctx, updExpr.Expr, qt.ID, true)
+		expr, subqs := sqc.pullOutValueSubqueries(ctx, updExpr.Expr, outerID, true)
 		if len(subqs) == 0 {
 			expr = updExpr.Expr
 		}
@@ -144,50 +157,75 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 			Expr: proj,
 		}
 	}
+	op = sqc.getRootOperator(op, nil)
 
-	vp, cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, vindexTable, qt.ID, assignments)
-
-	tr, ok := routing.(*ShardedRouting)
-	if ok {
-		tr.VindexPreds = vp
+	target := updStmt.TableExprs[0]
+	atbl, ok := target.(*sqlparser.AliasedTableExpr)
+	if !ok {
+		panic(42)
+	}
+	tblID := ctx.SemTable.TableSetFor(atbl)
+	tblInfo, err := ctx.SemTable.TableInfoFor(tblID)
+	if err != nil {
+		panic(err)
 	}
 
-	for _, predicate := range qt.Predicates {
-		if subq := sqc.handleSubquery(ctx, predicate, qt.ID); subq != nil {
-			continue
-		}
-		routing = UpdateRoutingLogic(ctx, predicate, routing)
+	vTbl := tblInfo.GetVindexTable()
+	// Reference table should update the source table.
+	if vTbl.Type == vindexes.TypeReference && vTbl.Source != nil {
+		vTbl = updateQueryGraphWithSource(ctx, op, tblID, vTbl)
 	}
 
-	if routing.OpCode() == engine.Scatter && updStmt.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		panic(vterrors.VT12001("multi shard UPDATE with LIMIT"))
+	name, err := tblInfo.Name()
+	if err != nil {
+		panic(err)
 	}
 
-	route := &Route{
-		Source: &Update{
-			QTable:                       qt,
-			VTable:                       vindexTable,
-			Assignments:                  assignments,
-			ChangedVindexValues:          cvv,
-			OwnedVindexQuery:             ovq,
-			Ignore:                       updStmt.Ignore,
-			Limit:                        updStmt.Limit,
-			OrderBy:                      updStmt.OrderBy,
-			SubQueriesArgOnChangedVindex: subQueriesArgOnChangedVindex,
-		},
-		Routing:  routing,
-		Comments: updStmt.Comments,
+	targetTbl := TargetTable{
+		ID:     tblID,
+		VTable: vTbl,
+		Name:   name,
 	}
 
-	decorator := func(op Operator) Operator {
-		return &LockAndComment{
-			Source: op,
-			Lock:   sqlparser.ShareModeLock,
-		}
+	_, cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, targetTbl, assignments)
+
+	updOp := &Update{
+		Target:                       targetTbl,
+		Assignments:                  assignments,
+		ChangedVindexValues:          cvv,
+		OwnedVindexQuery:             ovq,
+		Ignore:                       updStmt.Ignore,
+		SubQueriesArgOnChangedVindex: subQueriesArgOnChangedVindex,
+		Source:                       op,
 	}
 
-	return sqc.getRootOperator(route, decorator)
+	if updStmt.Limit == nil {
+		return updOp
+	}
+
+	addOrdering(ctx, updStmt.OrderBy, updOp)
+
+	updOp.Source = &Limit{
+		Source: updOp.Source,
+		AST:    updStmt.Limit,
+	}
+
+	return updOp
+}
+
+func getUpdateVindexInformation(
+	ctx *plancontext.PlanningContext,
+	updStmt *sqlparser.Update,
+	table TargetTable,
+	assignments []SetExpr,
+) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, *sqlparser.Select, []string) {
+	if !table.VTable.Keyspace.Sharded {
+		return nil, nil, nil, nil
+	}
+
+	primaryVindex, vindexAndPredicates := getVindexInformation(table.ID, table.VTable)
+	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex := buildChangedVindexesValues(ctx, updStmt, table.VTable, primaryVindex.Columns, assignments)
+	return vindexAndPredicates, changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex
 }
 
 func buildFkOperator(ctx *plancontext.PlanningContext, updOp Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) Operator {

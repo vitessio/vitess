@@ -62,12 +62,13 @@ func buildChangedVindexesValues(
 	table *vindexes.Table,
 	ksidCols []sqlparser.IdentifierCI,
 	assignments []SetExpr,
-) (vv map[string]*engine.VindexValues, ownedVindexQuery string, subQueriesArgOnChangedVindex []string) {
+) (vv map[string]*engine.VindexValues, ownedVindexQuery *sqlparser.Select, subQueriesArgOnChangedVindex []string) {
 	changedVindexes := make(map[string]*engine.VindexValues)
-	buf, offset := initialQuery(ksidCols, table)
+	selExprs, offset := initialQuery(ksidCols, table)
 	for i, vindex := range table.ColumnVindexes {
 		vindexValueMap := make(map[string]evalengine.Expr)
-		first := true
+		// first := true
+		var compExprs []sqlparser.Expr
 		for _, vcol := range vindex.Columns {
 			// Searching in order of columns in colvindex.
 			found := false
@@ -98,13 +99,11 @@ func buildChangedVindexesValues(
 				}
 
 				vindexValueMap[vcol.String()] = pv
-				if first {
-					buf.Myprintf(", %s", assignment.String())
-					first = false
-				} else {
-					buf.Myprintf(" and %s", assignment.String())
-				}
+				compExprs = append(compExprs, sqlparser.NewComparisonExpr(sqlparser.EqualOp, assignment.Name, assignment.Expr.EvalExpr, nil))
 			}
+		}
+		if len(compExprs) > 0 {
+			selExprs = append(selExprs, aeWrap(sqlparser.AndExpressions(compExprs...)))
 		}
 		if len(vindexValueMap) == 0 {
 			// Vindex not changing, continue
@@ -127,7 +126,7 @@ func buildChangedVindexesValues(
 		offset++
 	}
 	if len(changedVindexes) == 0 {
-		return nil, "", nil
+		return nil, nil, nil
 	}
 	// generate rest of the owned vindex query.
 	aTblExpr, ok := update.TableExprs[0].(*sqlparser.AliasedTableExpr)
@@ -135,28 +134,32 @@ func buildChangedVindexesValues(
 		panic(vterrors.VT12001("UPDATE on complex table expression"))
 	}
 	tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: table.Name}, As: aTblExpr.As}
-	buf.Myprintf(" from %v%v%v%v for update", tblExpr, update.Where, update.OrderBy, update.Limit)
-	return changedVindexes, buf.String(), subQueriesArgOnChangedVindex
+	// sqlparser.RemoveKeyspaceInTables(tblExpr)
+	ovq := &sqlparser.Select{
+		From:        []sqlparser.TableExpr{tblExpr},
+		SelectExprs: selExprs,
+		Where:       update.Where,
+		OrderBy:     update.OrderBy,
+		Limit:       update.Limit,
+		Lock:        sqlparser.ForUpdateLock,
+	}
+	return changedVindexes, ovq, subQueriesArgOnChangedVindex
 }
 
-func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {
-	buf := sqlparser.NewTrackedBuffer(nil)
+func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (sqlparser.SelectExprs, int) {
+	var selExprs sqlparser.SelectExprs
 	offset := 0
 	for _, col := range ksidCols {
-		if offset == 0 {
-			buf.Myprintf("select %v", col)
-		} else {
-			buf.Myprintf(", %v", col)
-		}
+		selExprs = append(selExprs, aeWrap(sqlparser.NewColName(col.String())))
 		offset++
 	}
 	for _, cv := range table.Owned {
 		for _, column := range cv.Columns {
-			buf.Myprintf(", %v", column)
+			selExprs = append(selExprs, aeWrap(sqlparser.NewColName(column.String())))
 			offset++
 		}
 	}
-	return buf, offset
+	return selExprs, offset
 }
 
 func invalidUpdateExpr(upd string, expr sqlparser.Expr) error {

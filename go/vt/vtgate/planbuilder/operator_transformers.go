@@ -688,14 +688,18 @@ func buildUpdateLogicalPlan(
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
 	rb.Routing.UpdateRoutingParams(ctx, rp)
 	edml := &engine.DML{
-		Query:             generateQuery(stmt),
-		TableNames:        []string{upd.VTable.Name.String()},
-		Vindexes:          upd.VTable.ColumnVindexes,
-		OwnedVindexQuery:  upd.OwnedVindexQuery,
+		Query:      generateQuery(stmt),
+		TableNames: []string{upd.Target.VTable.Name.String()},
+		Vindexes:   upd.Target.VTable.ColumnVindexes,
+
 		RoutingParameters: rp,
 	}
 
-	transformDMLPlan(upd.VTable, edml, rb.Routing, len(upd.ChangedVindexValues) > 0)
+	if upd.OwnedVindexQuery != nil {
+		edml.OwnedVindexQuery = sqlparser.String(upd.OwnedVindexQuery)
+	}
+
+	transformDMLPlan(upd.Target.VTable, edml, rb.Routing, len(upd.ChangedVindexValues) > 0)
 
 	e := &engine.Update{
 		ChangedVindexValues: upd.ChangedVindexValues,
