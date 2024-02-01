@@ -42,27 +42,32 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/protoutil"
-
 	"vitess.io/vitess/config"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	vtenv "vitess.io/vitess/go/vt/env"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var (
+// The string we expect before the MySQL version number
+// in strings containing MySQL version information.
+const versionStringPrefix = "Ver "
 
+// How many bytes from MySQL error log to sample for error messages
+const maxLogFileSampleSize = 4096
+
+var (
 	// DisableActiveReparents is a flag to disable active
 	// reparents for safety reasons. It is used in three places:
 	// 1. in this file to skip registering the commands.
@@ -86,14 +91,17 @@ var (
 
 	replicationConnectRetry = 10 * time.Second
 
-	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	versionRegex = regexp.MustCompile(fmt.Sprintf(`%s([0-9]+)\.([0-9]+)\.([0-9]+)`, versionStringPrefix))
+	// versionSQLQuery will return a version string directly from
+	// a MySQL server that is compatible with what we expect from
+	// mysqld --version and matches the versionRegex. Example
+	// result: Ver 8.0.35 MySQL Community Server - GPL
+	versionSQLQuery = fmt.Sprintf("select concat('%s', @@global.version, ' ', @@global.version_comment) as version",
+		versionStringPrefix)
 
 	binlogEntryCommittedTimestampRegex = regexp.MustCompile("original_committed_timestamp=([0-9]+)")
 	binlogEntryTimestampGTIDRegexp     = regexp.MustCompile(`^#(.+) server id.*\bGTID\b`)
 )
-
-// How many bytes from MySQL error log to sample for error messages
-const maxLogFileSampleSize = 4096
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
@@ -1136,7 +1144,13 @@ func buildLdPaths() ([]string, error) {
 
 // GetVersionString is part of the MysqlExecutor interface.
 func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
-	// Execute as remote action on mysqlctld to ensure we get the actual running MySQL version.
+	// Try to query the mysqld instance directly.
+	qr, err := mysqld.FetchSuperQuery(ctx, versionSQLQuery)
+	if err == nil && len(qr.Rows) == 1 {
+		return qr.Rows[0][0].ToString(), nil
+	}
+	// Execute as remote action on mysqlctld to use the actual running MySQL
+	// version.
 	if socketFile != "" {
 		client, err := mysqlctlclient.New("unix", socketFile)
 		if err != nil {
@@ -1145,6 +1159,7 @@ func (mysqld *Mysqld) GetVersionString(ctx context.Context) (string, error) {
 		defer client.Close()
 		return client.VersionString(ctx)
 	}
+	// Fall back to the sys exec method using mysqld --version.
 	return GetVersionString()
 }
 
@@ -1379,7 +1394,7 @@ func (mysqld *Mysqld) scanBinlogTimestamp(
 // ReadBinlogFilesTimestamps reads all given binlog files via `mysqlbinlog` command and returns the first and last  found transaction timestamps
 func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error) {
 	if len(req.BinlogFileNames) == 0 {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "empty binlog list in ReadBinlogFilesTimestampsRequest")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "empty binlog list in ReadBinlogFilesTimestampsRequest")
 	}
 	if socketFile != "" {
 		log.Infof("executing Mysqld.ReadBinlogFilesTimestamps() remotely via mysqlctld server: %v", socketFile)
