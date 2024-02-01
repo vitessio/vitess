@@ -425,6 +425,7 @@ func (e *EntityNotFoundError) Error() string {
 }
 
 type EnumValueOrdinalChangedError struct {
+	Table      string
 	Column     string
 	Value      string
 	Ordinal    int
@@ -432,7 +433,7 @@ type EnumValueOrdinalChangedError struct {
 }
 
 func (e *EnumValueOrdinalChangedError) Error() string {
-	return fmt.Sprintf("ordinal of %s changed in enum or set column %s, from %d to %d", e.Value, sqlescape.EscapeID(e.Column), e.Ordinal, e.NewOrdinal)
+	return fmt.Sprintf("ordinal of %s changed in enum or set column %s.%s, from %d to %d", e.Value, sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.Column), e.Ordinal, e.NewOrdinal)
 }
 
 type UnknownColumnCharsetCollationError struct {

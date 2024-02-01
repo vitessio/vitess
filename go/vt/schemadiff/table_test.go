@@ -327,7 +327,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:        "create table t1 (id int primary key, e enum('a', 'b', 'c'))",
 			to:          "create table t2 (id int primary key, e enum('b', 'a', 'c'))",
 			enumreorder: EnumReorderStrategyReject,
-			errorMsg:    (&EnumValueOrdinalChangedError{Column: "e", Value: "'a'", Ordinal: 0, NewOrdinal: 1}).Error(),
+			errorMsg:    (&EnumValueOrdinalChangedError{Table: "t1", Column: "e", Value: "'a'", Ordinal: 0, NewOrdinal: 1}).Error(),
 		},
 		{
 			name:        "reorder enum, allow",
@@ -363,7 +363,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:        "create table t1 (id int primary key, e set('a', 'b', 'c'))",
 			to:          "create table t2 (id int primary key, e set('b', 'a', 'c'))",
 			enumreorder: EnumReorderStrategyReject,
-			errorMsg:    (&EnumValueOrdinalChangedError{Column: "e", Value: "'a'", Ordinal: 0, NewOrdinal: 1}).Error(),
+			errorMsg:    (&EnumValueOrdinalChangedError{Table: "t1", Column: "e", Value: "'a'", Ordinal: 0, NewOrdinal: 1}).Error(),
 		},
 		{
 			name:        "reorder set, allow",

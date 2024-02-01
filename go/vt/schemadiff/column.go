@@ -96,6 +96,7 @@ func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionE
 // We need to denormalize the column's charset/collate properties, so that the comparison can be done.
 func (c *ColumnDefinitionEntity) ColumnDiff(
 	env *Environment,
+	tableName string,
 	other *ColumnDefinitionEntity,
 	t1cc *charsetCollate,
 	t2cc *charsetCollate,
@@ -182,7 +183,7 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 		for ordinal, enumValue := range c.columnDefinition.Type.EnumValues {
 			if otherOrdinal, ok := otherEnumValuesMap[enumValue]; ok {
 				if ordinal != otherOrdinal {
-					return nil, &EnumValueOrdinalChangedError{Column: c.columnDefinition.Name.String(), Value: enumValue, Ordinal: ordinal, NewOrdinal: otherOrdinal}
+					return nil, &EnumValueOrdinalChangedError{Table: tableName, Column: c.columnDefinition.Name.String(), Value: enumValue, Ordinal: ordinal, NewOrdinal: otherOrdinal}
 				}
 			}
 		}

@@ -1599,7 +1599,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColEntity := NewColumnDefinitionEntity(t2Col)
 
 		// check diff between before/after columns:
-		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, t2ColEntity, t1cc, t2cc, hints)
+		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, t1cc, t2cc, hints)
 		if err != nil {
 			return err
 		}
