@@ -2,7 +2,7 @@ drop table if exists onlineddl_test;
 create table onlineddl_test (
   id int auto_increment,
   i int not null,
-  e enum('red', 'green', 'blue', 'orange') not null,
+  e enum('red', 'green', 'blue') not null,
   primary key(id)
 ) auto_increment=1;
 
