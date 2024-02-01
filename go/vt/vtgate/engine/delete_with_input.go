@@ -62,6 +62,9 @@ func (del *DeleteWithInput) TryExecute(ctx context.Context, vcursor VCursor, bin
 	if err != nil {
 		return nil, err
 	}
+	if inputRes == nil || len(inputRes.Rows) == 0 {
+		return &sqltypes.Result{}, nil
+	}
 
 	var bv *querypb.BindVariable
 	if len(del.OutputCols) == 1 {

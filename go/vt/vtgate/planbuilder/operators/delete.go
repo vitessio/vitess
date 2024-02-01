@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -78,8 +79,15 @@ func (d *Delete) ShortDescription() string {
 }
 
 func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (op Operator) {
-	delClone := sqlparser.CloneRefOfDelete(deleteStmt)
+	childFks := ctx.SemTable.GetChildForeignKeysForTable(deleteStmt.Targets[0])
 
+	// If the delete statement has a limit and has foreign keys, we will use a DeleteWithInput
+	// operator wherein we do a selection first and use that output for the subsequent deletes.
+	if len(childFks) > 0 && deleteStmt.Limit != nil {
+		return deletePlanningForLimitFk(ctx, deleteStmt)
+	}
+
+	delClone := sqlparser.CloneRefOfDelete(deleteStmt)
 	delOp := createDeleteOperator(ctx, deleteStmt)
 	op = delOp
 
@@ -90,17 +98,55 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		}
 	}
 
-	childFks := ctx.SemTable.GetChildForeignKeysForTable(deleteStmt.Targets[0])
-	// If there are no foreign key constraints, then we don't need to do anything.
+	// If there are no foreign key constraints, then we don't need to do anything special.
 	if len(childFks) == 0 {
 		return op
 	}
-	// If the delete statement has a limit, we don't support it yet.
-	if delClone.Limit != nil {
-		panic(vterrors.VT12001("foreign keys management at vitess with limit"))
-	}
 
 	return createFkCascadeOpForDelete(ctx, op, delClone, childFks, delOp.Target.VTable)
+}
+
+func deletePlanningForLimitFk(ctx *plancontext.PlanningContext, del *sqlparser.Delete) Operator {
+	delClone := ctx.SemTable.Clone(del).(*sqlparser.Delete)
+	del.Limit = nil
+	del.OrderBy = nil
+
+	selectStmt := &sqlparser.Select{
+		From:    delClone.TableExprs,
+		Where:   delClone.Where,
+		OrderBy: delClone.OrderBy,
+		Limit:   delClone.Limit,
+		Lock:    sqlparser.ForUpdateLock,
+	}
+	ts := ctx.SemTable.Targets[del.Targets[0].Name]
+	ti, err := ctx.SemTable.TableInfoFor(ts)
+	if err != nil {
+		panic(vterrors.VT13001(err.Error()))
+	}
+	vTbl := ti.GetVindexTable()
+
+	var leftComp sqlparser.ValTuple
+	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
+	for _, col := range vTbl.PrimaryKey {
+		colName := sqlparser.NewColName(col.String())
+		selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(colName))
+		cols = append(cols, colName)
+		leftComp = append(leftComp, colName)
+		ctx.SemTable.Recursive[colName] = ts
+	}
+	// optimize for case when there is only single column on left hand side.
+	var lhs sqlparser.Expr = leftComp
+	if len(leftComp) == 1 {
+		lhs = leftComp[0]
+	}
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmVals), nil)
+	del.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
+
+	return &DeleteWithInput{
+		Delete: createOperatorFromDelete(ctx, del),
+		Source: createOperatorFromSelect(ctx, selectStmt),
+		cols:   cols,
+	}
 }
 
 func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) *Delete {
