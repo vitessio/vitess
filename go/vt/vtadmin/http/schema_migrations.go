@@ -19,6 +19,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"io"
 
 	"github.com/gorilla/mux"
 
@@ -79,7 +80,7 @@ func GetSchemaMigrations(ctx context.Context, r Request, api *API) *JSONResponse
 	defer r.Body.Close()
 
 	var req vtadminpb.GetSchemaMigrationsRequest
-	if err := decoder.Decode(&req); err != nil {
+	if err := decoder.Decode(&req); err != nil && err != io.EOF {
 		return NewJSONResponse(nil, &errors.BadRequest{
 			Err: err,
 		})

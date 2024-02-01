@@ -379,8 +379,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/retry", httpAPI.Adapt(vtadminhttp.RetrySchemaMigration)).Name("API.RetrySchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migrations/", httpAPI.Adapt(vtadminhttp.GetSchemaMigrations)).Name("API.GetSchemaMigrations")
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
-	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
-	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
+	router.HandleFunc("/schma/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
+	router.HandleFunc("/schemeas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
 	router.HandleFunc("/schemas/reload", httpAPI.Adapt(vtadminhttp.ReloadSchemas)).Name("API.ReloadSchemas").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/emergency_failover", httpAPI.Adapt(vtadminhttp.EmergencyFailoverShard)).Name("API.EmergencyFailoverShard").Methods("POST")
 	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/planned_failover", httpAPI.Adapt(vtadminhttp.PlannedFailoverShard)).Name("API.PlannedFailoverShard").Methods("POST")
@@ -1087,6 +1087,35 @@ func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchem
 		rec     concurrency.AllErrorRecorder
 		results = make([]*vtadminpb.SchemaMigration, 0, len(req.ClusterRequests))
 	)
+
+	for _, c := range clusters {
+		if len(requestsByCluster[c.ID]) == 0 {
+			wg.Add(1)
+			go func(c *cluster.Cluster) {
+				defer wg.Done()
+
+				keyspaces, err := c.GetKeyspaces(ctx)
+				if err != nil {
+					rec.RecordError(err)
+					return
+				}
+
+				m.Lock()
+				defer m.Unlock()
+
+				for _, ks := range keyspaces {
+					requestsByCluster[c.ID] = append(requestsByCluster[c.ID], &vtctldatapb.GetSchemaMigrationsRequest{
+						Keyspace: ks.Keyspace.Name,
+					})
+				}
+			}(c)
+		}
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
 
 	for _, c := range clusters {
 		for _, r := range requestsByCluster[c.ID] {
