@@ -1236,7 +1236,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		var err error
-		queries, err = handler.SQLParser().SplitStatementToPieces(query)
+		queries, err = handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1256,7 +1256,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		PrepareStmt: queries[0],
 	}
 
-	statement, err := handler.SQLParser().ParseStrictDDL(query)
+	statement, err := handler.Env().Parser().ParseStrictDDL(query)
 	if err != nil {
 		log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
 		if !c.writeErrorPacketFromErrorAndLog(err) {
@@ -1364,7 +1364,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	var err error
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err = handler.SQLParser().SplitStatementToPieces(query)
+		queries, err = handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
