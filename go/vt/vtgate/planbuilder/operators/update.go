@@ -199,15 +199,15 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		Source:                       op,
 	}
 
-	if updStmt.Limit == nil {
-		return updOp
+	if len(updStmt.OrderBy) > 0 {
+		addOrdering(ctx, updStmt.OrderBy, updOp)
 	}
 
-	addOrdering(ctx, updStmt.OrderBy, updOp)
-
-	updOp.Source = &Limit{
-		Source: updOp.Source,
-		AST:    updStmt.Limit,
+	if updStmt.Limit != nil {
+		updOp.Source = &Limit{
+			Source: updOp.Source,
+			AST:    updStmt.Limit,
+		}
 	}
 
 	return updOp
