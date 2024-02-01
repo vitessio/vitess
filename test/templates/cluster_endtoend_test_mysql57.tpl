@@ -59,6 +59,7 @@ jobs:
         filters: |
           end_to_end:
             - 'go/**/*.go'
+            - 'go/test/endtoend/onlineddl/vrepl_suite/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'
