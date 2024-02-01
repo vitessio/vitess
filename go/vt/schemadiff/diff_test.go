@@ -220,7 +220,16 @@ func TestDiffTables(t *testing.T) {
 				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
 				TableCharsetCollateStrategy: TableCharsetCollateIgnoreAlways,
 			},
-			expectError: "cannot match charset to collation",
+			expectError: (&UnknownColumnCollationCharsetError{Column: "a", Collation: "latin1_nonexisting"}).Error(),
+		},
+		{
+			name: "error on unknown charset",
+			from: "create table t (a varchar(64)) default charset=latin_nonexisting collate=''",
+			to:   "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
+			hints: &DiffHints{
+				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
+			},
+			expectError: (&UnknownColumnCharsetCollationError{Column: "a", Charset: "latin_nonexisting"}).Error(),
 		},
 		{
 			name:     "changing table level defaults with column specific settings",

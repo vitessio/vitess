@@ -434,3 +434,21 @@ type EnumValueOrdinalChangedError struct {
 func (e *EnumValueOrdinalChangedError) Error() string {
 	return fmt.Sprintf("ordinal of %s changed in enum or set column %s, from %d to %d", e.Value, sqlescape.EscapeID(e.Column), e.Ordinal, e.NewOrdinal)
 }
+
+type UnknownColumnCharsetCollationError struct {
+	Column  string
+	Charset string
+}
+
+func (e *UnknownColumnCharsetCollationError) Error() string {
+	return fmt.Sprintf("unable to determine collation for column %s with charset %s", sqlescape.EscapeID(e.Column), e.Charset)
+}
+
+type UnknownColumnCollationCharsetError struct {
+	Column    string
+	Collation string
+}
+
+func (e *UnknownColumnCollationCharsetError) Error() string {
+	return fmt.Sprintf("unable to determine charset for column %s with collation %s", sqlescape.EscapeID(e.Column), e.Collation)
+}
