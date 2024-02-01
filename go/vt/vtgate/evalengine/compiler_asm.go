@@ -3825,12 +3825,8 @@ func (asm *assembler) Fn_TIME_TO_SEC() {
 		}
 		d := env.vm.stack[env.vm.sp-1].(*evalTemporal)
 
-		sec := d.dt.Time.Hour()*3600 + d.dt.Time.Minute()*60 + d.dt.Time.Second()
-
-		if d.dt.Time.Neg() {
-			sec *= -1
-		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(sec))
+		sec := d.dt.Time.ToSeconds()
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(sec)
 		return 1
 	}, "FN TIME_TO_SEC TIME(SP-1)")
 }

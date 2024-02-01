@@ -1346,11 +1346,8 @@ func (b *builtinTimeToSec) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	sec := d.dt.Time.Hour()*3600 + d.dt.Time.Minute()*60 + d.dt.Time.Second()
-	if d.dt.Time.Neg() {
-		sec *= -1
-	}
-	return newEvalInt64(int64(sec)), nil
+	sec := d.dt.Time.ToSeconds()
+	return newEvalInt64(sec), nil
 }
 
 func (call *builtinTimeToSec) compile(c *compiler) (ctype, error) {
