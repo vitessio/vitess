@@ -120,7 +120,7 @@ const (
 )
 
 const (
-	EnumReorderStrategyReject = iota
+	EnumReorderStrategyReject int = iota
 	EnumReorderStrategyAllow
 )
 
