@@ -32,17 +32,17 @@ func TestDiffTables(t *testing.T) {
 	env57, err := vtenv.New(vtenv.Options{MySQLServerVersion: "5.7.9"})
 	require.NoError(t, err)
 	tt := []struct {
-		name     string
-		from     string
-		to       string
-		diff     string
-		cdiff    string
-		fromName string
-		toName   string
-		action   string
-		isError  bool
-		hints    *DiffHints
-		env      *Environment
+		name        string
+		from        string
+		to          string
+		diff        string
+		cdiff       string
+		fromName    string
+		toName      string
+		action      string
+		expectError string
+		hints       *DiffHints
+		env         *Environment
 	}{
 		{
 			name: "identical",
@@ -220,7 +220,7 @@ func TestDiffTables(t *testing.T) {
 				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
 				TableCharsetCollateStrategy: TableCharsetCollateIgnoreAlways,
 			},
-			isError: true,
+			expectError: "cannot match charset to collation",
 		},
 		{
 			name:     "changing table level defaults with column specific settings",
@@ -335,9 +335,9 @@ func TestDiffTables(t *testing.T) {
 			dq, dqerr := DiffCreateTablesQueries(env, ts.from, ts.to, hints)
 			d, err := DiffTables(env, fromCreateTable, toCreateTable, hints)
 			switch {
-			case ts.isError:
-				assert.Error(t, err)
-				assert.Error(t, dqerr)
+			case ts.expectError != "":
+				assert.ErrorContains(t, err, ts.expectError)
+				assert.ErrorContains(t, dqerr, ts.expectError)
 			case ts.diff == "":
 				assert.NoError(t, err)
 				assert.NoError(t, dqerr)

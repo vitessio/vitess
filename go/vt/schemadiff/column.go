@@ -102,6 +102,7 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 	other *ColumnDefinitionEntity,
 	t1cc *charsetCollate,
 	t2cc *charsetCollate,
+	hints *DiffHints,
 ) (*ModifyColumnDiff, error) {
 	if c.IsTextual() || other.IsTextual() {
 		// We will now denormalize the columns charset & collate as needed (if empty, populate from table.)
@@ -171,6 +172,25 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 		return nil, nil
 	}
 
+	getEnumValuesMap := func(enumValues []string) map[string]int {
+		m := make(map[string]int)
+		for i, enumValue := range enumValues {
+			m[enumValue] = i
+		}
+		return m
+	}
+	switch hints.EnumReorderStrategy {
+	case EnumReorderStrategyReject:
+		enumValuesMap := getEnumValuesMap(c.columnDefinition.Type.EnumValues)
+		otherEnumValuesMap := getEnumValuesMap(other.columnDefinition.Type.EnumValues)
+		for enumValue, ordinal := range enumValuesMap {
+			if otherOrdinal, ok := otherEnumValuesMap[enumValue]; ok {
+				if ordinal != otherOrdinal {
+					return nil, &EnumValueOrdinalChangedError{Column: c.columnDefinition.Name.String(), Value: enumValue, Ordinal: ordinal, NewOrdinal: otherOrdinal}
+				}
+			}
+		}
+	}
 	return NewModifyColumnDiffByDefinition(other.columnDefinition), nil
 }
 

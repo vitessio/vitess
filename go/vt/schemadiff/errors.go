@@ -423,3 +423,14 @@ type EntityNotFoundError struct {
 func (e *EntityNotFoundError) Error() string {
 	return fmt.Sprintf("entity %s not found", sqlescape.EscapeID(e.Name))
 }
+
+type EnumValueOrdinalChangedError struct {
+	Column     string
+	Value      string
+	Ordinal    int
+	NewOrdinal int
+}
+
+func (e *EnumValueOrdinalChangedError) Error() string {
+	return fmt.Sprintf("ordinal of %s changed in enum or set column %s, from %d to %d", e.Value, sqlescape.EscapeID(e.Column), e.Ordinal, e.NewOrdinal)
+}
