@@ -44,6 +44,266 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+func TestApplySchema(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "SchemaMigration",
+					Actions:  []string{"create"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "other"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.ApplySchema(ctx, &vtadminpb.ApplySchemaRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.ApplySchemaRequest{
+				Keyspace: "test",
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to ApplySchema", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to ApplySchema", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "allowed"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.ApplySchema(ctx, &vtadminpb.ApplySchemaRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.ApplySchemaRequest{
+				Keyspace: "test",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to ApplySchema", actor)
+	})
+}
+
+func TestCancelSchemaMigration(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "SchemaMigration",
+					Actions:  []string{"cancel"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "other"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.CancelSchemaMigration(ctx, &vtadminpb.CancelSchemaMigrationRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.CancelSchemaMigrationRequest{
+				Keyspace: "test",
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to CancelSchemaMigration", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to CancelSchemaMigration", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "allowed"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.CancelSchemaMigration(ctx, &vtadminpb.CancelSchemaMigrationRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.CancelSchemaMigrationRequest{
+				Keyspace: "test",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to CancelSchemaMigration", actor)
+	})
+}
+
+func TestCleanupSchemaMigration(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "SchemaMigration",
+					Actions:  []string{"cleanup_schema_migration"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "other"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.CleanupSchemaMigration(ctx, &vtadminpb.CleanupSchemaMigrationRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.CleanupSchemaMigrationRequest{
+				Keyspace: "test",
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to CleanupSchemaMigration", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to CleanupSchemaMigration", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "allowed"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.CleanupSchemaMigration(ctx, &vtadminpb.CleanupSchemaMigrationRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.CleanupSchemaMigrationRequest{
+				Keyspace: "test",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to CleanupSchemaMigration", actor)
+	})
+}
+
+func TestCompleteSchemaMigration(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "SchemaMigration",
+					Actions:  []string{"complete_schema_migration"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "other"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.CompleteSchemaMigration(ctx, &vtadminpb.CompleteSchemaMigrationRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.CompleteSchemaMigrationRequest{
+				Keyspace: "test",
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to CompleteSchemaMigration", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to CompleteSchemaMigration", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "allowed"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.CompleteSchemaMigration(ctx, &vtadminpb.CompleteSchemaMigrationRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.CompleteSchemaMigrationRequest{
+				Keyspace: "test",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to CompleteSchemaMigration", actor)
+	})
+}
+
 func TestCreateKeyspace(t *testing.T) {
 	t.Parallel()
 
@@ -1070,6 +1330,79 @@ func TestGetKeyspaces(t *testing.T) {
 	})
 }
 
+func TestGetSchemaMigrations(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "SchemaMigration",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "SchemaMigration",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "unauthorized"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.GetSchemaMigrations(ctx, &vtadminpb.GetSchemaMigrationsRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.SchemaMigrations, "actor %+v should not be permitted to GetSchemaMigrations", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "allowed-other"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, _ := api.GetSchemaMigrations(ctx, &vtadminpb.GetSchemaMigrationsRequest{})
+		assert.NotEmpty(t, resp.SchemaMigrations, "actor %+v should be permitted to GetSchemaMigrations", actor)
+		assert.Len(t, resp.SchemaMigrations, 3, "'other' actor should be able to see the 3 migrations in cluster 'other'")
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "allowed-all"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, _ := api.GetSchemaMigrations(ctx, &vtadminpb.GetSchemaMigrationsRequest{})
+		assert.NotEmpty(t, resp.SchemaMigrations, "actor %+v should be permitted to GetSchemaMigrations", actor)
+		assert.Len(t, resp.SchemaMigrations, 4, "'all' actor should be able to see migrations in all clusters")
+	})
+}
+
 func TestGetSchema(t *testing.T) {
 	t.Parallel()
 
@@ -2001,6 +2334,71 @@ func TestGetWorkflows(t *testing.T) {
 	})
 }
 
+func TestLaunchSchemaMigration(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "SchemaMigration",
+					Actions:  []string{"launch_schema_migration"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "other"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.LaunchSchemaMigration(ctx, &vtadminpb.LaunchSchemaMigrationRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.LaunchSchemaMigrationRequest{
+				Keyspace: "test",
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to LaunchSchemaMigration", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to LaunchSchemaMigration", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "allowed"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.LaunchSchemaMigration(ctx, &vtadminpb.LaunchSchemaMigrationRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.LaunchSchemaMigrationRequest{
+				Keyspace: "test",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to LaunchSchemaMigration", actor)
+	})
+}
+
 func TestPingTablet(t *testing.T) {
 	t.Parallel()
 
@@ -2346,6 +2744,71 @@ func TestReloadSchemas(t *testing.T) {
 			},
 		})
 		assert.NotEmpty(t, resp.KeyspaceResults, "actor %+v should be permitted to ReloadSchemas", actor)
+	})
+}
+
+func TestRetrySchemaMigration(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "SchemaMigration",
+					Actions:  []string{"retry"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "other"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.RetrySchemaMigration(ctx, &vtadminpb.RetrySchemaMigrationRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.RetrySchemaMigrationRequest{
+				Keyspace: "test",
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to RetrySchemaMigration", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to RetrySchemaMigration", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "allowed"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.RetrySchemaMigration(ctx, &vtadminpb.RetrySchemaMigrationRequest{
+			ClusterId: "test",
+			Request: &vtctldatapb.RetrySchemaMigrationRequest{
+				Keyspace: "test",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to RetrySchemaMigration", actor)
 	})
 }
 
@@ -2998,6 +3461,38 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				Name: "test",
 			},
 			VtctldClient: &fakevtctldclient.VtctldClient{
+				ApplySchemaResults: map[string]struct {
+					Response *vtctldatapb.ApplySchemaResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.ApplySchemaResponse{},
+					},
+				},
+				CancelSchemaMigrationResults: map[string]struct {
+					Response *vtctldatapb.CancelSchemaMigrationResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.CancelSchemaMigrationResponse{},
+					},
+				},
+				CleanupSchemaMigrationResults: map[string]struct {
+					Response *vtctldatapb.CleanupSchemaMigrationResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.CleanupSchemaMigrationResponse{},
+					},
+				},
+				CompleteSchemaMigrationResults: map[string]struct {
+					Response *vtctldatapb.CompleteSchemaMigrationResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.CompleteSchemaMigrationResponse{},
+					},
+				},
 				DeleteShardsResults: map[string]error{
 					"test/-": nil,
 				},
@@ -3086,6 +3581,18 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
+				GetSchemaMigrationsResults: map[string]struct {
+					Response *vtctldatapb.GetSchemaMigrationsResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.GetSchemaMigrationsResponse{
+							Migrations: []*vtctldatapb.SchemaMigration{
+								{},
+							},
+						},
+					},
+				},
 				GetSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetSchemaResponse
 					Error    error
@@ -3155,6 +3662,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							},
 						}},
 				},
+				LaunchSchemaMigrationResults: map[string]struct {
+					Response *vtctldatapb.LaunchSchemaMigrationResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.LaunchSchemaMigrationResponse{},
+					},
+				},
 				PingTabletResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
@@ -3184,6 +3699,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				}{
 					"zone1-0000000100": {
 						Response: &vtctldatapb.ReparentTabletResponse{},
+					},
+				},
+				RetrySchemaMigrationResults: map[string]struct {
+					Response *vtctldatapb.RetrySchemaMigrationResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.RetrySchemaMigrationResponse{},
 					},
 				},
 				RunHealthCheckResults: map[string]error{
@@ -3320,6 +3843,18 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						{
 							Name:     "otherks",
 							Keyspace: &topodatapb.Keyspace{},
+						},
+					},
+				},
+				GetSchemaMigrationsResults: map[string]struct {
+					Response *vtctldatapb.GetSchemaMigrationsResponse
+					Error    error
+				}{
+					"otherks": {
+						Response: &vtctldatapb.GetSchemaMigrationsResponse{
+							Migrations: []*vtctldatapb.SchemaMigration{
+								{}, {}, {},
+							},
 						},
 					},
 				},

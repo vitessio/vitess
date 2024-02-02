@@ -450,6 +450,12 @@ func (api *API) ApplySchema(ctx context.Context, req *vtadminpb.ApplySchemaReque
 	span, ctx := trace.NewSpan(ctx, "API.ApplySchema")
 	defer span.Finish()
 
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
@@ -462,6 +468,12 @@ func (api *API) ApplySchema(ctx context.Context, req *vtadminpb.ApplySchemaReque
 func (api *API) CancelSchemaMigration(ctx context.Context, req *vtadminpb.CancelSchemaMigrationRequest) (*vtctldatapb.CancelSchemaMigrationResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.CancelSchemaMigration")
 	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.CancelAction) {
+		return nil, fmt.Errorf("%w: cannot cancel schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
@@ -476,6 +488,12 @@ func (api *API) CleanupSchemaMigration(ctx context.Context, req *vtadminpb.Clean
 	span, ctx := trace.NewSpan(ctx, "API.CleanupSchemaMigration")
 	defer span.Finish()
 
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.CleanupSchemaMigrationAction) {
+		return nil, fmt.Errorf("%w: cannot cleanup schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
@@ -488,6 +506,12 @@ func (api *API) CleanupSchemaMigration(ctx context.Context, req *vtadminpb.Clean
 func (api *API) CompleteSchemaMigration(ctx context.Context, req *vtadminpb.CompleteSchemaMigrationRequest) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.CompleteSchemaMigration")
 	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.CompleteSchemaMigrationAction) {
+		return nil, fmt.Errorf("%w: cannot complete schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
@@ -1105,8 +1129,17 @@ func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchem
 	for _, c := range clusters {
 		if len(requestsByCluster[c.ID]) == 0 {
 			wg.Add(1)
-			go func(c *cluster.Cluster) {
+			go func(ctx context.Context, c *cluster.Cluster) {
 				defer wg.Done()
+
+				span, ctx := trace.NewSpan(ctx, "API.getClusterKeyspaces")
+				defer span.Finish()
+
+				span.Annotate("cluster_id", c.ID)
+
+				if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaMigrationResource, rbac.GetAction) {
+					return
+				}
 
 				keyspaces, err := c.GetKeyspaces(ctx)
 				if err != nil {
@@ -1122,7 +1155,7 @@ func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchem
 						Keyspace: ks.Keyspace.Name,
 					})
 				}
-			}(c)
+			}(ctx, c)
 		}
 	}
 
@@ -1135,8 +1168,17 @@ func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchem
 		for _, r := range requestsByCluster[c.ID] {
 			wg.Add(1)
 
-			go func(c *cluster.Cluster, r *vtctldatapb.GetSchemaMigrationsRequest) {
+			go func(ctx context.Context, c *cluster.Cluster, r *vtctldatapb.GetSchemaMigrationsRequest) {
 				defer wg.Done()
+
+				span, ctx := trace.NewSpan(ctx, "API.getClusterSchemaMigrations")
+				defer span.Finish()
+
+				span.Annotate("cluster_id", c.ID)
+
+				if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaMigrationResource, rbac.GetAction) {
+					return
+				}
 
 				migrations, err := c.GetSchemaMigrations(ctx, r)
 				if err != nil {
@@ -1148,7 +1190,7 @@ func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchem
 				defer m.Unlock()
 
 				results = append(results, migrations...)
-			}(c, r)
+			}(ctx, c, r)
 		}
 	}
 
@@ -1668,6 +1710,12 @@ func (api *API) LaunchSchemaMigration(ctx context.Context, req *vtadminpb.Launch
 	span, ctx := trace.NewSpan(ctx, "API.LaunchSchemaMigration")
 	defer span.Finish()
 
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.LaunchSchemaMigrationAction) {
+		return nil, fmt.Errorf("%w: cannot launch schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
@@ -1887,6 +1935,12 @@ func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSche
 func (api *API) RetrySchemaMigration(ctx context.Context, req *vtadminpb.RetrySchemaMigrationRequest) (*vtctldatapb.RetrySchemaMigrationResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.RetrySchemaMigration")
 	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.RetryAction) {
+		return nil, fmt.Errorf("%w: cannot retry schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
