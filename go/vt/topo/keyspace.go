@@ -20,7 +20,6 @@ import (
 	"context"
 	"path"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -43,6 +42,11 @@ import (
 
 // Default concurrency to use in order to avoid overhwelming the topo server.
 var DefaultConcurrency = 32
+
+// shardKeySuffix is the suffix of a shard key.
+// The full key looks like this:
+// /vitess/global/keyspaces/customer/shards/80-/Shard
+const shardKeySuffix = "Shard"
 
 func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&DefaultConcurrency, "topo_read_concurrency", DefaultConcurrency, "Concurrency of topo reads.")
@@ -218,8 +222,8 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 			// We don't want keys that aren't Shards. For example:
 			// /vitess/global/keyspaces/commerce/shards/0/locks/7587876423742065323
 			// This example key can happen with Shards because you can get a shard
-			// lock in the topo via TopoServer.LockShard.
-			if !strings.HasSuffix(shardKey, "/Shard") {
+			// lock in the topo via TopoServer.LockShard().
+			if path.Base(shardKey) != shardKeySuffix {
 				continue
 			}
 			shardName := path.Base(path.Dir(shardKey)) // The base part of the dir is "-80"
