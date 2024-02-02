@@ -43,7 +43,6 @@ import (
 type testHandler struct {
 	mysql.UnimplementedHandler
 	lastConn *mysql.Conn
-	env      *vtenv.Environment
 }
 
 func (th *testHandler) NewConnection(c *mysql.Conn) {
@@ -84,7 +83,7 @@ func (th *testHandler) WarningCount(c *mysql.Conn) uint16 {
 }
 
 func (th *testHandler) Env() *vtenv.Environment {
-	return th.env
+	return vtenv.NewTestEnv()
 }
 
 func TestConnectionUnixSocket(t *testing.T) {
