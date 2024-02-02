@@ -98,7 +98,7 @@ func TestServerGetServingShards(t *testing.T) {
 	// This is needed because memorytopo doesn't implement locks using
 	// keys in the topo. So we simulate the behavior of other topo server
 	// implementations and how they implement TopoServer.LockShard().
-	createSimulatedLock := func(ctx context.Context, ts *topo.Server, keyspace, shard string) error {
+	createSimulatedShardLock := func(ctx context.Context, ts *topo.Server, keyspace, shard string) error {
 		conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
 		if err != nil {
 			return err
@@ -160,7 +160,7 @@ func TestServerGetServingShards(t *testing.T) {
 				// /vitess/global/keyspaces/<keyspace>/shards/<shardname>/locks/XXXX
 				// We want to confirm that this key is ignored when building
 				// the results.
-				err = createSimulatedLock(ctx, ts, keyspace, shardNames[0])
+				err = createSimulatedShardLock(ctx, ts, keyspace, shardNames[0])
 				require.NoError(t, err)
 			}
 
