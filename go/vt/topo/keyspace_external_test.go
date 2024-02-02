@@ -95,6 +95,19 @@ func TestServerGetServingShards(t *testing.T) {
 	keyspace := "ks1"
 	errNoListImpl := topo.NewError(topo.NoImplementation, "don't be doing no listing round here")
 
+	// This is needed because memorytopo doesn't implement locks using
+	// keys in the topo. So we simulate the behavior of other topo server
+	// implementations and how they implement TopoServer.LockShard().
+	createSimulatedShardLock := func(ctx context.Context, ts *topo.Server, keyspace, shard string) error {
+		conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
+		if err != nil {
+			return err
+		}
+		lockKey := fmt.Sprintf("keyspaces/%s/shards/%s/locks/1234", keyspace, shard)
+		_, err = conn.Create(ctx, lockKey, []byte("lock"))
+		return err
+	}
+
 	tests := []struct {
 		shards   int    // Number of shards to create
 		err      string // Error message we expect, if any
@@ -138,10 +151,17 @@ func TestServerGetServingShards(t *testing.T) {
 			if tt.shards > 0 {
 				shardNames, err = key.GenerateShardRanges(tt.shards)
 				require.NoError(t, err)
+				require.Equal(t, tt.shards, len(shardNames))
 				for _, shardName := range shardNames {
 					err = ts.CreateShard(ctx, keyspace, shardName)
 					require.NoError(t, err)
 				}
+				// A shard lock typically becomes a key in the topo like this:
+				// /vitess/global/keyspaces/<keyspace>/shards/<shardname>/locks/XXXX
+				// We want to confirm that this key is ignored when building
+				// the results.
+				err = createSimulatedShardLock(ctx, ts, keyspace, shardNames[0])
+				require.NoError(t, err)
 			}
 
 			// Verify that we return a complete list of shards and that each
