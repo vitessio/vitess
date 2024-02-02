@@ -2205,5 +2205,35 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "No weightstrings or derived table needed",
+    "query": "select textcol1 from user union select textcol1 from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select textcol1 from user union select textcol1 from user",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0: latin1_swedish_ci"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select textcol1 from `user` where 1 != 1 union select textcol1 from `user` where 1 != 1",
+            "Query": "select textcol1 from `user` union select textcol1 from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
