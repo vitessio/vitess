@@ -9,7 +9,7 @@ permissions: read-all
 jobs:
   test:
     name: Code Coverage
-    runs-on: gh-hosted-runners-4cores-1
+    runs-on: gh-hosted-runners-16cores-1
 
     steps:
     - name: Check out code
@@ -106,8 +106,14 @@ jobs:
 
         eatmydata -- make unit_test_cover
 
+        # Restore the files we deleted as codecov tries to fix their paths.
+        git reset --hard HEAD
+
     - name: Upload coverage reports to codecov.io
       if: steps.changes.outputs.changed_files == 'true'
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
+      with:
+        fail_ci_if_error: true
+        verbose: true
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
