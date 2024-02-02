@@ -3496,7 +3496,7 @@ func (asm *assembler) Fn_CONVERT_TZ() {
 			return 1
 		}
 
-		dt, ok := convertTz(n.dt, fromTz, toTz)
+		dt, ok := convertTz(n.dt, fromTz, toTz, env.now)
 		if !ok {
 			env.vm.stack[env.vm.sp-3] = nil
 			env.vm.sp -= 2
@@ -3526,11 +3526,7 @@ func (asm *assembler) Fn_DAYOFWEEK() {
 		}
 		d := env.vm.stack[env.vm.sp-1].(*evalTemporal)
 
-		wd := d.dt.Date.ToStdTime(env.currentTimezone()).Weekday() + 1
-		if d.dt.Date.Year() == 0 && d.dt.Date.Month() <= 2 {
-			wd += 1
-		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(wd))
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(d.dt.Date.Weekday() + 1))
 		return 1
 	}, "FN DAYOFWEEK DATE(SP-1)")
 }

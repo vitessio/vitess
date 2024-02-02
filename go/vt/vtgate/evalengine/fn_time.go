@@ -335,7 +335,14 @@ type builtinConvertTz struct {
 
 var _ IR = (*builtinConvertTz)(nil)
 
-func convertTz(dt datetime.DateTime, from, to *time.Location) (datetime.DateTime, bool) {
+func convertTz(dt datetime.DateTime, from, to *time.Location, now time.Time) (datetime.DateTime, bool) {
+	t := dt.ToStdTime(now)
+	lowerBoundTz := time.Date(1970, 01, 01, 0, 0, 0, 0, time.UTC)
+	upperBoundTz := time.Date(3001, 1, 19, 3, 14, 7, 99999, time.UTC)
+	if t.Before(lowerBoundTz) || t.After(upperBoundTz) {
+		return dt, true
+	}
+
 	buf := datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(dt, datetime.DefaultPrecision)
 	ts, err := time.ParseInLocation(time.DateTime, hack.String(buf), from)
 	if err != nil {
@@ -380,7 +387,7 @@ func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	out, ok := convertTz(dt.dt, fromTz, toTz)
+	out, ok := convertTz(dt.dt, fromTz, toTz, env.now)
 	if !ok {
 		return nil, nil
 	}
@@ -504,12 +511,7 @@ func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
-
-	wd := d.dt.Date.ToStdTime(env.currentTimezone()).Weekday() + 1
-	if d.dt.Date.Year() == 0 && d.dt.Date.Month() <= 2 {
-		wd += 1
-	}
-	return newEvalInt64(int64(wd)), nil
+	return newEvalInt64(int64(d.dt.Date.Weekday() + 1)), nil
 }
 
 func (call *builtinDayOfWeek) compile(c *compiler) (ctype, error) {
@@ -1499,9 +1501,12 @@ func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
 	}
 
 	ts := dt.dt.ToStdTime(env.now)
-	if ts.Before(time.Date(1970, 01, 01, 0, 0, 0, 0, time.UTC)) || ts.After(time.Date(3001, 1, 19, 3, 14, 7, 99999, time.UTC)) {
+	lowerBoundTimestamp := time.Date(1970, 01, 01, 0, 0, 0, 0, time.UTC)
+	upperBoundTimestamp := time.Date(3001, 1, 19, 3, 14, 7, 99999, time.UTC)
+	if ts.Before(lowerBoundTimestamp) || ts.After(upperBoundTimestamp) {
 		return newEvalInt64(0)
 	}
+
 	if dt.prec == 0 {
 		return newEvalInt64(ts.Unix())
 	}
