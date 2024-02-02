@@ -160,7 +160,7 @@ func TestServerGetServingShards(t *testing.T) {
 				// /vitess/global/keyspaces/<keyspace>/shards/<shardname>/locks/XXXX
 				// We want to confirm that this key is ignored when building
 				// the results.
-				err := createSimulatedLock(ctx, ts, keyspace, shardNames[0])
+				err = createSimulatedLock(ctx, ts, keyspace, shardNames[0])
 				require.NoError(t, err)
 			}
 
