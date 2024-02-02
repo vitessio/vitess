@@ -103,6 +103,7 @@ func TestServerGetServingShards(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		defer conn.Close()
 		lockKey := fmt.Sprintf("keyspaces/%s/shards/%s/locks/1234", keyspace, shard)
 		_, err = conn.Create(ctx, lockKey, []byte("lock"))
 		return err
