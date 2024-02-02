@@ -372,6 +372,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate/schema", httpAPI.Adapt(vtadminhttp.ValidateSchemaKeyspace)).Name("API.ValidateSchemaKeyspace").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate/version", httpAPI.Adapt(vtadminhttp.ValidateVersionKeyspace)).Name("API.ValidateVersionKeyspace").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/keyspaces", httpAPI.Adapt(vtadminhttp.GetKeyspaces)).Name("API.GetKeyspaces")
+	router.HandleFunc("/migration/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.ApplySchema)).Name("API.ApplySchema").Methods("POST")
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/cancel", httpAPI.Adapt(vtadminhttp.CancelSchemaMigration)).Name("API.CancelSchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/cleanup", httpAPI.Adapt(vtadminhttp.CleanupSchemaMigration)).Name("API.CleanupSchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/complete", httpAPI.Adapt(vtadminhttp.CompleteSchemaMigration)).Name("API.CompleteSchemaMigration").Methods("PUT", "OPTIONS")
@@ -442,6 +443,19 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	}
 
 	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)
+}
+
+// ApplySchema is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ApplySchema(ctx context.Context, req *vtadminpb.ApplySchemaRequest) (*vtctldatapb.ApplySchemaResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ApplySchema")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.ApplySchema(ctx, req.Request)
 }
 
 // CancelSchemaMigration is part of the vtadminpb.VTAdminServer interface.

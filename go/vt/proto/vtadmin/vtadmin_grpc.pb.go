@@ -23,6 +23,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type VTAdminClient interface {
+	// ApplySchema applies a schema to a keyspace in the given cluster.
+	ApplySchema(ctx context.Context, in *ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplySchemaResponse, error)
 	// CancelSchemaMigration cancels one or all schema migrations in the given
 	// cluster, terminating any running ones as needed.
 	CancelSchemaMigration(ctx context.Context, in *CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error)
@@ -196,6 +198,15 @@ type vTAdminClient struct {
 
 func NewVTAdminClient(cc grpc.ClientConnInterface) VTAdminClient {
 	return &vTAdminClient{cc}
+}
+
+func (c *vTAdminClient) ApplySchema(ctx context.Context, in *ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplySchemaResponse, error) {
+	out := new(vtctldata.ApplySchemaResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ApplySchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *vTAdminClient) CancelSchemaMigration(ctx context.Context, in *CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error) {
@@ -715,6 +726,8 @@ func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opt
 // All implementations must embed UnimplementedVTAdminServer
 // for forward compatibility
 type VTAdminServer interface {
+	// ApplySchema applies a schema to a keyspace in the given cluster.
+	ApplySchema(context.Context, *ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error)
 	// CancelSchemaMigration cancels one or all schema migrations in the given
 	// cluster, terminating any running ones as needed.
 	CancelSchemaMigration(context.Context, *CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error)
@@ -887,6 +900,9 @@ type VTAdminServer interface {
 type UnimplementedVTAdminServer struct {
 }
 
+func (UnimplementedVTAdminServer) ApplySchema(context.Context, *ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplySchema not implemented")
+}
 func (UnimplementedVTAdminServer) CancelSchemaMigration(context.Context, *CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelSchemaMigration not implemented")
 }
@@ -1069,6 +1085,24 @@ type UnsafeVTAdminServer interface {
 
 func RegisterVTAdminServer(s grpc.ServiceRegistrar, srv VTAdminServer) {
 	s.RegisterService(&VTAdmin_ServiceDesc, srv)
+}
+
+func _VTAdmin_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplySchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ApplySchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ApplySchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ApplySchema(ctx, req.(*ApplySchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _VTAdmin_CancelSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -2104,6 +2138,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "vtadmin.VTAdmin",
 	HandlerType: (*VTAdminServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ApplySchema",
+			Handler:    _VTAdmin_ApplySchema_Handler,
+		},
 		{
 			MethodName: "CancelSchemaMigration",
 			Handler:    _VTAdmin_CancelSchemaMigration_Handler,

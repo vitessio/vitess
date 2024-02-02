@@ -24,6 +24,20 @@ export namespace vtadmin {
         public static create(rpcImpl: $protobuf.RPCImpl, requestDelimited?: boolean, responseDelimited?: boolean): VTAdmin;
 
         /**
+         * Calls ApplySchema.
+         * @param request ApplySchemaRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ApplySchemaResponse
+         */
+        public applySchema(request: vtadmin.IApplySchemaRequest, callback: vtadmin.VTAdmin.ApplySchemaCallback): void;
+
+        /**
+         * Calls ApplySchema.
+         * @param request ApplySchemaRequest message or plain object
+         * @returns Promise
+         */
+        public applySchema(request: vtadmin.IApplySchemaRequest): Promise<vtctldata.ApplySchemaResponse>;
+
+        /**
          * Calls CancelSchemaMigration.
          * @param request CancelSchemaMigrationRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and CancelSchemaMigrationResponse
@@ -823,6 +837,13 @@ export namespace vtadmin {
     }
 
     namespace VTAdmin {
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#applySchema}.
+         * @param error Error, if any
+         * @param [response] ApplySchemaResponse
+         */
+        type ApplySchemaCallback = (error: (Error|null), response?: vtctldata.ApplySchemaResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#cancelSchemaMigration}.
@@ -3187,6 +3208,109 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for Workflow
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ApplySchemaRequest. */
+    interface IApplySchemaRequest {
+
+        /** ApplySchemaRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** ApplySchemaRequest request */
+        request?: (vtctldata.IApplySchemaRequest|null);
+    }
+
+    /** Represents an ApplySchemaRequest. */
+    class ApplySchemaRequest implements IApplySchemaRequest {
+
+        /**
+         * Constructs a new ApplySchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IApplySchemaRequest);
+
+        /** ApplySchemaRequest cluster_id. */
+        public cluster_id: string;
+
+        /** ApplySchemaRequest request. */
+        public request?: (vtctldata.IApplySchemaRequest|null);
+
+        /**
+         * Creates a new ApplySchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplySchemaRequest instance
+         */
+        public static create(properties?: vtadmin.IApplySchemaRequest): vtadmin.ApplySchemaRequest;
+
+        /**
+         * Encodes the specified ApplySchemaRequest message. Does not implicitly {@link vtadmin.ApplySchemaRequest.verify|verify} messages.
+         * @param message ApplySchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IApplySchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplySchemaRequest message, length delimited. Does not implicitly {@link vtadmin.ApplySchemaRequest.verify|verify} messages.
+         * @param message ApplySchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IApplySchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplySchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplySchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ApplySchemaRequest;
+
+        /**
+         * Decodes an ApplySchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplySchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ApplySchemaRequest;
+
+        /**
+         * Verifies an ApplySchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplySchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplySchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ApplySchemaRequest;
+
+        /**
+         * Creates a plain object from an ApplySchemaRequest message. Also converts values to other types if specified.
+         * @param message ApplySchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ApplySchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplySchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplySchemaRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

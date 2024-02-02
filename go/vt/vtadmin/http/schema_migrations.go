@@ -29,6 +29,29 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+// ApplySchema implements the http wrapper for POST /migration/{cluster_id}/{keyspace}/.
+func ApplySchema(ctx context.Context, r Request, api *API) *JSONResponse {
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var req vtctldatapb.ApplySchemaRequest
+	if err := decoder.Decode(&req); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	vars := mux.Vars(r.Request)
+	req.Keyspace = vars["keyspace"]
+
+	resp, err := api.server.ApplySchema(ctx, &vtadminpb.ApplySchemaRequest{
+		ClusterId: vars["cluster_id"],
+		Request:   &req,
+	})
+
+	return NewJSONResponse(resp, err)
+}
+
 // CancelSchemaMigration implements the http wrapper for /migration/{cluster_id}/{keyspace}/cancel[?uuid].
 func CancelSchemaMigration(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := mux.Vars(r.Request)

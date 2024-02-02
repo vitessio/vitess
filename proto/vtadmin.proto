@@ -33,6 +33,8 @@ import "vtctldata.proto";
 // VTAdmin is the Vitess Admin API service. It provides RPCs that operate on
 // across a range of Vitess clusters.
 service VTAdmin {
+    // ApplySchema applies a schema to a keyspace in the given cluster.
+    rpc ApplySchema(ApplySchemaRequest) returns (vtctldata.ApplySchemaResponse) {};
     // CancelSchemaMigration cancels one or all schema migrations in the given
     // cluster, terminating any running ones as needed.
     rpc CancelSchemaMigration(CancelSchemaMigrationRequest) returns (vtctldata.CancelSchemaMigrationResponse) {};
@@ -344,6 +346,11 @@ message Workflow {
 }
 
 /* Request/Response types */
+
+message ApplySchemaRequest {
+    string cluster_id = 1;
+    vtctldata.ApplySchemaRequest request = 2;
+}
 
 message CancelSchemaMigrationRequest {
     string cluster_id = 1;

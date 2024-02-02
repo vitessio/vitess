@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -351,6 +352,31 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	}
 
 	return tablet, nil
+}
+
+// ApplySchema applies a schema to the given keyspace in this cluster.
+func (c *Cluster) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySchemaRequest) (*vtctldatapb.ApplySchemaResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.ApplySchema")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("sql", strings.Join(req.Sql, "; "))
+	span.Annotate("ddl_strategy", req.DdlStrategy)
+	span.Annotate("uuid_list", strings.Join(req.UuidList, ", "))
+	span.Annotate("migration_context", req.MigrationContext)
+
+	if d, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout); ok && err != nil {
+		span.Annotate("wait_replicas_timeout", d.String())
+	}
+
+	span.Annotate("caller_id", strings.Join(
+		[]string{callerid.GetPrincipal(req.CallerId), callerid.GetComponent(req.CallerId), callerid.GetSubcomponent(req.CallerId)},
+		":",
+	))
+	span.Annotate("batch_size", req.BatchSize)
+
+	return c.Vtctld.ApplySchema(ctx, req)
 }
 
 // CancelSchemaMigration cancels one or all migrations in a keyspace in this
