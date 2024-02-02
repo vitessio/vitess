@@ -91,3 +91,7 @@ func (e *Environment) TruncateForUI(query string) string {
 func (e *Environment) TruncateForLog(query string) string {
 	return sqlparser.TruncateQuery(query, e.truncateErrLen)
 }
+
+func (e *Environment) TruncateErrLen() int {
+	return e.truncateErrLen
+}
