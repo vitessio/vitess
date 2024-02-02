@@ -20,6 +20,7 @@ import (
 	"context"
 	"path"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -214,6 +215,13 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 		for _, entry := range kvpairs {
 			// The shard key looks like this: /vitess/global/keyspaces/commerce/shards/-80/Shard
 			shardKey := string(entry.Key)
+			// We don't want keys that aren't Shards. For example:
+			// /vitess/global/keyspaces/commerce/shards/0/locks/7587876423742065323
+			// This example key can happen with Shards because you can get a shard
+			// lock in the topo via TopoServer.LockShard.
+			if !strings.HasSuffix(shardKey, "/Shard") {
+				continue
+			}
 			shardName := path.Base(path.Dir(shardKey)) // The base part of the dir is "-80"
 			// Validate the extracted shard name.
 			if _, _, err := ValidateShardName(shardName); err != nil {
