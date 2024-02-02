@@ -2362,7 +2362,7 @@ func (cmp *Comparator) RefOfDelete(a, b *Delete) bool {
 	return cmp.RefOfWith(a.With, b.With) &&
 		a.Ignore == b.Ignore &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
-		cmp.TableExprs(a.TableExprs, b.TableExprs) &&
+		cmp.SliceOfTableExpr(a.TableExprs, b.TableExprs) &&
 		cmp.TableNames(a.Targets, b.Targets) &&
 		cmp.Partitions(a.Partitions, b.Partitions) &&
 		cmp.RefOfWhere(a.Where, b.Where) &&
@@ -4621,7 +4621,7 @@ func (cmp *Comparator) RefOfUpdate(a, b *Update) bool {
 	return cmp.RefOfWith(a.With, b.With) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		a.Ignore == b.Ignore &&
-		cmp.TableExprs(a.TableExprs, b.TableExprs) &&
+		cmp.SliceOfTableExpr(a.TableExprs, b.TableExprs) &&
 		cmp.UpdateExprs(a.Exprs, b.Exprs) &&
 		cmp.RefOfWhere(a.Where, b.Where) &&
 		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
@@ -7192,6 +7192,19 @@ func (cmp *Comparator) SliceOfString(a, b []string) bool {
 	return true
 }
 
+// SliceOfTableExpr does deep equals between the two objects.
+func (cmp *Comparator) SliceOfTableExpr(a, b []TableExpr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.TableExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // SliceOfRefOfVariable does deep equals between the two objects.
 func (cmp *Comparator) SliceOfRefOfVariable(a, b []*Variable) bool {
 	if len(a) != len(b) {
@@ -7417,19 +7430,6 @@ func (cmp *Comparator) RefOfRootNode(a, b *RootNode) bool {
 		return false
 	}
 	return cmp.SQLNode(a.SQLNode, b.SQLNode)
-}
-
-// SliceOfTableExpr does deep equals between the two objects.
-func (cmp *Comparator) SliceOfTableExpr(a, b []TableExpr) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.TableExpr(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
 }
 
 // RefOfTableName does deep equals between the two objects.

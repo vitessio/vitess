@@ -188,6 +188,11 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	}
 }
 
+// GetChildForeignKeysForTable gets the child foreign keys as a list for the specified table.
+func (st *SemTable) GetChildForeignKeysForTable(tableName sqlparser.TableName) []vindexes.ChildFKInfo {
+	return st.childForeignKeysInvolved[st.Targets[tableName.Name]]
+}
+
 // GetChildForeignKeysList gets the child foreign keys as a list.
 func (st *SemTable) GetChildForeignKeysList() []vindexes.ChildFKInfo {
 	var childFkInfos []vindexes.ChildFKInfo
@@ -764,6 +769,34 @@ func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*
 	return ks, tables
 }
 
+// SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same keyspace
+func (st *SemTable) SingleKeyspace() (ks *vindexes.Keyspace) {
+	validKS := func(this *vindexes.Keyspace) bool {
+		if this == nil {
+			return true
+		}
+		if ks == nil {
+			// first keyspace we see
+			ks = this
+		} else if ks != this {
+			return false
+		}
+		return true
+	}
+
+	for _, table := range st.Tables {
+		if _, isDT := table.(*DerivedTable); isDT {
+			continue
+		}
+
+		vtbl := table.GetVindexTable()
+		if !validKS(vtbl.Keyspace) {
+			return nil
+		}
+	}
+	return
+}
+
 // EqualsExpr compares two expressions using the semantic analysis information.
 // This means that we use the binding info to recognize that two ColName's can point to the same
 // table column even though they are written differently. Example would be the `foobar` column in the following query:
@@ -873,4 +906,14 @@ func (st *SemTable) ASTEquals() *sqlparser.Comparator {
 		}
 	}
 	return st.comparator
+}
+
+func (st *SemTable) Clone(n sqlparser.SQLNode) sqlparser.SQLNode {
+	return sqlparser.CopyOnRewrite(n, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		expr, isExpr := cursor.Node().(sqlparser.Expr)
+		if !isExpr {
+			return
+		}
+		cursor.Replace(sqlparser.CloneExpr(expr))
+	}, st.CopySemanticInfo)
 }

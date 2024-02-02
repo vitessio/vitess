@@ -1175,7 +1175,7 @@ func CloneRefOfDelete(n *Delete) *Delete {
 	out := *n
 	out.With = CloneRefOfWith(n.With)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.TableExprs = CloneTableExprs(n.TableExprs)
+	out.TableExprs = CloneSliceOfTableExpr(n.TableExprs)
 	out.Targets = CloneTableNames(n.Targets)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.Where = CloneRefOfWhere(n.Where)
@@ -3143,7 +3143,7 @@ func CloneRefOfUpdate(n *Update) *Update {
 	out := *n
 	out.With = CloneRefOfWith(n.With)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.TableExprs = CloneTableExprs(n.TableExprs)
+	out.TableExprs = CloneSliceOfTableExpr(n.TableExprs)
 	out.Exprs = CloneUpdateExprs(n.Exprs)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
@@ -4349,6 +4349,18 @@ func CloneSliceOfString(n []string) []string {
 	return res
 }
 
+// CloneSliceOfTableExpr creates a deep clone of the input.
+func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
+	if n == nil {
+		return nil
+	}
+	res := make([]TableExpr, len(n))
+	for i, x := range n {
+		res[i] = CloneTableExpr(x)
+	}
+	return res
+}
+
 // CloneSliceOfRefOfVariable creates a deep clone of the input.
 func CloneSliceOfRefOfVariable(n []*Variable) []*Variable {
 	if n == nil {
@@ -4551,18 +4563,6 @@ func CloneRefOfRootNode(n *RootNode) *RootNode {
 	out := *n
 	out.SQLNode = CloneSQLNode(n.SQLNode)
 	return &out
-}
-
-// CloneSliceOfTableExpr creates a deep clone of the input.
-func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
-	if n == nil {
-		return nil
-	}
-	res := make([]TableExpr, len(n))
-	for i, x := range n {
-		res[i] = CloneTableExpr(x)
-	}
-	return res
 }
 
 // CloneRefOfTableName creates a deep clone of the input.

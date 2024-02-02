@@ -49,7 +49,8 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	}
 
 	// Get the result.
-	colNumber, _, err := c.readComQueryResponse()
+	var packetOk PacketOK
+	colNumber, err := c.readComQueryResponse(&packetOk)
 	if err != nil {
 		return err
 	}

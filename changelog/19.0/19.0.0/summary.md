@@ -6,7 +6,8 @@
   - **[Dropping Support for MySQL 5.7](#drop-support-mysql57)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [VTTablet Flags](#vttablet-flags)
-    - [MySQL binary in vitess/lite Docker image](#mysql-binary-in-lite-image)
+    - [Docker Image vitess/lite](#deprecation-vitess-lite-mysqld)
+    - [Explain Statement Format](#explain-stmt-format)
   - **[Breaking Changes](#breaking-changes)**
      - [ExecuteFetchAsDBA rejects multi-statement SQL](#execute-fetch-as-dba-reject-multi)
   - **[New Stats](#new-stats)**
@@ -18,6 +19,7 @@
     - [Multi Table Delete Support](#multi-table-delete)
     - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
+    - [Explain Statement](#explain-statement)
     - [Partial Multi-shard Commit Warnings](#partial-multi-shard-commit-warnings)
   - **[Vttestserver](#vttestserver)**
     - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
@@ -45,24 +47,47 @@ Vitess will however, continue to support importing from MySQL 5.7 into Vitess ev
 `--vreplication_healthcheck_topology_refresh`, `--vreplication_healthcheck_retry_delay`, and `--vreplication_healthcheck_timeout`.
 - The `--vreplication_tablet_type` flag is now deprecated and ignored.
 
-#### <a id="mysql-binary-in-lite-image"/>MySQL binary in vitess/lite Docker image
+#### <a id="deprecation-vitess-lite-mysqld"/>Docker Image vitess/lite
 
 The `mysqld` binary is now deprecated in the `vitess/lite` Docker image and will be removed in a future release.
+This means that the MySQL/Percona version specific image tags for the `vitess/lite` image are deprecated.
 
-If you are currently using `vitess/lite` as your `mysqld` image in your vitess-operator deployment we invite you to use an official MySQL image such as `mysql:8.0.30`.
+Below is a full list of available tags for `v19.0.0` and their deprecation status:
+
+| Image                           | Deprecated | 
+|---------------------------------|------------|
+| `vitess/lite:v19.0.0`           | NO         |
+| `vitess/lite:v19.0.0-mysql57`   | YES        |
+| `vitess/lite:v19.0.0-mysql80`   | YES        |
+| `vitess/lite:v19.0.0-percona57` | YES        |
+| `vitess/lite:v19.0.0-percona80` | YES        |
+
+If you are currently using `vitess/lite` as your `mysqld` image in your vitess-operator deployment we invite you to use an official MySQL image, such as `mysql:8.0.30`.
 
 Below is an example of a kubernetes yaml file before and after upgrading to an official MySQL image:
 
 ```yaml
-# before
+# before:
+
+# the image used here includes MySQL 8.0.30 and its binaries
+
     mysqld:
-      mysql80Compatible: vitess/lite:19.0.0
+      mysql80Compatible: vitess/lite:v19.0.0-mysql80
 ```
 ```yaml
-# after
+# after:
+
+# if we still want to use MySQL 8.0.30, we now have to use the
+# official MySQL image with the 8.0.30 tag as shown below 
+
     mysqld:
       mysql80Compatible: mysql:8.0.30 # or even mysql:8.0.34 for instance
 ```
+
+#### <a id="explain-stmt-format"/>Explain Statement Format
+
+Explain statement format `vitess` and `vexplain` were deprecated in v16 and removed in v19 version.
+Use [VExplain Statement](https://vitess.io/docs/19.0/user-guides/sql/vexplain/) for understanding Vitess plans.
 
 ### <a id="breaking-changes"/>Breaking Changes
 
@@ -130,6 +155,10 @@ mysql> show vschema keyspaces;
 #### <a id="fk-checks-vitess-aware"/>`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable
 
 When VTGate receives a query to change the `FOREIGN_KEY_CHECKS` value for a session, instead of sending the value down to MySQL, VTGate now keeps track of the value and changes the queries by adding `SET_VAR(FOREIGN_KEY_CHECKS=On/Off)` style query optimizer hints wherever required. 
+
+#### <a id="explain-statement"/>Explain Statement
+
+`Explain` statement can handle routed table queries now. `Explain` is unsupported when the tables involved in the query refers more than one keyspace. Users should use [VExplain Statement](https://vitess.io/docs/19.0/user-guides/sql/vexplain/) in those cases.
 
 #### <a id="partial-multi-shard-commit-warnings"/>Partial Multi-shard Commit Warnings
 

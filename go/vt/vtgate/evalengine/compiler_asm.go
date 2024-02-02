@@ -3286,31 +3286,32 @@ func cmpnum[N interface{ int64 | uint64 | float64 }](a, b N) int {
 	}
 }
 
-func (asm *assembler) Fn_Now(t querypb.Type, format *datetime.Strftime, prec uint8, utc bool) {
+func (asm *assembler) Fn_Now(prec uint8, utc bool) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
-		val := env.vm.arena.newEvalBytesEmpty()
-		val.tt = int16(t)
-		val.bytes = format.Format(env.time(utc), prec)
-		val.col = collationBinary
-		env.vm.stack[env.vm.sp] = val
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalDateTime(env.time(utc), int(prec))
 		env.vm.sp++
 		return 1
-	}, "FN NOW")
+	}, "FN NOW(DATETIME)")
+}
+
+func (asm *assembler) Fn_NowTime(prec uint8, utc bool) {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalTime(env.time(utc).Time, int(prec))
+		env.vm.sp++
+		return 1
+	}, "FN NOW(TIME)")
 }
 
 func (asm *assembler) Fn_Sysdate(prec uint8) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
-		val := env.vm.arena.newEvalBytesEmpty()
-		val.tt = int16(sqltypes.Datetime)
 		now := SystemTime()
 		if tz := env.currentTimezone(); tz != nil {
 			now = now.In(tz)
 		}
-		val.bytes = datetime.NewDateTimeFromStd(now).Format(prec)
-		val.col = collationBinary
-		env.vm.stack[env.vm.sp] = val
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalDateTime(datetime.NewDateTimeFromStd(now), int(prec))
 		env.vm.sp++
 		return 1
 	}, "FN SYSDATE")
@@ -3319,11 +3320,7 @@ func (asm *assembler) Fn_Sysdate(prec uint8) {
 func (asm *assembler) Fn_Curdate() {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
-		val := env.vm.arena.newEvalBytesEmpty()
-		val.tt = int16(sqltypes.Date)
-		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(false), 0)
-		val.col = collationBinary
-		env.vm.stack[env.vm.sp] = val
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalDate(env.time(false).Date)
 		env.vm.sp++
 		return 1
 	}, "FN CURDATE")
@@ -3332,11 +3329,7 @@ func (asm *assembler) Fn_Curdate() {
 func (asm *assembler) Fn_UtcDate() {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
-		val := env.vm.arena.newEvalBytesEmpty()
-		val.tt = int16(sqltypes.Date)
-		val.bytes = datetime.Date_YYYY_MM_DD.Format(env.time(true), 0)
-		val.col = collationBinary
-		env.vm.stack[env.vm.sp] = val
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalDate(env.time(true).Date)
 		env.vm.sp++
 		return 1
 	}, "FN UTC_DATE")
@@ -3793,6 +3786,36 @@ func (asm *assembler) Fn_LAST_DAY() {
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(d)
 		return 1
 	}, "FN LAST_DAY DATETIME(SP-1)")
+}
+
+func (asm *assembler) Fn_TO_DAYS() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+		if arg.dt.Date.IsZero() {
+			env.vm.stack[env.vm.sp-1] = nil
+		} else {
+			numDays := datetime.MysqlDayNumber(arg.dt.Date.Year(), arg.dt.Date.Month(), arg.dt.Date.Day())
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(numDays))
+		}
+		return 1
+	}, "FN TO_DAYS DATE(SP-1)")
+}
+
+func (asm *assembler) Fn_FROM_DAYS() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		d := datetime.DateFromDayNumber(int(arg.i))
+		if d.Year() > 9999 {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(d)
+		return 1
+	}, "FN FROM_DAYS INT64(SP-1)")
 }
 
 func (asm *assembler) Fn_QUARTER() {

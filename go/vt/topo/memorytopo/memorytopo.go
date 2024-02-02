@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 
@@ -73,6 +74,9 @@ type Factory struct {
 	// listErr is used for testing purposed to fake errors from
 	// calls to List.
 	listErr error
+	// callstats allows us to keep track of how many topo.Conn calls
+	// we make (Create, Get, Update, Delete, List, ListDir, etc).
+	callstats *stats.CountersWithMultiLabels
 }
 
 // HasGlobalReadOnlyCell is part of the topo.Factory interface.
@@ -106,6 +110,10 @@ func (f *Factory) SetError(err error) {
 			node.PropagateWatchError(err)
 		}
 	}
+}
+
+func (f *Factory) GetCallStats() *stats.CountersWithMultiLabels {
+	return f.callstats
 }
 
 // Lock blocks all requests to the topo and is exposed to allow tests to
@@ -144,6 +152,7 @@ func (c *Conn) dial(ctx context.Context) error {
 
 // Close is part of the topo.Conn interface.
 func (c *Conn) Close() {
+	c.factory.callstats.Add([]string{"Close"}, 1)
 	c.closed = true
 }
 
@@ -240,6 +249,7 @@ func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *F
 	f := &Factory{
 		cells:      make(map[string]*node),
 		generation: uint64(rand.Int63n(1 << 60)),
+		callstats:  stats.NewCountersWithMultiLabels("", "", []string{"Call"}),
 	}
 	f.cells[topo.GlobalCell] = f.newDirectory(topo.GlobalCell, nil)
 

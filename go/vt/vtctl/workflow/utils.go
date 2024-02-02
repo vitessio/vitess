@@ -327,7 +327,7 @@ func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error)
 //
 // It returns ErrNoStreams if there are no targets found for the workflow.
 func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
-	targetShards, err := ts.GetShardNames(ctx, targetKeyspace)
+	targetShards, err := ts.FindAllShardsInKeyspace(ctx, targetKeyspace, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -345,18 +345,13 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 	// stream. For example, if we're splitting -80 to [-40,40-80], only those
 	// two target shards will have vreplication streams, and the other shards in
 	// the target keyspace will not.
-	for _, targetShard := range targetShards {
-		si, err := ts.GetShard(ctx, targetKeyspace, targetShard)
-		if err != nil {
-			return nil, err
-		}
-
-		if si.PrimaryAlias == nil {
+	for targetShardName, targetShard := range targetShards {
+		if targetShard.PrimaryAlias == nil {
 			// This can happen if bad inputs are given.
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "shard %v/%v doesn't have a primary set", targetKeyspace, targetShard)
 		}
 
-		primary, err := ts.GetTablet(ctx, si.PrimaryAlias)
+		primary, err := ts.GetTablet(ctx, targetShard.PrimaryAlias)
 		if err != nil {
 			return nil, err
 		}
@@ -373,7 +368,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		}
 
 		target := &MigrationTarget{
-			si:      si,
+			si:      targetShard,
 			primary: primary,
 			Sources: make(map[int32]*binlogdatapb.BinlogSource),
 		}
@@ -390,7 +385,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			target.Sources[stream.Id] = stream.Bls
 		}
 
-		targets[targetShard] = target
+		targets[targetShardName] = target
 	}
 
 	if len(targets) == 0 {

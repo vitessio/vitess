@@ -111,6 +111,14 @@ type (
 		CallExpr
 	}
 
+	builtinToDays struct {
+		CallExpr
+	}
+
+	builtinFromDays struct {
+		CallExpr
+	}
+
 	builtinQuarter struct {
 		CallExpr
 	}
@@ -173,6 +181,8 @@ var _ IR = (*builtinMinute)(nil)
 var _ IR = (*builtinMonth)(nil)
 var _ IR = (*builtinMonthName)(nil)
 var _ IR = (*builtinLastDay)(nil)
+var _ IR = (*builtinToDays)(nil)
+var _ IR = (*builtinFromDays)(nil)
 var _ IR = (*builtinQuarter)(nil)
 var _ IR = (*builtinSecond)(nil)
 var _ IR = (*builtinTime)(nil)
@@ -186,26 +196,22 @@ var _ IR = (*builtinYearWeek)(nil)
 func (call *builtinNow) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(call.utc)
 	if call.onlyTime {
-		buf := datetime.Time_hh_mm_ss.Format(now, call.prec)
-		return newEvalRaw(sqltypes.Time, buf, collationBinary), nil
+		return newEvalTime(now.Time, int(call.prec)), nil
 	} else {
-		buf := datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(now, call.prec)
-		return newEvalRaw(sqltypes.Datetime, buf, collationBinary), nil
+		return newEvalDateTime(now, int(call.prec), false), nil
 	}
 }
 
 func (call *builtinNow) compile(c *compiler) (ctype, error) {
-	var format *datetime.Strftime
 	var t sqltypes.Type
 
 	if call.onlyTime {
-		format = datetime.Time_hh_mm_ss
 		t = sqltypes.Time
+		c.asm.Fn_NowTime(call.prec, call.utc)
 	} else {
-		format = datetime.DateTime_YYYY_MM_DD_hh_mm_ss
 		t = sqltypes.Datetime
+		c.asm.Fn_Now(call.prec, call.utc)
 	}
-	c.asm.Fn_Now(t, format, call.prec, call.utc)
 	return ctype{Type: t, Col: collationBinary}, nil
 }
 
@@ -218,7 +224,7 @@ func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
 	if tz := env.currentTimezone(); tz != nil {
 		now = now.In(tz)
 	}
-	return newEvalRaw(sqltypes.Datetime, datetime.NewDateTimeFromStd(now).Format(call.prec), collationBinary), nil
+	return newEvalDateTime(datetime.NewDateTimeFromStd(now), int(call.prec), false), nil
 }
 
 func (call *builtinSysdate) compile(c *compiler) (ctype, error) {
@@ -232,7 +238,7 @@ func (call *builtinSysdate) constant() bool {
 
 func (call *builtinCurdate) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(false)
-	return newEvalRaw(sqltypes.Date, datetime.Date_YYYY_MM_DD.Format(now, 0), collationBinary), nil
+	return newEvalDate(now.Date, false), nil
 }
 
 func (*builtinCurdate) compile(c *compiler) (ctype, error) {
@@ -246,7 +252,7 @@ func (call *builtinCurdate) constant() bool {
 
 func (call *builtinUtcDate) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(true)
-	return newEvalRaw(sqltypes.Date, datetime.Date_YYYY_MM_DD.Format(now, 0), collationBinary), nil
+	return newEvalDate(now.Date, false), nil
 }
 
 func (*builtinUtcDate) compile(c *compiler) (ctype, error) {
@@ -1245,6 +1251,78 @@ func (call *builtinLastDay) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xD(1, c.sqlmode.AllowZeroDate())
 	}
 	c.asm.Fn_LAST_DAY()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (b *builtinToDays) eval(env *ExpressionEnv) (eval, error) {
+	date, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if date == nil {
+		return nil, nil
+	}
+	dt := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
+	if dt == nil || dt.isZero() {
+		return nil, nil
+	}
+
+	numDays := datetime.MysqlDayNumber(dt.dt.Date.Year(), dt.dt.Date.Month(), dt.dt.Date.Day())
+	return newEvalInt64(int64(numDays)), nil
+}
+
+func (call *builtinToDays) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime:
+	default:
+		c.asm.Convert_xD(1, true)
+	}
+	c.asm.Fn_TO_DAYS()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (b *builtinFromDays) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := b.arg1(env)
+	if arg == nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	d := datetime.DateFromDayNumber(int(evalToInt64(arg).i))
+
+	// mysql returns NULL if year is greater than 9999
+	if d.Year() > 9999 {
+		return nil, nil
+	}
+	return newEvalDate(d, true), nil
+}
+
+func (call *builtinFromDays) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Int64:
+	default:
+		c.asm.Convert_xi(1)
+	}
+
+	c.asm.Fn_FROM_DAYS()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
 }
