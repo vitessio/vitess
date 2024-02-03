@@ -61,10 +61,9 @@ func commandMirrorTraffic(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowMirrorTrafficRequest{
-		Keyspace:    BaseOptions.TargetKeyspace,
-		Workflow:    BaseOptions.Workflow,
-		TabletTypes: MirrorTrafficOptions.TabletTypes,
-		Percent:     MirrorTrafficOptions.Percent,
+		Keyspace: BaseOptions.TargetKeyspace,
+		Workflow: BaseOptions.Workflow,
+		Percent:  MirrorTrafficOptions.Percent,
 	}
 	resp, err := GetClient().WorkflowMirrorTraffic(GetCommandCtx(), req)
 	if err != nil {

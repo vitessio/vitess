@@ -81,12 +81,15 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 		return nil, vterrors.VT14004(ks)
 	}
 
-	return newPlanResult(&engine.Send{
-		Keyspace:          keyspace,
-		TargetDestination: destination,
-		Query:             sqlparser.String(explain),
-		SingleShardOnly:   true,
-	}, singleTable(keyspace.Name, explain.Table.Name.String())), nil
+	return newPlanResult(
+		&engine.Send{
+			Keyspace:          keyspace,
+			TargetDestination: destination,
+			Query:             sqlparser.String(explain),
+			SingleShardOnly:   true,
+		},
+		sqlparser.NewTableNameWithQualifier(explain.Table.Name.String(), keyspace.Name),
+	), nil
 }
 
 func buildVExplainVtgatePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -53,13 +54,13 @@ type (
 
 	planResult struct {
 		primitive engine.Primitive
-		tables    []string
+		tables    sqlparser.TableNames
 	}
 
 	stmtPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (*planResult, error)
 )
 
-func newPlanResult(prim engine.Primitive, tablesUsed ...string) *planResult {
+func newPlanResult(prim engine.Primitive, tablesUsed ...sqlparser.TableName) *planResult {
 	return &planResult{primitive: prim, tables: tablesUsed}
 }
 
@@ -104,7 +105,7 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 	}
 
 	var primitive engine.Primitive
-	var tablesUsed []string
+	var tablesUsed []sqlparser.TableName
 	if planResult != nil {
 		primitive = planResult.primitive
 		tablesUsed = planResult.tables
@@ -117,6 +118,71 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 		TablesUsed:   tablesUsed,
 	}
 	return plan, nil
+}
+
+func buildMirrorPlan(ctx context.Context, from *planResult, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	// Collect keyspaces and validate tables.
+	fromKeyspaces := make(map[string]any)
+	toKeyspaces := make(map[string]float32)
+
+	for _, table := range from.tables {
+		// Record the from keyspace.
+		fromKeyspace := table.Qualifier.String()
+		fromKeyspaces[fromKeyspace] = true
+
+		// Find the mirror rule for the from keyspace.
+		mirrorRule, err := vschema.FindMirrorRule(fromKeyspace)
+		if err != nil {
+			return nil, err
+		}
+		if mirrorRule == nil {
+			return nil, nil
+		}
+
+		// Record the to keyspace.
+		toKeyspaces[mirrorRule.ToKeyspace] = mirrorRule.Percent
+
+		// Validate that the to table exists in the vschema (always true if the
+		// keyspace is unsharded).
+		table, err := vschema.GetVSchema().FindTable(mirrorRule.ToKeyspace, table.Name.String())
+		if err != nil {
+			return nil, err
+		}
+		if table == nil {
+			return nil, nil
+		}
+	}
+
+	// Nothing to mirror if we can't identify any to keyspaces.
+	if len(toKeyspaces) == 0 {
+		return nil, nil
+	}
+
+	// Use the smallest mirror percent.
+	var i int
+	var percent float32
+	for _, p := range toKeyspaces {
+		if i == 0 || p < percent {
+			percent = p
+		}
+		i++
+	}
+
+	mirrorVSchema := plancontext.ForMirroring(vschema)
+	target, err := createInstructionFor(ctx, query, stmt, reservedVars, mirrorVSchema, enableOnlineDDL, enableDirectDDL)
+	if err != nil {
+		return nil, err
+	}
+
+	target.primitive = engine.NewMirror(
+		from.primitive,
+		engine.NewPercentMirrorTarget(percent, target.primitive),
+	)
+	tables := append(from.tables, target.tables...)
+	operators.SortTableNames(tables)
+	target.tables = tables
+
+	return target, nil
 }
 
 func getConfiguredPlanner(vschema plancontext.VSchema, stmt sqlparser.Statement, query string) (stmtPlanner, error) {
@@ -155,14 +221,42 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 	return f(stmt, reservedVars, vschema)
 }
 
+func buildMirroredRoutePlan(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	// Building the query changes the statement. Clone the statement in case we
+	// need to mirror it.
+	var mirrorStmt sqlparser.Statement
+
+	// TODO(maxeng): find a more precise way to skip mirroring work when
+	// statement cannot be mirrored for one reason or another.
+	if vschema.HasMirrorRules() {
+		mirrorStmt = sqlparser.CloneStatement(stmt)
+	}
+
+	configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(plan.tables) > 0 && vschema.HasMirrorRules() {
+		mirrorPlan, err := buildMirrorPlan(ctx, plan, query, mirrorStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		if err != nil {
+			// TODO(maxeng): logs? metrics?
+		} else if mirrorPlan != nil {
+			plan = mirrorPlan
+		}
+	}
+
+	return plan, nil
+}
+
 func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
-		if err != nil {
-			return nil, err
-		}
-		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
+		return buildMirroredRoutePlan(ctx, query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.Insert:
 		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
 		if err != nil {
@@ -285,7 +379,7 @@ func buildAnalyzePlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsche
 		TargetDestination: dest,
 		Query:             sqlparser.String(analyzeStmt),
 	}
-	return newPlanResult(prim, sqlparser.String(analyzeStmt.Table)), nil
+	return newPlanResult(prim, analyzeStmt.Table), nil
 }
 
 func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
@@ -357,7 +451,7 @@ func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema plancontext.VSche
 	return newPlanResult(&engine.AlterVSchema{
 		Keyspace:        keyspace,
 		AlterVschemaDDL: stmt,
-	}, singleTable(keyspace.Name, stmt.Table.Name.String())), nil
+	}, sqlparser.NewTableNameWithQualifier(stmt.Table.Name.String(), keyspace.Name)), nil
 }
 
 func buildFlushPlan(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
@@ -417,7 +511,7 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 		if tbl == nil {
 			return nil, vindexes.NotFoundError{TableName: tab.Name.String()}
 		}
-		tc.addTable(tbl.Keyspace.Name, tbl.Name.String())
+		tc.addTable(sqlparser.NewTableNameWithQualifier(tbl.Name.String(), tbl.Keyspace.Name))
 		ksTab = tbl.Keyspace
 		stmt.TableNames[i] = sqlparser.TableName{
 			Name: tbl.Name,
@@ -461,28 +555,23 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 }
 
 type tableCollector struct {
-	tables map[string]any
+	tables map[sqlparser.TableName]any
 }
 
-func (tc *tableCollector) addTable(ks, tbl string) {
+func (tc *tableCollector) addTable(t sqlparser.TableName) {
 	if tc.tables == nil {
-		tc.tables = map[string]any{}
+		tc.tables = map[sqlparser.TableName]any{}
 	}
-	tc.tables[fmt.Sprintf("%s.%s", ks, tbl)] = nil
+	tc.tables[t] = nil
 }
 
-func (tc *tableCollector) addASTTable(ks string, tbl sqlparser.TableName) {
-	tc.addTable(ks, tbl.Name.String())
-}
-
-func (tc *tableCollector) getTables() []string {
-	tableNames := make([]string, 0, len(tc.tables))
-	for tbl := range tc.tables {
-		tableNames = append(tableNames, tbl)
+func (tc *tableCollector) getTables() []sqlparser.TableName {
+	tables := make([]sqlparser.TableName, 0, len(tc.tables))
+	for t := range tc.tables {
+		tables = append(tables, t)
 	}
-
-	sort.Strings(tableNames)
-	return tableNames
+	operators.SortTableNames(tables)
+	return tables
 }
 
 func newFlushStmt(stmt *sqlparser.Flush, tables sqlparser.TableNames) *sqlparser.Flush {

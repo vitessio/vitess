@@ -47,6 +47,15 @@ func (client *gRPCVtctldClient) AddCellsAlias(ctx context.Context, in *vtctldata
 	return client.c.AddCellsAlias(ctx, in, opts...)
 }
 
+// ApplyMirrorRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ApplyMirrorRules(ctx context.Context, in *vtctldatapb.ApplyMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyMirrorRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ApplyMirrorRules(ctx, in, opts...)
+}
+
 // ApplyRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldatapb.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
 	if client.c == nil {
@@ -324,6 +333,15 @@ func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatap
 	}
 
 	return client.c.GetKeyspaces(ctx, in, opts...)
+}
+
+// GetMirrorRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetMirrorRules(ctx context.Context, in *vtctldatapb.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetMirrorRulesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetMirrorRules(ctx, in, opts...)
 }
 
 // GetPermissions is part of the vtctlservicepb.VtctldClient interface.

@@ -39,6 +39,11 @@ func (client *localVtctldClient) AddCellsAlias(ctx context.Context, in *vtctldat
 	return client.s.AddCellsAlias(ctx, in)
 }
 
+// ApplyMirrorRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ApplyMirrorRules(ctx context.Context, in *vtctldatapb.ApplyMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyMirrorRulesResponse, error) {
+	return client.s.ApplyMirrorRules(ctx, in)
+}
+
 // ApplyRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldatapb.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyRoutingRulesResponse, error) {
 	return client.s.ApplyRoutingRules(ctx, in)
@@ -284,6 +289,11 @@ func (client *localVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatap
 // GetKeyspaces is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatapb.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspacesResponse, error) {
 	return client.s.GetKeyspaces(ctx, in)
+}
+
+// GetMirrorRules is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetMirrorRules(ctx context.Context, in *vtctldatapb.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetMirrorRulesResponse, error) {
+	return client.s.GetMirrorRules(ctx, in)
 }
 
 // GetPermissions is part of the vtctlservicepb.VtctldClient interface.

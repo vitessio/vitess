@@ -33,20 +33,8 @@ message RoutingRules {
 
 // RoutingRule specifies a routing rule.
 message RoutingRule {
-  enum Action {
-    ACTION_UNSPECIFIED = 0;
-    ACTION_REDIRECT = 1;
-    ACTION_MIRROR = 2;
-  }
-
-  message Mirror {
-    float percent = 1;
-  }
-
   string from_table = 1;
   repeated string to_tables = 2;
-  optional Action action = 3;
-  optional Mirror mirror = 4;
 }
 
 // Keyspace is the vschema for a keyspace.
@@ -154,6 +142,7 @@ message SrvVSchema {
   map<string, Keyspace> keyspaces = 1;
   RoutingRules routing_rules = 2; // table routing rules
   ShardRoutingRules shard_routing_rules = 3;
+  MirrorRules mirror_rules = 4; // mirror rules
 }
 
 // ShardRoutingRules specify the shard routing rules for the VSchema.
@@ -166,4 +155,19 @@ message ShardRoutingRule {
   string from_keyspace = 1;
   string to_keyspace = 2;
   string shard = 3;
+}
+
+// MirrorRules specify the high level mirror rules for the VSchema.
+message MirrorRules {
+  // rules should ideally be a map. However protos dont't allow
+  // repeated fields as elements of a map. So, we use a list
+  // instead.
+  repeated MirrorRule rules = 1;
+}
+
+// MirrorRule specifies a mirror rule.
+message MirrorRule {
+  string from_keyspace = 1;
+  string to_keyspace = 2;
+  float percent = 3;
 }

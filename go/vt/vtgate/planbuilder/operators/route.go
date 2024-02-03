@@ -109,6 +109,11 @@ type (
 	}
 )
 
+var (
+	_ Operator  = (*Route)(nil)
+	_ TableUser = (*Route)(nil)
+)
+
 // UpdateRoutingLogic first checks if we are dealing with a predicate that
 func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r Routing) Routing {
 	ks := r.Keyspace()
@@ -383,43 +388,7 @@ func createRoute(
 		true, /*planReferences*/
 	)
 
-	mirrorTargets := findMirrorTablesAndCreateTargetRoutes(ctx, queryTable, solves)
-	if len(mirrorTargets) > 0 {
-		operator = &Mirror{
-			Operator: operator,
-			Targets:  mirrorTargets,
-		}
-	}
-
 	return operator
-}
-
-func findMirrorTablesAndCreateTargetRoutes(
-	ctx *plancontext.PlanningContext,
-	queryTable *QueryTable,
-	solves semantics.TableSet,
-) []MirrorTarget {
-	mirrorTables, _, tabletType, target, err := ctx.VSchema.FindMirrorTables(queryTable.Table)
-	if err != nil {
-		panic(err)
-	}
-
-	mirrorTargets := make([]MirrorTarget, 0, len(mirrorTables))
-	for vschemaTable, mirror := range mirrorTables {
-		mirrorTargets = append(mirrorTargets, &PercentMirrorTarget{
-			Percent: mirror.Percent,
-			Operator: createRouteFromVSchemaTable(
-				ctx,
-				queryTable,
-				vschemaTable,
-				solves,
-				true,
-				createTargetedRouting(ctx, target, tabletType, vschemaTable),
-			),
-		})
-	}
-
-	return mirrorTargets
 }
 
 // findTableOrVindexAndCreateRoute consults the VSchema to find a suitable
@@ -736,8 +705,8 @@ func (r *Route) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 
 // TablesUsed returns tables used by MergedWith routes, which are not included
 // in Inputs() and thus not a part of the operator tree
-func (r *Route) TablesUsed() []string {
-	addString, collect := collectSortedUniqueStrings()
+func (r *Route) TablesUsed() []sqlparser.TableName {
+	addString, collect := collectSortedUniqueTableNames()
 	for _, mw := range r.MergedWith {
 		for _, u := range TablesUsed(mw) {
 			addString(u)

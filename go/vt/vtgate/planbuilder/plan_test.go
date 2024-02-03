@@ -97,7 +97,6 @@ func TestPlan(t *testing.T) {
 	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "misc_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "cte_cases.json", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "mirror_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.
@@ -524,6 +523,19 @@ func TestOtherPlanningFromFile(t *testing.T) {
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "other_read_cases.json", testOutputTempDir, vschema, false)
 	testFile(t, "other_admin_cases.json", testOutputTempDir, vschema, false)
+}
+
+func TestMirrorPlanning(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(t, "vschemas/mirror_schema.json", true),
+		TabletType_:   topodatapb.TabletType_PRIMARY,
+		SysVarEnabled: true,
+		TestBuilder:   TestBuilder,
+	}
+	testOutputTempDir := makeTestOutput(t)
+
+	testFile(t, "mirror_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSchema {

@@ -57,11 +57,9 @@ func TestMirror(t *testing.T) {
 
 	mirror := &Mirror{
 		Primitive: primitive,
-		Targets: []MirrorTarget{
-			&PercentMirrorTarget{
-				Percent:   100,
-				Primitive: mirrorPrimitive1,
-			},
+		Target: &PercentMirrorTarget{
+			Percent:   100,
+			Primitive: mirrorPrimitive1,
 		},
 	}
 

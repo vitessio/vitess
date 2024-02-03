@@ -234,7 +234,8 @@ func TestVSchemaUpdate(t *testing.T) {
 			},
 		},
 		expected: &vindexes.VSchema{
-			RoutingRules: map[string]*vindexes.RoutingRulesByAction{},
+			MirrorRules:  map[string]*vindexes.MirrorRule{},
+			RoutingRules: map[string]*vindexes.RoutingRule{},
 			Keyspaces: map[string]*vindexes.KeyspaceSchema{
 				"ks": {
 					Keyspace:       ks,
@@ -457,7 +458,8 @@ func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.Table) *
 
 func makeTestEmptyVSchema() *vindexes.VSchema {
 	return &vindexes.VSchema{
-		RoutingRules: map[string]*vindexes.RoutingRulesByAction{},
+		MirrorRules:  map[string]*vindexes.MirrorRule{},
+		RoutingRules: map[string]*vindexes.RoutingRule{},
 		Keyspaces:    map[string]*vindexes.KeyspaceSchema{},
 	}
 }

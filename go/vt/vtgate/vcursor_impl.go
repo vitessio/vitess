@@ -218,6 +218,16 @@ func (vc *vcursorImpl) SQLParser() *sqlparser.Parser {
 	return vc.executor.sqlparser()
 }
 
+// FindMirrorRule returns the mirror rule for the requested keyspace.
+func (vc *vcursorImpl) FindMirrorRule(keyspace string) (*vindexes.MirrorRule, error) {
+	return vc.vschema.FindMirrorRule(keyspace)
+}
+
+// HasMirrorRules returns true if the vschema has any mirror rules.
+func (vc *vcursorImpl) HasMirrorRules() bool {
+	return vc.vschema.HasMirrorRules()
+}
+
 func (vc *vcursorImpl) TimeZone() *time.Location {
 	return vc.safeSession.TimeZone()
 }
@@ -280,22 +290,6 @@ func (vc *vcursorImpl) FindView(name sqlparser.TableName) sqlparser.SelectStatem
 		ks = vc.keyspace
 	}
 	return vc.vschema.FindView(ks, name.Name.String())
-}
-
-// FindMirrorTables finds the tables which mirror the specified name.
-func (vc *vcursorImpl) FindMirrorTables(name sqlparser.TableName) (map[*vindexes.Table]*vindexes.Mirror, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
-	if err != nil {
-		return nil, "", destTabletType, nil, err
-	}
-	if destKeyspace == "" {
-		destKeyspace = vc.keyspace
-	}
-	tables, err := vc.vschema.FindMirroredTables(destKeyspace, name.Name.String(), destTabletType)
-	if err != nil {
-		return nil, "", destTabletType, nil, err
-	}
-	return tables, destKeyspace, destTabletType, dest, err
 }
 
 func (vc *vcursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Table, error) {

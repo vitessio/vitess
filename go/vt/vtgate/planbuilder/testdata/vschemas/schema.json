@@ -44,30 +44,6 @@
       {
         "from_table": "user.rerouted_ref",
         "to_tables": ["user.ref"]
-      },
-      {
-        "from_table": "user.mirror",
-        "to_tables": ["main.mirror"],
-        "action": "ACTION_MIRROR",
-        "mirror": {
-          "percent": 50.0
-        }
-      },
-      {
-        "from_table": "user.mirror_fragment",
-        "to_tables": ["main.mirror_fragment"],
-        "action": "ACTION_MIRROR",
-        "mirror": {
-          "percent": 50.0
-        }
-      },
-      {
-        "from_table": "main.another_mirror",
-        "to_tables": ["user.another_mirror"],
-        "action": "ACTION_MIRROR",
-        "mirror": {
-          "percent": 50.0
-        }
       }
     ]
   },

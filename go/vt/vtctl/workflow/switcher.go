@@ -150,6 +150,6 @@ func (r *switcher) initializeTargetSequences(ctx context.Context, sequencesByBac
 	return r.ts.initializeTargetSequences(ctx, sequencesByBackingTable)
 }
 
-func (r *switcher) mirrorTableTraffic(ctx context.Context, percent float32, servedTypes []topodatapb.TabletType) error {
-	return r.ts.mirrorTableTraffic(ctx, percent, servedTypes)
+func (r *switcher) mirrorTableTraffic(ctx context.Context, percent float32) error {
+	return r.ts.mirrorTableTraffic(ctx, percent)
 }

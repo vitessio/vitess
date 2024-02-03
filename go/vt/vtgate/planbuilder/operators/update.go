@@ -60,6 +60,11 @@ type (
 	}
 )
 
+var (
+	_ Operator  = (*Update)(nil)
+	_ TableUser = (*Update)(nil)
+)
+
 func (se SetExpr) String() string {
 	return fmt.Sprintf("%s = %s", sqlparser.String(se.Name), sqlparser.String(se.Expr.EvalExpr))
 }
@@ -81,9 +86,9 @@ func (u *Update) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func (u *Update) TablesUsed() []string {
+func (u *Update) TablesUsed() []sqlparser.TableName {
 	if u.VTable != nil {
-		return SingleQualifiedIdentifier(u.VTable.Keyspace, u.VTable.Name)
+		return SingleTableName(u.VTable.Keyspace, u.VTable.Name)
 	}
 	return nil
 }

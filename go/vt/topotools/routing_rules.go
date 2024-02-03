@@ -35,12 +35,6 @@ func GetRoutingRulesMap(rules *vschemapb.RoutingRules) map[string][]string {
 	}
 	rulesMap := make(map[string][]string, len(rules.Rules))
 	for _, rr := range rules.Rules {
-		// TODO(maxeng): temporary hack, need to refactor routing rules usage
-		// to take this into account. For now, skip mirror rules when getting
-		// routing rules.
-		if action := rr.Action; action != nil && *action == vschemapb.RoutingRule_ACTION_MIRROR {
-			continue
-		}
 		rulesMap[rr.FromTable] = rr.ToTables
 	}
 	return rulesMap
@@ -64,30 +58,13 @@ func GetRoutingRules(ctx context.Context, ts *topo.Server) (map[string][]string,
 func SaveRoutingRules(ctx context.Context, ts *topo.Server, rules map[string][]string) error {
 	log.Infof("Saving routing rules %v\n", rules)
 
-	rrs, err := ts.GetRoutingRules(ctx)
-	if err != nil {
-		return err
-	}
-
-	// TODO(maxeng): temporary hack; need to properly refactor routing rule
-	// usage in a performant way to take mirror rules into account.
-	newRules := make([]*vschemapb.RoutingRule, 0)
-	for _, oldRule := range rrs.Rules {
-		// Keep mirror rules.
-		if action := oldRule.Action; action != nil && *action != vschemapb.RoutingRule_ACTION_MIRROR {
-			newRules = append(newRules, oldRule)
-		}
-	}
-
-	// Add new rules.
+	rrs := &vschemapb.RoutingRules{Rules: make([]*vschemapb.RoutingRule, 0, len(rules))}
 	for from, to := range rules {
-		newRules = append(newRules, &vschemapb.RoutingRule{
+		rrs.Rules = append(rrs.Rules, &vschemapb.RoutingRule{
 			FromTable: from,
 			ToTables:  to,
 		})
 	}
-
-	rrs.Rules = newRules
 
 	return ts.SaveRoutingRules(ctx, rrs)
 }

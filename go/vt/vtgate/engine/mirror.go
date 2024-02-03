@@ -31,7 +31,7 @@ import (
 type (
 	Mirror struct {
 		Primitive Primitive
-		Targets   []MirrorTarget
+		Target    MirrorTarget
 	}
 
 	MirrorTarget interface {
@@ -52,11 +52,13 @@ var (
 )
 
 // NewMirror creates a Mirror.
-func NewMirror(primitive Primitive, targets []MirrorTarget) *Mirror {
-	return &Mirror{
-		primitive,
-		targets,
-	}
+func NewMirror(primitive Primitive, target MirrorTarget) *Mirror {
+	return &Mirror{primitive, target}
+}
+
+// NewPercentMirrorTarget creates a percentage-based Mirror target.
+func NewPercentMirrorTarget(percent float32, primitive Primitive) *PercentMirrorTarget {
+	return &PercentMirrorTarget{percent, primitive}
 }
 
 func (m *Mirror) RouteType() string {
@@ -80,40 +82,30 @@ func (m *Mirror) NeedsTransaction() bool {
 }
 
 func (m *Mirror) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	var wg sync.WaitGroup
-	defer wg.Wait()
-
-	for _, target := range m.Targets {
-		if !target.Accept() {
-			continue
-		}
-
+	if m.Target.Accept() {
+		var wg sync.WaitGroup
+		defer wg.Wait()
 		wg.Add(1)
 		go func(target Primitive, vcursor VCursor) {
 			defer wg.Done()
 			_, _ = target.TryExecute(ctx, vcursor, bindVars, wantfields)
-		}(target, vcursor.CloneForMirroring(ctx))
+		}(m.Target, vcursor.CloneForMirroring(ctx))
 	}
 
 	return m.Primitive.TryExecute(ctx, vcursor, bindVars, wantfields)
 }
 
 func (m *Mirror) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	var wg sync.WaitGroup
-	defer wg.Wait()
-
-	for _, target := range m.Targets {
-		if !target.Accept() {
-			continue
-		}
-
+	if m.Target.Accept() {
+		var wg sync.WaitGroup
+		defer wg.Wait()
 		wg.Add(1)
 		go func(target Primitive, vcursor VCursor) {
 			defer wg.Done()
 			_ = target.TryStreamExecute(ctx, vcursor, bindVars, wantfields, func(_ *sqltypes.Result) error {
 				return nil
 			})
-		}(target, vcursor.CloneForMirroring(ctx))
+		}(m.Target, vcursor.CloneForMirroring(ctx))
 	}
 
 	return m.Primitive.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
@@ -122,11 +114,9 @@ func (m *Mirror) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars
 // Inputs is a slice containing the inputs to this Primitive.
 // The returned map has additional information about the inputs, that is used in the description.
 func (m *Mirror) Inputs() ([]Primitive, []map[string]any) {
-	inputs := make([]Primitive, 1+len(m.Targets))
+	inputs := make([]Primitive, 2)
 	inputs[0] = m.Primitive
-	for i, target := range m.Targets {
-		inputs[i+1] = target
-	}
+	inputs[1] = m.Target
 	return inputs, nil
 }
 

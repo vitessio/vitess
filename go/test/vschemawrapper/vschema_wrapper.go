@@ -222,18 +222,6 @@ func (vw *VSchemaWrapper) Destination() key.Destination {
 	return vw.Dest
 }
 
-func (vw *VSchemaWrapper) FindMirrorTables(tab sqlparser.TableName) (map[*vindexes.Table]*vindexes.Mirror, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
-	if err != nil {
-		return nil, destKeyspace, destTabletType, destTarget, err
-	}
-	tables, err := vw.V.FindMirroredTables(destKeyspace, tab.Name.String(), destTabletType)
-	if err != nil {
-		return nil, destKeyspace, destTabletType, destTarget, err
-	}
-	return tables, destKeyspace, destTabletType, destTarget, nil
-}
-
 func (vw *VSchemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
@@ -351,4 +339,12 @@ func (vw *VSchemaWrapper) FindRoutedShard(keyspace, shard string) (string, error
 
 func (vw *VSchemaWrapper) IsViewsEnabled() bool {
 	return vw.EnableViews
+}
+
+func (vw *VSchemaWrapper) FindMirrorRule(fromKeyspace string) (*vindexes.MirrorRule, error) {
+	return vw.V.FindMirrorRule(fromKeyspace)
+}
+
+func (vw *VSchemaWrapper) HasMirrorRules() bool {
+	return vw.V.HasMirrorRules()
 }

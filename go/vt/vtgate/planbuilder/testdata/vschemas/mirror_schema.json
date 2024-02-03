@@ -1,0 +1,52 @@
+{
+  "mirror_rules": {
+    "rules": [
+      {
+        "from_keyspace": "unsharded_src1",
+        "to_keyspace": "unsharded_dst1",
+        "percent": 50.0
+      },
+      {
+        "from_keyspace": "unsharded_src2",
+        "to_keyspace": "sharded_dst2",
+        "percent": 50.0
+      }
+    ]
+  },
+  "keyspaces": {
+    "main": {
+      "sharded": false,
+      "tables": {}
+    },
+    "unsharded_src1": {
+      "sharded": false,
+      "tables": {}
+    },
+    "unsharded_src2": {
+      "sharded": false,
+      "tables": {}
+    },
+    "unsharded_dst1": {
+      "sharded": false,
+      "tables": {}
+    },
+    "sharded_dst2": {
+      "sharded": true,
+      "vindexes": {
+        "xxhash": {
+          "type": "xxhash"
+        }
+      },
+      "tables": {
+        "t1": {
+          "columnVindexes": [
+            {
+              "column": "id",
+              "name": "xxhash"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

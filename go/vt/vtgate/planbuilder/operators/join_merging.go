@@ -18,65 +18,11 @@ package operators
 
 import (
 	"fmt"
-	"math"
 	"reflect"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
-
-// mergeJoinMirrors checks whether two mirrors can be merged into a single one.
-// If they can be merged, a new operator with the merged mirror is returned
-// If they cannot be merged, nil is returned.
-func mergeJoinMirrors(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m merger) *Mirror {
-	lhsMirror, rhsMirror, _ := prepareInputMirrors(lhs, rhs)
-	if lhsMirror == nil {
-		return nil
-	}
-
-	joinedRoute := mergeJoinRoutes(ctx, lhsMirror.Operator, rhsMirror.Operator, joinPredicates, m)
-	if joinedRoute == nil {
-		return nil
-	}
-
-	// We were able to join the primary routes of the mirror.
-	// Now we'll try to join the mirror targets.
-
-	lhsTargets := lhsMirror.Targets
-	rhsTargets := rhsMirror.Targets
-
-	if len(lhsTargets) != len(rhsTargets) {
-		return nil
-	}
-
-	joinedTargets := make([]MirrorTarget, len(lhsTargets))
-	for i, lhsTarget := range lhsTargets {
-		rhsTarget := rhsTargets[i]
-		switch lv := lhsTarget.(type) {
-		case *PercentMirrorTarget:
-			switch rv := rhsTarget.(type) {
-			case *PercentMirrorTarget:
-				joinedRoute := mergeJoinRoutes(ctx, lv.Operator, rv.Operator, joinPredicates, m)
-				if joinedRoute == nil {
-					return nil
-				}
-				joinedTargets[i] = &PercentMirrorTarget{
-					Operator: joinedRoute,
-					Percent:  float32(math.Min(float64(lv.Percent), float64(rv.Percent))),
-				}
-			default:
-				return nil
-			}
-		default:
-			panic("non-exhaustive switch")
-		}
-	}
-
-	return &Mirror{
-		Operator: joinedRoute,
-		Targets:  joinedTargets,
-	}
-}
 
 // mergeJoinRoutes checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
@@ -117,15 +63,6 @@ func mergeJoinRoutes(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 	default:
 		return nil
 	}
-}
-
-func prepareInputMirrors(lhs Operator, rhs Operator) (*Mirror, *Mirror, bool) {
-	lhsMirror, rhsMirror := operatorsToMirrors(lhs, rhs)
-	if lhsMirror == nil || rhsMirror == nil {
-		return nil, nil, false
-	}
-
-	return lhsMirror, rhsMirror, true
 }
 
 func prepareInputRoutes(lhs Operator, rhs Operator) (*Route, *Route, Routing, Routing, routingType, routingType, bool) {

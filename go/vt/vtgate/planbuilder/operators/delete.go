@@ -38,6 +38,11 @@ type Delete struct {
 	noPredicates
 }
 
+var (
+	_ Operator  = (*Delete)(nil)
+	_ TableUser = (*Delete)(nil)
+)
+
 type TargetTable struct {
 	ID     semantics.TableSet
 	VTable *vindexes.Table
@@ -67,8 +72,8 @@ func (d *Delete) SetInputs(inputs []Operator) {
 	d.Source = inputs[0]
 }
 
-func (d *Delete) TablesUsed() []string {
-	return SingleQualifiedIdentifier(d.Target.VTable.Keyspace, d.Target.VTable.Name)
+func (d *Delete) TablesUsed() []sqlparser.TableName {
+	return SingleTableName(d.Target.VTable.Keyspace, d.Target.VTable.Name)
 }
 
 func (d *Delete) GetOrdering(*plancontext.PlanningContext) []OrderBy {

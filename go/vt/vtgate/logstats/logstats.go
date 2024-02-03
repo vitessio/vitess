@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -53,7 +54,7 @@ type LogStats struct {
 	ExecuteTime    time.Duration
 	CommitTime     time.Duration
 	Error          error
-	TablesUsed     []string
+	TablesUsed     []sqlparser.TableName
 	SessionUUID    string
 	CachedPlan     bool
 	ActiveKeyspace string // ActiveKeyspace is the selected keyspace `use ks`
@@ -157,9 +158,9 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q, \"TabletType\": %q, \"SessionUUID\": %q, \"Cached Plan\": %v, \"TablesUsed\": %v, \"ActiveKeyspace\": %q}\n"
 	}
 
-	tables := stats.TablesUsed
-	if tables == nil {
-		tables = []string{}
+	tables := make([]string, len(stats.TablesUsed))
+	for i, table := range stats.TablesUsed {
+		tables[i] = sqlparser.String(table)
 	}
 	tablesUsed, marshalErr := json.Marshal(tables)
 	if marshalErr != nil {

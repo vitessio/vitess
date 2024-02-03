@@ -741,46 +741,30 @@ func TestVSchemaRoutingRules(t *testing.T) {
 		Keyspace: ks2,
 	}
 	want := &VSchema{
-		RoutingRules: map[string]*RoutingRulesByAction{
+		RoutingRules: map[string]*RoutingRule{
 			"rt1": {
-				Redirect: &RoutingRule{
-					Error: errors.New("table rt1 has more than one target: [ks1.t1 ks2.t2]"),
-				},
+				Error: errors.New("table rt1 has more than one target: [ks1.t1 ks2.t2]"),
 			},
 			"rt2": {
-				Redirect: &RoutingRule{
-					ToTables: []*Table{t2},
-				},
+				Tables: []*Table{t2},
 			},
 			"escaped": {
-				Redirect: &RoutingRule{
-					ToTables: []*Table{t2},
-				},
+				Tables: []*Table{t2},
 			},
 			"dup": {
-				Redirect: &RoutingRule{
-					Error: errors.New("duplicate redirect rule for entry dup"),
-				},
+				Error: errors.New("duplicate rule for entry dup"),
 			},
 			"badname": {
-				Redirect: &RoutingRule{
-					Error: errors.New("invalid table name: t1.t2.t3, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
-				},
+				Error: errors.New("invalid table name: t1.t2.t3, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"unqualified": {
-				Redirect: &RoutingRule{
-					Error: errors.New("invalid table name: t1, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
-				},
+				Error: errors.New("invalid table name: t1, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"badkeyspace": {
-				Redirect: &RoutingRule{
-					Error: errors.New("VT05003: unknown database 'ks3' in vschema"),
-				},
+				Error: errors.New("VT05003: unknown database 'ks3' in vschema"),
 			},
 			"notfound": {
-				Redirect: &RoutingRule{
-					Error: errors.New("table t2 not found"),
-				},
+				Error: errors.New("table t2 not found"),
 			},
 		},
 		globalTables: map[string]*Table{
@@ -1166,7 +1150,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	want := &VSchema{
-		RoutingRules: map[string]*RoutingRulesByAction{},
+		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"t1": t1,
 		},
@@ -1242,7 +1226,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		t1.ColumnVindexes[1],
 		t1.ColumnVindexes[0]}
 	want := &VSchema{
-		RoutingRules: map[string]*RoutingRulesByAction{},
+		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"t1": t1,
 		},
@@ -1349,7 +1333,7 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Keyspace: ksb,
 		Type:     "sequence"}
 	want := &VSchema{
-		RoutingRules: map[string]*RoutingRulesByAction{},
+		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"t1": nil,
 		},
@@ -1410,7 +1394,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Keyspace: ksb,
 	}
 	want := &VSchema{
-		RoutingRules: map[string]*RoutingRulesByAction{},
+		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"t1": nil,
 		},
@@ -1539,7 +1523,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		t2.ColumnVindexes[0],
 	}
 	want := &VSchema{
-		RoutingRules: map[string]*RoutingRulesByAction{},
+		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"t1": nil,
 		},
@@ -2125,7 +2109,7 @@ func TestSequence(t *testing.T) {
 		t2.ColumnVindexes[0],
 	}
 	want := &VSchema{
-		RoutingRules: map[string]*RoutingRulesByAction{},
+		RoutingRules: map[string]*RoutingRule{},
 		globalTables: map[string]*Table{
 			"seq": seq,
 			"t1":  t1,
@@ -3046,24 +3030,21 @@ func TestOtherTablesMakeReferenceTableAndSourceAmbiguous(t *testing.T) {
 func TestFindTableWithSequences(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		RoutingRules: &vschemapb.RoutingRules{
-			Rules: []*vschemapb.RoutingRule{
-				{
-					FromTable: "seq3",
-					ToTables:  []string{"ksb.seq3"},
-				},
+			Rules: []*vschemapb.RoutingRule{{
+				FromTable: "seq3",
+				ToTables:  []string{"ksb.seq3"},
+			},
 				{
 					FromTable: "seq4",
 					ToTables:  []string{"ksb.seq4"},
-				},
-			},
+				}},
 		},
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ksa": {
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu1": {
 						Type: "stfu",
-					},
-				},
+					}},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{

@@ -3910,7 +3910,7 @@ func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMir
 		return err
 	}
 
-	log.Infof("Mirroring traffic: %s.%s tablet types: %s, workflow state: %s", ts.targetKeyspace, ts.workflow, req.TabletTypes, state.String())
+	log.Infof("Mirroring traffic: %s.%s, workflow state: %s", ts.targetKeyspace, ts.workflow, state.String())
 
 	sw := &switcher{ts: ts, s: s}
 
@@ -3928,7 +3928,7 @@ func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMir
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		if ts.isPartialMigration {
 			ts.Logger().Infof("Partial migration, mirror traffic is not currently supported.")
-		} else if err := sw.mirrorTableTraffic(ctx, req.Percent, req.TabletTypes); err != nil {
+		} else if err := sw.mirrorTableTraffic(ctx, req.Percent); err != nil {
 			return handleError("failed to mirror traffic for the tables", err)
 		}
 		return nil

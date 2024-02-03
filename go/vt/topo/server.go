@@ -79,6 +79,7 @@ const (
 	RoutingRulesFile      = "RoutingRules"
 	ExternalClustersFile  = "ExternalClusters"
 	ShardRoutingRulesFile = "ShardRoutingRules"
+	MirrorRulesFile       = "MirrorRules"
 )
 
 // Path for all object types.
