@@ -189,9 +189,13 @@ func TestVTOrcRepairs(t *testing.T) {
 
 	t.Run("ReplicationFromOtherReplica", func(t *testing.T) {
 		// point replica at otherReplica
-		changeReplicationSourceCommand := fmt.Sprintf("STOP SLAVE; RESET SLAVE ALL;"+
-			"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1; START SLAVE", utils.Hostname, otherReplica.MySQLPort)
-		_, err := utils.RunSQL(t, changeReplicationSourceCommand, replica, "")
+		changeReplicationSourceCommands := []string{
+			"STOP SLAVE",
+			"RESET SLAVE ALL",
+			fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", utils.Hostname, otherReplica.MySQLPort),
+			"START SLAVE",
+		}
+		err := utils.RunSQLs(t, changeReplicationSourceCommands, replica, "")
 		require.NoError(t, err)
 
 		// wait until the source port is set back correctly by vtorc
@@ -204,10 +208,13 @@ func TestVTOrcRepairs(t *testing.T) {
 
 	t.Run("CircularReplication", func(t *testing.T) {
 		// change the replication source on the primary
-		changeReplicationSourceCommands := fmt.Sprintf("STOP SLAVE; RESET SLAVE ALL;"+
-			"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
-			"START SLAVE;", replica.VttabletProcess.TabletHostname, replica.MySQLPort)
-		_, err := utils.RunSQL(t, changeReplicationSourceCommands, curPrimary, "")
+		changeReplicationSourceCommands := []string{
+			"STOP SLAVE",
+			"RESET SLAVE ALL",
+			fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", replica.VttabletProcess.TabletHostname, replica.MySQLPort),
+			"START SLAVE",
+		}
+		err := utils.RunSQLs(t, changeReplicationSourceCommands, curPrimary, "")
 		require.NoError(t, err)
 
 		// wait for curPrimary to reach stable state

@@ -210,13 +210,15 @@ func compileRegex(pat eval, c colldata.Charset, flags icuregex.RegexpFlag) (*icu
 	return nil, err
 }
 
+var errNonConstantRegexp = errors.New("non-constant regexp")
+
 func compileConstantRegex(c *compiler, args TupleExpr, pat, mt int, cs collations.TypedCollation, flags icuregex.RegexpFlag, f string) (*icuregex.Pattern, error) {
 	pattern := args[pat]
 	if !pattern.constant() {
-		return nil, c.unsupported(pattern)
+		return nil, errNonConstantRegexp
 	}
 	var err error
-	staticEnv := EmptyExpressionEnv(c.collationEnv)
+	staticEnv := EmptyExpressionEnv(c.env)
 	pattern, err = simplifyExpr(staticEnv, pattern)
 	if err != nil {
 		return nil, err
@@ -225,7 +227,7 @@ func compileConstantRegex(c *compiler, args TupleExpr, pat, mt int, cs collation
 	if len(args) > mt {
 		fl := args[mt]
 		if !fl.constant() {
-			return nil, c.unsupported(fl)
+			return nil, errNonConstantRegexp
 		}
 		fl, err = simplifyExpr(staticEnv, fl)
 		if err != nil {
@@ -238,7 +240,7 @@ func compileConstantRegex(c *compiler, args TupleExpr, pat, mt int, cs collation
 	}
 
 	if pattern.(*Literal).inner == nil {
-		return nil, c.unsupported(pattern)
+		return nil, errNonConstantRegexp
 	}
 
 	innerPat, err := evalToVarchar(pattern.(*Literal).inner, cs.Collation, true)
@@ -346,7 +348,7 @@ func (r *builtinRegexpLike) compile(c *compiler) (ctype, error) {
 		skips = append(skips, c.compileNullCheckArg(f, 2))
 	}
 
-	merged, flags, err := compileRegexpCollation(c.collationEnv, input, pat, "regexp_like")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_like")
 	if err != nil {
 		return ctype{}, err
 	}
@@ -553,7 +555,7 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		}
 	}
 
-	merged, flags, err := compileRegexpCollation(c.collationEnv, input, pat, "regexp_instr")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_instr")
 	if err != nil {
 		return ctype{}, err
 	}
@@ -730,7 +732,7 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 		}
 	}
 
-	merged, flags, err := compileRegexpCollation(c.collationEnv, input, pat, "regexp_substr")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_substr")
 	if err != nil {
 		return ctype{}, err
 	}
@@ -970,7 +972,7 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		}
 	}
 
-	merged, flags, err := compileRegexpCollation(c.collationEnv, input, pat, "regexp_replace")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_replace")
 	if err != nil {
 		return ctype{}, err
 	}

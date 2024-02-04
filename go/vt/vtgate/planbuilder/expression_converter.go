@@ -20,17 +20,17 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type expressionConverter struct {
 	tabletExpressions []sqlparser.Expr
-	collationEnv      *collations.Environment
+	env               *vtenv.Environment
 	collation         collations.ID
 }
 
@@ -84,8 +84,8 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 		}
 	}
 	evalExpr, err := evalengine.Translate(astExpr, &evalengine.Config{
-		Collation:    ec.collation,
-		CollationEnv: ec.collationEnv,
+		Collation:   ec.collation,
+		Environment: ec.env,
 	})
 	if err != nil {
 		if !strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {

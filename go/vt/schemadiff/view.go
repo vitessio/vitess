@@ -91,6 +91,11 @@ func (d *AlterViewEntityDiff) SubsequentDiff() EntityDiff {
 func (d *AlterViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *AlterViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
 type CreateViewEntityDiff struct {
 	createView *sqlparser.CreateView
 
@@ -157,6 +162,11 @@ func (d *CreateViewEntityDiff) SubsequentDiff() EntityDiff {
 
 // SetSubsequentDiff implements EntityDiff
 func (d *CreateViewEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
+// InstantDDLCapability implements EntityDiff
+func (d *CreateViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
 }
 
 type DropViewEntityDiff struct {
@@ -227,16 +237,22 @@ func (d *DropViewEntityDiff) SubsequentDiff() EntityDiff {
 func (d *DropViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *DropViewEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
 // CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.
 type CreateViewEntity struct {
 	*sqlparser.CreateView
+	env *Environment
 }
 
-func NewCreateViewEntity(c *sqlparser.CreateView) (*CreateViewEntity, error) {
+func NewCreateViewEntity(env *Environment, c *sqlparser.CreateView) (*CreateViewEntity, error) {
 	if !c.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.ViewName.Name.String(), Statement: sqlparser.CanonicalString(c)}
 	}
-	entity := &CreateViewEntity{CreateView: c}
+	entity := &CreateViewEntity{CreateView: c, env: env}
 	entity.normalize()
 	return entity, nil
 }

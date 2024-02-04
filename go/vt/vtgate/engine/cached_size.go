@@ -189,6 +189,28 @@ func (cached *Delete) CachedSize(alloc bool) int64 {
 	size += cached.DML.CachedSize(true)
 	return size
 }
+func (cached *DeleteWithInput) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Delete vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Delete.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field OutputCols []int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.OutputCols)) * int64(8))
+	}
+	return size
+}
 func (cached *Distinct) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

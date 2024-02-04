@@ -25,8 +25,8 @@ import (
 	"vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -1603,17 +1603,18 @@ type infoSchemaWithColumns struct {
 	infoSchemaData map[string][]vindexes.Column
 }
 
+// MySQLVersion implements SchemaInformation.
+
 // We cache this information, since these are maps that are not changed
 var infoSchema57 = getInfoSchema57()
 var infoSchema80 = getInfoSchema80()
 
 // newSchemaInfo returns a SchemaInformation that has the column information for all info_schema tables
 func newSchemaInfo(inner SchemaInformation) SchemaInformation {
-	return &infoSchemaWithColumns{inner: inner, infoSchemaData: loadSchemaInfo()}
+	return &infoSchemaWithColumns{inner: inner, infoSchemaData: loadSchemaInfo(inner.Environment().MySQLVersion())}
 }
 
-func loadSchemaInfo() map[string][]vindexes.Column {
-	version := servenv.MySQLServerVersion()
+func loadSchemaInfo(version string) map[string][]vindexes.Column {
 	if strings.HasPrefix(version, "5.7") {
 		return infoSchema57
 	}
@@ -1645,9 +1646,8 @@ func (i *infoSchemaWithColumns) ConnCollation() collations.ID {
 	return i.inner.ConnCollation()
 }
 
-// CollationEnv implements the SchemaInformation interface
-func (i *infoSchemaWithColumns) CollationEnv() *collations.Environment {
-	return i.inner.CollationEnv()
+func (i *infoSchemaWithColumns) Environment() *vtenv.Environment {
+	return i.inner.Environment()
 }
 
 func (i *infoSchemaWithColumns) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {

@@ -122,7 +122,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 		allSQL = strings.Join(applySchemaOptions.SQL, ";")
 	}
 
-	parts, err := parser.SplitStatementToPieces(allSQL)
+	parts, err := env.Parser().SplitStatementToPieces(allSQL)
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func commandReloadSchema(cmd *cobra.Command, args []string) error {
 }
 
 var reloadSchemaKeyspaceOptions = struct {
-	Concurrency    uint32
+	Concurrency    int32
 	IncludePrimary bool
 }{
 	Concurrency: 10,
@@ -254,7 +254,7 @@ func commandReloadSchemaKeyspace(cmd *cobra.Command, args []string) error {
 }
 
 var reloadSchemaShardOptions = struct {
-	Concurrency    uint32
+	Concurrency    int32
 	IncludePrimary bool
 }{
 	Concurrency: 10,
@@ -307,11 +307,11 @@ func init() {
 
 	Root.AddCommand(ReloadSchema)
 
-	ReloadSchemaKeyspace.Flags().Uint32Var(&reloadSchemaKeyspaceOptions.Concurrency, "concurrency", 10, "Number of tablets to reload in parallel. Set to zero for unbounded concurrency.")
+	ReloadSchemaKeyspace.Flags().Int32Var(&reloadSchemaKeyspaceOptions.Concurrency, "concurrency", 10, "Number of tablets to reload in parallel. Set to zero for unbounded concurrency.")
 	ReloadSchemaKeyspace.Flags().BoolVar(&reloadSchemaKeyspaceOptions.IncludePrimary, "include-primary", false, "Also reload the primary tablets.")
 	Root.AddCommand(ReloadSchemaKeyspace)
 
-	ReloadSchemaShard.Flags().Uint32Var(&reloadSchemaShardOptions.Concurrency, "concurrency", 10, "Number of tablets to reload in parallel. Set to zero for unbounded concurrency.")
+	ReloadSchemaShard.Flags().Int32Var(&reloadSchemaShardOptions.Concurrency, "concurrency", 10, "Number of tablets to reload in parallel. Set to zero for unbounded concurrency.")
 	ReloadSchemaShard.Flags().BoolVar(&reloadSchemaShardOptions.IncludePrimary, "include-primary", false, "Also reload the primary tablet.")
 	Root.AddCommand(ReloadSchemaShard)
 }

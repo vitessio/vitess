@@ -28,12 +28,11 @@ import (
 	"sync"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 var (
@@ -2466,6 +2465,10 @@ var (
 		input:  "show foobar like select * from table where syntax is 'ignored'",
 		output: "show foobar",
 	}, {
+		// Making sure "force_cutover" is not a keyword
+		input:  "select force_cutover from t",
+		output: "select `force_cutover` from t",
+	}, {
 		input:  "use db",
 		output: "use db",
 	}, {
@@ -2520,16 +2523,6 @@ var (
 		input: "explain format = tree select * from t",
 	}, {
 		input: "explain format = json select * from t",
-	}, {
-		input: "explain format = vtexplain select * from t",
-	}, {
-		input: "explain format = vitess select * from t",
-	}, {
-		input:  "describe format = vitess select * from t",
-		output: "explain format = vitess select * from t",
-	}, {
-		input:  "describe format = vtexplain select * from t",
-		output: "explain format = vtexplain select * from t",
 	}, {
 		input: "explain delete from t",
 	}, {
@@ -3686,6 +3679,21 @@ var (
 	}, {
 		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
+	}, {
+		input:  "select 1 from dual where 'bac' = 'b' 'a' 'c'",
+		output: "select 1 from dual where 'bac' = 'bac'",
+	}, {
+		input:  "select 'b' 'a' 'c'",
+		output: "select 'bac' from dual",
+	}, {
+		input:  "select 1 where 'bac' = N'b' 'a' 'c'",
+		output: "select 1 from dual where 'bac' = N'bac'",
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  "select _ascii 'b' 'a' 'c'",
+		output: "select _ascii 'bac' from dual",
 	}, {
 		input: `kill connection 18446744073709551615`,
 	}, {

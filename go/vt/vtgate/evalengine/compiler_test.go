@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
 )
@@ -98,16 +99,16 @@ func TestCompilerReference(t *testing.T) {
 	defer func() { evalengine.SystemTime = time.Now }()
 
 	track := NewTracker()
-	parser := sqlparser.NewTestParser()
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			var supported, total int
-			env := evalengine.EmptyExpressionEnv(collations.MySQL8())
+			env := evalengine.EmptyExpressionEnv(venv)
 
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
 
-				stmt, err := parser.ParseExpr(query)
+				stmt, err := venv.Parser().ParseExpr(query)
 				if err != nil {
 					// no need to test un-parseable queries
 					return
@@ -118,7 +119,7 @@ func TestCompilerReference(t *testing.T) {
 					ResolveColumn:     fields.Column,
 					ResolveType:       fields.Type,
 					Collation:         collations.CollationUtf8mb4ID,
-					CollationEnv:      collations.MySQL8(),
+					Environment:       venv,
 					NoConstantFolding: true,
 				}
 
@@ -602,13 +603,21 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `CAST(time '32:34:58.5' AS TIME)`,
 			result:     `TIME("32:34:59")`,
 		},
+		{
+			expression: `now(6) + interval 1 day`,
+			result:     `DATETIME("2023-10-25 12:00:00.123456")`,
+		},
+		{
+			expression: `now() + interval 654321 microsecond`,
+			result:     `DATETIME("2023-10-24 12:00:00.654321")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
-	parser := sqlparser.NewTestParser()
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			expr, err := parser.ParseExpr(tc.expression)
+			expr, err := venv.Parser().ParseExpr(tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -618,7 +627,7 @@ func TestCompilerSingle(t *testing.T) {
 				ResolveColumn:     fields.Column,
 				ResolveType:       fields.Type,
 				Collation:         collations.CollationUtf8mb4ID,
-				CollationEnv:      collations.MySQL8(),
+				Environment:       venv,
 				NoConstantFolding: true,
 			}
 
@@ -627,8 +636,8 @@ func TestCompilerSingle(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			env := evalengine.NewExpressionEnv(context.Background(), nil, evalengine.NewEmptyVCursor(collations.MySQL8(), tz))
-			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 0, tz))
+			env := evalengine.NewExpressionEnv(context.Background(), nil, evalengine.NewEmptyVCursor(venv, tz))
+			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 123456000, tz))
 			env.Row = tc.values
 
 			expected, err := env.EvaluateAST(converted)
@@ -685,10 +694,10 @@ func TestBindVarLiteral(t *testing.T) {
 		},
 	}
 
-	parser := sqlparser.NewTestParser()
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			expr, err := parser.ParseExpr(tc.expression)
+			expr, err := venv.Parser().ParseExpr(tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -700,7 +709,7 @@ func TestBindVarLiteral(t *testing.T) {
 				ResolveColumn:     fields.Column,
 				ResolveType:       fields.Type,
 				Collation:         collations.CollationUtf8mb4ID,
-				CollationEnv:      collations.MySQL8(),
+				Environment:       venv,
 				NoConstantFolding: true,
 			}
 
@@ -711,7 +720,7 @@ func TestBindVarLiteral(t *testing.T) {
 
 			result := `VARCHAR("ÿ")`
 
-			env := evalengine.EmptyExpressionEnv(collations.MySQL8())
+			env := evalengine.EmptyExpressionEnv(venv)
 			env.BindVars = map[string]*querypb.BindVariable{
 				"vtg1": tc.bindVar,
 			}
@@ -751,17 +760,17 @@ func TestCompilerNonConstant(t *testing.T) {
 		},
 	}
 
-	parser := sqlparser.NewTestParser()
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			expr, err := parser.ParseExpr(tc.expression)
+			expr, err := venv.Parser().ParseExpr(tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			cfg := &evalengine.Config{
 				Collation:         collations.CollationUtf8mb4ID,
-				CollationEnv:      collations.MySQL8(),
+				Environment:       venv,
 				NoConstantFolding: true,
 			}
 
@@ -770,7 +779,7 @@ func TestCompilerNonConstant(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			env := evalengine.EmptyExpressionEnv(collations.MySQL8())
+			env := evalengine.EmptyExpressionEnv(venv)
 			var prev string
 			for i := 0; i < 1000; i++ {
 				expected, err := env.EvaluateAST(converted)

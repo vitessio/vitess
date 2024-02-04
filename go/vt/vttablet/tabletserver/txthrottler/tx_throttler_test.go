@@ -28,13 +28,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -42,9 +41,9 @@ import (
 )
 
 func TestDisabledThrottler(t *testing.T) {
-	config := tabletenv.NewDefaultConfig()
-	config.EnableTxThrottler = false
-	env := tabletenv.NewEnv(config, t.Name(), collations.MySQL8(), sqlparser.NewTestParser())
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.EnableTxThrottler = false
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, t.Name())
 	throttler := NewTxThrottler(env, nil)
 	throttler.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
@@ -104,11 +103,11 @@ func TestEnabledThrottler(t *testing.T) {
 	call4.After(call3)
 	calllast.After(call4)
 
-	config := tabletenv.NewDefaultConfig()
-	config.EnableTxThrottler = true
-	config.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.EnableTxThrottler = true
+	cfg.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
 
-	env := tabletenv.NewEnv(config, t.Name(), collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, t.Name())
 	throttler := NewTxThrottler(env, ts)
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.NotNil(t, throttlerImpl)
@@ -170,8 +169,8 @@ func TestFetchKnownCells(t *testing.T) {
 }
 
 func TestDryRunThrottler(t *testing.T) {
-	config := tabletenv.NewDefaultConfig()
-	env := tabletenv.NewEnv(config, t.Name(), collations.MySQL8(), sqlparser.NewTestParser())
+	cfg := tabletenv.NewDefaultConfig()
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, t.Name())
 
 	testCases := []struct {
 		Name                           string

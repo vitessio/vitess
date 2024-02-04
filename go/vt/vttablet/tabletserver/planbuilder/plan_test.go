@@ -30,9 +30,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
@@ -85,7 +85,7 @@ func testPlan(t *testing.T, fileName string) {
 			var err error
 			statement, err := parser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName", false, collations.MySQL8())
+				plan, err = Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
 			}
 			PassthroughDMLs = false
 
@@ -123,7 +123,7 @@ func TestPlanInReservedConn(t *testing.T) {
 			var err error
 			statement, err := parser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName", false, collations.MySQL8())
+				plan, err = Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
 			}
 			PassthroughDMLs = false
 
@@ -175,7 +175,7 @@ func TestCustom(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Got error: %v, parsing sql: %v", err.Error(), tcase.input)
 				}
-				plan, err := Build(statement, schem, "dbName", false, collations.MySQL8())
+				plan, err := Build(vtenv.NewTestEnv(), statement, schem, "dbName", false)
 				var out string
 				if err != nil {
 					out = err.Error()
@@ -264,7 +264,7 @@ func TestLockPlan(t *testing.T) {
 			var err error
 			statement, err := parser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName", false, collations.MySQL8())
+				plan, err = Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
 			}
 
 			var out string

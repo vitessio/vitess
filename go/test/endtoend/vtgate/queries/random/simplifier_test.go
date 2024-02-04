@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/vschemawrapper"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/require"
 
@@ -92,6 +93,7 @@ func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
 	vSchemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:       vSchema,
 		Version: planbuilder.Gen4,
+		Env:     vtenv.NewTestEnv(),
 	}
 
 	stmt, err := sqlparser.NewTestParser().Parse(query)

@@ -23,12 +23,12 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -49,6 +49,7 @@ var (
 // Multiple go routines can use the same Wrangler at the same time,
 // provided they want to share the same logger / topo server / lock timeout.
 type Wrangler struct {
+	env      *vtenv.Environment
 	logger   logutil.Logger
 	ts       *topo.Server
 	tmc      tmclient.TabletManagerClient
@@ -58,22 +59,19 @@ type Wrangler struct {
 	// DO NOT USE in production code.
 	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
 	// Limt the number of concurrent background goroutines if needed.
-	sem *semaphore.Weighted
-
-	collationEnv *collations.Environment
-	parser       *sqlparser.Parser
+	sem            *semaphore.Weighted
+	WorkflowParams *VReplicationWorkflowParams
 }
 
 // New creates a new Wrangler object.
-func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient, collationEnv *collations.Environment, parser *sqlparser.Parser) *Wrangler {
+func New(env *vtenv.Environment, logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
 	return &Wrangler{
-		logger:       logger,
-		ts:           ts,
-		tmc:          tmc,
-		vtctld:       grpcvtctldserver.NewVtctldServer(ts, parser),
-		sourceTs:     ts,
-		collationEnv: collationEnv,
-		parser:       parser,
+		env:      env,
+		logger:   logger,
+		ts:       ts,
+		tmc:      tmc,
+		vtctld:   grpcvtctldserver.NewVtctldServer(env, ts),
+		sourceTs: ts,
 	}
 }
 
@@ -81,13 +79,12 @@ func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClien
 // in production.
 func NewTestWrangler(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
 	return &Wrangler{
-		logger:       logger,
-		ts:           ts,
-		tmc:          tmc,
-		vtctld:       grpcvtctldserver.NewTestVtctldServer(ts, tmc),
-		sourceTs:     ts,
-		collationEnv: collations.MySQL8(),
-		parser:       sqlparser.NewTestParser(),
+		env:      vtenv.NewTestEnv(),
+		logger:   logger,
+		ts:       ts,
+		tmc:      tmc,
+		vtctld:   grpcvtctldserver.NewTestVtctldServer(ts, tmc),
+		sourceTs: ts,
 	}
 }
 
@@ -121,5 +118,5 @@ func (wr *Wrangler) Logger() logutil.Logger {
 
 // SQLParser returns the parser this wrangler is using.
 func (wr *Wrangler) SQLParser() *sqlparser.Parser {
-	return wr.parser
+	return wr.env.Parser()
 }

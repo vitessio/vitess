@@ -35,6 +35,7 @@ const (
 	delegateAggregation
 	addAggrOrdering
 	cleanOutPerfDistinct
+	deleteWithInput
 	subquerySettling
 	DONE
 )
@@ -55,6 +56,8 @@ func (p Phase) String() string {
 		return "optimize Distinct operations"
 	case subquerySettling:
 		return "settle subqueries"
+	case deleteWithInput:
+		return "expand delete to delete with input"
 	default:
 		panic(vterrors.VT13001("unhandled default case"))
 	}
@@ -72,6 +75,8 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 		return s.Distinct
 	case subquerySettling:
 		return s.SubQueries
+	case deleteWithInput:
+		return s.Delete
 	default:
 		return true
 	}
@@ -89,6 +94,8 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 		return removePerformanceDistinctAboveRoute(ctx, op)
 	case subquerySettling:
 		return settleSubqueries(ctx, op)
+	case deleteWithInput:
+		return findDeletesAboveRoute(ctx, op)
 	default:
 		return op
 	}
@@ -111,6 +118,19 @@ func (p *phaser) next(ctx *plancontext.PlanningContext) Phase {
 			return curr
 		}
 	}
+}
+
+func findDeletesAboveRoute(ctx *plancontext.PlanningContext, root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+		delOp, ok := in.(*Delete)
+		if !ok {
+			return in, NoRewrite
+		}
+
+		return createDeleteWithInput(ctx, delOp, delOp.Source)
+	}
+
+	return BottomUp(root, TableID, visitor, stopAtRoute)
 }
 
 func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op Operator) Operator {
@@ -168,7 +188,7 @@ func addOrderingFor(aggrOp *Aggregator) {
 
 func needsOrdering(ctx *plancontext.PlanningContext, in *Aggregator) bool {
 	requiredOrder := slice.Map(in.Grouping, func(from GroupBy) sqlparser.Expr {
-		return from.SimplifiedExpr
+		return from.Inner
 	})
 	if in.DistinctExpr != nil {
 		requiredOrder = append(requiredOrder, in.DistinctExpr)
@@ -209,7 +229,7 @@ func addLiteralGroupingToRHS(in *ApplyJoin) (Operator, *ApplyResult) {
 		}
 		if len(aggr.Grouping) == 0 {
 			gb := sqlparser.NewIntLiteral(".0")
-			aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb, gb))
+			aggr.Grouping = append(aggr.Grouping, NewGroupBy(gb))
 		}
 		return nil
 	})

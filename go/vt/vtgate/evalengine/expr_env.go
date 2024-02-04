@@ -27,13 +27,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 type VCursor interface {
 	TimeZone() *time.Location
 	GetKeyspace() string
 	SQLMode() string
-	CollationEnv() *collations.Environment
+	Environment() *vtenv.Environment
 }
 
 type (
@@ -74,16 +75,14 @@ func (env *ExpressionEnv) currentUser() string {
 }
 
 func (env *ExpressionEnv) currentDatabase() string {
-	if env.vc == nil {
-		return ""
-	}
 	return env.vc.GetKeyspace()
 }
 
+func (env *ExpressionEnv) currentVersion() string {
+	return env.vc.Environment().MySQLVersion()
+}
+
 func (env *ExpressionEnv) currentTimezone() *time.Location {
-	if env.vc == nil {
-		return nil
-	}
 	return env.vc.TimeZone()
 }
 
@@ -117,9 +116,17 @@ func (env *ExpressionEnv) SetTime(now time.Time) {
 	}
 }
 
+func (env *ExpressionEnv) VCursor() VCursor {
+	return env.vc
+}
+
 type emptyVCursor struct {
-	collationEnv *collations.Environment
-	tz           *time.Location
+	env *vtenv.Environment
+	tz  *time.Location
+}
+
+func (e *emptyVCursor) Environment() *vtenv.Environment {
+	return e.env
 }
 
 func (e *emptyVCursor) TimeZone() *time.Location {
@@ -134,17 +141,13 @@ func (e *emptyVCursor) SQLMode() string {
 	return config.DefaultSQLMode
 }
 
-func (e *emptyVCursor) CollationEnv() *collations.Environment {
-	return e.collationEnv
-}
-
-func NewEmptyVCursor(collationEnv *collations.Environment, tz *time.Location) VCursor {
-	return &emptyVCursor{collationEnv: collationEnv, tz: tz}
+func NewEmptyVCursor(env *vtenv.Environment, tz *time.Location) VCursor {
+	return &emptyVCursor{env: env, tz: tz}
 }
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
-func EmptyExpressionEnv(collationEnv *collations.Environment) *ExpressionEnv {
-	return NewExpressionEnv(context.Background(), nil, NewEmptyVCursor(collationEnv, time.Local))
+func EmptyExpressionEnv(env *vtenv.Environment) *ExpressionEnv {
+	return NewExpressionEnv(context.Background(), nil, NewEmptyVCursor(env, time.Local))
 }
 
 // NewExpressionEnv returns an expression environment with no current row, but with bindvars
@@ -153,7 +156,7 @@ func NewExpressionEnv(ctx context.Context, bindVars map[string]*querypb.BindVari
 	env.user = callerid.ImmediateCallerIDFromContext(ctx)
 	env.SetTime(time.Now())
 	env.sqlmode = ParseSQLMode(vc.SQLMode())
-	env.collationEnv = vc.CollationEnv()
+	env.collationEnv = vc.Environment().CollationEnv()
 	return env
 }
 

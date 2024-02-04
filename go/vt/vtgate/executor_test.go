@@ -889,6 +889,7 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestExecutor", "keyspace_id", "numeric", "", ""),
 			buildVarCharRow("TestExecutor", "krcol_unique_vdx", "keyrange_lookuper_unique", "", ""),
 			buildVarCharRow("TestExecutor", "krcol_vdx", "keyrange_lookuper", "", ""),
+			buildVarCharRow("TestExecutor", "multicol_vdx", "multicol", "column_count=2; column_vindex=xxhash,binary", ""),
 			buildVarCharRow("TestExecutor", "music_user_map", "lookup_hash_unique", "from=music_id; table=music_user_map; to=user_id", "music"),
 			buildVarCharRow("TestExecutor", "name_lastname_keyspace_id_map", "lookup", "from=name,lastname; table=name_lastname_keyspace_id_map; to=keyspace_id", "user2"),
 			buildVarCharRow("TestExecutor", "name_user_map", "lookup_hash", "from=name; table=name_user_map; to=user_id", "user"),
@@ -1151,97 +1152,6 @@ func TestExecutorComment(t *testing.T) {
 		}
 		if !gotResult.Equal(wantResult) {
 			t.Errorf("Exec %s: %v, want %v", stmt, gotResult, wantResult)
-		}
-	}
-}
-
-func TestExecutorOther(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
-
-	type cnts struct {
-		Sbc1Cnt      int64
-		Sbc2Cnt      int64
-		SbcLookupCnt int64
-	}
-
-	tcs := []struct {
-		targetStr string
-
-		hasNoKeyspaceErr       bool
-		hasDestinationShardErr bool
-		wantCnts               cnts
-	}{
-		{
-			targetStr:        "",
-			hasNoKeyspaceErr: true,
-		},
-		{
-			targetStr:              "TestExecutor[-]",
-			hasDestinationShardErr: true,
-		},
-		{
-			targetStr: KsTestUnsharded,
-			wantCnts: cnts{
-				Sbc1Cnt:      0,
-				Sbc2Cnt:      0,
-				SbcLookupCnt: 1,
-			},
-		},
-		{
-			targetStr: "TestExecutor",
-			wantCnts: cnts{
-				Sbc1Cnt:      1,
-				Sbc2Cnt:      0,
-				SbcLookupCnt: 0,
-			},
-		},
-		{
-			targetStr: "TestExecutor/-20",
-			wantCnts: cnts{
-				Sbc1Cnt:      1,
-				Sbc2Cnt:      0,
-				SbcLookupCnt: 0,
-			},
-		},
-		{
-			targetStr: "TestExecutor[00]",
-			wantCnts: cnts{
-				Sbc1Cnt:      1,
-				Sbc2Cnt:      0,
-				SbcLookupCnt: 0,
-			},
-		},
-	}
-
-	stmts := []string{
-		"describe select * from t1",
-		"explain select * from t1",
-		"repair table t1",
-		"optimize table t1",
-	}
-
-	for _, stmt := range stmts {
-		for _, tc := range tcs {
-			t.Run(fmt.Sprintf("%s-%s", stmt, tc.targetStr), func(t *testing.T) {
-				sbc1.ExecCount.Store(0)
-				sbc2.ExecCount.Store(0)
-				sbclookup.ExecCount.Store(0)
-
-				_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
-				if tc.hasNoKeyspaceErr {
-					assert.Error(t, err, errNoKeyspace)
-				} else if tc.hasDestinationShardErr {
-					assert.Errorf(t, err, "Destination can only be a single shard for statement: %s", stmt)
-				} else {
-					assert.NoError(t, err)
-				}
-
-				utils.MustMatch(t, tc.wantCnts, cnts{
-					Sbc1Cnt:      sbc1.ExecCount.Load(),
-					Sbc2Cnt:      sbc2.ExecCount.Load(),
-					SbcLookupCnt: sbclookup.ExecCount.Load(),
-				})
-			})
 		}
 	}
 }
@@ -2145,8 +2055,8 @@ func TestServingKeyspaces(t *testing.T) {
 	require.Equal(t, `[[VARCHAR("TestUnsharded")]]`, fmt.Sprintf("%v", result.Rows))
 }
 
-func TestExecutorOtherRead(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup, _ := createExecutorEnv(t)
+func TestExecutorOther(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 
 	type cnts struct {
 		Sbc1Cnt      int64
@@ -2185,26 +2095,42 @@ func TestExecutorOtherRead(t *testing.T) {
 				SbcLookupCnt: 0,
 			},
 		},
+		{
+			targetStr: "TestExecutor/-20",
+			wantCnts: cnts{
+				Sbc1Cnt:      1,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 0,
+			},
+		},
+		{
+			targetStr: "TestExecutor[00]",
+			wantCnts: cnts{
+				Sbc1Cnt:      1,
+				Sbc2Cnt:      0,
+				SbcLookupCnt: 0,
+			},
+		},
 	}
 
 	stmts := []string{
-		"describe select * from t1",
-		"explain select * from t1",
+		"repair table t1",
+		"optimize table t1",
 		"do 1",
 	}
 
 	for _, stmt := range stmts {
 		for _, tc := range tcs {
-			t.Run(stmt+tc.targetStr, func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s-%s", stmt, tc.targetStr), func(t *testing.T) {
 				sbc1.ExecCount.Store(0)
 				sbc2.ExecCount.Store(0)
 				sbclookup.ExecCount.Store(0)
 
-				_, err := executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+				_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 				if tc.hasNoKeyspaceErr {
-					assert.EqualError(t, err, errNoKeyspace.Error())
+					assert.Error(t, err, errNoKeyspace)
 				} else if tc.hasDestinationShardErr {
-					assert.Errorf(t, err, "Destination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
+					assert.Errorf(t, err, "Destination can only be a single shard for statement: %s", stmt)
 				} else {
 					assert.NoError(t, err)
 				}
@@ -2213,7 +2139,7 @@ func TestExecutorOtherRead(t *testing.T) {
 					Sbc1Cnt:      sbc1.ExecCount.Load(),
 					Sbc2Cnt:      sbc2.ExecCount.Load(),
 					SbcLookupCnt: sbclookup.ExecCount.Load(),
-				}, "count did not match")
+				})
 			})
 		}
 	}
@@ -2265,6 +2191,71 @@ func TestExecutorAnalyze(t *testing.T) {
 				SbcLookupCnt: sbclookup.ExecCount.Load(),
 			}, "count did not match")
 		})
+	}
+}
+
+func TestExecutorExplainStmt(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
+
+	type cnts struct {
+		Sbc1Cnt      int64
+		Sbc2Cnt      int64
+		SbcLookupCnt int64
+	}
+
+	tcs := []struct {
+		targetStr string
+
+		wantCnts cnts
+	}{
+		{
+			targetStr: "",
+			wantCnts:  cnts{Sbc1Cnt: 1},
+		},
+		{
+			targetStr: "TestExecutor[-]",
+			wantCnts:  cnts{Sbc1Cnt: 1, Sbc2Cnt: 1},
+		},
+		{
+			targetStr: KsTestUnsharded,
+			wantCnts:  cnts{SbcLookupCnt: 1},
+		},
+		{
+			targetStr: "TestExecutor",
+			wantCnts:  cnts{Sbc1Cnt: 1},
+		},
+		{
+			targetStr: "TestExecutor/-20",
+			wantCnts:  cnts{Sbc1Cnt: 1},
+		},
+		{
+			targetStr: "TestExecutor[00]",
+			wantCnts:  cnts{Sbc1Cnt: 1},
+		},
+	}
+
+	stmts := []string{
+		"describe select * from t1",
+		"explain select * from t1",
+	}
+
+	for _, stmt := range stmts {
+		for _, tc := range tcs {
+			t.Run(fmt.Sprintf("%s-%s", stmt, tc.targetStr), func(t *testing.T) {
+				sbc1.ExecCount.Store(0)
+				sbc2.ExecCount.Store(0)
+				sbclookup.ExecCount.Store(0)
+
+				_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+				assert.NoError(t, err)
+
+				utils.MustMatch(t, tc.wantCnts, cnts{
+					Sbc1Cnt:      sbc1.ExecCount.Load(),
+					Sbc2Cnt:      sbc2.ExecCount.Load(),
+					SbcLookupCnt: sbclookup.ExecCount.Load(),
+				})
+			})
+		}
 	}
 }
 

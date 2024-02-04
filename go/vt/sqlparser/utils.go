@@ -19,6 +19,7 @@ package sqlparser
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -159,4 +160,23 @@ func (p *Parser) ReplaceTableQualifiers(query, olddb, newdb string) (string, err
 		return String(upd), nil
 	}
 	return query, nil
+}
+
+// ReplaceTableQualifiersMultiQuery accepts a multi-query string and modifies it
+// via ReplaceTableQualifiers, one query at a time.
+func (p *Parser) ReplaceTableQualifiersMultiQuery(multiQuery, olddb, newdb string) (string, error) {
+	queries, err := p.SplitStatementToPieces(multiQuery)
+	if err != nil {
+		return multiQuery, err
+	}
+	var modifiedQueries []string
+	for _, query := range queries {
+		// Replace any provided sidecar database qualifiers with the correct one.
+		query, err := p.ReplaceTableQualifiers(query, olddb, newdb)
+		if err != nil {
+			return query, err
+		}
+		modifiedQueries = append(modifiedQueries, query)
+	}
+	return strings.Join(modifiedQueries, ";"), nil
 }

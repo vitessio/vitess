@@ -261,13 +261,13 @@ func (tr *ShardedRouting) planInOp(ctx *plancontext.PlanningContext, cmp *sqlpar
 		opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.IN }
 		return tr.haveMatchingVindex(ctx, cmp, vdValue, left, value, opcode, justTheVindex)
 	case sqlparser.ValTuple:
-		right, rightIsValTuple := cmp.Right.(sqlparser.ValTuple)
-		if !rightIsValTuple {
-			return false
+		switch right := cmp.Right.(type) {
+		case sqlparser.ValTuple:
+			return tr.planCompositeInOpRecursive(ctx, cmp, left, right, nil)
+		case sqlparser.ListArg:
+			return tr.planCompositeInOpArg(ctx, cmp, left, right)
 		}
-		return tr.planCompositeInOpRecursive(ctx, cmp, left, right, nil)
 	}
-
 	return false
 }
 
@@ -350,7 +350,6 @@ func (tr *ShardedRouting) haveMatchingVindex(
 		switch v.ColVindex.Vindex.(type) {
 		case vindexes.SingleColumn:
 			newVindexFound = tr.processSingleColumnVindex(node, valueExpr, column, value, opcode, vfunc, v, newVindexFound)
-
 		case vindexes.MultiColumn:
 			newVindexFound = tr.processMultiColumnVindex(node, valueExpr, column, value, opcode, vfunc, v, newVindexFound)
 		}
@@ -380,15 +379,19 @@ func (tr *ShardedRouting) processSingleColumnVindex(
 		return newVindexFound
 	}
 
-	vindexPlusPredicates.Options = append(vindexPlusPredicates.Options, &VindexOption{
+	vo := &VindexOption{
 		Values:      []evalengine.Expr{value},
-		ValueExprs:  []sqlparser.Expr{valueExpr},
 		Predicates:  []sqlparser.Expr{node},
 		OpCode:      routeOpcode,
 		FoundVindex: vindex,
 		Cost:        costFor(vindexPlusPredicates.ColVindex, routeOpcode),
 		Ready:       true,
-	})
+	}
+	if valueExpr != nil {
+		vo.ValueExprs = []sqlparser.Expr{valueExpr}
+	}
+	vindexPlusPredicates.Options = append(vindexPlusPredicates.Options, vo)
+
 	return true
 }
 
@@ -517,6 +520,40 @@ func (tr *ShardedRouting) planCompositeInOpRecursive(
 	return foundVindex
 }
 
+func (tr *ShardedRouting) planCompositeInOpArg(
+	ctx *plancontext.PlanningContext,
+	cmp *sqlparser.ComparisonExpr,
+	left sqlparser.ValTuple,
+	right sqlparser.ListArg,
+) bool {
+	foundVindex := false
+	for idx, expr := range left {
+		col, ok := expr.(*sqlparser.ColName)
+		if !ok {
+			continue
+		}
+
+		// check if left col is a vindex
+		if !tr.hasVindex(col) {
+			continue
+		}
+
+		value := &evalengine.TupleBindVariable{
+			Key:   right.String(),
+			Index: idx,
+		}
+		if typ, found := ctx.SemTable.TypeForExpr(col); found {
+			value.Type = typ.Type()
+			value.Collation = typ.Collation()
+		}
+
+		opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.MultiEqual }
+		newVindex := tr.haveMatchingVindex(ctx, cmp, nil, col, value, opcode, justTheVindex)
+		foundVindex = newVindex || foundVindex
+	}
+	return foundVindex
+}
+
 func (tr *ShardedRouting) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range tr.VindexPreds {
 		for _, col := range v.ColVindex.Columns {
@@ -546,6 +583,14 @@ func (tr *ShardedRouting) extraInfo() string {
 	if tr.Selected == nil {
 		return fmt.Sprintf(
 			"Seen:[%s]",
+			sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
+		)
+	}
+
+	if len(tr.Selected.ValueExprs) == 0 {
+		return fmt.Sprintf(
+			"Vindex[%s] Seen:[%s]",
+			tr.Selected.FoundVindex.String(),
 			sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
 		)
 	}
@@ -610,9 +655,9 @@ func tryMergeJoinShardedRouting(
 func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) evalengine.Expr {
 	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
 		ee, _ := evalengine.Translate(expr, &evalengine.Config{
-			Collation:    ctx.SemTable.Collation,
-			ResolveType:  ctx.SemTable.TypeForExpr,
-			CollationEnv: ctx.VSchema.CollationEnv(),
+			Collation:   ctx.SemTable.Collation,
+			ResolveType: ctx.SemTable.TypeForExpr,
+			Environment: ctx.VSchema.Environment(),
 		})
 		if ee != nil {
 			return ee

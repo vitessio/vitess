@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqlescape"
@@ -43,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -121,7 +121,7 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards, targetShards []string, fmtQuery string) *testMigraterEnv {
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
-	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser())
+	tme.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.wr.sem = semaphore.NewWeighted(1)
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
@@ -391,7 +391,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 	require.Greater(t, len(shards), 1, "shard by shard migrations can only be done on sharded keyspaces")
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
-	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser())
+	tme.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.wr.sem = semaphore.NewWeighted(1)
 	tme.sourceShards = shards
 	tme.targetShards = shards
@@ -476,10 +476,10 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 	now := time.Now().Unix()
 
 	for i, shard := range shards {
+		var streamInfoRows []string
+		var streamExtInfoRows []string
+		var vreplIDs []string
 		for _, shardToMove := range shardsToMove {
-			var streamInfoRows []string
-			var streamExtInfoRows []string
-			var vreplIDs []string
 			if shardToMove == shard {
 				bls := &binlogdatapb.BinlogSource{
 					Keyspace: "ks1",
@@ -498,27 +498,29 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 				streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||1||0", i+1, now, now))
 				vreplIDs = append(vreplIDs, strconv.FormatInt(int64(i+1), 10))
 			}
-			vreplIDsJoined := strings.Join(vreplIDs, ", ")
-			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
-			tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
-				"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
-				streamInfoRows...))
-			tme.dbTargetClients[i].addInvariant(streamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
-				"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
-				streamExtInfoRows...))
-			tme.dbTargetClients[i].addInvariant(reverseStreamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
-				"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
-				streamExtInfoRows...))
 		}
+		vreplIDsJoined := strings.Join(vreplIDs, ", ")
+		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
+		log.Infof("Adding streamInfoKs2 invariant for shard %s,  client %s,rows %q",
+			shard, tme.dbTargetClients[i].name, streamExtInfoRows)
+		tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
+			streamInfoRows...))
+		tme.dbTargetClients[i].addInvariant(streamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
+			streamExtInfoRows...))
+		tme.dbTargetClients[i].addInvariant(reverseStreamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
+			streamExtInfoRows...))
 	}
 
 	for i, shard := range shards {
+		var streamInfoRows []string
+		var vreplIDs []string
 		for _, shardToMove := range shardsToMove {
-			var streamInfoRows []string
-			var vreplIDs []string
 			if shardToMove == shard {
 				bls := &binlogdatapb.BinlogSource{
 					Keyspace: "ks2",
@@ -536,16 +538,15 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 				streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v||||1|0|0", i+1, bls))
 				vreplIDs = append(vreplIDs, strconv.FormatInt(int64(i+1), 10))
 			}
-			vreplIDsJoined := strings.Join(vreplIDs, ", ")
-			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
-			tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
-				"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
-				streamInfoRows...),
-			)
 		}
+		vreplIDsJoined := strings.Join(vreplIDs, ", ")
+		tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, vreplIDsJoined, vreplIDsJoined), noResult)
+		tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
+			streamInfoRows...),
+		)
 	}
-
 	tme.targetKeyspace = "ks2"
 	return tme
 }
@@ -553,7 +554,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targetShards []string) *testShardMigraterEnv {
 	tme := &testShardMigraterEnv{}
 	tme.ts = memorytopo.NewServer(ctx, "cell1", "cell2")
-	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient(), collations.MySQL8(), sqlparser.NewTestParser())
+	tme.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)

@@ -78,7 +78,7 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 			{
 				Name:    "uuid",
 				Type:    sqltypes.VarChar,
-				Charset: uint32(vcursor.CollationEnv().DefaultConnectionCharset()),
+				Charset: uint32(vcursor.ConnCollation()),
 			},
 		},
 		Rows: [][]sqltypes.Value{},
@@ -89,7 +89,7 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		migrationContext = fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID())
 	}
 	onlineDDLs, err := schema.NewOnlineDDLs(v.GetKeyspaceName(), v.SQL, v.DDL,
-		v.DDLStrategySetting, migrationContext, "", vcursor.SQLParser(),
+		v.DDLStrategySetting, migrationContext, "", vcursor.Environment().Parser(),
 	)
 	if err != nil {
 		return result, err

@@ -158,9 +158,14 @@ func (node *Update) Format(buf *TrackedBuffer) {
 	if node.With != nil {
 		buf.astPrintf(node, "%v", node.With)
 	}
-	buf.astPrintf(node, "update %v%s%v set %v%v%v%v",
-		node.Comments, node.Ignore.ToString(), node.TableExprs,
-		node.Exprs, node.Where, node.OrderBy, node.Limit)
+	buf.astPrintf(node, "update %v%s",
+		node.Comments, node.Ignore.ToString())
+	prefix := ""
+	for _, expr := range node.TableExprs {
+		buf.astPrintf(node, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+	buf.astPrintf(node, " set %v%v%v%v", node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
 // Format formats the node.
@@ -175,7 +180,12 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 	if node.Targets != nil && !node.isSingleAliasExpr() {
 		buf.astPrintf(node, "%v ", node.Targets)
 	}
-	buf.astPrintf(node, "from %v%v%v%v%v", node.TableExprs, node.Partitions, node.Where, node.OrderBy, node.Limit)
+	prefix := "from "
+	for _, expr := range node.TableExprs {
+		buf.astPrintf(node, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+	buf.astPrintf(node, "%v%v%v%v", node.Partitions, node.Where, node.OrderBy, node.Limit)
 }
 
 // Format formats the node.

@@ -484,9 +484,9 @@ func (dbc *Conn) CurrentForLogging() string {
 	if dbc.env != nil && dbc.env.Config() != nil && !dbc.env.Config().SanitizeLogMessages {
 		queryToLog = dbc.Current()
 	} else {
-		queryToLog, _ = dbc.env.SQLParser().RedactSQLQuery(dbc.Current())
+		queryToLog, _ = dbc.env.Environment().Parser().RedactSQLQuery(dbc.Current())
 	}
-	return dbc.env.SQLParser().TruncateForLog(queryToLog)
+	return dbc.env.Environment().Parser().TruncateForLog(queryToLog)
 }
 
 func (dbc *Conn) applySameSetting(ctx context.Context) (err error) {

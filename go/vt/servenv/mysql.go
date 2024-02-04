@@ -40,14 +40,6 @@ func MySQLServerVersion() string {
 	return mySQLServerVersion
 }
 
-// SetMySQLServerVersionForTest sets the value of the `--mysql_server_version`
-// flag. It is intended for use in tests that require a specific MySQL server
-// version (for example, collations) that cannot specify that via the command
-// line.
-func SetMySQLServerVersionForTest(version string) {
-	mySQLServerVersion = version
-}
-
 func init() {
 	for _, cmd := range []string{
 		"mysqlctl",

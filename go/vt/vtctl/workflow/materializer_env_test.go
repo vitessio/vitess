@@ -30,9 +30,9 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -82,8 +82,8 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	parser := sqlparser.NewTestParser()
-	env.ws = NewServer(env.topoServ, env.tmc, parser)
+	venv := vtenv.NewTestEnv()
+	env.ws = NewServer(venv, env.topoServ, env.tmc)
 	tabletID := 100
 	for _, shard := range sources {
 		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
@@ -99,7 +99,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 
 	for _, ts := range ms.TableSettings {
 		tableName := ts.TargetTable
-		table, err := parser.TableFromStatement(ts.SourceExpression)
+		table, err := venv.Parser().TableFromStatement(ts.SourceExpression)
 		if err == nil {
 			tableName = table.Name.String()
 		}

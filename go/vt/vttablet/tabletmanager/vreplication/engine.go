@@ -28,15 +28,14 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
@@ -113,8 +112,7 @@ type Engine struct {
 	// production.
 	shortcircuit bool
 
-	collationEnv *collations.Environment
-	parser       *sqlparser.Parser
+	env *vtenv.Environment
 }
 
 type journalEvent struct {
@@ -131,17 +129,16 @@ type PostCopyAction struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler, collationEnv *collations.Environment, parser *sqlparser.Parser) *Engine {
+func NewEngine(env *vtenv.Environment, config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler) *Engine {
 	vre := &Engine{
+		env:             env,
 		controllers:     make(map[int32]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		journaler:       make(map[string]*journalEvent),
-		ec:              newExternalConnector(config.ExternalConnections, collationEnv, parser),
+		ec:              newExternalConnector(env, config.ExternalConnections),
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.VReplicationName, throttle.ThrottleCheckPrimaryWrite),
-		collationEnv:    collationEnv,
-		parser:          parser,
 	}
 
 	return vre
@@ -154,17 +151,19 @@ func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 		return
 	}
 	vre.dbClientFactoryFiltered = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB(), vre.parser)
+		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB(), vre.env.Parser())
 	}
 	vre.dbClientFactoryDba = func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB(), vre.parser)
+		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB(), vre.env.Parser())
 	}
 	vre.dbName = dbcfgs.DBName
 }
 
 // NewTestEngine creates a new Engine for testing.
 func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
+	env := vtenv.NewTestEnv()
 	vre := &Engine{
+		env:                     env,
 		controllers:             make(map[int32]*controller),
 		ts:                      ts,
 		cell:                    cell,
@@ -173,9 +172,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig, collations.MySQL8(), sqlparser.NewTestParser()),
-		collationEnv:            collations.MySQL8(),
-		parser:                  sqlparser.NewTestParser(),
+		ec:                      newExternalConnector(env, externalConfig),
 	}
 	return vre
 }
@@ -183,7 +180,9 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 // NewSimpleTestEngine creates a new Engine for testing that can
 // also short circuit functions as needed.
 func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
+	env := vtenv.NewTestEnv()
 	vre := &Engine{
+		env:                     env,
 		controllers:             make(map[int32]*controller),
 		ts:                      ts,
 		cell:                    cell,
@@ -192,10 +191,8 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbClientFactoryDba:      dbClientFactoryDba,
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
-		ec:                      newExternalConnector(externalConfig, collations.MySQL8(), sqlparser.NewTestParser()),
+		ec:                      newExternalConnector(env, externalConfig),
 		shortcircuit:            true,
-		collationEnv:            collations.MySQL8(),
-		parser:                  sqlparser.NewTestParser(),
 	}
 	return vre
 }
@@ -372,7 +369,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 	defer vre.updateStats()
 
-	plan, err := buildControllerPlan(query, vre.parser)
+	plan, err := buildControllerPlan(query, vre.env.Parser())
 	if err != nil {
 		return nil, err
 	}

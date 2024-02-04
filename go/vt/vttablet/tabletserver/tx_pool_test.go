@@ -23,11 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -817,15 +816,15 @@ func newTxPoolWithEnv(env tabletenv.Env) (*TxPool, *fakeLimiter) {
 }
 
 func newEnv(exporterName string) tabletenv.Env {
-	config := tabletenv.NewDefaultConfig()
-	config.TxPool.Size = 300
-	config.Oltp.TxTimeout = 30 * time.Second
-	config.TxPool.Timeout = 40 * time.Second
-	config.TxPool.MaxWaiters = 500000
-	config.OltpReadPool.IdleTimeout = 30 * time.Second
-	config.OlapReadPool.IdleTimeout = 30 * time.Second
-	config.TxPool.IdleTimeout = 30 * time.Second
-	env := tabletenv.NewEnv(config, exporterName, collations.MySQL8(), sqlparser.NewTestParser())
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.TxPool.Size = 300
+	cfg.Oltp.TxTimeout = 30 * time.Second
+	cfg.TxPool.Timeout = 40 * time.Second
+	cfg.TxPool.MaxWaiters = 500000
+	cfg.OltpReadPool.IdleTimeout = 30 * time.Second
+	cfg.OlapReadPool.IdleTimeout = 30 * time.Second
+	cfg.TxPool.IdleTimeout = 30 * time.Second
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, exporterName)
 	return env
 }
 

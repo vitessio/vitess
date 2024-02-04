@@ -86,6 +86,8 @@ var (
 	// backupCompressBlocks is the number of blocks that are processed
 	// once before the writer blocks
 	backupCompressBlocks = 2
+
+	EmptyBackupMessage = "no new data to backup, skipping it"
 )
 
 func init() {
@@ -168,14 +170,20 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := be.ExecuteBackup(ctx, beParams, bh)
+	backupResult, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger
 	var finishErr error
-	if usable {
-		finishErr = bh.EndBackup(ctx)
-	} else {
+	switch backupResult {
+	case BackupUnusable:
 		logger.Errorf2(err, "backup is not usable, aborting it")
 		finishErr = bh.AbortBackup(ctx)
+	case BackupEmpty:
+		logger.Infof(EmptyBackupMessage)
+		// While an empty backup is considered "successful", it should leave no trace.
+		// We therefore ensire to clean up an backup files/directories/entries.
+		finishErr = bh.AbortBackup(ctx)
+	case BackupUsable:
+		finishErr = bh.EndBackup(ctx)
 	}
 	if err != nil {
 		if finishErr != nil {

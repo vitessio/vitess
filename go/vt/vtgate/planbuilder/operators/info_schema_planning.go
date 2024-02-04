@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -47,7 +46,7 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningConte
 		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
 			Collation:     collations.SystemCollation.Collation,
 			ResolveColumn: NotImplementedSchemaInfoResolver,
-			CollationEnv:  ctx.VSchema.CollationEnv(),
+			Environment:   ctx.VSchema.Environment(),
 		})
 		if err != nil {
 			panic(err)
@@ -60,7 +59,7 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningConte
 		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
 			Collation:     collations.SystemCollation.Collation,
 			ResolveColumn: NotImplementedSchemaInfoResolver,
-			CollationEnv:  ctx.VSchema.CollationEnv(),
+			Environment:   ctx.VSchema.Environment(),
 		})
 		if err != nil {
 			panic(err)
@@ -123,7 +122,7 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 		return false, "", nil
 	}
 
-	isSchemaName, col := isTableOrSchemaRoutable(cmp)
+	isSchemaName, col := isTableOrSchemaRoutable(cmp, ctx.VSchema.Environment().MySQLVersion())
 	rhs := cmp.Right
 	if col == nil || !shouldRewrite(rhs) {
 		return false, "", nil
@@ -134,7 +133,7 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 	_, err := evalengine.Translate(rhs, &evalengine.Config{
 		Collation:     collations.SystemCollation.Collation,
 		ResolveColumn: NotImplementedSchemaInfoResolver,
-		CollationEnv:  ctx.VSchema.CollationEnv(),
+		Environment:   ctx.VSchema.Environment(),
 	})
 	if err != nil {
 		// if we can't translate this to an evalengine expression,
@@ -155,14 +154,14 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 // isTableOrSchemaRoutable searches for a comparison where one side is a table or schema name column.
 // if it finds the correct column name being used,
 // it also makes sure that the LHS of the comparison contains the column, and the RHS the value sought after
-func isTableOrSchemaRoutable(cmp *sqlparser.ComparisonExpr) (
+func isTableOrSchemaRoutable(cmp *sqlparser.ComparisonExpr, version string) (
 	isSchema bool, // tells if we are dealing with a table or a schema name comparator
 	col *sqlparser.ColName, // which is the colName we are comparing against
 ) {
-	if col, schema, table := IsTableSchemaOrName(cmp.Left); schema || table {
+	if col, schema, table := IsTableSchemaOrName(cmp.Left, version); schema || table {
 		return schema, col
 	}
-	if col, schema, table := IsTableSchemaOrName(cmp.Right); schema || table {
+	if col, schema, table := IsTableSchemaOrName(cmp.Right, version); schema || table {
 		// to make the rest of the code easier, we shuffle these around so the ColName is always on the LHS
 		cmp.Right, cmp.Left = cmp.Left, cmp.Right
 		return schema, col
@@ -288,16 +287,15 @@ func shouldRewrite(e sqlparser.Expr) bool {
 	return true
 }
 
-func IsTableSchemaOrName(e sqlparser.Expr) (col *sqlparser.ColName, isTableSchema bool, isTableName bool) {
+func IsTableSchemaOrName(e sqlparser.Expr, version string) (col *sqlparser.ColName, isTableSchema bool, isTableName bool) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
 		return nil, false, false
 	}
-	return col, isDbNameCol(col), isTableNameCol(col)
+	return col, isDbNameCol(col, version), isTableNameCol(col)
 }
 
-func isDbNameCol(col *sqlparser.ColName) bool {
-	version := servenv.MySQLServerVersion()
+func isDbNameCol(col *sqlparser.ColName, version string) bool {
 	var schemaColumns map[string]any
 	if strings.HasPrefix(version, "5.7") {
 		schemaColumns = schemaColumns57

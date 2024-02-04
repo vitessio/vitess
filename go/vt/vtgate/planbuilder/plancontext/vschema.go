@@ -6,6 +6,7 @@ import (
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -41,7 +42,7 @@ type VSchema interface {
 	Planner() PlannerVersion
 	SetPlannerVersion(pv PlannerVersion)
 	ConnCollation() collations.ID
-	CollationEnv() *collations.Environment
+	Environment() *vtenv.Environment
 
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so
@@ -92,9 +93,6 @@ type VSchema interface {
 
 	// StorePrepareData stores the prepared data in the session.
 	StorePrepareData(name string, v *vtgatepb.PrepareData)
-
-	// SQLParser returns the proper sqlparser instance with the right version.
-	SQLParser() *sqlparser.Parser
 
 	// FindMirrorRule returns the mirror rule associated with the requested
 	// keyspace.
@@ -237,8 +235,8 @@ func (m *mirrorVSchema) ConnCollation() collations.ID {
 	return m.vschema.ConnCollation()
 }
 
-func (m *mirrorVSchema) CollationEnv() *collations.Environment {
-	return m.vschema.CollationEnv()
+func (m *mirrorVSchema) Environment() *vtenv.Environment {
+	return m.vschema.Environment()
 }
 
 // ErrorIfShardedF will return an error if the keyspace is sharded,
@@ -320,11 +318,6 @@ func (m *mirrorVSchema) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
 // StorePrepareData stores the prepared data in the session.
 func (m *mirrorVSchema) StorePrepareData(name string, v *vtgatepb.PrepareData) {
 	m.vschema.StorePrepareData(name, v)
-}
-
-// SQLParser returns the proper sqlparser instance with the right version.
-func (m *mirrorVSchema) SQLParser() *sqlparser.Parser {
-	return m.vschema.SQLParser()
 }
 
 // FindMirrorRule returns the mirror rule associated with the requested

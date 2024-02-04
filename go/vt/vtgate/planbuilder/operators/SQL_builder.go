@@ -309,7 +309,7 @@ func (ts *tableSorter) Swap(i, j int) {
 func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	switch expr := expr.(type) {
 	case *sqlparser.AliasedExpr:
-		sqlparser.RemoveKeyspace(expr.Expr)
+		sqlparser.RemoveKeyspaceInCol(expr.Expr)
 	case *sqlparser.StarExpr:
 		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
 	}
@@ -401,8 +401,8 @@ func buildDelete(op *Delete, qb *queryBuilder) {
 		Targets:    sqlparser.TableNames{op.Target.Name},
 		TableExprs: sel.From,
 		Where:      sel.Where,
-		OrderBy:    op.OrderBy,
-		Limit:      op.Limit,
+		Limit:      sel.Limit,
+		OrderBy:    sel.OrderBy,
 	}
 }
 
@@ -457,7 +457,7 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) {
 
 	for _, by := range op.Grouping {
 		qb.addGroupBy(by.Inner)
-		simplified := by.SimplifiedExpr
+		simplified := by.Inner
 		if by.WSOffset != -1 {
 			qb.addGroupBy(weightStringFor(simplified))
 		}
@@ -567,7 +567,7 @@ func buildFilter(op *Filter, qb *queryBuilder) {
 func buildDerived(op *Horizon, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
 
-	sqlparser.RemoveKeyspace(op.Query)
+	sqlparser.RemoveKeyspaceInCol(op.Query)
 
 	stmt := qb.stmt
 	qb.stmt = nil

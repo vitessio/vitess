@@ -546,9 +546,9 @@ func (dt DateTime) Compare(dt2 DateTime) int {
 	return dt.Time.Compare(dt2.Time)
 }
 
-func (dt DateTime) AddInterval(itv *Interval, stradd bool) (DateTime, uint8, bool) {
+func (dt DateTime) AddInterval(itv *Interval, prec uint8, stradd bool) (DateTime, uint8, bool) {
 	ok := dt.addInterval(itv)
-	return dt, itv.precision(stradd), ok
+	return dt, max(prec, itv.precision(stradd)), ok
 }
 
 func (dt DateTime) Round(p int) (r DateTime) {
@@ -610,7 +610,7 @@ func (dt *DateTime) addInterval(itv *Interval) bool {
 		dt.Time.minute = uint8((dur % time.Hour) / time.Minute)
 		dt.Time.hour = uint16(dur / time.Hour)
 
-		daynum := mysqlDayNumber(dt.Date.Year(), dt.Date.Month(), 1) + int(days)
+		daynum := MysqlDayNumber(dt.Date.Year(), dt.Date.Month(), 1) + int(days)
 		if daynum < 0 || daynum > maxDay {
 			return false
 		}
@@ -619,7 +619,7 @@ func (dt *DateTime) addInterval(itv *Interval) bool {
 		return true
 
 	case itv.unit.HasDayParts():
-		daynum := mysqlDayNumber(dt.Date.Year(), dt.Date.Month(), dt.Date.Day())
+		daynum := MysqlDayNumber(dt.Date.Year(), dt.Date.Month(), dt.Date.Day())
 		daynum += itv.day
 		dt.Date.year, dt.Date.month, dt.Date.day = mysqlDateFromDayNumber(daynum)
 		return true

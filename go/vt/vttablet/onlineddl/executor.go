@@ -24,7 +24,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path"
 	"strconv"
@@ -39,6 +38,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
@@ -291,7 +291,7 @@ func (e *Executor) executeQuery(ctx context.Context, query string) (result *sqlt
 	}
 	defer conn.Recycle()
 
-	return conn.Conn.Exec(ctx, query, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, query, -1, true)
 }
 
 func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, query string) (result *sqltypes.Result, err error) {
@@ -304,11 +304,11 @@ func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, que
 	defer conn.Recycle()
 
 	// Replace any provided sidecar DB qualifiers with the correct one.
-	uq, err := e.env.SQLParser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
+	uq, err := e.env.Environment().Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
-	return conn.Conn.Exec(ctx, uq, math.MaxInt32, true)
+	return conn.Conn.Exec(ctx, uq, -1, true)
 }
 
 // TabletAliasString returns tablet alias as string (duh)
@@ -413,7 +413,7 @@ func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) (action
 	}
 
 	var err error
-	action, err = onlineDDL.GetAction(e.env.SQLParser())
+	action, err = onlineDDL.GetAction(e.env.Environment().Parser())
 	if err != nil {
 		return action, false
 	}
@@ -800,7 +800,7 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 		for _, row := range rs.Named().Rows {
 			threadId := row.AsInt64("id", 0)
 			infoQuery := row.AsString("info", "")
-			stmt, err := e.env.SQLParser().Parse(infoQuery)
+			stmt, err := e.env.Environment().Parser().Parse(infoQuery)
 			if err != nil {
 				log.Error(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unable to parse processlist Info query: %v", infoQuery))
 				continue
@@ -833,8 +833,8 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 			}
 		}
 	}
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
-	capable, err := capableOf(mysql.PerformanceSchemaDataLocksTableCapability)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
+	capable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability)
 	if err != nil {
 		return err
 	}
@@ -1381,7 +1381,7 @@ func (e *Executor) duplicateCreateTable(ctx context.Context, onlineDDL *schema.O
 	constraintMap map[string]string,
 	err error,
 ) {
-	stmt, err := e.env.SQLParser().ParseStrictDDL(originalShowCreateTable)
+	stmt, err := e.env.Environment().Parser().ParseStrictDDL(originalShowCreateTable)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -1447,7 +1447,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return nil, err
 	}
 
-	stmt, err := e.env.SQLParser().ParseStrictDDL(onlineDDL.SQL)
+	stmt, err := e.env.Environment().Parser().ParseStrictDDL(onlineDDL.SQL)
 	if err != nil {
 		return nil, err
 	}
@@ -1474,7 +1474,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, originalShowCreateTable, vreplShowCreateTable, onlineDDL.SQL, onlineDDL.StrategySetting().IsAnalyzeTableFlag(), e.env.CollationEnv(), e.env.SQLParser())
+	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, originalShowCreateTable, vreplShowCreateTable, onlineDDL.SQL, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
 	return v, nil
 }
 
@@ -1528,7 +1528,7 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "", "", "", false, e.env.CollationEnv(), e.env.SQLParser())
+	v = NewVRepl(e.env.Environment(), onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "", "", "", false)
 	v.pos = revertStream.pos
 	return v, nil
 }
@@ -2398,7 +2398,7 @@ func (e *Executor) reviewEmptyTableRevertMigrations(ctx context.Context, onlineD
 
 	// Try to update table name and ddl_action
 	// Failure to do so fails the migration
-	revertUUID, err := onlineDDL.GetRevertUUID(e.env.SQLParser())
+	revertUUID, err := onlineDDL.GetRevertUUID(e.env.Environment().Parser())
 	if err != nil {
 		return false, e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot analyze revert UUID for revert migration %s: %v", onlineDDL.UUID, err))
 	}
@@ -2441,7 +2441,14 @@ func (e *Executor) reviewEmptyTableRevertMigrations(ctx context.Context, onlineD
 // Non immediate operations are:
 // - A gh-ost migration
 // - A vitess (vreplication) migration
-func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysql.CapableOf, onlineDDL *schema.OnlineDDL, ddlAction string, isRevert bool, isView bool) (bool, error) {
+func (e *Executor) reviewImmediateOperations(
+	ctx context.Context,
+	capableOf capabilities.CapableOf,
+	onlineDDL *schema.OnlineDDL,
+	ddlAction string,
+	isRevert bool,
+	isView bool,
+) (bool, error) {
 	switch ddlAction {
 	case sqlparser.CreateStr, sqlparser.DropStr:
 		return true, nil
@@ -2467,7 +2474,7 @@ func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysq
 // It analyzes whether the migration can & should be fulfilled immediately (e.g. via INSTANT DDL or just because it's a CREATE or DROP),
 // or backfills necessary information if it's a REVERT.
 // If all goes well, it sets `reviewed_timestamp` which then allows the state machine to schedule the migration.
-func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capableOf mysql.CapableOf) error {
+func (e *Executor) reviewQueuedMigration(ctx context.Context, uuid string, capableOf capabilities.CapableOf) error {
 	onlineDDL, row, err := e.readMigration(ctx, uuid)
 	if err != nil {
 		return err
@@ -2531,7 +2538,7 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 		return err
 	}
 	defer conn.Close()
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -2552,7 +2559,7 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 
 func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigration *schema.OnlineDDL, revertingMigrationUUID string) (err error) {
 	// Validation: migration to revert exists and is in complete state
-	action, actionStr, err := revertMigration.GetActionStr(e.env.SQLParser())
+	action, actionStr, err := revertMigration.GetActionStr(e.env.Environment().Parser())
 	if err != nil {
 		return err
 	}
@@ -2621,7 +2628,7 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 // - what type of migration we're reverting? (CREATE/DROP/ALTER)
 // - revert appropriately to the type of migration
 func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
-	revertUUID, err := onlineDDL.GetRevertUUID(e.env.SQLParser())
+	revertUUID, err := onlineDDL.GetRevertUUID(e.env.Environment().Parser())
 	if err != nil {
 		return fmt.Errorf("cannot run a revert migration %v: %+v", onlineDDL.UUID, err)
 	}
@@ -2734,7 +2741,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schema.OnlineDDL) (diff schemadiff.EntityDiff, err error) {
 
 	// Modify the CREATE TABLE statement to indicate a different, made up table name, known as the "comparison table"
-	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.SQLParser())
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -2788,12 +2795,13 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	if newShowCreateTable == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected: cannot find table or view even as it was just created: %v", onlineDDL.Table)
 	}
+	senv := schemadiff.NewEnv(e.env.Environment(), e.env.Environment().CollationEnv().DefaultConnectionCharset())
 	hints := &schemadiff.DiffHints{AutoIncrementStrategy: schemadiff.AutoIncrementApplyHigher}
 	switch ddlStmt.(type) {
 	case *sqlparser.CreateTable:
-		diff, err = schemadiff.DiffCreateTablesQueries(existingShowCreateTable, newShowCreateTable, hints, e.env.SQLParser())
+		diff, err = schemadiff.DiffCreateTablesQueries(senv, existingShowCreateTable, newShowCreateTable, hints)
 	case *sqlparser.CreateView:
-		diff, err = schemadiff.DiffCreateViewsQueries(existingShowCreateTable, newShowCreateTable, hints, e.env.SQLParser())
+		diff, err = schemadiff.DiffCreateViewsQueries(senv, existingShowCreateTable, newShowCreateTable, hints)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected CREATE TABLE or CREATE VIEW in online DDL statement: %v", onlineDDL.SQL)
 	}
@@ -2854,7 +2862,7 @@ func (e *Executor) analyzeDropDDLActionMigration(ctx context.Context, onlineDDL 
 			}
 		}
 	}
-	stmt, err := e.env.SQLParser().ParseStrictDDL(originalShowCreateTable)
+	stmt, err := e.env.Environment().Parser().ParseStrictDDL(originalShowCreateTable)
 	if err != nil {
 		return err
 	}
@@ -2900,7 +2908,7 @@ func (e *Executor) executeDropDDLActionMigration(ctx context.Context, onlineDDL 
 
 	// We transform a DROP TABLE into a RENAME TABLE statement, so as to remove the table safely and asynchronously.
 
-	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.SQLParser())
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 	if err != nil {
 		return failMigration(err)
 	}
@@ -2943,7 +2951,7 @@ func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDD
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.SQLParser())
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 	if err != nil {
 		return failMigration(err)
 	}
@@ -3030,7 +3038,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	if err != nil {
 		return err
 	}
-	stmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.SQLParser())
+	stmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 	if err != nil {
 		return err
 	}
@@ -3118,7 +3126,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 		return false, err
 	}
 	defer conn.Close()
-	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
 
 	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, capableOf)
 	if err != nil {
@@ -3189,7 +3197,7 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 	failMigration := func(err error) error {
 		return e.failMigration(ctx, onlineDDL, err)
 	}
-	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.SQLParser())
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 	if err != nil {
 		return failMigration(err)
 	}
@@ -3262,7 +3270,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		return e.failMigration(ctx, onlineDDL, err)
 	}
 
-	ddlAction, err := onlineDDL.GetAction(e.env.SQLParser())
+	ddlAction, err := onlineDDL.GetAction(e.env.Environment().Parser())
 	if err != nil {
 		return failMigration(err)
 	}
@@ -3296,7 +3304,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			// - Implicitly do nothing, if the table does not exist
 			{
 				// Sanity: reject IF NOT EXISTS statements, because they don't make sense (or are ambiguous) in declarative mode
-				ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.SQLParser())
+				ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 				if err != nil {
 					return failMigration(err)
 				}
@@ -3323,7 +3331,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			// - Implicitly do nothing, if the table exists and is identical to CREATE statement
 
 			// Sanity: reject IF NOT EXISTS statements, because they don't make sense (or are ambiguous) in declarative mode
-			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.SQLParser())
+			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 			if err != nil {
 				return failMigration(err)
 			}
@@ -3464,7 +3472,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	}
 	{
 		// We strip out any VT query comments because our simplified parser doesn't work well with comments
-		ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.SQLParser())
+		ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL, e.env.Environment().Parser())
 		if err == nil {
 			ddlStmt.SetComments(sqlparser.Comments{})
 			onlineDDL.SQL = sqlparser.String(ddlStmt)
@@ -4862,7 +4870,7 @@ func (e *Executor) submittedMigrationConflictsWithPendingMigrationInSingletonCon
 		return false
 	}
 	// Let's see if the pending migration is a revert:
-	if _, err := pendingOnlineDDL.GetRevertUUID(e.env.SQLParser()); err != nil {
+	if _, err := pendingOnlineDDL.GetRevertUUID(e.env.Environment().Parser()); err != nil {
 		// Not a revert. So the pending migration definitely conflicts with our migration.
 		return true
 	}
@@ -4997,13 +5005,13 @@ func (e *Executor) SubmitMigration(
 
 	// OK, this is a new UUID
 
-	_, actionStr, err := onlineDDL.GetActionStr(e.env.SQLParser())
+	_, actionStr, err := onlineDDL.GetActionStr(e.env.Environment().Parser())
 	if err != nil {
 		return nil, err
 	}
 	log.Infof("SubmitMigration: request to submit migration %s; action=%s, table=%s", onlineDDL.UUID, actionStr, onlineDDL.Table)
 
-	revertedUUID, _ := onlineDDL.GetRevertUUID(e.env.SQLParser()) // Empty value if the migration is not actually a REVERT. Safe to ignore error.
+	revertedUUID, _ := onlineDDL.GetRevertUUID(e.env.Environment().Parser()) // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
 	if retainArtifacts, _ := onlineDDL.StrategySetting().RetainArtifactsDuration(); retainArtifacts != 0 {
 		// Explicit retention indicated by `--retain-artifact` DDL strategy flag for this migration. Override!
@@ -5029,7 +5037,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeCompletion()),
 		sqltypes.BoolBindVariable(allowConcurrentMigration),
 		sqltypes.StringBindVariable(revertedUUID),
-		sqltypes.BoolBindVariable(onlineDDL.IsView(e.env.SQLParser())),
+		sqltypes.BoolBindVariable(onlineDDL.IsView(e.env.Environment().Parser())),
 	)
 	if err != nil {
 		return nil, err

@@ -110,8 +110,8 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "FieldQuery": "select colb, cola, y, colc, x from multicol_tbl1 where 1 != 1",
-            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
+            "FieldQuery": "select multicol_tbl1.colb, multicol_tbl1.cola, multicol_tbl1.y, multicol_tbl1.colc, multicol_tbl1.x from multicol_tbl1 where 1 != 1",
+            "Query": "select multicol_tbl1.colb, multicol_tbl1.cola, multicol_tbl1.y, multicol_tbl1.colc, multicol_tbl1.x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
             "Table": "multicol_tbl1",
             "Values": [
               "1",
@@ -123,7 +123,7 @@
           {
             "InputName": "CascadeChild-1",
             "OperatorType": "Delete",
-            "Variant": "Scatter",
+            "Variant": "MultiEqual",
             "Keyspace": {
               "Name": "sharded_fk_allow",
               "Sharded": true
@@ -138,7 +138,13 @@
               4
             ],
             "Query": "delete /*+ SET_VAR(foreign_key_checks=ON) */ from multicol_tbl2 where (colb, cola, x, colc, y) in ::fkc_vals",
-            "Table": "multicol_tbl2"
+            "Table": "multicol_tbl2",
+            "Values": [
+              "fkc_vals:1",
+              "fkc_vals:0",
+              "fkc_vals:3"
+            ],
+            "Vindex": "multicolIdx"
           },
           {
             "InputName": "Parent",
@@ -257,8 +263,8 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "FieldQuery": "select t5col5 from tbl5 where 1 != 1",
-            "Query": "select t5col5 from tbl5 for update",
+            "FieldQuery": "select tbl5.t5col5 from tbl5 where 1 != 1",
+            "Query": "select tbl5.t5col5 from tbl5 for update",
             "Table": "tbl5"
           },
           {
@@ -365,8 +371,8 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "FieldQuery": "select col9 from tbl9 where 1 != 1",
-            "Query": "select col9 from tbl9 where col9 = 34 for update",
+            "FieldQuery": "select tbl9.col9 from tbl9 where 1 != 1",
+            "Query": "select tbl9.col9 from tbl9 where col9 = 34 for update",
             "Table": "tbl9",
             "Values": [
               "34"

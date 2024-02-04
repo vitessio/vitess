@@ -58,8 +58,6 @@ func TestSubqueriesHasValues(t *testing.T) {
 }
 
 func TestNotINQueries(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
-
 	// Tests NOT IN where the RHS contains all rows, some rows and no rows
 	mcmp, closer := start(t)
 	defer closer()

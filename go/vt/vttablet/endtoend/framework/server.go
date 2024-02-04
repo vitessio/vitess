@@ -23,11 +23,10 @@ import (
 	"net/http"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/yaml2"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -60,7 +59,7 @@ var (
 // StartCustomServer starts the server and initializes
 // all the global variables. This function should only be called
 // once at the beginning of the test.
-func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnParams, dbName string, config *tabletenv.TabletConfig) error {
+func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnParams, dbName string, cfg *tabletenv.TabletConfig) error {
 	// Setup a fake vtgate server.
 	protocol := "resolveTest"
 	vtgateconn.SetVTGateProtocol(protocol)
@@ -79,7 +78,7 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 	}
 	TopoServer = memorytopo.NewServer(ctx, "")
 
-	Server = tabletserver.NewTabletServer(ctx, "", config, TopoServer, &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser())
+	Server = tabletserver.NewTabletServer(ctx, vtenv.NewTestEnv(), "", cfg, TopoServer, &topodatapb.TabletAlias{})
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs, nil /* mysqld */)
 	if err != nil {

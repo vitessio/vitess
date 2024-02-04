@@ -50,7 +50,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	err = rewriteRoutedTables(deleteStmt, vschema)
+	err = queryRewrite(ctx.SemTable, reservedVars, deleteStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -69,11 +69,6 @@ func gen4DeleteStmtPlanner(
 	}
 
 	if err := checkIfDeleteSupported(deleteStmt, ctx.SemTable); err != nil {
-		return nil, err
-	}
-
-	err = queryRewrite(ctx.SemTable, reservedVars, deleteStmt)
-	if err != nil {
 		return nil, err
 	}
 
@@ -146,7 +141,7 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 
 	// Delete is only supported for single Target.
 	if len(del.Targets) > 1 {
-		return vterrors.VT12001("multi-table DELETE statement in a sharded keyspace")
+		return vterrors.VT12001("multi-table DELETE statement with multi-target")
 	}
 
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {

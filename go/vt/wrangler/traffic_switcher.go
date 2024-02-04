@@ -26,12 +26,10 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -138,7 +136,6 @@ type trafficSwitcher struct {
 
 func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.wr.ts }
 func (ts *trafficSwitcher) TabletManagerClient() tmclient.TabletManagerClient { return ts.wr.tmc }
-func (ts *trafficSwitcher) CollationEnv() *collations.Environment             { return ts.wr.collationEnv }
 func (ts *trafficSwitcher) Logger() logutil.Logger                            { return ts.wr.logger }
 func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
 	return ts.wr.VReplicationExec(ctx, alias, query)
@@ -224,7 +221,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		return nil, nil, err
 	}
 
-	ws := workflow.NewServer(wr.ts, wr.tmc, wr.parser)
+	ws := workflow.NewServer(wr.env, wr.ts, wr.tmc)
 	state := &workflow.State{
 		Workflow:           workflowName,
 		SourceKeyspace:     ts.SourceKeyspaceName(),
@@ -556,7 +553,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	}
 	if !journalsExist {
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm, err := workflow.BuildStreamMigrator(ctx, ts, cancel, wr.parser)
+		sm, err := workflow.BuildStreamMigrator(ctx, ts, cancel, wr.env.Parser())
 		if err != nil {
 			return handleError("failed to migrate the workflow streams", err)
 		}
@@ -859,8 +856,45 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowNam
 	return sw.logs(), nil
 }
 
+func (wr *Wrangler) getShardSubset(ctx context.Context, keyspace string, shardSubset []string) ([]string, error) {
+	if wr.WorkflowParams != nil && len(wr.WorkflowParams.ShardSubset) > 0 {
+		shardSubset = wr.WorkflowParams.ShardSubset
+	}
+	allShards, err := wr.ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		return nil, err
+	}
+	if len(allShards) == 0 {
+		return nil, fmt.Errorf("no shards found in keyspace %s", keyspace)
+	}
+
+	if len(shardSubset) == 0 {
+		return allShards, nil
+	}
+
+	existingShards := make(map[string]bool, len(allShards))
+	for _, shard := range allShards {
+		existingShards[shard] = true
+	}
+	// Validate that the provided shards are part of the keyspace.
+	for _, shard := range shardSubset {
+		_, found := existingShards[shard]
+		if !found {
+			return nil, fmt.Errorf("shard %s not found in keyspace %s", shard, keyspace)
+		}
+	}
+	log.Infof("Selecting subset of shards in keyspace %s: %d from %d :: %+v",
+		keyspace, len(shardSubset), len(allShards), shardSubset)
+	return shardSubset, nil
+
+}
+
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, error) {
-	tgtInfo, err := workflow.LegacyBuildTargets(ctx, wr.ts, wr.tmc, targetKeyspace, workflowName)
+	shardSubset, err := wr.getShardSubset(ctx, targetKeyspace, nil)
+	if err != nil {
+		return nil, err
+	}
+	tgtInfo, err := workflow.LegacyBuildTargets(ctx, wr.ts, wr.tmc, targetKeyspace, workflowName, shardSubset)
 	if err != nil {
 		log.Infof("Error building targets: %s", err)
 		return nil, err
@@ -956,7 +990,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 	if err != nil {
 		return nil, err
 	}
-	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace, wr.parser)
+	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace, wr.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -1150,7 +1184,7 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
 	var (
-		ws = workflow.NewServer(ts.TopoServer(), ts.TabletManagerClient(), ts.wr.parser)
+		ws = workflow.NewServer(ts.wr.env, ts.TopoServer(), ts.TabletManagerClient())
 		mu sync.Mutex
 	)
 
@@ -1735,23 +1769,28 @@ func getRenameFileName(tableName string) string {
 func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {
 	err := ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		for _, tableName := range ts.Tables() {
-			query := fmt.Sprintf("drop table %s.%s",
-				sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
-				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
+			primaryDbName, err := sqlescape.EnsureEscaped(source.GetPrimary().DbName())
+			if err != nil {
+				return err
+			}
+			tableNameEscaped, err := sqlescape.EnsureEscaped(tableName)
+			if err != nil {
+				return err
+			}
+			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableNameEscaped)
 			if removalType == workflow.DropTable {
 				ts.Logger().Infof("%s: Dropping table %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
 			} else {
-				renameName := getRenameFileName(tableName)
+				renameName, err := sqlescape.EnsureEscaped(getRenameFileName(tableName))
+				if err != nil {
+					return err
+				}
 				ts.Logger().Infof("%s: Renaming table %s.%s to %s.%s\n",
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
-				query = fmt.Sprintf("rename table %s.%s TO %s.%s",
-					sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
-					sqlescape.EscapeID(sqlescape.UnescapeID(tableName)),
-					sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
-					sqlescape.EscapeID(sqlescape.UnescapeID(renameName)))
+				query = fmt.Sprintf("rename table %s.%s TO %s.%s", primaryDbName, tableNameEscaped, primaryDbName, renameName)
 			}
-			_, err := ts.wr.ExecuteFetchAsDba(ctx, source.GetPrimary().Alias, query, 1, false, true)
+			_, err = ts.wr.ExecuteFetchAsDba(ctx, source.GetPrimary().Alias, query, 1, false, true)
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v", source.GetPrimary().String(), tableName, err)
 				return err
@@ -1846,12 +1885,18 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 	log.Infof("removeTargetTables")
 	err := ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 		for _, tableName := range ts.Tables() {
-			query := fmt.Sprintf("drop table %s.%s",
-				sqlescape.EscapeID(sqlescape.UnescapeID(target.GetPrimary().DbName())),
-				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
+			primaryDbName, err := sqlescape.EnsureEscaped(target.GetPrimary().DbName())
+			if err != nil {
+				return err
+			}
+			tableName, err := sqlescape.EnsureEscaped(tableName)
+			if err != nil {
+				return err
+			}
+			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
 			ts.Logger().Infof("%s: Dropping table %s.%s\n",
 				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
-			_, err := ts.wr.ExecuteFetchAsDba(ctx, target.GetPrimary().Alias, query, 1, false, true)
+			_, err = ts.wr.ExecuteFetchAsDba(ctx, target.GetPrimary().Alias, query, 1, false, true)
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v",
 					target.GetPrimary().String(), tableName, err)
@@ -2071,7 +2116,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 // error if any is seen.
 func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspace) (map[string]*sequenceMetadata, bool, error) {
 	allFullyQualified := true
-	targets := maps2.Values(ts.Targets())
+	targets := maps.Values(ts.Targets())
 	if len(targets) == 0 || targets[0].GetPrimary() == nil { // This should never happen
 		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target keyspace %s", ts.targetKeyspace)
 	}

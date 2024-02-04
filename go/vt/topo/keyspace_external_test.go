@@ -18,14 +18,17 @@ package topo_test
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/key"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestServerFindAllShardsInKeyspace(t *testing.T) {
@@ -83,6 +86,97 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 				if _, ok := out[s]; !ok {
 					t.Errorf("shard %q was not found", s)
 				}
+			}
+		})
+	}
+}
+
+func TestServerGetServingShards(t *testing.T) {
+	keyspace := "ks1"
+	errNoListImpl := topo.NewError(topo.NoImplementation, "don't be doing no listing round here")
+
+	tests := []struct {
+		shards   int    // Number of shards to create
+		err      string // Error message we expect, if any
+		fallback bool   // Should we fallback to the shard by shard method
+	}{
+		{
+			shards: 0,
+			err:    fmt.Sprintf("%s has no serving shards", keyspace),
+		},
+		{
+			shards: 2,
+		},
+		{
+			shards: 128,
+		},
+		{
+			shards:   512,
+			fallback: true,
+		},
+		{
+			shards: 1024,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%d shards with fallback = %t", tt.shards, tt.fallback), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts, factory := memorytopo.NewServerAndFactory(ctx)
+			defer ts.Close()
+			stats := factory.GetCallStats()
+			require.NotNil(t, stats)
+
+			if tt.fallback {
+				factory.SetListError(errNoListImpl)
+			}
+
+			err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{})
+			require.NoError(t, err)
+			var shardNames []string
+			if tt.shards > 0 {
+				shardNames, err = key.GenerateShardRanges(tt.shards)
+				require.NoError(t, err)
+				for _, shardName := range shardNames {
+					err = ts.CreateShard(ctx, keyspace, shardName)
+					require.NoError(t, err)
+				}
+			}
+
+			// Verify that we return a complete list of shards and that each
+			// key range is present in the output.
+			stats.ResetAll() // We only want the stats for GetServingShards
+			shardInfos, err := ts.GetServingShards(ctx, keyspace)
+			if tt.err != "" {
+				require.EqualError(t, err, tt.err)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, shardInfos, tt.shards)
+			for _, shardName := range shardNames {
+				f := func(si *topo.ShardInfo) bool {
+					return key.KeyRangeString(si.Shard.KeyRange) == shardName
+				}
+				require.True(t, slices.ContainsFunc(shardInfos, f), "shard %q was not found in the results",
+					shardName)
+			}
+
+			// Now we check the stats based on the number of shards and whether or not
+			// we should have had a List error and fell back to the shard by shard method.
+			callcounts := stats.Counts()
+			require.NotNil(t, callcounts)
+			require.Equal(t, int64(1), callcounts["List"]) // We should always try
+			switch {
+			case tt.fallback: // We get the shards one by one from the list
+				require.Equal(t, int64(1), callcounts["ListDir"])     // GetShardNames
+				require.Equal(t, int64(tt.shards), callcounts["Get"]) // GetShard
+			case tt.shards < 1: // We use a Get to check that the keyspace exists
+				require.Equal(t, int64(0), callcounts["ListDir"])
+				require.Equal(t, int64(1), callcounts["Get"])
+			default: // We should not make any ListDir or Get calls
+				require.Equal(t, int64(0), callcounts["ListDir"])
+				require.Equal(t, int64(0), callcounts["Get"])
 			}
 		})
 	}

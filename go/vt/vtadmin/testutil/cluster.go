@@ -27,8 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -43,6 +41,7 @@ import (
 	grpcvtctldtestutil "vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -171,7 +170,7 @@ func BuildIntegrationTestCluster(t testing.TB, ctx context.Context, c *vtadminpb
 
 	ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
 	vtctld := grpcvtctldtestutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts, sqlparser.NewTestParser())
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
 	localclient := localvtctldclient.New(vtctld)

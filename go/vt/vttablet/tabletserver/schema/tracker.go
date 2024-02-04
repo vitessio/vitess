@@ -134,12 +134,12 @@ func (tr *Tracker) process(ctx context.Context) {
 					gtid = event.Gtid
 				}
 				if event.Type == binlogdatapb.VEventType_DDL &&
-					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName(), tr.env.SQLParser()) {
+					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName(), tr.env.Environment().Parser()) {
 
 					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
 						log.Errorf("Error updating schema: %s for ddl %s, gtid %s",
-							tr.env.SQLParser().TruncateForLog(err.Error()), event.Statement, gtid)
+							tr.env.Environment().Parser().TruncateForLog(err.Error()), event.Statement, gtid)
 					}
 				}
 			}

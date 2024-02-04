@@ -25731,7 +25731,7 @@ export namespace tabletmanagerdata {
     interface IBackupRequest {
 
         /** BackupRequest concurrency */
-        concurrency?: (number|Long|null);
+        concurrency?: (number|null);
 
         /** BackupRequest allow_primary */
         allow_primary?: (boolean|null);
@@ -25753,7 +25753,7 @@ export namespace tabletmanagerdata {
         constructor(properties?: tabletmanagerdata.IBackupRequest);
 
         /** BackupRequest concurrency. */
-        public concurrency: (number|Long);
+        public concurrency: number;
 
         /** BackupRequest allow_primary. */
         public allow_primary: boolean;
@@ -27753,6 +27753,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state */
         state?: (binlogdata.VReplicationWorkflowState|null);
+
+        /** UpdateVReplicationWorkflowRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents an UpdateVReplicationWorkflowRequest. */
@@ -27781,6 +27784,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state. */
         public state: binlogdata.VReplicationWorkflowState;
+
+        /** UpdateVReplicationWorkflowRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
@@ -29255,6 +29261,9 @@ export namespace binlogdata {
 
         /** Rule convert_int_to_enum */
         convert_int_to_enum?: ({ [k: string]: boolean }|null);
+
+        /** Rule force_unique_key */
+        force_unique_key?: (string|null);
     }
 
     /** Represents a Rule. */
@@ -29289,6 +29298,9 @@ export namespace binlogdata {
 
         /** Rule convert_int_to_enum. */
         public convert_int_to_enum: { [k: string]: boolean };
+
+        /** Rule force_unique_key. */
+        public force_unique_key: string;
 
         /**
          * Creates a new Rule instance using the specified properties.
@@ -43625,6 +43637,15 @@ export namespace vtctldata {
 
             /** Stream throttler_status */
             throttler_status?: (vtctldata.Workflow.Stream.IThrottlerStatus|null);
+
+            /** Stream tablet_types */
+            tablet_types?: (topodata.TabletType[]|null);
+
+            /** Stream tablet_selection_preference */
+            tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
+
+            /** Stream cells */
+            cells?: (string[]|null);
         }
 
         /** Represents a Stream. */
@@ -43686,6 +43707,15 @@ export namespace vtctldata {
 
             /** Stream throttler_status. */
             public throttler_status?: (vtctldata.Workflow.Stream.IThrottlerStatus|null);
+
+            /** Stream tablet_types. */
+            public tablet_types: topodata.TabletType[];
+
+            /** Stream tablet_selection_preference. */
+            public tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+
+            /** Stream cells. */
+            public cells: string[];
 
             /**
              * Creates a new Stream instance using the specified properties.
@@ -45496,7 +45526,7 @@ export namespace vtctldata {
         allow_primary?: (boolean|null);
 
         /** BackupRequest concurrency */
-        concurrency?: (number|Long|null);
+        concurrency?: (number|null);
 
         /** BackupRequest incremental_from_pos */
         incremental_from_pos?: (string|null);
@@ -45521,7 +45551,7 @@ export namespace vtctldata {
         public allow_primary: boolean;
 
         /** BackupRequest concurrency. */
-        public concurrency: (number|Long);
+        public concurrency: number;
 
         /** BackupRequest incremental_from_pos. */
         public incremental_from_pos: string;
@@ -45735,7 +45765,7 @@ export namespace vtctldata {
         allow_primary?: (boolean|null);
 
         /** BackupShardRequest concurrency */
-        concurrency?: (number|Long|null);
+        concurrency?: (number|null);
 
         /** BackupShardRequest upgrade_safe */
         upgrade_safe?: (boolean|null);
@@ -45763,7 +45793,7 @@ export namespace vtctldata {
         public allow_primary: boolean;
 
         /** BackupShardRequest concurrency. */
-        public concurrency: (number|Long);
+        public concurrency: number;
 
         /** BackupShardRequest upgrade_safe. */
         public upgrade_safe: boolean;
@@ -54419,6 +54449,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest include_logs */
         include_logs?: (boolean|null);
+
+        /** GetWorkflowsRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a GetWorkflowsRequest. */
@@ -54444,6 +54477,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest include_logs. */
         public include_logs: boolean;
+
+        /** GetWorkflowsRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
@@ -57307,6 +57343,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest dry_run */
         dry_run?: (boolean|null);
+
+        /** MoveTablesCompleteRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a MoveTablesCompleteRequest. */
@@ -57335,6 +57374,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest dry_run. */
         public dry_run: boolean;
+
+        /** MoveTablesCompleteRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new MoveTablesCompleteRequest instance using the specified properties.
@@ -67018,6 +67060,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest keep_routing_rules */
         keep_routing_rules?: (boolean|null);
+
+        /** WorkflowDeleteRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a WorkflowDeleteRequest. */
@@ -67040,6 +67085,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest keep_routing_rules. */
         public keep_routing_rules: boolean;
+
+        /** WorkflowDeleteRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new WorkflowDeleteRequest instance using the specified properties.
@@ -67336,6 +67384,9 @@ export namespace vtctldata {
 
         /** WorkflowStatusRequest workflow */
         workflow?: (string|null);
+
+        /** WorkflowStatusRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a WorkflowStatusRequest. */
@@ -67352,6 +67403,9 @@ export namespace vtctldata {
 
         /** WorkflowStatusRequest workflow. */
         public workflow: string;
+
+        /** WorkflowStatusRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new WorkflowStatusRequest instance using the specified properties.
@@ -67926,6 +67980,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest initialize_target_sequences */
         initialize_target_sequences?: (boolean|null);
+
+        /** WorkflowSwitchTrafficRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a WorkflowSwitchTrafficRequest. */
@@ -67966,6 +68023,9 @@ export namespace vtctldata {
 
         /** WorkflowSwitchTrafficRequest initialize_target_sequences. */
         public initialize_target_sequences: boolean;
+
+        /** WorkflowSwitchTrafficRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new WorkflowSwitchTrafficRequest instance using the specified properties.
