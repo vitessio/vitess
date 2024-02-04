@@ -48,7 +48,7 @@ var (
 	successResult          = "success"
 )
 
-// ChooseNewPrimary finds a tablet that should become a primary after reparent.
+// ElectNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
 // cell as the current primary, and to be different from avoidPrimaryAlias. The
 // tablet with the most advanced replication position is chosen to minimize the
@@ -58,7 +58,7 @@ var (
 // with transactions being executed on the current primary, so when all tablets
 // are at roughly the same position, then the choice of new primary-elect will
 // be somewhat unpredictable.
-func ChooseNewPrimary(
+func ElectNewPrimary(
 	ctx context.Context,
 	tmc tmclient.TabletManagerClient,
 	shardInfo *topo.ShardInfo,
@@ -134,9 +134,9 @@ func ChooseNewPrimary(
 		return nil, err
 	}
 
-	// return nothing if there are no valid tablets available
+	// return an error if there are no valid tablets available
 	if len(validTablets) == 0 {
-		return nil, nil
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to in the same cell as the current primary")
 	}
 
 	// sort the tablets for finding the best primary

@@ -61,7 +61,7 @@ func (fake *chooseNewPrimaryTestTMClient) ReplicationStatus(ctx context.Context,
 	return nil, assert.AnError
 }
 
-func TestChooseNewPrimary(t *testing.T) {
+func TestElectNewPrimary(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -285,7 +285,7 @@ func TestChooseNewPrimary(t *testing.T) {
 				Uid:  102,
 			},
 			expected:  nil,
-			shouldErr: false,
+			shouldErr: true,
 		},
 		{
 			name: "found a replica ignoring replica lag",
@@ -641,7 +641,7 @@ func TestChooseNewPrimary(t *testing.T) {
 				Uid:  0,
 			},
 			expected:  nil,
-			shouldErr: false,
+			shouldErr: true,
 		},
 		{
 			name: "only available tablet is AvoidPrimary",
@@ -678,7 +678,7 @@ func TestChooseNewPrimary(t *testing.T) {
 				Uid:  101,
 			},
 			expected:  nil,
-			shouldErr: false,
+			shouldErr: true,
 		},
 		{
 			name: "no replicas in shard",
@@ -705,7 +705,7 @@ func TestChooseNewPrimary(t *testing.T) {
 				Uid:  0,
 			},
 			expected:  nil,
-			shouldErr: false,
+			shouldErr: true,
 		},
 	}
 
@@ -717,7 +717,7 @@ func TestChooseNewPrimary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual, err := ChooseNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.newPrimaryAlias, tt.avoidPrimaryAlias, time.Millisecond*50, tt.tolerableReplLag, durability, logger)
+			actual, err := ElectNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.newPrimaryAlias, tt.avoidPrimaryAlias, time.Millisecond*50, tt.tolerableReplLag, durability, logger)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

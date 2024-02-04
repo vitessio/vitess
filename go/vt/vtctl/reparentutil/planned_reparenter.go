@@ -152,7 +152,7 @@ func (pr *PlannedReparenter) getLockAction(opts PlannedReparentOptions) string {
 // primary), as well as an error.
 //
 // It will also set the NewPrimaryAlias option if the caller did not specify
-// one, provided it can choose a new primary candidate. See ChooseNewPrimary()
+// one, provided it can choose a new primary candidate. See ElectNewPrimary()
 // for details on primary candidate selection.
 func (pr *PlannedReparenter) preflightChecks(
 	ctx context.Context,
@@ -179,14 +179,10 @@ func (pr *PlannedReparenter) preflightChecks(
 		}
 	}
 
-	event.DispatchUpdate(ev, "searching for primary candidate")
-	opts.NewPrimaryAlias, err = ChooseNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.NewPrimaryAlias, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
+	event.DispatchUpdate(ev, "electing a primary candidate")
+	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.NewPrimaryAlias, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
 	if err != nil {
 		return true, err
-	}
-
-	if opts.NewPrimaryAlias == nil {
-		return true, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to in the same cell as the current primary")
 	}
 
 	pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
