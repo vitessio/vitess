@@ -138,6 +138,10 @@ func TestNilCollection(t *testing.T) {
 }
 
 func TestStopAutoExpiration(t *testing.T) {
+	oldNamedCollection := namedCollection
+	defer func() {
+		namedCollection = oldNamedCollection
+	}()
 	// Clear Collection map
 	namedCollection = make(map[string]*Collection)
 
@@ -154,6 +158,10 @@ func TestStopAutoExpiration(t *testing.T) {
 }
 
 func TestSince(t *testing.T) {
+	oldNamedCollection := namedCollection
+	defer func() {
+		namedCollection = oldNamedCollection
+	}()
 	// Clear Collection map
 	namedCollection = make(map[string]*Collection)
 
@@ -186,6 +194,10 @@ func TestSince(t *testing.T) {
 }
 
 func TestRemoveBefore(t *testing.T) {
+	oldNamedCollection := namedCollection
+	defer func() {
+		namedCollection = oldNamedCollection
+	}()
 	// Clear Collection map
 	namedCollection = make(map[string]*Collection)
 
