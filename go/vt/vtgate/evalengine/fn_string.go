@@ -43,6 +43,11 @@ type (
 		CallExpr
 	}
 
+	builtinInstr struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinASCII struct {
 		CallExpr
 	}
@@ -99,6 +104,7 @@ type (
 var _ IR = (*builtinChangeCase)(nil)
 var _ IR = (*builtinCharLength)(nil)
 var _ IR = (*builtinLength)(nil)
+var _ IR = (*builtinInstr)(nil)
 var _ IR = (*builtinASCII)(nil)
 var _ IR = (*builtinOrd)(nil)
 var _ IR = (*builtinBitLength)(nil)
@@ -197,6 +203,77 @@ func (call *builtinLength) eval(env *ExpressionEnv) (eval, error) {
 
 func (call *builtinLength) compile(c *compiler) (ctype, error) {
 	return c.compileFn_length(call.Arguments[0], c.asm.Fn_LENGTH)
+}
+
+func instrIndex(str *evalBytes, substr *evalBytes) int64 {
+	// Case sensitive if one of the strings is binary string
+	if !str.isBinary() && !substr.isBinary() {
+		str.bytes = bytes.ToLower(str.bytes)
+		substr.bytes = bytes.ToLower(substr.bytes)
+	}
+
+	pos := bytes.Index(str.bytes, substr.bytes) + 1
+	return int64(pos)
+}
+
+func (call *builtinInstr) eval(env *ExpressionEnv) (eval, error) {
+	arg1, arg2, err := call.arg2(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg1 == nil || arg2 == nil {
+		return nil, nil
+	}
+
+	str, ok := arg1.(*evalBytes)
+	if !ok {
+		str, err = evalToVarchar(arg1, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	substr, ok := arg2.(*evalBytes)
+	if !ok {
+		substr, err = evalToVarchar(arg2, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return newEvalInt64(instrIndex(str, substr)), nil
+}
+
+func (call *builtinInstr) compile(c *compiler) (ctype, error) {
+	arg1, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck1(arg1)
+
+	switch {
+	case arg1.isTextual():
+	default:
+		c.asm.Convert_xce(1, sqltypes.VarChar, call.collate)
+	}
+
+	arg2, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1(arg2)
+
+	switch {
+	case arg2.isTextual():
+	default:
+		c.asm.Convert_xce(1, sqltypes.VarChar, call.collate)
+	}
+
+	c.asm.Fn_INSTR()
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 }
 
 func (call *builtinBitLength) eval(env *ExpressionEnv) (eval, error) {

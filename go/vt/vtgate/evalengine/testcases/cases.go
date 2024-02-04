@@ -67,6 +67,7 @@ var Cases = []TestCase{
 	{Run: FnUpper},
 	{Run: FnCharLength},
 	{Run: FnLength},
+	{Run: FnInstr},
 	{Run: FnBitLength},
 	{Run: FnAscii},
 	{Run: FnOrd},
@@ -1336,6 +1337,41 @@ func FnLength(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("LENGTH(%s)", str), nil)
 		yield(fmt.Sprintf("OCTET_LENGTH(%s)", str), nil)
+	}
+}
+
+func FnInstr(yield Query) {
+	for _, str := range inputStrings {
+		for _, substr := range inputStrings {
+			yield(fmt.Sprintf("INSTR(%s, %s)", str, substr), nil)
+		}
+	}
+
+	cases := []struct {
+		str    string
+		substr string
+	}{
+		{"'ACABAB'", "'AB'"},
+		{"'ABABAB'", "'AB'"},
+		{"'ABABAB'", "'ab'"},
+		{"'ABABAB'", "'ba'"},
+		{"'CBDASD'", "'ab'"},
+		{"'ABABAB'", "''"},
+		{"'ABABAB'", ""},
+		{"1233", "23"},
+		{"0x616162", "0x6162"},
+		{"0x616162", "0x4141"},
+		{"'AAB'", "123"},
+		{"123", "'ABC'"},
+		{"_binary'FOOBAR'", "'AR'"},
+		{"_binary'FOOBAR'", "BINARY 'AR'"},
+		{"BINARY 'FOOBAR'", "'ar'"},
+		{"'foobarbar'", "'bar'"},
+		{"'xbar'", "'foobar'"},
+	}
+
+	for _, tc := range cases {
+		yield(fmt.Sprintf("INSTR(%s, %s)", tc.str, tc.substr), nil)
 	}
 }
 

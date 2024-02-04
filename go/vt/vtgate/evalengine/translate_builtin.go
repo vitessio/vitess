@@ -285,6 +285,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &builtinLength{CallExpr: call}, nil
+	case "instr":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinInstr{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "bit_length":
 		if len(args) != 1 {
 			return nil, argError(method)

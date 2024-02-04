@@ -1418,6 +1418,18 @@ func (asm *assembler) Mod_dd() {
 	}, "MOD DECIMAL(SP-2), DECIMAL(SP-1)")
 }
 
+func (asm *assembler) Fn_INSTR() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		substr := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(instrIndex(str, substr))
+		return 1
+	}, "FN INSTR VARCHAR(SP-2) VARCHAR(SP-1)")
+}
+
 func (asm *assembler) Fn_ASCII() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
