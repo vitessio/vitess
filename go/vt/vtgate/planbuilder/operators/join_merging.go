@@ -24,10 +24,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// mergeJoinRoutes checks whether two operators can be merged into a single one.
+// mergeJoinInputs checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func mergeJoinRoutes(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m merger) *Route {
+func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m merger) *Route {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
 		return nil
@@ -139,14 +139,14 @@ func getRoutesOrAlternates(lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, 
 		return lhsRoute, rhsRoute, routingA, routingB, sameKeyspace
 	}
 
-	if refA, ok := routingA.(*ReferenceRouting); ok {
-		if altARoute := refA.ReferenceRoute(routingB.Keyspace()); altARoute != nil {
+	if refA, ok := routingA.(*AnyShardRouting); ok {
+		if altARoute := refA.AlternateInKeyspace(routingB.Keyspace()); altARoute != nil {
 			return altARoute, rhsRoute, altARoute.Routing, routingB, true
 		}
 	}
 
-	if refB, ok := routingB.(*ReferenceRouting); ok {
-		if altBRoute := refB.ReferenceRoute(routingA.Keyspace()); altBRoute != nil {
+	if refB, ok := routingB.(*AnyShardRouting); ok {
+		if altBRoute := refB.AlternateInKeyspace(routingA.Keyspace()); altBRoute != nil {
 			return lhsRoute, altBRoute, routingA, altBRoute.Routing, true
 		}
 	}
@@ -159,7 +159,7 @@ func getTypeName(myvar interface{}) string {
 }
 
 func getRoutingType(r Routing) routingType {
-	switch t := r.(type) {
+	switch r.(type) {
 	case *InfoSchemaRouting:
 		return infoSchema
 	case *AnyShardRouting:
@@ -172,8 +172,6 @@ func getRoutingType(r Routing) routingType {
 		return none
 	case *TargetedRouting:
 		return targeted
-	case *ReferenceRouting:
-		return getRoutingType(t.InnerRouting())
 	}
 	panic(fmt.Sprintf("switch should be exhaustive, got %T", r))
 }

@@ -500,30 +500,6 @@
               "name": "shard_index"
             }
           ]
-        },
-        "mirror": {
-          "column_vindexes": [
-            {
-              "column": "id",
-              "name": "shard_index"
-            }
-          ]
-        },
-        "mirror_fragment": {
-          "column_vindexes": [
-            {
-              "column": "mirror_id",
-              "name": "shard_index"
-            }
-          ]
-        },
-        "another_mirror": {
-          "column_vindexes": [
-            {
-              "column": "id",
-              "name": "shard_index"
-            }
-          ]
         }
       }
     },
@@ -628,10 +604,7 @@
         "global_ref": {},
         "rerouted_ref": {},
         "source_of_ref": {},
-        "unsharded_ref": {},
-        "mirror": {},
-        "mirror_fragment": {},
-        "another_mirror": {}
+        "unsharded_ref": {}
       }
     },
     "main_2": {

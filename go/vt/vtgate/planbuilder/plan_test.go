@@ -566,6 +566,7 @@ func TestMirrorPlanning(t *testing.T) {
 		TabletType_:   topodatapb.TabletType_PRIMARY,
 		SysVarEnabled: true,
 		TestBuilder:   TestBuilder,
+		Env:           vtenv.NewTestEnv(),
 	}
 	testOutputTempDir := makeTestOutput(t)
 

@@ -1,9 +1,0 @@
-,
-      {
-        "from_table": "user.mirror",
-        "to_tables": ["main.mirror"],
-        "action": "ACTION_MIRROR",
-        "mirror": {
-          "percent": 50.0
-        }
-      }

@@ -132,7 +132,7 @@ type (
 		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
 		CloneForReplicaWarming(ctx context.Context) VCursor
 
-		// CloneForReplicaWarming clones the VCursor for re-use in mirroring queries to other keyspaces
+		// CloneForMirroring clones the VCursor for re-use in mirroring queries to other keyspaces
 		CloneForMirroring(ctx context.Context) VCursor
 	}
 

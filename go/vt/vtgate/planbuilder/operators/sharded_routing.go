@@ -50,9 +50,7 @@ type ShardedRouting struct {
 	SeenPredicates []sqlparser.Expr
 }
 
-var (
-	_ Routing = (*ShardedRouting)(nil)
-)
+var _ Routing = (*ShardedRouting)(nil)
 
 func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 	routing := &ShardedRouting{

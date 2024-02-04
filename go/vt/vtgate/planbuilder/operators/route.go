@@ -110,11 +110,6 @@ type (
 	}
 )
 
-var (
-	_ Operator  = (*Route)(nil)
-	_ TableUser = (*Route)(nil)
-)
-
 // UpdateRoutingLogic first checks if we are dealing with a predicate that
 func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r Routing) Routing {
 	ks := r.Keyspace()
@@ -378,30 +373,21 @@ func createRoute(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	solves semantics.TableSet,
-) (operator Operator) {
+) Operator {
 	if queryTable.IsInfSchema {
 		return createInfSchemaRoute(ctx, queryTable)
 	}
-
-	operator = findTableOrVindexAndCreateRoute(
-		ctx,
-		queryTable,
-		queryTable.Table,
-		solves,
-		true, /*planReferences*/
-	)
-
-	return operator
+	return findVSchemaTableAndCreateRoute(ctx, queryTable, queryTable.Table, solves, true /*planAlternates*/)
 }
 
-// findTableOrVindexAndCreateRoute consults the VSchema to find a suitable
+// findVSchemaTableAndCreateRoute consults the VSchema to find a suitable
 // table, and then creates a route from that.
-func findTableOrVindexAndCreateRoute(
+func findVSchemaTableAndCreateRoute(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	tableName sqlparser.TableName,
 	solves semantics.TableSet,
-	planReferences bool,
+	planAlternates bool,
 ) *Route {
 	vschemaTable, _, _, tabletType, target, err := ctx.VSchema.FindTableOrVindex(tableName)
 	if err != nil {
@@ -415,7 +401,7 @@ func findTableOrVindexAndCreateRoute(
 		queryTable,
 		vschemaTable,
 		solves,
-		planReferences,
+		planAlternates,
 		targeted,
 	)
 }
@@ -458,7 +444,7 @@ func createRouteFromVSchemaTable(
 	queryTable *QueryTable,
 	vschemaTable *vindexes.Table,
 	solves semantics.TableSet,
-	planReferences bool,
+	planAlternates bool,
 	targeted Routing,
 ) *Route {
 	if vschemaTable.Name.String() != queryTable.Table.Name.String() {
@@ -505,11 +491,8 @@ func createRouteFromVSchemaTable(
 			plan.Routing = routing.tryImprove(ctx, queryTable)
 		}
 	case *AnyShardRouting:
-		if planReferences {
-			plan.Routing = &ReferenceRouting{
-				innerRouting:    routing,
-				referenceRoutes: createReferenceRoutesFromVSchemaTable(ctx, queryTable, vschemaTable, solves),
-			}
+		if planAlternates {
+			routing.Alternates = createAlternateRoutesFromVSchemaTable(ctx, queryTable, vschemaTable, solves)
 		}
 	}
 
@@ -529,7 +512,7 @@ func createRoutingForVTable(vschemaTable *vindexes.Table, id semantics.TableSet)
 	}
 }
 
-func createReferenceRoutesFromVSchemaTable(
+func createAlternateRoutesFromVSchemaTable(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	vschemaTable *vindexes.Table,
@@ -540,7 +523,7 @@ func createReferenceRoutesFromVSchemaTable(
 	switch vschemaTable.Type {
 	case "", vindexes.TypeReference:
 		for ksName, referenceTable := range vschemaTable.ReferencedBy {
-			route := findTableOrVindexAndCreateRoute(
+			route := findVSchemaTableAndCreateRoute(
 				ctx,
 				queryTable,
 				sqlparser.TableName{
@@ -548,18 +531,18 @@ func createReferenceRoutesFromVSchemaTable(
 					Qualifier: sqlparser.NewIdentifierCS(ksName),
 				},
 				solves,
-				false, /*planReferences*/
+				false, /*planAlternates*/
 			)
 			routes[referenceTable.Keyspace] = route
 		}
 
 		if vschemaTable.Source != nil {
-			route := findTableOrVindexAndCreateRoute(
+			route := findVSchemaTableAndCreateRoute(
 				ctx,
 				queryTable,
 				vschemaTable.Source.TableName,
 				solves,
-				false, /*planReferences*/
+				false, /*planAlternates*/
 			)
 			keyspace := route.Routing.Keyspace()
 			if keyspace != nil {
@@ -709,10 +692,10 @@ func (r *Route) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 // TablesUsed returns tables used by MergedWith routes, which are not included
 // in Inputs() and thus not a part of the operator tree
 func (r *Route) TablesUsed() []sqlparser.TableName {
-	addString, collect := collectSortedUniqueTableNames()
+	addTable, collect := collectSortedUniqueTableNames()
 	for _, mw := range r.MergedWith {
 		for _, u := range TablesUsed(mw) {
-			addString(u)
+			addTable(u)
 		}
 	}
 	return collect()

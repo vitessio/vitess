@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -32,22 +31,11 @@ func GetMirrorTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:                   "mirrortraffic",
 		Short:                 fmt.Sprintf("Mirror traffic for a %s VReplication workflow.", opts.SubCommand),
-		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer mirrortraffic --percent 50.0 --tablet-types "replica,rdonly"`, opts.SubCommand, opts.Workflow),
+		Example:               fmt.Sprintf(`vtctldclient --server localhost:15999 %s --workflow %s --target-keyspace customer mirrortraffic --percent 50.0`, opts.SubCommand, opts.Workflow),
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"MirrorTraffic"},
 		Args:                  cobra.NoArgs,
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if !cmd.Flags().Lookup("tablet-types").Changed {
-				// We mirror traffic for all tablet types if none are provided.
-				MirrorTrafficOptions.TabletTypes = []topodatapb.TabletType{
-					topodatapb.TabletType_PRIMARY,
-					topodatapb.TabletType_REPLICA,
-					topodatapb.TabletType_RDONLY,
-				}
-			}
-			return nil
-		},
-		RunE: commandMirrorTraffic,
+		RunE:                  commandMirrorTraffic,
 	}
 	return cmd
 }

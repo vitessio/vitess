@@ -225,8 +225,7 @@ func AddCommonCreateFlags(cmd *cobra.Command) {
 }
 
 var MirrorTrafficOptions = struct {
-	Percent     float32
-	TabletTypes []topodatapb.TabletType
+	Percent float32
 }{}
 
 var SwitchTrafficOptions = struct {

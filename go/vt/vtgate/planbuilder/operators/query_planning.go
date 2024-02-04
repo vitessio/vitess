@@ -227,7 +227,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 
 	rb, isRoute := in.src().(*Route)
 	if isRoute && rb.IsSingleShard() {
-		return Swap(in, rb, "push horizon into single-shard route")
+		return Swap(in, rb, "push horizon into route")
 	}
 
 	sel, isSel := in.selectStatement().(*sqlparser.Select)
@@ -245,7 +245,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 		in.selectStatement().GetLimit() == nil
 
 	if canPush {
-		return Swap(in, rb, "push horizon into simple select route")
+		return Swap(in, rb, "push horizon into route")
 	}
 
 	return expandHorizon(ctx, in)

@@ -20,7 +20,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var (
@@ -67,7 +66,6 @@ func registerCommands(root *cobra.Command) {
 
 	mirrorTrafficCommand := common.GetMirrorTrafficCommand(opts)
 	mirrorTrafficCommand.Flags().Float32Var(&common.MirrorTrafficOptions.Percent, "percent", 1.0, "Percentage of traffic to mirror.")
-	mirrorTrafficCommand.Flags().Var((*topoproto.TabletTypeListFlag)(&common.MirrorTrafficOptions.TabletTypes), "tablet-types", "Source tablet types to mirror traffic from (e.g. PRIMARY,REPLICA,RDONLY).")
 	base.AddCommand(mirrorTrafficCommand)
 
 	switchTrafficCommand := common.GetSwitchTrafficCommand(opts)
