@@ -19,6 +19,7 @@ package workflow
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -338,6 +339,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		targets         = make(map[string]*MigrationTarget, len(targetShards))
 		workflowType    binlogdatapb.VReplicationWorkflowType
 		workflowSubType binlogdatapb.VReplicationWorkflowSubType
+		options         vtctldatapb.Workflow_VReplicationWorkflowOptions
 	)
 
 	// We check all shards in the target keyspace. Not all of them may have a
@@ -376,6 +378,9 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		optTabletTypes = topoproto.MakeStringTypeCSV(wf.TabletTypes)
 		workflowType = wf.WorkflowType
 		workflowSubType = wf.WorkflowSubType
+		if err := json.Unmarshal([]byte(wf.GetOptions()), &options); err != nil {
+			return nil, err
+		}
 
 		for _, stream := range wf.Streams {
 			if stream.Message == Frozen {
@@ -398,6 +403,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		OptTabletTypes:  optTabletTypes,
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
+		Options:         &options,
 	}, nil
 }
 
@@ -757,4 +763,36 @@ func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.Table
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
 	}, nil
+}
+
+func addFilter(sel *sqlparser.Select, filter sqlparser.Expr) {
+	if sel.Where != nil {
+		sel.Where = &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+			Expr: &sqlparser.AndExpr{
+				Left:  filter,
+				Right: sel.Where.Expr,
+			},
+		}
+	} else {
+		sel.Where = &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+			Expr: filter,
+		}
+	}
+}
+
+func getAdditionalFilter(parser *sqlparser.Parser, filter string) (*sqlparser.Where, error) {
+	if filter == "" {
+		return nil, nil
+	}
+	stmt, err := parser.Parse(fmt.Sprintf("select * from t where %s", filter))
+	if err != nil {
+		return nil, err
+	}
+	sel, ok := stmt.(*sqlparser.Select)
+	if !ok {
+		return nil, fmt.Errorf("error in predicate: %s", filter)
+	}
+	return sel.Where, nil
 }

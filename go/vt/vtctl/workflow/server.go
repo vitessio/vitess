@@ -18,6 +18,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -412,7 +413,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			time_throttled,
 			rows_copied,
 			tablet_types,
-			cell
+			cell,
+			options
 		FROM
 			_vt.vreplication
 		%s`,
@@ -598,6 +600,10 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			cells[i] = strings.TrimSpace(cell)
 		}
 
+		options := row["options"].ToString()
+		if err := json.Unmarshal([]byte(options), &workflow.Options); err != nil {
+			return err
+		}
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:                        id,
 			Shard:                     tablet.Shard,
@@ -1451,6 +1457,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		OnDdl:                     req.OnDdl,
 		DeferSecondaryKeys:        req.DeferSecondaryKeys,
 		AtomicCopy:                req.AtomicCopy,
+		AdditionalFilter:          req.AdditionalFilter,
 	}
 	if req.SourceTimeZone != "" {
 		ms.SourceTimeZone = req.SourceTimeZone
@@ -2575,6 +2582,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 		optTabletTypes:  optTabletTypes,
 		workflowType:    tgtInfo.WorkflowType,
 		workflowSubType: tgtInfo.WorkflowSubType,
+		options:         tgtInfo.Options,
 	}
 	log.Infof("Migration ID for workflow %s: %d", workflowName, ts.id)
 	sourceTopo := s.ts

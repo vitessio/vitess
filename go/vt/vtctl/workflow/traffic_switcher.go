@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -174,6 +176,7 @@ type TargetInfo struct {
 	OptTabletTypes  string
 	WorkflowType    binlogdatapb.VReplicationWorkflowType
 	WorkflowSubType binlogdatapb.VReplicationWorkflowSubType
+	Options         *vtctldatapb.Workflow_VReplicationWorkflowOptions
 }
 
 // MigrationSource contains the metadata for each migration source.
@@ -234,6 +237,7 @@ type trafficSwitcher struct {
 	targetTimeZone   string
 	workflowType     binlogdatapb.VReplicationWorkflowType
 	workflowSubType  binlogdatapb.VReplicationWorkflowSubType
+	options          *vtctldatapb.Workflow_VReplicationWorkflowOptions
 }
 
 func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.ws.ts }
@@ -849,7 +853,10 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 			SourceTimeZone: bls.TargetTimeZone,
 			TargetTimeZone: bls.SourceTimeZone,
 		}
-
+		additionalWhereClause, err := getAdditionalFilter(ts.ws.env.Parser(), ts.options.AdditionalFilter)
+		if err != nil {
+			return err
+		}
 		for _, rule := range bls.Filter.Rules {
 			if rule.Filter == "exclude" {
 				reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
@@ -886,15 +893,27 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 					}
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
+
+			}
+			stmt, err := ts.ws.env.Parser().Parse(filter)
+			if err != nil {
+				return err
+			}
+			sel, ok := stmt.(*sqlparser.Select)
+			if !ok {
+				return fmt.Errorf("unrecognized statement: %s", filter)
+			}
+			if additionalWhereClause != nil {
+				addFilter(sel, additionalWhereClause.Expr)
 			}
 			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
 				Match:  rule.Match,
-				Filter: filter,
+				Filter: sqlparser.String(sel),
 			})
 		}
 		log.Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
 			source.GetPrimary().Alias, ts.ReverseWorkflowName(), target.Position)
-		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias,
+		_, err = ts.VReplicationExec(ctx, source.GetPrimary().Alias,
 			binlogplayer.CreateVReplicationState(ts.ReverseWorkflowName(), reverseBls, target.Position,
 				binlogdatapb.VReplicationWorkflowState_Stopped, source.GetPrimary().DbName(), ts.workflowType, ts.workflowSubType))
 		if err != nil {

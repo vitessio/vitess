@@ -18,6 +18,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -121,6 +122,14 @@ func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreat
 		if err != nil {
 			return err
 		}
+		vrOptions := &vtctldatapb.Workflow_VReplicationWorkflowOptions{}
+		if mz.ms.AdditionalFilter != "" {
+			vrOptions.AdditionalFilter = mz.ms.AdditionalFilter
+		}
+		optionsJSON, err := json.Marshal(vrOptions)
+		if err != nil {
+			return err
+		}
 		_, err = mz.tmc.CreateVReplicationWorkflow(mz.ctx, targetPrimary.Tablet, &tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 			Workflow:                  req.Workflow,
 			BinlogSource:              blses,
@@ -132,6 +141,7 @@ func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreat
 			DeferSecondaryKeys:        req.DeferSecondaryKeys,
 			AutoStart:                 req.AutoStart,
 			StopAfterCopy:             req.StopAfterCopy,
+			Options:                   string(optionsJSON),
 		})
 		return err
 	})
@@ -288,6 +298,11 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			TargetTimeZone:  mz.ms.TargetTimeZone,
 			OnDdl:           binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[mz.ms.OnDdl]),
 		}
+		additionalWhereClause, err := getAdditionalFilter(mz.env.Parser(), mz.ms.AdditionalFilter)
+		if err != nil {
+			return nil, err
+		}
+
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{
 				Match: ts.TargetTable,
@@ -307,7 +322,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			if !ok {
 				return nil, fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
 			}
-			filter := ts.SourceExpression
+
 			if !keyRangesEqual && mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
 				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 				if err != nil {
@@ -332,25 +347,12 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,
 				}
-				if sel.Where != nil {
-					sel.Where = &sqlparser.Where{
-						Type: sqlparser.WhereClause,
-						Expr: &sqlparser.AndExpr{
-							Left:  inKeyRange,
-							Right: sel.Where.Expr,
-						},
-					}
-				} else {
-					sel.Where = &sqlparser.Where{
-						Type: sqlparser.WhereClause,
-						Expr: inKeyRange,
-					}
-				}
-
-				filter = sqlparser.String(sel)
+				addFilter(sel, inKeyRange)
 			}
-
-			rule.Filter = filter
+			if additionalWhereClause != nil {
+				addFilter(sel, additionalWhereClause.Expr)
+			}
+			rule.Filter = sqlparser.String(sel)
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
 		blses = append(blses, bls)

@@ -47,6 +47,7 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringSliceVar(&createOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying.")
 	create.Flags().BoolVar(&createOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
 	create.Flags().BoolVar(&createOptions.AtomicCopy, "atomic-copy", false, "(EXPERIMENTAL) A single copy phase is run for all tables from the source. Use this, for example, if your source keyspace has tables which use foreign key constraints.")
+	create.Flags().StringVar(&createOptions.AdditionalFilter, "additional-filter", "", "Additional filter to apply to the tables being copied in addition to the default filter.")
 	base.AddCommand(create)
 
 	opts := &common.SubCommandsOpts{
