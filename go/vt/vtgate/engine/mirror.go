@@ -25,20 +25,24 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// Mirror represents the instructions to execute an authoritative source,
-// and compare the results of that execution to those of one or more
-// non-authoritative mirroring targets.
 type (
+	// Mirror represents the instructions to execute an authoritative source,
+	// and compare the results of that execution to those of one or more
+	// non-authoritative mirroring targets.
 	Mirror struct {
 		Primitive Primitive
 		Target    MirrorTarget
 	}
 
+	// MirrorTarget contains the Primitive for mirroring a query to the
+	// non-authoritative target of the Mirror primitive.
 	MirrorTarget interface {
 		Primitive
 		Accept() bool
 	}
 
+	// PercentMirrorTarget contains the Primitive to mirror to, an will
+	// Accept() an execution based if a random dice-roll is less than Percent.
 	PercentMirrorTarget struct {
 		Percent   float32
 		Primitive Primitive
@@ -48,6 +52,7 @@ type (
 var (
 	_ Primitive    = (*Mirror)(nil)
 	_ Primitive    = (MirrorTarget)(nil)
+	_ Primitive    = (*PercentMirrorTarget)(nil)
 	_ MirrorTarget = (*PercentMirrorTarget)(nil)
 )
 
@@ -95,6 +100,9 @@ func (m *Mirror) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 	return m.Primitive.TryExecute(ctx, vcursor, bindVars, wantfields)
 }
 
+// TODO(maxeng): does it make sense mirror stream executions? One of the goals
+// of mirroring is to be able to compare the error codes returned by the main
+// and mirrored queries. Can we do that here?
 func (m *Mirror) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	if m.Target.Accept() {
 		var wg sync.WaitGroup
@@ -114,10 +122,7 @@ func (m *Mirror) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars
 // Inputs is a slice containing the inputs to this Primitive.
 // The returned map has additional information about the inputs, that is used in the description.
 func (m *Mirror) Inputs() ([]Primitive, []map[string]any) {
-	inputs := make([]Primitive, 2)
-	inputs[0] = m.Primitive
-	inputs[1] = m.Target
-	return inputs, nil
+	return []Primitive{m.Primitive, m.Target}, nil
 }
 
 // description is the description, sans the inputs, of this Primitive.
@@ -165,17 +170,15 @@ func (m *PercentMirrorTarget) Inputs() ([]Primitive, []map[string]any) {
 // description is the description, sans the inputs, of this Primitive.
 // to get the plan description with all children, use PrimitiveToPlanDescription()
 func (m *PercentMirrorTarget) description() PrimitiveDescription {
-	other := map[string]any{
-		"Percent": m.Percent,
-	}
-
 	return PrimitiveDescription{
 		OperatorType: "MirrorTarget",
 		Variant:      "Percent",
-		Other:        other,
+		Other: map[string]any{
+			"Percent": m.Percent,
+		},
 	}
 }
 
 func (m *PercentMirrorTarget) Accept() bool {
-	return m.Percent > (rand.Float32() * 100.0)
+	return m.Percent >= (rand.Float32() * 100.0)
 }
