@@ -3818,6 +3818,19 @@ func (asm *assembler) Fn_FROM_DAYS() {
 	}, "FN FROM_DAYS INT64(SP-1)")
 }
 
+func (asm *assembler) Fn_TIME_TO_SEC() {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			return 1
+		}
+		d := env.vm.stack[env.vm.sp-1].(*evalTemporal)
+
+		sec := d.dt.Time.ToSeconds()
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(sec)
+		return 1
+	}, "FN TIME_TO_SEC TIME(SP-1)")
+}
+
 func (asm *assembler) Fn_QUARTER() {
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-1] == nil {
