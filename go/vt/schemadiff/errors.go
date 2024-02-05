@@ -294,18 +294,18 @@ type ForeignKeyLoopError struct {
 func (e *ForeignKeyLoopError) Error() string {
 	tableIsInsideLoop := false
 
-	escaped := make([]string, 0, len(e.Loop))
-	for _, t := range e.Loop {
-		escaped = append(escaped, sqlescape.EscapeID(t))
+	escaped := make([]string, len(e.Loop))
+	for i, t := range e.Loop {
+		escaped[i] = sqlescape.EscapeID(t)
 		if t == e.Table {
 			tableIsInsideLoop = true
 		}
 	}
 	if tableIsInsideLoop {
-		return fmt.Sprintf("table %s participates in foreign key loop: %s",
+		return fmt.Sprintf("table %s participates in a circular foreign key reference: %s",
 			sqlescape.EscapeID(e.Table), strings.Join(escaped, ", "))
 	}
-	return fmt.Sprintf("table %s references foreign key loop: %s",
+	return fmt.Sprintf("table %s references a circular foreign key reference: %s",
 		sqlescape.EscapeID(e.Table), strings.Join(escaped, ", "))
 }
 

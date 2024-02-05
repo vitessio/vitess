@@ -156,7 +156,7 @@ func (s *Schema) findForeignKeyLoop(tableName string, seen []string) (loop []str
 		}
 		if seenTable == tableName {
 			// This table alreay appears in `seen`.
-			// We only return the loop portion of `seen` that starts and ends with this table.
+			// We only return the suffix of `seen` that starts (and now ends) with this table.
 			return seen[i:]
 		}
 	}
