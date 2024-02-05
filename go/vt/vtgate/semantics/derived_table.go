@@ -154,14 +154,14 @@ func (dt *DerivedTable) GetVindexTable() *vindexes.Table {
 	return nil
 }
 
-func (dt *DerivedTable) getColumns() []ColumnInfo {
+func (dt *DerivedTable) getColumns() ([]ColumnInfo, error) {
 	cols := make([]ColumnInfo, 0, len(dt.columnNames))
 	for _, col := range dt.columnNames {
 		cols = append(cols, ColumnInfo{
 			Name: col,
 		})
 	}
-	return cols
+	return cols, nil
 }
 
 func (dt *DerivedTable) hasStar() bool {

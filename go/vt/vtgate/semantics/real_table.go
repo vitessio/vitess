@@ -40,7 +40,11 @@ var _ TableInfo = (*RealTable)(nil)
 // dependencies implements the TableInfo interface
 func (r *RealTable) dependencies(colName string, org originable) (dependencies, error) {
 	ts := org.tableSetFor(r.ASTNode)
-	for _, info := range r.getColumns() {
+	columns, err := r.getColumns()
+	if err != nil {
+		return nil, err
+	}
+	for _, info := range columns {
 		if strings.EqualFold(info.Name, colName) {
 			return createCertain(ts, ts, info.Type), nil
 		}
@@ -68,7 +72,7 @@ func (r *RealTable) IsInfSchema() bool {
 }
 
 // GetColumns implements the TableInfo interface
-func (r *RealTable) getColumns() []ColumnInfo {
+func (r *RealTable) getColumns() ([]ColumnInfo, error) {
 	return vindexTableToColumnInfo(r.Table, r.collationEnv)
 }
 
@@ -117,24 +121,28 @@ func (r *RealTable) matches(name sqlparser.TableName) bool {
 	return (name.Qualifier.IsEmpty() || name.Qualifier.String() == r.dbName) && r.tableName == name.Name.String()
 }
 
-func vindexTableToColumnInfo(tbl *vindexes.Table, collationEnv *collations.Environment) []ColumnInfo {
+func vindexTableToColumnInfo(tbl *vindexes.Table, collationEnv *collations.Environment) ([]ColumnInfo, error) {
 	if tbl == nil {
-		return nil
+		return nil, nil
 	}
 	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
+		tt, err := col.ToEvalengineType(collationEnv)
+		if err != nil {
+			return nil, err
+		}
 
 		cols = append(cols, ColumnInfo{
 			Name:      col.Name.String(),
-			Type:      col.ToEvalengineType(collationEnv),
+			Type:      tt,
 			Invisible: col.Invisible,
 		})
 		nameMap[col.Name.String()] = nil
 	}
 	// If table is authoritative, we do not need ColumnVindexes to help in resolving the unqualified columns.
 	if tbl.ColumnListAuthoritative {
-		return cols
+		return cols, nil
 	}
 	for _, vindex := range tbl.ColumnVindexes {
 		for _, column := range vindex.Columns {
@@ -148,5 +156,5 @@ func vindexTableToColumnInfo(tbl *vindexes.Table, collationEnv *collations.Envir
 			nameMap[name] = nil
 		}
 	}
-	return cols
+	return cols, nil
 }

@@ -1630,8 +1630,13 @@ func fakeSchemaInfo() *FakeSI {
 		Name: sqlparser.NewIdentifierCI("uid"),
 		Type: querypb.Type_INT64,
 	}, {
-		Name: sqlparser.NewIdentifierCI("name"),
-		Type: querypb.Type_VARCHAR,
+		Name:          sqlparser.NewIdentifierCI("name"),
+		Type:          querypb.Type_VARCHAR,
+		CollationName: "utf8_bin",
+	}, {
+		Name:          sqlparser.NewIdentifierCI("textcol"),
+		Type:          querypb.Type_VARCHAR,
+		CollationName: "big5_bin",
 	}}
 
 	si := &FakeSI{
