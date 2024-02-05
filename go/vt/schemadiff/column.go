@@ -171,7 +171,7 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 	}
 
 	getEnumValuesMap := func(enumValues []string) map[string]int {
-		m := make(map[string]int)
+		m := make(map[string]int, len(enumValues))
 		for i, enumValue := range enumValues {
 			m[enumValue] = i
 		}
