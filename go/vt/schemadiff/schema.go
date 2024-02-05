@@ -22,9 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/capabilities"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -1093,7 +1091,7 @@ func (s *Schema) getEntityColumnNames(entityName string, schemaInformation *decl
 	case *CreateViewEntity:
 		return s.getViewColumnNames(entity, schemaInformation)
 	}
-	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected entity type for %v", entityName)
+	return nil, &UnsupportedEntityError{Entity: entity.Name(), Statement: entity.Create().CanonicalStatementString()}
 }
 
 // getTableColumnNames returns the names of columns in given table.
