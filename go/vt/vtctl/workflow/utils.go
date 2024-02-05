@@ -378,8 +378,12 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		optTabletTypes = topoproto.MakeStringTypeCSV(wf.TabletTypes)
 		workflowType = wf.WorkflowType
 		workflowSubType = wf.WorkflowSubType
-		if err := json.Unmarshal([]byte(wf.GetOptions()), &options); err != nil {
-			return nil, err
+		optionsJSON := wf.GetOptions()
+		if optionsJSON != "" {
+			if err := json.Unmarshal([]byte(optionsJSON), &options); err != nil {
+				log.Errorf("failed to unmarshal options: %v %s", err, optionsJSON)
+				return nil, err
+			}
 		}
 
 		for _, stream := range wf.Streams {
