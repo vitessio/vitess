@@ -81,7 +81,7 @@ func (d *Delete) ShortDescription() string {
 func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (op Operator) {
 	childFks := ctx.SemTable.GetChildForeignKeysForTable(deleteStmt.Targets[0])
 
-	// If the delete statement has a limit and has foreign keys, we will use a DeleteWithInput
+	// If the delete statement has a limit and has foreign keys, we will use a DMLWithInput
 	// operator wherein we do a selection first and use that output for the subsequent deletes.
 	if len(childFks) > 0 && deleteStmt.Limit != nil {
 		return deletePlanningForLimitFk(ctx, deleteStmt)
@@ -139,11 +139,11 @@ func deletePlanningForLimitFk(ctx *plancontext.PlanningContext, del *sqlparser.D
 	if len(leftComp) == 1 {
 		lhs = leftComp[0]
 	}
-	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmVals), nil)
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmlVals), nil)
 	del.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
 
-	return &DeleteWithInput{
-		Delete: createOperatorFromDelete(ctx, del),
+	return &DMLWithInput{
+		DML:    createOperatorFromDelete(ctx, del),
 		Source: createOperatorFromSelect(ctx, selectStmt),
 		cols:   cols,
 	}

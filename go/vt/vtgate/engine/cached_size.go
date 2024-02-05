@@ -177,19 +177,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	size += cached.RoutingParameters.CachedSize(true)
 	return size
 }
-func (cached *Delete) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(8)
-	}
-	// field DML *vitess.io/vitess/go/vt/vtgate/engine.DML
-	size += cached.DML.CachedSize(true)
-	return size
-}
-func (cached *DeleteWithInput) CachedSize(alloc bool) int64 {
+func (cached *DMLWithInput) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -209,6 +197,18 @@ func (cached *DeleteWithInput) CachedSize(alloc bool) int64 {
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.OutputCols)) * int64(8))
 	}
+	return size
+}
+func (cached *Delete) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	// field DML *vitess.io/vitess/go/vt/vtgate/engine.DML
+	size += cached.DML.CachedSize(true)
 	return size
 }
 func (cached *Distinct) CachedSize(alloc bool) int64 {

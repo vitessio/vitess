@@ -61,7 +61,7 @@ func (p Phase) String() string {
 	case subquerySettling:
 		return "settle subqueries"
 	case deleteWithInput:
-		return "expand delete to delete with input"
+		return "expand delete to dml with input"
 	case updateWithSuq:
 		return "move update to outer side of subquery container"
 	default:
@@ -137,17 +137,17 @@ func findDeletesAboveRoute(ctx *plancontext.PlanningContext, root Operator) Oper
 			return in, NoRewrite
 		}
 
-		return createDeleteWithInput(ctx, delOp, delOp.Source)
+		return createDMLWithInput(ctx, delOp, delOp.Source)
 	}
 
 	return BottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func createDeleteWithInput(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
+func createDMLWithInput(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
 	if len(in.Target.VTable.PrimaryKey) == 0 {
 		panic(vterrors.VT09015())
 	}
-	dm := &DeleteWithInput{}
+	dm := &DMLWithInput{}
 	var leftComp sqlparser.ValTuple
 	proj := newAliasedProjection(src)
 	for _, col := range in.Target.VTable.PrimaryKey {
@@ -177,7 +177,7 @@ func createDeleteWithInput(ctx *plancontext.PlanningContext, in *Delete, src Ope
 	if len(leftComp) == 1 {
 		lhs = leftComp[0]
 	}
-	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmVals), nil)
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmlVals), nil)
 	targetQT := targetTable.QTable
 	qt := &QueryTable{
 		ID:         targetQT.ID,
@@ -193,9 +193,9 @@ func createDeleteWithInput(ctx *plancontext.PlanningContext, in *Delete, src Ope
 		in.OwnedVindexQuery.From = sqlparser.TableExprs{targetQT.Alias}
 		in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
 	}
-	dm.Delete = in
+	dm.DML = in
 
-	return dm, Rewrote("changed Delete to DeleteWithInput")
+	return dm, Rewrote("changed Delete to DMLWithInput")
 }
 
 func findUpdateWithSubq(ctx *plancontext.PlanningContext, root Operator) Operator {

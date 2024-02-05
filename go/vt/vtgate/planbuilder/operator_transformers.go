@@ -74,26 +74,26 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformHashJoin(ctx, op)
 	case *operators.Sequential:
 		return transformSequential(ctx, op)
-	case *operators.DeleteWithInput:
-		return transformDeleteWithInput(ctx, op)
+	case *operators.DMLWithInput:
+		return transformDMLWithInput(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
 }
 
-func transformDeleteWithInput(ctx *plancontext.PlanningContext, op *operators.DeleteWithInput) (logicalPlan, error) {
+func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWithInput) (logicalPlan, error) {
 	input, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 
-	del, err := transformToLogicalPlan(ctx, op.Delete)
+	del, err := transformToLogicalPlan(ctx, op.DML)
 	if err != nil {
 		return nil, err
 	}
-	return &deleteWithInput{
+	return &dmlWithInput{
 		input:      input,
-		delete:     del,
+		dml:        del,
 		outputCols: op.Offsets,
 	}, nil
 }
