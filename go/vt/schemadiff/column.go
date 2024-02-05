@@ -130,7 +130,7 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 				}()
 				c.columnDefinition.Type.Options.Collate = t1cc.collate
 			}
-			if c.columnDefinition.Type.Options.Collate = t1cc.collate; c.columnDefinition.Type.Options.Collate == "" {
+			if c.columnDefinition.Type.Options.Collate = t1cc.collate; t1cc.charset != "" && c.columnDefinition.Type.Options.Collate == "" {
 				collation := env.CollationEnv().DefaultCollationForCharset(t1cc.charset)
 				if collation == collations.Unknown {
 					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot match collation to charset %v", t1cc.charset)
@@ -157,7 +157,7 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 				other.columnDefinition.Type.Options.Collate = ""
 			}()
 			other.columnDefinition.Type.Charset.Name = t2cc.charset
-			if other.columnDefinition.Type.Options.Collate = t2cc.collate; other.columnDefinition.Type.Options.Collate == "" {
+			if other.columnDefinition.Type.Options.Collate = t2cc.collate; t2cc.charset != "" && other.columnDefinition.Type.Options.Collate == "" {
 				collation := env.CollationEnv().DefaultCollationForCharset(t2cc.charset)
 				if collation == collations.Unknown {
 					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot match collation to charset %v", t2cc.charset)

@@ -20,8 +20,6 @@ import (
 	"context"
 	"expvar"
 	"fmt"
-	"io/fs"
-	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -276,6 +274,48 @@ func TestCollationsForSchemaEngineTables(t *testing.T) {
 			currentSchema: "",
 			expectedDiff:  "CREATE TABLE IF NOT EXISTS `_vt`.`tables` (\n\t`TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,\n\t`TABLE_NAME` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,\n\t`CREATE_STATEMENT` longtext,\n\t`CREATE_TIME` bigint,\n\tPRIMARY KEY (`TABLE_SCHEMA`, `TABLE_NAME`)\n) ENGINE InnoDB",
 		},
+		{
+			name:          "views schema in MySQL 5.7",
+			mysqlVersion:  "5.7.31",
+			tableName:     "views",
+			currentSchema: "",
+			expectedDiff:  "CREATE TABLE IF NOT EXISTS `_vt`.`views` (\n\t`TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL,\n\t`TABLE_NAME` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL,\n\t`CREATE_STATEMENT` longtext,\n\t`VIEW_DEFINITION` longtext NOT NULL,\n\tPRIMARY KEY (`TABLE_SCHEMA`, `TABLE_NAME`)\n) ENGINE InnoDB",
+		},
+		{
+			name:          "views schema in MySQL 8.0",
+			mysqlVersion:  "8.0.30",
+			tableName:     "views",
+			currentSchema: "",
+			expectedDiff:  "CREATE TABLE IF NOT EXISTS `_vt`.`views` (\n\t`TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,\n\t`TABLE_NAME` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,\n\t`CREATE_STATEMENT` longtext,\n\t`VIEW_DEFINITION` longtext NOT NULL,\n\tPRIMARY KEY (`TABLE_SCHEMA`, `TABLE_NAME`)\n) ENGINE InnoDB",
+		},
+		{
+			name:          "tables upgrade from MySQL 5.7 to MySQL 8.0",
+			mysqlVersion:  "8.0.30",
+			tableName:     "tables",
+			currentSchema: "CREATE TABLE IF NOT EXISTS `_vt`.`tables` (\n\t`TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL,\n\t`TABLE_NAME` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL,\n\t`CREATE_STATEMENT` longtext,\n\t`CREATE_TIME` bigint,\n\tPRIMARY KEY (`TABLE_SCHEMA`, `TABLE_NAME`)\n) ENGINE InnoDB",
+			expectedDiff:  "ALTER TABLE `_vt`.`tables` MODIFY COLUMN `TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, MODIFY COLUMN `TABLE_NAME` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, ALGORITHM = COPY",
+		},
+		{
+			name:          "views upgrade from MySQL 5.7 to MySQL 8.0",
+			mysqlVersion:  "8.0.30",
+			tableName:     "views",
+			currentSchema: "CREATE TABLE IF NOT EXISTS `_vt`.`views` (\n\t`TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL,\n\t`TABLE_NAME` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL,\n\t`CREATE_STATEMENT` longtext,\n\t`VIEW_DEFINITION` longtext NOT NULL,\n\tPRIMARY KEY (`TABLE_SCHEMA`, `TABLE_NAME`)\n) ENGINE InnoDB",
+			expectedDiff:  "ALTER TABLE `_vt`.`views` MODIFY COLUMN `TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, MODIFY COLUMN `TABLE_NAME` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, ALGORITHM = COPY",
+		},
+		{
+			name:          "tables downgrade from MySQL 8.0 to MySQL 5.7",
+			mysqlVersion:  "5.7.31",
+			tableName:     "tables",
+			currentSchema: "CREATE TABLE IF NOT EXISTS `_vt`.`tables` (\n\t`TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,\n\t`TABLE_NAME` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,\n\t`CREATE_STATEMENT` longtext,\n\t`CREATE_TIME` bigint,\n\tPRIMARY KEY (`TABLE_SCHEMA`, `TABLE_NAME`)\n) ENGINE InnoDB",
+			expectedDiff:  "ALTER TABLE `_vt`.`tables` MODIFY COLUMN `TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL, MODIFY COLUMN `TABLE_NAME` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL, ALGORITHM = COPY",
+		},
+		{
+			name:          "views downgrade from MySQL 8.0 to MySQL 5.7",
+			mysqlVersion:  "5.7.31",
+			tableName:     "views",
+			currentSchema: "CREATE TABLE IF NOT EXISTS `_vt`.`views` (\n\t`TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,\n\t`TABLE_NAME` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,\n\t`CREATE_STATEMENT` longtext,\n\t`VIEW_DEFINITION` longtext NOT NULL,\n\tPRIMARY KEY (`TABLE_SCHEMA`, `TABLE_NAME`)\n) ENGINE InnoDB",
+			expectedDiff:  "ALTER TABLE `_vt`.`views` MODIFY COLUMN `TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL, MODIFY COLUMN `TABLE_NAME` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL, ALGORITHM = COPY",
+		},
 	}
 
 	for _, tt := range testcases {
@@ -307,33 +347,4 @@ func TestCollationsForSchemaEngineTables(t *testing.T) {
 
 		})
 	}
-}
-
-func findTablesAndViewsSchema() (string, string, error) {
-	var tablesSchema, viewsSchema string
-	err := fs.WalkDir(schemaLocation, ".", func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !entry.IsDir() {
-			_, fname := filepath.Split(path)
-
-			if fname == "tables.sql" {
-				schema, err := schemaLocation.ReadFile(path)
-				if err != nil {
-					panic(err)
-				}
-				tablesSchema = string(schema)
-			}
-			if fname == "views.sql" {
-				schema, err := schemaLocation.ReadFile(path)
-				if err != nil {
-					panic(err)
-				}
-				viewsSchema = string(schema)
-			}
-		}
-		return nil
-	})
-	return tablesSchema, viewsSchema, err
 }

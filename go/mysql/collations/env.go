@@ -180,7 +180,7 @@ func makeEnv(version collver) *Environment {
 		}
 	}
 
-	for from, to := range charsetAliases() {
+	for from, to := range charsetAliases(env.version) {
 		env.byCharset[from] = env.byCharset[to]
 	}
 
@@ -212,14 +212,12 @@ var SystemCollation = TypedCollation{
 // this mapping will change, so it's important to use this helper so that
 // Vitess code has a consistent mapping for the active collations environment.
 func (env *Environment) CharsetAlias(charset string) (alias string, ok bool) {
-	alias, ok = charsetAliases()[charset]
+	alias, ok = charsetAliases(env.version)[charset]
 	return
 }
 
 // CollationAlias returns the internal collaction name for the given charset.
-// For now, this maps all `utf8` to `utf8mb3` collation names; in future versions of MySQL,
-// this mapping will change, so it's important to use this helper so that
-// Vitess code has a consistent mapping for the active collations environment.
+// For now, this maps `utf8` to `utf8mb4` collation names for MySQL 8.0 and maps the rest to `utf8mb3`.
 func (env *Environment) CollationAlias(collation string) (string, bool) {
 	col := env.LookupByName(collation)
 	if col == Unknown {
@@ -233,7 +231,7 @@ func (env *Environment) CollationAlias(collation string) (string, bool) {
 		return collation, false
 	}
 	for _, alias := range allCols.alias {
-		for source, dest := range charsetAliases() {
+		for source, dest := range charsetAliases(env.version) {
 			if strings.HasPrefix(collation, fmt.Sprintf("%s_", source)) &&
 				strings.HasPrefix(alias.name, fmt.Sprintf("%s_", dest)) {
 				return alias.name, true

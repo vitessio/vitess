@@ -58,7 +58,15 @@ func (v collver) String() string {
 		panic("invalid version identifier")
 	}
 }
-func charsetAliases() map[string]string { return map[string]string{"utf8": "utf8mb3"} }
+
+func charsetAliases(version collver) map[string]string {
+	switch version {
+	case collverMySQL8:
+		return map[string]string{"utf8": "utf8mb4"}
+	default:
+		return map[string]string{"utf8": "utf8mb3"}
+	}
+}
 
 var globalVersionInfo = map[ID]struct {
 	alias     []collalias
@@ -108,7 +116,6 @@ var globalVersionInfo = map[ID]struct {
 	43:   {alias: []collalias{{0b01111111, "macce_bin", "macce"}}, isdefault: 0b00000000},
 	44:   {alias: []collalias{{0b01111111, "cp1250_croatian_ci", "cp1250"}}, isdefault: 0b00000000},
 	45:   {alias: []collalias{{0b01111111, "utf8mb4_general_ci", "utf8mb4"}}, isdefault: 0b00111111},
-	46:   {alias: []collalias{{0b01111111, "utf8mb4_bin", "utf8mb4"}}, isdefault: 0b00000000},
 	47:   {alias: []collalias{{0b01111111, "latin1_bin", "latin1"}}, isdefault: 0b00000000},
 	48:   {alias: []collalias{{0b01111111, "latin1_general_ci", "latin1"}}, isdefault: 0b00000000},
 	49:   {alias: []collalias{{0b01111111, "latin1_general_cs", "latin1"}}, isdefault: 0b00000000},
@@ -145,7 +152,7 @@ var globalVersionInfo = map[ID]struct {
 	80:   {alias: []collalias{{0b01111111, "cp850_bin", "cp850"}}, isdefault: 0b00000000},
 	81:   {alias: []collalias{{0b01111111, "cp852_bin", "cp852"}}, isdefault: 0b00000000},
 	82:   {alias: []collalias{{0b01111111, "swe7_bin", "swe7"}}, isdefault: 0b00000000},
-	83:   {alias: []collalias{{0b01111111, "utf8_bin", "utf8"}, {0b01111111, "utf8mb3_bin", "utf8mb3"}}, isdefault: 0b00000000},
+	83:   {alias: []collalias{{0b01111111, "utf8_bin", "utf8"}, {0b01111111, "utf8mb3_bin", "utf8mb3"}, {0b01111111, "utf8mb4_bin", "utf8mb4"}}, isdefault: 0b00000000},
 	84:   {alias: []collalias{{0b01111111, "big5_bin", "big5"}}, isdefault: 0b00000000},
 	85:   {alias: []collalias{{0b01111111, "euckr_bin", "euckr"}}, isdefault: 0b00000000},
 	86:   {alias: []collalias{{0b01111111, "gb2312_bin", "gb2312"}}, isdefault: 0b00000000},
