@@ -442,7 +442,7 @@ type UnknownColumnCharsetCollationError struct {
 }
 
 func (e *UnknownColumnCharsetCollationError) Error() string {
-	return fmt.Sprintf("unable to determine collation for column %s with charset %s", sqlescape.EscapeID(e.Column), e.Charset)
+	return fmt.Sprintf("unable to determine collation for column %s with charset %q", sqlescape.EscapeID(e.Column), e.Charset)
 }
 
 type UnknownColumnCollationCharsetError struct {
@@ -451,5 +451,5 @@ type UnknownColumnCollationCharsetError struct {
 }
 
 func (e *UnknownColumnCollationCharsetError) Error() string {
-	return fmt.Sprintf("unable to determine charset for column %s with collation %s", sqlescape.EscapeID(e.Column), e.Collation)
+	return fmt.Sprintf("unable to determine charset for column %s with collation %q", sqlescape.EscapeID(e.Column), e.Collation)
 }
