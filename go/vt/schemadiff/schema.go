@@ -39,6 +39,7 @@ type Schema struct {
 
 	foreignKeyParents  []*CreateTableEntity // subset of tables
 	foreignKeyChildren []*CreateTableEntity // subset of tables
+	foreignKeyLoopMap  map[string][]string  // map of table name that either participate, or directly or indirectly reference foreign key loops
 
 	env *Environment
 }
@@ -53,6 +54,7 @@ func newEmptySchema(env *Environment) *Schema {
 
 		foreignKeyParents:  []*CreateTableEntity{},
 		foreignKeyChildren: []*CreateTableEntity{},
+		foreignKeyLoopMap:  map[string][]string{},
 
 		env: env,
 	}
@@ -133,6 +135,42 @@ func getForeignKeyParentTableNames(createTable *sqlparser.CreateTable) (names []
 		}
 	}
 	return names
+}
+
+// findForeignKeyLoop is a stateful recursive function that determines whether a given table participates in a foreign
+// key loop or derives from one. It returns a list of table names that form a loop, or nil if no loop is found.
+// The function updates and checks the stateful map s.foreignKeyLoopMap to avoid re-analyzing the same table twice.
+func (s *Schema) findForeignKeyLoop(tableName string, seen []string) (loop []string) {
+	if loop := s.foreignKeyLoopMap[tableName]; loop != nil {
+		return loop
+	}
+	t := s.Table(tableName)
+	if t == nil {
+		return nil
+	}
+	seen = append(seen, tableName)
+	for i, seenTable := range seen {
+		if i == len(seen)-1 {
+			// as we've just appended the table name to the end of the slice, we should skip it.
+			break
+		}
+		if seenTable == tableName {
+			// This table alreay appears in `seen`.
+			// We only return the suffix of `seen` that starts (and now ends) with this table.
+			return seen[i:]
+		}
+	}
+	for _, referencedTableName := range getForeignKeyParentTableNames(t.CreateTable) {
+		if loop := s.findForeignKeyLoop(referencedTableName, seen); loop != nil {
+			// Found loop. Update cache.
+			// It's possible for one table to participate in more than one foreign key loop, but
+			// we suffice with one loop, since we already only ever report one foreign key error
+			// per table.
+			s.foreignKeyLoopMap[tableName] = loop
+			return loop
+		}
+	}
+	return nil
 }
 
 // getViewDependentTableNames analyzes a CREATE VIEW definition and extracts all tables/views read by this view
@@ -309,7 +347,16 @@ func (s *Schema) normalize() error {
 		}
 		iterationLevel++
 	}
+
 	if len(s.sorted) != len(s.tables)+len(s.views) {
+
+		for _, t := range s.tables {
+			if _, ok := dependencyLevels[t.Name()]; !ok {
+				if loop := s.findForeignKeyLoop(t.Name(), nil); loop != nil {
+					errs = errors.Join(errs, addEntityFkError(t, &ForeignKeyLoopError{Table: t.Name(), Loop: loop}))
+				}
+			}
+		}
 		// We have leftover tables or views. This can happen if the schema definition is invalid:
 		// - a table's foreign key references a nonexistent table
 		// - two or more tables have circular FK dependency
