@@ -184,7 +184,7 @@ mysql> show warnings;
 
 A new flag `--vtcombo-bind-host` has been added to vttestserver that allows the users to configure the bind host that vtcombo uses. This is especially useful when running vttestserver as a docker image and you want to run vtctld commands and look at the vtcombo `/debug/status` dashboard.
 
-### <a id="vttestserver"/>New lock syntax
+### <a id="lock-syntax"/>New lock syntax
 
 Vitess now supports the following LOCK syntax
 
@@ -193,11 +193,11 @@ SELECT .. FOR SHARE (NOWAIT|SKIP LOCKED)
 SELECT .. FOR UPDATE (NOWAIT|SKIP LOCKED)
 ```
 
-### <a id="vttestserver"/>Support for AVG() aggregation function
+### <a id="avg-support"/>Support for AVG() aggregation function
 
 Vtgate can now evaluate `AVG` on sharded keyspaces, by using a combination of `SUM/COUNT`
 
-### <a id="vttestserver"/>Support for non-recursive CTEs
+### <a id="cte-support"/>Support for non-recursive CTEs
 
 Common table expressions that are not recursive can now be used. 
 
