@@ -76,7 +76,7 @@ func (v *VindexTable) canShortCut() shortCut {
 }
 
 // GetColumns implements the TableInfo interface
-func (v *VindexTable) getColumns() ([]ColumnInfo, error) {
+func (v *VindexTable) getColumns() []ColumnInfo {
 	return v.Table.getColumns()
 }
 

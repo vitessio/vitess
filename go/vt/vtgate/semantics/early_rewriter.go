@@ -680,11 +680,7 @@ func findOnlyOneTableInfoThatHasColumn(b *binder, tbl sqlparser.TableExpr, colum
 	case *sqlparser.AliasedTableExpr:
 		ts := b.tc.tableSetFor(tbl)
 		tblInfo := b.tc.Tables[ts.TableOffset()]
-		columns, err := tblInfo.getColumns()
-		if err != nil {
-			return nil, err
-		}
-		for _, info := range columns {
+		for _, info := range tblInfo.getColumns() {
 			if column.EqualString(info.Name) {
 				return []TableInfo{tblInfo}, nil
 			}
@@ -839,13 +835,9 @@ func (e *expanderState) processColumnsFor(tbl TableInfo) error {
 		From: https://dev.mysql.com/doc/refman/8.0/en/join.html
 	*/
 
-	columns, err := tbl.getColumns()
-	if err != nil {
-		return err
-	}
 outer:
 	// in this first loop we just find columns used in any JOIN USING used on this table
-	for _, col := range columns {
+	for _, col := range tbl.getColumns() {
 		if col.Invisible {
 			continue
 		}
@@ -864,11 +856,7 @@ outer:
 	}
 
 	// and this time around we are printing any columns not involved in any JOIN USING
-	columns, err = tbl.getColumns()
-	if err != nil {
-		return err
-	}
-	for _, col := range columns {
+	for _, col := range tbl.getColumns() {
 		if col.Invisible {
 			continue
 		}

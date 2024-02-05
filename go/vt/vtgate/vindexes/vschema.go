@@ -219,15 +219,12 @@ func (col *Column) MarshalJSON() ([]byte, error) {
 	return json.Marshal(cj)
 }
 
-func (col *Column) ToEvalengineType(collationEnv *collations.Environment) (evalengine.Type, error) {
+func (col *Column) ToEvalengineType(collationEnv *collations.Environment) evalengine.Type {
 	collation := collations.CollationForType(col.Type, collationEnv.DefaultConnectionCharset())
 	if sqltypes.IsText(col.Type) {
 		collation, _ = collationEnv.LookupID(col.CollationName)
-		if collation == collations.Unknown {
-			return evalengine.Type{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown collation name %q", col.CollationName)
-		}
 	}
-	return evalengine.NewTypeEx(col.Type, collation, col.Nullable, col.Size, col.Scale), nil
+	return evalengine.NewTypeEx(col.Type, collation, col.Nullable, col.Size, col.Scale)
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.

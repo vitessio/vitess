@@ -40,11 +40,7 @@ var _ TableInfo = (*RealTable)(nil)
 // dependencies implements the TableInfo interface
 func (r *RealTable) dependencies(colName string, org originable) (dependencies, error) {
 	ts := org.tableSetFor(r.ASTNode)
-	columns, err := r.getColumns()
-	if err != nil {
-		return nil, err
-	}
-	for _, info := range columns {
+	for _, info := range r.getColumns() {
 		if strings.EqualFold(info.Name, colName) {
 			return createCertain(ts, ts, info.Type), nil
 		}
@@ -72,7 +68,7 @@ func (r *RealTable) IsInfSchema() bool {
 }
 
 // GetColumns implements the TableInfo interface
-func (r *RealTable) getColumns() ([]ColumnInfo, error) {
+func (r *RealTable) getColumns() []ColumnInfo {
 	return vindexTableToColumnInfo(r.Table, r.collationEnv)
 }
 
@@ -121,18 +117,14 @@ func (r *RealTable) matches(name sqlparser.TableName) bool {
 	return (name.Qualifier.IsEmpty() || name.Qualifier.String() == r.dbName) && r.tableName == name.Name.String()
 }
 
-func vindexTableToColumnInfo(tbl *vindexes.Table, collationEnv *collations.Environment) ([]ColumnInfo, error) {
+func vindexTableToColumnInfo(tbl *vindexes.Table, collationEnv *collations.Environment) []ColumnInfo {
 	if tbl == nil {
-		return nil, nil
+		return nil
 	}
 	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
-		tt, err := col.ToEvalengineType(collationEnv)
-		if err != nil {
-			return nil, err
-		}
-
+		tt := col.ToEvalengineType(collationEnv)
 		cols = append(cols, ColumnInfo{
 			Name:      col.Name.String(),
 			Type:      tt,
@@ -142,7 +134,7 @@ func vindexTableToColumnInfo(tbl *vindexes.Table, collationEnv *collations.Envir
 	}
 	// If table is authoritative, we do not need ColumnVindexes to help in resolving the unqualified columns.
 	if tbl.ColumnListAuthoritative {
-		return cols, nil
+		return cols
 	}
 	for _, vindex := range tbl.ColumnVindexes {
 		for _, column := range vindex.Columns {
@@ -156,5 +148,5 @@ func vindexTableToColumnInfo(tbl *vindexes.Table, collationEnv *collations.Envir
 			nameMap[name] = nil
 		}
 	}
-	return cols, nil
+	return cols
 }

@@ -57,6 +57,7 @@ func TestNormalizerAndSemanticAnalysisIntegration(t *testing.T) {
 	}
 }
 
+// Tests that the types correctly picks up and sets the collation on columns
 func TestColumnCollations(t *testing.T) {
 	tests := []struct {
 		query, collation string
@@ -75,7 +76,7 @@ func TestColumnCollations(t *testing.T) {
 
 			st, err := Analyze(parse, "d", fakeSchemaInfo())
 			require.NoError(t, err)
-			col := parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+			col := extract(parse.(*sqlparser.Select), 0)
 			typ, found := st.TypeForExpr(col)
 			require.True(t, found, "column was not typed")
 

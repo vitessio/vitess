@@ -83,14 +83,14 @@ func (v *vTableInfo) GetVindexTable() *vindexes.Table {
 	return nil
 }
 
-func (v *vTableInfo) getColumns() ([]ColumnInfo, error) {
+func (v *vTableInfo) getColumns() []ColumnInfo {
 	cols := make([]ColumnInfo, 0, len(v.columnNames))
 	for _, col := range v.columnNames {
 		cols = append(cols, ColumnInfo{
 			Name: col,
 		})
 	}
-	return cols, nil
+	return cols
 }
 
 func (v *vTableInfo) hasStar() bool {
