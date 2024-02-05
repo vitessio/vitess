@@ -368,9 +368,12 @@ func (d Date) YearWeek(mode int) int {
 	case 1, 3:
 		year, week := d.ISOWeek()
 		return year*100 + week
-	case 4, 5, 6, 7:
-		// TODO
-		return 0
+	case 4, 6:
+		year, week := d.Sunday4DayWeek()
+		return year*100 + week
+	case 5, 7:
+		year, week := d.MondayWeek()
+		return year*100 + week
 	default:
 		return d.YearWeek(DefaultWeekMode)
 	}

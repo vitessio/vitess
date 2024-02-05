@@ -1917,7 +1917,7 @@ func FnYear(yield Query) {
 }
 
 func FnYearWeek(yield Query) {
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 8; i++ {
 		for _, d := range inputConversions {
 			yield(fmt.Sprintf("YEARWEEK(%s, %d)", d, i), nil)
 		}
