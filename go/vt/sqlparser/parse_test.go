@@ -48,7 +48,7 @@ var (
 			output: "create view `version` as select * from base.`version`",
 		},
 		{
-			input: "create table t123 (c1 varchar(5) check (c1 in ('v1', 'v2')) NOT NULL);",
+			input:  "create table t123 (c1 varchar(5) check (c1 in ('v1', 'v2')) NOT NULL);",
 			output: "create table t123 (\n\tc1 varchar(5) not null,\n\tcheck (c1 in ('v1', 'v2'))\n)",
 		},
 		{
@@ -848,80 +848,80 @@ var (
 			input: "select /* if as func */ 1 from t where a = if(b)",
 		},
 		{
-			input: "select /* current_date */ current_date from t",
+			input:  "select /* current_date */ current_date from t",
 			output: "select /* current_date */ current_date() from t",
 		},
 		{
 			input: "select /* current_date as func */ current_date() from t",
 		},
 		{
-			input: "select /* current_time */ current_time from t",
+			input:  "select /* current_time */ current_time from t",
 			output: "select /* current_time */ current_time(0) from t",
 		},
 		{
-			input: "select /* current_time as func */ current_time() from t",
+			input:  "select /* current_time as func */ current_time() from t",
 			output: "select /* current_time as func */ current_time(0) from t",
 		},
 		{
 			input: "select /* current_time with fsp */ current_time(1) from t",
 		},
 		{
-			input: "select /* current_timestamp */ current_timestamp from t",
+			input:  "select /* current_timestamp */ current_timestamp from t",
 			output: "select /* current_timestamp */ current_timestamp(0) from t",
 		},
 		{
-			input: "select /* current_timestamp as func */ current_timestamp() from t",
+			input:  "select /* current_timestamp as func */ current_timestamp() from t",
 			output: "select /* current_timestamp as func */ current_timestamp(0) from t",
 		},
 		{
 			input: "select /* current_timestamp with fsp */ current_timestamp(3) from t",
 		},
 		{
-			input: "select /* localtime */ localtime from t",
+			input:  "select /* localtime */ localtime from t",
 			output: "select /* localtime */ localtime(0) from t",
 		},
 		{
-			input: "select /* localtime as func */ localtime() from t",
+			input:  "select /* localtime as func */ localtime() from t",
 			output: "select /* localtime as func */ localtime(0) from t",
 		},
 		{
 			input: "select /* localtime with fsp */ localtime(5) from t",
 		},
 		{
-			input: "select /* localtimestamp */ localtimestamp from t",
+			input:  "select /* localtimestamp */ localtimestamp from t",
 			output: "select /* localtimestamp */ localtimestamp(0) from t",
 		},
 		{
-			input: "select /* localtimestamp as func */ localtimestamp() from t",
+			input:  "select /* localtimestamp as func */ localtimestamp() from t",
 			output: "select /* localtimestamp as func */ localtimestamp(0) from t",
 		},
 		{
 			input: "select /* localtimestamp with fsp */ localtimestamp(7) from t",
 		},
 		{
-			input: "select /* utc_date */ utc_date from t",
+			input:  "select /* utc_date */ utc_date from t",
 			output: "select /* utc_date */ utc_date() from t",
 		},
 		{
 			input: "select /* utc_date as func */ utc_date() from t",
 		},
 		{
-			input: "select /* utc_time */ utc_time from t",
+			input:  "select /* utc_time */ utc_time from t",
 			output: "select /* utc_time */ utc_time(0) from t",
 		},
 		{
-			input: "select /* utc_time as func */ utc_time() from t",
+			input:  "select /* utc_time as func */ utc_time() from t",
 			output: "select /* utc_time as func */ utc_time(0) from t",
 		},
 		{
 			input: "select /* utc_time with fsp */ utc_time(4) from t",
 		},
 		{
-			input: "select /* utc_timestamp */ utc_timestamp from t",
+			input:  "select /* utc_timestamp */ utc_timestamp from t",
 			output: "select /* utc_timestamp */ utc_timestamp(0) from t",
 		},
 		{
-			input: "select /* utc_timestamp as func */ utc_timestamp() from t",
+			input:  "select /* utc_timestamp as func */ utc_timestamp() from t",
 			output: "select /* utc_timestamp as func */ utc_timestamp(0) from t",
 		},
 		{
@@ -1740,7 +1740,7 @@ var (
 		{
 			input: "create trigger t1 after delete on foo for each row delete from xxy where old.y = z",
 		},
-		{   //TODO: figure out why `SET SESSION sys_var = x` does not work when set directly on the trigger (works in BEGIN/END block)
+		{ //TODO: figure out why `SET SESSION sys_var = x` does not work when set directly on the trigger (works in BEGIN/END block)
 			input:  "create trigger t1 after delete on foo for each row set @@sum = @@sum + old.b",
 			output: "create trigger t1 after delete on foo for each row set session sum = @@sum + old.b",
 		},
@@ -1754,7 +1754,7 @@ var (
 			input: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		},
 		{
-			input: "create trigger t1 before insert on foo for each row begin end",
+			input:  "create trigger t1 before insert on foo for each row begin end",
 			output: "create trigger t1 before insert on foo for each row begin\nend",
 		},
 		{
@@ -3193,6 +3193,15 @@ var (
 		}, {
 			input:  "SELECT m.id, t.category FROM mytable m JOIN testtable t on m.id = t.id LIMIT 1 INTO @myId, @myCategory",
 			output: "select m.id, t.category from mytable as m join testtable as t on m.id = t.id limit 1 into @myId, @myCategory",
+		}, {
+			input:  "select * from foo limit a",
+			output: "select * from foo limit a",
+		}, {
+			input:  "select * from foo limit a ,a",
+			output: "select * from foo limit a, a",
+		}, {
+			input:  "select * from foo limit a offset a",
+			output: "select * from foo limit a, a",
 		}, {
 			input:  "SELECT id FROM mytable UNION select id FROM testtable LIMIT 1 INTO @myId",
 			output: "select id from mytable union select id from testtable limit 1 into @myId",
@@ -4830,7 +4839,7 @@ func TestKeywords(t *testing.T) {
 			useSelectExpressionLiteral: true,
 		},
 		{
-			input: "update t set a = current_timestamp()",
+			input:  "update t set a = current_timestamp()",
 			output: "update t set a = current_timestamp(0)",
 		},
 		{
@@ -6052,139 +6061,139 @@ func TestCreateTable(t *testing.T) {
 			"	primary key (id)\n" +
 			")",
 	},
-	{
-		// test now
-		input: "create table t (\n" +
-			"	time1 timestamp default now(),\n" +
-			"	time2 timestamp default now() on update now(),\n" +
-			"	time3 timestamp(3) default now(3) on update now(3)\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default now(),\n" +
-			"	time2 timestamp default now() on update now(),\n" +
-			"	time3 timestamp(3) default now(3) on update now(3)\n" +
-			")",
-	},
-	{
-		// test current_timestamp with and without ()
-		input: "create table t (\n" +
-			"	time1 timestamp default current_timestamp,\n" +
-			"	time2 timestamp default current_timestamp(),\n" +
-			"	time3 timestamp default current_timestamp on update current_timestamp,\n" +
-			"	time4 timestamp default current_timestamp() on update current_timestamp(),\n" +
-			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default current_timestamp(0),\n" +
-			"	time2 timestamp default current_timestamp(0),\n" +
-			"	time3 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
-			"	time4 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
-			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
-			")",
-	},
-	{
-		// test inline check constraint
-		input: "create table t (\n" +
-			"	a int,\n" +
-			"	b int constraint b_positive check (b > 0)\n" +
-			")",
-		output: "create table t (\n" +
-			"	a int,\n" +
-			"	b int,\n" +
-			"	constraint b_positive check (b > 0)\n" +
-			")",
-	}, {
-		// test initial table constraint
-		input: "create table t (\n" +
-			"	check (a <> b),\n" +
-			"	a int,\n" +
-			"	b int\n" +
-			")",
-		output: "create table t (\n" +
-			"	a int,\n" +
-			"	b int,\n" +
-			"	check (a != b)\n" +
-			")",
-	}, {
-		input: "create table t (\n" +
-			"	id int,\n" +
-			"	status int,\n" +
-			"	constraint status check (a > 0)\n" +
-			")",
-		output: "create table t (\n" +
-			"	id int,\n" +
-			"	`status` int,\n" +
-			"	constraint status check (a > 0)\n" +
-			")",
-	}, {
-		input: "create table t (\n" +
-			"	id int,\n" +
-			"	status int,\n" +
-			"	constraint status check (status in (0, 1))\n" +
-			")",
-		output: "create table t (\n" +
-			"	id int,\n" +
-			"	`status` int,\n" +
-			"	constraint status check (`status` in (0, 1))\n" +
-			")",
-	}, {
-		// we don't support named primary keys currently
-		input: "create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	a int,\n" +
-			"	b int,\n" +
-			"	constraint a_positive primary key (a, b)\n" +
-			")",
-		output: "create table t (\n" +
-			"	id int auto_increment,\n" +
-			"	username varchar,\n" +
-			"	a int,\n" +
-			"	b int,\n" +
-			"	primary key (a, b)\n" +
-			")",
-	}, {
-		// test localtime with and without ()
-		input: "create table t (\n" +
-			"	time1 timestamp default localtime,\n" +
-			"	time2 timestamp default localtime(),\n" +
-			"	time3 timestamp default localtime on update localtime,\n" +
-			"	time4 timestamp default localtime() on update localtime(),\n" +
-			"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default localtime(0),\n" +
-			"	time2 timestamp default localtime(0),\n" +
-			"	time3 timestamp default localtime(0) on update localtime(0),\n" +
-			"	time4 timestamp default localtime(0) on update localtime(0),\n" +
-			"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
-			")",
-	}, {
-		// test localtimestamp with and without ()
-		input: "create table t (\n" +
-			"	time1 timestamp default localtimestamp,\n" +
-			"	time2 timestamp default localtimestamp(),\n" +
-			"	time3 timestamp default localtimestamp on update localtimestamp,\n" +
-			"	time4 timestamp default localtimestamp() on update localtimestamp(),\n" +
-			"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
-			")",
-		output: "create table t (\n" +
-			"	time1 timestamp default localtimestamp(0),\n" +
-			"	time2 timestamp default localtimestamp(0),\n" +
-			"	time3 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
-			"	time4 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
-			"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
-			")",
-	}, {
-		input: "create table t (\n" +
-			"	id serial not null,\n" +
-			"	a bigint not null\n" +
-			")",
-		output: "create table t (\n" +
-			"	id bigint not null auto_increment unique,\n" +
-			"	a bigint not null\n" +
-			")",
-	},
+		{
+			// test now
+			input: "create table t (\n" +
+				"	time1 timestamp default now(),\n" +
+				"	time2 timestamp default now() on update now(),\n" +
+				"	time3 timestamp(3) default now(3) on update now(3)\n" +
+				")",
+			output: "create table t (\n" +
+				"	time1 timestamp default now(),\n" +
+				"	time2 timestamp default now() on update now(),\n" +
+				"	time3 timestamp(3) default now(3) on update now(3)\n" +
+				")",
+		},
+		{
+			// test current_timestamp with and without ()
+			input: "create table t (\n" +
+				"	time1 timestamp default current_timestamp,\n" +
+				"	time2 timestamp default current_timestamp(),\n" +
+				"	time3 timestamp default current_timestamp on update current_timestamp,\n" +
+				"	time4 timestamp default current_timestamp() on update current_timestamp(),\n" +
+				"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
+				")",
+			output: "create table t (\n" +
+				"	time1 timestamp default current_timestamp(0),\n" +
+				"	time2 timestamp default current_timestamp(0),\n" +
+				"	time3 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
+				"	time4 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
+				"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
+				")",
+		},
+		{
+			// test inline check constraint
+			input: "create table t (\n" +
+				"	a int,\n" +
+				"	b int constraint b_positive check (b > 0)\n" +
+				")",
+			output: "create table t (\n" +
+				"	a int,\n" +
+				"	b int,\n" +
+				"	constraint b_positive check (b > 0)\n" +
+				")",
+		}, {
+			// test initial table constraint
+			input: "create table t (\n" +
+				"	check (a <> b),\n" +
+				"	a int,\n" +
+				"	b int\n" +
+				")",
+			output: "create table t (\n" +
+				"	a int,\n" +
+				"	b int,\n" +
+				"	check (a != b)\n" +
+				")",
+		}, {
+			input: "create table t (\n" +
+				"	id int,\n" +
+				"	status int,\n" +
+				"	constraint status check (a > 0)\n" +
+				")",
+			output: "create table t (\n" +
+				"	id int,\n" +
+				"	`status` int,\n" +
+				"	constraint status check (a > 0)\n" +
+				")",
+		}, {
+			input: "create table t (\n" +
+				"	id int,\n" +
+				"	status int,\n" +
+				"	constraint status check (status in (0, 1))\n" +
+				")",
+			output: "create table t (\n" +
+				"	id int,\n" +
+				"	`status` int,\n" +
+				"	constraint status check (`status` in (0, 1))\n" +
+				")",
+		}, {
+			// we don't support named primary keys currently
+			input: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	a int,\n" +
+				"	b int,\n" +
+				"	constraint a_positive primary key (a, b)\n" +
+				")",
+			output: "create table t (\n" +
+				"	id int auto_increment,\n" +
+				"	username varchar,\n" +
+				"	a int,\n" +
+				"	b int,\n" +
+				"	primary key (a, b)\n" +
+				")",
+		}, {
+			// test localtime with and without ()
+			input: "create table t (\n" +
+				"	time1 timestamp default localtime,\n" +
+				"	time2 timestamp default localtime(),\n" +
+				"	time3 timestamp default localtime on update localtime,\n" +
+				"	time4 timestamp default localtime() on update localtime(),\n" +
+				"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
+				")",
+			output: "create table t (\n" +
+				"	time1 timestamp default localtime(0),\n" +
+				"	time2 timestamp default localtime(0),\n" +
+				"	time3 timestamp default localtime(0) on update localtime(0),\n" +
+				"	time4 timestamp default localtime(0) on update localtime(0),\n" +
+				"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
+				")",
+		}, {
+			// test localtimestamp with and without ()
+			input: "create table t (\n" +
+				"	time1 timestamp default localtimestamp,\n" +
+				"	time2 timestamp default localtimestamp(),\n" +
+				"	time3 timestamp default localtimestamp on update localtimestamp,\n" +
+				"	time4 timestamp default localtimestamp() on update localtimestamp(),\n" +
+				"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
+				")",
+			output: "create table t (\n" +
+				"	time1 timestamp default localtimestamp(0),\n" +
+				"	time2 timestamp default localtimestamp(0),\n" +
+				"	time3 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
+				"	time4 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
+				"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
+				")",
+		}, {
+			input: "create table t (\n" +
+				"	id serial not null,\n" +
+				"	a bigint not null\n" +
+				")",
+			output: "create table t (\n" +
+				"	id bigint not null auto_increment unique,\n" +
+				"	a bigint not null\n" +
+				")",
+		},
 
 		// partition options
 		{
@@ -6884,9 +6893,6 @@ var (
 	}, {
 		input:  "select * from foo limit 1+1",
 		output: "syntax error at position 27 near '1'",
-	}, {
-		input:  "select * from foo limit a",
-		output: "syntax error at position 26 near 'a'",
 	}, {
 		input:  "select * from foo limit '100'",
 		output: "syntax error at position 30 near '100'",

@@ -464,7 +464,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolean> all_opt enforced_opt
 %type <str> compare
 %type <ins> insert_data
-%type <expr> value value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr timestamp_value
+%type <expr> value value_expression num_val as_of_opt limit_val integral_or_interval_expr timestamp_value
 %type <bytes> time_unit non_microsecond_time_unit
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <expr> func_datetime_prec_opt function_call_window function_call_aggregate_with_window function_call_on_update
@@ -7710,20 +7710,20 @@ limit_opt:
   {
     $$ = nil
   }
-| LIMIT integral_or_value_arg
+| LIMIT limit_val
   {
     $$ = &Limit{Rowcount: $2}
   }
-| LIMIT integral_or_value_arg ',' integral_or_value_arg
+| LIMIT limit_val ',' limit_val
   {
     $$ = &Limit{Offset: $2, Rowcount: $4}
   }
-| LIMIT integral_or_value_arg OFFSET integral_or_value_arg
+| LIMIT limit_val OFFSET limit_val
   {
     $$ = &Limit{Offset: $4, Rowcount: $2}
   }
 
-integral_or_value_arg:
+limit_val:
 INTEGRAL
   {
     $$ = NewIntVal($1)
@@ -7731,6 +7731,10 @@ INTEGRAL
 | VALUE_ARG
   {
     $$ = NewValArg($1)
+  }
+| column_name
+  {
+    $$ = $1
   }
 
 lock_opt:
