@@ -17,16 +17,10 @@ limitations under the License.
 package operators
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-<<<<<<< HEAD
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
-=======
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
->>>>>>> ea8a90d093 (Copy expression types to avoid weight_strings and derived tables (#15069))
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -213,12 +207,11 @@ func createMergedUnion(
 			continue
 		}
 		deps = deps.Merge(ctx.SemTable.RecursiveDeps(rae.Expr))
-		rt, foundR := ctx.SemTable.TypeForExpr(rae.Expr)
-		lt, foundL := ctx.SemTable.TypeForExpr(lae.Expr)
-		if foundR && foundL {
-			types := []sqltypes.Type{rt.Type(), lt.Type()}
-			t := evalengine.AggregateTypes(types)
-			ctx.SemTable.ExprTypes[col] = evalengine.NewType(t, collations.Unknown)
+		rt, _, foundR := ctx.SemTable.TypeForExpr(rae.Expr)
+		lt, _, foundL := ctx.SemTable.TypeForExpr(lae.Expr)
+		if foundR && foundL && rt == lt {
+			ctx.SemTable.CopySemanticInfo(rae.Expr, col)
+			ctx.SemTable.CopySemanticInfo(lae.Expr, col)
 		}
 		ctx.SemTable.Recursive[col] = deps
 	}
