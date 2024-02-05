@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/vschemawrapper"
-	"vitess.io/vitess/go/vt/vtenv"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/vschemawrapper"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -61,7 +61,8 @@ func (tc *collationTestCase) addCollationsToSchema(vschema *vschemawrapper.VSche
 		for i, c := range tbl.Columns {
 			if c.Name.EqualString(collation.colName) {
 				tbl.Columns[i].CollationName = collation.collationName
-				break
+			} else if c.CollationName == "" && sqltypes.IsText(c.Type) {
+				tbl.Columns[i].CollationName = "latin1_swedish_ci"
 			}
 		}
 	}
