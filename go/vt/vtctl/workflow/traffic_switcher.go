@@ -893,23 +893,26 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 					}
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
-
 			}
-			stmt, err := ts.ws.env.Parser().Parse(filter)
-			if err != nil {
-				return err
-			}
-			sel, ok := stmt.(*sqlparser.Select)
-			if !ok {
-				return fmt.Errorf("unrecognized statement: %s", filter)
-			}
-			if additionalWhereClause != nil {
-				addFilter(sel, additionalWhereClause.Expr)
+			if filter != "-" {
+				stmt, err := ts.ws.env.Parser().Parse(filter)
+				if err != nil {
+					return err
+				}
+				sel, ok := stmt.(*sqlparser.Select)
+				if !ok {
+					return fmt.Errorf("unrecognized statement: %s", filter)
+				}
+				if additionalWhereClause != nil {
+					addFilter(sel, additionalWhereClause.Expr)
+				}
+				filter = sqlparser.String(sel)
 			}
 			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
 				Match:  rule.Match,
-				Filter: sqlparser.String(sel),
+				Filter: filter,
 			})
+
 		}
 		log.Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
 			source.GetPrimary().Alias, ts.ReverseWorkflowName(), target.Position)
