@@ -446,3 +446,33 @@ type EntityNotFoundError struct {
 func (e *EntityNotFoundError) Error() string {
 	return fmt.Sprintf("entity %s not found", sqlescape.EscapeID(e.Name))
 }
+
+type EnumValueOrdinalChangedError struct {
+	Table      string
+	Column     string
+	Value      string
+	Ordinal    int
+	NewOrdinal int
+}
+
+func (e *EnumValueOrdinalChangedError) Error() string {
+	return fmt.Sprintf("ordinal of %s changed in enum or set column %s.%s, from %d to %d", e.Value, sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.Column), e.Ordinal, e.NewOrdinal)
+}
+
+type UnknownColumnCharsetCollationError struct {
+	Column  string
+	Charset string
+}
+
+func (e *UnknownColumnCharsetCollationError) Error() string {
+	return fmt.Sprintf("unable to determine collation for column %s with charset %q", sqlescape.EscapeID(e.Column), e.Charset)
+}
+
+type UnknownColumnCollationCharsetError struct {
+	Column    string
+	Collation string
+}
+
+func (e *UnknownColumnCollationCharsetError) Error() string {
+	return fmt.Sprintf("unable to determine charset for column %s with collation %q", sqlescape.EscapeID(e.Column), e.Collation)
+}
