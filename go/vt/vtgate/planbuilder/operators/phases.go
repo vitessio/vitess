@@ -17,9 +17,12 @@ limitations under the License.
 package operators
 
 import (
+	"io"
+
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -138,6 +141,61 @@ func findDeletesAboveRoute(ctx *plancontext.PlanningContext, root Operator) Oper
 	}
 
 	return BottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func createDeleteWithInput(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
+	if len(in.Target.VTable.PrimaryKey) == 0 {
+		panic(vterrors.VT09015())
+	}
+	dm := &DeleteWithInput{}
+	var leftComp sqlparser.ValTuple
+	proj := newAliasedProjection(src)
+	for _, col := range in.Target.VTable.PrimaryKey {
+		colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
+		proj.AddColumn(ctx, true, false, aeWrap(colName))
+		dm.cols = append(dm.cols, colName)
+		leftComp = append(leftComp, colName)
+		ctx.SemTable.Recursive[colName] = in.Target.ID
+	}
+
+	dm.Source = proj
+
+	var targetTable *Table
+	_ = Visit(src, func(operator Operator) error {
+		if tbl, ok := operator.(*Table); ok && tbl.QTable.ID == in.Target.ID {
+			targetTable = tbl
+			return io.EOF
+		}
+		return nil
+	})
+	if targetTable == nil {
+		panic(vterrors.VT13001("target DELETE table not found"))
+	}
+
+	// optimize for case when there is only single column on left hand side.
+	var lhs sqlparser.Expr = leftComp
+	if len(leftComp) == 1 {
+		lhs = leftComp[0]
+	}
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmVals), nil)
+	targetQT := targetTable.QTable
+	qt := &QueryTable{
+		ID:         targetQT.ID,
+		Alias:      sqlparser.CloneRefOfAliasedTableExpr(targetQT.Alias),
+		Table:      sqlparser.CloneTableName(targetQT.Table),
+		Predicates: []sqlparser.Expr{compExpr},
+	}
+
+	qg := &QueryGraph{Tables: []*QueryTable{qt}}
+	in.Source = qg
+
+	if in.OwnedVindexQuery != nil {
+		in.OwnedVindexQuery.From = sqlparser.TableExprs{targetQT.Alias}
+		in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
+	}
+	dm.Delete = in
+
+	return dm, Rewrote("changed Delete to DeleteWithInput")
 }
 
 func findUpdateWithSubq(ctx *plancontext.PlanningContext, root Operator) Operator {

@@ -685,70 +685,53 @@ func buildUpdateLogicalPlan(
 	hints *queryHints,
 ) (logicalPlan, error) {
 	upd := dmlOp.(*operators.Update)
-	rp := newRoutingParams(ctx, rb.Routing.OpCode())
-	rb.Routing.UpdateRoutingParams(ctx, rp)
-	edml := &engine.DML{
-		Query:      generateQuery(stmt),
-		TableNames: []string{upd.Target.VTable.Name.String()},
-		Vindexes:   upd.Target.VTable.ColumnVindexes,
-
-		RoutingParameters: rp,
+	vQuery := ""
+	if len(upd.ChangedVindexValues) > 0 {
+		vQuery = sqlparser.String(upd.OwnedVindexQuery)
 	}
 
-	if upd.OwnedVindexQuery != nil {
-		edml.OwnedVindexQuery = sqlparser.String(upd.OwnedVindexQuery)
-	}
+	edml := createDMLPrimitive(ctx, rb, hints, upd.Target.VTable, generateQuery(stmt), vQuery)
 
-	transformDMLPlan(upd.Target.VTable, edml, rb.Routing, len(upd.ChangedVindexValues) > 0)
-
-	e := &engine.Update{
-		ChangedVindexValues: upd.ChangedVindexValues,
+	return &primitiveWrapper{prim: &engine.Update{
 		DML:                 edml,
-	}
-	if hints != nil {
-		e.MultiShardAutocommit = hints.multiShardAutocommit
-		e.QueryTimeout = hints.queryTimeout
-	}
-
-	return &primitiveWrapper{prim: e}, nil
+		ChangedVindexValues: upd.ChangedVindexValues,
+	}}, nil
 }
 
 func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Route, dmlOp operators.Operator, stmt *sqlparser.Delete, hints *queryHints) (logicalPlan, error) {
 	del := dmlOp.(*operators.Delete)
+	vQuery := ""
+	if del.OwnedVindexQuery != nil {
+		vQuery = sqlparser.String(del.OwnedVindexQuery)
+	}
+
+	edml := createDMLPrimitive(ctx, rb, hints, del.Target.VTable, generateQuery(stmt), vQuery)
+
+	return &primitiveWrapper{prim: &engine.Delete{DML: edml}}, nil
+}
+
+func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, hints *queryHints, vTbl *vindexes.Table, query string, vindexQuery string) *engine.DML {
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
 	rb.Routing.UpdateRoutingParams(ctx, rp)
-	vtable := del.Target.VTable
 	edml := &engine.DML{
-		Query:             generateQuery(stmt),
-		TableNames:        []string{vtable.Name.String()},
-		Vindexes:          vtable.Owned,
+		Query:             query,
+		TableNames:        []string{vTbl.Name.String()},
+		Vindexes:          vTbl.Owned,
+		OwnedVindexQuery:  vindexQuery,
 		RoutingParameters: rp,
 	}
 
-	hasLookupVindex := del.OwnedVindexQuery != nil
-	if hasLookupVindex {
-		edml.OwnedVindexQuery = sqlparser.String(del.OwnedVindexQuery)
-	}
-
-	transformDMLPlan(vtable, edml, rb.Routing, hasLookupVindex)
-
-	e := &engine.Delete{
-		DML: edml,
-	}
-	if hints != nil {
-		e.MultiShardAutocommit = hints.multiShardAutocommit
-		e.QueryTimeout = hints.queryTimeout
-	}
-
-	return &primitiveWrapper{prim: e}, nil
-}
-
-func transformDMLPlan(vtable *vindexes.Table, edml *engine.DML, routing operators.Routing, setVindex bool) {
-	if routing.OpCode() != engine.Unsharded && setVindex {
-		primary := vtable.ColumnVindexes[0]
+	if rb.Routing.OpCode() != engine.Unsharded && vindexQuery != "" {
+		primary := vTbl.ColumnVindexes[0]
 		edml.KsidVindex = primary.Vindex
 		edml.KsidLength = len(primary.Columns)
 	}
+
+	if hints != nil {
+		edml.MultiShardAutocommit = hints.multiShardAutocommit
+		edml.QueryTimeout = hints.queryTimeout
+	}
+	return edml
 }
 
 func updateSelectedVindexPredicate(op *operators.Route) sqlparser.Expr {

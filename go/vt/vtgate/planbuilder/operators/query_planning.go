@@ -21,8 +21,6 @@ import (
 	"io"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -112,34 +110,19 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
 	if src, ok := in.Source.(*Route); ok {
-		return pushDeleteUnderRoute(in, src)
+		return pushDMLUnderRoute(in, src, "pushed delete under route")
 	}
 	return in, NoRewrite
-}
-
-func pushDeleteUnderRoute(in *Delete, src *Route) (Operator, *ApplyResult) {
-	switch r := src.Routing.(type) {
-	case *SequenceRouting:
-		// Sequences are just unsharded routes
-		src.Routing = &AnyShardRouting{
-			keyspace: r.keyspace,
-		}
-	case *AnyShardRouting:
-		// References would have an unsharded source
-		// Alternates are not required.
-		r.Alternates = nil
-	}
-	return Swap(in, src, "pushed delete under route")
 }
 
 func tryPushUpdate(in *Update) (Operator, *ApplyResult) {
 	if src, ok := in.Source.(*Route); ok {
-		return pushUpdateUnderRoute(in, src)
+		return pushDMLUnderRoute(in, src, "pushed update under route")
 	}
 	return in, NoRewrite
 }
 
-func pushUpdateUnderRoute(in *Update, src *Route) (Operator, *ApplyResult) {
+func pushDMLUnderRoute(in Operator, src *Route, msg string) (Operator, *ApplyResult) {
 	switch r := src.Routing.(type) {
 	case *SequenceRouting:
 		// Sequences are just unsharded routes
@@ -151,117 +134,7 @@ func pushUpdateUnderRoute(in *Update, src *Route) (Operator, *ApplyResult) {
 		// Alternates are not required.
 		r.Alternates = nil
 	}
-	return Swap(in, src, "pushed delete under route")
-}
-
-func createDeleteWithInput(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
-	if len(in.Target.VTable.PrimaryKey) == 0 {
-		panic(vterrors.VT09015())
-	}
-	dm := &DeleteWithInput{}
-	var leftComp sqlparser.ValTuple
-	proj := newAliasedProjection(src)
-	for _, col := range in.Target.VTable.PrimaryKey {
-		colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
-		proj.AddColumn(ctx, true, false, aeWrap(colName))
-		dm.cols = append(dm.cols, colName)
-		leftComp = append(leftComp, colName)
-		ctx.SemTable.Recursive[colName] = in.Target.ID
-	}
-
-	dm.Source = proj
-
-	var targetTable *Table
-	_ = Visit(src, func(operator Operator) error {
-		if tbl, ok := operator.(*Table); ok && tbl.QTable.ID == in.Target.ID {
-			targetTable = tbl
-			return io.EOF
-		}
-		return nil
-	})
-	if targetTable == nil {
-		panic(vterrors.VT13001("target DELETE table not found"))
-	}
-
-	// optimize for case when there is only single column on left hand side.
-	var lhs sqlparser.Expr = leftComp
-	if len(leftComp) == 1 {
-		lhs = leftComp[0]
-	}
-	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmVals), nil)
-	targetQT := targetTable.QTable
-	qt := &QueryTable{
-		ID:         targetQT.ID,
-		Alias:      sqlparser.CloneRefOfAliasedTableExpr(targetQT.Alias),
-		Table:      sqlparser.CloneTableName(targetQT.Table),
-		Predicates: []sqlparser.Expr{compExpr},
-	}
-
-	qg := &QueryGraph{Tables: []*QueryTable{qt}}
-	in.Source = qg
-
-	if in.OwnedVindexQuery != nil {
-		in.OwnedVindexQuery.From = sqlparser.TableExprs{targetQT.Alias}
-		in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
-	}
-	dm.Delete = in
-
-	return dm, Rewrote("changed Delete to DeleteWithInput")
-}
-
-func createUpdateWithInput(ctx *plancontext.PlanningContext, in *Update, src Operator) (Operator, *ApplyResult) {
-	if len(in.Target.VTable.PrimaryKey) == 0 {
-		panic(vterrors.VT09015())
-	}
-	dm := &DeleteWithInput{}
-	var leftComp sqlparser.ValTuple
-	proj := newAliasedProjection(src)
-	for _, col := range in.Target.VTable.PrimaryKey {
-		colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
-		proj.AddColumn(ctx, true, false, aeWrap(colName))
-		dm.cols = append(dm.cols, colName)
-		leftComp = append(leftComp, colName)
-		ctx.SemTable.Recursive[colName] = in.Target.ID
-	}
-
-	dm.Source = proj
-
-	var targetTable *Table
-	_ = Visit(src, func(operator Operator) error {
-		if tbl, ok := operator.(*Table); ok && tbl.QTable.ID == in.Target.ID {
-			targetTable = tbl
-			return io.EOF
-		}
-		return nil
-	})
-	if targetTable == nil {
-		panic(vterrors.VT13001("target DELETE table not found"))
-	}
-
-	// optimize for case when there is only single column on left hand side.
-	var lhs sqlparser.Expr = leftComp
-	if len(leftComp) == 1 {
-		lhs = leftComp[0]
-	}
-	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmVals), nil)
-	targetQT := targetTable.QTable
-	qt := &QueryTable{
-		ID:         targetQT.ID,
-		Alias:      sqlparser.CloneRefOfAliasedTableExpr(targetQT.Alias),
-		Table:      sqlparser.CloneTableName(targetQT.Table),
-		Predicates: []sqlparser.Expr{compExpr},
-	}
-
-	qg := &QueryGraph{Tables: []*QueryTable{qt}}
-	in.Source = qg
-
-	if in.OwnedVindexQuery != nil {
-		in.OwnedVindexQuery.From = sqlparser.TableExprs{targetQT.Alias}
-		in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
-	}
-	dm.Delete = in
-
-	return dm, Rewrote("changed Delete to DeleteWithInput")
+	return Swap(in, src, msg)
 }
 
 func pushLockAndComment(l *LockAndComment) (Operator, *ApplyResult) {

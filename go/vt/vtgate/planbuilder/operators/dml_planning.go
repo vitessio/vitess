@@ -67,7 +67,6 @@ func buildChangedVindexesValues(
 	selExprs, offset := initialQuery(ksidCols, table)
 	for i, vindex := range table.ColumnVindexes {
 		vindexValueMap := make(map[string]evalengine.Expr)
-		// first := true
 		var compExprs []sqlparser.Expr
 		for _, vcol := range vindex.Columns {
 			// Searching in order of columns in colvindex.
@@ -134,7 +133,6 @@ func buildChangedVindexesValues(
 		panic(vterrors.VT12001("UPDATE on complex table expression"))
 	}
 	tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: table.Name}, As: aTblExpr.As}
-	// sqlparser.RemoveKeyspaceInTables(tblExpr)
 	ovq := &sqlparser.Select{
 		From:        []sqlparser.TableExpr{tblExpr},
 		SelectExprs: selExprs,
