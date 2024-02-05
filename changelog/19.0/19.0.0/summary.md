@@ -21,6 +21,9 @@
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
     - [Explain Statement](#explain-statement)
     - [Partial Multi-shard Commit Warnings](#partial-multi-shard-commit-warnings)
+    - [New Lock Syntax](#lock-syntax)
+    - [Support for AVG()](#avg-support)
+    - [Support for non-recursive CTEs](#cte-support)
   - **[Vttestserver](#vttestserver)**
     - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
 - **[Minor Changes](#minor-changes)**
