@@ -1576,10 +1576,8 @@ func TestUpdateErrors(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(test.query)
 			require.NoError(t, err)
 
-			st, err := Analyze(parse, "d", fakeSchemaInfo())
-			if err == nil {
-				err = st.NotUnshardedErr
-			}
+			_, err = AnalyzeStrict(parse, "d", fakeSchemaInfo())
+
 			assert.EqualError(t, err, test.expectedError)
 		})
 	}
