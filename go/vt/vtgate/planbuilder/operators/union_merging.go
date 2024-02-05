@@ -188,25 +188,31 @@ func createMergedUnion(
 	cols := make(sqlparser.SelectExprs, len(lhsExprs))
 	noDeps := len(lhsExprs) != len(rhsExprs)
 	for idx, col := range lhsExprs {
-		ae, ok := col.(*sqlparser.AliasedExpr)
+		lae, ok := col.(*sqlparser.AliasedExpr)
 		if !ok {
 			cols[idx] = col
 			noDeps = true
 			continue
 		}
-		col := sqlparser.NewColName(ae.ColumnName())
+		col := sqlparser.NewColName(lae.ColumnName())
 		cols[idx] = aeWrap(col)
 		if noDeps {
 			continue
 		}
 
-		deps := ctx.SemTable.RecursiveDeps(ae.Expr)
-		ae, ok = rhsExprs[idx].(*sqlparser.AliasedExpr)
+		deps := ctx.SemTable.RecursiveDeps(lae.Expr)
+		rae, ok := rhsExprs[idx].(*sqlparser.AliasedExpr)
 		if !ok {
 			noDeps = true
 			continue
 		}
-		deps = deps.Merge(ctx.SemTable.RecursiveDeps(ae.Expr))
+		deps = deps.Merge(ctx.SemTable.RecursiveDeps(rae.Expr))
+		rt, _, foundR := ctx.SemTable.TypeForExpr(rae.Expr)
+		lt, _, foundL := ctx.SemTable.TypeForExpr(lae.Expr)
+		if foundR && foundL && rt == lt {
+			ctx.SemTable.CopySemanticInfo(rae.Expr, col)
+			ctx.SemTable.CopySemanticInfo(lae.Expr, col)
+		}
 		ctx.SemTable.Recursive[col] = deps
 	}
 
