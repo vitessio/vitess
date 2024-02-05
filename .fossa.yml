@@ -4,7 +4,7 @@ project:
   id: vitess
   name: vitess
 
-# ignore a noisy warning produced by this file, it's a schema not a package.json
+# Exclude the maven based scanning of our java client until we can get it working again.
 targets:
   exclude:
     - type: maven
