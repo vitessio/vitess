@@ -20,16 +20,18 @@ import (
 	"context"
 	"expvar"
 	"fmt"
+	"io/fs"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
-
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
 
@@ -248,4 +250,90 @@ func TestAlterTableAlgorithm(t *testing.T) {
 			require.Equal(t, copyAlgo, alterAlgo)
 		})
 	}
+}
+
+// TestCollationsForSchemaEngineTables tests that the correct collation and character set is used for
+// schema engine tables based on the MySQL version being used.
+func TestCollationsForSchemaEngineTables(t *testing.T) {
+	testcases := []struct {
+		name          string
+		mysqlVersion  string
+		tableName     string
+		currentSchema string
+		expectedDiff  string
+	}{
+		{
+			name:          "tables schema in MySQL 5.7",
+			mysqlVersion:  "5.7.31",
+			tableName:     "tables",
+			currentSchema: "",
+			expectedDiff:  "CREATE TABLE IF NOT EXISTS `_vt`.`tables` (\n\t`TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL,\n\t`TABLE_NAME` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin NOT NULL,\n\t`CREATE_STATEMENT` longtext,\n\t`CREATE_TIME` bigint,\n\tPRIMARY KEY (`TABLE_SCHEMA`, `TABLE_NAME`)\n) ENGINE InnoDB",
+		},
+		{
+			name:          "tables schema in MySQL 8.0",
+			mysqlVersion:  "8.0.30",
+			tableName:     "tables",
+			currentSchema: "",
+			expectedDiff:  "CREATE TABLE IF NOT EXISTS `_vt`.`tables` (\n\t`TABLE_SCHEMA` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,\n\t`TABLE_NAME` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,\n\t`CREATE_STATEMENT` longtext,\n\t`CREATE_TIME` bigint,\n\tPRIMARY KEY (`TABLE_SCHEMA`, `TABLE_NAME`)\n) ENGINE InnoDB",
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			oldSidecarTables := sidecarTables
+			defer func() {
+				sidecarTables = oldSidecarTables
+			}()
+
+			env, err := vtenv.New(vtenv.Options{
+				MySQLServerVersion: tt.mysqlVersion,
+			})
+			require.NoError(t, err)
+
+			loadSchemaDefinitions(env.Parser())
+
+			si := &schemaInit{
+				env: env,
+			}
+
+			for _, table := range sidecarTables {
+				if table.name != tt.tableName {
+					continue
+				}
+				ddl, err := si.findTableSchemaDiff(tt.tableName, tt.currentSchema, table.schema)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedDiff, ddl)
+			}
+
+		})
+	}
+}
+
+func findTablesAndViewsSchema() (string, string, error) {
+	var tablesSchema, viewsSchema string
+	err := fs.WalkDir(schemaLocation, ".", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() {
+			_, fname := filepath.Split(path)
+
+			if fname == "tables.sql" {
+				schema, err := schemaLocation.ReadFile(path)
+				if err != nil {
+					panic(err)
+				}
+				tablesSchema = string(schema)
+			}
+			if fname == "views.sql" {
+				schema, err := schemaLocation.ReadFile(path)
+				if err != nil {
+					panic(err)
+				}
+				viewsSchema = string(schema)
+			}
+		}
+		return nil
+	})
+	return tablesSchema, viewsSchema, err
 }
