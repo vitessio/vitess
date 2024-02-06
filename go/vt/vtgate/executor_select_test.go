@@ -183,8 +183,8 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
-		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
-		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select 1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -220,8 +220,8 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
-		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
-		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select 1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -265,9 +265,9 @@ func TestSetSystemVariablesTx(t *testing.T) {
 	require.Zero(t, session.ShardSessions)
 
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select 1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{}},
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
-		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ 1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -299,7 +299,7 @@ func TestSetSystemVariables(t *testing.T) {
 	require.False(t, session.InReservedConn())
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
-		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ 1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 	lookup.Queries = nil
@@ -310,7 +310,7 @@ func TestSetSystemVariables(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries = []*querypb.BoundQuery{
-		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ /* comment */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ /* comment */ 1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 	lookup.Queries = nil
@@ -378,8 +378,8 @@ func TestSetSystemVariables(t *testing.T) {
 
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select 1 from dual where @@max_tmp_tables != 1"},
-		{Sql: "set max_tmp_tables = '1', sql_mode = 'only_full_group_by', sql_safe_updates = '0'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
-		{Sql: "select :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "set max_tmp_tables = '1', sql_mode = 'only_full_group_by', sql_safe_updates = '0'", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select 1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 }
@@ -420,7 +420,7 @@ func TestSetSystemVariablesWithReservedConnection(t *testing.T) {
 		{Sql: "select @@sql_mode orig, '' new"},
 		{Sql: "set sql_mode = ''"},
 		{Sql: "select age, city, weight_string(age) from `user` group by age, weight_string(age) order by age asc"},
-		{Sql: "select age, city + :vtg1 /* INT64 */, weight_string(age) from `user` group by age, weight_string(age) order by age asc", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select age, city + 1, weight_string(age) from `user` group by age, weight_string(age) order by age asc", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	require.Equal(t, "''", session.SystemVariables["sql_mode"])
@@ -484,9 +484,8 @@ func TestGen4SelectDBA(t *testing.T) {
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
-	wantQueries = []*querypb.BoundQuery{{Sql: "select :vtg1 /* INT64 */ from information_schema.table_constraints where constraint_schema = :__vtschemaname /* VARCHAR */ and table_name = :table_name1 /* VARCHAR */",
+	wantQueries = []*querypb.BoundQuery{{Sql: "select 1 from information_schema.table_constraints where constraint_schema = :__vtschemaname /* VARCHAR */ and table_name = :table_name1 /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1":              sqltypes.Int64BindVariable(1),
 			"constraint_schema": sqltypes.StringBindVariable("vt_ks"),
 			"table_name":        sqltypes.StringBindVariable("user"),
 			"__vtschemaname":    sqltypes.StringBindVariable("vt_ks"),
@@ -498,9 +497,8 @@ func TestGen4SelectDBA(t *testing.T) {
 	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks'"
 	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA", NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}), query, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
-	wantQueries = []*querypb.BoundQuery{{Sql: "select :vtg1 /* INT64 */ from information_schema.table_constraints where constraint_schema = :__vtschemaname /* VARCHAR */",
+	wantQueries = []*querypb.BoundQuery{{Sql: "select 1 from information_schema.table_constraints where constraint_schema = :__vtschemaname /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1":              sqltypes.Int64BindVariable(1),
 			"constraint_schema": sqltypes.StringBindVariable("vt_ks"),
 			"__vtschemaname":    sqltypes.StringBindVariable("vt_ks"),
 		}}}

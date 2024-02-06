@@ -133,7 +133,7 @@ func (nz *normalizer) walkDownSelect(node, parent SQLNode) bool {
 		// we should not rewrite the type description
 		return false
 	case *AliasedExpr:
-		// we don't want to rewrite literals in select expressions if the column is not aliased
+		// we only want to rewrite literals in select expressions if the column is aliased
 		return node.As.NotEmpty()
 	}
 	return nz.err == nil // only continue if we haven't found any errors
