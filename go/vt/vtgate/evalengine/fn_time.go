@@ -335,7 +335,7 @@ type builtinConvertTz struct {
 
 var _ IR = (*builtinConvertTz)(nil)
 
-func convertTz(dt datetime.DateTime, from, to *time.Location, now time.Time) (datetime.DateTime, bool) {
+func convertTz(dt datetime.DateTime, from, to *time.Location) (datetime.DateTime, bool) {
 	buf := datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(dt, datetime.DefaultPrecision)
 	ts, err := time.ParseInLocation(time.DateTime, hack.String(buf), from)
 	if err != nil {
@@ -384,7 +384,7 @@ func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	out, ok := convertTz(dt.dt, fromTz, toTz, env.now)
+	out, ok := convertTz(dt.dt, fromTz, toTz)
 	if !ok {
 		return nil, nil
 	}

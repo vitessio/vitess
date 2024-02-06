@@ -3496,7 +3496,7 @@ func (asm *assembler) Fn_CONVERT_TZ() {
 			return 1
 		}
 
-		dt, ok := convertTz(n.dt, fromTz, toTz, env.now)
+		dt, ok := convertTz(n.dt, fromTz, toTz)
 		if !ok {
 			env.vm.stack[env.vm.sp-3] = nil
 			env.vm.sp -= 2
