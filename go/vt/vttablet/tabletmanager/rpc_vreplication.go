@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -57,6 +58,8 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 	}
 	res := &sqltypes.Result{}
 	for _, bls := range req.BinlogSource {
+		// Sort the tables by name to ensure a consistent order.
+		slices.Sort(bls.Tables)
 		source, err := prototext.Marshal(bls)
 		if err != nil {
 			return nil, err
@@ -294,6 +297,8 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		if !textutil.ValueIsSimulatedNull(req.OnDdl) {
 			bls.OnDdl = req.OnDdl
 		}
+		// Sort the tables by name to ensure a consistent order.
+		slices.Sort(bls.Tables)
 		source, err = prototext.Marshal(bls)
 		if err != nil {
 			return nil, err
