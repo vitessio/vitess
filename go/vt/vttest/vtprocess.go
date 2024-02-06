@@ -141,8 +141,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
 	vtp.proc.Env = append(vtp.proc.Env, os.Environ()...)
 	vtp.proc.Env = append(vtp.proc.Env, vtp.Env...)
-
-	if testing.Verbose() {
+	if !testing.Testing() || testing.Verbose() {
 		vtp.proc.Stderr = os.Stderr
 		vtp.proc.Stdout = os.Stdout
 	}
