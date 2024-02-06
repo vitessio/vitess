@@ -58,7 +58,6 @@ func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *Aggregate
 		Col:    col,
 		Alias:  alias,
 		WCol:   -1,
-		Type:   sqltypes.Unknown,
 	}
 	if opcode.NeedsComparableValues() {
 		out.KeyCol = col
@@ -75,7 +74,7 @@ func (ap *AggregateParams) String() string {
 	if ap.WAssigned() {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
-	if sqltypes.IsText(ap.Type) && ap.CollationID != collations.Unknown {
+	if sqltypes.IsText(ap.Type) && collations.Local().IsSupported(ap.CollationID) {
 		keyCol += " COLLATE " + collations.Local().LookupName(ap.CollationID)
 	}
 	dispOrigOp := ""

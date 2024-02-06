@@ -74,9 +74,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	}
 
 	// Creation of the semantic table
-	semTable := analyzer.newSemTable(statement, si.ConnCollation())
-
-	return semTable, nil
+	return analyzer.newSemTable(statement, si.ConnCollation())
 }
 
 // AnalyzeStrict analyzes the parsed query, and fails the analysis for any possible errors
@@ -96,7 +94,10 @@ func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInf
 	return st, nil
 }
 
-func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
+func (a *analyzer) newSemTable(
+	statement sqlparser.Statement,
+	coll collations.ID,
+) (*SemTable, error) {
 	var comments *sqlparser.ParsedComments
 	commentedStmt, isCommented := statement.(sqlparser.Commented)
 	if isCommented {
@@ -122,7 +123,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		columns:           columns,
 		StatementIDs:      a.scoper.statementIDs,
 		QuerySignature:    a.sig,
-	}
+	}, nil
 }
 
 func (a *analyzer) setError(err error) {
