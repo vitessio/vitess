@@ -397,20 +397,18 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		return nil, err
 	}
 	results := make(map[*topo.TabletInfo]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, len(shards))
-	rctx, rcancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout*2) // We use this with all errgroups
-	defer rcancel()
-	getTabletsEg, getTabletsCtx := errgroup.WithContext(rctx)
+	readWorkflowsEg, readWorkflowsCtx := errgroup.WithContext(ctx)
 	for _, shard := range shards {
 		shard := shard // https://golang.org/doc/faq#closures_and_goroutines
-		getTabletsEg.Go(func() error {
-			si, err := s.ts.GetShard(getTabletsCtx, req.Keyspace, shard)
+		readWorkflowsEg.Go(func() error {
+			si, err := s.ts.GetShard(readWorkflowsCtx, req.Keyspace, shard)
 			if err != nil {
 				return err
 			}
 			if si.PrimaryAlias == nil {
 				return fmt.Errorf("%w %s/%s", vexec.ErrNoShardPrimary, req.Keyspace, shard)
 			}
-			primary, err := s.ts.GetTablet(getTabletsCtx, si.PrimaryAlias)
+			primary, err := s.ts.GetTablet(readWorkflowsCtx, si.PrimaryAlias)
 			if err != nil {
 				return err
 			}
@@ -420,7 +418,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			// Clone the request so that we can set the correct DB name for tablet.
 			req := readReq.CloneVT()
 			req.DbName = primary.DbName()
-			wres, err := s.tmc.ReadVReplicationWorkflows(getTabletsCtx, primary.Tablet, req)
+			wres, err := s.tmc.ReadVReplicationWorkflows(readWorkflowsCtx, primary.Tablet, req)
 			if err != nil {
 				return err
 			}
@@ -430,7 +428,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			return nil
 		})
 	}
-	if getTabletsEg.Wait() != nil {
+	if readWorkflowsEg.Wait() != nil {
 		return nil, err
 	}
 
@@ -463,8 +461,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		return nil
 	}
 
-	fetchCopyStatesEg, fetchCopyStatesCtx := errgroup.WithContext(rctx)
-
+	fetchCopyStatesEg, fetchCopyStatesCtx := errgroup.WithContext(ctx)
 	for tablet, result := range results {
 		tablet := tablet // loop closure
 
