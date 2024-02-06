@@ -45,7 +45,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/proto/vttime"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 const (
@@ -165,6 +165,86 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				AutoStart:          true,
 			},
 			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
+				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
+		},
+		{
+			name: "binlog source order with include",
+			schema: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					{
+						Name:              "zt",
+						Columns:           []string{"id"},
+						PrimaryKeyColumns: []string{"id"},
+						Fields:            sqltypes.MakeTestFields("id", "int64"),
+					},
+					{
+						Name:              "t1",
+						Columns:           []string{"id", "c2"},
+						PrimaryKeyColumns: []string{"id"},
+						Fields:            sqltypes.MakeTestFields("id|c2", "int64|int64"),
+					},
+					{
+						Name:              "wut",
+						Columns:           []string{"id"},
+						PrimaryKeyColumns: []string{"id"},
+						Fields:            sqltypes.MakeTestFields("id", "int64"),
+					},
+				},
+			},
+			req: &vtctldatapb.MoveTablesCreateRequest{
+				SourceKeyspace:     sourceKs,
+				TargetKeyspace:     targetKs,
+				Workflow:           wf,
+				Cells:              tenv.cells,
+				IncludeTables:      []string{"zt", "wut", "t1"},
+				SourceTimeZone:     "EDT",
+				OnDdl:              binlogdatapb.OnDDLAction_EXEC.String(),
+				StopAfterCopy:      true,
+				DropForeignKeys:    true,
+				DeferSecondaryKeys: true,
+				AutoStart:          true,
+			},
+			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"wut\" filter:\"select * from wut\"} rules:{match:\"zt\" filter:\"select * from zt\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
+				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
+		},
+		{
+			name: "binlog source order with all-tables",
+			schema: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					{
+						Name:              "zt",
+						Columns:           []string{"id"},
+						PrimaryKeyColumns: []string{"id"},
+						Fields:            sqltypes.MakeTestFields("id", "int64"),
+					},
+					{
+						Name:              "t1",
+						Columns:           []string{"id", "c2"},
+						PrimaryKeyColumns: []string{"id"},
+						Fields:            sqltypes.MakeTestFields("id|c2", "int64|int64"),
+					},
+					{
+						Name:              "wut",
+						Columns:           []string{"id"},
+						PrimaryKeyColumns: []string{"id"},
+						Fields:            sqltypes.MakeTestFields("id", "int64"),
+					},
+				},
+			},
+			req: &vtctldatapb.MoveTablesCreateRequest{
+				SourceKeyspace:     sourceKs,
+				TargetKeyspace:     targetKs,
+				Workflow:           wf,
+				Cells:              tenv.cells,
+				AllTables:          true,
+				SourceTimeZone:     "EDT",
+				OnDdl:              binlogdatapb.OnDDLAction_EXEC.String(),
+				StopAfterCopy:      true,
+				DropForeignKeys:    true,
+				DeferSecondaryKeys: true,
+				AutoStart:          true,
+			},
+			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"wut\" filter:\"select * from wut\"} rules:{match:\"zt\" filter:\"select * from zt\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
 				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
 		},
 	}
@@ -426,7 +506,7 @@ func TestMoveTables(t *testing.T) {
 		Keyspace:                  targetKs,
 		Workflow:                  wf,
 		Cells:                     tenv.cells,
-		MaxReplicationLagAllowed:  &vttime.Duration{Seconds: 922337203},
+		MaxReplicationLagAllowed:  &vttimepb.Duration{Seconds: 922337203},
 		EnableReverseReplication:  true,
 		InitializeTargetSequences: true,
 		Direction:                 int32(workflow.DirectionForward),
@@ -447,7 +527,7 @@ func TestMoveTables(t *testing.T) {
 		Keyspace:                 targetKs,
 		Workflow:                 wf,
 		Cells:                    tenv.cells,
-		MaxReplicationLagAllowed: &vttime.Duration{Seconds: 922337203},
+		MaxReplicationLagAllowed: &vttimepb.Duration{Seconds: 922337203},
 		EnableReverseReplication: true,
 		Direction:                int32(workflow.DirectionBackward),
 	})

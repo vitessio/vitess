@@ -18,13 +18,12 @@ package tabletmanager
 
 import (
 	"context"
-	"slices"
-	"sort"
 	"strings"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
@@ -59,12 +58,7 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 	}
 	res := &sqltypes.Result{}
 	for _, bls := range req.BinlogSource {
-		// Sort the tables by name to ensure a consistent order.
-		slices.Sort(bls.Tables)
-		sort.Slice(bls.Filter.Rules, func(i, j int) bool {
-			return bls.Filter.Rules[i].Match < bls.Filter.Rules[j].Match
-		})
-
+		protoutil.SortBinlogSourceTables(bls)
 		source, err := prototext.Marshal(bls)
 		if err != nil {
 			return nil, err
@@ -302,8 +296,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		if !textutil.ValueIsSimulatedNull(req.OnDdl) {
 			bls.OnDdl = req.OnDdl
 		}
-		// Sort the tables by name to ensure a consistent order.
-		slices.Sort(bls.Tables)
+		protoutil.SortBinlogSourceTables(bls)
 		source, err = prototext.Marshal(bls)
 		if err != nil {
 			return nil, err
