@@ -33,6 +33,6 @@ func TestInsertGenerator(t *testing.T) {
 	assert.Equal(t, ig.String(), want)
 
 	ig.AddRow("g", &binlogdatapb.BinlogSource{Keyspace: "h"}, "i", "j", "k", binlogdatapb.VReplicationWorkflowType_Reshard, binlogdatapb.VReplicationWorkflowSubType_Partial, true)
-	want += `, ('g', 'keyspace:\"h\"', 'i', 9223372036854775807, 9223372036854775807, 'j', 'k', 111, 0, 'Stopped', 'a', 4, 1, true)`
+	want += `, ('g', 'keyspace:\"h\"', 'i', 9223372036854775807, 9223372036854775807, 'j', 'k', 111, 0, 'Stopped', 'a', 4, 1, true, '{}')`
 	assert.Equal(t, ig.String(), want)
 }
