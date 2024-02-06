@@ -17,9 +17,16 @@ limitations under the License.
 package topotools
 
 import (
+	"bytes"
+	"compress/zlib"
 	"context"
 	"fmt"
+	"io/ioutil"
+	"sort"
 	"strings"
+
+	"github.com/cespare/xxhash/v2"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -76,6 +83,7 @@ func SaveRoutingRules(ctx context.Context, ts *topo.Server, rules map[string][]s
 func GetShardRoutingRuleKey(fromKeyspace, shard string) string {
 	return fmt.Sprintf("%s.%s", fromKeyspace, shard)
 }
+
 func ParseShardRoutingRuleKey(key string) (string, string) {
 	arr := strings.Split(key, ".")
 	return arr[0], arr[1]
@@ -122,3 +130,142 @@ func SaveShardRoutingRules(ctx context.Context, ts *topo.Server, srr map[string]
 
 	return ts.SaveShardRoutingRules(ctx, srs)
 }
+
+// endregion
+
+//region keyspace routing rules
+
+type KeyspaceRoutingRules struct {
+	RulesHash string
+	Rules     map[string]string
+}
+
+func GetKeyspaceRoutingRulesMap(rules *vschemapb.KeyspaceRoutingRules) map[string]string {
+	if rules == nil {
+		return nil
+	}
+	rulesMap := make(map[string]string, len(rules.Rules))
+	for _, rr := range rules.Rules {
+		rulesMap[rr.FromKeyspace] = rr.ToKeyspace
+	}
+	return rulesMap
+}
+
+func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (*KeyspaceRoutingRules, error) {
+	var rules KeyspaceRoutingRules
+	ks_rr_c, err := ts.GetKeyspaceRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rules.RulesHash = ks_rr_c.RulesHash
+	compressedRules := ks_rr_c.CompressedRules
+	rulesBytes, err := Decompress([]byte(compressedRules))
+	if err != nil {
+		return nil, err
+	}
+
+	var ksRules vschemapb.KeyspaceRoutingRules
+	err = protojson.Unmarshal(rulesBytes, &ksRules)
+	if err != nil {
+		return nil, err
+	}
+	rules.Rules = GetKeyspaceRoutingRulesMap(&ksRules)
+
+	return &rules, nil
+}
+
+func SaveKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, rules map[string]string) (string, error) {
+	log.Infof("Saving keyspace routing rules %v\n", rules)
+
+	ks_rr := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(rules))}
+	for from, to := range rules {
+		ks_rr.Rules = append(ks_rr.Rules, &vschemapb.KeyspaceRoutingRule{
+			FromKeyspace: from,
+			ToKeyspace:   to,
+		})
+	}
+
+	ks_rr_c := &vschemapb.KeyspaceRoutingRulesCompressed{}
+	ks_rr_bytes, err := protojson.Marshal(ks_rr)
+	if err != nil {
+		return "", err
+	}
+	compressedRules, err := Compress(ks_rr_bytes)
+	if err != nil {
+		return "", err
+	}
+	ks_rr_c.CompressedRules = string(compressedRules)
+	ks_rr_c.RulesHash = ComputeStableMapHash(rules)
+
+	err = ts.SaveKeyspaceRoutingRules(ctx, ks_rr_c)
+
+	return ks_rr_c.RulesHash, err
+}
+
+//endregion
+
+//region compression and hashing
+
+// Compress compresses the given byte slice and returns a compressed byte slice.
+func Compress(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	w := zlib.NewWriter(&buf)
+	if _, err := w.Write(data); err != nil {
+		w.Close()
+		return nil, err
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// Decompress decompresses the given byte slice and returns a decompressed byte slice.
+func Decompress(data []byte) ([]byte, error) {
+	b := bytes.NewReader(data)
+	r, err := zlib.NewReader(b)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	decompressedData, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	return decompressedData, nil
+}
+
+// ComputeStableMapHash computes a stable hash for a map with string keys and string values.
+func ComputeStableMapHash(m map[string]string) string {
+	// Create a slice to hold the map's keys.
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+
+	// Sort the keys to ensure stable iteration order.
+	sort.Strings(keys)
+
+	// Create an xxhash hasher.
+	hasher := xxhash.New()
+
+	// Iterate over the map in the order of the sorted keys.
+	for _, k := range keys {
+		// Write the key and value to the hasher.
+		// Adding a separator between the key and value to ensure unique combinations are hashed distinctly.
+		// You might also consider how to handle potential collisions in key-value pairs, such as "ab"+"c" vs "a"+"bc".
+		_, err := hasher.Write([]byte(k + ":" + m[k]))
+		if err != nil {
+			return ""
+		}
+	}
+
+	// Compute the hash.
+	hash := hasher.Sum64()
+
+	return fmt.Sprintf("%016x", hash)
+}
+
+//endregion

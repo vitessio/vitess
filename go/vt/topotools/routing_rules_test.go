@@ -90,3 +90,24 @@ func TestShardRoutingRulesRoundTrip(t *testing.T) {
 
 	assert.Equal(t, srr, roundtripRules)
 }
+
+func TestKeyspaceRoutingRulesRoundTrip(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	rulesMap := map[string]string{
+		"ks1": "ks2",
+		"ks4": "ks5",
+	}
+
+	rulesHash, err := SaveKeyspaceRoutingRules(ctx, ts, rulesMap)
+	require.NoError(t, err, "could not save keyspace routing rules to topo %v", rulesMap)
+
+	roundtripRules, err := GetKeyspaceRoutingRules(ctx, ts)
+	require.NoError(t, err, "could not fetch keyspace routing rules from topo")
+
+	assert.Equal(t, rulesMap, roundtripRules.Rules)
+	assert.Equal(t, rulesHash, roundtripRules.RulesHash)
+}
