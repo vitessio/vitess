@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/schema"
@@ -34,6 +35,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -141,79 +143,6 @@ func (rs *resharder) validateTargets(ctx context.Context) error {
 	})
 	return err
 }
-
-/*
-func (rs *resharder) readRefStreams(ctx context.Context) error {
-	var mu sync.Mutex
-	err := rs.forAll(rs.sourceShards, func(source *topo.ShardInfo) error {
-		sourcePrimary := rs.sourcePrimaries[source.ShardName()]
-
-		query := fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name=%s and message != 'FROZEN'", encodeString(sourcePrimary.DbName()))
-		p3qr, err := rs.s.tmc.VReplicationExec(ctx, sourcePrimary.Tablet, query)
-		if err != nil {
-			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", sourcePrimary.Tablet, query)
-		}
-		qr := sqltypes.Proto3ToResult(p3qr)
-
-		mu.Lock()
-		defer mu.Unlock()
-
-		mustCreate := false
-		var ref map[string]bool
-		if rs.refStreams == nil {
-			rs.refStreams = make(map[string]*refStream)
-			mustCreate = true
-		} else {
-			// Copy the ref streams for comparison.
-			ref = make(map[string]bool, len(rs.refStreams))
-			for k := range rs.refStreams {
-				ref[k] = true
-			}
-		}
-		for _, row := range qr.Rows {
-
-			workflow := row[0].ToString()
-			if workflow == "" {
-				return fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s", source.Keyspace(), source.ShardName())
-			}
-			var bls binlogdatapb.BinlogSource
-			rowBytes, err := row[1].ToBytes()
-			if err != nil {
-				return err
-			}
-			if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
-				return vterrors.Wrapf(err, "prototext.Unmarshal: %v", row)
-			}
-			isReference, err := rs.blsIsReference(&bls)
-			if err != nil {
-				return vterrors.Wrap(err, "blsIsReference")
-			}
-			if !isReference {
-				continue
-			}
-			refKey := fmt.Sprintf("%s:%s:%s", workflow, bls.Keyspace, bls.Shard)
-			if mustCreate {
-				rs.refStreams[refKey] = &refStream{
-					workflow:    workflow,
-					bls:         &bls,
-					cell:        row[2].ToString(),
-					tabletTypes: row[3].ToString(),
-				}
-			} else {
-				if !ref[refKey] {
-					return fmt.Errorf("streams are mismatched across source shards for workflow: %s", workflow)
-				}
-				delete(ref, refKey)
-			}
-		}
-		if len(ref) != 0 {
-			return fmt.Errorf("streams are mismatched across source shards: %v", ref)
-		}
-		return nil
-	})
-	return err
-}
-*/
 
 func (rs *resharder) readRefStreams(ctx context.Context) error {
 	var mu sync.Mutex
@@ -395,11 +324,15 @@ func (rs *resharder) startStreams(ctx context.Context) error {
 		// because we've already confirmed that there were no existing workflows
 		// on the shards when we started, and we want to start all of the ones
 		// that we've created on the new shards as we're migrating them.
-		// We use the comment directive to indicate that this is intentional
-		// and OK.
 		req := &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow: rs.workflow,
 			State:    binlogdatapb.VReplicationWorkflowState_Running,
+			// Don't change anything else, so pass simulated NULLs.
+			Cells: textutil.SimulatedNullStringSlice,
+			TabletTypes: []topodatapb.TabletType{
+				topodatapb.TabletType(textutil.SimulatedNullInt),
+			},
+			OnDdl: binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
 		}
 		if _, err := rs.s.tmc.UpdateVReplicationWorkflow(ctx, targetPrimary.Tablet, req); err != nil {
 			return vterrors.Wrapf(err, "UpdateVReplicationWorkflow(%v, 'state='%s')",

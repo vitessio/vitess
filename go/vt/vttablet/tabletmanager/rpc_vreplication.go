@@ -44,7 +44,8 @@ const (
 	// Create a new VReplication workflow record.
 	sqlCreateVReplicationWorkflow = "insert into %s.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a)"
 	sqlHasVReplicationWorkflows   = "select if(count(*) > 0, 1, 0) as has_workflows from %s.vreplication where db_name = %a"
-	// Read all VReplication workflows.
+	// Read all VReplication workflows. The final format specifier is used to
+	// optionally add any additional predicates to the query.
 	sqlReadVReplicationWorkflows = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from %s.vreplication where db_name = %a%s group by workflow, id order by workflow, id"
 	// Read a VReplication workflow.
 	sqlReadVReplicationWorkflow = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from %s.vreplication where workflow = %a and db_name = %a"
@@ -143,6 +144,7 @@ func (tm *TabletManager) HasVReplicationWorkflows(ctx context.Context, req *tabl
 	if err != nil {
 		return nil, err
 	}
+	// This should never occur. Let the caller decide how to treat it.
 	if res == nil || len(res.Rows) == 0 {
 		return nil, nil
 	}
@@ -234,7 +236,7 @@ func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tab
 		return resp, nil
 	}
 	rows := res.Named().Rows
-	workflows := make(map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse)
+	workflows := make(map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, len(rows))
 
 	for _, row := range rows {
 		workflow := row["workflow"].ToString()
@@ -488,7 +490,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		}
 		tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
 		if (inorder && req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN) ||
-			req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
+			(req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER) {
 			tabletTypesStr = discovery.InOrderHint + tabletTypesStr
 		}
 		if err = prototext.Unmarshal(source, bls); err != nil {

@@ -397,20 +397,20 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		return nil, err
 	}
 	results := make(map[*topo.TabletInfo]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, len(shards))
-	rctx, rcancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	rctx, rcancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout*3) // We use this with all 3 errgroups
 	defer rcancel()
-	erg, erctx := errgroup.WithContext(rctx)
+	getTabletsEg, getTabletsCtx := errgroup.WithContext(rctx)
 	for _, shard := range shards {
 		shard := shard // https://golang.org/doc/faq#closures_and_goroutines
-		erg.Go(func() error {
-			si, err := s.ts.GetShard(erctx, req.Keyspace, shard)
+		getTabletsEg.Go(func() error {
+			si, err := s.ts.GetShard(getTabletsCtx, req.Keyspace, shard)
 			if err != nil {
 				return err
 			}
 			if si.PrimaryAlias == nil {
 				return fmt.Errorf("%w %s/%s", vexec.ErrNoShardPrimary, req.Keyspace, shard)
 			}
-			primary, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+			primary, err := s.ts.GetTablet(getTabletsCtx, si.PrimaryAlias)
 			if err != nil {
 				return err
 			}
@@ -420,7 +420,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			// Clone the request so that we can set the correct DB name for tablet.
 			req := readReq.CloneVT()
 			req.DbName = primary.DbName()
-			wres, err := s.tmc.ReadVReplicationWorkflows(ctx, primary.Tablet, req)
+			wres, err := s.tmc.ReadVReplicationWorkflows(getTabletsCtx, primary.Tablet, req)
 			if err != nil {
 				return err
 			}
@@ -430,7 +430,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			return nil
 		})
 	}
-	if erg.Wait() != nil {
+	if getTabletsEg.Wait() != nil {
 		return nil, err
 	}
 
@@ -463,7 +463,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		return nil
 	}
 
-	fetchCopyStatesEg, fetchCopyStatesCtx := errgroup.WithContext(ctx)
+	fetchCopyStatesEg, fetchCopyStatesCtx := errgroup.WithContext(rctx)
 
 	for tablet, result := range results {
 		tablet := tablet // loop closure
@@ -664,6 +664,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		return nil
 	}
 
+	scanWorkflowEg, scanWorkflowCtx := errgroup.WithContext(rctx)
+
 	for tablet, result := range results {
 		// In the old implementation, we knew we had at most one (0 <= N <= 1)
 		// workflow for each shard primary we queried. There might be multiple
@@ -690,10 +692,17 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				targetShardsByWorkflow[workflowName] = sets.New[string]()
 			}
 
-			if err := scanWorkflow(ctx, workflow, wfres, tablet); err != nil {
-				return nil, err
-			}
+			// https://golang.org/doc/faq#closures_and_goroutines
+			wfres := wfres
+			tablet := tablet
+			getTabletsEg.Go(func() error {
+				return scanWorkflow(scanWorkflowCtx, workflow, wfres, tablet)
+			})
 		}
+	}
+
+	if scanWorkflowEg.Wait() != nil {
+		return nil, err
 	}
 
 	var (
