@@ -26,6 +26,7 @@ import (
 	"path"
 	"strings"
 	"syscall"
+	"testing"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
