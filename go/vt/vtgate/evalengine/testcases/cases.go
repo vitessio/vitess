@@ -1857,6 +1857,25 @@ func FnTime(yield Query) {
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("TIME(%s)", d), nil)
 	}
+	times := []string{
+		"'00:00:00'",
+		"'asdadsasd'",
+		"'312sadd'",
+		"'11-12-23'",
+		"'0000-11-23'",
+		"'0-0-0'",
+		"00:00",
+		"00:00-00",
+		"00:00:0:0:0:0",
+		"00::00",
+		"12::00",
+		"'00000001'",
+		"'11116656'",
+	}
+
+	for _, d := range times {
+		yield(fmt.Sprintf("TIME(%s)", d), nil)
+	}
 }
 
 func FnUnixTimestamp(yield Query) {
@@ -1898,7 +1917,7 @@ func FnYear(yield Query) {
 }
 
 func FnYearWeek(yield Query) {
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 8; i++ {
 		for _, d := range inputConversions {
 			yield(fmt.Sprintf("YEARWEEK(%s, %d)", d, i), nil)
 		}
