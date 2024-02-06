@@ -390,7 +390,6 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	if len(predicates) > 0 {
 		where = fmt.Sprintf("WHERE %s", strings.Join(predicates, " AND "))
 	}
-
 	query := fmt.Sprintf(`
 		SELECT
 			id,
@@ -601,8 +600,10 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		}
 
 		options := row["options"].ToString()
-		if err := json.Unmarshal([]byte(options), &workflow.Options); err != nil {
-			return err
+		if options != "" {
+			if err := json.Unmarshal([]byte(options), &workflow.Options); err != nil {
+				return err
+			}
 		}
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:                        id,
@@ -1490,7 +1491,6 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if err != nil {
 		return nil, err
 	}
-
 	// If we get an error after this point, where the vreplication streams/records
 	// have been created, then we clean up the workflow's artifacts.
 	defer func() {
@@ -1560,7 +1560,6 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			return nil, err
 		}
 	}
-
 	tabletShards, err := s.collectTargetStreams(ctx, mz)
 	if err != nil {
 		return nil, err
@@ -1570,7 +1569,6 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if err != nil {
 		return nil, err
 	}
-
 	if mz.ms.ExternalCluster == "" {
 		exists, tablets, err := s.checkIfPreviousJournalExists(ctx, mz, migrationID)
 		if err != nil {
@@ -1585,13 +1583,11 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, msg)
 		}
 	}
-
 	if req.AutoStart {
 		if err := mz.startStreams(ctx); err != nil {
 			return nil, err
 		}
 	}
-
 	return s.WorkflowStatus(ctx, &vtctldatapb.WorkflowStatusRequest{
 		Keyspace: targetKeyspace,
 		Workflow: req.Workflow,

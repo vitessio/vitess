@@ -130,6 +130,9 @@ func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreat
 		if err != nil {
 			return err
 		}
+		if optionsJSON == nil {
+			optionsJSON = []byte("{}")
+		}
 		_, err = mz.tmc.CreateVReplicationWorkflow(mz.ctx, targetPrimary.Tablet, &tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 			Workflow:                  req.Workflow,
 			BinlogSource:              blses,
