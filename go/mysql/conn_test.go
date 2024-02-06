@@ -39,7 +39,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
@@ -1141,8 +1141,8 @@ func (t testRun) WarningCount(c *Conn) uint16 {
 	return 0
 }
 
-func (t testRun) SQLParser() *sqlparser.Parser {
-	return sqlparser.NewTestParser()
+func (t testRun) Env() *vtenv.Environment {
+	return vtenv.NewTestEnv()
 }
 
 var _ Handler = (*testRun)(nil)

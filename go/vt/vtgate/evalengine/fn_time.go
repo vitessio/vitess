@@ -119,6 +119,10 @@ type (
 		CallExpr
 	}
 
+	builtinTimeToSec struct {
+		CallExpr
+	}
+
 	builtinQuarter struct {
 		CallExpr
 	}
@@ -183,6 +187,7 @@ var _ IR = (*builtinMonthName)(nil)
 var _ IR = (*builtinLastDay)(nil)
 var _ IR = (*builtinToDays)(nil)
 var _ IR = (*builtinFromDays)(nil)
+var _ IR = (*builtinTimeToSec)(nil)
 var _ IR = (*builtinQuarter)(nil)
 var _ IR = (*builtinSecond)(nil)
 var _ IR = (*builtinTime)(nil)
@@ -1325,6 +1330,43 @@ func (call *builtinFromDays) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_FROM_DAYS()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
+}
+
+func (b *builtinTimeToSec) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := b.arg1(env)
+	if arg == nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	d := evalToTime(arg, -1)
+	if d == nil {
+		return nil, nil
+	}
+
+	sec := d.dt.Time.ToSeconds()
+	return newEvalInt64(sec), nil
+}
+
+func (call *builtinTimeToSec) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	default:
+		c.asm.Convert_xT(1, -1)
+	}
+
+	c.asm.Fn_TIME_TO_SEC()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {

@@ -119,6 +119,11 @@ const (
 	AlterTableAlgorithmStrategyCopy
 )
 
+const (
+	EnumReorderStrategyReject int = iota
+	EnumReorderStrategyAllow
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering         bool
@@ -131,6 +136,7 @@ type DiffHints struct {
 	TableCharsetCollateStrategy int
 	TableQualifierHint          int
 	AlterTableAlgorithmStrategy int
+	EnumReorderStrategy         int
 
 	MySQLServerVersion string // Used to determine specific capabilities such as INSTANT DDL support
 }

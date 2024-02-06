@@ -448,6 +448,10 @@ func (t Time) toDuration() time.Duration {
 	return dur
 }
 
+func (t Time) ToSeconds() int64 {
+	return int64(t.ToDuration().Seconds())
+}
+
 func (d Date) ToStdTime(loc *time.Location) (out time.Time) {
 	return time.Date(d.Year(), time.Month(d.Month()), d.Day(), 0, 0, 0, 0, loc)
 }
