@@ -122,7 +122,11 @@ type Handler interface {
 	WarningCount(c *Conn) uint16
 
 	// ComResetConnection is called when a connection receives a COM_RESET_CONNECTION signal.
-	ComResetConnection(c *Conn)
+	// This is used to reset the session state (e.g. clearing user vars, resetting session vars, releasing
+	// locks, releasing cached prepared statements, etc). One of the primary use cases for COM_RESET_CONNECTION
+	// is to reset a pooled connection's session state so that it can be safely returned to the connection pool
+	// and given to another application process to reuse.
+	ComResetConnection(c *Conn) error
 
 	// ParserOptionsForConnection returns any parser options that should be used for the given connection. For
 	// example, if the connection has enabled ANSI_QUOTES or ANSI SQL_MODE, then the parser needs to know that

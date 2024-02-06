@@ -305,8 +305,8 @@ func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback fu
 	}
 }
 
-func (th *testHandler) ComResetConnection(c *Conn) {
-
+func (th *testHandler) ComResetConnection(c *Conn) error {
+	return nil
 }
 
 func (th *testHandler) WarningCount(c *Conn) uint16 {

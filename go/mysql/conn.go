@@ -1347,7 +1347,11 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		// Clean up and reset the connection
 		c.recycleReadPacket()
 		c.discardCursor()
-		handler.ComResetConnection(c)
+		err = handler.ComResetConnection(c)
+		if err != nil {
+			log.Errorf("Error resetting connection (ID %d): %v", c.ConnectionID, err)
+			c.writeErrorPacketFromError(err)
+		}
 		// Reset prepared statements
 		c.PrepareData = make(map[uint32]*PrepareData)
 		err = c.writeOKPacket(0, 0, 0, 0)
