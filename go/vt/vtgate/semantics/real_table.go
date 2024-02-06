@@ -105,11 +105,8 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
 		collation := collations.DefaultCollationForType(col.Type)
-		if sqltypes.IsText(col.Type) {
-			coll, found := collations.Local().LookupID(col.CollationName)
-			if found {
-				collation = coll
-			}
+		if sqltypes.IsText(col.Type) && col.CollationName != "" {
+			collation, _ = collations.Local().LookupID(col.CollationName)
 		}
 
 		cols = append(cols, ColumnInfo{

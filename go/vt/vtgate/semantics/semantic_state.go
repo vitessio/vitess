@@ -351,7 +351,12 @@ func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
 		if !found {
 			return true
 		}
-		return typ.Collation == collations.Unknown && !sqltypes.IsNumber(typ.Type)
+
+		if sqltypes.IsNumber(typ.Type) {
+			return false
+		}
+
+		return !collations.Local().IsSupported(typ.Collation)
 	}
 }
 

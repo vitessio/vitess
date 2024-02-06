@@ -4845,7 +4845,8 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "min(0 COLLATE latin1_swedish_ci) AS min(textcol1), max(1 COLLATE latin1_swedish_ci) AS max(textcol2), sum_distinct(2 COLLATE latin1_swedish_ci) AS sum(distinct textcol1), count_distinct(3 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
+        "Aggregates": "min(0 COLLATE latin1_swedish_ci) AS min(textcol1), max(1|4) AS max(textcol2), sum_distinct(2 COLLATE latin1_swedish_ci) AS sum(distinct textcol1), count_distinct(3 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
+        "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -4854,9 +4855,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select min(textcol1), max(textcol2), textcol1, textcol1 from `user` where 1 != 1 group by textcol1",
+            "FieldQuery": "select min(textcol1), max(textcol2), textcol1, textcol1, weight_string(textcol2) from `user` where 1 != 1 group by textcol1, weight_string(textcol2)",
             "OrderBy": "2 ASC COLLATE latin1_swedish_ci",
-            "Query": "select min(textcol1), max(textcol2), textcol1, textcol1 from `user` group by textcol1 order by textcol1 asc",
+            "Query": "select min(textcol1), max(textcol2), textcol1, textcol1, weight_string(textcol2) from `user` group by textcol1, weight_string(textcol2) order by textcol1 asc",
             "Table": "`user`"
           }
         ]
@@ -4875,8 +4876,9 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "min(1 COLLATE latin1_swedish_ci) AS min(textcol1), max(2 COLLATE latin1_swedish_ci) AS max(textcol2), sum_distinct(3 COLLATE latin1_swedish_ci) AS sum(distinct textcol1), count_distinct(4 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
+        "Aggregates": "min(1 COLLATE latin1_swedish_ci) AS min(textcol1), max(2|5) AS max(textcol2), sum_distinct(3 COLLATE latin1_swedish_ci) AS sum(distinct textcol1), count_distinct(4 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
         "GroupBy": "0",
+        "ResultColumns": 5,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -4885,9 +4887,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, min(textcol1), max(textcol2), textcol1, textcol1 from `user` where 1 != 1 group by col, textcol1",
+            "FieldQuery": "select col, min(textcol1), max(textcol2), textcol1, textcol1, weight_string(textcol2) from `user` where 1 != 1 group by col, textcol1, weight_string(textcol2)",
             "OrderBy": "0 ASC, 3 ASC COLLATE latin1_swedish_ci",
-            "Query": "select col, min(textcol1), max(textcol2), textcol1, textcol1 from `user` group by col, textcol1 order by col asc, textcol1 asc",
+            "Query": "select col, min(textcol1), max(textcol2), textcol1, textcol1, weight_string(textcol2) from `user` group by col, textcol1, weight_string(textcol2) order by col asc, textcol1 asc",
             "Table": "`user`"
           }
         ]

@@ -501,7 +501,12 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 			for _, table := range ks.Tables {
 				for i, col := range table.Columns {
 					if sqltypes.IsText(col.Type) {
-						table.Columns[i].CollationName = "latin1_swedish_ci"
+						switch col.Name.String() {
+						case "textcol2":
+							table.Columns[i].CollationName = "big5_bin"
+						default:
+							table.Columns[i].CollationName = "latin1_swedish_ci"
+						}
 					}
 				}
 			}
