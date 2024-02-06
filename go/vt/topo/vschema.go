@@ -166,7 +166,7 @@ func (ts *Server) SaveKeyspaceRoutingRules(ctx context.Context, ks_rr_c *vschema
 	}
 
 	if len(data) == 0 {
-		// No vschema, remove it. So we can remove the keyspace.
+		// No rules, remove it.
 		if err := ts.globalCell.Delete(ctx, KeyspaceRoutingRulesFile, nil); err != nil && !IsErrType(err, NoNode) {
 			return err
 		}

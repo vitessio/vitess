@@ -34,6 +34,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -67,10 +68,11 @@ type VSchema struct {
 	// table is uniquely named, the value will be the qualified Table object
 	// with the keyspace where this table exists. If multiple keyspaces have a
 	// table with the same name, the value will be a `nil`.
-	globalTables      map[string]*Table
-	uniqueVindexes    map[string]Vindex
-	Keyspaces         map[string]*KeyspaceSchema `json:"keyspaces"`
-	ShardRoutingRules map[string]string          `json:"shard_routing_rules"`
+	globalTables         map[string]*Table
+	uniqueVindexes       map[string]Vindex
+	Keyspaces            map[string]*KeyspaceSchema `json:"keyspaces"`
+	ShardRoutingRules    map[string]string          `json:"shard_routing_rules"`
+	KeyspaceRoutingRules map[string]string          `json:"keyspace_routing_rules"`
 	// created is the time when the VSchema object was created. Used to detect if a cached
 	// copy of the vschema is stale.
 	created time.Time
@@ -322,6 +324,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 	buildReferences(source, vschema)
 	buildRoutingRule(source, vschema, parser)
 	buildShardRoutingRule(source, vschema)
+	buildKeyspaceRoutingRule(source, vschema)
 	// Resolve auto-increments after routing rules are built since sequence tables also obey routing rules.
 	resolveAutoIncrement(source, vschema, parser)
 	return vschema
@@ -981,6 +984,18 @@ func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	}
 }
 
+func buildKeyspaceRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	vschema.KeyspaceRoutingRules = nil
+	if source.KeyspaceRoutingRulesCompressed == nil || len(source.KeyspaceRoutingRulesCompressed.CompressedRules) == 0 {
+		return
+	}
+	rulesMap, err := topotools.GetKeyspaceRoutingRulesMapFromCompressed(source.KeyspaceRoutingRulesCompressed.CompressedRules)
+	if err != nil {
+		return
+	}
+	vschema.KeyspaceRoutingRules = rulesMap
+}
+
 // FindTable returns a pointer to the Table. If a keyspace is specified, only tables
 // from that keyspace are searched. If the specified keyspace is unsharded
 // and no tables matched, it's considered valid: FindTable will construct a table
@@ -1226,6 +1241,17 @@ func (vschema *VSchema) FindRoutedShard(keyspace, shard string) (string, error) 
 		return keyspace, nil
 	}
 	if ks, ok := vschema.ShardRoutingRules[getShardRoutingRulesKey(keyspace, shard)]; ok {
+		return ks, nil
+	}
+	return keyspace, nil
+}
+
+// FindRoutedKeyspace looks up keyspace routing rules and returns the target keyspace if applicable
+func (vschema *VSchema) FindRoutedKeyspace(keyspace string) (string, error) {
+	if len(vschema.KeyspaceRoutingRules) == 0 {
+		return keyspace, nil
+	}
+	if ks, ok := vschema.KeyspaceRoutingRules[keyspace]; ok {
 		return ks, nil
 	}
 	return keyspace, nil

@@ -151,15 +151,7 @@ func GetKeyspaceRoutingRulesMap(rules *vschemapb.KeyspaceRoutingRules) map[strin
 	return rulesMap
 }
 
-func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (*KeyspaceRoutingRules, error) {
-	var rules KeyspaceRoutingRules
-	ks_rr_c, err := ts.GetKeyspaceRoutingRules(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rules.RulesHash = ks_rr_c.RulesHash
-	compressedRules := ks_rr_c.CompressedRules
+func GetKeyspaceRoutingRulesMapFromCompressed(compressedRules string) (map[string]string, error) {
 	rulesBytes, err := Decompress([]byte(compressedRules))
 	if err != nil {
 		return nil, err
@@ -170,8 +162,21 @@ func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (*KeyspaceRou
 	if err != nil {
 		return nil, err
 	}
-	rules.Rules = GetKeyspaceRoutingRulesMap(&ksRules)
+	return GetKeyspaceRoutingRulesMap(&ksRules), nil
+}
 
+func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (*KeyspaceRoutingRules, error) {
+	var rules KeyspaceRoutingRules
+	ks_rr_c, err := ts.GetKeyspaceRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rules.RulesHash = ks_rr_c.RulesHash
+	rules.Rules, err = GetKeyspaceRoutingRulesMapFromCompressed(ks_rr_c.CompressedRules)
+	if err != nil {
+		return nil, err
+	}
 	return &rules, nil
 }
 
