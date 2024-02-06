@@ -50,7 +50,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtadmin"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -1612,7 +1611,7 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 
 // GetSchemaMigrations returns one or more schema migrations for a keyspace in
 // this cluster.
-func (c *Cluster) GetSchemaMigrations(ctx context.Context, req *vtctldatapb.GetSchemaMigrationsRequest) ([]*vtadmin.SchemaMigration, error) {
+func (c *Cluster) GetSchemaMigrations(ctx context.Context, req *vtctldatapb.GetSchemaMigrationsRequest) ([]*vtadminpb.SchemaMigration, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetSchemaMigrations")
 	defer span.Finish()
 

@@ -1167,6 +1167,10 @@ func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchem
 	}
 
 	for _, c := range clusters {
+		if requestsByCluster[c.ID] == nil {
+			continue
+		}
+
 		for _, r := range requestsByCluster[c.ID] {
 			wg.Add(1)
 
