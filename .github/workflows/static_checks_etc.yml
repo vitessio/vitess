@@ -39,6 +39,7 @@ jobs:
         with:
           # This is a push-only API token: https://github.com/fossa-contrib/fossa-action#push-only-api-token
           fossa-api-key: f62c11ef0c249fef239947f01279aa0f
+          github-token: ${{ github.token }}
 
       - name: Check for changes in Go files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
