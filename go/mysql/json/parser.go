@@ -941,8 +941,8 @@ func (v *Value) Time() (datetime.Time, bool) {
 	if v.t != TypeTime {
 		return datetime.Time{}, false
 	}
-	t, _, ok := datetime.ParseTime(v.s, datetime.DefaultPrecision)
-	return t, ok
+	t, _, state := datetime.ParseTime(v.s, datetime.DefaultPrecision)
+	return t, state == datetime.TimeOK
 }
 
 // Object returns the underlying JSON object for the v.
