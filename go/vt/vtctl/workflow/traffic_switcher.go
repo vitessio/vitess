@@ -837,6 +837,27 @@ func (ts *trafficSwitcher) ForAllUIDs(f func(target *MigrationTarget, uid int32)
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
+func (ts *trafficSwitcher) addAdditionalFilter(filter string) (string, error) {
+	if ts.options.AdditionalFilter == "" {
+		return filter, nil
+	}
+	stmt, err := ts.ws.env.Parser().Parse(filter)
+	if err != nil {
+		return "", err
+	}
+	sel, ok := stmt.(*sqlparser.Select)
+	if !ok {
+		return "", fmt.Errorf("unrecognized statement: %s", filter)
+	}
+	additionalWhereClause, err := getAdditionalFilter(ts.ws.SQLParser(), ts.options.AdditionalFilter)
+	if err != nil {
+		return "", err
+	}
+	addFilter(sel, additionalWhereClause.Expr)
+	filter = sqlparser.String(sel)
+	return filter, nil
+}
+
 func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error {
 	if err := ts.deleteReverseVReplication(ctx); err != nil {
 		return err
@@ -853,10 +874,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 			SourceTimeZone: bls.TargetTimeZone,
 			TargetTimeZone: bls.SourceTimeZone,
 		}
-		additionalWhereClause, err := getAdditionalFilter(ts.ws.env.Parser(), ts.options.AdditionalFilter)
-		if err != nil {
-			return err
-		}
+		var err error
 		for _, rule := range bls.Filter.Rules {
 			if rule.Filter == "exclude" {
 				reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
@@ -893,26 +911,15 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 					}
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
-			}
-			if filter != "-" {
-				stmt, err := ts.ws.env.Parser().Parse(filter)
+				filter, err = ts.addAdditionalFilter(filter)
 				if err != nil {
 					return err
 				}
-				sel, ok := stmt.(*sqlparser.Select)
-				if !ok {
-					return fmt.Errorf("unrecognized statement: %s", filter)
-				}
-				if additionalWhereClause != nil {
-					addFilter(sel, additionalWhereClause.Expr)
-				}
-				filter = sqlparser.String(sel)
 			}
 			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
 				Match:  rule.Match,
 				Filter: filter,
 			})
-
 		}
 		log.Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
 			source.GetPrimary().Alias, ts.ReverseWorkflowName(), target.Position)
