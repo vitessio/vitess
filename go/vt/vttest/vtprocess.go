@@ -26,7 +26,6 @@ import (
 	"path"
 	"strings"
 	"syscall"
-	"testing"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -142,11 +141,8 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
 	vtp.proc.Env = append(vtp.proc.Env, os.Environ()...)
 	vtp.proc.Env = append(vtp.proc.Env, vtp.Env...)
-
-	if testing.Verbose() {
-		vtp.proc.Stderr = os.Stderr
-		vtp.proc.Stdout = os.Stdout
-	}
+	vtp.proc.Stderr = os.Stderr
+	vtp.proc.Stdout = os.Stdout
 
 	log.Infof("%v %v", strings.Join(vtp.proc.Args, " "))
 	err = vtp.proc.Start()
