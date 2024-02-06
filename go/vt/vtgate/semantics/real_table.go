@@ -124,7 +124,6 @@ func vindexTableToColumnInfo(tbl *vindexes.Table, collationEnv *collations.Envir
 	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
-
 		cols = append(cols, ColumnInfo{
 			Name:      col.Name.String(),
 			Type:      col.ToEvalengineType(collationEnv),
