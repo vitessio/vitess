@@ -172,7 +172,7 @@ func TestGetSchemaRPC(t *testing.T) {
 		}, {
 			name: "Create some internal tables",
 			queries: []string{
-				"create table _vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410 (eid int);",
+				"create table if not exists _vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410(id bigint primary key);",
 				"create table vitess_temp1 (eid int);",
 				"create view vitess_view1 as select eid from vitess_a",
 			},
