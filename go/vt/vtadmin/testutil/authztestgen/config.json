@@ -6,6 +6,26 @@
             "name": "test",
             "vtctldclient_mock_data": [
                 {
+                    "field": "ApplySchemaResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ApplySchemaResponse\nError error}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.ApplySchemaResponse{},\n},"
+                },
+                {
+                    "field": "CancelSchemaMigrationResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.CancelSchemaMigrationResponse\nError error}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.CancelSchemaMigrationResponse{},\n},"
+                },
+                {
+                    "field": "CleanupSchemaMigrationResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.CleanupSchemaMigrationResponse\nError error}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.CleanupSchemaMigrationResponse{},\n},"
+                },
+                {
+                    "field": "CompleteSchemaMigrationResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.CompleteSchemaMigrationResponse\nError error}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.CompleteSchemaMigrationResponse{},\n},"
+                },
+                {
                     "field": "DeleteShardsResults",
                     "type": "map[string]error",
                     "value": "\"test/-\": nil,"
@@ -51,6 +71,11 @@
                     "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"test\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
                 },
                 {
+                    "field": "GetSchemaMigrationsResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetSchemaMigrationsResponse\nError error}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.GetSchemaMigrationsResponse{\nMigrations: []*vtctldatapb.SchemaMigration{\n{},\n},\n},\n},"
+                },
+                {
                     "field": "GetSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetSchemaResponse\nError error}",
                     "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.GetSchemaResponse{\nSchema: &tabletmanagerdatapb.SchemaDefinition{\nTableDefinitions: []*tabletmanagerdatapb.TableDefinition{\n{Name: \"t1\", Schema: \"create table t1 (id int(11) not null primary key);\",},\n{Name: \"t2\"},\n},\n},\n},\n},"
@@ -70,6 +95,11 @@
                     "field": "GetWorkflowsResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetWorkflowsResponse\nError error}",
                     "value": "\"test\": {\nResponse: &vtctldatapb.GetWorkflowsResponse{\nWorkflows: []*vtctldatapb.Workflow{\n{\nName: \"testworkflow\",\n},\n},\n}},"
+                },
+                {
+                    "field": "LaunchSchemaMigrationResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.LaunchSchemaMigrationResponse\nError error}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.LaunchSchemaMigrationResponse{},\n},"
                 },
                 {
                     "field": "PingTabletResults",
@@ -95,6 +125,11 @@
                     "field": "ReparentTabletResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.ReparentTabletResponse\nError error\n}",
                     "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.ReparentTabletResponse{},\n},"
+                },
+                {
+                    "field": "RetrySchemaMigrationResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.RetrySchemaMigrationResponse\nError error}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.RetrySchemaMigrationResponse{},\n},"
                 },
                 {
                     "field": "RunHealthCheckResults",
@@ -183,6 +218,11 @@
                     "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"otherks\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
                 },
                 {
+                    "field": "GetSchemaMigrationsResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetSchemaMigrationsResponse\nError error}",
+                    "value": "\"otherks\": {\nResponse: &vtctldatapb.GetSchemaMigrationsResponse{\nMigrations: []*vtctldatapb.SchemaMigration{\n{}, {}, {},\n},\n},\n},"
+                },
+                {
                     "field": "GetSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetSchemaResponse\nError error}",
                     "value": "\"other1-0000000100\": {\nResponse: &vtctldatapb.GetSchemaResponse{\nSchema: &tabletmanagerdatapb.SchemaDefinition{\nTableDefinitions: []*tabletmanagerdatapb.TableDefinition{\n{Name: \"t1\"},\n},\n},\n},\n},"
@@ -225,6 +265,138 @@
         }
     ],
     "tests": [
+        {
+            "method": "ApplySchema",
+            "rules": [
+                {
+                    "resource": "SchemaMigration",
+                    "actions": ["create"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.ApplySchemaRequest{\nClusterId: \"test\",\nRequest: &vtctldatapb.ApplySchemaRequest{\nKeyspace: \"test\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "CancelSchemaMigration",
+            "rules": [
+                {
+                    "resource": "SchemaMigration",
+                    "actions": ["cancel"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.CancelSchemaMigrationRequest{\nClusterId: \"test\",\nRequest: &vtctldatapb.CancelSchemaMigrationRequest{\nKeyspace: \"test\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "CleanupSchemaMigration",
+            "rules": [
+                {
+                    "resource": "SchemaMigration",
+                    "actions": ["cleanup_schema_migration"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.CleanupSchemaMigrationRequest{\nClusterId: \"test\",\nRequest: &vtctldatapb.CleanupSchemaMigrationRequest{\nKeyspace: \"test\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "CompleteSchemaMigration",
+            "rules": [
+                {
+                    "resource": "SchemaMigration",
+                    "actions": ["complete_schema_migration"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.CompleteSchemaMigrationRequest{\nClusterId: \"test\",\nRequest: &vtctldatapb.CompleteSchemaMigrationRequest{\nKeyspace: \"test\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
         {
             "method": "CreateKeyspace",
             "rules": [
@@ -799,6 +971,54 @@
             ]
         },
         {
+            "method": "GetSchemaMigrations",
+            "rules": [
+                {
+                    "resource": "SchemaMigration",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "SchemaMigration",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetSchemaMigrationsRequest{}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.NoError(t, err)",
+                        "assert.Empty(t, resp.SchemaMigrations, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.SchemaMigrations, $$)",
+                        "assert.Len(t, resp.SchemaMigrations, 3, \"'other' actor should be able to see the 3 migrations in cluster 'other'\")"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.SchemaMigrations, $$)",
+                        "assert.Len(t, resp.SchemaMigrations, 4, \"'all' actor should be able to see migrations in all clusters\")"
+                    ]
+                }
+            ]
+        },
+        {
             "method": "GetSchema",
             "rules": [
                 {
@@ -1351,6 +1571,39 @@
             ]
         },
         {
+            "method": "LaunchSchemaMigration",
+            "rules": [
+                {
+                    "resource": "SchemaMigration",
+                    "actions": ["launch_schema_migration"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.LaunchSchemaMigrationRequest{\nClusterId: \"test\",\nRequest: &vtctldatapb.LaunchSchemaMigrationRequest{\nKeyspace: \"test\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
             "method": "PingTablet",
             "rules": [
                 {
@@ -1523,6 +1776,39 @@
                     "is_permitted": true,
                     "assertions": [
                         "assert.NotEmpty(t, resp.KeyspaceResults, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "RetrySchemaMigration",
+            "rules": [
+                {
+                    "resource": "SchemaMigration",
+                    "actions": ["retry"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.RetrySchemaMigrationRequest{\nClusterId: \"test\",\nRequest: &vtctldatapb.RetrySchemaMigrationRequest{\nKeyspace: \"test\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
                     ]
                 }
             ]
