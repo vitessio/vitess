@@ -336,17 +336,14 @@ type builtinConvertTz struct {
 var _ IR = (*builtinConvertTz)(nil)
 
 func convertTz(dt datetime.DateTime, from, to *time.Location, now time.Time) (datetime.DateTime, bool) {
-	t := dt.ToStdTime(now)
-	lowerBoundTz := time.Date(1970, 01, 01, 0, 0, 0, 0, time.UTC)
-	upperBoundTz := time.Date(3001, 1, 19, 3, 14, 7, 99999, time.UTC)
-	if t.Before(lowerBoundTz) || t.After(upperBoundTz) {
-		return dt, true
-	}
-
 	buf := datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(dt, datetime.DefaultPrecision)
 	ts, err := time.ParseInLocation(time.DateTime, hack.String(buf), from)
 	if err != nil {
 		return datetime.DateTime{}, false
+	}
+
+	if ts.Unix() < 0 || ts.Unix() >= maxUnixtime {
+		return dt, true
 	}
 	return datetime.NewDateTimeFromStd(ts.In(to)), true
 }
@@ -1501,9 +1498,7 @@ func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
 	}
 
 	ts := dt.dt.ToStdTime(env.now)
-	lowerBoundTimestamp := time.Date(1970, 01, 01, 0, 0, 0, 0, time.UTC)
-	upperBoundTimestamp := time.Date(3001, 1, 19, 3, 14, 7, 99999, time.UTC)
-	if ts.Before(lowerBoundTimestamp) || ts.After(upperBoundTimestamp) {
+	if ts.Unix() < 0 || ts.Unix() >= maxUnixtime {
 		return newEvalInt64(0)
 	}
 
