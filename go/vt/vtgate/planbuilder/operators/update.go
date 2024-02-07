@@ -104,8 +104,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 
 	vindexTable, routing := buildVindexTableForDML(ctx, tableInfo, qt, "update")
 
-	updClone := sqlparser.CloneRefOfUpdate(updStmt)
-	updOp := createUpdateOperator(ctx, updStmt, vindexTable, qt, routing)
+	updOp, updClone := createUpdateOperator(ctx, updStmt, vindexTable, qt, routing)
 
 	parentFks := ctx.SemTable.GetParentForeignKeysList()
 	childFks := ctx.SemTable.GetChildForeignKeysList()
@@ -127,13 +126,19 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	return buildFkOperator(ctx, updOp, updClone, parentFks, childFks, vindexTable)
 }
 
-func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, vindexTable *vindexes.Table, qt *QueryTable, routing Routing) Operator {
+func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, vindexTable *vindexes.Table, qt *QueryTable, routing Routing) (Operator, *sqlparser.Update) {
 	sqc := &SubQueryBuilder{}
 	assignments := make([]SetExpr, len(updStmt.Exprs))
+	// updClone is used in foreign key planning to create the selection statements to be used for verification and selection.
+	// If we encounter subqueries, we want to fix the updClone to use the replaced expression, so that the pulled out subquery's
+	// result is used everywhere instead of running the subquery multiple times, which is wasteful.
+	updClone := sqlparser.CloneRefOfUpdate(updStmt)
 	for idx, updExpr := range updStmt.Exprs {
 		expr, subqs := sqc.pullOutValueSubqueries(ctx, updExpr.Expr, qt.ID, true)
 		if len(subqs) == 0 {
 			expr = updExpr.Expr
+		} else {
+			updClone.Exprs[idx].Expr = sqlparser.CloneExpr(expr)
 		}
 		proj := newProjExpr(aeWrap(expr))
 		if len(subqs) != 0 {
@@ -187,10 +192,17 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		}
 	}
 
-	return sqc.getRootOperator(route, decorator)
+	return sqc.getRootOperator(route, decorator), updClone
 }
 
 func buildFkOperator(ctx *plancontext.PlanningContext, updOp Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) Operator {
+	// If the outermost operator is a subquery container, we want to do the foreign key planning inside it,
+	// because we want to Inner of the subquery to execute first and its result be used for the entire update planning.
+	subqc, isSubqc := updOp.(*SubQueryContainer)
+	if isSubqc {
+		subqc.Outer = buildFkOperator(ctx, subqc.Outer, updClone, parentFks, childFks, updatedTable)
+		return subqc
+	}
 	restrictChildFks, cascadeChildFks := splitChildFks(childFks)
 
 	op := createFKCascadeOp(ctx, updOp, updClone, cascadeChildFks, updatedTable)
