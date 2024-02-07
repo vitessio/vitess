@@ -468,7 +468,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <boolean> distinct_opt union_op replace_opt local_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
-%type <strs> select_options flush_option_list
+%type <strs> select_options select_options_opt flush_option_list
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
@@ -906,11 +906,11 @@ vstream_statement:
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
 query_primary:
 //  1         2            3              4                    5             6                7           8            9           10
-  SELECT comment_opt select_options select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
+  SELECT comment_opt select_options_opt select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
     $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), GroupBy($8), NewWhere(HavingClause, $9), $10)
   }
-| SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
+| SELECT comment_opt select_options_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
     $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8), $9)
   }
@@ -4812,25 +4812,23 @@ select_expression_list_opt:
     $$ = $1
   }
 
-select_options:
+select_options_opt:
   {
     $$ = nil
   }
-| select_option
+| select_options
+  {
+    $$ = $1
+  }
+
+select_options:
+select_option
   {
     $$ = []string{$1}
   }
-| select_option select_option // TODO: figure out a way to do this recursively instead.
-  {                           // TODO: This is a hack since I couldn't get it to work in a nicer way. I got 'conflicts: 8 shift/reduce'
-    $$ = []string{$1, $2}
-  }
-| select_option select_option select_option
+| select_options select_option
   {
-    $$ = []string{$1, $2, $3}
-  }
-| select_option select_option select_option select_option
-  {
-    $$ = []string{$1, $2, $3, $4}
+    $$ = append($1, $2)
   }
 
 select_option:
