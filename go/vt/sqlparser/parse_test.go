@@ -3233,6 +3233,10 @@ var (
 			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a'",
 		},
 		{
+			input:  "select * from tbl into outfile 'outfile.txt' columns terminated by 'a'",
+			output: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a'",
+		},
+		{
 			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b'",
 		},
 		{
@@ -3249,6 +3253,9 @@ var (
 		},
 		{
 			input:  "select * from tbl into outfile 'outfile.txt' lines terminated by 'd'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e'",
 		},
 		{
 			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' lines terminated by 'd'",
@@ -4743,6 +4750,16 @@ func TestInvalid(t *testing.T) {
 		{
 			// TODO: should work
 			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' escaped by 'c' escaped by 'c'",
+			err:   "syntax error",
+		},
+		{
+			// TODO: should work
+			input:  "select * from tbl into outfile 'outfile.txt' lines terminated by 'e' starting by 'd'",
+			err:   "syntax error",
+		},
+		{
+			// TODO: should work
+			input:  "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e' starting by 'd' terminated by 'e'",
 			err:   "syntax error",
 		},
 	}
