@@ -1445,20 +1445,20 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:                  req.Workflow,
-		MaterializationIntent:     vtctldatapb.MaterializationIntent_MOVETABLES,
-		SourceKeyspace:            sourceKeyspace,
-		TargetKeyspace:            targetKeyspace,
-		Cell:                      strings.Join(req.Cells, ","),
-		TabletTypes:               topoproto.MakeStringTypeCSV(req.TabletTypes),
-		TabletSelectionPreference: req.TabletSelectionPreference,
-		StopAfterCopy:             req.StopAfterCopy,
-		ExternalCluster:           req.ExternalClusterName,
-		SourceShards:              req.SourceShards,
-		OnDdl:                     req.OnDdl,
-		DeferSecondaryKeys:        req.DeferSecondaryKeys,
-		AtomicCopy:                req.AtomicCopy,
-		AdditionalFilter:          req.AdditionalFilter,
+		Workflow:                    req.Workflow,
+		MaterializationIntent:       vtctldatapb.MaterializationIntent_MOVETABLES,
+		SourceKeyspace:              sourceKeyspace,
+		TargetKeyspace:              targetKeyspace,
+		Cell:                        strings.Join(req.Cells, ","),
+		TabletTypes:                 topoproto.MakeStringTypeCSV(req.TabletTypes),
+		TabletSelectionPreference:   req.TabletSelectionPreference,
+		StopAfterCopy:               req.StopAfterCopy,
+		ExternalCluster:             req.ExternalClusterName,
+		SourceShards:                req.SourceShards,
+		OnDdl:                       req.OnDdl,
+		DeferSecondaryKeys:          req.DeferSecondaryKeys,
+		AtomicCopy:                  req.AtomicCopy,
+		VReplicationWorkflowOptions: req.VReplicationWorkflowOptions,
 	}
 	if req.SourceTimeZone != "" {
 		ms.SourceTimeZone = req.SourceTimeZone
@@ -1514,42 +1514,15 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	// Now that the streams have been successfully created, let's put the associated
 	// routing rules in place.
 	if externalTopo == nil {
-		if req.NoRoutingRules {
-			log.Warningf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
-		} else {
-			// Save routing rules before vschema. If we save vschema first, and routing
-			// rules fails to save, we may generate duplicate table errors.
-			if mz.isPartial {
-				if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
-					return nil, err
-				}
-			}
-
-			rules, err := topotools.GetRoutingRules(ctx, s.ts)
-			if err != nil {
-				return nil, err
-			}
-			for _, table := range tables {
-				toSource := []string{sourceKeyspace + "." + table}
-				rules[table] = toSource
-				rules[table+"@replica"] = toSource
-				rules[table+"@rdonly"] = toSource
-				rules[targetKeyspace+"."+table] = toSource
-				rules[targetKeyspace+"."+table+"@replica"] = toSource
-				rules[targetKeyspace+"."+table+"@rdonly"] = toSource
-				rules[targetKeyspace+"."+table] = toSource
-				rules[sourceKeyspace+"."+table+"@replica"] = toSource
-				rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
-			}
-			if err := topotools.SaveRoutingRules(ctx, s.ts, rules); err != nil {
-				return nil, err
-			}
+		err := s.setupInitialRoutingRules(ctx, req, mz, tables, vschema)
+		if err != nil {
+			return nil, err
 		}
-
 		// We added to the vschema.
 		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
 			return nil, err
 		}
+		return nil, nil
 	}
 	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
@@ -1592,6 +1565,84 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		Keyspace: targetKeyspace,
 		Workflow: req.Workflow,
 	})
+}
+
+func (s *Server) validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateRequest, mz *materializer) error {
+	if req.NoRoutingRules && req.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use --no-routing-rules and --use-keyspace-routing-rules flags together")
+	}
+	if mz.isPartial && req.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use --use-keyspace-routing-rules with partial migration")
+	}
+	return nil
+}
+
+func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest, mz *materializer, tables []string, vschema *vschemapb.Keyspace) error {
+	if err := s.validateRoutingRuleFlags(req, mz); err != nil {
+		return err
+	}
+
+	const (
+		primaryType = ""
+		globalRoute
+	)
+	sourceKeyspace := req.SourceKeyspace
+	targetKeyspace := req.TargetKeyspace
+
+	if req.NoRoutingRules {
+		log.Warningf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
+		return nil
+	}
+
+	// Save routing rules before vschema. If we save vschema first, and routing
+	// rules fails to save, we may generate duplicate table errors.
+	if mz.isPartial {
+		if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
+			return err
+		}
+	}
+
+	// This needs to be protected with a mutex or a lock. FIXME: confirm this.
+	// Otherwise the map could be overwritten if multiple movetables are run at the same time.
+	if req.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
+		var keyspaces []string
+		keyspaces = append(keyspaces, sourceKeyspace, targetKeyspace)
+		if req.VReplicationWorkflowOptions.SourceKeyspaceAlias != "" {
+			keyspaces = append(keyspaces, req.VReplicationWorkflowOptions.SourceKeyspaceAlias)
+		}
+		routes := make(map[string]string)
+		for _, ks := range keyspaces {
+			routes[ks] = sourceKeyspace
+		}
+		if err := updateKeyspaceRoutingRule(ctx, s.ts, routes); err != nil {
+			return err
+		}
+	}
+
+	// Setup table routing rules.
+	rules, err := topotools.GetRoutingRules(ctx, s.ts)
+	if err != nil {
+		return err
+	}
+	routeTableToSource := func(keyspace, table string) {
+		key := table
+		route := fmt.Sprintf("%s.%s", sourceKeyspace, table)
+		if keyspace != "" {
+			key = fmt.Sprintf("%s.%s", keyspace, table)
+		}
+		for _, typ := range []string{primaryType, "@replica", "@rdonly"} {
+			rules[key+typ] = []string{route}
+		}
+	}
+	for _, table := range tables {
+		for _, ks := range []string{globalRoute, targetKeyspace, sourceKeyspace} {
+			routeTableToSource(ks, table)
+		}
+	}
+	if err := topotools.SaveRoutingRules(ctx, s.ts, rules); err != nil {
+		return err
+	}
+	return nil
 }
 
 // MoveTablesComplete is part of the vtctlservicepb.VtctldServer interface.
@@ -2669,6 +2720,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	if ts.isPartialMigration {
 		log.Infof("Migration is partial, for shards %+v", sourceShards)
 	}
+
 	return ts, nil
 }
 
@@ -2999,6 +3051,12 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			return nil, err
 		}
 	}
+
+	if ts.options.UseKeyspaceRoutingRules && !(hasRdonly && hasReplica && hasPrimary) {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "all traffic needs to be switched for workflow %s: since use of keyspace routing rules was specified", req.Workflow)
+		return nil, err
+	}
+
 	reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()), req.Shards)
 	if err != nil {
 		return nil, err
@@ -3155,10 +3213,16 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	defer unlock(&err)
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		if ts.isPartialMigration {
+		switch {
+		case ts.options.UseKeyspaceRoutingRules:
+			ts.Logger().Infof("If keyspace routing rules are used, traffic is all or nothing per keyspace.")
+		case ts.isPartialMigration:
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
-		} else if err := sw.switchTableReads(ctx, cells, roTabletTypes, direction); err != nil {
-			return handleError("failed to switch read traffic for the tables", err)
+		default:
+			err := sw.switchTableReads(ctx, cells, roTabletTypes, direction)
+			if err != nil {
+				return handleError("failed to switch read traffic for the tables", err)
+			}
 		}
 		return sw.logs(), nil
 	}

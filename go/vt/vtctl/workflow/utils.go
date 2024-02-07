@@ -339,7 +339,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		targets         = make(map[string]*MigrationTarget, len(targetShards))
 		workflowType    binlogdatapb.VReplicationWorkflowType
 		workflowSubType binlogdatapb.VReplicationWorkflowSubType
-		options         vtctldatapb.Workflow_VReplicationWorkflowOptions
+		options         vtctldatapb.VReplicationWorkflowOptions
 	)
 
 	// We check all shards in the target keyspace. Not all of them may have a
@@ -799,4 +799,19 @@ func getAdditionalFilter(parser *sqlparser.Parser, filter string) (*sqlparser.Wh
 		return nil, fmt.Errorf("error in predicate: %s", filter)
 	}
 	return sel.Where, nil
+}
+
+// updateKeyspaceRoutingRule updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
+func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, routes map[string]string) error {
+	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+	if err != nil {
+		return err
+	}
+	for fromKeyspace, toKeyspace := range routes {
+		rules[fromKeyspace] = toKeyspace
+	}
+	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts, rules); err != nil {
+		return err
+	}
+	return nil
 }

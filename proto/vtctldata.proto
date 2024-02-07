@@ -97,12 +97,8 @@ message MaterializeSettings {
   bool defer_secondary_keys = 14;
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
   bool atomic_copy = 16;
-  string additional_filter = 17;
+  VReplicationWorkflowOptions v_replication_workflow_options = 17;
 }
-
-
-
-
 
 /* Data types for VtctldServer */
 
@@ -210,6 +206,12 @@ message Shard {
   topodata.Shard shard = 3;
 }
 
+message VReplicationWorkflowOptions {
+  string additional_filter = 1;
+  bool use_keyspace_routing_rules = 2;
+  string source_keyspace_alias = 3;
+}
+
 // TODO: comment the hell out of this.
 message Workflow {
   string name = 1;
@@ -228,10 +230,6 @@ message Workflow {
   // This specifies whether to defer the creation of secondary keys.
   bool defer_secondary_keys = 9;
   VReplicationWorkflowOptions options = 10;
-
-  message VReplicationWorkflowOptions {
-    string additional_filter = 1;
-  }
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -1229,7 +1227,7 @@ message MoveTablesCreateRequest {
   // AdditionalFilter is a SQL WHERE clause that can be used to filter the tables to be moved.
   // This will be appended to the default filter which might have a WHERE clause already in case of
   // we are moving into a sharded keyspace.
-  string additional_filter = 20;
+  VReplicationWorkflowOptions v_replication_workflow_options = 20;
 }
 
 message MoveTablesCreateResponse {

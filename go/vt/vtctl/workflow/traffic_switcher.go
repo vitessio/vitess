@@ -176,7 +176,7 @@ type TargetInfo struct {
 	OptTabletTypes  string
 	WorkflowType    binlogdatapb.VReplicationWorkflowType
 	WorkflowSubType binlogdatapb.VReplicationWorkflowSubType
-	Options         *vtctldatapb.Workflow_VReplicationWorkflowOptions
+	Options         *vtctldatapb.VReplicationWorkflowOptions
 }
 
 // MigrationSource contains the metadata for each migration source.
@@ -237,7 +237,7 @@ type trafficSwitcher struct {
 	targetTimeZone   string
 	workflowType     binlogdatapb.VReplicationWorkflowType
 	workflowSubType  binlogdatapb.VReplicationWorkflowSubType
-	options          *vtctldatapb.Workflow_VReplicationWorkflowOptions
+	options          *vtctldatapb.VReplicationWorkflowOptions
 }
 
 func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.ws.ts }
@@ -715,7 +715,23 @@ func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
-	if ts.isPartialMigration {
+	if ts.options.UseKeyspaceRoutingRules {
+		ts.Logger().Infof("Changing keyspace routing rules")
+		var keyspaces []string
+		keyspaces = append(keyspaces, ts.SourceKeyspaceName(), ts.TargetKeyspaceName())
+		if ts.options.UseKeyspaceRoutingRules {
+			if ts.options.SourceKeyspaceAlias != "" {
+				keyspaces = append(keyspaces, ts.options.SourceKeyspaceAlias)
+			}
+			routes := make(map[string]string)
+			for _, ks := range keyspaces {
+				routes[ks] = ts.TargetKeyspaceName()
+			}
+			if err := updateKeyspaceRoutingRule(ctx, ts.TopoServer(), routes); err != nil {
+				return err
+			}
+		}
+	} else if ts.isPartialMigration {
 		srr, err := topotools.GetShardRoutingRules(ctx, ts.TopoServer())
 		if err != nil {
 			return err
