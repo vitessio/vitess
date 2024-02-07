@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
@@ -281,8 +283,8 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 
 		ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, targetPrimary.DbName())
 
-		// copy excludeRules to prevent data race.
-		copyExcludeRules := append([]*binlogdatapb.Rule(nil), excludeRules...)
+		// Clone excludeRules to prevent data races.
+		copyExcludeRules := slices.Clone(excludeRules)
 		for _, source := range rs.sourceShards {
 			if !key.KeyRangeIntersect(target.KeyRange, source.KeyRange) {
 				continue
@@ -307,13 +309,16 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 		}
 
 		for _, rstream := range rs.refStreams {
+			log.Errorf("DEBUG: Before AddRow: %s", rstream.bls.String())
 			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes,
 				// TODO: fix based on original stream.
 				binlogdatapb.VReplicationWorkflowType_Reshard,
 				binlogdatapb.VReplicationWorkflowSubType_None,
 				rs.deferSecondaryKeys)
+			log.Errorf("DEBUG: After AddRow: %s", rstream.bls.String())
 		}
 		query := ig.String()
+		log.Errorf("DEBUG: Full statement: %s", query)
 		if _, err := rs.s.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
 		}

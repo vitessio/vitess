@@ -31,16 +31,30 @@ func SortBinlogSourceTables(bls *binlogdatapb.BinlogSource) {
 	if bls == nil {
 		return
 	}
+
 	// Sort the tables by name to ensure a consistent order.
 	slices.Sort(bls.Tables)
+
 	if bls.Filter == nil || len(bls.Filter.Rules) == 0 {
 		return
 	}
 	sort.Slice(bls.Filter.Rules, func(i, j int) bool {
+		// Exclude filters should logically be processed first.
+		if bls.Filter.Rules[i].Filter == "exclude" && bls.Filter.Rules[j].Filter != "exclude" {
+			return true
+		}
+		if bls.Filter.Rules[j].Filter == "exclude" && bls.Filter.Rules[i].Filter != "exclude" {
+			return false
+		}
+
 		// Remove preceding slash from the match string.
 		// That is used when the filter is a regular expression.
 		fi, _ := strings.CutPrefix(bls.Filter.Rules[i].Match, "/")
 		fj, _ := strings.CutPrefix(bls.Filter.Rules[j].Match, "/")
-		return fi < fj
+		if fi != fj {
+			return fi < fj
+		}
+
+		return bls.Filter.Rules[i].Filter < bls.Filter.Rules[j].Filter
 	})
 }

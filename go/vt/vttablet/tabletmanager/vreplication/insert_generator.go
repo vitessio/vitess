@@ -22,8 +22,9 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/protoutil"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/throttler"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 // InsertGenerator generates a vreplication insert statement.

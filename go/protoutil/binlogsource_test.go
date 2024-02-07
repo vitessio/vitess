@@ -47,6 +47,10 @@ func TestSortBinlogSourceTables(t *testing.T) {
 							Match: "/wuts",
 						},
 						{
+							Match:  "1table",
+							Filter: "a",
+						},
+						{
 							Match: "1table",
 						},
 						{
@@ -63,6 +67,10 @@ func TestSortBinlogSourceTables(t *testing.T) {
 							Match: "1table",
 						},
 						{
+							Match:  "1table",
+							Filter: "a",
+						},
+						{
 							Match: "atable",
 						},
 						{
@@ -73,6 +81,92 @@ func TestSortBinlogSourceTables(t *testing.T) {
 						},
 						{
 							Match: "ztable2",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "With excludes",
+			inSource: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{
+						{
+							Match: "./*",
+						},
+						{
+							Match:  "no4",
+							Filter: "exclude",
+						},
+						{
+							Match:  "no2",
+							Filter: "exclude",
+						},
+						{
+							Match: "ztable2",
+						},
+						{
+							Match: "atable2",
+						},
+					},
+				},
+			},
+			outSource: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{
+						{
+							Match:  "no2",
+							Filter: "exclude",
+						},
+						{
+							Match:  "no4",
+							Filter: "exclude",
+						},
+						{
+							Match: "./*",
+						},
+						{
+							Match: "atable2",
+						},
+						{
+							Match: "ztable2",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "With excludes",
+			inSource: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{
+						{
+							Match:  "no4",
+							Filter: "exclude",
+						},
+						{
+							Match:  "no2",
+							Filter: "exclude",
+						},
+						{
+							Match: "./*",
+						},
+					},
+				},
+			},
+			outSource: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{
+						{
+							Match:  "no2",
+							Filter: "exclude",
+						},
+						{
+							Match:  "no4",
+							Filter: "exclude",
+						},
+						{
+							Match: "./*",
 						},
 					},
 				},
@@ -109,7 +203,7 @@ func TestSortBinlogSourceTables(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			SortBinlogSourceTables(tt.inSource)
-			require.True(t, proto.Equal(tt.inSource, tt.outSource))
+			require.True(t, proto.Equal(tt.inSource, tt.outSource), "got: %s, want: %s", tt.inSource.String(), tt.outSource.String())
 		})
 	}
 }
