@@ -116,7 +116,6 @@ func TestSubqueryInINClause(t *testing.T) {
 }
 
 func TestSubqueryInUpdate(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -131,7 +130,6 @@ func TestSubqueryInUpdate(t *testing.T) {
 }
 
 func TestSubqueryInReference(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -176,4 +174,15 @@ func TestSubqueryInAggregation(t *testing.T) {
 
 	// This fails as the planner adds `weight_string` method which make the query fail on MySQL.
 	// mcmp.Exec(`SELECT max((select min(id2) from t1 where t1.id1 = t.id1)) FROM t1 t`)
+}
+
+// TestSubqueryInDerivedTable
+func TestSubqueryInDerivedTable(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("INSERT INTO t1 (id1, id2) VALUES (1, 100), (2, 200), (3, 300), (4, 400), (5, 500);")
+	mcmp.Exec("INSERT INTO t2 (id3, id4) VALUES (10, 1), (20, 2), (30, 3), (40, 4), (50, 99)")
+	mcmp.Exec(`select t.a from (select t1.id2, t2.id3, (select id2 from t1 order by id2 limit 1) as a from t1 join t2 on t1.id1 = t2.id4) t`)
 }

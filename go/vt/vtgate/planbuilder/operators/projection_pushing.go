@@ -49,7 +49,7 @@ func (p *projector) add(pe *ProjExpr, alias string) {
 // get finds or adds an expression in the projector, returning its SQL representation with the appropriate alias
 func (p *projector) get(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
 	for _, column := range p.columns {
-		if ctx.SemTable.EqualsExprWithDeps(expr, column.EvalExpr) {
+		if ctx.SemTable.EqualsExprWithDeps(expr, column.ColExpr) {
 			alias := p.claimUnusedAlias(column.Original)
 			out := sqlparser.NewColName(alias)
 			out.Qualifier = p.tableName
@@ -265,6 +265,9 @@ func splitProjectionAcrossJoin(
 	switch pe.Info.(type) {
 	case nil:
 		join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
+	case Offset:
+		// for offsets, we'll just treat the expression as unexplored, and later stages will handle the new offset
+		join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
 	case SubQueryExpression:
 		join.JoinColumns.add(splitSubqueryExpression(ctx, join, lhs, rhs, pe, colAlias))
 	default:
@@ -279,7 +282,7 @@ func splitSubqueryExpression(
 	pe *ProjExpr,
 	alias string,
 ) applyJoinColumn {
-	col := join.getJoinColumnFor(ctx, pe.Original, pe.EvalExpr, false)
+	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
 	return pushDownSplitJoinCol(col, lhs, pe, alias, rhs)
 }
 
@@ -358,11 +361,13 @@ func rewriteColumnsForJoin(
 	exposeRHS bool, // we only want to expose the returned columns from the RHS.
 	// For predicates, we don't need to expose the RHS columns
 ) {
-	for colIdx, predicate := range columns {
-		for lhsIdx, bve := range predicate.LHSExprs {
+	for colIdx, column := range columns {
+		for lhsIdx, bve := range column.LHSExprs {
 			// since this is on the LHSExprs, we know that dependencies are from that side of the join
-			col := lhs.get(ctx, bve.Expr)
-			predicate.LHSExprs[lhsIdx].Expr = col
+			column.LHSExprs[lhsIdx].Expr = lhs.get(ctx, bve.Expr)
+		}
+		if column.IsPureLeft() {
+			continue
 		}
 
 		// now we need to go over the predicate and find
@@ -402,10 +407,10 @@ func rewriteColumnsForJoin(
 				return
 			}
 		}
-		newOriginal := sqlparser.CopyOnRewrite(predicate.Original, pre, post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
-		predicate.Original = newOriginal
+		newOriginal := sqlparser.CopyOnRewrite(column.Original, pre, post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
+		column.Original = newOriginal
 
-		columns[colIdx] = predicate
+		columns[colIdx] = column
 	}
 }
 
