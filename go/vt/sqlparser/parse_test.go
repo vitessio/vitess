@@ -3270,6 +3270,9 @@ var (
 			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
 		},
 		{
+			input:  "select * from tbl into outfile 'outfile.txt' character set binary fields terminated by 'a'",
+		},
+		{
 			input:  "table tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
 			output: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
 		},
