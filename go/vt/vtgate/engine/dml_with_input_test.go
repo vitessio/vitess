@@ -34,7 +34,7 @@ func TestDeleteWithInputSingleOffset(t *testing.T) {
 
 	del := &DMLWithInput{
 		Input: input,
-		Delete: &Delete{
+		DML: &Delete{
 			DML: &DML{
 				RoutingParameters: &RoutingParameters{
 					Opcode: Scatter,
@@ -78,7 +78,7 @@ func TestDeleteWithInputMultiOffset(t *testing.T) {
 
 	del := &DMLWithInput{
 		Input: input,
-		Delete: &Delete{
+		DML: &Delete{
 			DML: &DML{
 				RoutingParameters: &RoutingParameters{
 					Opcode: Scatter,

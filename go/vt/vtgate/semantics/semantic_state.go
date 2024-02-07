@@ -78,7 +78,7 @@ type (
 	// QuerySignature is used to identify shortcuts in the planning process
 	QuerySignature struct {
 		Aggregation bool
-		Delete      bool
+		Dml         bool
 		Distinct    bool
 		HashJoin    bool
 		SubQueries  bool

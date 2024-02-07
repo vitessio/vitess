@@ -5550,5 +5550,57 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "update with limit clause",
+    "query": "update user set val = 1 where (name = 'foo' or id = 1) limit 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where (name = 'foo' or id = 1) limit 1",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id from `user` where 1 != 1",
+                "Query": "select `user`.id from `user` where `name` = 'foo' or id = 1 limit :__upper_limit lock in share mode",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update `user` set val = 1 where `user`.id in ::dml_vals",
+            "Table": "user",
+            "Values": [
+              "::dml_vals"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

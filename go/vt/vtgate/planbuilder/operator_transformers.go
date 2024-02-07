@@ -76,8 +76,6 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformSequential(ctx, op)
 	case *operators.DMLWithInput:
 		return transformDMLWithInput(ctx, op)
-	case *operators.Update:
-		return nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
@@ -692,6 +690,9 @@ func buildUpdateLogicalPlan(
 	if len(upd.ChangedVindexValues) > 0 {
 		vQuery = sqlparser.String(upd.OwnedVindexQuery)
 		vindexes = upd.Target.VTable.ColumnVindexes
+		if upd.OwnedVindexQuery.Limit != nil && len(upd.OwnedVindexQuery.OrderBy) == 0 {
+			return nil, vterrors.VT12001("Vindex update should have ORDER BY clause when using LIMIT")
+		}
 	}
 
 	edml := createDMLPrimitive(ctx, rb, hints, upd.Target.VTable, generateQuery(stmt), vindexes, vQuery)

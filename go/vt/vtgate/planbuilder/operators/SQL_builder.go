@@ -397,7 +397,7 @@ func buildDelete(op *Delete, qb *queryBuilder) {
 
 	qb.dmlOperator = op
 	qb.stmt = &sqlparser.Delete{
-		Ignore:     sqlparser.Ignore(op.Ignore),
+		Ignore:     op.Ignore,
 		Targets:    sqlparser.TableNames{op.Target.Name},
 		TableExprs: sel.From,
 		Where:      sel.Where,

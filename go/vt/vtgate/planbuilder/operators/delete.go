@@ -28,10 +28,7 @@ import (
 )
 
 type Delete struct {
-	Target           TargetTable
-	OwnedVindexQuery *sqlparser.Select
-	Ignore           bool
-	Source           Operator
+	*DMLCommon
 
 	noColumns
 	noPredicates
@@ -193,10 +190,12 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 	}
 
 	delOp := &Delete{
-		Target:           targetTbl,
-		Source:           op,
-		Ignore:           bool(del.Ignore),
-		OwnedVindexQuery: ovq,
+		DMLCommon: &DMLCommon{
+			Ignore:           del.Ignore,
+			Target:           targetTbl,
+			OwnedVindexQuery: ovq,
+			Source:           op,
+		},
 	}
 
 	if del.Limit == nil {

@@ -28,6 +28,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+type DMLCommon struct {
+	Ignore           sqlparser.Ignore
+	Target           TargetTable
+	OwnedVindexQuery *sqlparser.Select
+	Source           Operator
+}
+
 // getVindexInformation returns the vindex and VindexPlusPredicates for the DML,
 // If it cannot find a unique vindex match, it returns an error.
 func getVindexInformation(id semantics.TableSet, table *vindexes.Table) (
@@ -109,9 +116,6 @@ func buildChangedVindexesValues(
 			continue
 		}
 
-		if update.Limit != nil && len(update.OrderBy) == 0 {
-			panic(vterrors.VT12001(fmt.Sprintf("you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: %v", vindex.Name)))
-		}
 		if i == 0 {
 			panic(vterrors.VT12001(fmt.Sprintf("you cannot UPDATE primary vindex columns; invalid update on vindex: %v", vindex.Name)))
 		}

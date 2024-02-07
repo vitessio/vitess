@@ -34,18 +34,15 @@ import (
 
 type (
 	Update struct {
-		Target              TargetTable
+		*DMLCommon
+
 		Assignments         []SetExpr
 		ChangedVindexValues map[string]*engine.VindexValues
-		OwnedVindexQuery    *sqlparser.Select
-		Ignore              sqlparser.Ignore
 
 		// these subqueries cannot be merged as they are part of the changed vindex values
 		// these values are needed to be sent over to lookup vindex for update.
 		// On merging this information will be lost, so subquery merge is blocked.
 		SubQueriesArgOnChangedVindex []string
-
-		Source Operator
 
 		noColumns
 		noPredicates
@@ -189,13 +186,15 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	_, cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, targetTbl, assignments)
 
 	updOp := &Update{
-		Target:                       targetTbl,
+		DMLCommon: &DMLCommon{
+			Ignore:           updStmt.Ignore,
+			Target:           targetTbl,
+			OwnedVindexQuery: ovq,
+			Source:           op,
+		},
 		Assignments:                  assignments,
 		ChangedVindexValues:          cvv,
-		OwnedVindexQuery:             ovq,
-		Ignore:                       updStmt.Ignore,
 		SubQueriesArgOnChangedVindex: subQueriesArgOnChangedVindex,
-		Source:                       op,
 	}
 
 	if len(updStmt.OrderBy) > 0 {

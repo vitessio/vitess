@@ -38,7 +38,7 @@ const (
 	delegateAggregation
 	addAggrOrdering
 	cleanOutPerfDistinct
-	deleteWithInput
+	dmlWithInput
 	subquerySettling
 	DONE
 )
@@ -59,8 +59,8 @@ func (p Phase) String() string {
 		return "optimize Distinct operations"
 	case subquerySettling:
 		return "settle subqueries"
-	case deleteWithInput:
-		return "expand delete to dml with input"
+	case dmlWithInput:
+		return "expand update/delete to dml with input"
 	default:
 		panic(vterrors.VT13001("unhandled default case"))
 	}
@@ -78,8 +78,8 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 		return s.Distinct
 	case subquerySettling:
 		return s.SubQueries
-	case deleteWithInput:
-		return s.Delete
+	case dmlWithInput:
+		return s.Dml
 	default:
 		return true
 	}
@@ -97,8 +97,8 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 		return removePerformanceDistinctAboveRoute(ctx, op)
 	case subquerySettling:
 		return settleSubqueries(ctx, op)
-	case deleteWithInput:
-		return findDeletesAboveRoute(ctx, op)
+	case dmlWithInput:
+		return findDMLAboveRoute(ctx, op)
 	default:
 		return op
 	}
@@ -123,20 +123,21 @@ func (p *phaser) next(ctx *plancontext.PlanningContext) Phase {
 	}
 }
 
-func findDeletesAboveRoute(ctx *plancontext.PlanningContext, root Operator) Operator {
+func findDMLAboveRoute(ctx *plancontext.PlanningContext, root Operator) Operator {
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
-		delOp, ok := in.(*Delete)
-		if !ok {
-			return in, NoRewrite
+		switch op := in.(type) {
+		case *Delete:
+			return createDMLWithInput(ctx, op, op.Source, op.DMLCommon)
+		case *Update:
+			return createDMLWithInput(ctx, op, op.Source, op.DMLCommon)
 		}
-
-		return createDMLWithInput(ctx, delOp, delOp.Source)
+		return in, NoRewrite
 	}
 
 	return BottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func createDMLWithInput(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
+func createDMLWithInput(ctx *plancontext.PlanningContext, op, src Operator, in *DMLCommon) (Operator, *ApplyResult) {
 	if len(in.Target.VTable.PrimaryKey) == 0 {
 		panic(vterrors.VT09015())
 	}
@@ -186,7 +187,7 @@ func createDMLWithInput(ctx *plancontext.PlanningContext, in *Delete, src Operat
 		in.OwnedVindexQuery.From = sqlparser.TableExprs{targetQT.Alias}
 		in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
 	}
-	dm.DML = in
+	dm.DML = op
 
 	return dm, Rewrote("changed Delete to DMLWithInput")
 }

@@ -185,8 +185,8 @@ func (cached *DMLWithInput) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
-	// field Delete vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Delete.(cachedObject); ok {
+	// field DML vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.DML.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive

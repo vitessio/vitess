@@ -32,8 +32,8 @@ const DmlVals = "dml_vals"
 
 // DMLWithInput represents the instructions to perform a DML operation based on the input result.
 type DMLWithInput struct {
-	Delete Primitive
-	Input  Primitive
+	DML   Primitive
+	Input Primitive
 
 	OutputCols []int
 
@@ -53,7 +53,7 @@ func (dml *DMLWithInput) GetTableName() string {
 }
 
 func (dml *DMLWithInput) Inputs() ([]Primitive, []map[string]any) {
-	return []Primitive{dml.Input, dml.Delete}, nil
+	return []Primitive{dml.Input, dml.DML}, nil
 }
 
 // TryExecute performs a non-streaming exec.
@@ -74,7 +74,7 @@ func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 	}
 
 	bindVars[DmlVals] = bv
-	return vcursor.ExecutePrimitive(ctx, dml.Delete, bindVars, false)
+	return vcursor.ExecutePrimitive(ctx, dml.DML, bindVars, false)
 }
 
 func getBVSingle(res *sqltypes.Result, offset int) *querypb.BindVariable {

@@ -34,7 +34,7 @@ func (d *dmlWithInput) Primitive() engine.Primitive {
 	inp := d.input.Primitive()
 	del := d.dml.Primitive()
 	return &engine.DMLWithInput{
-		Delete:     del,
+		DML:        del,
 		Input:      inp,
 		OutputCols: d.outputCols,
 	}
