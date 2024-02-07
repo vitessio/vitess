@@ -1430,6 +1430,29 @@ func (asm *assembler) Fn_ASCII() {
 	}, "FN ASCII VARCHAR(SP-1)")
 }
 
+func (asm *assembler) Fn_REVERSE() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		arg.tt = int16(sqltypes.VarChar)
+		arg.bytes = reverse(arg)
+		return 1
+	}, "FN REVERSE VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_SPACE(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalInt64).i
+
+		if !validMaxLength(1, arg) {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(space(arg), col)
+		return 1
+	}, "FN SPACE INT64(SP-1)")
+}
+
 func (asm *assembler) Fn_ORD(col collations.ID) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)

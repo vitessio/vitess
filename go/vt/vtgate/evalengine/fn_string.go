@@ -47,6 +47,16 @@ type (
 		CallExpr
 	}
 
+	builtinReverse struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinSpace struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinOrd struct {
 		CallExpr
 		collate collations.ID
@@ -100,6 +110,8 @@ var _ IR = (*builtinChangeCase)(nil)
 var _ IR = (*builtinCharLength)(nil)
 var _ IR = (*builtinLength)(nil)
 var _ IR = (*builtinASCII)(nil)
+var _ IR = (*builtinReverse)(nil)
+var _ IR = (*builtinSpace)(nil)
 var _ IR = (*builtinOrd)(nil)
 var _ IR = (*builtinBitLength)(nil)
 var _ IR = (*builtinCollation)(nil)
@@ -251,6 +263,101 @@ func (call *builtinASCII) compile(c *compiler) (ctype, error) {
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(str.Flag)}, nil
+}
+
+func reverse(in *evalBytes) []byte {
+	cs := colldata.Lookup(in.col.Collation).Charset()
+	out, cur := make([]byte, len(in.bytes)), len(in.bytes)
+
+	for i := 0; i < charset.Length(cs, in.bytes); i++ {
+		b := charset.Slice(cs, in.bytes, i, i+1)
+		l := len(b)
+
+		copy(out[cur-l:cur], b)
+		cur = cur - l
+	}
+
+	return out
+}
+
+func (call *builtinReverse) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	b, ok := arg.(*evalBytes)
+	if !ok {
+		b, err = evalToVarchar(arg, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return newEvalText(reverse(b), b.col), nil
+}
+
+func (call *builtinReverse) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case arg.isTextual():
+	default:
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, 0, false)
+	}
+
+	c.asm.Fn_REVERSE()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: arg.Col, Flag: flagNullable}, nil
+}
+
+func space(num int64) []byte {
+	num = max(num, 0)
+
+	spaces := bytes.Repeat([]byte{0x20}, int(num))
+	return spaces
+}
+
+func (call *builtinSpace) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	num := evalToInt64(arg).i
+
+	if !validMaxLength(1, num) {
+		return nil, nil
+	}
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
+	return newEvalText(space(num), col), nil
+}
+
+func (call *builtinSpace) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	_ = c.compileToInt64(arg, 1)
+
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
+	c.asm.Fn_SPACE(col)
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
 }
 
 func charOrd(b []byte, coll collations.ID) int64 {
