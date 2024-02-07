@@ -21,6 +21,7 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/slice"
+	"vitess.io/vitess/go/test/dbg"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -261,8 +262,25 @@ func splitProjectionAcrossJoin(
 		return
 	}
 
-	// Add the new applyJoinColumn to the ApplyJoin's JoinPredicates.
-	join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
+	switch pe.Info.(type) {
+	case nil:
+		join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
+	case SubQueryExpression:
+		join.JoinColumns.add(splitSubqueryExpression(ctx, join, lhs, rhs, pe, colAlias))
+	default:
+		panic(dbg.S(pe.Info))
+	}
+}
+
+func splitSubqueryExpression(
+	ctx *plancontext.PlanningContext,
+	join *ApplyJoin,
+	lhs, rhs *projector,
+	pe *ProjExpr,
+	alias string,
+) applyJoinColumn {
+	col := join.getJoinColumnFor(ctx, pe.Original, pe.EvalExpr, false)
+	return pushDownSplitJoinCol(col, lhs, pe, alias, rhs)
 }
 
 func splitUnexploredExpression(
@@ -275,6 +293,10 @@ func splitUnexploredExpression(
 	// Get a applyJoinColumn for the current expression.
 	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
 
+	return pushDownSplitJoinCol(col, lhs, pe, alias, rhs)
+}
+
+func pushDownSplitJoinCol(col applyJoinColumn, lhs *projector, pe *ProjExpr, alias string, rhs *projector) applyJoinColumn {
 	// Update the left and right child columns and names based on the applyJoinColumn type.
 	switch {
 	case col.IsPureLeft():
@@ -347,6 +369,10 @@ func rewriteColumnsForJoin(
 		var rewriteTo sqlparser.Expr
 
 		pre := func(node, _ sqlparser.SQLNode) bool {
+			_, isSQ := node.(*sqlparser.Subquery)
+			if isSQ {
+				return false
+			}
 			expr, ok := node.(sqlparser.Expr)
 			if !ok {
 				return true
