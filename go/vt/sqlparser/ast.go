@@ -7230,23 +7230,24 @@ func (node *SrsAttribute) Format(buf *TrackedBuffer) {
 	buf.Myprintf("description '%s'", node.Description)
 }
 
-// DoltgresInjectedExpr allows DoltgreSQL to bypass AST analysis, which is currently specific to MySQL.
-type DoltgresInjectedExpr struct {
+// InjectedExpr allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
+// MySQL's dialect.
+type InjectedExpr struct {
 	Expression any
 }
 
-var _ Expr = DoltgresInjectedExpr{}
+var _ Expr = InjectedExpr{}
 
-func (d DoltgresInjectedExpr) iExpr() {}
+func (d InjectedExpr) iExpr() {}
 
-func (d DoltgresInjectedExpr) replace(from, to Expr) bool {
+func (d InjectedExpr) replace(from, to Expr) bool {
 	return false
 }
 
-func (d DoltgresInjectedExpr) Format(buf *TrackedBuffer) {
+func (d InjectedExpr) Format(buf *TrackedBuffer) {
 	if stringer, ok := d.Expression.(fmt.Stringer); ok {
 		buf.WriteString(stringer.String())
 	} else {
-		buf.WriteString("DoltgresInjectedExpr")
+		buf.WriteString("InjectedExpr")
 	}
 }
