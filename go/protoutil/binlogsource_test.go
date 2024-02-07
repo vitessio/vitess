@@ -78,11 +78,36 @@ func TestSortBinlogSourceTables(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:      "Nil",
+			inSource:  nil,
+			outSource: nil,
+		},
+		{
+			name: "No filter",
+			inSource: &binlogdatapb.BinlogSource{
+				Tables: []string{"wuts1", "atable", "1table", "ztable2", "table3"},
+				Filter: nil,
+			},
+			outSource: &binlogdatapb.BinlogSource{
+				Tables: []string{"1table", "atable", "table3", "wuts1", "ztable2"},
+				Filter: nil,
+			},
+		},
+		{
+			name: "No filter rules",
+			inSource: &binlogdatapb.BinlogSource{
+				Tables: []string{"wuts1", "atable", "1table", "ztable2", "table3"},
+				Filter: &binlogdatapb.Filter{},
+			},
+			outSource: &binlogdatapb.BinlogSource{
+				Tables: []string{"1table", "atable", "table3", "wuts1", "ztable2"},
+				Filter: &binlogdatapb.Filter{},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.NotNil(t, tt.inSource, "no input source provided")
-			require.NotNil(t, tt.outSource, "no output source provided")
 			SortBinlogSourceTables(tt.inSource)
 			require.True(t, proto.Equal(tt.inSource, tt.outSource))
 		})
