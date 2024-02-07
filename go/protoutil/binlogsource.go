@@ -28,8 +28,14 @@ import (
 // BinlogSource struct lexicographically by table name in order to
 // produce consistent results.
 func SortBinlogSourceTables(bls *binlogdatapb.BinlogSource) {
+	if bls == nil {
+		return
+	}
 	// Sort the tables by name to ensure a consistent order.
 	slices.Sort(bls.Tables)
+	if bls.Filter == nil || len(bls.Filter.Rules) == 0 {
+		return
+	}
 	sort.Slice(bls.Filter.Rules, func(i, j int) bool {
 		// Remove preceding slash from the match string.
 		// That is used when the filter is a regular expression.
