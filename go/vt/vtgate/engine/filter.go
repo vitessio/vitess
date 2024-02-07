@@ -30,13 +30,13 @@ var _ Primitive = (*Filter)(nil)
 
 // Filter is a primitive that performs the FILTER operation.
 type Filter struct {
+	noTxNeeded
+
 	Predicate    evalengine.Expr
 	ASTPredicate sqlparser.Expr
 	Input        Primitive
 
 	Truncate int
-
-	noTxNeeded
 }
 
 // RouteType returns a description of the query routing type used by the primitive
