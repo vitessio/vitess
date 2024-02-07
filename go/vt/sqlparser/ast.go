@@ -895,8 +895,8 @@ func (node *Load) walkSubtree(visit Visit) error {
 
 type Fields struct {
 	TerminatedBy *SQLVal
-	*EnclosedBy
-	EscapedBy *SQLVal
+	EnclosedBy   *EnclosedBy
+	EscapedBy    *SQLVal
 	SQLNode
 }
 
@@ -904,18 +904,14 @@ func (node *Fields) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-
-	terminated := ""
+	buf.Myprintf(" fields")
 	if node.TerminatedBy != nil {
-		terminated = "terminated by " + "'" + string(node.TerminatedBy.Val) + "'"
+		buf.Myprintf(" terminated by '%s'", node.TerminatedBy.Val)
 	}
-
-	escaped := ""
+	buf.Myprintf("%v", node.EnclosedBy)
 	if node.EscapedBy != nil {
-		escaped = " escaped by " + "'" + string(node.EscapedBy.Val) + "'"
+		buf.Myprintf(" escaped by '%s'", node.EscapedBy.Val)
 	}
-
-	buf.Myprintf(" fields %s%v%s", terminated, node.EnclosedBy, escaped)
 }
 
 type EnclosedBy struct {
@@ -928,15 +924,10 @@ func (node *EnclosedBy) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-
-	enclosed := "enclosed by " + "'" + string(node.Delim.Val) + "'"
 	if node.Optionally {
-		enclosed = " optionally " + enclosed
-	} else {
-		enclosed = " " + enclosed
+		buf.Myprintf(" optionally")
 	}
-
-	buf.Myprintf(enclosed)
+	buf.Myprintf(" enclosed by '%s'", node.Delim.Val)
 }
 
 type Lines struct {
@@ -949,18 +940,13 @@ func (node *Lines) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-
-	starting := ""
+	buf.Myprintf(" lines")
 	if node.StartingBy != nil {
-		starting = " starting by " + "'" + string(node.StartingBy.Val) + "'"
+		buf.Myprintf(" starting by '%s'", node.StartingBy.Val)
 	}
-
-	terminated := ""
 	if node.TerminatedBy != nil {
-		terminated = " terminated by " + "'" + string(node.TerminatedBy.Val) + "'"
+		buf.Myprintf(" terminated by '%s'", node.TerminatedBy.Val)
 	}
-
-	buf.Myprintf(" lines%s%s", starting, terminated)
 }
 
 // BeginEndBlock represents a BEGIN .. END block with one or more statements nested within
@@ -4316,8 +4302,12 @@ func (w *With) walkSubtree(visit Visit) error {
 
 type Into struct {
 	Variables Variables
-	Outfile   string
 	Dumpfile  string
+
+	Outfile   string
+	Charset   string
+	Fields    *Fields
+	Lines     *Lines
 }
 
 func (i *Into) Format(buf *TrackedBuffer) {
@@ -4326,14 +4316,17 @@ func (i *Into) Format(buf *TrackedBuffer) {
 	}
 
 	buf.Myprintf(" into ")
-	if i.Variables != nil {
-		buf.Myprintf("%v", i.Variables)
+	buf.Myprintf("%v", i.Variables)
+	if i.Dumpfile != "" {
+		buf.Myprintf("dumpfile '%s'", i.Dumpfile)
 	}
 	if i.Outfile != "" {
 		buf.Myprintf("outfile '%s'", i.Outfile)
-	}
-	if i.Dumpfile != "" {
-		buf.Myprintf("dumpfile '%s'", i.Dumpfile)
+		if i.Charset != "" {
+			buf.Myprintf(" character set %s", i.Charset)
+		}
+		buf.Myprintf("%v", i.Fields)
+		buf.Myprintf("%v", i.Lines)
 	}
 }
 

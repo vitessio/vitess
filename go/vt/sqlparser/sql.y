@@ -868,13 +868,13 @@ into_opt:
   {
     $$ = &Into{Variables: $2}
   }
-| INTO OUTFILE STRING
-  {
-    $$ = &Into{Outfile: string($3)}
-  }
 | INTO DUMPFILE STRING
   {
     $$ = &Into{Dumpfile: string($3)}
+  }
+| INTO OUTFILE STRING charset_opt fields_opt lines_opt
+  {
+    $$ = &Into{Outfile: string($3), Charset: $4, Fields: $5, Lines: $6}
   }
 
 variable_list:
@@ -8195,6 +8195,9 @@ escaped_by_opt:
     $$ = NewStrVal($3)
   }
 
+// TODO: support any number of enclosed_by_opt
+// TODO: support any number of escaped_by_opt
+// TODO: escaped_by_opt and enclosed_by_opt can appear in any order
 fields_opt:
   {
     $$ = nil
