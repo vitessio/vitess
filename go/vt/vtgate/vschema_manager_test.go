@@ -372,6 +372,100 @@ func TestRebuildVSchema(t *testing.T) {
 	}
 }
 
+// TestVSchemaUpdateWithFKReferenceToInternalTables tests that any internal table as part of fk reference is ignored.
+func TestVSchemaUpdateWithFKReferenceToInternalTables(t *testing.T) {
+	ks := &vindexes.Keyspace{Name: "ks"}
+	cols1 := []vindexes.Column{{
+		Name: sqlparser.NewIdentifierCI("id"),
+		Type: querypb.Type_INT64,
+	}}
+	sqlparserCols1 := sqlparser.MakeColumns("id")
+
+	vindexTable_t1 := &vindexes.Table{
+		Name:                    sqlparser.NewIdentifierCS("t1"),
+		Keyspace:                ks,
+		Columns:                 cols1,
+		ColumnListAuthoritative: true,
+	}
+	vindexTable_t2 := &vindexes.Table{
+		Name:                    sqlparser.NewIdentifierCS("t2"),
+		Keyspace:                ks,
+		Columns:                 cols1,
+		ColumnListAuthoritative: true,
+	}
+
+	vindexTable_t1.ChildForeignKeys = append(vindexTable_t1.ChildForeignKeys, vindexes.ChildFKInfo{
+		Table:         vindexTable_t2,
+		ChildColumns:  sqlparserCols1,
+		ParentColumns: sqlparserCols1,
+		OnDelete:      sqlparser.SetNull,
+		OnUpdate:      sqlparser.Cascade,
+	})
+	vindexTable_t2.ParentForeignKeys = append(vindexTable_t2.ParentForeignKeys, vindexes.ParentFKInfo{
+		Table:         vindexTable_t1,
+		ChildColumns:  sqlparserCols1,
+		ParentColumns: sqlparserCols1,
+	})
+
+	vm := &VSchemaManager{}
+	var vs *vindexes.VSchema
+	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+		vs = vschema
+		vs.ResetCreated()
+	}
+	vm.schema = &fakeSchema{t: map[string]*vindexes.TableInfo{
+		"t1": {Columns: cols1},
+		"t2": {
+			Columns: cols1,
+			ForeignKeys: []*sqlparser.ForeignKeyDefinition{
+				createFkDefinition([]string{"id"}, "t1", []string{"id"}, sqlparser.Cascade, sqlparser.SetNull),
+				createFkDefinition([]string{"id"}, "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410", []string{"id"}, sqlparser.Cascade, sqlparser.SetNull),
+			},
+		},
+	}}
+	vm.VSchemaUpdate(&vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks": {
+				ForeignKeyMode: vschemapb.Keyspace_managed,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {Columns: []*vschemapb.Column{{Name: "id", Type: querypb.Type_INT64}}},
+					"t2": {Columns: []*vschemapb.Column{{Name: "id", Type: querypb.Type_INT64}}},
+				},
+			},
+		},
+	}, nil)
+
+	utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, &vindexes.VSchema{
+		RoutingRules: map[string]*vindexes.RoutingRule{},
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			"ks": {
+				Keyspace:       ks,
+				ForeignKeyMode: vschemapb.Keyspace_managed,
+				Vindexes:       map[string]vindexes.Vindex{},
+				Tables: map[string]*vindexes.Table{
+					"t1": vindexTable_t1,
+					"t2": vindexTable_t2,
+				},
+			},
+		},
+	}, vs)
+	utils.MustMatch(t, vs, vm.currentVschema, "currentVschema should have same reference as Vschema")
+}
+
+// createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.
+func createFkDefinition(childCols []string, parentTableName string, parentCols []string, onUpdate, onDelete sqlparser.ReferenceAction) *sqlparser.ForeignKeyDefinition {
+	pKs, pTbl, _ := sqlparser.ParseTable(parentTableName)
+	return &sqlparser.ForeignKeyDefinition{
+		Source: sqlparser.MakeColumns(childCols...),
+		ReferenceDefinition: &sqlparser.ReferenceDefinition{
+			ReferencedTable:   sqlparser.NewTableNameWithQualifier(pTbl, pKs),
+			ReferencedColumns: sqlparser.MakeColumns(parentCols...),
+			OnUpdate:          onUpdate,
+			OnDelete:          onDelete,
+		},
+	}
+}
+
 func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.Table) *vindexes.VSchema {
 	keyspaceSchema := &vindexes.KeyspaceSchema{
 		Keyspace: &vindexes.Keyspace{
