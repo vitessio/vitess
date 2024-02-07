@@ -76,6 +76,8 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformSequential(ctx, op)
 	case *operators.DMLWithInput:
 		return transformDMLWithInput(ctx, op)
+	case *operators.Update:
+		return nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
@@ -685,12 +687,14 @@ func buildUpdateLogicalPlan(
 	hints *queryHints,
 ) (logicalPlan, error) {
 	upd := dmlOp.(*operators.Update)
+	var vindexes []*vindexes.ColumnVindex
 	vQuery := ""
 	if len(upd.ChangedVindexValues) > 0 {
 		vQuery = sqlparser.String(upd.OwnedVindexQuery)
+		vindexes = upd.Target.VTable.ColumnVindexes
 	}
 
-	edml := createDMLPrimitive(ctx, rb, hints, upd.Target.VTable, generateQuery(stmt), vQuery)
+	edml := createDMLPrimitive(ctx, rb, hints, upd.Target.VTable, generateQuery(stmt), vindexes, vQuery)
 
 	return &primitiveWrapper{prim: &engine.Update{
 		DML:                 edml,
@@ -700,23 +704,26 @@ func buildUpdateLogicalPlan(
 
 func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Route, dmlOp operators.Operator, stmt *sqlparser.Delete, hints *queryHints) (logicalPlan, error) {
 	del := dmlOp.(*operators.Delete)
+
+	var vindexes []*vindexes.ColumnVindex
 	vQuery := ""
 	if del.OwnedVindexQuery != nil {
 		vQuery = sqlparser.String(del.OwnedVindexQuery)
+		vindexes = del.Target.VTable.Owned
 	}
 
-	edml := createDMLPrimitive(ctx, rb, hints, del.Target.VTable, generateQuery(stmt), vQuery)
+	edml := createDMLPrimitive(ctx, rb, hints, del.Target.VTable, generateQuery(stmt), vindexes, vQuery)
 
 	return &primitiveWrapper{prim: &engine.Delete{DML: edml}}, nil
 }
 
-func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, hints *queryHints, vTbl *vindexes.Table, query string, vindexQuery string) *engine.DML {
+func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, hints *queryHints, vTbl *vindexes.Table, query string, colVindexes []*vindexes.ColumnVindex, vindexQuery string) *engine.DML {
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
 	rb.Routing.UpdateRoutingParams(ctx, rp)
 	edml := &engine.DML{
 		Query:             query,
 		TableNames:        []string{vTbl.Name.String()},
-		Vindexes:          vTbl.Owned,
+		Vindexes:          colVindexes,
 		OwnedVindexQuery:  vindexQuery,
 		RoutingParameters: rp,
 	}

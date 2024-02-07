@@ -104,8 +104,8 @@ func (u *Update) ShortDescription() string {
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (op Operator) {
 	updClone := sqlparser.CloneRefOfUpdate(updStmt)
 
-	updOp := createUpdateOperator(ctx, updStmt)
-	op = updOp
+	var vTbl *vindexes.Table
+	op, vTbl = createUpdateOperator(ctx, updStmt)
 
 	op = &LockAndComment{
 		Source:   op,
@@ -130,10 +130,10 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		panic(err)
 	}
 
-	return buildFkOperator(ctx, op, updClone, parentFks, childFks, updOp.Target.VTable)
+	return buildFkOperator(ctx, op, updClone, parentFks, childFks, vTbl)
 }
 
-func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) *Update {
+func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, *vindexes.Table) {
 	op := crossJoin(ctx, updStmt.TableExprs)
 
 	sqc := &SubQueryBuilder{}
@@ -157,7 +157,6 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 			Expr: proj,
 		}
 	}
-	op = sqc.getRootOperator(op, nil)
 
 	target := updStmt.TableExprs[0]
 	atbl, ok := target.(*sqlparser.AliasedTableExpr)
@@ -210,7 +209,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		}
 	}
 
-	return updOp
+	return sqc.getRootOperator(updOp, nil), vTbl
 }
 
 func getUpdateVindexInformation(
