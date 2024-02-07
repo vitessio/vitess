@@ -194,6 +194,32 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 	return resp, nil
 }
 
+// ApplyKeyspaceRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplyKeyspaceRoutingRules(ctx context.Context, req *vtctldatapb.ApplyKeyspaceRoutingRulesRequest) (*vtctldatapb.ApplyKeyspaceRoutingRulesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplyKeyspaceRoutingRules")
+	defer span.Finish()
+
+	span.Annotate("skip_rebuild", req.SkipRebuild)
+	span.Annotate("rebuild_cells", strings.Join(req.RebuildCells, ","))
+
+	if err := s.ts.SaveKeyspaceRoutingRules(ctx, req.KeyspaceRoutingRules); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.ApplyKeyspaceRoutingRulesResponse{}
+
+	if req.SkipRebuild {
+		log.Warningf("Skipping rebuild of SrvVSchema as requested, you will need to run RebuildVSchemaGraph for changes to take effect")
+		return resp, nil
+	}
+
+	if err := s.ts.RebuildSrvVSchema(ctx, req.RebuildCells); err != nil {
+		return nil, vterrors.Wrapf(err, "RebuildSrvVSchema(%v) failed: %v", req.RebuildCells, err)
+	}
+
+	return resp, nil
+}
+
 // ApplyShardRoutingRules is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplyShardRoutingRules(ctx context.Context, req *vtctldatapb.ApplyShardRoutingRulesRequest) (*vtctldatapb.ApplyShardRoutingRulesResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplyShardRoutingRules")
@@ -1556,6 +1582,21 @@ func (s *VtctldServer) GetRoutingRules(ctx context.Context, req *vtctldatapb.Get
 
 	return &vtctldatapb.GetRoutingRulesResponse{
 		RoutingRules: rr,
+	}, nil
+}
+
+// GetKeyspaceRoutingRules is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetKeyspaceRoutingRules(ctx context.Context, req *vtctldatapb.GetKeyspaceRoutingRulesRequest) (*vtctldatapb.GetKeyspaceRoutingRulesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetKeyspaceRoutingRules")
+	defer span.Finish()
+
+	rules, err := s.ts.GetKeyspaceRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetKeyspaceRoutingRulesResponse{
+		KeyspaceRoutingRules: rules,
 	}, nil
 }
 

@@ -102,12 +102,10 @@ func TestKeyspaceRoutingRulesRoundTrip(t *testing.T) {
 		"ks4": "ks5",
 	}
 
-	rulesHash, err := SaveKeyspaceRoutingRules(ctx, ts, rulesMap)
+	err := SaveKeyspaceRoutingRules(ctx, ts, rulesMap)
 	require.NoError(t, err, "could not save keyspace routing rules to topo %v", rulesMap)
 
-	roundtripRules, err := GetKeyspaceRoutingRules(ctx, ts)
+	roundtripRulesMap, err := GetKeyspaceRoutingRules(ctx, ts)
 	require.NoError(t, err, "could not fetch keyspace routing rules from topo")
-
-	assert.Equal(t, rulesMap, roundtripRules.Rules)
-	assert.Equal(t, rulesHash, roundtripRules.RulesHash)
+	assert.EqualValues(t, rulesMap, roundtripRulesMap)
 }
