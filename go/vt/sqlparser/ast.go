@@ -2613,6 +2613,9 @@ type ColumnType struct {
 	// The base type string
 	Type string
 
+	// The base type if it has already been resolved
+	ResolvedType any
+
 	// Generic field options.
 	Null          BoolVal
 	NotNull       BoolVal
@@ -2771,17 +2774,19 @@ func (ct *ColumnType) merge(other ColumnType) error {
 
 // Format returns a canonical string representation of the type and all relevant options
 func (ct *ColumnType) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s", ct.Type)
+	if stringer, ok := ct.ResolvedType.(fmt.Stringer); ok {
+		buf.WriteString(stringer.String())
+	} else {
+		buf.Myprintf("%s", ct.Type)
+		if ct.Length != nil && ct.Scale != nil {
+			buf.Myprintf("(%v,%v)", ct.Length, ct.Scale)
 
-	if ct.Length != nil && ct.Scale != nil {
-		buf.Myprintf("(%v,%v)", ct.Length, ct.Scale)
-
-	} else if ct.Length != nil {
-		buf.Myprintf("(%v)", ct.Length)
-	}
-
-	if len(ct.EnumValues) > 0 {
-		buf.Myprintf("('%s')", strings.Join(ct.EnumValues, "', '"))
+		} else if ct.Length != nil {
+			buf.Myprintf("(%v)", ct.Length)
+		}
+		if len(ct.EnumValues) > 0 {
+			buf.Myprintf("('%s')", strings.Join(ct.EnumValues, "', '"))
+		}
 	}
 
 	opts := make([]string, 0, 16)
@@ -7223,4 +7228,26 @@ func (node *SrsAttribute) Format(buf *TrackedBuffer) {
 	buf.Myprintf("definition '%s'\n", node.Definition)
 	buf.Myprintf("organization '%s' identified by %v\n", node.Organization, node.OrgID)
 	buf.Myprintf("description '%s'", node.Description)
+}
+
+// InjectedExpr allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
+// MySQL's dialect.
+type InjectedExpr struct {
+	Expression any
+}
+
+var _ Expr = InjectedExpr{}
+
+func (d InjectedExpr) iExpr() {}
+
+func (d InjectedExpr) replace(from, to Expr) bool {
+	return false
+}
+
+func (d InjectedExpr) Format(buf *TrackedBuffer) {
+	if stringer, ok := d.Expression.(fmt.Stringer); ok {
+		buf.WriteString(stringer.String())
+	} else {
+		buf.WriteString("InjectedExpr")
+	}
 }
