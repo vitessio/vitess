@@ -296,7 +296,6 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		if !textutil.ValueIsSimulatedNull(req.OnDdl) {
 			bls.OnDdl = req.OnDdl
 		}
-		protoutil.SortBinlogSourceTables(bls)
 		source, err = prototext.Marshal(bls)
 		if err != nil {
 			return nil, err
