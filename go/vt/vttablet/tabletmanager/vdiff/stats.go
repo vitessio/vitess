@@ -17,10 +17,16 @@ limitations under the License.
 package vdiff
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+)
+
+const (
+// Keys for the rates/timings stats map.
 )
 
 var (
@@ -28,9 +34,6 @@ var (
 )
 
 func init() {
-	globalStats.Timings = stats.NewTimings("", "", "")
-	globalStats.Rates = stats.NewRates("", globalStats.Timings, 15*60/5, 5*time.Second)
-	globalStats.PhaseTimings = stats.NewTimings("", "", "Phase")
 	globalStats.register()
 }
 
@@ -38,45 +41,33 @@ func init() {
 // vdiffStats exports the stats for Engine. It's a separate structure to
 // prevent potential deadlocks with the mutex in Engine.
 type vdiffStats struct {
-	mu sync.Mutex
+	mu          sync.Mutex
+	controllers map[int64]*controller
 
-	Created             *stats.Counter
-	CreatedByWorkflow   *stats.CountersWithSingleLabel
-	Errors              *stats.Counter
-	ErrorsByWorkflow    *stats.CountersWithSingleLabel
-	RestartedTableDiffs *stats.CountersWithSingleLabel
+	Count                *stats.Gauge
+	Errors               *stats.Counter
+	ErrorsByWorkflow     *stats.CountersWithSingleLabel
+	RestartedTableDiffs  *stats.CountersWithSingleLabel
+	RowsDiffed           *stats.Counter
+	RowsDiffedByWorkflow *stats.CountersWithSingleLabel
 
-	Timings      *stats.Timings // How long a VDiff run takes to complete.
+	DiffTimings  *stats.Timings // How long a VDiff run takes to complete.
+	DiffRates    *stats.Rates   // How many things we're doing per second.
 	PhaseTimings *stats.Timings // How long we spend in phases such as table diff initialization.
-	Rates        *stats.Rates
-
-	RowsDiffedPerSecond *stats.CountersWithMultiLabels
 }
 
 func (st *vdiffStats) register() {
-	globalStats.Created = stats.NewCounter("", "")
-	globalStats.CreatedByWorkflow = stats.NewCountersWithSingleLabel("", "", "Workflow", "")
+	globalStats.Count = stats.NewGauge("", "")
 	globalStats.Errors = stats.NewCounter("", "")
 	globalStats.ErrorsByWorkflow = stats.NewCountersWithSingleLabel("", "", "Workflow", "")
 	globalStats.RestartedTableDiffs = stats.NewCountersWithSingleLabel("", "", "Table", "")
-	globalStats.Timings = stats.NewTimings("", "", "")
-	globalStats.Rates = stats.NewRates("", globalStats.Timings, 15*60/5, 5*time.Second) // Pers second avg with 15 second samples
-	globalStats.PhaseTimings = stats.NewTimings("", "", "Phase")
+	globalStats.RowsDiffed = stats.NewCounter("", "")
+	globalStats.RowsDiffedByWorkflow = stats.NewCountersWithSingleLabel("", "", "Workflow", "")
+	globalStats.DiffTimings = stats.NewTimings("", "", "")
+	globalStats.DiffRates = stats.NewRates("", globalStats.DiffTimings, 15*60/5, 5*time.Second) // Pers second avg with 15 second samples
+	globalStats.PhaseTimings = stats.NewTimings("VDiffPhaseTimings", "vdiff per phase timings", "Phase")
 
-	/*
-		bps.BulkQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
-		bps.TrxQueryBatchCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
-		bps.CopyRowCount = stats.NewCounter("", "")
-		bps.CopyLoopCount = stats.NewCounter("", "")
-		bps.ErrorCounts = stats.NewCountersWithMultiLabels("", "", []string{"type"})
-		bps.NoopQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
-		bps.VReplicationLags = stats.NewTimings("", "", "")
-		bps.VReplicationLagRates = stats.NewRates("", bps.VReplicationLags, 15*60/5, 5*time.Second)
-		bps.TableCopyRowCounts = stats.NewCountersWithSingleLabel("", "", "Table", "")
-		bps.TableCopyTimings = stats.NewTimings("", "", "Table")
-		bps.PartialQueryCacheSize = stats.NewCountersWithMultiLabels("", "", []string{"type"})
-		bps.PartialQueryCount = stats.NewCountersWithMultiLabels("", "", []string{"type"})
-	*/
+	stats.NewGaugeFunc("VDiffCount", "Number of current vdiffs", st.numControllers)
 
 	stats.NewCounterFunc(
 		"VDiffErrorsTotal",
@@ -123,12 +114,59 @@ func (st *vdiffStats) register() {
 		},
 	)
 
+	stats.NewCounterFunc(
+		"VDiffRowsCompared",
+		"number of rows compared across all vdiffs",
+		func() int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			return globalStats.RowsDiffed.Get()
+		})
+
+	stats.NewGaugesFuncWithMultiLabels(
+		"VDiffRowsComparedByWorkflow",
+		"number of rows compared by vreplication workflow name",
+		[]string{"table_name"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64)
+			for label, count := range globalStats.RowsDiffedByWorkflow.Counts() {
+				if label == "" {
+					continue
+				}
+				result[label] = count
+			}
+			return result
+		},
+	)
+
 	stats.NewRateFunc(
-		"VDiffRowsComparedPerSecond",
-		"number of rows diffed per second all vdiffs",
+		"VDiffActionsPerSecond",
+		"number of actions per second across all vdiffs",
 		func() map[string][]float64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
-			return globalStats.Rates.Get()
+			return globalStats.DiffRates.Get()
 		})
+
+	stats.Publish("VDiffStreamingTablets", stats.StringMapFunc(func() map[string]string {
+		st.mu.Lock()
+		defer st.mu.Unlock()
+		result := make(map[string]string, len(st.controllers))
+		for _, ct := range st.controllers {
+			tt := topoproto.TabletAliasString(ct.targetShardStreamer.tablet.Alias)
+			for _, s := range ct.sources {
+				result[fmt.Sprintf("%s.%s.%s", ct.workflow, ct.uuid, s.shard)] =
+					fmt.Sprintf("source:%s;target:%s", topoproto.TabletAliasString(s.tablet.Alias), tt)
+			}
+		}
+		return result
+	}))
+}
+
+func (st *vdiffStats) numControllers() int64 {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return int64(len(st.controllers))
 }

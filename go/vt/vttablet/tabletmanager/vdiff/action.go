@@ -67,8 +67,14 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 	defer func() {
 		if err != nil {
 			globalStats.Errors.Add(1)
+			if req != nil {
+				globalStats.ErrorsByWorkflow.Add(req.Workflow, 1)
+			}
 		}
 	}()
+	if req == nil {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "nil vdiff request")
+	}
 	if !vde.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vdiff engine is closed")
 	}

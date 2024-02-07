@@ -159,6 +159,7 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 	if err := vde.initControllers(rows); err != nil {
 		return err
 	}
+	vde.updateStats()
 
 	// At this point we've fully and successfully opened so begin
 	// retrying error'd VDiffs until the engine is closed.
@@ -218,6 +219,9 @@ func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletman
 			row, vde.thisTablet.Alias)
 	}
 	vde.controllers[ct.id] = ct
+	globalStats.mu.Lock()
+	defer globalStats.mu.Unlock()
+	globalStats.controllers[ct.id] = ct
 	return nil
 }
 
@@ -392,4 +396,16 @@ func (vde *Engine) resetControllers() {
 		ct.Stop()
 	}
 	vde.controllers = make(map[int64]*controller)
+	vde.updateStats()
+}
+
+// UpdateStats must be called with lock held.
+func (vre *Engine) updateStats() {
+	globalStats.mu.Lock()
+	defer globalStats.mu.Unlock()
+
+	globalStats.controllers = make(map[int64]*controller, len(vre.controllers))
+	for id, ct := range vre.controllers {
+		globalStats.controllers[id] = ct
+	}
 }

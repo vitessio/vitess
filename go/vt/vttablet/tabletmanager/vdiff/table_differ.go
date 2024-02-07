@@ -90,6 +90,7 @@ func newTableDiffer(wd *workflowDiffer, table *tabletmanagerdatapb.TableDefiniti
 
 // initialize
 func (td *tableDiffer) initialize(ctx context.Context) error {
+	defer globalStats.PhaseTimings.Record("initialize", time.Now())
 	vdiffEngine := td.wd.ct.vde
 	vdiffEngine.snapshotMu.Lock()
 	defer vdiffEngine.snapshotMu.Unlock()
@@ -467,6 +468,7 @@ func (td *tableDiffer) setupRowSorters() {
 }
 
 func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows int64, stop <-chan time.Time) (*DiffReport, error) {
+	globalStats.PhaseTimings.Record("diff", time.Now())
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -664,6 +666,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 }
 
 func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []compareColInfo, compareOnlyNonPKs bool) (int, error) {
+	globalStats.DiffTimings.Record("RowDiff", time.Now())
 	for _, col := range cols {
 		if col.isPK && compareOnlyNonPKs {
 			continue
@@ -738,6 +741,8 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			return err
 		}
 	}
+	globalStats.RowsDiffed.Add(dr.ProcessedRows)
+	globalStats.RowsDiffedByWorkflow.Add(td.wd.ct.workflow, dr.ProcessedRows)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
