@@ -32,9 +32,8 @@ var _ Primitive = (*Upsert)(nil)
 // Upsert Primitive will execute the insert primitive first and
 // if there is `Duplicate Key` error, it executes the update primitive.
 type Upsert struct {
-	Upserts []upsert
-
 	txNeeded
+	Upserts []upsert
 }
 
 type upsert struct {
