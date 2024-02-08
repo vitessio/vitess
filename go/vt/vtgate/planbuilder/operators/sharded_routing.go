@@ -52,7 +52,7 @@ type ShardedRouting struct {
 
 var _ Routing = (*ShardedRouting)(nil)
 
-func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
+func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.Table, id semantics.TableSet) Routing {
 	routing := &ShardedRouting{
 		RouteOpCode: engine.Scatter,
 		keyspace:    vtable.Keyspace,
@@ -77,7 +77,33 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 		}
 
 	}
+	// Find the tableInfo for the given id
+	ti, err := ctx.SemTable.TableInfoFor(id)
+	if err != nil {
+		panic(err)
+	}
+
+	// If the tableInfo is a realTable, then get the vindexHint from it.
+	var vindexHint *sqlparser.IndexHint
+	rt, isRt := ti.(*semantics.RealTable)
+	if isRt {
+		vindexHint = rt.GetVindexHint()
+	}
 	for _, columnVindex := range vtable.ColumnVindexes {
+		if vindexHint != nil {
+			switch vindexHint.Type {
+			case sqlparser.UseVindexOp:
+				// For a USE VINDEX type vindex hint, we want to skip any vindex that isn't in the indexes list.
+				if !indexesContains(vindexHint.Indexes, columnVindex.Name) {
+					continue
+				}
+			case sqlparser.IgnoreVindexOp:
+				// For a IGNORE VINDEX type vindex hint, we want to skip any vindex that is in the indexes list.
+				if indexesContains(vindexHint.Indexes, columnVindex.Name) {
+					continue
+				}
+			}
+		}
 		// ignore any backfilling vindexes from vindex selection.
 		if columnVindex.IsBackfilling() {
 			continue
@@ -85,6 +111,16 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 		routing.VindexPreds = append(routing.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: id})
 	}
 	return routing
+}
+
+// indexesContains is a helper function that returns whether a given string is part of the IdentifierCI list.
+func indexesContains(indexes []sqlparser.IdentifierCI, name string) bool {
+	for _, index := range indexes {
+		if index.EqualString(name) {
+			return true
+		}
+	}
+	return false
 }
 
 func (tr *ShardedRouting) isScatter() bool {

@@ -196,12 +196,12 @@ func checkUpdate(node *sqlparser.Update) error {
 
 // checkAliasedTableExpr checks the validity of AliasedTableExpr.
 func checkAliasedTableExpr(node *sqlparser.AliasedTableExpr) error {
-	if node.Hints == nil {
+	if len(node.Hints) == 0 {
 		return nil
 	}
 	alreadySeenVindexHint := false
 	for _, hint := range node.Hints {
-		if hint.Type == sqlparser.UseVindexOp || hint.Type == sqlparser.IgnoreVindexOp {
+		if hint.Type.IsVindexHint() {
 			if alreadySeenVindexHint {
 				// TableName is safe to call, because only TableExpr can have hints.
 				// And we already checked for hints being empty.

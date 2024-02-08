@@ -1570,6 +1570,16 @@ func (ty IndexHintType) ToString() string {
 	}
 }
 
+// IsVindexHint returns if the given hint is a Vindex hint or not.
+func (ty IndexHintType) IsVindexHint() bool {
+	switch ty {
+	case UseVindexOp, IgnoreVindexOp:
+		return true
+	default:
+		return false
+	}
+}
+
 // ToString returns the type as a string
 func (ty IndexHintForType) ToString() string {
 	switch ty {

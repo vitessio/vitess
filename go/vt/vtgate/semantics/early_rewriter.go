@@ -140,30 +140,53 @@ func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
 }
 
 func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
-	// this rewriting is done in the `up` phase, because we need the scope to have been
-	// filled in with the available tables
-	node, ok := cursor.Node().(*sqlparser.JoinTableExpr)
-	if !ok || len(node.Condition.Using) == 0 {
-		return nil
-	}
-
-	err := rewriteJoinUsing(r.binder, node)
-	if err != nil {
-		return err
-	}
-
-	// since the binder has already been over the join, we need to invoke it again, so it
-	// can bind columns to the right tables
-	sqlparser.Rewrite(node.Condition.On, nil, func(cursor *sqlparser.Cursor) bool {
-		innerErr := r.binder.up(cursor)
-		if innerErr == nil {
-			return true
+	switch node := cursor.Node().(type) {
+	case *sqlparser.JoinTableExpr:
+		// this rewriting is done in the `up` phase, because we need the scope to have been
+		// filled in with the available tables
+		if len(node.Condition.Using) == 0 {
+			return nil
 		}
 
-		err = innerErr
-		return false
-	})
-	return err
+		err := rewriteJoinUsing(r.binder, node)
+		if err != nil {
+			return err
+		}
+
+		// since the binder has already been over the join, we need to invoke it again, so it
+		// can bind columns to the right tables
+		sqlparser.Rewrite(node.Condition.On, nil, func(cursor *sqlparser.Cursor) bool {
+			innerErr := r.binder.up(cursor)
+			if innerErr == nil {
+				return true
+			}
+
+			err = innerErr
+			return false
+		})
+		return err
+	case *sqlparser.AliasedTableExpr:
+		// this rewriting is done in the `up` phase, because we need the vindex hints to have been
+		// processed while collecting the tables.
+		return removeVindexHints(node)
+	}
+	return nil
+}
+
+// removeVindexHints removes the vindex hints from the aliased table expression provided.
+func removeVindexHints(node *sqlparser.AliasedTableExpr) error {
+	if len(node.Hints) == 0 {
+		return nil
+	}
+	var newHints sqlparser.IndexHints
+	for _, hint := range node.Hints {
+		if hint.Type.IsVindexHint() {
+			continue
+		}
+		newHints = append(newHints, hint)
+	}
+	node.Hints = newHints
+	return nil
 }
 
 // handleWhereClause processes WHERE clauses, specifically the HAVING clause.

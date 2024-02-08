@@ -234,6 +234,7 @@ func (tc *tableCollector) createTable(
 		tableName:    alias.As.String(),
 		ASTNode:      alias,
 		Table:        tbl,
+		VindexHint:   getVindexHint(alias.Hints),
 		isInfSchema:  isInfSchema,
 		collationEnv: tc.si.Environment().CollationEnv(),
 	}
@@ -255,4 +256,14 @@ func (tc *tableCollector) createTable(
 		}
 	}
 	return table
+}
+
+// getVindexHint gets the vindex hint from the list of IndexHints.
+func getVindexHint(hints sqlparser.IndexHints) *sqlparser.IndexHint {
+	for _, hint := range hints {
+		if hint.Type.IsVindexHint() {
+			return hint
+		}
+	}
+	return nil
 }
