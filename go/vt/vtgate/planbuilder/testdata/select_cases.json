@@ -3966,7 +3966,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from (select id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
-                "Query": "select id from (select id from (select music.id from music where music.user_id in ::__vals) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
+                "Query": "select id from (select id from (select music.id from music where music.user_id in ::__vals) as subquery_for_limit limit :__upper_limit) as subquery_for_limit",
                 "Table": "music",
                 "Values": [
                   "(5, 6)"
@@ -4025,7 +4025,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from (select id from (select music.id from music where 1 != 1) as subquery_for_limit where 1 != 1) as subquery_for_limit where 1 != 1",
-                "Query": "select id from (select id from (select music.id from music) as subquery_for_limit limit :__upper_limit) as subquery_for_limit limit :__upper_limit",
+                "Query": "select id from (select id from (select music.id from music) as subquery_for_limit limit :__upper_limit) as subquery_for_limit",
                 "Table": "music"
               }
             ]

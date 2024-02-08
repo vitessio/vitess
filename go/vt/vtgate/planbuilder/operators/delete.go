@@ -72,7 +72,11 @@ func (d *Delete) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 }
 
 func (d *Delete) ShortDescription() string {
-	return fmt.Sprintf("%s.%s", d.Target.VTable.Keyspace.Name, d.Target.VTable.Name.String())
+	ovq := ""
+	if d.OwnedVindexQuery != nil {
+		ovq = " vindexQuery:%s" + sqlparser.String(d.OwnedVindexQuery)
+	}
+	return fmt.Sprintf("%s.%s%s", d.Target.VTable.Keyspace.Name, d.Target.VTable.Name.String(), ovq)
 }
 
 func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (op Operator) {

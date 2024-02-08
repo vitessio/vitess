@@ -95,7 +95,11 @@ func (u *Update) TablesUsed() []string {
 }
 
 func (u *Update) ShortDescription() string {
-	return fmt.Sprintf("%s.%s", u.Target.VTable.Keyspace.Name, u.Target.VTable.Name.String())
+	ovq := ""
+	if u.OwnedVindexQuery != nil {
+		ovq = " vindexQuery:%s" + sqlparser.String(u.OwnedVindexQuery)
+	}
+	return fmt.Sprintf("%s.%s%s", u.Target.VTable.Keyspace.Name, u.Target.VTable.Name.String(), ovq)
 }
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (op Operator) {

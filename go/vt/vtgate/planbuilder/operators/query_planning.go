@@ -249,7 +249,7 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 				Pushed: false,
 			}
 			op.Source = newSrc
-			result = result.Merge(Rewrote("push limit under route"))
+			result = result.Merge(Rewrote("push upper limit under route"))
 			return SkipChildren
 		default:
 			return VisitChildren
