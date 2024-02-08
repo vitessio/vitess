@@ -269,11 +269,12 @@ func reverse(in *evalBytes) []byte {
 	cs := colldata.Lookup(in.col.Collation).Charset()
 	b := in.bytes
 
-	out, cur := make([]byte, len(b)), len(b)
-	for _, size := cs.DecodeRune(b); size > 0; _, size = cs.DecodeRune(b) {
-		copy(out[cur-size:cur], b[:size])
+	out, end := make([]byte, len(b)), len(b)
+	for len(b) > 0 {
+		_, size := cs.DecodeRune(b)
+		copy(out[end-size:end], b[:size])
 		b = b[size:]
-		cur = cur - size
+		end -= size
 	}
 	return out
 }
