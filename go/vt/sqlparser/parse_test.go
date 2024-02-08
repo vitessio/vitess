@@ -2662,6 +2662,18 @@ var (
 	}, {
 		input: "select * from payment_pulls ignore vindex (lookup_vindex_name) where customer_id in (1, 10) and payment_id = 5",
 	}, {
+		input:  "select * from payment_pulls ignore vindex (lookup_vindex_name, x, t) order by id",
+		output: "select * from payment_pulls ignore vindex (lookup_vindex_name, x, t) order by id asc",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name) where customer_id in (1, 10) and payment_id = 5",
+	}, {
+		input:  "select * from payment_pulls use vindex (lookup_vindex_name, x, t) order by id",
+		output: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) order by id asc",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) ignore vindex (x, t)",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) ignore vindex (x, t) join tab ignore vindex (y)",
+	}, {
 		input:  "select name, group_concat(score) from t group by name",
 		output: "select `name`, group_concat(score) from t group by `name`",
 	}, {
