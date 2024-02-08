@@ -64,7 +64,7 @@ func (mr *MockThrottlerInterfaceMockRecorder) GetConfiguration() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfiguration", reflect.TypeOf((*MockThrottlerInterface)(nil).GetConfiguration))
 }
 
-// LastMaxLagNotIgnoredForTabletType mocks base method.
+// MaxLag mocks base method.
 func (m *MockThrottlerInterface) MaxLag(tabletType topodata.TabletType) uint32 {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MaxLag", tabletType)
@@ -72,8 +72,8 @@ func (m *MockThrottlerInterface) MaxLag(tabletType topodata.TabletType) uint32 {
 	return ret0
 }
 
-// LastMaxLagNotIgnoredForTabletType indicates an expected call of LastMaxLagNotIgnoredForTabletType.
-func (mr *MockThrottlerInterfaceMockRecorder) LastMaxLagNotIgnoredForTabletType(tabletType interface{}) *gomock.Call {
+// MaxLag indicates an expected call of LastMaxLagNotIgnoredForTabletType.
+func (mr *MockThrottlerInterfaceMockRecorder) MaxLag(tabletType interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxLag", reflect.TypeOf((*MockThrottlerInterface)(nil).MaxLag), tabletType)
 }
