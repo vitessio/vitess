@@ -66,10 +66,7 @@ var (
 func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (resp *tabletmanagerdatapb.VDiffResponse, err error) {
 	defer func() {
 		if err != nil {
-			globalStats.Errors.Add(1)
-			if req != nil {
-				globalStats.ErrorsByWorkflow.Add(req.Workflow, 1)
-			}
+			globalStats.ErrorCount.Add(1)
 		}
 	}()
 	if req == nil {
@@ -88,7 +85,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 	}
 	// We use the db_filtered user for vreplication related work.
 	dbClient := vde.dbClientFactoryFiltered()
-	if err = dbClient.Connect(); err != nil {
+	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
 	defer dbClient.Close()
@@ -96,19 +93,19 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 	action := VDiffAction(req.Action)
 	switch action {
 	case CreateAction, ResumeAction:
-		if err = vde.handleCreateResumeAction(ctx, dbClient, action, req, resp); err != nil {
+		if err := vde.handleCreateResumeAction(ctx, dbClient, action, req, resp); err != nil {
 			return nil, err
 		}
 	case ShowAction:
-		if err = vde.handleShowAction(ctx, dbClient, action, req, resp); err != nil {
+		if err := vde.handleShowAction(ctx, dbClient, action, req, resp); err != nil {
 			return nil, err
 		}
 	case StopAction:
-		if err = vde.handleStopAction(ctx, dbClient, action, req, resp); err != nil {
+		if err := vde.handleStopAction(ctx, dbClient, action, req, resp); err != nil {
 			return nil, err
 		}
 	case DeleteAction:
-		if err = vde.handleDeleteAction(ctx, dbClient, action, req, resp); err != nil {
+		if err := vde.handleDeleteAction(ctx, dbClient, action, req, resp); err != nil {
 			return nil, err
 		}
 	default:
@@ -379,6 +376,9 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		}
 		controller.Stop()
 		delete(vde.controllers, controller.id)
+		globalStats.mu.Lock()
+		defer globalStats.mu.Unlock()
+		delete(globalStats.controllers, controller.id)
 	}
 
 	switch req.ActionArg {

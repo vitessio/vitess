@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -75,6 +76,11 @@ type controller struct {
 	sourceTimeZone, targetTimeZone string // Named time zones if conversions are necessary for datetime values
 
 	externalCluster string // For Mount+Migrate
+
+	// Information used in vdiff stats/metrics.
+	ErrorCounts           *stats.CountersWithMultiLabels
+	TableDiffRowCounts    *stats.CountersWithMultiLabels
+	TableDiffPhaseTimings *stats.Timings
 }
 
 func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
@@ -84,16 +90,19 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 	id, _ := row["id"].ToInt64()
 
 	ct := &controller{
-		id:              id,
-		uuid:            row["vdiff_uuid"].ToString(),
-		workflow:        row["workflow"].ToString(),
-		dbClientFactory: dbClientFactory,
-		ts:              ts,
-		vde:             vde,
-		done:            make(chan struct{}),
-		tmc:             vde.tmClientFactory(),
-		sources:         make(map[string]*migrationSource),
-		options:         options,
+		id:                    id,
+		uuid:                  row["vdiff_uuid"].ToString(),
+		workflow:              row["workflow"].ToString(),
+		dbClientFactory:       dbClientFactory,
+		ts:                    ts,
+		vde:                   vde,
+		done:                  make(chan struct{}),
+		tmc:                   vde.tmClientFactory(),
+		sources:               make(map[string]*migrationSource),
+		options:               options,
+		ErrorCounts:           stats.NewCountersWithMultiLabels("", "", []string{"Error"}),
+		TableDiffRowCounts:    stats.NewCountersWithMultiLabels("", "", []string{"Rows"}),
+		TableDiffPhaseTimings: stats.NewTimings("", "", "", "TablePhase"),
 	}
 	ctx, ct.cancel = context.WithCancel(ctx)
 	go ct.run(ctx)

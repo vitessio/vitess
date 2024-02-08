@@ -90,7 +90,7 @@ func newTableDiffer(wd *workflowDiffer, table *tabletmanagerdatapb.TableDefiniti
 
 // initialize
 func (td *tableDiffer) initialize(ctx context.Context) error {
-	defer globalStats.PhaseTimings.Record("initialize", time.Now())
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.initializing", td.table.Name), time.Now())
 	vdiffEngine := td.wd.ct.vde
 	vdiffEngine.snapshotMu.Lock()
 	defer vdiffEngine.snapshotMu.Unlock()
@@ -213,6 +213,7 @@ func (td *tableDiffer) forEachSource(cb func(source *migrationSource) error) err
 }
 
 func (td *tableDiffer) selectTablets(ctx context.Context) error {
+	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.picking_streaming_tablets", td.table.Name), time.Now())
 	var (
 		wg                   sync.WaitGroup
 		sourceErr, targetErr error
@@ -288,6 +289,7 @@ func (td *tableDiffer) pickTablet(ctx context.Context, ts *topo.Server, cells []
 }
 
 func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
+	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.syncing_source_streams", td.table.Name), time.Now())
 	// source can be replica, wait for them to at least reach max gtid of all target streams
 	ct := td.wd.ct
 	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
@@ -306,6 +308,7 @@ func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
+	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.syncing_target_streams", td.table.Name), time.Now())
 	ct := td.wd.ct
 	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
 	defer cancel()
@@ -328,6 +331,7 @@ func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
+	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.starting_target_data_streams", td.table.Name), time.Now())
 	ct := td.wd.ct
 	gtidch := make(chan string, 1)
 	ct.targetShardStreamer.result = make(chan *sqltypes.Result, 1)
@@ -342,6 +346,7 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 }
 
 func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
+	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.starting_source_data_streams", td.table.Name), time.Now())
 	if err := td.forEachSource(func(source *migrationSource) error {
 		gtidch := make(chan string, 1)
 		source.result = make(chan *sqltypes.Result, 1)
@@ -360,6 +365,7 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) error {
+	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.restarting_vreplication_streams", td.table.Name), time.Now())
 	ct := td.wd.ct
 	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
 		encodeString(ct.vde.dbName), encodeString(ct.workflow))
@@ -468,7 +474,7 @@ func (td *tableDiffer) setupRowSorters() {
 }
 
 func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows int64, stop <-chan time.Time) (*DiffReport, error) {
-	globalStats.PhaseTimings.Record("diff", time.Now())
+	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.diffing_table", td.table.Name), time.Now())
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -517,6 +523,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 		if err := td.updateTableProgress(dbClient, dr, lastProcessedRow); err != nil {
 			log.Errorf("Failed to update vdiff progress on %s table: %v", td.table.Name, err)
 		}
+		globalStats.RowsDiffedCount.Add(dr.ProcessedRows)
 	}()
 
 	for {
@@ -666,7 +673,6 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 }
 
 func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []compareColInfo, compareOnlyNonPKs bool) (int, error) {
-	globalStats.DiffTimings.Record("RowDiff", time.Now())
 	for _, col := range cols {
 		if col.isPK && compareOnlyNonPKs {
 			continue
@@ -741,11 +747,12 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			return err
 		}
 	}
-	globalStats.RowsDiffed.Add(dr.ProcessedRows)
-	globalStats.RowsDiffedByWorkflow.Add(td.wd.ct.workflow, dr.ProcessedRows)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
+	// We have to reset first as the value is not incremental.
+	td.wd.ct.TableDiffRowCounts.Reset([]string{td.table.Name})
+	td.wd.ct.TableDiffRowCounts.Add([]string{td.table.Name}, dr.ProcessedRows)
 	return nil
 }
 

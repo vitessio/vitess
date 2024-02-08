@@ -19,14 +19,9 @@ package vdiff
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-)
-
-const (
-// Keys for the rates/timings stats map.
 )
 
 var (
@@ -44,57 +39,28 @@ type vdiffStats struct {
 	mu          sync.Mutex
 	controllers map[int64]*controller
 
-	Count                *stats.Gauge
-	Errors               *stats.Counter
-	ErrorsByWorkflow     *stats.CountersWithSingleLabel
-	RestartedTableDiffs  *stats.CountersWithSingleLabel
-	RowsDiffed           *stats.Counter
-	RowsDiffedByWorkflow *stats.CountersWithSingleLabel
-
-	DiffTimings  *stats.Timings // How long a VDiff run takes to complete.
-	DiffRates    *stats.Rates   // How many things we're doing per second.
-	PhaseTimings *stats.Timings // How long we spend in phases such as table diff initialization.
+	Count               *stats.Gauge
+	ErrorCount          *stats.Counter
+	RestartedTableDiffs *stats.CountersWithSingleLabel
+	RowsDiffedCount     *stats.Counter
 }
 
 func (st *vdiffStats) register() {
 	globalStats.Count = stats.NewGauge("", "")
-	globalStats.Errors = stats.NewCounter("", "")
-	globalStats.ErrorsByWorkflow = stats.NewCountersWithSingleLabel("", "", "Workflow", "")
+	globalStats.ErrorCount = stats.NewCounter("", "")
 	globalStats.RestartedTableDiffs = stats.NewCountersWithSingleLabel("", "", "Table", "")
-	globalStats.RowsDiffed = stats.NewCounter("", "")
-	globalStats.RowsDiffedByWorkflow = stats.NewCountersWithSingleLabel("", "", "Workflow", "")
-	globalStats.DiffTimings = stats.NewTimings("", "", "")
-	globalStats.DiffRates = stats.NewRates("", globalStats.DiffTimings, 15*60/5, 5*time.Second) // Pers second avg with 15 second samples
-	globalStats.PhaseTimings = stats.NewTimings("VDiffPhaseTimings", "vdiff per phase timings", "Phase")
+	globalStats.RowsDiffedCount = stats.NewCounter("", "")
 
 	stats.NewGaugeFunc("VDiffCount", "Number of current vdiffs", st.numControllers)
 
 	stats.NewCounterFunc(
-		"VDiffErrorsTotal",
+		"VDiffErrorCountTotal",
 		"number of errors encountered across all vdiffs",
 		func() int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
-			return globalStats.Errors.Get()
+			return globalStats.ErrorCount.Get()
 		})
-
-	stats.NewGaugesFuncWithMultiLabels(
-		"VDiffErrorsByWorkflow",
-		"number of errors encountered for vdiffs by vreplication workflow name",
-		[]string{"table_name"},
-		func() map[string]int64 {
-			st.mu.Lock()
-			defer st.mu.Unlock()
-			result := make(map[string]int64)
-			for label, count := range globalStats.ErrorsByWorkflow.Counts() {
-				if label == "" {
-					continue
-				}
-				result[label] = count
-			}
-			return result
-		},
-	)
 
 	stats.NewGaugesFuncWithMultiLabels(
 		"VDiffRestartedTableDiffsCount",
@@ -115,54 +81,81 @@ func (st *vdiffStats) register() {
 	)
 
 	stats.NewCounterFunc(
-		"VDiffRowsCompared",
+		"VDiffRowsComparedTotal",
 		"number of rows compared across all vdiffs",
 		func() int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
-			return globalStats.RowsDiffed.Get()
+			return globalStats.RowsDiffedCount.Get()
 		})
 
 	stats.NewGaugesFuncWithMultiLabels(
-		"VDiffRowsComparedByWorkflow",
-		"number of rows compared by vreplication workflow name",
-		[]string{"table_name"},
+		"VDiffRowsCompared",
+		"live number of rows compared per vdiff by table",
+		[]string{"workflow", "uuid", "table"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
-			result := make(map[string]int64)
-			for label, count := range globalStats.RowsDiffedByWorkflow.Counts() {
-				if label == "" {
-					continue
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for key, val := range ct.TableDiffRowCounts.Counts() {
+					result[fmt.Sprintf("%s.%s.%s", ct.workflow, ct.uuid, key)] = val
 				}
-				result[label] = count
 			}
 			return result
 		},
 	)
 
-	stats.NewRateFunc(
-		"VDiffActionsPerSecond",
-		"number of actions per second across all vdiffs",
-		func() map[string][]float64 {
+	stats.NewStringMapFuncWithMultiLabels(
+		"VDiffStreamingTablets",
+		"latest tablets used on the source and target for streaming table data",
+		[]string{"workflow", "uuid", "target_shard"},
+		"tablets",
+		func() map[string]string {
 			st.mu.Lock()
 			defer st.mu.Unlock()
-			return globalStats.DiffRates.Get()
+			result := make(map[string]string, len(st.controllers))
+			for _, ct := range st.controllers {
+				tt := topoproto.TabletAliasString(ct.targetShardStreamer.tablet.Alias)
+				for _, s := range ct.sources {
+					result[fmt.Sprintf("%s.%s.%s", ct.workflow, ct.uuid, s.shard)] =
+						fmt.Sprintf("source:%s,target:%s", topoproto.TabletAliasString(s.tablet.Alias), tt)
+				}
+			}
+			return result
 		})
 
-	stats.Publish("VDiffStreamingTablets", stats.StringMapFunc(func() map[string]string {
-		st.mu.Lock()
-		defer st.mu.Unlock()
-		result := make(map[string]string, len(st.controllers))
-		for _, ct := range st.controllers {
-			tt := topoproto.TabletAliasString(ct.targetShardStreamer.tablet.Alias)
-			for _, s := range ct.sources {
-				result[fmt.Sprintf("%s.%s.%s", ct.workflow, ct.uuid, s.shard)] =
-					fmt.Sprintf("source:%s;target:%s", topoproto.TabletAliasString(s.tablet.Alias), tt)
+	stats.NewCountersFuncWithMultiLabels(
+		"VDiffErrors",
+		"count of specific errors seen when performing a vdiff",
+		[]string{"workflow", "uuid", "error"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for key, val := range ct.ErrorCounts.Counts() {
+					result[fmt.Sprintf("%s.%s.%s", ct.workflow, ct.uuid, key)] = val
+				}
 			}
-		}
-		return result
-	}))
+			return result
+		})
+
+	stats.NewGaugesFuncWithMultiLabels(
+		"VDiffPhaseTimings",
+		"vdiff phase timings",
+		[]string{"workflow", "uuid", "table", "phase"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for tablePhase, h := range ct.TableDiffPhaseTimings.Histograms() {
+					result[fmt.Sprintf("%s.%s.%s", ct.workflow, ct.uuid, tablePhase)] = h.Total()
+				}
+			}
+			return result
+		})
 }
 
 func (st *vdiffStats) numControllers() int64 {
