@@ -31,10 +31,11 @@ var _ Primitive = (*Projection)(nil)
 
 // Projection can evaluate expressions and project the results
 type Projection struct {
+	noTxNeeded
+
 	Cols  []string
 	Exprs []evalengine.Expr
 	Input Primitive
-	noTxNeeded
 }
 
 // RouteType implements the Primitive interface
