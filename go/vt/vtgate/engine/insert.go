@@ -38,6 +38,7 @@ var _ Primitive = (*Insert)(nil)
 
 // Insert represents the instructions to perform an insert operation.
 type Insert struct {
+	noInputs
 	InsertCommon
 
 	// Query specifies the query to be executed.
@@ -54,8 +55,6 @@ type Insert struct {
 
 	// Mid is the row values for the sharded insert plans.
 	Mid sqlparser.Values
-
-	noInputs
 }
 
 // newQueryInsert creates an Insert with a query string.

@@ -30,12 +30,11 @@ var _ Primitive = (*UpdateTarget)(nil)
 
 // UpdateTarget is an operator to update target string.
 type UpdateTarget struct {
+	noInputs
+	noTxNeeded
+
 	// Target string to be updated
 	Target string
-
-	noInputs
-
-	noTxNeeded
 }
 
 func (updTarget *UpdateTarget) description() PrimitiveDescription {
