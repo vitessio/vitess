@@ -128,9 +128,7 @@ func TestNewMaxReplicationLagModule_recalculateRate(t *testing.T) {
 		},
 	}
 
-	for _, aTestCase := range testCases {
-		theCase := aTestCase
-
+	for _, theCase := range testCases {
 		t.Run(theCase.name, func(t *testing.T) {
 			t.Parallel()
 
