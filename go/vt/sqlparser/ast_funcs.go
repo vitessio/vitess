@@ -1558,9 +1558,13 @@ func (ty IndexHintType) ToString() string {
 	case UseOp:
 		return UseStr
 	case IgnoreOp:
-		return IgnoreStr
+		return IgnoreIndexStr
 	case ForceOp:
 		return ForceStr
+	case UseVindexOp:
+		return UseVindexStr
+	case IgnoreVindexOp:
+		return IgnoreVindexStr
 	default:
 		return "Unknown IndexHintType"
 	}

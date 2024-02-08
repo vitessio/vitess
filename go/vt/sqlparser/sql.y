@@ -5224,6 +5224,14 @@ index_hint:
   {
     $$ = &IndexHint{Type: ForceOp, ForType: $3, Indexes: $5}
   }
+| USE VINDEX openb sql_id closeb
+  {
+    $$ = &IndexHint{Type: UseVindexOp, Indexes: Columns{$4} }
+  }
+| IGNORE VINDEX openb sql_id closeb
+  {
+    $$ = &IndexHint{Type: IgnoreVindexOp, Indexes: Columns{$4}}
+  }
 
 index_hint_for_opt:
   {
