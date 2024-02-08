@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -31,6 +32,21 @@ const (
 const (
 	InternalTableNameExpression string = `^_vt_([a-zA-Z0-9]{3})_([0-f]{32})_([0-9]{14})_$`
 )
+
+type InternalTableHint string
+
+const (
+	InternalTableUnknownHint      InternalTableHint = "nil"
+	InternalTableGCHoldHint       InternalTableHint = "hld"
+	InternalTableGCPurgeHint      InternalTableHint = "prg"
+	InternalTableGCEvacHint       InternalTableHint = "evc"
+	InternalTableGCDropHint       InternalTableHint = "drp"
+	InternalTableVreplicationHint InternalTableHint = "vrp"
+)
+
+func (h InternalTableHint) String() string {
+	return string(h)
+}
 
 var (
 	// internalTableNameRegexp parses new intrnal table name format, e.g. _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_
@@ -63,6 +79,44 @@ func CreateUUID() (string, error) {
 // Example: for Aug 25 2020, 16:04:25 we return "20200825160425"
 func ToReadableTimestamp(t time.Time) string {
 	return t.Format(readableTimeFormat)
+}
+
+// ReadableTimestamp returns the current timestamp, in seconds resolution, that is human readable
+func ReadableTimestamp() string {
+	return ToReadableTimestamp(time.Now())
+}
+
+func condenseUUID(uuid string) string {
+	uuid = strings.ReplaceAll(uuid, "-", "")
+	uuid = strings.ReplaceAll(uuid, "_", "")
+	return uuid
+}
+
+// isCondensedUUID answers 'true' when the given string is a condensed UUID, e.g.:
+// a0638f6bec7b11ea9bf8000d3a9b8a9a
+func isCondensedUUID(uuid string) bool {
+	return condensedUUIDRegexp.MatchString(uuid)
+}
+
+// generateGCTableName creates an internal table name, based on desired hint and time, and with optional preset UUID.
+// If uuid is given, then it must be in condensed-UUID format. If empty, the function auto-generates a UUID.
+func GenerateInternalTableName(hint string, uuid string, t time.Time) (tableName string, err error) {
+	if len(hint) != 3 {
+		return "", fmt.Errorf("Invalid hint: %s, expected 3 characters", hint)
+	}
+	if uuid == "" {
+		uuid, err = CreateUUIDWithDelimiter("")
+	} else {
+		uuid = condenseUUID(uuid)
+	}
+	if err != nil {
+		return "", err
+	}
+	if !isCondensedUUID(uuid) {
+		return "", fmt.Errorf("Invalid UUID: %s, expected condensed 32 hexadecimals", uuid)
+	}
+	timestamp := ToReadableTimestamp(t)
+	return fmt.Sprintf("_vt_%s_%s_%s_", hint, uuid, timestamp), nil
 }
 
 // IsInternalOperationTableName answers 'true' when the given table name stands for an internal Vitess

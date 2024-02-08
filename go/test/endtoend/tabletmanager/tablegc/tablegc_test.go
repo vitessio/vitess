@@ -319,10 +319,7 @@ func TestPopulateTable(t *testing.T) {
 }
 
 func generateRenameStatement(newFormat bool, fromTableName string, state schema.TableGCState, tm time.Time) (statement string, toTableName string, err error) {
-	if newFormat {
-		return schema.GenerateRenameStatementNewFormat(fromTableName, state, tm)
-	}
-	return schema.GenerateRenameStatement(fromTableName, state, tm)
+	return schema.GenerateRenameStatementWithUUID(fromTableName, state, "", tm)
 }
 
 func TestHold(t *testing.T) {
@@ -448,7 +445,7 @@ func TestPurge(t *testing.T) {
 
 func TestPurgeView(t *testing.T) {
 	populateTable(t)
-	query, tableName, err := schema.GenerateRenameStatement("v1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
+	query, tableName, err := generateRenameStatement(true, "v1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	require.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)

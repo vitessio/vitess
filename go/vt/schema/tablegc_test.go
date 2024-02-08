@@ -25,20 +25,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestGCStates(t *testing.T) {
+	assert.Equal(t, HoldTableGCState, gcStates["hld"])
+	assert.Equal(t, HoldTableGCState, gcStates["HOLD"])
+	assert.Equal(t, PurgeTableGCState, gcStates["prg"])
+	assert.Equal(t, PurgeTableGCState, gcStates["PURGE"])
+	assert.Equal(t, EvacTableGCState, gcStates["evc"])
+	assert.Equal(t, EvacTableGCState, gcStates["EVAC"])
+	assert.Equal(t, DropTableGCState, gcStates["drp"])
+	assert.Equal(t, DropTableGCState, gcStates["DROP"])
+	_, ok := gcStates["purge"]
+	assert.False(t, ok)
+	_, ok = gcStates["vrp"]
+	assert.False(t, ok)
+}
+
 func TestIsGCTableName(t *testing.T) {
 	tm := time.Now()
 	states := []TableGCState{HoldTableGCState, PurgeTableGCState, EvacTableGCState, DropTableGCState}
 	for _, state := range states {
 		for i := 0; i < 10; i++ {
-			tableName, err := generateGCTableName(state, "", tm)
-			assert.NoError(t, err)
-			assert.True(t, IsGCTableName(tableName))
-
-			tableName, err = generateGCTableNameNewFormat(state, "6ace8bcef73211ea87e9f875a4d24e90", tm)
+			tableName, err := generateGCTableNameOldFormat(state, "", tm)
 			assert.NoError(t, err)
 			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
 
-			tableName, err = GenerateGCTableNameNewFormat(state, tm)
+			tableName, err = generateGCTableName(state, "6ace8bcef73211ea87e9f875a4d24e90", tm)
+			assert.NoError(t, err)
+			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
+
+			tableName, err = GenerateGCTableName(state, tm)
 			assert.NoError(t, err)
 			assert.Truef(t, IsGCTableName(tableName), "table name: %s", tableName)
 		}
@@ -77,7 +92,7 @@ func TestIsGCTableName(t *testing.T) {
 	t.Run("explicit regexp", func(t *testing.T) {
 		// NewGCTableNameExpression regexp is used externally by vreplication. Its a redundant form of
 		// InternalTableNameExpression, but is nonetheless required. We verify it works correctly
-		re := regexp.MustCompile(NewGCTableNameExpression)
+		re := regexp.MustCompile(GCTableNameExpression)
 		t.Run("accept", func(t *testing.T) {
 			names := []string{
 				"_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
@@ -173,7 +188,7 @@ func TestAnalyzeGCTableName(t *testing.T) {
 			assert.Equal(t, ts.isGC, isGC)
 			if ts.isGC {
 				assert.NoError(t, err)
-				assert.True(t, IsGCUUID(uuid))
+				assert.True(t, isCondensedUUID(uuid))
 				assert.Equal(t, ts.state, state)
 				assert.Equal(t, ts.t, tm)
 			}
