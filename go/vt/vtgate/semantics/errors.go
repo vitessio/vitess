@@ -51,6 +51,7 @@ type (
 	AmbiguousColumnError           struct{ Column string }
 	SubqueryColumnCountError       struct{ Expected int }
 	ColumnsMissingInSchemaError    struct{}
+	CantUseMultipleVindexHints     struct{ Table string }
 
 	UnsupportedMultiTablesInUpdateError struct {
 		ExprCount int
@@ -260,4 +261,13 @@ func (e *ColumnsMissingInSchemaError) Error() string {
 
 func (e *ColumnsMissingInSchemaError) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_INVALID_ARGUMENT
+}
+
+// CantUseMultipleVindexHints
+func (c *CantUseMultipleVindexHints) Error() string {
+	return vterrors.VT09020(c.Table).Error()
+}
+
+func (c *CantUseMultipleVindexHints) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_FAILED_PRECONDITION
 }
