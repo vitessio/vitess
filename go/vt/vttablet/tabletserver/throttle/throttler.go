@@ -772,7 +772,6 @@ func (throttler *Throttler) generateTabletProbeFunction(ctx context.Context, clu
 		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if gRPCErr != nil {
-			resp.StatusCode = http.StatusInternalServerError
 			mySQLThrottleMetric.Err = fmt.Errorf("gRPC error accessing tablet %v. Err=%v", probe.Alias, gRPCErr)
 			return mySQLThrottleMetric
 		}
