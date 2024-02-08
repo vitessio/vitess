@@ -52,9 +52,11 @@ import (
 	"fmt"
 	"log/syslog"
 	"os"
+	"testing"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 // Syslogger is the interface that events should implement if they want to be
@@ -143,10 +145,28 @@ func listener(ev Syslogger) {
 }
 
 func init() {
+	// We only want to init syslog when the app is being initialized
+	// Some binaries import the syslog package indirectly leading to
+	// the syslog.New function being called and this might fail if
+	// running inside Docker without the syslog daemon enabled, leading
+	// logging the error which will make glog think there are not --log_dir
+	// flag set as we have not parsed the flags yet.
+	// https://github.com/vitessio/vitess/issues/15120
+	servenv.OnInit(func() {
+		initSyslog()
+	})
+
+	// We still do the init of syslog if we are testing this package.
+	if testing.Testing() {
+		initSyslog()
+	}
+}
+
+func initSyslog() {
 	var err error
 	writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_USER, os.Args[0])
 	if err != nil {
-		log.Errorf("can't connect to syslog")
+		log.Errorf("can't connect to syslog: %v", err.Error())
 		writer = nil
 	}
 
