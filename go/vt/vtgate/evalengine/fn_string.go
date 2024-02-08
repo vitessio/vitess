@@ -29,6 +29,11 @@ import (
 )
 
 type (
+	builtinInsert struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinChangeCase struct {
 		CallExpr
 		upcase  bool
@@ -96,6 +101,7 @@ type (
 	}
 )
 
+var _ IR = (*builtinInsert)(nil)
 var _ IR = (*builtinChangeCase)(nil)
 var _ IR = (*builtinCharLength)(nil)
 var _ IR = (*builtinLength)(nil)
@@ -107,6 +113,97 @@ var _ IR = (*builtinWeightString)(nil)
 var _ IR = (*builtinLeftRight)(nil)
 var _ IR = (*builtinPad)(nil)
 var _ IR = (*builtinTrim)(nil)
+
+func insert(str, newstr *evalBytes, pos, l int) []byte {
+	cs := colldata.Lookup(str.col.Collation).Charset()
+	strLength := charset.Length(cs, str.bytes)
+
+	if strLength < pos {
+		return nil
+	}
+
+	end := min(pos+l, strLength)
+	b := charset.Slice(cs, str.bytes, pos-1, end)
+	b = append(b, newstr.bytes...)
+
+	if end != strLength {
+		b = append(b, charset.Slice(cs, str.bytes, end, strLength)...)
+	}
+	return b
+}
+
+func (call *builtinInsert) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.args(env)
+	if err != nil {
+		return nil, err
+	}
+
+	str, ok := arg[0].(*evalBytes)
+	if !ok {
+		str, err = evalToVarchar(arg[0], call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	pos := evalToInt64(arg[1]).i
+	l := evalToInt64(arg[2]).i
+
+	newstr, ok := arg[3].(*evalBytes)
+	if !ok {
+		newstr, err = evalToVarchar(arg[3], call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return newEvalText(insert(str, newstr, int(pos), int(l)), str.col), nil
+}
+
+func (call *builtinInsert) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	pos, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	l, err := call.Arguments[2].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck3(str, pos, l)
+
+	newstr, err := call.Arguments[3].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip2 := c.compileNullCheck1(newstr)
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xc(4, sqltypes.VarChar, c.collation, 0, false)
+	}
+
+	_ = c.compileToInt64(pos, 3)
+	_ = c.compileToInt64(l, 2)
+
+	switch {
+	case newstr.isTextual():
+	default:
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, 0, false)
+	}
+
+	c.asm.Fn_INSERT()
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.VarChar, Col: str.Col, Flag: flagNullable}, nil
+}
 
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)

@@ -63,6 +63,7 @@ var Cases = []TestCase{
 	{Run: TupleComparisons},
 	{Run: Comparisons},
 	{Run: InStatement},
+	{Run: FnInsert},
 	{Run: FnLower},
 	{Run: FnUpper},
 	{Run: FnCharLength},
@@ -1310,6 +1311,24 @@ var JSONExtract_Schema = []*querypb.Field{
 		Type:       sqltypes.TypeJSON,
 		ColumnType: "JSON",
 	},
+}
+
+func FnInsert(yield Query) {
+	str := []string{
+		"'Quadratic'",
+		"'What'",
+	}
+
+	pos := []string{
+		"3",
+		"4",
+	}
+
+	for _, s := range str {
+		for _, p := range pos {
+			yield(fmt.Sprintf("INSERT(%s, %s, %s, %s)", s, p, p, s), nil)
+		}
+	}
 }
 
 func FnLower(yield Query) {

@@ -2322,6 +2322,19 @@ func (asm *assembler) Fn_BIT_LENGTH() {
 	}, "FN BIT_LENGTH VARCHAR(SP-1)")
 }
 
+func (asm *assembler) Fn_INSERT() {
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-4].(*evalBytes)
+		pos := env.vm.stack[env.vm.sp-3].(*evalInt64).i
+		l := env.vm.stack[env.vm.sp-2].(*evalInt64).i
+		newstr := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		env.vm.stack[env.vm.sp-4] = env.vm.arena.newEvalText(insert(str, newstr, int(pos), int(l)), str.col)
+		env.vm.sp -= 3
+		return 1
+	}, "FN INSERT VARCHAR(SP-4) INT64(SP-3) INT64(SP-2) VARCHAR(SP-1)")
+}
+
 func (asm *assembler) Fn_LUCASE(upcase bool) {
 	if upcase {
 		asm.emit(func(env *ExpressionEnv) int {

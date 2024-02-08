@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -265,6 +266,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &builtinPad{CallExpr: call, collate: ast.cfg.Collation, left: method == "lpad"}, nil
+	case "insert":
+		if len(args) != 4 {
+			return nil, argError(method)
+		}
+		return &builtinInsert{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -599,9 +605,21 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 	}
 }
 
+func GetFunctionName(i interface{}) {
+	r := reflect.ValueOf(&i).Elem()
+	rt := r.Type()
+	for i := 0; i < rt.NumField(); i++ {
+		field := rt.Field(i)
+		rv := reflect.ValueOf(&i)
+		value := reflect.Indirect(rv).FieldByName(field.Name)
+		fmt.Println(field.Name, value.String())
+	}
+}
+
 func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 	switch call := call.(type) {
 	case *sqlparser.FuncExpr:
+		fmt.Println("working")
 		return ast.translateFuncExpr(call)
 
 	case *sqlparser.ConvertExpr:
@@ -975,6 +993,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_REPLACE"},
 		}, nil
 	default:
+		GetFunctionName(call)
 		return nil, translateExprNotSupported(call)
 	}
 }
