@@ -36,7 +36,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		tables := []string{"t1", "uks.unsharded"}
+		tables := []string{"t1", "tbl", "unq_idx", "nonunq_idx", "uks.unsharded"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -135,6 +135,40 @@ func TestCast(t *testing.T) {
 	mcmp.AssertMatches("select cast('3.2' as float)", `[[FLOAT32(3.2)]]`)
 	mcmp.AssertMatches("select cast('3.2' as double)", `[[FLOAT64(3.2)]]`)
 	mcmp.AssertMatches("select cast('3.2' as unsigned)", `[[UINT64(3)]]`)
+}
+
+// TestVindexHints tests that vindex hints work as intended.
+func TestVindexHints(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,0,10), (2,10,10), (3,4,20), (4,30,20), (5,40,10)")
+	mcmp.AssertMatches("select id, unq_col, nonunq_col from tbl where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", "[[INT64(2) INT64(10) INT64(10)]]")
+
+	// Verify that without any vindex hints, the query plan uses a hash vindex.
+	res, err := mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "hash")
+
+	// Now we make the query explicitly use the unique lookup vindex.
+	// We make sure the query still works.
+	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	// Verify that we are using the unq_vdx, that we requested explicitly.
+	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "unq_vdx")
+
+	// Now we make the query explicitly refuse two of the three vindexes.
+	// We make sure the query still works.
+	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	// Verify that we are using the nonunq_vdx, which is the only one left to be used.
+	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "nonunq_vdx")
 }
 
 func TestOuterJoinWithPredicate(t *testing.T) {
