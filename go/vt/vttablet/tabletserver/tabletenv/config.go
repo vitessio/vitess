@@ -557,12 +557,12 @@ func (cfg *OlapConfig) UnmarshalJSON(data []byte) (err error) {
 
 // OltpConfig contains the config for oltp settings.
 type OltpConfig struct {
-	QueryTimeout             time.Duration  `json:"queryTimeoutSeconds,omitempty"`
-	TxTimeout                time.Duration  `json:"txTimeoutSeconds,omitempty"`
-  QueryTimeoutPushdown     bool           `json:"queryTimeoutPushdown,omitempty"`
-	QueryTimeoutPushdownWait time.Duration  `json:"queryTimeoutPushdownWait,omitempty"`
-	MaxRows                  int            `json:"maxRows,omitempty"`
-	WarnRows                 int            `json:"warnRows,omitempty"`
+	QueryTimeout             time.Duration `json:"queryTimeoutSeconds,omitempty"`
+	TxTimeout                time.Duration `json:"txTimeoutSeconds,omitempty"`
+	QueryTimeoutPushdown     bool          `json:"queryTimeoutPushdown,omitempty"`
+	QueryTimeoutPushdownWait time.Duration `json:"queryTimeoutPushdownWait,omitempty"`
+	MaxRows                  int           `json:"maxRows,omitempty"`
+	WarnRows                 int           `json:"warnRows,omitempty"`
 }
 
 func (cfg *OltpConfig) MarshalJSON() ([]byte, error) {

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -610,6 +611,37 @@ func TestGetMySQLSetVarValue(t *testing.T) {
 				comments: tt.comments,
 			}
 			assert.Equal(t, tt.want, c.GetMySQLSetVarValue(tt.valToFind))
+		})
+	}
+}
+
+func TestSetMySQLMaxExecutionTime(t *testing.T) {
+	tests := []struct {
+		name           string
+		comments       []string
+		maxExecTime    time.Duration
+		commentsWanted Comments
+	}{
+		{
+			name:           "No comments",
+			comments:       nil,
+			maxExecTime:    time.Second * 30,
+			commentsWanted: []string{"/*+ MAX_EXECUTION_TIME(30000) */"},
+		},
+		{
+			name:           "Add to comments",
+			comments:       []string{"/*+ SET_VAR(sort_buffer_size = 16M) */"},
+			maxExecTime:    time.Second * 30,
+			commentsWanted: []string{"/*+ SET_VAR(sort_buffer_size = 16M) MAX_EXECUTION_TIME(30000) */"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ParsedComments{
+				comments: tt.comments,
+			}
+			newComments := c.SetMySQLMaxExecutionTime(tt.maxExecTime)
+			require.EqualValues(t, tt.commentsWanted, newComments)
 		})
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -62,6 +63,9 @@ const (
 	// MaxPriorityValue specifies the maximum value allowed for the priority query directive. Valid priority values are
 	// between zero and MaxPriorityValue.
 	MaxPriorityValue = 100
+
+	// OptimizerHintMaxExecutionTime is the optimizer hint used in MySQL to set the max execution time for a query.
+	OptimizerHintMaxExecutionTime = "MAX_EXECUTION_TIME"
 
 	// OptimizerHintSetVar is the optimizer hint used in MySQL to set the value of a specific session variable for a query.
 	OptimizerHintSetVar = "SET_VAR"
@@ -318,11 +322,22 @@ func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 	return ""
 }
 
+// SetMySQLMaxExecutionTime sets a query level maximum execution time using a /*+ MAX_EXECUTION_TIME() */ MySQL optimizer hint.
+func (c *ParsedComments) SetMySQLMaxExecutionTime(maxExecutionTime time.Duration) (newComments Comments) {
+	return c.SetMySQLOptimizerHint(OptimizerHintMaxExecutionTime, strconv.FormatInt(maxExecutionTime.Milliseconds(), 10))
+}
+
 // SetMySQLSetVarValue updates or sets the value of the given variable as part of a /*+ SET_VAR() */ MySQL optimizer hint.
 func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComments Comments) {
+	value = fmt.Sprintf("%v=%v", key, value)
+	return c.SetMySQLOptimizerHint(OptimizerHintSetVar, value)
+}
+
+// SetMySQLOptimizerHint updates or sets the value of a MySQL optimizer hint.
+func (c *ParsedComments) SetMySQLOptimizerHint(hint, value string) (newComments Comments) {
 	if c == nil {
 		// If we have no parsed comments, then we create a new one with the required optimizer hint and return it.
-		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v=%v) */", OptimizerHintSetVar, key, value))
+		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v) */", hint, value))
 		return
 	}
 	seenFirstOhComment := false
@@ -354,6 +369,7 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 			ohContent := commentStr[ohContentStart:ohContentEnd]
 			// Check if the optimizer hint name matches `SET_VAR`.
 			if strings.EqualFold(strings.TrimSpace(ohName), OptimizerHintSetVar) {
+				key, setValue, _ := strings.Cut(value, "=")
 				// If it does, then we cut the string at the first occurrence of "=".
 				// That gives us the name of the variable, and the value that it is being set to.
 				// If the variable matches what we are looking for, we can change its value.
@@ -365,17 +381,17 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 				}
 				if strings.EqualFold(strings.TrimSpace(setVarName), key) {
 					keyPresent = true
-					finalComment += fmt.Sprintf(" %v(%v=%v)", ohName, strings.TrimSpace(setVarName), value)
+					finalComment += fmt.Sprintf(" %v(%v=%v)", ohName, strings.TrimSpace(setVarName), setValue)
 				}
 			} else {
 				// If it doesn't match, we add it to our final comment and move on.
 				finalComment += fmt.Sprintf(" %v(%v)", ohName, ohContent)
 			}
 		}
-		// If we haven't found any SET_VAR optimizer hint with the matching variable,
+		// If we haven't found any optimizer hint with the matching variable,
 		// then we add a new optimizer hint to introduce this variable.
 		if !keyPresent {
-			finalComment += fmt.Sprintf(" %v(%v=%v)", OptimizerHintSetVar, key, value)
+			finalComment += fmt.Sprintf(" %v(%v)", hint, value)
 		}
 
 		finalComment += " */"
@@ -384,7 +400,7 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 	// If we have not seen even a single comment that has the optimizer hint prefix,
 	// then we add a new optimizer hint to introduce this variable.
 	if !seenFirstOhComment {
-		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v=%v) */", OptimizerHintSetVar, key, value))
+		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v) */", hint, value))
 	}
 	return newComments
 }
@@ -643,22 +659,4 @@ func GetWorkloadNameFromStatement(statement Statement) string {
 	workloadName, _ := directives.GetString(DirectiveWorkloadName, "")
 
 	return workloadName
-}
-
-func AddMysqlOptimizerHintsComment(query string, hints map[string]any) string {
-	hintsSlice := make([]string, 0, len(hints))
-	for hint, val := range hints {
-		hintsSlice = append(hintsSlice, fmt.Sprintf("%s(%v)", hint, val))
-	}
-	if len(hintsSlice) > 0 {
-		// MySQL optimizer hints must come immediately after the 1st
-		// field/verb, which should always be "select" or "SELECT".
-		fields := strings.SplitN(query, " ", 2)
-		return strings.Join([]string{
-			fields[0],
-			"/*+ " + strings.Join(hintsSlice, " ") + " */",
-			fields[1],
-		}, " ")
-	}
-	return query
 }
