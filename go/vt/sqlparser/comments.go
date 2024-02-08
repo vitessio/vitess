@@ -324,20 +324,23 @@ func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 
 // SetMySQLMaxExecutionTime sets a query level maximum execution time using a /*+ MAX_EXECUTION_TIME() */ MySQL optimizer hint.
 func (c *ParsedComments) SetMySQLMaxExecutionTime(maxExecutionTime time.Duration) (newComments Comments) {
-	return c.SetMySQLOptimizerHint(OptimizerHintMaxExecutionTime, strconv.FormatInt(maxExecutionTime.Milliseconds(), 10))
+	return c.SetMySQLOptimizerHint(OptimizerHintMaxExecutionTime, "", strconv.FormatInt(maxExecutionTime.Milliseconds(), 10))
 }
 
 // SetMySQLSetVarValue updates or sets the value of the given variable as part of a /*+ SET_VAR() */ MySQL optimizer hint.
 func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComments Comments) {
-	value = fmt.Sprintf("%v=%v", key, value)
-	return c.SetMySQLOptimizerHint(OptimizerHintSetVar, value)
+	return c.SetMySQLOptimizerHint(OptimizerHintSetVar, key, value)
 }
 
 // SetMySQLOptimizerHint updates or sets the value of a MySQL optimizer hint.
-func (c *ParsedComments) SetMySQLOptimizerHint(hint, value string) (newComments Comments) {
+func (c *ParsedComments) SetMySQLOptimizerHint(hint, key, value string) (newComments Comments) {
+	keyAndValue := value
+	if key != "" {
+		keyAndValue = fmt.Sprintf("%v=%v", key, value)
+	}
 	if c == nil {
 		// If we have no parsed comments, then we create a new one with the required optimizer hint and return it.
-		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v) */", hint, value))
+		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v) */", hint, keyAndValue))
 		return
 	}
 	seenFirstOhComment := false
@@ -369,7 +372,6 @@ func (c *ParsedComments) SetMySQLOptimizerHint(hint, value string) (newComments 
 			ohContent := commentStr[ohContentStart:ohContentEnd]
 			// Check if the optimizer hint name matches `SET_VAR`.
 			if strings.EqualFold(strings.TrimSpace(ohName), OptimizerHintSetVar) {
-				key, setValue, _ := strings.Cut(value, "=")
 				// If it does, then we cut the string at the first occurrence of "=".
 				// That gives us the name of the variable, and the value that it is being set to.
 				// If the variable matches what we are looking for, we can change its value.
@@ -381,7 +383,7 @@ func (c *ParsedComments) SetMySQLOptimizerHint(hint, value string) (newComments 
 				}
 				if strings.EqualFold(strings.TrimSpace(setVarName), key) {
 					keyPresent = true
-					finalComment += fmt.Sprintf(" %v(%v=%v)", ohName, strings.TrimSpace(setVarName), setValue)
+					finalComment += fmt.Sprintf(" %v(%v=%v)", ohName, strings.TrimSpace(setVarName), value)
 				}
 			} else {
 				// If it doesn't match, we add it to our final comment and move on.
@@ -391,7 +393,7 @@ func (c *ParsedComments) SetMySQLOptimizerHint(hint, value string) (newComments 
 		// If we haven't found any optimizer hint with the matching variable,
 		// then we add a new optimizer hint to introduce this variable.
 		if !keyPresent {
-			finalComment += fmt.Sprintf(" %v(%v)", hint, value)
+			finalComment += fmt.Sprintf(" %v(%v)", hint, keyAndValue)
 		}
 
 		finalComment += " */"
@@ -400,7 +402,7 @@ func (c *ParsedComments) SetMySQLOptimizerHint(hint, value string) (newComments 
 	// If we have not seen even a single comment that has the optimizer hint prefix,
 	// then we add a new optimizer hint to introduce this variable.
 	if !seenFirstOhComment {
-		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v) */", hint, value))
+		newComments = append(newComments, fmt.Sprintf("/*+ %v(%v) */", hint, keyAndValue))
 	}
 	return newComments
 }
