@@ -175,9 +175,9 @@ func TestUpdateWithLimit(t *testing.T) {
 
 	// update with limit
 	qr = mcmp.Exec(`update s_tbl set num = 32 where num > 17 limit 1`)
-	require.EqualValues(t, 4, qr.RowsAffected)
+	require.EqualValues(t, 1, qr.RowsAffected)
 
-	qr = mcmp.Exec(`update order_tbl set oid = 24 limit 5`)
+	qr = mcmp.Exec(`update order_tbl set cust_no = cust_no + 10  limit 5`)
 	require.EqualValues(t, 4, qr.RowsAffected)
 
 	// check rows
@@ -186,8 +186,8 @@ func TestUpdateWithLimit(t *testing.T) {
 		`[[INT64(1) INT64(12)] [INT64(2) INT64(12)] [INT64(3) INT64(10)] [INT64(4) INT64(32)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`,
 		`[[INT64(1) INT64(12)] [INT64(2) INT64(12)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(32)]]`)
 	mcmp.AssertMatchesAnyNoCompare(`select region_id, oid, cust_no from order_tbl order by oid`,
-		`[[INT64(1) INT64(24) INT64(12)] [INT64(1) INT64(24) INT64(2)] [INT64(2) INT64(24) INT64(5)] [INT64(2) INT64(24) INT64(55)]]`,
-		`[[INT64(1) INT64(24) INT64(4)] [INT64(1) INT64(24) INT64(12)] [INT64(2) INT64(24) INT64(5)] [INT64(2) INT64(24) INT64(55)]]`)
+		`[[INT64(1) INT64(1) INT64(22)] [INT64(1) INT64(2) INT64(12)] [INT64(2) INT64(3) INT64(15)] [INT64(2) INT64(4) INT64(65)]]`,
+		`[[INT64(1) INT64(1) INT64(14)] [INT64(1) INT64(2) INT64(22)] [INT64(2) INT64(3) INT64(15)] [INT64(2) INT64(4) INT64(65)]]`)
 
 	// trying with zero limit.
 	qr = mcmp.Exec(`update s_tbl set num = 44 limit 0`)
@@ -197,10 +197,10 @@ func TestUpdateWithLimit(t *testing.T) {
 	require.EqualValues(t, 0, qr.RowsAffected)
 
 	// trying with limit with no-matching row.
-	qr = mcmp.Exec(`update s_tbl set num = 44 where id = 100 limit 2`)
+	qr = mcmp.Exec(`update s_tbl set num = 44 where id > 100 limit 2`)
 	require.EqualValues(t, 0, qr.RowsAffected)
 
-	qr = mcmp.Exec(`update order_tbl set oid = 44 where region_id = 100 limit 2`)
+	qr = mcmp.Exec(`update order_tbl set oid = 44 where region_id > 100 limit 2`)
 	require.EqualValues(t, 0, qr.RowsAffected)
 
 }
