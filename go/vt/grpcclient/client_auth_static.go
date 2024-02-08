@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
@@ -128,8 +129,10 @@ func loadStaticAuthCredsFromFile(path string) (*StaticAuthClientCreds, error) {
 }
 
 func init() {
-	clientCredsSigChan = make(chan os.Signal, 1)
-	signal.Notify(clientCredsSigChan, syscall.SIGHUP)
-	_, _ = getStaticAuthCreds() // preload static auth credentials
+	servenv.OnInit(func() {
+		clientCredsSigChan = make(chan os.Signal, 1)
+		signal.Notify(clientCredsSigChan, syscall.SIGHUP)
+		_, _ = getStaticAuthCreds() // preload static auth credentials
+	})
 	RegisterGRPCDialOptions(AppendStaticAuth)
 }
