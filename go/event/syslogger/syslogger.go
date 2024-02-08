@@ -57,6 +57,7 @@ import (
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 // Syslogger is the interface that events should implement if they want to be
@@ -145,12 +146,14 @@ func listener(ev Syslogger) {
 }
 
 func init() {
-	var err error
-	writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_USER, os.Args[0])
-	if err != nil {
-		log.Errorf("can't connect to syslog")
-		writer = nil
-	}
+	servenv.OnInit(func() {
+		var err error
+		writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_USER, os.Args[0])
+		if err != nil {
+			log.Errorf("can't connect to syslog: %v", err.Error())
+			writer = nil
+		}
 
-	event.AddListener(listener)
+		event.AddListener(listener)
+	})
 }
