@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -147,7 +148,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	}
 
 	// Convert MySQL type to Vitess type.
-	field.Type, err = sqltypes.MySQLToType(int64(t), int64(flags))
+	field.Type, err = sqltypes.MySQLToType(t, int64(flags))
 	if err != nil {
 		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "MySQLToType(%v,%v) failed for column %v: %v", t, flags, index, err)
 	}
@@ -243,7 +244,7 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	}
 
 	// Convert MySQL type to Vitess type.
-	field.Type, err = sqltypes.MySQLToType(int64(t), int64(flags))
+	field.Type, err = sqltypes.MySQLToType(t, int64(flags))
 	if err != nil {
 		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "MySQLToType(%v,%v) failed for column %v: %v", t, flags, index, err)
 	}
@@ -313,7 +314,7 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
-				sqlerr.Query = query
+				sqlerr.Query = sqlparser.TruncateQuery(query, c.truncateErrLen)
 			}
 		}
 	}()
@@ -337,7 +338,7 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
-				sqlerr.Query = query
+				sqlerr.Query = sqlparser.TruncateQuery(query, c.truncateErrLen)
 			}
 		}
 	}()
@@ -353,8 +354,9 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 
 // ReadQueryResult gets the result from the last written query.
 func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, bool, uint16, error) {
+	var packetOk PacketOK
 	// Get the result.
-	colNumber, packetOk, err := c.readComQueryResponse()
+	colNumber, err := c.readComQueryResponse(&packetOk)
 	if err != nil {
 		return nil, false, 0, err
 	}
@@ -440,15 +442,15 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 				more = (statusFlags & ServerMoreResultsExists) != 0
 				result.StatusFlags = statusFlags
 			} else {
-				packetOk, err := c.parseOKPacket(data)
-				if err != nil {
+				var packetEof PacketOK
+				if err := c.parseOKPacket(&packetEof, data); err != nil {
 					return nil, false, 0, err
 				}
-				warnings = packetOk.warnings
-				more = (packetOk.statusFlags & ServerMoreResultsExists) != 0
-				result.SessionStateChanges = packetOk.sessionStateData
-				result.StatusFlags = packetOk.statusFlags
-				result.Info = packetOk.info
+				warnings = packetEof.warnings
+				more = (packetEof.statusFlags & ServerMoreResultsExists) != 0
+				result.SessionStateChanges = packetEof.sessionStateData
+				result.StatusFlags = packetEof.statusFlags
+				result.Info = packetEof.info
 			}
 			return result, more, warnings, nil
 
@@ -496,35 +498,34 @@ func (c *Conn) drainResults() error {
 	}
 }
 
-func (c *Conn) readComQueryResponse() (int, *PacketOK, error) {
+func (c *Conn) readComQueryResponse(packetOk *PacketOK) (int, error) {
 	data, err := c.readEphemeralPacket()
 	if err != nil {
-		return 0, nil, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+		return 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	defer c.recycleReadPacket()
 	if len(data) == 0 {
-		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty COM_QUERY response packet")
+		return 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty COM_QUERY response packet")
 	}
 
 	switch data[0] {
 	case OKPacket:
-		packetOk, err := c.parseOKPacket(data)
-		return 0, packetOk, err
+		return 0, c.parseOKPacket(packetOk, data)
 	case ErrPacket:
 		// Error
-		return 0, nil, ParseErrorPacket(data)
+		return 0, ParseErrorPacket(data)
 	case 0xfb:
 		// Local infile
-		return 0, nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
+		return 0, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 	}
 	n, pos, ok := readLenEncInt(data, 0)
 	if !ok {
-		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")
+		return 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")
 	}
 	if pos != len(data) {
-		return 0, nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extra data in COM_QUERY response")
+		return 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extra data in COM_QUERY response")
 	}
-	return int(n), &PacketOK{}, nil
+	return int(n), nil
 }
 
 //
@@ -596,7 +597,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 			}
 
 			// convert MySQL type to internal type.
-			valType, err := sqltypes.MySQLToType(int64(mysqlType), int64(flags))
+			valType, err := sqltypes.MySQLToType(mysqlType, int64(flags))
 			if err != nil {
 				return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "MySQLToType(%v,%v) failed: %v", mysqlType, flags, err)
 			}
@@ -930,7 +931,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 	pos = writeByte(data, pos, 0x0c)
 	pos = writeUint16(data, pos, uint16(field.Charset))
 	pos = writeUint32(data, pos, field.ColumnLength)
-	pos = writeByte(data, pos, byte(typ))
+	pos = writeByte(data, pos, typ)
 	pos = writeUint16(data, pos, uint16(flags))
 	pos = writeByte(data, pos, byte(field.Decimals))
 	pos = writeUint16(data, pos, uint16(0x0000))

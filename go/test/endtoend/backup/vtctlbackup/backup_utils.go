@@ -74,8 +74,6 @@ var (
 	dbCredentialFile string
 	shardName        = "0"
 	commonTabletArg  = []string{
-		"--vreplication_healthcheck_topology_refresh", "1s",
-		"--vreplication_healthcheck_retry_delay", "1s",
 		"--vreplication_retry_delay", "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
@@ -1257,13 +1255,10 @@ func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
 	}
 }
 
-func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos string, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	numBackups := len(waitForNumBackups(t, -1))
-	incrementalFromPosArg := "auto"
-	if !incrementalFromPos.IsZero() {
-		incrementalFromPosArg = replication.EncodePosition(incrementalFromPos)
-	}
-	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--incremental-from-pos", incrementalFromPosArg, replica.Alias)
+
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--incremental-from-pos", incrementalFromPos, replica.Alias)
 	if expectError != "" {
 		require.Errorf(t, err, "expected: %v", expectError)
 		require.Contains(t, output, expectError)
@@ -1271,18 +1266,24 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 
+	if expectEmpty {
+		require.Contains(t, output, mysqlctl.EmptyBackupMessage)
+		return nil, ""
+	}
+
 	backups := waitForNumBackups(t, numBackups+1)
 	require.NotEmptyf(t, backups, "output: %v", output)
 
 	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 	backupName = backups[len(backups)-1]
+
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backupName
 	return readManifestFile(t, backupLocation), backupName
 }
 
-func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos replication.Position, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
+func TestReplicaIncrementalBackup(t *testing.T, replicaIndex int, incrementalFromPos string, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	replica := getReplica(t, replicaIndex)
-	return testReplicaIncrementalBackup(t, replica, incrementalFromPos, expectError)
+	return testReplicaIncrementalBackup(t, replica, incrementalFromPos, expectEmpty, expectError)
 }
 
 func TestReplicaFullRestore(t *testing.T, replicaIndex int, expectError string) {

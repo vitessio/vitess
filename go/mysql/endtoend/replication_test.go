@@ -908,6 +908,10 @@ func TestRowReplicationTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dConn.Close()
+	// We have tests for zero dates, so we need to allow that for this session.
+	if _, err := dConn.ExecuteFetch("SET @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 0, false); err != nil {
+		t.Fatal(err)
+	}
 
 	// Set the connection time zone for execution of the
 	// statements to PST. That way we're sure to test the

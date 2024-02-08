@@ -63,8 +63,8 @@ func TestMain(m *testing.M) {
 
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--queryserver-config-max-result-size", "1000000",
-			"--queryserver-config-query-timeout", "200",
-			"--queryserver-config-query-pool-timeout", "200")
+			"--queryserver-config-query-timeout", "200s",
+			"--queryserver-config-query-pool-timeout", "200s")
 		// Start Unsharded keyspace
 		ukeyspace := &cluster.Keyspace{
 			Name:      uks,

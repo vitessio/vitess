@@ -26,7 +26,7 @@ import (
 // FuzzOnlineDDLFromCommentedStatement implements a fuzzer
 // that targets schema.OnlineDDLFromCommentedStatement
 func FuzzOnlineDDLFromCommentedStatement(data []byte) int {
-	stmt, err := sqlparser.Parse(string(data))
+	stmt, err := sqlparser.NewTestParser().Parse(string(data))
 	if err != nil {
 		return 0
 	}
@@ -75,7 +75,7 @@ func FuzzNewOnlineDDLs(data []byte) int {
 		return 0
 	}
 
-	onlineDDLs, err := schema.NewOnlineDDLs(keyspace, sql, ddlStmt, ddlStrategySetting, requestContext)
+	onlineDDLs, err := schema.NewOnlineDDLs(sql, ddlStmt, ddlStrategySetting, requestContext, keyspace)
 	if err != nil {
 		return 0
 	}

@@ -28,22 +28,20 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -329,7 +327,13 @@ type ColumnInfo struct {
 }
 
 func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}, ExcludeTables: []string{"/" + schema.GCTableNameExpression + "/"}}
+	req := &tabletmanagerdatapb.GetSchemaRequest{
+		Tables: []string{"/.*/"},
+		ExcludeTables: []string{
+			"/" + schema.GCTableNameExpression + "/",
+			"/" + schema.NewGCTableNameExpression + "/",
+		},
+	}
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
 	if err != nil {
 		return nil, err
@@ -352,7 +356,11 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 			pks = td.PrimaryKeyColumns
 		} else {
 			// Use a PK equivalent if one exists.
-			if pks, _, err = vr.mysqld.GetPrimaryKeyEquivalentColumns(ctx, vr.dbClient.DBName(), td.Name); err != nil {
+			executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+				// This sets wantfields to true.
+				return vr.dbClient.ExecuteFetch(query, maxrows)
+			}
+			if pks, _, err = mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, vr.dbClient.DBName(), td.Name); err != nil {
 				return nil, err
 			}
 			// Fall back to using every column in the table if there's no PK or PKE.
@@ -561,7 +569,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 //   - "vreplication" for most flows
 //   - "vreplication:online-ddl" for online ddl flows.
 //     Note that with such name, it's possible to throttle
-//     the worflow by either /throttler/throttle-app?app=vreplication and/or /throttler/throttle-app?app=online-ddl
+//     the workflow by either /throttler/throttle-app?app=vreplication and/or /throttler/throttle-app?app=online-ddl
 //     This is useful when we want to throttle all migrations. We throttle "online-ddl" and that applies to both vreplication
 //     migrations as well as gh-ost migrations.
 func (vr *vreplicator) throttlerAppName() string {
@@ -728,7 +736,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	}
 	tableSchema := schema.TableDefinitions[0].Schema
 	var secondaryKeys []*sqlparser.IndexDefinition
-	parsedDDL, err := sqlparser.ParseStrictDDL(tableSchema)
+	parsedDDL, err := vr.vre.env.Parser().ParseStrictDDL(tableSchema)
 	if err != nil {
 		return secondaryKeys, err
 	}
@@ -739,8 +747,27 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
 	}
 
-	for _, index := range createTable.GetTableSpec().Indexes {
+	tableSpec := createTable.GetTableSpec()
+	fkIndexCols := make(map[string]bool)
+	for _, constraint := range tableSpec.Constraints {
+		if fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
+			fkCols := make([]string, len(fkDef.Source))
+			for i, fkCol := range fkDef.Source {
+				fkCols[i] = fkCol.Lowered()
+			}
+			fkIndexCols[strings.Join(fkCols, ",")] = true
+		}
+	}
+	for _, index := range tableSpec.Indexes {
 		if index.Info.Type != sqlparser.IndexTypePrimary {
+			cols := make([]string, len(index.Columns))
+			for i, col := range index.Columns {
+				cols[i] = col.Column.Lowered()
+			}
+			if fkIndexCols[strings.Join(cols, ",")] {
+				// This index is needed for a FK constraint so we cannot drop it.
+				continue
+			}
 			secondaryKeys = append(secondaryKeys, index)
 		}
 	}
@@ -956,7 +983,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 				// the table schema and if so move forward and delete the
 				// post_copy_action record.
 				if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERDupKeyName {
-					stmt, err := sqlparser.ParseStrictDDL(action.Task)
+					stmt, err := vr.vre.env.Parser().ParseStrictDDL(action.Task)
 					if err != nil {
 						return failedAlterErr
 					}
@@ -1044,7 +1071,7 @@ func (vr *vreplicator) setExistingRowsCopied() {
 	if vr.stats.CopyRowCount.Get() == 0 {
 		rowsCopiedExisting, err := vr.readExistingRowsCopied(vr.id)
 		if err != nil {
-			log.Warningf("Failed to read existing rows copied value for %s worfklow: %v", vr.WorkflowName, err)
+			log.Warningf("Failed to read existing rows copied value for %s workflow: %v", vr.WorkflowName, err)
 		} else if rowsCopiedExisting != 0 {
 			log.Infof("Resuming the %s vreplication workflow started on another tablet, setting rows copied counter to %v", vr.WorkflowName, rowsCopiedExisting)
 			vr.stats.CopyRowCount.Set(rowsCopiedExisting)

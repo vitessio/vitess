@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -31,12 +32,11 @@ import (
 // If it cannot find a unique vindex match, it returns an error.
 func getVindexInformation(id semantics.TableSet, table *vindexes.Table) (
 	*vindexes.ColumnVindex,
-	[]*VindexPlusPredicates,
-	error) {
+	[]*VindexPlusPredicates) {
 
 	// Check that we have a primary vindex which is valid
 	if len(table.ColumnVindexes) == 0 || !table.ColumnVindexes[0].IsUnique() {
-		return nil, nil, vterrors.VT09001(table.Name)
+		panic(vterrors.VT09001(table.Name))
 	}
 	primaryVindex := table.ColumnVindexes[0]
 
@@ -53,10 +53,16 @@ func getVindexInformation(id semantics.TableSet, table *vindexes.Table) (
 			TableID:   id,
 		})
 	}
-	return primaryVindex, vindexesAndPredicates, nil
+	return primaryVindex, vindexesAndPredicates
 }
 
-func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI, assignments []SetExpr) (vv map[string]*engine.VindexValues, ownedVindexQuery string, subQueriesArgOnChangedVindex []string, err error) {
+func buildChangedVindexesValues(
+	ctx *plancontext.PlanningContext,
+	update *sqlparser.Update,
+	table *vindexes.Table,
+	ksidCols []sqlparser.IdentifierCI,
+	assignments []SetExpr,
+) (vv map[string]*engine.VindexValues, ownedVindexQuery string, subQueriesArgOnChangedVindex []string) {
 	changedVindexes := make(map[string]*engine.VindexValues)
 	buf, offset := initialQuery(ksidCols, table)
 	for i, vindex := range table.ColumnVindexes {
@@ -70,12 +76,16 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 					continue
 				}
 				if found {
-					return nil, "", nil, vterrors.VT03015(assignment.Name.Name)
+					panic(vterrors.VT03015(assignment.Name.Name))
 				}
 				found = true
-				pv, err := evalengine.Translate(assignment.Expr.EvalExpr, nil)
+				pv, err := evalengine.Translate(assignment.Expr.EvalExpr, &evalengine.Config{
+					ResolveType: ctx.SemTable.TypeForExpr,
+					Collation:   ctx.SemTable.Collation,
+					Environment: ctx.VSchema.Environment(),
+				})
 				if err != nil {
-					return nil, "", nil, invalidUpdateExpr(assignment.Name.Name.String(), assignment.Expr.EvalExpr)
+					panic(invalidUpdateExpr(assignment.Name.Name.String(), assignment.Expr.EvalExpr))
 				}
 
 				if assignment.Expr.Info != nil {
@@ -102,13 +112,13 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 		}
 
 		if update.Limit != nil && len(update.OrderBy) == 0 {
-			return nil, "", nil, vterrors.VT12001(fmt.Sprintf("you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: %v", vindex.Name))
+			panic(vterrors.VT12001(fmt.Sprintf("you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: %v", vindex.Name)))
 		}
 		if i == 0 {
-			return nil, "", nil, vterrors.VT12001(fmt.Sprintf("you cannot UPDATE primary vindex columns; invalid update on vindex: %v", vindex.Name))
+			panic(vterrors.VT12001(fmt.Sprintf("you cannot UPDATE primary vindex columns; invalid update on vindex: %v", vindex.Name)))
 		}
 		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
-			return nil, "", nil, vterrors.VT12001(fmt.Sprintf("you can only UPDATE lookup vindexes; invalid update on vindex: %v", vindex.Name))
+			panic(vterrors.VT12001(fmt.Sprintf("you can only UPDATE lookup vindexes; invalid update on vindex: %v", vindex.Name)))
 		}
 		changedVindexes[vindex.Name] = &engine.VindexValues{
 			EvalExprMap: vindexValueMap,
@@ -117,16 +127,16 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 		offset++
 	}
 	if len(changedVindexes) == 0 {
-		return nil, "", nil, nil
+		return nil, "", nil
 	}
 	// generate rest of the owned vindex query.
 	aTblExpr, ok := update.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, "", nil, vterrors.VT12001("UPDATE on complex table expression")
+		panic(vterrors.VT12001("UPDATE on complex table expression"))
 	}
 	tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: table.Name}, As: aTblExpr.As}
 	buf.Myprintf(" from %v%v%v%v for update", tblExpr, update.Where, update.OrderBy, update.Limit)
-	return changedVindexes, buf.String(), subQueriesArgOnChangedVindex, nil
+	return changedVindexes, buf.String(), subQueriesArgOnChangedVindex
 }
 
 func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {

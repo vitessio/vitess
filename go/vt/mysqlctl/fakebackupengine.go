@@ -41,7 +41,7 @@ type FakeBackupEngineExecuteBackupCall struct {
 }
 
 type FakeBackupEngineExecuteBackupReturn struct {
-	Ok  bool
+	Res BackupResult
 	Err error
 }
 
@@ -59,14 +59,14 @@ func (be *FakeBackupEngine) ExecuteBackup(
 	ctx context.Context,
 	params BackupParams,
 	bh backupstorage.BackupHandle,
-) (bool, error) {
+) (BackupResult, error) {
 	be.ExecuteBackupCalls = append(be.ExecuteBackupCalls, FakeBackupEngineExecuteBackupCall{params, bh})
 
 	if be.ExecuteBackupDuration > 0 {
 		time.Sleep(be.ExecuteBackupDuration)
 	}
 
-	return be.ExecuteBackupReturn.Ok, be.ExecuteBackupReturn.Err
+	return be.ExecuteBackupReturn.Res, be.ExecuteBackupReturn.Err
 }
 
 func (be *FakeBackupEngine) ExecuteRestore(

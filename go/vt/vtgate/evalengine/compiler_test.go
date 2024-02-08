@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine_test
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
 )
@@ -97,16 +99,16 @@ func TestCompilerReference(t *testing.T) {
 	defer func() { evalengine.SystemTime = time.Now }()
 
 	track := NewTracker()
-
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			var supported, total int
-			env := evalengine.EmptyExpressionEnv()
+			env := evalengine.EmptyExpressionEnv(venv)
 
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
 
-				stmt, err := sqlparser.ParseExpr(query)
+				stmt, err := venv.Parser().ParseExpr(query)
 				if err != nil {
 					// no need to test un-parseable queries
 					return
@@ -117,6 +119,7 @@ func TestCompilerReference(t *testing.T) {
 					ResolveColumn:     fields.Column,
 					ResolveType:       fields.Type,
 					Collation:         collations.CollationUtf8mb4ID,
+					Environment:       venv,
 					NoConstantFolding: true,
 				}
 
@@ -164,6 +167,7 @@ func TestCompilerSingle(t *testing.T) {
 		expression string
 		values     []sqltypes.Value
 		result     string
+		collation  collations.ID
 	}{
 		{
 			expression: "1 + column0",
@@ -489,13 +493,135 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `'2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month`,
 			result:     `CHAR("2020-12-01")`,
 		},
+		{
+			expression: `case column0 when 1 then column1 else column2 end`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(42), sqltypes.NewVarChar("sole"), sqltypes.NewInt64(0)},
+			result:     `VARCHAR("0")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(0.0) + 1`,
+			result:     `DECIMAL(1.0)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(0.000) + 1`,
+			result:     `DECIMAL(1.000)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(-1.5) + 1`,
+			result:     `DECIMAL(1.0)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(-1.500) + 1`,
+			result:     `DECIMAL(1.000)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(0x0) + 1`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP(timestamp '2000-01-01 10:34:58.123456') + 1`,
+			result:     `DECIMAL(946719299.123456)`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP('200001011034581111111') + 1`,
+			result:     `INT64(946719299)`,
+		},
+		{
+			expression: `CONV(-0x1, 13e0, 13e0)`,
+			result:     `VARCHAR("219505A9511A867B72")`,
+		},
+		{
+			expression: `UNIX_TIMESTAMP('20000101103458.111111') + 1`,
+			result:     `DECIMAL(946719299.111111)`,
+		},
+		{
+			expression: `cast(null * 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null + 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null - 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null / 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `cast(null % 1 as CHAR)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `1 AND NULL * 1`,
+			result:     `NULL`,
+		},
+		{
+			expression: `case 0 when NULL then 1 else 0 end`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `case when null is null then 23 else null end`,
+			result:     `INT64(23)`,
+		},
+		{
+			expression: `CAST(0 AS DATE)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `DAYOFMONTH(0)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `week('2023-12-31', 4)`,
+			result:     `INT64(53)`,
+		},
+		{
+			expression: `week('2023-12-31', 2)`,
+			result:     `INT64(53)`,
+		},
+		{
+			expression: `week('2024-12-31', 1)`,
+			result:     `INT64(53)`,
+		},
+		{
+			expression: `week('2024-12-31', 5)`,
+			result:     `INT64(53)`,
+		},
+		{
+			expression: `FROM_UNIXTIME(time '10:04:58.5')`,
+			result:     `DATETIME("1970-01-02 04:54:18.5")`,
+		},
+		{
+			expression: `0 = time '10:04:58.1'`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `CAST(time '32:34:58.5' AS TIME)`,
+			result:     `TIME("32:34:59")`,
+		},
+		{
+			expression: `now(6) + interval 1 day`,
+			result:     `DATETIME("2023-10-25 12:00:00.123456")`,
+		},
+		{
+			expression: `now() + interval 654321 microsecond`,
+			result:     `DATETIME("2023-10-24 12:00:00.654321")`,
+		},
+		{
+			expression: `time('1111:66:56')`,
+			result:     `NULL`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
-
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			expr, err := sqlparser.ParseExpr(tc.expression)
+			expr, err := venv.Parser().ParseExpr(tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -505,6 +631,7 @@ func TestCompilerSingle(t *testing.T) {
 				ResolveColumn:     fields.Column,
 				ResolveType:       fields.Type,
 				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
 				NoConstantFolding: true,
 			}
 
@@ -513,8 +640,8 @@ func TestCompilerSingle(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			env := evalengine.EmptyExpressionEnv()
-			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 0, tz))
+			env := evalengine.NewExpressionEnv(context.Background(), nil, evalengine.NewEmptyVCursor(venv, tz))
+			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 123456000, tz))
 			env.Row = tc.values
 
 			expected, err := env.EvaluateAST(converted)
@@ -523,6 +650,9 @@ func TestCompilerSingle(t *testing.T) {
 			}
 			if expected.String() != tc.result {
 				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
+			}
+			if tc.collation != collations.Unknown && tc.collation != expected.Collation() {
+				t.Fatalf("bad collation evaluation from eval engine: got %d, want %d", expected.Collation(), tc.collation)
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
@@ -534,6 +664,9 @@ func TestCompilerSingle(t *testing.T) {
 
 				if res.String() != tc.result {
 					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+				}
+				if tc.collation != collations.Unknown && tc.collation != res.Collation() {
+					t.Fatalf("bad collation evaluation from compiler: got %d, want %d", res.Collation(), tc.collation)
 				}
 			}
 		})
@@ -565,9 +698,10 @@ func TestBindVarLiteral(t *testing.T) {
 		},
 	}
 
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			expr, err := sqlparser.ParseExpr(tc.expression)
+			expr, err := venv.Parser().ParseExpr(tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -579,6 +713,7 @@ func TestBindVarLiteral(t *testing.T) {
 				ResolveColumn:     fields.Column,
 				ResolveType:       fields.Type,
 				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
 				NoConstantFolding: true,
 			}
 
@@ -589,7 +724,7 @@ func TestBindVarLiteral(t *testing.T) {
 
 			result := `VARCHAR("ÿ")`
 
-			env := evalengine.EmptyExpressionEnv()
+			env := evalengine.EmptyExpressionEnv(venv)
 			env.BindVars = map[string]*querypb.BindVariable{
 				"vtg1": tc.bindVar,
 			}
@@ -629,15 +764,17 @@ func TestCompilerNonConstant(t *testing.T) {
 		},
 	}
 
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			expr, err := sqlparser.ParseExpr(tc.expression)
+			expr, err := venv.Parser().ParseExpr(tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			cfg := &evalengine.Config{
 				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
 				NoConstantFolding: true,
 			}
 
@@ -646,7 +783,7 @@ func TestCompilerNonConstant(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			env := evalengine.EmptyExpressionEnv()
+			env := evalengine.EmptyExpressionEnv(venv)
 			var prev string
 			for i := 0; i < 1000; i++ {
 				expected, err := env.EvaluateAST(converted)

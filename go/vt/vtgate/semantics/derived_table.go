@@ -77,7 +77,7 @@ func handleAliasedExpr(vTbl *DerivedTable, expr *sqlparser.AliasedExpr, cols sql
 		return
 	}
 
-	if !expr.As.IsEmpty() {
+	if expr.As.NotEmpty() {
 		vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
 		return
 	}
@@ -106,6 +106,10 @@ func (dt *DerivedTable) dependencies(colName string, org originable) (dependenci
 	for i, name := range dt.columnNames {
 		if !strings.EqualFold(name, colName) {
 			continue
+		}
+		if len(dt.recursive) == 0 {
+			// we have unexpanded columns and can't figure this out
+			return nil, ShardedError{Inner: vterrors.VT09015()}
 		}
 		recursiveDeps, qt := dt.recursive[i], dt.types[i]
 
@@ -137,7 +141,7 @@ func (dt *DerivedTable) Name() (sqlparser.TableName, error) {
 	return dt.ASTNode.TableName()
 }
 
-func (dt *DerivedTable) getAliasedTableExpr() *sqlparser.AliasedTableExpr {
+func (dt *DerivedTable) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return dt.ASTNode
 }
 
@@ -161,7 +165,7 @@ func (dt *DerivedTable) getColumns() []ColumnInfo {
 }
 
 func (dt *DerivedTable) hasStar() bool {
-	return dt.tables.NonEmpty()
+	return dt.tables.NotEmpty()
 }
 
 // GetTables implements the TableInfo interface

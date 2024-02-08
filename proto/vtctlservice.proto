@@ -54,7 +54,7 @@ service Vtctld {
   rpc Backup(vtctldata.BackupRequest) returns (stream vtctldata.BackupResponse) {};
   // BackupShard chooses a tablet in the shard and uses it to create a backup.
   rpc BackupShard(vtctldata.BackupShardRequest) returns (stream vtctldata.BackupResponse) {};
-  // CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+  // CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
   rpc CancelSchemaMigration(vtctldata.CancelSchemaMigrationRequest) returns (vtctldata.CancelSchemaMigrationResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
@@ -103,6 +103,8 @@ service Vtctld {
   // FindAllShardsInKeyspace returns a map of shard names to shard references
   // for a given keyspace.
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
+  // ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
+  rpc ForceCutOverSchemaMigration(vtctldata.ForceCutOverSchemaMigrationRequest) returns (vtctldata.ForceCutOverSchemaMigrationResponse) {};
   // GetBackups returns all the backups for a shard.
   rpc GetBackups(vtctldata.GetBackupsRequest) returns (vtctldata.GetBackupsResponse) {};
   // GetCellInfo returns the information for a cell.

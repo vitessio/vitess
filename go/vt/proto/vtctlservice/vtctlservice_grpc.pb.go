@@ -159,7 +159,7 @@ type VtctldClient interface {
 	Backup(ctx context.Context, in *vtctldata.BackupRequest, opts ...grpc.CallOption) (Vtctld_BackupClient, error)
 	// BackupShard chooses a tablet in the shard and uses it to create a backup.
 	BackupShard(ctx context.Context, in *vtctldata.BackupShardRequest, opts ...grpc.CallOption) (Vtctld_BackupShardClient, error)
-	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+	// CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
 	CancelSchemaMigration(ctx context.Context, in *vtctldata.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
@@ -208,6 +208,8 @@ type VtctldClient interface {
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
 	// for a given keyspace.
 	FindAllShardsInKeyspace(ctx context.Context, in *vtctldata.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.FindAllShardsInKeyspaceResponse, error)
+	// ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
+	ForceCutOverSchemaMigration(ctx context.Context, in *vtctldata.ForceCutOverSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.ForceCutOverSchemaMigrationResponse, error)
 	// GetBackups returns all the backups for a shard.
 	GetBackups(ctx context.Context, in *vtctldata.GetBackupsRequest, opts ...grpc.CallOption) (*vtctldata.GetBackupsResponse, error)
 	// GetCellInfo returns the information for a cell.
@@ -725,6 +727,15 @@ func (c *vtctldClient) ExecuteHook(ctx context.Context, in *vtctldata.ExecuteHoo
 func (c *vtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldata.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.FindAllShardsInKeyspaceResponse, error) {
 	out := new(vtctldata.FindAllShardsInKeyspaceResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/FindAllShardsInKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ForceCutOverSchemaMigration(ctx context.Context, in *vtctldata.ForceCutOverSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.ForceCutOverSchemaMigrationResponse, error) {
+	out := new(vtctldata.ForceCutOverSchemaMigrationResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ForceCutOverSchemaMigration", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1546,7 +1557,7 @@ type VtctldServer interface {
 	Backup(*vtctldata.BackupRequest, Vtctld_BackupServer) error
 	// BackupShard chooses a tablet in the shard and uses it to create a backup.
 	BackupShard(*vtctldata.BackupShardRequest, Vtctld_BackupShardServer) error
-	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+	// CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
 	CancelSchemaMigration(context.Context, *vtctldata.CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
@@ -1595,6 +1606,8 @@ type VtctldServer interface {
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
 	// for a given keyspace.
 	FindAllShardsInKeyspace(context.Context, *vtctldata.FindAllShardsInKeyspaceRequest) (*vtctldata.FindAllShardsInKeyspaceResponse, error)
+	// ForceCutOverSchemaMigration marks a schema migration for forced cut-over.
+	ForceCutOverSchemaMigration(context.Context, *vtctldata.ForceCutOverSchemaMigrationRequest) (*vtctldata.ForceCutOverSchemaMigrationResponse, error)
 	// GetBackups returns all the backups for a shard.
 	GetBackups(context.Context, *vtctldata.GetBackupsRequest) (*vtctldata.GetBackupsResponse, error)
 	// GetCellInfo returns the information for a cell.
@@ -1918,6 +1931,9 @@ func (UnimplementedVtctldServer) ExecuteHook(context.Context, *vtctldata.Execute
 }
 func (UnimplementedVtctldServer) FindAllShardsInKeyspace(context.Context, *vtctldata.FindAllShardsInKeyspaceRequest) (*vtctldata.FindAllShardsInKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FindAllShardsInKeyspace not implemented")
+}
+func (UnimplementedVtctldServer) ForceCutOverSchemaMigration(context.Context, *vtctldata.ForceCutOverSchemaMigrationRequest) (*vtctldata.ForceCutOverSchemaMigrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ForceCutOverSchemaMigration not implemented")
 }
 func (UnimplementedVtctldServer) GetBackups(context.Context, *vtctldata.GetBackupsRequest) (*vtctldata.GetBackupsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBackups not implemented")
@@ -2639,6 +2655,24 @@ func _Vtctld_FindAllShardsInKeyspace_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).FindAllShardsInKeyspace(ctx, req.(*vtctldata.FindAllShardsInKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ForceCutOverSchemaMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ForceCutOverSchemaMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ForceCutOverSchemaMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ForceCutOverSchemaMigration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ForceCutOverSchemaMigration(ctx, req.(*vtctldata.ForceCutOverSchemaMigrationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4274,6 +4308,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FindAllShardsInKeyspace",
 			Handler:    _Vtctld_FindAllShardsInKeyspace_Handler,
+		},
+		{
+			MethodName: "ForceCutOverSchemaMigration",
+			Handler:    _Vtctld_ForceCutOverSchemaMigration_Handler,
 		},
 		{
 			MethodName: "GetBackups",

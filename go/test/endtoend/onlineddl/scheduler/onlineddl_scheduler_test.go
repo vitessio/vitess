@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -127,7 +128,8 @@ deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 
 func parseTableName(t *testing.T, sql string) (tableName string) {
 	// ddlStatement could possibly be composed of multiple DDL statements
-	tokenizer := sqlparser.NewStringTokenizer(sql)
+	parser := sqlparser.NewTestParser()
+	tokenizer := parser.NewStringTokenizer(sql)
 	for {
 		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
 		if err != nil && errors.Is(err, io.EOF) {
@@ -189,6 +191,29 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 					assert.True(t, row["ready_to_complete_timestamp"].IsNull())
 				}
 
+				return
+			}
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+		}
+		require.NoError(t, ctx.Err())
+	}
+}
+
+func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
+	ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			message := row.AsString("message", "")
+			if strings.Contains(message, messageSubstring) {
 				return
 			}
 		}
@@ -310,7 +335,7 @@ func testScheduler(t *testing.T) {
 
 	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
-	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 
 	var (
 		t1uuid string
@@ -365,6 +390,9 @@ func testScheduler(t *testing.T) {
 		`
 		alterNonexistent = `
 				ALTER TABLE nonexistent FORCE
+		`
+		populateT1Statement = `
+			insert into t1_test values (1, 'new_row')
 		`
 	)
 
@@ -490,6 +518,109 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
 	})
+
+	t.Run("Postpone completion ALTER", func(t *testing.T) {
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
+
+		t.Run("wait for t1 running", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		})
+		t.Run("check postpone_completion", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeCompletion := row.AsInt64("postpone_completion", 0)
+				assert.Equal(t, int64(1), postponeCompletion)
+			}
+		})
+		t.Run("complete", func(t *testing.T) {
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("check no postpone_completion", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeCompletion := row.AsInt64("postpone_completion", 0)
+				assert.Equal(t, int64(0), postponeCompletion)
+			}
+		})
+	})
+
+	forceCutoverCapable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability) // 8.0
+	require.NoError(t, err)
+	if forceCutoverCapable {
+		t.Run("force_cutover", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*2)
+			defer cancel()
+
+			t.Run("populate t1_test", func(t *testing.T) {
+				onlineddl.VtgateExecQuery(t, &vtParams, populateT1Statement, "")
+			})
+			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
+
+			t.Run("wait for t1 running", func(t *testing.T) {
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			})
+			commitTransactionChan := make(chan any)
+			transactionErrorChan := make(chan error)
+			t.Run("locking table rows", func(t *testing.T) {
+				go runInTransaction(t, ctx, shards[0].Vttablets[0], "select * from t1_test for update", commitTransactionChan, transactionErrorChan)
+			})
+			t.Run("check no force_cutover", func(t *testing.T) {
+				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					forceCutOver := row.AsInt64("force_cutover", 0)
+					assert.Equal(t, int64(0), forceCutOver) // disabled
+				}
+			})
+			t.Run("attempt to complete", func(t *testing.T) {
+				onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			})
+			t.Run("cut-over fail due to timeout", func(t *testing.T) {
+				waitForMessage(t, t1uuid, "due to context deadline exceeded")
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusRunning)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+			})
+			t.Run("force_cutover", func(t *testing.T) {
+				onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, t1uuid, true)
+			})
+			t.Run("check force_cutover", func(t *testing.T) {
+				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					forceCutOver := row.AsInt64("force_cutover", 0)
+					assert.Equal(t, int64(1), forceCutOver) // enabled
+				}
+			})
+			t.Run("expect completion", func(t *testing.T) {
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+			})
+			t.Run("expect transaction failure", func(t *testing.T) {
+				select {
+				case commitTransactionChan <- true: //good
+				case <-ctx.Done():
+					assert.Fail(t, ctx.Err().Error())
+				}
+				// Transaction will now attempt to commit. But we expect our "force_cutover" to have terminated
+				// the transaction's connection.
+				select {
+				case err := <-transactionErrorChan:
+					assert.ErrorContains(t, err, "broken pipe")
+				case <-ctx.Done():
+					assert.Fail(t, ctx.Err().Error())
+				}
+			})
+		})
+	}
 	t.Run("ALTER both tables non-concurrent", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
 		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
@@ -941,8 +1072,27 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
+	checkConstraintCapable, err := capableOf(capabilities.CheckConstraintsCapability) // 8.0.16 and above
+	require.NoError(t, err)
+	if checkConstraintCapable {
+		// Constraints
+		t.Run("CREATE TABLE with CHECK constraint", func(t *testing.T) {
+			query := `create table with_constraint (id int primary key, check ((id >= 0)))`
+			uuid := testOnlineDDLStatement(t, createParams(query, ddlStrategy, "vtgate", "chk_", "", false))
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			t.Run("ensure constraint name is rewritten", func(t *testing.T) {
+				// Since we did not provide a name for the CHECK constraint, MySQL will
+				// name it `with_constraint_chk_1`. But we expect Online DDL to explicitly
+				// modify the constraint name, specifically to get rid of the <table-name> prefix,
+				// so that we don't get into https://bugs.mysql.com/bug.php?id=107772 situation.
+				createStatement := getCreateTableStatement(t, shards[0].Vttablets[0], "with_constraint")
+				assert.NotContains(t, createStatement, "with_constraint_chk")
+			})
+		})
+	}
+
 	// INSTANT DDL
-	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
+	instantDDLCapable, err := capableOf(capabilities.InstantAddLastColumnFlavorCapability)
 	require.NoError(t, err)
 	if instantDDLCapable {
 		t.Run("INSTANT DDL: postpone-completion", func(t *testing.T) {
@@ -2128,7 +2278,7 @@ func testForeignKeys(t *testing.T) {
 		},
 		{
 			name:                      "drop foreign key from a child",
-			sql:                       "alter table child_table DROP FOREIGN KEY child_parent_fk",
+			sql:                       "alter table child_table DROP FOREIGN KEY <childTableConstraintName>", // See "getting child_table constraint name" test step below.
 			allowForeignKeys:          true,
 			expectHint:                "child_hint",
 			onlyIfFKOnlineDDLPossible: true,
@@ -2138,8 +2288,10 @@ func testForeignKeys(t *testing.T) {
 	fkOnlineDDLPossible := false
 	t.Run("check 'rename_table_preserve_foreign_key' variable", func(t *testing.T) {
 		// Online DDL is not possible on vanilla MySQL 8.0 for reasons described in https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.
-		// However, Online DDL is made possible in via these changes: https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
-		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps1.
+		// However, Online DDL is made possible in via these changes:
+		// - https://github.com/planetscale/mysql-server/commit/bb777e3e86387571c044fb4a2beb4f8c60462ced
+		// - https://github.com/planetscale/mysql-server/commit/c2f1344a6863518d749f2eb01a4c74ca08a5b889
+		// as part of https://github.com/planetscale/mysql-server/releases/tag/8.0.34-ps3.
 		// Said changes introduce a new global/session boolean variable named 'rename_table_preserve_foreign_key'. It defaults 'false'/0 for backwards compatibility.
 		// When enabled, a `RENAME TABLE` to a FK parent "pins" the children's foreign keys to the table name rather than the table pointer. Which means after the RENAME,
 		// the children will point to the newly instated table rather than the original, renamed table.
@@ -2193,6 +2345,19 @@ func testForeignKeys(t *testing.T) {
 					})
 				}
 			})
+			t.Run("getting child_table constraint name", func(t *testing.T) {
+				// Due to how OnlineDDL works, the name of the foreign key constraint will not be the one we used in the CREATE TABLE statement.
+				// There's a specific test where we drop said constraint. So speficially for that test (or any similar future tests), we need to dynamically
+				// evaluate the constraint name.
+				rs := onlineddl.VtgateExecQuery(t, &vtParams, "select CONSTRAINT_NAME from information_schema.REFERENTIAL_CONSTRAINTS where TABLE_NAME='child_table'", "")
+				assert.Equal(t, 1, len(rs.Rows))
+				row := rs.Named().Row()
+				assert.NotNil(t, row)
+				childTableConstraintName := row.AsString("CONSTRAINT_NAME", "")
+				assert.NotEmpty(t, childTableConstraintName)
+				testcase.sql = strings.ReplaceAll(testcase.sql, "<childTableConstraintName>", childTableConstraintName)
+			})
+
 			var uuid string
 			t.Run("run migration", func(t *testing.T) {
 				if testcase.allowForeignKeys {
@@ -2328,7 +2493,7 @@ func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid 
 	return uuid
 }
 
-// checkTable checks the number of tables in the first two shards.
+// checkTable checks the number of tables in all shards
 func checkTable(t *testing.T, showTableName string, expectExists bool) bool {
 	expectCount := 0
 	if expectExists {
@@ -2367,4 +2532,32 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	assert.GreaterOrEqual(t, len(queryResult.Rows[0]), 2) // table name, create statement, and if it's a view then additional columns
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
+}
+
+func runInTransaction(t *testing.T, ctx context.Context, tablet *cluster.Vttablet, query string, commitTransactionChan chan any, transactionErrorChan chan error) error {
+	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, true)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("begin", 0, false)
+	require.NoError(t, err)
+
+	_, err = conn.ExecuteFetch(query, 10000, false)
+	require.NoError(t, err)
+
+	if commitTransactionChan != nil {
+		// Wait for instruction to commit
+		select {
+		case <-commitTransactionChan:
+			// good
+		case <-ctx.Done():
+			assert.Fail(t, ctx.Err().Error())
+		}
+	}
+
+	_, err = conn.ExecuteFetch("commit", 0, false)
+	if transactionErrorChan != nil {
+		transactionErrorChan <- err
+	}
+	return err
 }

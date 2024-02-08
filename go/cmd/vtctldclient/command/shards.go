@@ -558,7 +558,7 @@ func commandSourceShardDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	uid, err := strconv.ParseUint(cmd.Flags().Arg(1), 10, 32)
+	uid, err := strconv.ParseInt(cmd.Flags().Arg(1), 10, 32)
 	if err != nil {
 		return fmt.Errorf("Failed to parse SourceShard uid: %w", err) // nolint
 	}

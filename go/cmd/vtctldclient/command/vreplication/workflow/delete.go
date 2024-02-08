@@ -54,6 +54,7 @@ func commandDelete(cmd *cobra.Command, args []string) error {
 		Workflow:         baseOptions.Workflow,
 		KeepData:         deleteOptions.KeepData,
 		KeepRoutingRules: deleteOptions.KeepRoutingRules,
+		Shards:           baseOptions.Shards,
 	}
 	resp, err := common.GetClient().WorkflowDelete(common.GetCommandCtx(), req)
 	if err != nil {

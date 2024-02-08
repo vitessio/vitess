@@ -20,10 +20,12 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -112,9 +114,10 @@ func TestTranslateSimplification(t *testing.T) {
 		{"json->>\"$.c\"", ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))"), ok("JSON_UNQUOTE(JSON_EXTRACT(`json`, '$.c'))")},
 	}
 
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			stmt, err := sqlparser.Parse("select " + tc.expression)
+			stmt, err := venv.Parser().Parse("select " + tc.expression)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -125,7 +128,8 @@ func TestTranslateSimplification(t *testing.T) {
 
 			cfg := &Config{
 				ResolveColumn:     fields.Column,
-				Collation:         collations.Default(),
+				Collation:         venv.CollationEnv().DefaultConnectionCharset(),
+				Environment:       venv,
 				NoConstantFolding: true,
 				NoCompilation:     true,
 			}
@@ -295,13 +299,17 @@ func TestEvaluate(t *testing.T) {
 		expected:   False,
 	}}
 
+	venv := vtenv.NewTestEnv()
 	for _, test := range tests {
 		t.Run(test.expression, func(t *testing.T) {
 			// Given
-			stmt, err := sqlparser.Parse("select " + test.expression)
+			stmt, err := sqlparser.NewTestParser().Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, &Config{Collation: collations.Default()})
+			sqltypesExpr, err := Translate(astExpr, &Config{
+				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
+				Environment: venv,
+			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := NewExpressionEnv(context.Background(), map[string]*querypb.BindVariable{
@@ -311,14 +319,14 @@ func TestEvaluate(t *testing.T) {
 				"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
 				"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 				"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
-			}, nil)
+			}, NewEmptyVCursor(venv, time.Local))
 
 			// When
 			r, err := env.Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
-			assert.Equal(t, test.expected, r.Value(collations.Default()), "expected %s", test.expected.String())
+			assert.Equal(t, test.expected, r.Value(collations.MySQL8().DefaultConnectionCharset()), "expected %s", test.expected.String())
 		})
 	}
 }
@@ -340,18 +348,22 @@ func TestEvaluateTuple(t *testing.T) {
 		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("2"), sqltypes.NewDecimal("4.0")},
 	}}
 
+	venv := vtenv.NewTestEnv()
 	for _, test := range tests {
 		t.Run(test.expression, func(t *testing.T) {
 			// Given
-			stmt, err := sqlparser.Parse("select " + test.expression)
+			stmt, err := sqlparser.NewTestParser().Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, &Config{Collation: collations.Default()})
+			sqltypesExpr, err := Translate(astExpr, &Config{
+				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
+				Environment: venv,
+			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 
 			// When
-			r, err := EmptyExpressionEnv().Evaluate(sqltypesExpr)
+			r, err := EmptyExpressionEnv(venv).Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
@@ -377,13 +389,17 @@ func TestTranslationFailures(t *testing.T) {
 		},
 	}
 
+	venv := vtenv.NewTestEnv()
 	for _, testcase := range testcases {
 		t.Run(testcase.expression, func(t *testing.T) {
 			// Given
-			stmt, err := sqlparser.Parse("select " + testcase.expression)
+			stmt, err := sqlparser.NewTestParser().Parse("select " + testcase.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			_, err = Translate(astExpr, &Config{Collation: collations.Default()})
+			_, err = Translate(astExpr, &Config{
+				Collation:   venv.CollationEnv().DefaultConnectionCharset(),
+				Environment: venv,
+			})
 			require.EqualError(t, err, testcase.expectedErr)
 		})
 	}
@@ -410,16 +426,21 @@ func TestCardinalityWithBindVariables(t *testing.T) {
 		{expr: `1 IN ::bar`},
 	}
 
+	venv := vtenv.NewTestEnv()
 	for _, testcase := range testcases {
 		t.Run(testcase.expr, func(t *testing.T) {
 			err := func() error {
-				stmt, err := sqlparser.Parse("select " + testcase.expr)
+				stmt, err := sqlparser.NewTestParser().Parse("select " + testcase.expr)
 				if err != nil {
 					return err
 				}
 
 				astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-				_, err = Translate(astExpr, &Config{Collation: collations.Default(), NoCompilation: true})
+				_, err = Translate(astExpr, &Config{
+					Collation:     venv.CollationEnv().DefaultConnectionCharset(),
+					Environment:   venv,
+					NoCompilation: true,
+				})
 				return err
 			}()
 

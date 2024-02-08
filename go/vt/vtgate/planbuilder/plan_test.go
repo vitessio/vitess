@@ -36,12 +36,12 @@ import (
 	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	oprewriters "vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -60,8 +60,10 @@ func TestPlan(t *testing.T) {
 		TabletType_:   topodatapb.TabletType_PRIMARY,
 		SysVarEnabled: true,
 		TestBuilder:   TestBuilder,
+		Env:           vtenv.NewTestEnv(),
 	}
 	testOutputTempDir := makeTestOutput(t)
+	addPKs(t, vschemaWrapper.V, "user", []string{"user", "music"})
 
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
@@ -106,11 +108,46 @@ func TestForeignKeyPlanning(t *testing.T) {
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:           vschema,
 		TestBuilder: TestBuilder,
+		Env:         vtenv.NewTestEnv(),
 	}
 
 	testOutputTempDir := makeTestOutput(t)
 
 	testFile(t, "foreignkey_cases.json", testOutputTempDir, vschemaWrapper, false)
+}
+
+// TestForeignKeyChecksOn tests the planning when the session variable for foreign_key_checks is set to ON.
+func TestForeignKeyChecksOn(t *testing.T) {
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	setFks(t, vschema)
+	fkChecksState := true
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:                     vschema,
+		TestBuilder:           TestBuilder,
+		ForeignKeyChecksState: &fkChecksState,
+		Env:                   vtenv.NewTestEnv(),
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+
+	testFile(t, "foreignkey_checks_on_cases.json", testOutputTempDir, vschemaWrapper, false)
+}
+
+// TestForeignKeyChecksOff tests the planning when the session variable for foreign_key_checks is set to OFF.
+func TestForeignKeyChecksOff(t *testing.T) {
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	setFks(t, vschema)
+	fkChecksState := false
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:                     vschema,
+		TestBuilder:           TestBuilder,
+		ForeignKeyChecksState: &fkChecksState,
+		Env:                   vtenv.NewTestEnv(),
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+
+	testFile(t, "foreignkey_checks_off_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func setFks(t *testing.T, vschema *vindexes.VSchema) {
@@ -146,6 +183,10 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		// FK from tblrefDef referencing tbl20 that is shard scoped of SET-Default types.
 		_ = vschema.AddForeignKey("sharded_fk_allow", "tblrefDef", createFkDefinition([]string{"ref"}, "tbl20", []string{"col2"}, sqlparser.SetDefault, sqlparser.SetDefault))
 
+		// FK from tbl_auth referencing tbl20 that is shard scoped of CASCADE types.
+		_ = vschema.AddForeignKey("sharded_fk_allow", "tbl_auth", createFkDefinition([]string{"id"}, "tbl20", []string{"col2"}, sqlparser.Cascade, sqlparser.Cascade))
+		addPKs(t, vschema, "sharded_fk_allow", []string{"tbl1", "tbl2", "tbl3", "tbl4", "tbl5", "tbl6", "tbl7", "tbl9", "tbl10",
+			"multicol_tbl1", "multicol_tbl2", "tbl_auth", "tblrefDef", "tbl20"})
 	}
 	if vschema.Keyspaces["unsharded_fk_allow"] != nil {
 		// u_tbl2(col2)  -> u_tbl1(col1)  Cascade.
@@ -168,24 +209,45 @@ func setFks(t *testing.T, vschema *vindexes.VSchema) {
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl4", createFkDefinition([]string{"col4"}, "u_tbl3", []string{"col3"}, sqlparser.Restrict, sqlparser.Restrict))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl6", createFkDefinition([]string{"col6"}, "u_tbl5", []string{"col5"}, sqlparser.DefaultAction, sqlparser.DefaultAction))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl8", createFkDefinition([]string{"col8"}, "u_tbl9", []string{"col9"}, sqlparser.SetNull, sqlparser.SetNull))
-		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl8", createFkDefinition([]string{"col8"}, "u_tbl6", []string{"col6"}, sqlparser.Cascade, sqlparser.CASCADE))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl8", createFkDefinition([]string{"col8"}, "u_tbl6", []string{"col6"}, sqlparser.Cascade, sqlparser.Cascade))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl4", createFkDefinition([]string{"col4"}, "u_tbl7", []string{"col7"}, sqlparser.Cascade, sqlparser.Cascade))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl9", createFkDefinition([]string{"col9"}, "u_tbl4", []string{"col4"}, sqlparser.Restrict, sqlparser.Restrict))
+		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl11", createFkDefinition([]string{"col"}, "u_tbl10", []string{"col"}, sqlparser.Cascade, sqlparser.Cascade))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_tbl", createFkDefinition([]string{"col"}, "sharded_fk_allow.s_tbl", []string{"col"}, sqlparser.Restrict, sqlparser.Restrict))
 
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl2", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl1", []string{"cola", "colb"}, sqlparser.SetNull, sqlparser.SetNull))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl3", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl2", []string{"cola", "colb"}, sqlparser.Cascade, sqlparser.Cascade))
+
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{&sqlparser.BinaryExpr{Operator: sqlparser.MultOp, Left: sqlparser.NewColName("col9"), Right: sqlparser.NewColName("foo")}})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9"), sqlparser.NewColName("foo")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("foo"), sqlparser.NewColName("bar")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("bar"), sqlparser.NewColName("col9")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl8", sqlparser.Exprs{sqlparser.NewColName("col8")})
+
+		addPKs(t, vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11",
+			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3"})
+	}
+
+}
+
+func addPKs(t *testing.T, vschema *vindexes.VSchema, ks string, tbls []string) {
+	for _, tbl := range tbls {
+		require.NoError(t,
+			vschema.AddPrimaryKey(ks, tbl, []string{"id"}))
 	}
 }
 
 func TestSystemTables57(t *testing.T) {
 	// first we move everything to use 5.7 logic
-	oldVer := servenv.MySQLServerVersion()
-	servenv.SetMySQLServerVersionForTest("5.7")
-	defer func() {
-		servenv.SetMySQLServerVersionForTest(oldVer)
-	}()
-	vschemaWrapper := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true)}
+	env, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: "5.7.9",
+	})
+	require.NoError(t, err)
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:   loadSchema(t, "vschemas/schema.json", true),
+		Env: env,
+	}
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "info_schema57_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
@@ -194,6 +256,7 @@ func TestSysVarSetDisabled(t *testing.T) {
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/schema.json", true),
 		SysVarEnabled: false,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "set_sysvar_disabled_cases.json", makeTestOutput(t), vschemaWrapper, false)
@@ -203,88 +266,109 @@ func TestViews(t *testing.T) {
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:           loadSchema(t, "vschemas/schema.json", true),
 		EnableViews: true,
+		Env:         vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "view_cases.json", makeTestOutput(t), vschemaWrapper, false)
 }
 
 func TestOne(t *testing.T) {
-	reset := oprewriters.EnableDebugPrinting()
+	reset := operators.EnableDebugPrinting()
 	defer reset()
 
 	lv := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, lv)
+	addPKs(t, lv, "user", []string{"user", "music"})
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:           lv,
 		TestBuilder: TestBuilder,
+		Env:         vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
 func TestOneTPCC(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
+
 	vschema := &vschemawrapper.VSchemaWrapper{
-		V: loadSchema(t, "vschemas/tpcc_schema.json", true),
+		V:   loadSchema(t, "vschemas/tpcc_schema.json", true),
+		Env: vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
 func TestOneWithMainAsDefault(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/schema.json", true),
 		Keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
 		},
+		Env: vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
 func TestOneWithSecondUserAsDefault(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/schema.json", true),
 		Keyspace: &vindexes.Keyspace{
 			Name:    "second_user",
 			Sharded: true,
 		},
+		Env: vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
 func TestOneWithUserAsDefault(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/schema.json", true),
 		Keyspace: &vindexes.Keyspace{
 			Name:    "user",
 			Sharded: true,
 		},
+		Env: vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
 func TestOneWithTPCHVSchema(t *testing.T) {
-	reset := oprewriters.EnableDebugPrinting()
+	reset := operators.EnableDebugPrinting()
 	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/tpch_schema.json", true),
 		SysVarEnabled: true,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
 func TestOneWith57Version(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	// first we move everything to use 5.7 logic
-	oldVer := servenv.MySQLServerVersion()
-	servenv.SetMySQLServerVersionForTest("5.7")
-	defer func() {
-		servenv.SetMySQLServerVersionForTest(oldVer)
-	}()
-	vschema := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true)}
+	env, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: "5.7.9",
+	})
+	require.NoError(t, err)
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V:   loadSchema(t, "vschemas/schema.json", true),
+		Env: env,
+	}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
@@ -293,6 +377,7 @@ func TestRubyOnRailsQueries(t *testing.T) {
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/rails_schema.json", true),
 		SysVarEnabled: true,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "rails_cases.json", makeTestOutput(t), vschemaWrapper, false)
@@ -302,6 +387,7 @@ func TestOLTP(t *testing.T) {
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/oltp_schema.json", true),
 		SysVarEnabled: true,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "oltp_cases.json", makeTestOutput(t), vschemaWrapper, false)
@@ -311,6 +397,7 @@ func TestTPCC(t *testing.T) {
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/tpcc_schema.json", true),
 		SysVarEnabled: true,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "tpcc_cases.json", makeTestOutput(t), vschemaWrapper, false)
@@ -320,6 +407,7 @@ func TestTPCH(t *testing.T) {
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/tpch_schema.json", true),
 		SysVarEnabled: true,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "tpch_cases.json", makeTestOutput(t), vschemaWrapper, false)
@@ -341,6 +429,7 @@ func benchmarkWorkload(b *testing.B, name string) {
 	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(b, "vschemas/"+name+"_schema.json", true),
 		SysVarEnabled: true,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	testCases := readJSONTests(name + "_cases.json")
@@ -360,7 +449,9 @@ func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 			Sharded: false,
 		},
 		TabletType_: topodatapb.TabletType_PRIMARY,
-		Dest:        key.DestinationShard("-80")}
+		Dest:        key.DestinationShard("-80"),
+		Env:         vtenv.NewTestEnv(),
+	}
 
 	testFile(t, "bypass_shard_cases.json", makeTestOutput(t), vschema, false)
 }
@@ -376,6 +467,7 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 		},
 		TabletType_: topodatapb.TabletType_PRIMARY,
 		Dest:        key.DestinationExactKeyRange{KeyRange: keyRange[0]},
+		Env:         vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "bypass_keyrange_cases.json", makeTestOutput(t), vschema, false)
@@ -392,6 +484,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 			Sharded: false,
 		},
 		TabletType_: topodatapb.TabletType_PRIMARY,
+		Env:         vtenv.NewTestEnv(),
 	}
 	ts := memorytopo.NewServer(ctx, "cell1")
 	ts.CreateKeyspace(ctx, "main", &topodatapb.Keyspace{})
@@ -425,6 +518,7 @@ func TestWithDefaultKeyspaceFromFileSharded(t *testing.T) {
 			Sharded: true,
 		},
 		TabletType_: topodatapb.TabletType_PRIMARY,
+		Env:         vtenv.NewTestEnv(),
 	}
 
 	testOutputTempDir := makeTestOutput(t)
@@ -440,6 +534,7 @@ func TestWithUserDefaultKeyspaceFromFileSharded(t *testing.T) {
 			Sharded: true,
 		},
 		TabletType_: topodatapb.TabletType_PRIMARY,
+		Env:         vtenv.NewTestEnv(),
 	}
 
 	testOutputTempDir := makeTestOutput(t)
@@ -452,6 +547,7 @@ func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 		V:           loadSchema(t, "vschemas/schema.json", true),
 		Keyspace:    &vindexes.Keyspace{Name: "information_schema"},
 		TabletType_: topodatapb.TabletType_PRIMARY,
+		Env:         vtenv.NewTestEnv(),
 	}
 
 	testFile(t, "sysschema_default.json", makeTestOutput(t), vschema, false)
@@ -466,6 +562,7 @@ func TestOtherPlanningFromFile(t *testing.T) {
 			Sharded: false,
 		},
 		TabletType_: topodatapb.TabletType_PRIMARY,
+		Env:         vtenv.NewTestEnv(),
 	}
 
 	testOutputTempDir := makeTestOutput(t)
@@ -478,7 +575,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 	if err != nil {
 		t.Fatal(err)
 	}
-	vschema := vindexes.BuildVSchema(formal)
+	vschema := vindexes.BuildVSchema(formal, sqlparser.NewTestParser())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,9 +586,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 
 		// adding view in user keyspace
 		if ks.Keyspace.Name == "user" {
-			if err = vschema.AddView(ks.Keyspace.Name,
-				"user_details_view",
-				"select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id"); err != nil {
+			if err = vschema.AddView(ks.Keyspace.Name, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id", sqlparser.NewTestParser()); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -502,7 +597,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 		if setCollation {
 			for _, table := range ks.Tables {
 				for i, col := range table.Columns {
-					if sqltypes.IsText(col.Type) {
+					if sqltypes.IsText(col.Type) && col.CollationName == "" {
 						table.Columns[i].CollationName = "latin1_swedish_ci"
 					}
 				}
@@ -514,7 +609,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 
 // createFkDefinition is a helper function to create a Foreign key definition struct from the columns used in it provided as list of strings.
 func createFkDefinition(childCols []string, parentTableName string, parentCols []string, onUpdate, onDelete sqlparser.ReferenceAction) *sqlparser.ForeignKeyDefinition {
-	pKs, pTbl, _ := sqlparser.ParseTable(parentTableName)
+	pKs, pTbl, _ := sqlparser.NewTestParser().ParseTable(parentTableName)
 	return &sqlparser.ForeignKeyDefinition{
 		Source: sqlparser.MakeColumns(childCols...),
 		ReferenceDefinition: &sqlparser.ReferenceDefinition{
@@ -598,6 +693,7 @@ func readJSONTests(filename string) []planTest {
 		panic(err)
 	}
 	dec := json.NewDecoder(file)
+	dec.DisallowUnknownFields()
 	err = dec.Decode(&output)
 	if err != nil {
 		panic(err)
@@ -646,6 +742,7 @@ func BenchmarkPlanner(b *testing.B) {
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(b, "vschemas/schema.json", true),
 		SysVarEnabled: true,
+		Env:           vtenv.NewTestEnv(),
 	}
 	for _, filename := range benchMarkFiles {
 		testCases := readJSONTests(filename)
@@ -662,6 +759,7 @@ func BenchmarkSemAnalysis(b *testing.B) {
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(b, "vschemas/schema.json", true),
 		SysVarEnabled: true,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	for i := 0; i < b.N; i++ {
@@ -679,7 +777,7 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 		recover()
 	}()
 
-	ast, err := sqlparser.Parse(query)
+	ast, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		return
 	}
@@ -696,6 +794,7 @@ func BenchmarkSelectVsDML(b *testing.B) {
 		V:             loadSchema(b, "vschemas/schema.json", true),
 		SysVarEnabled: true,
 		Version:       Gen4,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	dmlCases := readJSONTests("dml_cases.json")

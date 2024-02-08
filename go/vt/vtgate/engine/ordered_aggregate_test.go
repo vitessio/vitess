@@ -32,18 +32,8 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/servenv"
 	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
-
-var collationEnv *collations.Environment
-
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.SetMySQLServerVersionForTest(mySQLVersion)
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-}
 
 func TestOrderedAggregateExecute(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
@@ -62,7 +52,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "")},
+		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collations.MySQL8())},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
@@ -94,7 +84,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 		)},
 	}
 
-	aggr := NewAggregateParam(AggregateSum, 1, "")
+	aggr := NewAggregateParam(AggregateSum, 1, "", collations.MySQL8())
 	aggr.OrigOpcode = AggregateCountStar
 
 	oa := &OrderedAggregate{
@@ -134,7 +124,7 @@ func TestMinMaxFailsCorrectly(t *testing.T) {
 		)},
 	}
 
-	aggr := NewAggregateParam(AggregateMax, 0, "")
+	aggr := NewAggregateParam(AggregateMax, 0, "", collations.MySQL8())
 	aggr.WCol = 1
 	oa := &ScalarAggregate{
 		Aggregates:          []*AggregateParams{aggr},
@@ -163,7 +153,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "")},
+		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collations.MySQL8())},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
@@ -202,7 +192,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates:          []*AggregateParams{NewAggregateParam(AggregateSum, 1, "")},
+		Aggregates:          []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collations.MySQL8())},
 		GroupByKeys:         []*GroupByParams{{KeyCol: 2}},
 		TruncateColumnCount: 2,
 		Input:               fp,
@@ -305,8 +295,8 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 		)},
 	}
 
-	aggr1 := NewAggregateParam(AggregateCountDistinct, 1, "count(distinct col2)")
-	aggr2 := NewAggregateParam(AggregateSum, 2, "")
+	aggr1 := NewAggregateParam(AggregateCountDistinct, 1, "count(distinct col2)", collations.MySQL8())
+	aggr2 := NewAggregateParam(AggregateSum, 2, "", collations.MySQL8())
 	aggr2.OrigOpcode = AggregateCountStar
 	oa := &OrderedAggregate{
 		Aggregates:  []*AggregateParams{aggr1, aggr2},
@@ -374,12 +364,12 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 		)},
 	}
 
-	aggr2 := NewAggregateParam(AggregateSum, 2, "")
+	aggr2 := NewAggregateParam(AggregateSum, 2, "", collations.MySQL8())
 	aggr2.OrigOpcode = AggregateCountDistinct
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{
-			NewAggregateParam(AggregateCountDistinct, 1, "count(distinct col2)"),
+			NewAggregateParam(AggregateCountDistinct, 1, "count(distinct col2)", collations.MySQL8()),
 			aggr2},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
@@ -460,8 +450,8 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{
-			NewAggregateParam(AggregateSumDistinct, 1, "sum(distinct col2)"),
-			NewAggregateParam(AggregateSum, 2, ""),
+			NewAggregateParam(AggregateSumDistinct, 1, "sum(distinct col2)", collations.MySQL8()),
+			NewAggregateParam(AggregateSum, 2, "", collations.MySQL8()),
 		},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
@@ -504,7 +494,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSumDistinct, 1, "sum(distinct col2)")},
+		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSumDistinct, 1, "sum(distinct col2)", collations.MySQL8())},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
@@ -536,7 +526,7 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "")},
+		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collations.MySQL8())},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
@@ -566,7 +556,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "")},
+		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collations.MySQL8())},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
@@ -627,7 +617,7 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		Aggregates:          []*AggregateParams{NewAggregateParam(AggregateGtid, 1, "vgtid")},
+		Aggregates:          []*AggregateParams{NewAggregateParam(AggregateGtid, 1, "vgtid", collations.MySQL8())},
 		TruncateColumnCount: 2,
 		Input:               fp,
 	}
@@ -660,7 +650,7 @@ func TestCountDistinctOnVarchar(t *testing.T) {
 		)},
 	}
 
-	aggr := NewAggregateParam(AggregateCountDistinct, 1, "count(distinct c2)")
+	aggr := NewAggregateParam(AggregateCountDistinct, 1, "count(distinct c2)", collations.MySQL8())
 	aggr.WCol = 2
 	oa := &OrderedAggregate{
 		Aggregates:          []*AggregateParams{aggr},
@@ -720,7 +710,7 @@ func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
 		)},
 	}
 
-	aggr := NewAggregateParam(AggregateCountDistinct, 1, "count(distinct c2)")
+	aggr := NewAggregateParam(AggregateCountDistinct, 1, "count(distinct c2)", collations.MySQL8())
 	aggr.WCol = 2
 	oa := &OrderedAggregate{
 		Aggregates:          []*AggregateParams{aggr},
@@ -782,7 +772,7 @@ func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
 		)},
 	}
 
-	aggr := NewAggregateParam(AggregateSumDistinct, 1, "sum(distinct c2)")
+	aggr := NewAggregateParam(AggregateSumDistinct, 1, "sum(distinct c2)", collations.MySQL8())
 	aggr.WCol = 2
 	oa := &OrderedAggregate{
 		Aggregates:          []*AggregateParams{aggr},
@@ -848,8 +838,8 @@ func TestMultiDistinct(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{
-			NewAggregateParam(AggregateCountDistinct, 1, "count(distinct c2)"),
-			NewAggregateParam(AggregateSumDistinct, 2, "sum(distinct c3)"),
+			NewAggregateParam(AggregateCountDistinct, 1, "count(distinct c2)", collations.MySQL8()),
+			NewAggregateParam(AggregateSumDistinct, 2, "sum(distinct c3)", collations.MySQL8()),
 		},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
@@ -904,10 +894,11 @@ func TestOrderedAggregateCollate(t *testing.T) {
 		)},
 	}
 
+	collationEnv := collations.MySQL8()
 	collationID, _ := collationEnv.LookupID("utf8mb4_0900_ai_ci")
 	oa := &OrderedAggregate{
-		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "")},
-		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.Type{Coll: collationID}}},
+		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collationEnv)},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.NewType(sqltypes.Unknown, collationID)}},
 		Input:       fp,
 	}
 
@@ -942,10 +933,11 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 		)},
 	}
 
+	collationEnv := collations.MySQL8()
 	collationID, _ := collationEnv.LookupID("utf8mb4_0900_as_ci")
 	oa := &OrderedAggregate{
-		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "")},
-		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.Type{Coll: collationID}}},
+		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collationEnv)},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.NewType(sqltypes.Unknown, collationID)}},
 		Input:       fp,
 	}
 
@@ -982,10 +974,11 @@ func TestOrderedAggregateCollateKS(t *testing.T) {
 		)},
 	}
 
+	collationEnv := collations.MySQL8()
 	collationID, _ := collationEnv.LookupID("utf8mb4_ja_0900_as_cs_ks")
 	oa := &OrderedAggregate{
-		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "")},
-		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.Type{Coll: collationID}}},
+		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collationEnv)},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.NewType(sqltypes.Unknown, collationID)}},
 		Input:       fp,
 	}
 
@@ -1066,7 +1059,7 @@ func TestGroupConcatWithAggrOnEngine(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
 			oa := &OrderedAggregate{
-				Aggregates:  []*AggregateParams{NewAggregateParam(AggregateGroupConcat, 1, "group_concat(c2)")},
+				Aggregates:  []*AggregateParams{NewAggregateParam(AggregateGroupConcat, 1, "group_concat(c2)", collations.MySQL8())},
 				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 				Input:       fp,
 			}
@@ -1145,7 +1138,7 @@ func TestGroupConcat(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
 			oa := &OrderedAggregate{
-				Aggregates:  []*AggregateParams{NewAggregateParam(AggregateGroupConcat, 1, "")},
+				Aggregates:  []*AggregateParams{NewAggregateParam(AggregateGroupConcat, 1, "", collations.MySQL8())},
 				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 				Input:       fp,
 			}

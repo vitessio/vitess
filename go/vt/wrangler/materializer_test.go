@@ -33,8 +33,10 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -1541,7 +1543,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	defer cancel()
 
 	topoServ := memorytopo.NewServer(ctx, "cell")
-	wr := New(logutil.NewConsoleLogger(), topoServ, nil)
+	wr := New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), topoServ, nil)
 
 	unique := map[string]*vschemapb.Vindex{
 		"v": {
@@ -2541,7 +2543,7 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	env.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), env.topoServ, env.tmc)
 	defer env.close()
 
 	tabletID := 100
@@ -2870,7 +2872,7 @@ func TestStripForeignKeys(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripTableForeignKeys(tc.ddl)
+		newDDL, err := stripTableForeignKeys(tc.ddl, sqlparser.NewTestParser())
 		if tc.hasErr != (err != nil) {
 			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
 		}
@@ -2944,7 +2946,7 @@ func TestStripConstraints(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		newDDL, err := stripTableConstraints(tc.ddl)
+		newDDL, err := stripTableConstraints(tc.ddl, sqlparser.NewTestParser())
 		if tc.hasErr != (err != nil) {
 			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
 		}

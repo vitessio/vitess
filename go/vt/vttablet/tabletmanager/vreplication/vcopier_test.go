@@ -102,7 +102,7 @@ func testPlayerCopyCharPK(t *testing.T) {
 	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -332,7 +332,7 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -811,7 +811,7 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 	defer func() { vttablet.CopyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -979,7 +979,7 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 		"update src1 set id2=10 where id1=5",
 		// move row from within to outside range.
 		"update src1 set id1=12 where id1=6",
-		// move row from outside to witihn range.
+		// move row from outside to within range.
 		"update src1 set id1=4 where id1=11",
 		// modify the copied table.
 		"update copied set val='bbb' where id=1",
@@ -1676,22 +1676,26 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 func testCopyTablesWithInvalidDates(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	execStatements(t, []string{
+	conn, err := env.Mysqld.GetDbaConnection(context.Background())
+	require.NoError(t, err)
+
+	// default mysql flavor allows invalid dates: so disallow explicitly for this test
+	if _, err := conn.ExecuteFetch("SET @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 0, false); err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+	}
+	defer func() {
+		if _, err := conn.ExecuteFetch("SET @@session.sql_mode=REPLACE(@@session.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE','')", 0, false); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+		}
+	}()
+
+	execConnStatements(t, conn, []string{
 		"create table src1(id int, dt date, primary key(id))",
 		fmt.Sprintf("create table %s.dst1(id int, dt date, primary key(id))", vrepldb),
 		"insert into src1 values(1, '2020-01-12'), (2, '0000-00-00');",
 	})
 
-	// default mysql flavor allows invalid dates: so disallow explicitly for this test
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')"); err != nil {
-		fmt.Fprintf(os.Stderr, "%v", err)
-	}
-	defer func() {
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE','')"); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-		}
-	}()
-	defer execStatements(t, []string{
+	defer execConnStatements(t, conn, []string{
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})

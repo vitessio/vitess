@@ -188,7 +188,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 			fields = ser.Result.Fields
 		}
 		if err := callback(sqltypes.CustomProto3ToResult(fields, ser.Result)); err != nil {
-			if err == nil || err == io.EOF {
+			if err == io.EOF {
 				return nil
 			}
 			return err
@@ -417,7 +417,7 @@ func (conn *gRPCQueryClient) ConcludeTransaction(ctx context.Context, target *qu
 	return nil
 }
 
-// ReadTransaction returns the metadata for the sepcified dtid.
+// ReadTransaction returns the metadata for the specified dtid.
 func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (*querypb.TransactionMetadata, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
@@ -537,7 +537,7 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *que
 			fields = ser.Result.Fields
 		}
 		if err := callback(sqltypes.CustomProto3ToResult(fields, ser.Result)); err != nil {
-			if err == nil || err == io.EOF {
+			if err == io.EOF {
 				return state, nil
 			}
 			return state, err
@@ -583,7 +583,7 @@ func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.
 			fields = msr.Result.Fields
 		}
 		if err := callback(sqltypes.CustomProto3ToResult(fields, msr.Result)); err != nil {
-			if err == nil || err == io.EOF {
+			if err == io.EOF {
 				return nil
 			}
 			return err
@@ -640,7 +640,7 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*qu
 			return tabletconn.ErrorFromGRPC(err)
 		}
 		if err := callback(shr); err != nil {
-			if err == nil || err == io.EOF {
+			if err == io.EOF {
 				return nil
 			}
 			return err
@@ -924,7 +924,7 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, targ
 			fields = ser.Result.Fields
 		}
 		if err := callback(sqltypes.CustomProto3ToResult(fields, ser.Result)); err != nil {
-			if err == nil || err == io.EOF {
+			if err == io.EOF {
 				return state, nil
 			}
 			return state, err
@@ -1029,7 +1029,7 @@ func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *q
 			fields = ser.Result.Fields
 		}
 		if err := callback(sqltypes.CustomProto3ToResult(fields, ser.Result)); err != nil {
-			if err == nil || err == io.EOF {
+			if err == io.EOF {
 				return state, nil
 			}
 			return state, err
@@ -1092,7 +1092,7 @@ func (conn *gRPCQueryClient) GetSchema(ctx context.Context, target *querypb.Targ
 			return tabletconn.ErrorFromGRPC(err)
 		}
 		if err := callback(shr); err != nil {
-			if err == nil || err == io.EOF {
+			if err == io.EOF {
 				return nil
 			}
 			return err

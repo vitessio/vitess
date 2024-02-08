@@ -50,7 +50,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	err = rewriteRoutedTables(deleteStmt, vschema)
+	err = queryRewrite(ctx.SemTable, reservedVars, deleteStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -72,11 +72,6 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	err = queryRewrite(ctx.SemTable, reservedVars, deleteStmt)
-	if err != nil {
-		return nil, err
-	}
-
 	op, err := operators.PlanQuery(ctx, deleteStmt)
 	if err != nil {
 		return nil, err
@@ -95,7 +90,7 @@ func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
 	if !ok {
 		return del, nil
 	}
-	if !atExpr.As.IsEmpty() && !sqlparser.Equals.IdentifierCS(del.Targets[0].Name, atExpr.As) {
+	if atExpr.As.NotEmpty() && !sqlparser.Equals.IdentifierCS(del.Targets[0].Name, atExpr.As) {
 		// Unknown table in MULTI DELETE
 		return nil, vterrors.VT03003(del.Targets[0].Name.String())
 	}
@@ -144,18 +139,9 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 		return semTable.NotUnshardedErr
 	}
 
-	// Delete is only supported for a single TableExpr which is supposed to be an aliased expression
-	multiShardErr := vterrors.VT12001("multi-shard or vindex write statement")
-	if len(del.TableExprs) != 1 {
-		return multiShardErr
-	}
-	_, isAliasedExpr := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !isAliasedExpr {
-		return multiShardErr
-	}
-
+	// Delete is only supported for single Target.
 	if len(del.Targets) > 1 {
-		return vterrors.VT12001("multi-table DELETE statement in a sharded keyspace")
+		return vterrors.VT12001("multi-table DELETE statement with multi-target")
 	}
 
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {

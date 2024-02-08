@@ -1850,18 +1850,26 @@ func (c *cow) copyOnRewriteRefOfDelete(n *Delete, parent SQLNode) (out SQLNode, 
 	if c.pre == nil || c.pre(n, parent) {
 		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
+		var changedTableExprs bool
+		_TableExprs := make([]TableExpr, len(n.TableExprs))
+		for x, el := range n.TableExprs {
+			this, changed := c.copyOnRewriteTableExpr(el, n)
+			_TableExprs[x] = this.(TableExpr)
+			if changed {
+				changedTableExprs = true
+			}
+		}
 		_Targets, changedTargets := c.copyOnRewriteTableNames(n.Targets, n)
-		_TableExprs, changedTableExprs := c.copyOnRewriteTableExprs(n.TableExprs, n)
 		_Partitions, changedPartitions := c.copyOnRewritePartitions(n.Partitions, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
-		if changedWith || changedComments || changedTargets || changedTableExprs || changedPartitions || changedWhere || changedOrderBy || changedLimit {
+		if changedWith || changedComments || changedTableExprs || changedTargets || changedPartitions || changedWhere || changedOrderBy || changedLimit {
 			res := *n
 			res.With, _ = _With.(*With)
 			res.Comments, _ = _Comments.(*ParsedComments)
+			res.TableExprs = _TableExprs
 			res.Targets, _ = _Targets.(TableNames)
-			res.TableExprs, _ = _TableExprs.(TableExprs)
 			res.Partitions, _ = _Partitions.(Partitions)
 			res.Where, _ = _Where.(*Where)
 			res.OrderBy, _ = _OrderBy.(OrderBy)
@@ -6023,7 +6031,15 @@ func (c *cow) copyOnRewriteRefOfUpdate(n *Update, parent SQLNode) (out SQLNode, 
 	if c.pre == nil || c.pre(n, parent) {
 		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		_TableExprs, changedTableExprs := c.copyOnRewriteTableExprs(n.TableExprs, n)
+		var changedTableExprs bool
+		_TableExprs := make([]TableExpr, len(n.TableExprs))
+		for x, el := range n.TableExprs {
+			this, changed := c.copyOnRewriteTableExpr(el, n)
+			_TableExprs[x] = this.(TableExpr)
+			if changed {
+				changedTableExprs = true
+			}
+		}
 		_Exprs, changedExprs := c.copyOnRewriteUpdateExprs(n.Exprs, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
@@ -6032,7 +6048,7 @@ func (c *cow) copyOnRewriteRefOfUpdate(n *Update, parent SQLNode) (out SQLNode, 
 			res := *n
 			res.With, _ = _With.(*With)
 			res.Comments, _ = _Comments.(*ParsedComments)
-			res.TableExprs, _ = _TableExprs.(TableExprs)
+			res.TableExprs = _TableExprs
 			res.Exprs, _ = _Exprs.(UpdateExprs)
 			res.Where, _ = _Where.(*Where)
 			res.OrderBy, _ = _OrderBy.(OrderBy)

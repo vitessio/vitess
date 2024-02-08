@@ -16,7 +16,10 @@ limitations under the License.
 
 package evalengine
 
-import "vitess.io/vitess/go/sqltypes"
+import (
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+)
 
 type typeAggregation struct {
 	double   uint16
@@ -42,17 +45,29 @@ type typeAggregation struct {
 	geometry uint16
 	blob     uint16
 	total    uint16
+
+	nullable bool
+}
+
+func AggregateEvalTypes(types []Type, env *collations.Environment) (Type, error) {
+	var typeAgg typeAggregation
+	var collAgg collationAggregation
+	var size, scale int32
+	for _, typ := range types {
+		typeAgg.addNullable(typ.typ, typ.nullable)
+		if err := collAgg.add(typedCoercionCollation(typ.typ, typ.collation), env); err != nil {
+			return Type{}, err
+		}
+		size = max(typ.size, size)
+		scale = max(typ.scale, scale)
+	}
+	return NewTypeEx(typeAgg.result(), collAgg.result().Collation, typeAgg.nullable, size, scale), nil
 }
 
 func AggregateTypes(types []sqltypes.Type) sqltypes.Type {
 	var typeAgg typeAggregation
 	for _, typ := range types {
-		var flag typeFlag
-		if typ == sqltypes.HexVal || typ == sqltypes.HexNum {
-			typ = sqltypes.Binary
-			flag = flagHex
-		}
-		typeAgg.add(typ, flag)
+		typeAgg.addNullable(typ, false)
 	}
 	return typeAgg.result()
 }
@@ -63,6 +78,7 @@ func (ta *typeAggregation) addEval(e eval) {
 	switch e := e.(type) {
 	case nil:
 		t = sqltypes.Null
+		ta.nullable = true
 	case *evalBytes:
 		t = sqltypes.Type(e.tt)
 		f = e.flag
@@ -72,7 +88,22 @@ func (ta *typeAggregation) addEval(e eval) {
 	ta.add(t, f)
 }
 
+func (ta *typeAggregation) addNullable(typ sqltypes.Type, nullable bool) {
+	var flag typeFlag
+	if typ == sqltypes.HexVal || typ == sqltypes.HexNum {
+		typ = sqltypes.Binary
+		flag |= flagHex
+	}
+	if nullable {
+		flag |= flagNullable
+	}
+	ta.add(typ, flag)
+}
+
 func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag) {
+	if f&flagNullable != 0 {
+		ta.nullable = true
+	}
 	switch tt {
 	case sqltypes.Float32, sqltypes.Float64:
 		ta.double++
@@ -120,6 +151,23 @@ func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag) {
 		return
 	}
 	ta.total++
+}
+
+func nextSignedTypeForUnsigned(t sqltypes.Type) sqltypes.Type {
+	switch t {
+	case sqltypes.Uint8:
+		return sqltypes.Int16
+	case sqltypes.Uint16:
+		return sqltypes.Int24
+	case sqltypes.Uint24:
+		return sqltypes.Int32
+	case sqltypes.Uint32:
+		return sqltypes.Int64
+	case sqltypes.Uint64:
+		return sqltypes.Decimal
+	default:
+		panic("bad unsigned integer type")
+	}
 }
 
 func (ta *typeAggregation) result() sqltypes.Type {
@@ -175,11 +223,14 @@ func (ta *typeAggregation) result() sqltypes.Type {
 		if ta.unsigned == ta.total {
 			return ta.unsignedMax
 		}
-		if ta.unsignedMax == sqltypes.Uint64 && ta.signed > 0 {
-			return sqltypes.Decimal
+		if ta.signed == 0 {
+			panic("bad type aggregation for signed/unsigned types")
 		}
-		// TODO
-		return sqltypes.Uint64
+		agtype := nextSignedTypeForUnsigned(ta.unsignedMax)
+		if sqltypes.IsSigned(agtype) {
+			return max(agtype, ta.signedMax)
+		}
+		return agtype
 	}
 
 	if ta.char == ta.total {

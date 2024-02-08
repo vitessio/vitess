@@ -22,39 +22,44 @@ import (
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 // Env defines the functions supported by TabletServer
-// that the sub-componennts need to access.
+// that the sub-components need to access.
 type Env interface {
 	CheckMySQL()
 	Config() *TabletConfig
 	Exporter() *servenv.Exporter
 	Stats() *Stats
 	LogError()
+	Environment() *vtenv.Environment
 }
 
 type testEnv struct {
 	config   *TabletConfig
 	exporter *servenv.Exporter
 	stats    *Stats
+	env      *vtenv.Environment
 }
 
 // NewEnv creates an Env that can be used for tabletserver subcomponents
 // without an actual TabletServer.
-func NewEnv(config *TabletConfig, exporterName string) Env {
+func NewEnv(env *vtenv.Environment, config *TabletConfig, exporterName string) Env {
 	exporter := servenv.NewExporter(exporterName, "Tablet")
 	return &testEnv{
 		config:   config,
 		exporter: exporter,
 		stats:    NewStats(exporter),
+		env:      env,
 	}
 }
 
-func (*testEnv) CheckMySQL()                    {}
-func (te *testEnv) Config() *TabletConfig       { return te.config }
-func (te *testEnv) Exporter() *servenv.Exporter { return te.exporter }
-func (te *testEnv) Stats() *Stats               { return te.stats }
+func (*testEnv) CheckMySQL()                        {}
+func (te *testEnv) Config() *TabletConfig           { return te.config }
+func (te *testEnv) Exporter() *servenv.Exporter     { return te.exporter }
+func (te *testEnv) Stats() *Stats                   { return te.stats }
+func (te *testEnv) Environment() *vtenv.Environment { return te.env }
 
 func (te *testEnv) LogError() {
 	if x := recover(); x != nil {

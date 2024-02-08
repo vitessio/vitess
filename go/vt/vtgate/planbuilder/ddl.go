@@ -2,6 +2,7 @@ package planbuilder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/key"
@@ -172,7 +173,8 @@ func findTableDestinationAndKeyspace(vschema plancontext.VSchema, ddlStatement s
 	var err error
 	table, _, _, _, destination, err = vschema.FindTableOrVindex(ddlStatement.GetTable())
 	if err != nil {
-		_, isNotFound := err.(vindexes.NotFoundError)
+		var notFoundError vindexes.NotFoundError
+		isNotFound := errors.As(err, &notFoundError)
 		if !isNotFound {
 			return nil, nil, err
 		}
@@ -312,7 +314,8 @@ func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLState
 		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
 
 		if err != nil {
-			_, isNotFound := err.(vindexes.NotFoundError)
+			var notFoundError vindexes.NotFoundError
+			isNotFound := errors.As(err, &notFoundError)
 			if !isNotFound {
 				return nil, nil, err
 			}
@@ -355,7 +358,8 @@ func buildRenameTable(vschema plancontext.VSchema, renameTable *sqlparser.Rename
 		table, _, _, _, destinationFrom, err = vschema.FindTableOrVindex(tabPair.FromTable)
 
 		if err != nil {
-			_, isNotFound := err.(vindexes.NotFoundError)
+			var notFoundError vindexes.NotFoundError
+			isNotFound := errors.As(err, &notFoundError)
 			if !isNotFound {
 				return nil, nil, err
 			}

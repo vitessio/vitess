@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -270,7 +269,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 						fmt.Sprintf("%s|%s|%s|%s||9223372036854775807|9223372036854775807||PRIMARY,REPLICA|1669511347|0|Running||%s|200||1669511347|1|0||1", id, vdiffenv.workflow, vreplSource, vdiffSourceGtid, vdiffDBName),
 					), nil)
 
-					// At this point we know that we kicked off the expected retry so we can short circit the vdiff.
+					// At this point we know that we kicked off the expected retry so we can short circuit the vdiff.
 					shortCircuitTestAfterQuery(fmt.Sprintf("update _vt.vdiff set state = 'started', last_error = left('', 1024) , started_at = utc_timestamp() where id = %s", id), vdiffenv.dbClient)
 
 					expectedControllerCnt++

@@ -33,6 +33,17 @@ import "vtctldata.proto";
 // VTAdmin is the Vitess Admin API service. It provides RPCs that operate on
 // across a range of Vitess clusters.
 service VTAdmin {
+    // ApplySchema applies a schema to a keyspace in the given cluster.
+    rpc ApplySchema(ApplySchemaRequest) returns (vtctldata.ApplySchemaResponse) {};
+    // CancelSchemaMigration cancels one or all schema migrations in the given
+    // cluster, terminating any running ones as needed.
+    rpc CancelSchemaMigration(CancelSchemaMigrationRequest) returns (vtctldata.CancelSchemaMigrationResponse) {};
+    // CleanupSchemaMigration marks a schema migration in the given cluster as
+    // ready for artifact cleanup.
+    rpc CleanupSchemaMigration(CleanupSchemaMigrationRequest) returns (vtctldata.CleanupSchemaMigrationResponse) {};
+    // CompleteSchemaMigration completes one or all migrations in the given
+    // cluster executed with --postpone-completion.
+    rpc CompleteSchemaMigration(CompleteSchemaMigrationRequest) returns (vtctldata.CompleteSchemaMigrationResponse) {};
     // CreateKeyspace creates a new keyspace in the given cluster.
     rpc CreateKeyspace(CreateKeyspaceRequest) returns (CreateKeyspaceResponse) {};
     // CreateShard creates a new shard in the given cluster and keyspace.
@@ -77,6 +88,13 @@ service VTAdmin {
     rpc GetSchema(GetSchemaRequest) returns (Schema) {};
     // GetSchemas returns all schemas across the specified clusters.
     rpc GetSchemas(GetSchemasRequest) returns (GetSchemasResponse) {};
+    // GetSchemaMigrations returns one or more online schema migrations for the
+    // set of keyspaces (or all keyspaces) in the given clusters, analagous to
+    // repeated executions of `SHOW VITESS_MIGRATIONS`.
+    //
+    // Different fields in the request message result in different behaviors.
+    // See the documentation on vtctldata.GetSchemaMigrationsRequest for details.
+    rpc GetSchemaMigrations(GetSchemaMigrationsRequest) returns (GetSchemaMigrationsResponse) {};
     // GetShardReplicationPositions returns shard replication positions grouped
     // by cluster.
     rpc GetShardReplicationPositions(GetShardReplicationPositionsRequest) returns (GetShardReplicationPositionsResponse) {};
@@ -108,6 +126,9 @@ service VTAdmin {
     rpc GetWorkflow(GetWorkflowRequest) returns (Workflow) {};
     // GetWorkflows returns the Workflows for all specified clusters.
     rpc GetWorkflows(GetWorkflowsRequest) returns (GetWorkflowsResponse) {};
+    // LaunchSchemaMigration launches one or all migrations in the given
+    // cluster executed with --postpone-launch.
+    rpc LaunchSchemaMigration(LaunchSchemaMigrationRequest) returns (vtctldata.LaunchSchemaMigrationResponse) {};
     // PingTablet checks that the specified tablet is awake and responding to
     // RPCs. This command can be blocked by other in-flight operations.
     rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
@@ -134,6 +155,9 @@ service VTAdmin {
     rpc ReloadSchemaShard(ReloadSchemaShardRequest) returns (ReloadSchemaShardResponse) {};
     // RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
     rpc RemoveKeyspaceCell(RemoveKeyspaceCellRequest) returns (RemoveKeyspaceCellResponse) {};
+    // RetrySchemaMigration marks a given schema migration in the given cluster
+    // for retry.
+    rpc RetrySchemaMigration(RetrySchemaMigrationRequest) returns (vtctldata.RetrySchemaMigrationResponse) {};
     // RunHealthCheck runs a healthcheck on the tablet.
     rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
     // SetReadOnly sets the tablet to read-only mode.
@@ -249,6 +273,11 @@ message Schema {
     }
 }
 
+message SchemaMigration {
+    Cluster cluster = 1;
+    vtctldata.SchemaMigration schema_migration = 2;
+}
+
 // Shard groups the vtctldata information about a shard record together with
 // the Vitess cluster it belongs to.
 message Shard {
@@ -317,6 +346,26 @@ message Workflow {
 }
 
 /* Request/Response types */
+
+message ApplySchemaRequest {
+    string cluster_id = 1;
+    vtctldata.ApplySchemaRequest request = 2;
+}
+
+message CancelSchemaMigrationRequest {
+    string cluster_id = 1;
+    vtctldata.CancelSchemaMigrationRequest request = 2;
+}
+
+message CleanupSchemaMigrationRequest {
+    string cluster_id = 1;
+    vtctldata.CleanupSchemaMigrationRequest request = 2;
+}
+
+message CompleteSchemaMigrationRequest {
+    string cluster_id = 1;
+    vtctldata.CompleteSchemaMigrationRequest request = 2;
+}
 
 message CreateKeyspaceRequest {
     string cluster_id = 1;
@@ -472,6 +521,19 @@ message GetSchemasResponse {
     repeated Schema schemas = 1;
 }
 
+message GetSchemaMigrationsRequest {
+    repeated ClusterRequest cluster_requests = 1;
+
+    message ClusterRequest {
+        string cluster_id = 1;
+        vtctldata.GetSchemaMigrationsRequest request = 2;
+    }
+}
+
+message GetSchemaMigrationsResponse {
+    repeated SchemaMigration schema_migrations = 1;
+}
+
 message GetShardReplicationPositionsRequest {
     repeated string cluster_ids = 1;
     // Keyspaces, if set, limits replication positions to just the specified
@@ -605,6 +667,11 @@ message GetWorkflowsResponse {
     map <string, ClusterWorkflows> workflows_by_cluster = 1;
 }
 
+message LaunchSchemaMigrationRequest {
+    string cluster_id = 1;
+    vtctldata.LaunchSchemaMigrationRequest request = 2;
+}
+
 message PingTabletRequest {
     // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
     topodata.TabletAlias alias = 1;
@@ -689,7 +756,7 @@ message ReloadSchemasRequest {
     //
     // In Tablets mode, Concurrency is the number of tablets to reload at once
     // *per cluster*.
-    uint32 concurrency = 5;
+    int32 concurrency = 5;
     // WaitPosition is the replication position that replicating tablets should
     // reach prior to reloading their schemas.
     //
@@ -757,7 +824,7 @@ message ReloadSchemaShardRequest {
   string wait_position = 4;
   bool include_primary = 5;
 
-  uint32 concurrency = 6;
+  int32 concurrency = 6;
 }
 
 message ReloadSchemaShardResponse {
@@ -786,6 +853,11 @@ message RemoveKeyspaceCellRequest {
 
 message RemoveKeyspaceCellResponse {
   string status = 1;
+}
+
+message RetrySchemaMigrationRequest {
+    string cluster_id = 1;
+    vtctldata.RetrySchemaMigrationRequest request = 2;
 }
 
 message RunHealthCheckRequest {

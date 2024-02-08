@@ -805,6 +805,62 @@ func TestCompareWithWeightString(t *testing.T) {
 	}
 }
 
+func TestTinyWeightStrings(t *testing.T) {
+	var Collations = []Collation{
+		testcollation(t, "utf8mb4_0900_as_cs"),
+		testcollation(t, "utf8mb4_0900_as_ci"),
+		testcollation(t, "utf8mb4_0900_ai_ci"),
+	}
+
+	var Strings = []string{
+		"a", "A", "aa", "AA", "aaa", "AAA", "aaaa", "AAAA",
+		"b", "B", "BB", "BB", "bbb", "BBB", "bbbb", "BBBB",
+		"Abc", "aBC",
+		"ǍḄÇ", "ÁḆĈ",
+		"\uA73A", "\uA738",
+		"\uAC00", "\u326E",
+		ExampleString,
+		ExampleStringLong,
+		JapaneseString,
+		WhitespaceString,
+		HungarianString,
+		JapaneseString2,
+		ChineseString,
+		ChineseString2,
+		SpanishString,
+		EnglishString,
+	}
+
+	for _, coll := range Collations {
+		tw := coll.(TinyWeightCollation)
+
+		for _, a := range Strings {
+			aw := tw.TinyWeightString([]byte(a))
+
+			for _, b := range Strings {
+				bw := tw.TinyWeightString([]byte(b))
+				cmp := tw.Collate([]byte(a), []byte(b), false)
+
+				switch {
+				case cmp == 0:
+					if aw != bw {
+						t.Errorf("[%s] %q vs %q: should be equal, got %08x / %08x", coll.Name(), a, b, aw, bw)
+					}
+				case cmp < 0:
+					if aw > bw {
+						t.Errorf("[%s] %q vs %q: should be <=, got %08x / %08x", coll.Name(), a, b, aw, bw)
+					}
+				case cmp > 0:
+					if aw < bw {
+						t.Errorf("[%s] %q vs %q: should be >= got %08x / %08x", coll.Name(), a, b, aw, bw)
+					}
+				}
+			}
+		}
+	}
+
+}
+
 func TestFastIterators(t *testing.T) {
 	allASCIICharacters := make([]byte, 128)
 	for n := range allASCIICharacters {

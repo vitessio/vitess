@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -52,7 +53,7 @@ func init() {
 	Register("lookup_hash_unique", newLookupHashUnique)
 }
 
-//====================================================================
+// ====================================================================
 
 // LookupHash defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
@@ -205,7 +206,7 @@ func (lh *LookupHash) Verify(ctx context.Context, vcursor VCursor, ids []sqltype
 
 	values, err := unhashList(ksids)
 	if err != nil {
-		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
+		return nil, vterrors.Wrap(err, "lookup.Verify.vunhash")
 	}
 	return lh.lkp.Verify(ctx, vcursor, ids, values)
 }
@@ -214,7 +215,7 @@ func (lh *LookupHash) Verify(ctx context.Context, vcursor VCursor, ids []sqltype
 func (lh *LookupHash) Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
-		return fmt.Errorf("lookup.Create.vunhash: %v", err)
+		return vterrors.Wrap(err, "lookup.Create.vunhash")
 	}
 	return lh.lkp.Create(ctx, vcursor, rowsColValues, values, ignoreMode)
 }
@@ -223,7 +224,7 @@ func (lh *LookupHash) Create(ctx context.Context, vcursor VCursor, rowsColValues
 func (lh *LookupHash) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	v, err := vunhash(ksid)
 	if err != nil {
-		return fmt.Errorf("lookup.Update.vunhash: %v", err)
+		return vterrors.Wrap(err, "lookup.Update.vunhash")
 	}
 	return lh.lkp.Update(ctx, vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
 }
@@ -232,7 +233,7 @@ func (lh *LookupHash) Update(ctx context.Context, vcursor VCursor, oldValues []s
 func (lh *LookupHash) Delete(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
 	v, err := vunhash(ksid)
 	if err != nil {
-		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
+		return vterrors.Wrap(err, "lookup.Delete.vunhash")
 	}
 	return lh.lkp.Delete(ctx, vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
@@ -242,7 +243,7 @@ func (lh *LookupHash) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lh.lkp)
 }
 
-// UnknownParams satisifes the ParamValidating interface.
+// UnknownParams satisfies the ParamValidating interface.
 func (lh *LookupHash) UnknownParams() []string {
 	return lh.unknownParams
 }
@@ -260,12 +261,12 @@ func unhashList(ksids [][]byte) ([]sqltypes.Value, error) {
 	return values, nil
 }
 
-//====================================================================
+// ====================================================================
 
 // LookupHashUnique defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
-// Warning: This Vindex is being depcreated in favor of LookupUnique
+// Warning: This Vindex is being deprecated in favor of LookupUnique
 type LookupHashUnique struct {
 	name          string
 	writeOnly     bool
@@ -383,7 +384,7 @@ func (lhu *LookupHashUnique) Verify(ctx context.Context, vcursor VCursor, ids []
 
 	values, err := unhashList(ksids)
 	if err != nil {
-		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
+		return nil, vterrors.Wrap(err, "lookup.Verify.vunhash")
 	}
 	return lhu.lkp.Verify(ctx, vcursor, ids, values)
 }
@@ -392,7 +393,7 @@ func (lhu *LookupHashUnique) Verify(ctx context.Context, vcursor VCursor, ids []
 func (lhu *LookupHashUnique) Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
-		return fmt.Errorf("lookup.Create.vunhash: %v", err)
+		return vterrors.Wrap(err, "lookup.Create.vunhash")
 	}
 	return lhu.lkp.Create(ctx, vcursor, rowsColValues, values, ignoreMode)
 }
@@ -401,7 +402,7 @@ func (lhu *LookupHashUnique) Create(ctx context.Context, vcursor VCursor, rowsCo
 func (lhu *LookupHashUnique) Delete(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
 	v, err := vunhash(ksid)
 	if err != nil {
-		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
+		return vterrors.Wrap(err, "lookup.Delete.vunhash")
 	}
 	return lhu.lkp.Delete(ctx, vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
@@ -410,7 +411,7 @@ func (lhu *LookupHashUnique) Delete(ctx context.Context, vcursor VCursor, rowsCo
 func (lhu *LookupHashUnique) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	v, err := vunhash(ksid)
 	if err != nil {
-		return fmt.Errorf("lookup.Update.vunhash: %v", err)
+		return vterrors.Wrap(err, "lookup.Update.vunhash")
 	}
 	return lhu.lkp.Update(ctx, vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
 }

@@ -27,9 +27,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -83,6 +84,8 @@ type iExecute interface {
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
 	VSchema() *vindexes.VSchema
 	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
+
+	environment() *vtenv.Environment
 }
 
 // VSchemaOperator is an interface to Vschema Operations
@@ -105,6 +108,11 @@ type vcursorImpl struct {
 	logStats       *logstats.LogStats
 	collation      collations.ID
 
+	// fkChecksState stores the state of foreign key checks variable.
+	// This state is meant to be the final fk checks state after consulting the
+	// session state, and the given query's comments for `SET_VAR` optimizer hints.
+	// A nil value represents that no foreign_key_checks value was provided.
+	fkChecksState       *bool
 	ignoreMaxMemoryRows bool
 	vschema             *vindexes.VSchema
 	vm                  VSchemaOperator
@@ -157,7 +165,7 @@ func newVCursorImpl(
 		}
 	}
 	if connCollation == collations.Unknown {
-		connCollation = collations.Default()
+		connCollation = executor.env.CollationEnv().DefaultConnectionCharset()
 	}
 
 	warmingReadsPct := 0
@@ -201,8 +209,19 @@ func (vc *vcursorImpl) ConnCollation() collations.ID {
 	return vc.collation
 }
 
+// Environment returns the vtenv associated with this session
+func (vc *vcursorImpl) Environment() *vtenv.Environment {
+	return vc.executor.environment()
+}
+
 func (vc *vcursorImpl) TimeZone() *time.Location {
 	return vc.safeSession.TimeZone()
+}
+
+func (vc *vcursorImpl) SQLMode() string {
+	// TODO: Implement return the current sql_mode.
+	// This is currently hardcoded to the default in MySQL 8.0.
+	return config.DefaultSQLMode
 }
 
 // MaxMemoryRows returns the maxMemoryRows flag value.
@@ -1071,7 +1090,7 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 	_, _ = buf.WriteString(vc.keyspace)
 	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
 	_, _ = buf.WriteString("+Collate:")
-	_, _ = buf.WriteString(collations.Local().LookupName(vc.collation))
+	_, _ = buf.WriteString(vc.Environment().CollationEnv().LookupName(vc.collation))
 
 	if vc.destination != nil {
 		switch vc.destination.(type) {
@@ -1229,7 +1248,7 @@ func (vc *vcursorImpl) ThrottleApp(ctx context.Context, throttledAppRule *topoda
 }
 
 func (vc *vcursorImpl) CanUseSetVar() bool {
-	return sqlparser.IsMySQL80AndAbove() && setVarEnabled
+	return vc.Environment().Parser().IsMySQL80AndAbove() && setVarEnabled
 }
 
 func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {
@@ -1258,7 +1277,7 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 }
 
 func (vc *vcursorImpl) VExplainLogging() {
-	vc.safeSession.EnableLogging()
+	vc.safeSession.EnableLogging(vc.Environment().Parser())
 }
 
 func (vc *vcursorImpl) GetVExplainLogs() []engine.ExecuteEntry {
@@ -1330,4 +1349,23 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	v.marginComments.Trailing += "/* warming read */"
 
 	return v
+}
+
+// UpdateForeignKeyChecksState updates the foreign key checks state of the vcursor.
+func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
+	// Initialize the state to unspecified.
+	vc.fkChecksState = nil
+	// If the query has a SET_VAR optimizer hint that explicitly sets the foreign key checks state,
+	// we should use that.
+	if fkStateFromQuery != nil {
+		vc.fkChecksState = fkStateFromQuery
+		return
+	}
+	// If the query doesn't have anything, then we consult the session state.
+	vc.fkChecksState = vc.safeSession.ForeignKeyChecks()
+}
+
+// GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.
+func (vc *vcursorImpl) GetForeignKeyChecksState() *bool {
+	return vc.fkChecksState
 }

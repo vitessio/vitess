@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -98,13 +99,15 @@ type explainTablet struct {
 	mysqlQueries  []*MysqlQuery
 	currentTime   int
 	vte           *VTExplain
+
+	collationEnv *collations.Environment
 }
 
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
-func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatapb.Tablet) *explainTablet {
+func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
-	sidecardb.AddSchemaInitQueries(db, true)
+	sidecardb.AddSchemaInitQueries(db, true, env.Parser())
 
 	config := tabletenv.NewCurrentConfig()
 	config.TrackSchemaVersions = false
@@ -117,9 +120,9 @@ func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatap
 	config.EnableTableGC = false
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(ctx, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias)
+	tsv := tabletserver.NewTabletServer(ctx, env, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias)
 
-	tablet := explainTablet{db: db, tsv: tsv, vte: vte}
+	tablet := explainTablet{db: db, tsv: tsv, vte: vte, collationEnv: env.CollationEnv()}
 	db.Handler = &tablet
 
 	tablet.QueryService = queryservice.Wrap(
@@ -129,7 +132,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, opts *Options, t *topodatap
 		},
 	)
 
-	params, _ := db.ConnParams().MysqlParams()
+	params := db.ConnParams()
 	cp := *params
 	dbcfgs := dbconfigs.NewTestDBConfigs(cp, cp, "")
 	cnf := mysqlctl.NewMycnf(22222, 6802)
@@ -280,7 +283,7 @@ func (t *explainTablet) Close(ctx context.Context) error {
 	return t.tsv.Close(ctx)
 }
 
-func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tabletEnv, error) {
+func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collationEnv *collations.Environment) (*tabletEnv, error) {
 	tEnv := newTabletEnv()
 	schemaQueries := map[string]*sqltypes.Result{
 		"select unix_timestamp()": {
@@ -300,6 +303,15 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 			}},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarChar("STRICT_TRANS_TABLES")},
+			},
+		},
+		"select @@global.collation_server": {
+			Fields: []*querypb.Field{{
+				Type:    sqltypes.VarChar,
+				Charset: uint32(collations.SystemCollation.Collation),
+			}},
+			Rows: [][]sqltypes.Value{
+				{sqltypes.NewVarChar("utf8mb4_0900_ai_ci")},
 			},
 		},
 		"select @@session.sql_mode as sql_mode": {
@@ -442,10 +454,18 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 	indexRows := make([][]sqltypes.Value, 0, 4)
 	for _, ddl := range ddls {
 		table := sqlparser.String(ddl.GetTable().Name)
-		backtickedTable := sqlescape.EscapeID(sqlescape.UnescapeID(table))
+		sanitizedTable, err := sqlescape.UnescapeID(table)
+		if err != nil {
+			return nil, err
+		}
+		backtickedTable := sqlescape.EscapeID(sanitizedTable)
 		if ddl.GetOptLike() != nil {
 			likeTable := ddl.GetOptLike().LikeTable.Name.String()
-			backtickedLikeTable := sqlescape.EscapeID(sqlescape.UnescapeID(likeTable))
+			sanitizedLikeTable, err := sqlescape.UnescapeID(likeTable)
+			if err != nil {
+				return nil, err
+			}
+			backtickedLikeTable := sqlescape.EscapeID(sanitizedLikeTable)
 
 			likeQuery := "SELECT * FROM " + backtickedLikeTable + " WHERE 1 != 1"
 			query := "SELECT * FROM " + backtickedTable + " WHERE 1 != 1"
@@ -454,8 +474,8 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 			}
 			tEnv.addResult(query, tEnv.getResult(likeQuery))
 
-			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(likeTable))
-			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sanitizedLikeTable)
+			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sanitizedTable)
 			if tEnv.getResult(likeQuery) == nil {
 				return nil, fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
@@ -479,7 +499,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		colType := &querypb.Field{
 			Name:    "column_type",
 			Type:    sqltypes.VarChar,
-			Charset: uint32(collations.Default()),
+			Charset: uint32(collationEnv.DefaultConnectionCharset()),
 		}
 		colTypes = append(colTypes, colType)
 		for _, col := range ddl.GetTableSpec().Columns {
@@ -496,7 +516,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		tEnv.addResult("SELECT * FROM "+backtickedTable+" WHERE 1 != 1", &sqltypes.Result{
 			Fields: rowTypes,
 		})
-		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sanitizedTable)
 		tEnv.addResult(query, &sqltypes.Result{
 			Fields: colTypes,
 			Rows:   colValues,
@@ -581,7 +601,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 	// Parse the select statement to figure out the table and columns
 	// that were referenced so that the synthetic response has the
 	// expected field names and types.
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := t.vte.env.Parser().Parse(query)
 	if err != nil {
 		return nil, err
 	}
@@ -646,7 +666,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 	rows := make([][]sqltypes.Value, 0, rowCount)
 	for i, col := range colNames {
 		colType := colTypes[i]
-		cs := collations.DefaultCollationForType(colType)
+		cs := collations.CollationForType(colType, t.collationEnv.DefaultConnectionCharset())
 		fields[i] = &querypb.Field{
 			Name:    col,
 			Type:    colType,
@@ -734,7 +754,7 @@ func (t *explainTablet) analyzeWhere(selStmt *sqlparser.Select, tableColumnMap m
 		// Check if we have a duplicate value
 		isNewValue := true
 		for _, v := range inVal {
-			result, err := evalengine.NullsafeCompare(v, value, collations.Default())
+			result, err := evalengine.NullsafeCompare(v, value, t.collationEnv, t.collationEnv.DefaultConnectionCharset())
 			if err != nil {
 				return "", nil, 0, nil, err
 			}

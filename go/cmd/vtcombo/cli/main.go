@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtcombo"
 	"vitess.io/vitess/go/vt/vtctld"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -79,6 +80,8 @@ In particular, it contains:
 	tpb             vttestpb.VTTestTopology
 	ts              *topo.Server
 	resilientServer *srvtopo.ResilientServer
+
+	env *vtenv.Environment
 )
 
 func init() {
@@ -114,6 +117,16 @@ func init() {
 	// We're going to force the value later, so don't even bother letting the
 	// user know about this flag.
 	Main.Flags().MarkHidden("tablet_protocol")
+
+	var err error
+	env, err = vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		log.Fatalf("unable to initialize env: %v", err)
+	}
 }
 
 func startMysqld(uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err error) {
@@ -123,7 +136,7 @@ func startMysqld(uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err 
 	mycnfFile := mysqlctl.MycnfFile(uid)
 
 	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
-		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", mysqlPort)
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", mysqlPort, env.CollationEnv())
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to initialize mysql config :%w", err)
 		}
@@ -131,7 +144,7 @@ func startMysqld(uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err 
 			return nil, nil, fmt.Errorf("failed to initialize mysql :%w", err)
 		}
 	} else {
-		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(uid)
+		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(uid, env.CollationEnv())
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to find mysql config: %w", err)
 		}
@@ -146,6 +159,8 @@ func startMysqld(uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err 
 
 	return mysqld, cnf, nil
 }
+
+const mysqlShutdownTimeout = 5 * time.Minute
 
 func run(cmd *cobra.Command, args []string) (err error) {
 	// Stash away a copy of the topology that vtcombo was started with.
@@ -163,7 +178,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 
 	// vtctld UI requires the cell flag
 	cmd.Flags().Set("cell", tpb.Cells[0])
-	if cmd.Flags().Lookup("log_dir") == nil {
+	if f := cmd.Flags().Lookup("log_dir"); f != nil && !f.Changed {
 		cmd.Flags().Set("log_dir", "$VTDATAROOT/tmp")
 	}
 
@@ -195,13 +210,15 @@ func run(cmd *cobra.Command, args []string) (err error) {
 			return err
 		}
 		servenv.OnClose(func() {
-			mysqld.Shutdown(context.TODO(), cnf, true)
+			ctx, cancel := context.WithTimeout(context.Background(), mysqlShutdownTimeout+10*time.Second)
+			defer cancel()
+			mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout)
 		})
 		// We want to ensure we can write to this database
 		mysqld.SetReadOnly(false)
 
 	} else {
-		dbconfigs.GlobalDBConfigs.InitWithSocket("")
+		dbconfigs.GlobalDBConfigs.InitWithSocket("", env.CollationEnv())
 		mysqld.Mysqld = mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)
 		servenv.OnClose(mysqld.Close)
 	}
@@ -213,11 +230,13 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	// to be the "internal" protocol that InitTabletMap registers.
 	cmd.Flags().Set("tablet_manager_protocol", "internal")
 	cmd.Flags().Set("tablet_protocol", "internal")
-	uid, err := vtcombo.InitTabletMap(ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql)
+	uid, err := vtcombo.InitTabletMap(env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql)
 	if err != nil {
 		// ensure we start mysql in the event we fail here
 		if startMysql {
-			mysqld.Shutdown(context.TODO(), cnf, true)
+			ctx, cancel := context.WithTimeout(context.Background(), mysqlShutdownTimeout+10*time.Second)
+			defer cancel()
+			mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout)
 		}
 
 		return fmt.Errorf("initTabletMapProto failed: %w", err)
@@ -236,8 +255,8 @@ func run(cmd *cobra.Command, args []string) (err error) {
 			}
 		}
 
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
-		newUID, err := vtcombo.CreateKs(ctx, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, ks, true, uid, wr)
+		wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, nil)
+		newUID, err := vtcombo.CreateKs(ctx, env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, ks, true, uid, wr)
 		if err != nil {
 			return err
 		}
@@ -264,7 +283,9 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, ks.GetName(), tpb.Cells, false)
 		if err != nil {
 			if startMysql {
-				mysqld.Shutdown(context.TODO(), cnf, true)
+				ctx, cancel := context.WithTimeout(context.Background(), mysqlShutdownTimeout+10*time.Second)
+				defer cancel()
+				mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout)
 			}
 
 			return fmt.Errorf("Couldn't build srv keyspace for (%v: %v). Got error: %w", ks, tpb.Cells, err)
@@ -283,11 +304,12 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
 	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
+
 	// pass nil for healthcheck, it will get created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait, plannerVersion)
+	vtg := vtgate.Init(context.Background(), env, nil, resilientServer, tpb.Cells[0], tabletTypesToWait, plannerVersion)
 
 	// vtctld configuration and init
-	err = vtctld.InitVtctld(ts)
+	err = vtctld.InitVtctld(env, ts)
 	if err != nil {
 		return err
 	}

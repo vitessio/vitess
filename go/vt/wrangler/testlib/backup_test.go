@@ -27,13 +27,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/replication"
-
-	"vitess.io/vitess/go/vt/discovery"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -41,11 +40,14 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+const mysqlShutdownTimeout = 1 * time.Minute
 
 type compressionDetails struct {
 	CompressionEngineName   string
@@ -90,7 +92,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
@@ -263,7 +265,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	err = destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */, time.Time{} /* restoreToTimestamp */, "")
+	err = destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */, time.Time{} /* restoreToTimestamp */, "", mysqlShutdownTimeout)
 	if err != nil {
 		return err
 	}
@@ -302,7 +304,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	primary.FakeMysqlDaemon.SetReplicationPositionPos = primary.FakeMysqlDaemon.CurrentPrimaryPosition
 
 	// restore primary from latest backup
-	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, ""),
+	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "", mysqlShutdownTimeout),
 		"RestoreData failed")
 	// tablet was created as PRIMARY, so it's baseTabletType is PRIMARY
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
@@ -318,7 +320,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	}
 
 	// Test restore with the backup timestamp
-	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, backupTime, time.Time{} /* restoreToTimestamp */, ""),
+	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, backupTime, time.Time{} /* restoreToTimestamp */, "", mysqlShutdownTimeout),
 		"RestoreData with backup timestamp failed")
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
@@ -342,7 +344,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
@@ -519,7 +521,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 
 	errCh = make(chan error, 1)
 	go func(ctx context.Context, tablet *FakeTablet) {
-		errCh <- tablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "")
+		errCh <- tablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "", mysqlShutdownTimeout)
 	}(ctx, destTablet)
 
 	timer = time.NewTicker(1 * time.Second)
@@ -561,7 +563,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
@@ -713,7 +715,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	// set a short timeout so that we don't have to wait 30 seconds
 	topo.RemoteOperationTimeout = 2 * time.Second
 	// Restore should still succeed
-	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, ""))
+	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "", mysqlShutdownTimeout))
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.True(t, destTablet.FakeMysqlDaemon.Replicating)
@@ -736,7 +738,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
@@ -867,7 +869,7 @@ func TestDisableActiveReparents(t *testing.T) {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, ""))
+	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */, time.Time{} /* restoreToTimestamp */, "", mysqlShutdownTimeout))
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.False(t, destTablet.FakeMysqlDaemon.Replicating)
@@ -889,9 +891,9 @@ func needInnoDBRedoLogSubdir() (needIt bool, err error) {
 		return needIt, err
 	}
 	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
-	_, capableOf, _ := mysql.GetFlavor(versionStr, nil)
+	capableOf := mysql.ServerVersionCapableOf(versionStr)
 	if capableOf == nil {
 		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
 	}
-	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
+	return capableOf(capabilities.DynamicRedoLogCapacityFlavorCapability)
 }

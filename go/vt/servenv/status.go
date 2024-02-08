@@ -17,11 +17,11 @@ limitations under the License.
 package servenv
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -172,7 +172,8 @@ func newStatusPage(name string) *statusPage {
 		registerDebugBlockProfileRate()
 		registerDebugMutexProfileFraction()
 	} else {
-		HTTPHandleFunc("/"+name+StatusURLPath(), sp.statusHandler)
+		pat, _ := url.JoinPath("/", name, StatusURLPath())
+		HTTPHandleFunc(pat, sp.statusHandler)
 	}
 	return sp
 }
@@ -256,7 +257,7 @@ func (sp *statusPage) statusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (sp *statusPage) reparse(sections []section) (*template.Template, error) {
-	var buf bytes.Buffer
+	var buf strings.Builder
 
 	io.WriteString(&buf, `{{define "status"}}`)
 	io.WriteString(&buf, statusHTML)
@@ -301,7 +302,7 @@ func registerDebugBlockProfileRate() {
 		runtime.SetBlockProfileRate(rate)
 		log.Infof("Set block profile rate to: %d", rate)
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte(message))
+		io.WriteString(w, message)
 	})
 }
 
@@ -329,7 +330,7 @@ func registerDebugMutexProfileFraction() {
 		runtime.SetMutexProfileFraction(fraction)
 		log.Infof("Set mutex profiling fraction to: %d", fraction)
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte(message))
+		io.WriteString(w, message)
 	})
 }
 

@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtexplain"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -78,9 +79,7 @@ If no keyspace name is present, VTExplain will return the following error:
 ` + "```\n",
 		Example: "Explain how Vitess will execute the query `SELECT * FROM users` using the VSchema contained in `vschemas.json` and the database schema `schema.sql`:\n\n" +
 			"```\nvtexplain --vschema-file vschema.json --schema-file schema.sql --sql \"SELECT * FROM users\"\n```\n\n" +
-
 			"Explain how the example will execute on 128 shards using Row-based replication:\n\n" +
-
 			"```\nvtexplain -- -shards 128 --vschema-file vschema.json --schema-file schema.sql --replication-mode \"ROW\" --output-mode text --sql \"INSERT INTO users (user_id, name) VALUES(1, 'john')\"\n```\n",
 		Args:    cobra.NoArgs,
 		PreRunE: servenv.CobraPreRunE,
@@ -175,7 +174,15 @@ func parseAndRun() error {
 		Target:          dbName,
 	}
 
-	vte, err := vtexplain.Init(context.Background(), vschema, schema, ksShardMap, opts)
+	env, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		return err
+	}
+	vte, err := vtexplain.Init(context.Background(), env, vschema, schema, ksShardMap, opts)
 	if err != nil {
 		return err
 	}

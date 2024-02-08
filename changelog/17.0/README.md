@@ -1,4 +1,12 @@
 ## v17.0
+* **[17.0.5](17.0.5)**
+	* [Changelog](17.0.5/changelog.md)
+	* [Release Notes](17.0.5/release_notes.md)
+
+* **[17.0.4](17.0.4)**
+	* [Changelog](17.0.4/changelog.md)
+	* [Release Notes](17.0.4/release_notes.md)
+
 * **[17.0.3](17.0.3)**
 	* [Changelog](17.0.3/changelog.md)
 	* [Release Notes](17.0.3/release_notes.md)

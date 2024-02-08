@@ -21,9 +21,9 @@ import (
 	"slices"
 	"sort"
 
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -33,7 +33,7 @@ type (
 		ctx         *plancontext.PlanningContext
 		stmt        sqlparser.Statement
 		tableNames  []string
-		dmlOperator ops.Operator
+		dmlOperator Operator
 	}
 )
 
@@ -41,7 +41,7 @@ func (qb *queryBuilder) asSelectStatement() sqlparser.SelectStatement {
 	return qb.stmt.(sqlparser.SelectStatement)
 }
 
-func ToSQL(ctx *plancontext.PlanningContext, op ops.Operator) (_ sqlparser.Statement, _ ops.Operator, err error) {
+func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement, _ Operator, err error) {
 	defer PanicHandler(&err)
 
 	q := &queryBuilder{ctx: ctx}
@@ -85,7 +85,7 @@ func (qb *queryBuilder) addTableExpr(
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
-	if _, toBeSkipped := qb.ctx.SkipPredicates[expr]; toBeSkipped {
+	if qb.ctx.ShouldSkip(expr) {
 		// This is a predicate that was added to the RHS of an ApplyJoin.
 		// The original predicate will be added, so we don't have to add this here
 		return
@@ -310,7 +310,7 @@ func (ts *tableSorter) Swap(i, j int) {
 func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	switch expr := expr.(type) {
 	case *sqlparser.AliasedExpr:
-		sqlparser.RemoveKeyspaceFromColName(expr.Expr)
+		sqlparser.RemoveKeyspaceInCol(expr.Expr)
 	case *sqlparser.StarExpr:
 		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
 	}
@@ -347,7 +347,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) {
 }
 
 // buildQuery recursively builds the query into an AST, from an operator tree
-func buildQuery(op ops.Operator, qb *queryBuilder) {
+func buildQuery(op Operator, qb *queryBuilder) {
 	switch op := op.(type) {
 	case *Table:
 		buildTable(op, qb)
@@ -377,11 +377,33 @@ func buildQuery(op ops.Operator, qb *queryBuilder) {
 	case *Update:
 		buildUpdate(op, qb)
 	case *Delete:
-		buildDML(op, qb)
+		buildDelete(op, qb)
 	case *Insert:
 		buildDML(op, qb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
+	}
+}
+
+func buildDelete(op *Delete, qb *queryBuilder) {
+	buildQuery(op.Source, qb)
+	// currently the qb builds a select query underneath.
+	// Will take the `From` and `Where` from this select
+	// and create a delete statement.
+	// TODO: change it to directly produce `delete` statement.
+	sel, ok := qb.stmt.(*sqlparser.Select)
+	if !ok {
+		panic(vterrors.VT13001("expected a select here"))
+	}
+
+	qb.dmlOperator = op
+	qb.stmt = &sqlparser.Delete{
+		Ignore:     sqlparser.Ignore(op.Ignore),
+		Targets:    sqlparser.TableNames{op.Target.Name},
+		TableExprs: sel.From,
+		Where:      sel.Where,
+		Limit:      sel.Limit,
+		OrderBy:    sel.OrderBy,
 	}
 }
 
@@ -415,7 +437,7 @@ func buildUpdate(op *Update, qb *queryBuilder) {
 }
 
 type OpWithAST interface {
-	ops.Operator
+	Operator
 	Statement() sqlparser.Statement
 }
 
@@ -436,7 +458,7 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) {
 
 	for _, by := range op.Grouping {
 		qb.addGroupBy(by.Inner)
-		simplified := by.SimplifiedExpr
+		simplified := by.Inner
 		if by.WSOffset != -1 {
 			qb.addGroupBy(weightStringFor(simplified))
 		}
@@ -502,20 +524,24 @@ func buildProjection(op *Projection, qb *queryBuilder) {
 }
 
 func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
+	predicates := slice.Map(op.JoinPredicates.columns, func(jc applyJoinColumn) sqlparser.Expr {
+		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
+		err := qb.ctx.SkipJoinPredicates(jc.Original)
+		if err != nil {
+			panic(err)
+		}
+		return jc.Original
+	})
+	pred := sqlparser.AndExpressions(predicates...)
+
 	buildQuery(op.LHS, qb)
-	// If we are going to add the predicate used in join here
-	// We should not add the predicate's copy of when it was split into
-	// two parts. To avoid this, we use the SkipPredicates map.
-	for _, expr := range qb.ctx.JoinPredicates[op.Predicate] {
-		qb.ctx.SkipPredicates[expr] = nil
-	}
+
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.RHS, qbR)
-
 	if op.LeftJoin {
-		qb.joinOuterWith(qbR, op.Predicate)
+		qb.joinOuterWith(qbR, pred)
 	} else {
-		qb.joinInnerWith(qbR, op.Predicate)
+		qb.joinInnerWith(qbR, pred)
 	}
 }
 
@@ -546,7 +572,7 @@ func buildFilter(op *Filter, qb *queryBuilder) {
 func buildDerived(op *Horizon, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
 
-	sqlparser.RemoveKeyspace(op.Query)
+	sqlparser.RemoveKeyspaceInCol(op.Query)
 
 	stmt := qb.stmt
 	qb.stmt = nil

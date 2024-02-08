@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/vschemawrapper"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/test/vschemawrapper"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -45,6 +45,7 @@ func (tc *collationTestCase) run(t *testing.T) {
 		V:             loadSchema(t, "vschemas/schema.json", false),
 		SysVarEnabled: true,
 		Version:       Gen4,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	tc.addCollationsToSchema(vschemaWrapper)
@@ -59,7 +60,6 @@ func (tc *collationTestCase) addCollationsToSchema(vschema *vschemawrapper.VSche
 		for i, c := range tbl.Columns {
 			if c.Name.EqualString(collation.colName) {
 				tbl.Columns[i].CollationName = collation.collationName
-				break
 			}
 		}
 	}
@@ -67,7 +67,7 @@ func (tc *collationTestCase) addCollationsToSchema(vschema *vschemawrapper.VSche
 
 func TestOrderedAggregateCollations(t *testing.T) {
 	collid := func(collname string) collations.ID {
-		return collations.Local().LookupByName(collname)
+		return collations.MySQL8().LookupByName(collname)
 	}
 	testCases := []collationTestCase{
 		{
@@ -76,7 +76,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Coll)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Collation())
 			},
 		},
 		{
@@ -85,7 +85,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				distinct, isDistinct := primitive.(*engine.Distinct)
 				require.True(t, isDistinct, "should be a distinct")
-				require.Equal(t, collid(colls[0].collationName), distinct.CheckCols[0].Type.Coll)
+				require.Equal(t, collid(colls[0].collationName), distinct.CheckCols[0].Type.Collation())
 			},
 		},
 		{
@@ -97,8 +97,8 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Coll)
-				require.Equal(t, collid(colls[1].collationName), oa.GroupByKeys[1].Type.Coll)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Collation())
+				require.Equal(t, collid(colls[1].collationName), oa.GroupByKeys[1].Type.Collation())
 			},
 		},
 		{
@@ -109,7 +109,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Coll)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Collation())
 			},
 		},
 		{
@@ -122,7 +122,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 				require.True(t, isMemSort, "should be a MemorySort")
 				oa, isOA := memSort.Input.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Coll)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].Type.Collation())
 			},
 		},
 	}

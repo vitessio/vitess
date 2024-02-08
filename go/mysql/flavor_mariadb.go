@@ -23,14 +23,18 @@ import (
 	"io"
 	"time"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // mariadbFlavor implements the Flavor interface for MariaDB.
-type mariadbFlavor struct{}
+type mariadbFlavor struct {
+	serverVersion string
+}
 type mariadbFlavor101 struct {
 	mariadbFlavor
 }
@@ -48,7 +52,7 @@ func (mariadbFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
 		return nil, err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_binlog_pos: %#v", qr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_binlog_pos: %#v", qr)
 	}
 
 	return replication.ParseMariadbGTIDSet(qr.Rows[0][0].ToString())
@@ -223,22 +227,45 @@ func (m mariadbFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error)
 	return status, err
 }
 
-// waitUntilPositionCommand is part of the Flavor interface.
+// waitUntilPosition is part of the Flavor interface.
 //
 // Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even
 // if the sql thread stops. If that is a problem, we'll have to change this.
-func (mariadbFlavor) waitUntilPositionCommand(ctx context.Context, pos replication.Position) (string, error) {
+func (mariadbFlavor) waitUntilPosition(ctx context.Context, c *Conn, pos replication.Position) error {
+	// Omit the timeout to wait indefinitely. In MariaDB, a timeout of 0 means
+	// return immediately.
+	query := fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s')", pos)
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := time.Until(deadline)
 		if timeout <= 0 {
-			return "", vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
+			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
 		}
-		return fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s', %.6f)", pos, timeout.Seconds()), nil
+		query = fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s', %.6f)", pos, timeout.Seconds())
 	}
 
-	// Omit the timeout to wait indefinitely. In MariaDB, a timeout of 0 means
-	// return immediately.
-	return fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s')", pos), nil
+	result, err := c.ExecuteFetch(query, 1, false)
+	if err != nil {
+		return err
+	}
+
+	// For MASTER_GTID_WAIT(), if the wait completes without a timeout 0 is
+	// returned and -1 if there was a timeout.
+	if len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid results: %#v", result)
+	}
+	val := result.Rows[0][0]
+	state, err := val.ToInt64()
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %#v", val)
+	}
+	switch state {
+	case 0:
+		return nil
+	case -1:
+		return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for position %v", pos)
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid result of %d", state)
+	}
 }
 
 // readBinlogEvent is part of the Flavor interface.
@@ -262,7 +289,7 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mariadbFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+func (mariadbFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {
 	default:
 		return false, nil

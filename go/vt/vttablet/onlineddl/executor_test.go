@@ -23,9 +23,13 @@ package onlineddl
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -43,7 +47,9 @@ func TestGetConstraintType(t *testing.T) {
 }
 
 func TestValidateAndEditCreateTableStatement(t *testing.T) {
-	e := Executor{}
+	e := Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "ValidateAndEditCreateTableStatementTest"),
+	}
 	tt := []struct {
 		name                string
 		query               string
@@ -155,7 +161,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(tc.query)
+			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tc.query)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -185,7 +191,9 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 }
 
 func TestValidateAndEditAlterTableStatement(t *testing.T) {
-	e := Executor{}
+	e := Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestValidateAndEditAlterTableStatementTest"),
+	}
 	tt := []struct {
 		alter  string
 		m      map[string]string
@@ -255,7 +263,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(tc.alter)
+			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tc.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -267,7 +275,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "t", Options: "--unsafe-allow-foreign-keys"}
 			alters, err := e.validateAndEditAlterTableStatement(context.Background(), onlineDDL, alterTable, m)
 			assert.NoError(t, err)
-			altersStrings := []string{}
+			var altersStrings []string
 			for _, alter := range alters {
 				altersStrings = append(altersStrings, sqlparser.String(alter))
 			}
@@ -277,7 +285,9 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 }
 
 func TestAddInstantAlgorithm(t *testing.T) {
-	e := Executor{}
+	e := Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "AddInstantAlgorithmTest"),
+	}
 	tt := []struct {
 		alter  string
 		expect string
@@ -301,7 +311,7 @@ func TestAddInstantAlgorithm(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(tc.alter)
+			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tc.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -311,10 +321,156 @@ func TestAddInstantAlgorithm(t *testing.T) {
 
 			assert.Equal(t, tc.expect, alterInstant)
 
-			stmt, err = sqlparser.ParseStrictDDL(alterInstant)
+			stmt, err = e.env.Environment().Parser().ParseStrictDDL(alterInstant)
 			require.NoError(t, err)
 			_, ok = stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
+		})
+	}
+}
+
+func TestDuplicateCreateTable(t *testing.T) {
+	e := Executor{
+		env: tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "DuplicateCreateTableTest"),
+	}
+	ctx := context.Background()
+	onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "something", Strategy: "vitess", Options: "--unsafe-allow-foreign-keys"}
+
+	tcases := []struct {
+		sql           string
+		newName       string
+		expectSQL     string
+		expectMapSize int
+	}{
+		{
+			sql:       "create table t (id int primary key)",
+			newName:   "mytable",
+			expectSQL: "create table mytable (\n\tid int primary key\n)",
+		},
+		{
+			sql:           "create table t (id int primary key, i int, constraint f foreign key (i) references parent (id) on delete cascade)",
+			newName:       "mytable",
+			expectSQL:     "create table mytable (\n\tid int primary key,\n\ti int,\n\tconstraint f_bjj16562shq086ozik3zf6kjg foreign key (i) references parent (id) on delete cascade\n)",
+			expectMapSize: 1,
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			originalCreateTable, newCreateTable, constraintMap, err := e.duplicateCreateTable(ctx, onlineDDL, tcase.sql, tcase.newName)
+			assert.NoError(t, err)
+			assert.NotNil(t, originalCreateTable)
+			assert.NotNil(t, newCreateTable)
+			assert.NotNil(t, constraintMap)
+
+			newSQL := sqlparser.String(newCreateTable)
+			assert.Equal(t, tcase.expectSQL, newSQL)
+			assert.Equal(t, tcase.expectMapSize, len(constraintMap))
+		})
+	}
+}
+
+func TestShouldCutOverAccordingToBackoff(t *testing.T) {
+	tcases := []struct {
+		name string
+
+		shouldForceCutOverIndicator bool
+		forceCutOverAfter           time.Duration
+		sinceReadyToComplete        time.Duration
+		sinceLastCutoverAttempt     time.Duration
+		cutoverAttempts             int64
+
+		expectShouldCutOver      bool
+		expectShouldForceCutOver bool
+	}{
+		{
+			name:                "no reason why not, normal cutover",
+			expectShouldCutOver: true,
+		},
+		{
+			name:                "backoff",
+			cutoverAttempts:     1,
+			expectShouldCutOver: false,
+		},
+		{
+			name:                "more backoff",
+			cutoverAttempts:     3,
+			expectShouldCutOver: false,
+		},
+		{
+			name:                    "more backoff, since last cutover",
+			cutoverAttempts:         3,
+			sinceLastCutoverAttempt: time.Second,
+			expectShouldCutOver:     false,
+		},
+		{
+			name:                    "no backoff, long since last cutover",
+			cutoverAttempts:         3,
+			sinceLastCutoverAttempt: time.Hour,
+			expectShouldCutOver:     true,
+		},
+		{
+			name:                    "many attempts, long since last cutover",
+			cutoverAttempts:         3000,
+			sinceLastCutoverAttempt: time.Hour,
+			expectShouldCutOver:     true,
+		},
+		{
+			name:                        "force cutover",
+			shouldForceCutOverIndicator: true,
+			expectShouldCutOver:         true,
+			expectShouldForceCutOver:    true,
+		},
+		{
+			name:                        "force cutover overrides backoff",
+			cutoverAttempts:             3,
+			shouldForceCutOverIndicator: true,
+			expectShouldCutOver:         true,
+			expectShouldForceCutOver:    true,
+		},
+		{
+			name:                     "backoff; cutover-after not in effect yet",
+			cutoverAttempts:          3,
+			forceCutOverAfter:        time.Second,
+			expectShouldCutOver:      false,
+			expectShouldForceCutOver: false,
+		},
+		{
+			name:                     "backoff; cutover-after still not in effect yet",
+			cutoverAttempts:          3,
+			forceCutOverAfter:        time.Second,
+			sinceReadyToComplete:     time.Millisecond,
+			expectShouldCutOver:      false,
+			expectShouldForceCutOver: false,
+		},
+		{
+			name:                     "cutover-after overrides backoff",
+			cutoverAttempts:          3,
+			forceCutOverAfter:        time.Second,
+			sinceReadyToComplete:     time.Second * 2,
+			expectShouldCutOver:      true,
+			expectShouldForceCutOver: true,
+		},
+		{
+			name:                     "cutover-after overrides backoff, realistic value",
+			cutoverAttempts:          300,
+			sinceLastCutoverAttempt:  time.Minute,
+			forceCutOverAfter:        time.Hour,
+			sinceReadyToComplete:     time.Hour * 2,
+			expectShouldCutOver:      true,
+			expectShouldForceCutOver: true,
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			shouldCutOver, shouldForceCutOver := shouldCutOverAccordingToBackoff(
+				tcase.shouldForceCutOverIndicator,
+				tcase.forceCutOverAfter,
+				tcase.sinceReadyToComplete,
+				tcase.sinceLastCutoverAttempt,
+				tcase.cutoverAttempts,
+			)
+			assert.Equal(t, tcase.expectShouldCutOver, shouldCutOver)
+			assert.Equal(t, tcase.expectShouldForceCutOver, shouldForceCutOver)
 		})
 	}
 }

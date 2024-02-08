@@ -20,6 +20,7 @@ package testenv
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"regexp"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttest"
@@ -75,7 +77,9 @@ func Init(ctx context.Context) (*Env, error) {
 	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName); err != nil {
 		panic(err)
 	}
-	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, "TestTopo")
+	// Add a random suffix to metric name to avoid panic. Another option would have been to generate a random string.
+	suffix := rand.Int()
+	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, "TestTopo"+fmt.Sprint(suffix))
 
 	cfg := vttest.Config{
 		Topology: &vttestpb.VTTestTopology{
@@ -103,9 +107,9 @@ func Init(ctx context.Context) (*Env, error) {
 		return nil, fmt.Errorf("could not launch mysql: %v", err)
 	}
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
-	config := tabletenv.NewDefaultConfig()
-	config.DB = te.Dbcfgs
-	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest")
+	conf := tabletenv.NewDefaultConfig()
+	conf.DB = te.Dbcfgs
+	te.TabletEnv = tabletenv.NewEnv(vtenv.NewTestEnv(), conf, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	pos, _ := te.Mysqld.PrimaryPosition()
 	if strings.HasPrefix(strings.ToLower(pos.GTIDSet.Flavor()), string(mysqlctl.FlavorMariaDB)) {

@@ -79,7 +79,7 @@ func TestRemoteWildcardMatches(t *testing.T) {
 		{"Ǎḅeçd", "a%bd"},
 	}
 
-	for _, local := range colldata.All(collations.Local()) {
+	for _, local := range colldata.All(collations.MySQL8()) {
 		t.Run(local.Name(), func(t *testing.T) {
 			var remote = remote.NewCollation(conn, local.Name())
 			var err error

@@ -131,7 +131,8 @@ func (tm *TabletManager) RestoreData(
 	deleteBeforeRestore bool,
 	backupTime time.Time,
 	restoreToTimetamp time.Time,
-	restoreToPos string) error {
+	restoreToPos string,
+	mysqlShutdownTimeout time.Duration) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -180,14 +181,14 @@ func (tm *TabletManager) RestoreData(
 		RestoreToPos:       restoreToPos,
 		RestoreToTimestamp: protoutil.TimeToProto(restoreToTimetamp),
 	}
-	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req)
+	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, req, mysqlShutdownTimeout)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest) error {
+func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) error {
 
 	tablet := tm.Tablet()
 	originalType := tablet.Type
@@ -217,18 +218,19 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 
 	params := mysqlctl.RestoreParams{
-		Cnf:                 tm.Cnf,
-		Mysqld:              tm.MysqlDaemon,
-		Logger:              logger,
-		Concurrency:         restoreConcurrency,
-		HookExtraEnv:        tm.hookExtraEnv(),
-		DeleteBeforeRestore: deleteBeforeRestore,
-		DbName:              topoproto.TabletDbName(tablet),
-		Keyspace:            keyspace,
-		Shard:               tablet.Shard,
-		StartTime:           startTime,
-		DryRun:              request.DryRun,
-		Stats:               backupstats.RestoreStats(),
+		Cnf:                  tm.Cnf,
+		Mysqld:               tm.MysqlDaemon,
+		Logger:               logger,
+		Concurrency:          restoreConcurrency,
+		HookExtraEnv:         tm.hookExtraEnv(),
+		DeleteBeforeRestore:  deleteBeforeRestore,
+		DbName:               topoproto.TabletDbName(tablet),
+		Keyspace:             keyspace,
+		Shard:                tablet.Shard,
+		StartTime:            startTime,
+		DryRun:               request.DryRun,
+		Stats:                backupstats.RestoreStats(),
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 	restoreToTimestamp := protoutil.TimeFromProto(request.RestoreToTimestamp).UTC()
 	if request.RestoreToPos != "" && !restoreToTimestamp.IsZero() {
@@ -424,7 +426,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos replicati
 		Port: connParams.Port,
 	}
 	dbCfgs.SetDbParams(*connParams, *connParams, *connParams)
-	vsClient := vreplication.NewReplicaConnector(connParams)
+	vsClient := vreplication.NewReplicaConnector(tm.Env, connParams)
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -475,7 +477,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos replicati
 			gtidsChan <- []string{"", ""}
 		}
 	}()
-	defer vsClient.Close(ctx)
+	defer vsClient.Close()
 	select {
 	case val := <-gtidsChan:
 		return val[0], val[1], nil
@@ -581,7 +583,7 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 	}
 }
 
-// disableReplication stopes and resets replication on the mysql server. It moreover sets impossible replication
+// disableReplication stops and resets replication on the mysql server. It moreover sets impossible replication
 // source params, so that the replica can't possibly reconnect. It would take a `CHANGE [MASTER|REPLICATION SOURCE] TO ...` to
 // make the mysql server replicate again (available via tm.MysqlDaemon.SetReplicationPosition)
 func (tm *TabletManager) disableReplication(ctx context.Context) error {

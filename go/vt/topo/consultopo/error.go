@@ -40,15 +40,16 @@ var (
 // are either application-level errors, or context errors.
 func convertError(err error, nodePath string) error {
 	// Unwrap errors from the Go HTTP client.
-	if urlErr, ok := err.(*url.Error); ok {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
 		err = urlErr.Err
 	}
 
 	// Convert specific sentinel values.
-	switch err {
-	case context.Canceled:
+	switch {
+	case errors.Is(err, context.Canceled):
 		return topo.NewError(topo.Interrupted, nodePath)
-	case context.DeadlineExceeded:
+	case errors.Is(err, context.DeadlineExceeded):
 		return topo.NewError(topo.Timeout, nodePath)
 	}
 

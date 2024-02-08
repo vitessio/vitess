@@ -27,9 +27,14 @@ const (
 	SQLCalcFoundRowsStr = "sql_calc_found_rows "
 
 	// Select.Lock
-	NoLockStr    = ""
-	ForUpdateStr = " for update"
-	ShareModeStr = " lock in share mode"
+	NoLockStr              = ""
+	ForUpdateStr           = " for update"
+	ForUpdateNoWaitStr     = " for update nowait"
+	ForUpdateSkipLockedStr = " for update skip locked"
+	ForShareStr            = " for share"
+	ForShareNoWaitStr      = " for share nowait"
+	ForShareSkipLockedStr  = " for share skip locked"
+	ShareModeStr           = " lock in share mode"
 
 	// Select.Cache
 	SQLCacheStr   = "sql_cache "
@@ -257,10 +262,8 @@ const (
 	EmptyStr       = ""
 	TreeStr        = "tree"
 	JSONStr        = "json"
-	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
-	VTExplainStr   = "vtexplain"
 	QueriesStr     = "queries"
 	AllVExplainStr = "all"
 	PlanStr        = "plan"
@@ -309,6 +312,7 @@ const (
 	VitessTargetStr            = " vitess_target"
 	VitessVariablesStr         = " vitess_metadata variables"
 	VschemaTablesStr           = " vschema tables"
+	VschemaKeyspacesStr        = " vschema keyspaces"
 	VschemaVindexesStr         = " vschema vindexes"
 	WarningsStr                = " warnings"
 
@@ -515,6 +519,11 @@ const (
 	NoLock Lock = iota
 	ForUpdateLock
 	ShareModeLock
+	ForShareLock
+	ForShareLockNoWait
+	ForShareLockSkipLocked
+	ForUpdateLockNoWait
+	ForUpdateLockSkipLocked
 )
 
 // Constants for Enum Type - TrimType
@@ -799,8 +808,6 @@ const (
 	EmptyType ExplainType = iota
 	TreeType
 	JSONType
-	VitessType
-	VTExplainType
 	TraditionalType
 	AnalyzeType
 )
@@ -881,6 +888,7 @@ const (
 	VitessTarget
 	VitessVariables
 	VschemaTables
+	VschemaKeyspaces
 	VschemaVindexes
 	Warnings
 	Keyspace
@@ -916,6 +924,8 @@ const (
 	ThrottleAllMigrationType
 	UnthrottleMigrationType
 	UnthrottleAllMigrationType
+	ForceCutOverMigrationType
+	ForceCutOverAllMigrationType
 )
 
 // ColumnStorage constants

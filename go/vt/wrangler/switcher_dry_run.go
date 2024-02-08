@@ -24,7 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/maps2"
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
@@ -224,7 +225,7 @@ func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *workflow.StreamMi
 }
 
 func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *workflow.StreamMigrator) {
-	dr.drLog.Log("Cancel stream migrations as requested")
+	dr.drLog.Log("Cancel migration as requested")
 }
 
 func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) (context.Context, func(*error), error) {
@@ -399,7 +400,7 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
-	sortedBackingTableNames := maps2.Keys(sequencesByBackingTable)
+	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
 	slices.Sort(sortedBackingTableNames)
 	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
 		strings.Join(sortedBackingTableNames, ",")))

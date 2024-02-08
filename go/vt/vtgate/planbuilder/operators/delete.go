@@ -22,189 +22,278 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type Delete struct {
-	QTable           *QueryTable
-	VTable           *vindexes.Table
-	OwnedVindexQuery string
-	AST              *sqlparser.Delete
+	Target           TargetTable
+	OwnedVindexQuery *sqlparser.Select
+	Ignore           bool
+	Source           Operator
 
-	noInputs
 	noColumns
 	noPredicates
 }
 
+type TargetTable struct {
+	ID     semantics.TableSet
+	VTable *vindexes.Table
+	Name   sqlparser.TableName
+}
+
 // Introduces implements the PhysicalOperator interface
 func (d *Delete) introducesTableID() semantics.TableSet {
-	return d.QTable.ID
+	return d.Target.ID
 }
 
 // Clone implements the Operator interface
-func (d *Delete) Clone([]ops.Operator) ops.Operator {
-	return &Delete{
-		QTable:           d.QTable,
-		VTable:           d.VTable,
-		OwnedVindexQuery: d.OwnedVindexQuery,
-		AST:              d.AST,
+func (d *Delete) Clone(inputs []Operator) Operator {
+	newD := *d
+	newD.SetInputs(inputs)
+	return &newD
+}
+
+func (d *Delete) Inputs() []Operator {
+	return []Operator{d.Source}
+}
+
+func (d *Delete) SetInputs(inputs []Operator) {
+	if len(inputs) != 1 {
+		panic(vterrors.VT13001("unexpected number of inputs for Delete operator"))
 	}
+	d.Source = inputs[0]
 }
 
 func (d *Delete) TablesUsed() []string {
-	if d.VTable != nil {
-		return SingleQualifiedIdentifier(d.VTable.Keyspace, d.VTable.Name)
-	}
-	return nil
+	return SingleQualifiedIdentifier(d.Target.VTable.Keyspace, d.Target.VTable.Name)
 }
 
-func (d *Delete) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (d *Delete) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
 func (d *Delete) ShortDescription() string {
-	return fmt.Sprintf("%s.%s %s", d.VTable.Keyspace.Name, d.VTable.Name.String(), sqlparser.String(d.AST.Where))
+	return fmt.Sprintf("%s.%s", d.Target.VTable.Keyspace.Name, d.Target.VTable.Name.String())
 }
 
-func (d *Delete) Statement() sqlparser.Statement {
-	return d.AST
-}
+func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (op Operator) {
+	childFks := ctx.SemTable.GetChildForeignKeysForTable(deleteStmt.Targets[0])
 
-func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (ops.Operator, error) {
-	tableInfo, qt, err := createQueryTableForDML(ctx, deleteStmt.TableExprs[0], deleteStmt.Where)
-	if err != nil {
-		return nil, err
-	}
-
-	vindexTable, routing, err := buildVindexTableForDML(ctx, tableInfo, qt, "delete")
-	if err != nil {
-		return nil, err
+	// If the delete statement has a limit and has foreign keys, we will use a DeleteWithInput
+	// operator wherein we do a selection first and use that output for the subsequent deletes.
+	if len(childFks) > 0 && deleteStmt.Limit != nil {
+		return deletePlanningForLimitFk(ctx, deleteStmt)
 	}
 
 	delClone := sqlparser.CloneRefOfDelete(deleteStmt)
-	// Create the delete operator first.
-	delOp, err := createDeleteOperator(ctx, deleteStmt, qt, vindexTable, routing)
-	if err != nil {
-		return nil, err
-	}
+	delOp := createDeleteOperator(ctx, deleteStmt)
+	op = delOp
 
 	if deleteStmt.Comments != nil {
-		delOp = &LockAndComment{
-			Source:   delOp,
+		op = &LockAndComment{
+			Source:   op,
 			Comments: deleteStmt.Comments,
 		}
 	}
 
-	childFks := ctx.SemTable.GetChildForeignKeysList()
-	// If there are no foreign key constraints, then we don't need to do anything.
+	// If there are no foreign key constraints, then we don't need to do anything special.
 	if len(childFks) == 0 {
-		return delOp, nil
-	}
-	// If the delete statement has a limit, we don't support it yet.
-	if deleteStmt.Limit != nil {
-		return nil, vterrors.VT12001("foreign keys management at vitess with limit")
+		return op
 	}
 
-	return createFkCascadeOpForDelete(ctx, delOp, delClone, childFks)
+	return createFkCascadeOpForDelete(ctx, op, delClone, childFks, delOp.Target.VTable)
 }
 
-func createDeleteOperator(
-	ctx *plancontext.PlanningContext,
-	deleteStmt *sqlparser.Delete,
-	qt *QueryTable,
-	vindexTable *vindexes.Table,
-	routing Routing) (ops.Operator, error) {
-	del := &Delete{
-		QTable: qt,
-		VTable: vindexTable,
-		AST:    deleteStmt,
-	}
-	route := &Route{
-		Source:  del,
-		Routing: routing,
-	}
+func deletePlanningForLimitFk(ctx *plancontext.PlanningContext, del *sqlparser.Delete) Operator {
+	delClone := ctx.SemTable.Clone(del).(*sqlparser.Delete)
+	del.Limit = nil
+	del.OrderBy = nil
 
-	if !vindexTable.Keyspace.Sharded {
-		return route, nil
+	selectStmt := &sqlparser.Select{
+		From:    delClone.TableExprs,
+		Where:   delClone.Where,
+		OrderBy: delClone.OrderBy,
+		Limit:   delClone.Limit,
+		Lock:    sqlparser.ForUpdateLock,
 	}
-
-	primaryVindex, vindexAndPredicates, err := getVindexInformation(qt.ID, vindexTable)
+	ts := ctx.SemTable.Targets[del.Targets[0].Name]
+	ti, err := ctx.SemTable.TableInfoFor(ts)
 	if err != nil {
-		return nil, err
+		panic(vterrors.VT13001(err.Error()))
+	}
+	vTbl := ti.GetVindexTable()
+
+	var leftComp sqlparser.ValTuple
+	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
+	for _, col := range vTbl.PrimaryKey {
+		colName := sqlparser.NewColName(col.String())
+		selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(colName))
+		cols = append(cols, colName)
+		leftComp = append(leftComp, colName)
+		ctx.SemTable.Recursive[colName] = ts
+	}
+	// optimize for case when there is only single column on left hand side.
+	var lhs sqlparser.Expr = leftComp
+	if len(leftComp) == 1 {
+		lhs = leftComp[0]
+	}
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmVals), nil)
+	del.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
+
+	return &DeleteWithInput{
+		Delete: createOperatorFromDelete(ctx, del),
+		Source: createOperatorFromSelect(ctx, selectStmt),
+		cols:   cols,
+	}
+}
+
+func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) *Delete {
+	op := crossJoin(ctx, del.TableExprs)
+
+	if del.Where != nil {
+		op = addWherePredicates(ctx, del.Where.Expr, op)
 	}
 
-	tr, ok := routing.(*ShardedRouting)
-	if ok {
-		tr.VindexPreds = vindexAndPredicates
+	target := del.Targets[0]
+	tblID, exists := ctx.SemTable.Targets[target.Name]
+	if !exists {
+		panic(vterrors.VT13001("delete target table should be part of semantic analyzer"))
+	}
+	tblInfo, err := ctx.SemTable.TableInfoFor(tblID)
+	if err != nil {
+		panic(err)
 	}
 
-	var ovq string
-	if len(vindexTable.Owned) > 0 {
-		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: vindexTable.Name}, As: qt.Alias.As}
-		ovq = generateOwnedVindexQuery(tblExpr, deleteStmt, vindexTable, primaryVindex.Columns)
+	vTbl := tblInfo.GetVindexTable()
+	// Reference table should delete from the source table.
+	if vTbl.Type == vindexes.TypeReference && vTbl.Source != nil {
+		vTbl = updateQueryGraphWithSource(ctx, op, tblID, vTbl)
 	}
 
-	del.OwnedVindexQuery = ovq
+	name, err := tblInfo.Name()
+	if err != nil {
+		panic(err)
+	}
 
-	sqc := &SubQueryBuilder{}
-	for _, predicate := range qt.Predicates {
-		if subq, err := sqc.handleSubquery(ctx, predicate, qt.ID); err != nil {
-			return nil, err
-		} else if subq != nil {
+	targetTbl := TargetTable{
+		ID:     tblID,
+		VTable: vTbl,
+		Name:   name,
+	}
+
+	var ovq *sqlparser.Select
+	if vTbl.Keyspace.Sharded && vTbl.Type == vindexes.TypeTable {
+		primaryVindex, _ := getVindexInformation(tblID, vTbl)
+		ate := tblInfo.GetAliasedTableExpr()
+		if len(vTbl.Owned) > 0 {
+			ovq = generateOwnedVindexQuery(ate, del, targetTbl, primaryVindex.Columns)
+		}
+	}
+
+	delOp := &Delete{
+		Target:           targetTbl,
+		Source:           op,
+		Ignore:           bool(del.Ignore),
+		OwnedVindexQuery: ovq,
+	}
+
+	if del.Limit == nil {
+		return delOp
+	}
+
+	addOrdering(ctx, del, delOp)
+
+	delOp.Source = &Limit{
+		Source: delOp.Source,
+		AST:    del.Limit,
+	}
+
+	return delOp
+}
+
+func addOrdering(ctx *plancontext.PlanningContext, del *sqlparser.Delete, delOp *Delete) {
+	es := &expressionSet{}
+	ordering := &Ordering{
+		Source: delOp.Source,
+	}
+	for _, order := range del.OrderBy {
+		if sqlparser.IsNull(order.Expr) {
+			// ORDER BY null can safely be ignored
 			continue
 		}
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-		if err != nil {
-			return nil, err
+		if !es.add(ctx, order.Expr) {
+			continue
 		}
+		ordering.Order = append(ordering.Order, OrderBy{
+			Inner:          sqlparser.CloneRefOfOrder(order),
+			SimplifiedExpr: order.Expr,
+		})
 	}
-
-	if routing.OpCode() == engine.Scatter && deleteStmt.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.VT12001("multi shard DELETE with LIMIT")
+	if len(ordering.Order) > 0 {
+		delOp.Source = ordering
 	}
-
-	return sqc.getRootOperator(route, nil), nil
 }
 
-func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo) (ops.Operator, error) {
+func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator, tblID semantics.TableSet, vTbl *vindexes.Table) *vindexes.Table {
+	sourceTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vTbl.Source.TableName)
+	if err != nil {
+		panic(err)
+	}
+	vTbl = sourceTable
+	TopDown(input, TableID, func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+		qg, ok := op.(*QueryGraph)
+		if !ok {
+			return op, NoRewrite
+		}
+		if len(qg.Tables) > 1 {
+			panic(vterrors.VT12001("DELETE on reference table with join"))
+		}
+		for _, tbl := range qg.Tables {
+			if tbl.ID != tblID {
+				continue
+			}
+			tbl.Alias = sqlparser.NewAliasedTableExpr(sqlparser.NewTableName(vTbl.Name.String()), tbl.Alias.As.String())
+			tbl.Table, _ = tbl.Alias.TableName()
+		}
+		return op, Rewrote("change query table point to source table")
+	}, func(operator Operator) VisitRule {
+		_, ok := operator.(*QueryGraph)
+		return VisitRule(ok)
+	})
+	return vTbl
+}
+
+func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo, deletedTbl *vindexes.Table) Operator {
 	var fkChildren []*FkChild
 	var selectExprs []sqlparser.SelectExpr
 	for _, fk := range childFks {
 		// Any RESTRICT type foreign keys that arrive here,
 		// are cross-shard/cross-keyspace RESTRICT cases, which we don't currently support.
 		if fk.OnDelete.IsRestrict() {
-			return nil, vterrors.VT12002()
+			panic(vterrors.VT12002())
 		}
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
-		cols, exprs := selectParentColumns(fk, len(selectExprs))
-		selectExprs = append(selectExprs, exprs...)
+		var offsets []int
+		offsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs, deletedTbl.GetTableName())
 
-		fkChild, err := createFkChildForDelete(ctx, fk, cols)
-		if err != nil {
-			return nil, err
-		}
-		fkChildren = append(fkChildren, fkChild)
+		fkChildren = append(fkChildren,
+			createFkChildForDelete(ctx, fk, offsets))
 	}
-	selectionOp, err := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, sqlparser.ForUpdateLock)
-	if err != nil {
-		return nil, err
-	}
+	selectionOp := createSelectionOp(ctx, selectExprs, delStmt.TableExprs, delStmt.Where, nil, nil, getUpdateLock(deletedTbl))
 
 	return &FkCascade{
 		Selection: selectionOp,
 		Children:  fkChildren,
 		Parent:    parentOp,
-	}, nil
+	}
 }
 
-func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, cols []int) (*FkChild, error) {
+func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, cols []int) *FkChild {
 	bvName := ctx.ReservedVars.ReserveVariable(foreignKeyConstraintValues)
-
+	parsedComments := getParsedCommentsForFkChecks(ctx)
 	var childStmt sqlparser.Statement
 	switch fk.OnDelete {
 	case sqlparser.Cascade:
@@ -216,6 +305,7 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		}
 		compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 		childStmt = &sqlparser.Delete{
+			Comments:   parsedComments,
 			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
 		}
@@ -234,22 +324,20 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 		childStmt = &sqlparser.Update{
 			Exprs:      updExprs,
+			Comments:   parsedComments,
 			TableExprs: []sqlparser.TableExpr{sqlparser.NewAliasedTableExpr(fk.Table.GetTableName(), "")},
 			Where:      &sqlparser.Where{Type: sqlparser.WhereClause, Expr: compExpr},
 		}
 	case sqlparser.SetDefault:
-		return nil, vterrors.VT09016()
+		panic(vterrors.VT09016())
 	}
 
 	// For the child statement of a DELETE query, we don't need to verify all the FKs on VTgate or ignore any foreign key explicitly.
-	childOp, err := createOpFromStmt(ctx, childStmt, false /* verifyAllFKs */, "" /* fkToIgnore */)
-	if err != nil {
-		return nil, err
-	}
+	childOp := createOpFromStmt(ctx, childStmt, false /* verifyAllFKs */, "" /* fkToIgnore */)
 
 	return &FkChild{
 		BVName: bvName,
 		Cols:   cols,
 		Op:     childOp,
-	}, nil
+	}
 }

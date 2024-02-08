@@ -23,15 +23,67 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
+
+// TestRowStreamerQuery validates that the correct force index hint and order by is added to the rowstreamer query.
+func TestRowStreamerQuery(t *testing.T) {
+	execStatements(t, []string{
+		"create table t1(id int, uk1 int, val varbinary(128), primary key(id), unique key uk2 (uk1))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	// We need to StreamRows, to get an initialized RowStreamer.
+	// Note that the query passed into StreamRows is overwritten while running the test.
+	err := engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		type testCase struct {
+			directives      string
+			sendQuerySuffix string
+		}
+		queryTemplate := "select %s id, uk1, val from t1"
+		getQuery := func(directives string) string {
+			return fmt.Sprintf(queryTemplate, directives)
+		}
+		sendQueryPrefix := "select /*+ MAX_EXECUTION_TIME(3600000) */ id, uk1, val from t1"
+		testCases := []testCase{
+			{"", "force index (`PRIMARY`) order by id"},
+			{"/*vt+ ukColumns=\"uk1\" ukForce=\"uk2\" */", "force index (`uk2`) order by uk1"},
+			{"/*vt+ ukForce=\"uk2\" */", "force index (`uk2`) order by uk1"},
+			{"/*vt+ ukColumns=\"uk1\" */", "order by uk1"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.directives, func(t *testing.T) {
+				var err error
+				var rs *rowStreamer
+				// Depending on the order of the test cases, the index of the engine.rowStreamers slice may change.
+				for _, rs2 := range engine.rowStreamers {
+					if rs2 != nil {
+						rs = rs2
+						break
+					}
+				}
+				require.NotNil(t, rs)
+				rs.query = getQuery(tc.directives)
+				err = rs.buildPlan()
+				require.NoError(t, err)
+				want := fmt.Sprintf("%s %s", sendQueryPrefix, tc.sendQuerySuffix)
+				require.Equal(t, want, rs.sendQuery)
+			})
+		}
+		return nil
+	})
+	require.NoError(t, err)
+}
 
 func TestStreamRowsScan(t *testing.T) {
 	if testing.Short() {
@@ -206,7 +258,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 		engine = savedEngine
 	}()
 	engine = customEngine(t, func(in mysql.ConnParams) mysql.ConnParams {
-		in.Charset = "latin1"
+		in.Charset = collations.CollationLatin1Swedish
 		return in
 	})
 	defer engine.Close()
