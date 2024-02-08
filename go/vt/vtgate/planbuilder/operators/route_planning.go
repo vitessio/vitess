@@ -347,12 +347,12 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 			return join, Rewrote("use a hash join because we have LIMIT on the LHS")
 		}
 
-		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
+		join := NewApplyJoin(ctx, Clone(rhs), Clone(lhs), nil, !inner)
 		newOp := pushJoinPredicates(ctx, joinPredicates, join)
 		return newOp, Rewrote("logical join to applyJoin, switching side because LIMIT")
 	}
 
-	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
+	join := NewApplyJoin(ctx, Clone(lhs), Clone(rhs), nil, !inner)
 	newOp := pushJoinPredicates(ctx, joinPredicates, join)
 	return newOp, Rewrote("logical join to applyJoin ")
 }
