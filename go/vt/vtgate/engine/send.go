@@ -33,6 +33,8 @@ var _ Primitive = (*Send)(nil)
 
 // Send is an operator to send query to the specific keyspace, tabletType and destination
 type Send struct {
+	noInputs
+
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
 
@@ -55,8 +57,6 @@ type Send struct {
 	MultishardAutocommit bool
 
 	ReservedConnectionNeeded bool
-
-	noInputs
 }
 
 // ShardName as key for setting shard name in bind variables map

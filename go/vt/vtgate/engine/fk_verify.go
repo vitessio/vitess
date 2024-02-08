@@ -35,10 +35,10 @@ type Verify struct {
 // FkVerify is a primitive that verifies that the foreign key constraints in parent tables are satisfied.
 // It does this by executing a select distinct query on the parent table with the values that are being inserted/updated.
 type FkVerify struct {
+	txNeeded
+
 	Verify []*Verify
 	Exec   Primitive
-
-	txNeeded
 }
 
 // constants for verification type.

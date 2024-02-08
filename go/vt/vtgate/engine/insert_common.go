@@ -36,6 +36,9 @@ import (
 
 type (
 	InsertCommon struct {
+		// Insert needs tx handling
+		txNeeded
+
 		// Opcode is the execution opcode.
 		Opcode InsertOpcode
 
@@ -76,9 +79,6 @@ type (
 		// Prefix, Suffix are for sharded insert plans.
 		Prefix string
 		Suffix sqlparser.OnDup
-
-		// Insert needs tx handling
-		txNeeded
 	}
 
 	ksID = []byte

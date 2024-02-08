@@ -147,6 +147,7 @@ func (v *Viper) Watch(ctx context.Context, static *viper.Viper, minWaitInterval 
 
 	v.disk.SetConfigFile(cfg)
 	if err := v.disk.ReadInConfig(); err != nil {
+		cancel()
 		return nil, err
 	}
 
