@@ -267,16 +267,14 @@ func (call *builtinASCII) compile(c *compiler) (ctype, error) {
 
 func reverse(in *evalBytes) []byte {
 	cs := colldata.Lookup(in.col.Collation).Charset()
-	out, cur := make([]byte, len(in.bytes)), len(in.bytes)
+	b := in.bytes
 
-	for i := 0; i < charset.Length(cs, in.bytes); i++ {
-		b := charset.Slice(cs, in.bytes, i, i+1)
-		l := len(b)
-
-		copy(out[cur-l:cur], b)
-		cur = cur - l
+	out, cur := make([]byte, len(b)), len(b)
+	for _, size := cs.DecodeRune(b); size > 0; _, size = cs.DecodeRune(b) {
+		copy(out[cur-size:cur], b[:size])
+		b = b[size:]
+		cur = cur - size
 	}
-
 	return out
 }
 
