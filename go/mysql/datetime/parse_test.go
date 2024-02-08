@@ -96,32 +96,33 @@ func TestParseTime(t *testing.T) {
 		output testTime
 		norm   string
 		l      int
-		err    bool
+		state  TimeState
 	}{
 		{input: "00:00:00", norm: "00:00:00.000000", output: testTime{}},
-		{input: "00:00:00foo", norm: "00:00:00.000000", output: testTime{}, err: true},
+		{input: "-00:00:00", norm: "-00:00:00.000000", output: testTime{negative: true}},
+		{input: "00:00:00foo", norm: "00:00:00.000000", output: testTime{}, state: TimePartial},
 		{input: "11:12:13", norm: "11:12:13.000000", output: testTime{11, 12, 13, 0, false}},
-		{input: "11:12:13foo", norm: "11:12:13.000000", output: testTime{11, 12, 13, 0, false}, err: true},
+		{input: "11:12:13foo", norm: "11:12:13.000000", output: testTime{11, 12, 13, 0, false}, state: TimePartial},
 		{input: "11:12:13.1", norm: "11:12:13.100000", output: testTime{11, 12, 13, 100000000, false}, l: 1},
-		{input: "11:12:13.foo", norm: "11:12:13.000000", output: testTime{11, 12, 13, 0, false}, err: true},
-		{input: "11:12:13.1foo", norm: "11:12:13.100000", output: testTime{11, 12, 13, 100000000, false}, l: 1, err: true},
+		{input: "11:12:13.foo", norm: "11:12:13.000000", output: testTime{11, 12, 13, 0, false}, state: TimePartial},
+		{input: "11:12:13.1foo", norm: "11:12:13.100000", output: testTime{11, 12, 13, 100000000, false}, l: 1, state: TimePartial},
 		{input: "11:12:13.123456", norm: "11:12:13.123456", output: testTime{11, 12, 13, 123456000, false}, l: 6},
 		{input: "11:12:13.000001", norm: "11:12:13.000001", output: testTime{11, 12, 13, 1000, false}, l: 6},
 		{input: "11:12:13.000000", norm: "11:12:13.000000", output: testTime{11, 12, 13, 0, false}, l: 6},
-		{input: "11:12:13.123456foo", norm: "11:12:13.123456", output: testTime{11, 12, 13, 123456000, false}, l: 6, err: true},
+		{input: "11:12:13.123456foo", norm: "11:12:13.123456", output: testTime{11, 12, 13, 123456000, false}, l: 6, state: TimePartial},
 		{input: "3 11:12:13", norm: "83:12:13.000000", output: testTime{3*24 + 11, 12, 13, 0, false}},
-		{input: "3 11:12:13foo", norm: "83:12:13.000000", output: testTime{3*24 + 11, 12, 13, 0, false}, err: true},
+		{input: "3 11:12:13foo", norm: "83:12:13.000000", output: testTime{3*24 + 11, 12, 13, 0, false}, state: TimePartial},
 		{input: "3 41:12:13", norm: "113:12:13.000000", output: testTime{3*24 + 41, 12, 13, 0, false}},
-		{input: "3 41:12:13foo", norm: "113:12:13.000000", output: testTime{3*24 + 41, 12, 13, 0, false}, err: true},
-		{input: "34 23:12:13", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, err: true},
-		{input: "35 11:12:13", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, err: true},
+		{input: "3 41:12:13foo", norm: "113:12:13.000000", output: testTime{3*24 + 41, 12, 13, 0, false}, state: TimePartial},
+		{input: "34 23:12:13", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, state: TimePartial},
+		{input: "35 11:12:13", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, state: TimePartial},
 		{input: "11:12", norm: "11:12:00.000000", output: testTime{11, 12, 0, 0, false}},
 		{input: "5 11:12", norm: "131:12:00.000000", output: testTime{5*24 + 11, 12, 0, 0, false}},
 		{input: "-2 11:12", norm: "-59:12:00.000000", output: testTime{2*24 + 11, 12, 0, 0, true}},
-		{input: "--2 11:12", norm: "00:00:00.000000", err: true},
-		{input: "nonsense", norm: "00:00:00.000000", err: true},
+		{input: "--2 11:12", norm: "00:00:00.000000", state: TimeInvalid},
+		{input: "nonsense", norm: "00:00:00.000000", state: TimeInvalid},
 		{input: "2 11", norm: "59:00:00.000000", output: testTime{2*24 + 11, 0, 0, 0, false}},
-		{input: "2 -11", norm: "00:00:02.000000", output: testTime{0, 0, 2, 0, false}, err: true},
+		{input: "2 -11", norm: "00:00:02.000000", output: testTime{0, 0, 2, 0, false}, state: TimePartial},
 		{input: "13", norm: "00:00:13.000000", output: testTime{0, 0, 13, 0, false}},
 		{input: "111213", norm: "11:12:13.000000", output: testTime{11, 12, 13, 0, false}},
 		{input: "111213.123456", norm: "11:12:13.123456", output: testTime{11, 12, 13, 123456000, false}, l: 6},
@@ -130,19 +131,21 @@ func TestParseTime(t *testing.T) {
 		{input: "25:12:13", norm: "25:12:13.000000", output: testTime{25, 12, 13, 0, false}},
 		{input: "32:35", norm: "32:35:00.000000", output: testTime{32, 35, 0, 0, false}},
 		{input: "101:34:58", norm: "101:34:58.000000", output: testTime{101, 34, 58, 0, false}},
+		{input: "101:64:58", norm: "00:00:00.000000", state: TimeInvalid},
+		{input: "101:34:68", norm: "00:00:00.000000", state: TimeInvalid},
 		{input: "1", norm: "00:00:01.000000", output: testTime{0, 0, 1, 0, false}},
 		{input: "11", norm: "00:00:11.000000", output: testTime{0, 0, 11, 0, false}},
 		{input: "111", norm: "00:01:11.000000", output: testTime{0, 1, 11, 0, false}},
 		{input: "1111", norm: "00:11:11.000000", output: testTime{0, 11, 11, 0, false}},
 		{input: "11111", norm: "01:11:11.000000", output: testTime{1, 11, 11, 0, false}},
 		{input: "111111", norm: "11:11:11.000000", output: testTime{11, 11, 11, 0, false}},
-		{input: "1foo", norm: "00:00:01.000000", output: testTime{0, 0, 1, 0, false}, err: true},
-		{input: "11foo", norm: "00:00:11.000000", output: testTime{0, 0, 11, 0, false}, err: true},
-		{input: "111foo", norm: "00:01:11.000000", output: testTime{0, 1, 11, 0, false}, err: true},
-		{input: "1111foo", norm: "00:11:11.000000", output: testTime{0, 11, 11, 0, false}, err: true},
-		{input: "11111foo", norm: "01:11:11.000000", output: testTime{1, 11, 11, 0, false}, err: true},
-		{input: "111111foo", norm: "11:11:11.000000", output: testTime{11, 11, 11, 0, false}, err: true},
-		{input: "1111111foo", norm: "111:11:11.000000", output: testTime{111, 11, 11, 0, false}, err: true},
+		{input: "1foo", norm: "00:00:01.000000", output: testTime{0, 0, 1, 0, false}, state: TimePartial},
+		{input: "11foo", norm: "00:00:11.000000", output: testTime{0, 0, 11, 0, false}, state: TimePartial},
+		{input: "111foo", norm: "00:01:11.000000", output: testTime{0, 1, 11, 0, false}, state: TimePartial},
+		{input: "1111foo", norm: "00:11:11.000000", output: testTime{0, 11, 11, 0, false}, state: TimePartial},
+		{input: "11111foo", norm: "01:11:11.000000", output: testTime{1, 11, 11, 0, false}, state: TimePartial},
+		{input: "111111foo", norm: "11:11:11.000000", output: testTime{11, 11, 11, 0, false}, state: TimePartial},
+		{input: "1111111foo", norm: "111:11:11.000000", output: testTime{111, 11, 11, 0, false}, state: TimePartial},
 		{input: "-1", norm: "-00:00:01.000000", output: testTime{0, 0, 1, 0, true}},
 		{input: "-11", norm: "-00:00:11.000000", output: testTime{0, 0, 11, 0, true}},
 		{input: "-111", norm: "-00:01:11.000000", output: testTime{0, 1, 11, 0, true}},
@@ -172,44 +175,31 @@ func TestParseTime(t *testing.T) {
 		{input: "11111.1", norm: "01:11:11.100000", output: testTime{1, 11, 11, 100000000, false}, l: 1},
 		{input: "111111.1", norm: "11:11:11.100000", output: testTime{11, 11, 11, 100000000, false}, l: 1},
 		{input: "1111111.1", norm: "111:11:11.100000", output: testTime{111, 11, 11, 100000000, false}, l: 1},
-		{input: "20000101", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, err: true},
-		{input: "-20000101", norm: "-838:59:59.000000", output: testTime{838, 59, 59, 0, true}, err: true},
-		{input: "999995959", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, err: true},
-		{input: "-999995959", norm: "-838:59:59.000000", output: testTime{838, 59, 59, 0, true}, err: true},
-		{input: "4294965959", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, err: true},
-		{input: "-4294965959", norm: "-838:59:59.000000", output: testTime{838, 59, 59, 0, true}, err: true},
-		{input: "4294975959", norm: "00:00:00.000000", err: true},
-		{input: "-4294975959", norm: "00:00:00.000000", err: true},
-		{input: "\t34 foo\t", norm: "00:00:34.000000", output: testTime{0, 0, 34, 0, false}, err: true},
-		{input: "\t34 1foo\t", norm: "817:00:00.000000", output: testTime{817, 0, 0, 0, false}, err: true},
-		{input: "\t34 23foo\t", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, err: true},
-		{input: "\t35 foo\t", norm: "00:00:35.000000", output: testTime{0, 0, 35, 0, false}, err: true},
-		{input: "\t35 1foo\t", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, err: true},
-		{input: " 255 foo", norm: "00:02:55.000000", output: testTime{0, 2, 55, 0, false}, err: true},
-		{input: "255", norm: "00:02:55.000000", output: testTime{0, 2, 55, 0, false}},
+		{input: "20000101", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, state: TimePartial},
+		{input: "-20000101", norm: "-838:59:59.000000", output: testTime{838, 59, 59, 0, true}, state: TimePartial},
+		{input: "999995959", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, state: TimePartial},
+		{input: "-999995959", norm: "-838:59:59.000000", output: testTime{838, 59, 59, 0, true}, state: TimePartial},
+		{input: "4294965959", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, state: TimePartial},
+		{input: "-4294965959", norm: "-838:59:59.000000", output: testTime{838, 59, 59, 0, true}, state: TimePartial},
+		{input: "4294975959", norm: "00:00:00.000000", state: TimeInvalid},
+		{input: "-4294975959", norm: "00:00:00.000000", state: TimeInvalid},
+		{input: "\t34 foo\t", norm: "00:00:34.000000", output: testTime{0, 0, 34, 0, false}, state: TimePartial},
+		{input: "\t34 1foo\t", norm: "817:00:00.000000", output: testTime{817, 0, 0, 0, false}, state: TimePartial},
+		{input: "\t34 23foo\t", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, state: TimePartial},
+		{input: "\t35 foo\t", norm: "00:00:35.000000", output: testTime{0, 0, 35, 0, false}, state: TimePartial},
+		{input: "\t35 1foo\t", norm: "838:59:59.000000", output: testTime{838, 59, 59, 0, false}, state: TimePartial},
 	}
 
 	for _, test := range tests {
 		t.Run(test.input, func(t *testing.T) {
-			got, l, ok := ParseTime(test.input, -1)
-			if test.err {
-				assert.Equal(t, test.output.hour, got.Hour())
-				assert.Equal(t, test.output.minute, got.Minute())
-				assert.Equal(t, test.output.second, got.Second())
-				assert.Equal(t, test.output.nanosecond, got.Nanosecond())
-				assert.Equal(t, test.norm, string(got.AppendFormat(nil, 6)))
-				assert.Equal(t, test.l, l)
-				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
-				return
-			}
-
-			require.True(t, ok)
+			got, l, state := ParseTime(test.input, -1)
+			assert.Equal(t, test.state, state)
 			assert.Equal(t, test.output.hour, got.Hour())
 			assert.Equal(t, test.output.minute, got.Minute())
 			assert.Equal(t, test.output.second, got.Second())
 			assert.Equal(t, test.output.nanosecond, got.Nanosecond())
-			assert.Equal(t, test.l, l)
 			assert.Equal(t, test.norm, string(got.AppendFormat(nil, 6)))
+			assert.Equal(t, test.l, l)
 		})
 	}
 }

@@ -17,8 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -205,10 +203,12 @@ func createMergedUnion(
 		rt, foundR := ctx.SemTable.TypeForExpr(rae.Expr)
 		lt, foundL := ctx.SemTable.TypeForExpr(lae.Expr)
 		if foundR && foundL {
-			types := []sqltypes.Type{rt.Type(), lt.Type()}
-			t := evalengine.AggregateTypes(types)
-			ctx.SemTable.ExprTypes[col] = evalengine.NewType(t, collations.Unknown)
+			t, err := evalengine.AggregateEvalTypes([]evalengine.Type{rt, lt}, ctx.VSchema.Environment().CollationEnv())
+			if err == nil {
+				ctx.SemTable.ExprTypes[col] = t
+			}
 		}
+
 		ctx.SemTable.Recursive[col] = deps
 	}
 

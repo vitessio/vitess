@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -217,6 +218,10 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 				continue
 			}
 			for _, fkDef := range tblInfo.ForeignKeys {
+				// Ignore internal tables as part of foreign key references.
+				if schema.IsInternalOperationTableName(fkDef.ReferenceDefinition.ReferencedTable.Name.String()) {
+					continue
+				}
 				parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
 				if err != nil {
 					log.Errorf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err)

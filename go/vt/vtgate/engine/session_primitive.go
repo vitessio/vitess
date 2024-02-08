@@ -27,11 +27,11 @@ import (
 // SessionPrimitive the session primitive is a very small primitive used
 // when we have simple engine code that needs to interact with the Session
 type SessionPrimitive struct {
-	action func(sa SessionActions) (*sqltypes.Result, error)
-	name   string
-
 	noInputs
 	noTxNeeded
+
+	action func(sa SessionActions) (*sqltypes.Result, error)
+	name   string
 }
 
 var _ Primitive = (*SessionPrimitive)(nil)

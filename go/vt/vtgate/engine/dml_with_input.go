@@ -32,12 +32,12 @@ const DmlVals = "dml_vals"
 
 // DMLWithInput represents the instructions to perform a DML operation based on the input result.
 type DMLWithInput struct {
+	txNeeded
+
 	DML   Primitive
 	Input Primitive
 
 	OutputCols []int
-
-	txNeeded
 }
 
 func (dml *DMLWithInput) RouteType() string {

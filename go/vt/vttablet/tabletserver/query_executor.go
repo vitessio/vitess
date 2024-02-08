@@ -1182,7 +1182,12 @@ func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(sche
 	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
 		schemaDef := make(map[string]string)
 		for _, row := range result.Rows {
-			schemaDef[row[0].ToString()] = row[1].ToString()
+			tableName := row[0].ToString()
+			// Schema RPC should ignore the internal table in the response.
+			if schema.IsInternalOperationTableName(tableName) {
+				continue
+			}
+			schemaDef[tableName] = row[1].ToString()
 		}
 		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
 	})
