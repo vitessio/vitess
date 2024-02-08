@@ -54,6 +54,7 @@ import (
 	"fmt"
 	"log/syslog"
 	"os"
+	"testing"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/vt/log"
@@ -147,13 +148,20 @@ func listener(ev Syslogger) {
 
 func init() {
 	servenv.OnInit(func() {
-		var err error
-		writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_USER, os.Args[0])
-		if err != nil {
-			log.Errorf("can't connect to syslog: %v", err.Error())
-			writer = nil
-		}
-
-		event.AddListener(listener)
+		initSyslog()
 	})
+	if testing.Testing() {
+		initSyslog()
+	}
+}
+
+func initSyslog() {
+	var err error
+	writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_USER, os.Args[0])
+	if err != nil {
+		log.Errorf("can't connect to syslog: %v", err.Error())
+		writer = nil
+	}
+
+	event.AddListener(listener)
 }
