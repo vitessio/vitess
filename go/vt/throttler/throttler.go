@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/topodata"
 
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
@@ -222,6 +223,28 @@ func (t *Throttler) Throttle(threadID int) time.Duration {
 		panic(fmt.Sprintf("BUG: thread with ID: %v already finished", threadID))
 	}
 	return t.threadThrottlers[threadID].throttle(t.nowFunc())
+}
+
+// MaxLag returns the max of all the last replication lag values seen across all tablets of
+// the provided type, excluding ignored tablets.
+func (t *Throttler) MaxLag(tabletType topodata.TabletType) uint32 {
+	cache := t.maxReplicationLagModule.lagCacheByType(tabletType)
+
+	var maxLag uint32
+	cacheEntries := cache.entries
+
+	for key := range cacheEntries {
+		if cache.isIgnored(key) {
+			continue
+		}
+
+		lag := cache.latest(key).Stats.ReplicationLagSeconds
+		if lag > maxLag {
+			maxLag = lag
+		}
+	}
+
+	return maxLag
 }
 
 // ThreadFinished marks threadID as finished and redistributes the thread's
