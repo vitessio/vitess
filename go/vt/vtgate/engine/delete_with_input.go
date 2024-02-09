@@ -32,12 +32,12 @@ const DmVals = "dm_vals"
 
 // DeleteWithInput represents the instructions to perform a delete operation based on the input result.
 type DeleteWithInput struct {
+	txNeeded
+
 	Delete Primitive
 	Input  Primitive
 
 	OutputCols []int
-
-	txNeeded
 }
 
 func (del *DeleteWithInput) RouteType() string {

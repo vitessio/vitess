@@ -120,6 +120,14 @@ func (a *Aggregator) isDerived() bool {
 	return a.DT != nil
 }
 
+func (a *Aggregator) derivedName() string {
+	if a.DT == nil {
+		return ""
+	}
+
+	return a.DT.Alias
+}
+
 func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr, underRoute bool) int {
 	if underRoute && a.isDerived() {
 		// We don't want to use columns on this operator if it's a derived table under a route.

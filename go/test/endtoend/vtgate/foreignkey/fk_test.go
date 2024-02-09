@@ -170,6 +170,14 @@ func TestUpdateWithFK(t *testing.T) {
 	// Verify the result in u_t2 and u_t3 as well.
 	utils.AssertMatches(t, conn, `select * from u_t2 order by id`, `[[INT64(19) INT64(1234)] [INT64(342) NULL]]`)
 	utils.AssertMatches(t, conn, `select * from u_t3 order by id`, `[[INT64(1) INT64(12)] [INT64(32) INT64(13)]]`)
+
+	// Update with a subquery inside, such that the update is on a foreign key related column.
+	qr = utils.Exec(t, conn, `update u_t2 set col2 = (select col1 from u_t1 where id = 100) where id = 342`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	// Verify the result in u_t1, u_t2 and u_t3.
+	utils.AssertMatches(t, conn, `select * from u_t1 order by id`, `[[INT64(1) INT64(13)] [INT64(10) INT64(12)] [INT64(100) INT64(13)] [INT64(1000) INT64(1234)]]`)
+	utils.AssertMatches(t, conn, `select * from u_t2 order by id`, `[[INT64(19) INT64(1234)] [INT64(342) INT64(13)]]`)
+	utils.AssertMatches(t, conn, `select * from u_t3 order by id`, `[[INT64(1) INT64(12)] [INT64(32) INT64(13)]]`)
 }
 
 // TestVstreamForFKBinLog tests that dml queries with fks are written with child row first approach in the binary logs.
