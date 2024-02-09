@@ -19,13 +19,12 @@ package operators
 import (
 	"fmt"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtenv"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -557,11 +556,21 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return r
 }
 
-func createProjection(ctx *plancontext.PlanningContext, src Operator) *Projection {
+func createProjection(ctx *plancontext.PlanningContext, src Operator, derivedName string) *Projection {
 	proj := newAliasedProjection(src)
 	cols := src.GetColumns(ctx)
 	for _, col := range cols {
-		proj.addUnexploredExpr(col, col.Expr)
+		if derivedName == "" {
+			proj.addUnexploredExpr(col, col.Expr)
+			continue
+		}
+
+		// for derived tables, we want to use the exposed colname
+		tableName := sqlparser.NewTableName(derivedName)
+		columnName := col.ColumnName()
+		colName := sqlparser.NewColNameWithQualifier(columnName, tableName)
+		ctx.SemTable.CopySemanticInfo(col.Expr, colName)
+		proj.addUnexploredExpr(aeWrap(colName), colName)
 	}
 	return proj
 }
@@ -578,14 +587,14 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 
 	// if at least one column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
-	op, ok, offsets := addMultipleColumnsToInput(ctx, r.Source, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
+	derived, op, ok, offsets := addMultipleColumnsToInput(ctx, r.Source, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
 	r.Source = op
 	if ok {
 		return offsets[0]
 	}
 
 	// If no-one could be found, we probably don't have one yet, so we add one here
-	src := createProjection(ctx, r.Source)
+	src := createProjection(ctx, r.Source, derived)
 	r.Source = src
 
 	offsets = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
@@ -596,57 +605,66 @@ type selectExpressions interface {
 	Operator
 	addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int
 	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) []int
-	isDerived() bool
+	derivedName() string
 }
 
-// addColumnToInput adds a column to an operator without pushing it down.
-// It will return a bool indicating whether the addition was successful or not,
-// and an offset to where the column can be found
-func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator Operator, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) (Operator, bool, []int) {
+// addColumnToInput adds columns to an operator without pushing them down
+func addMultipleColumnsToInput(
+	ctx *plancontext.PlanningContext,
+	operator Operator,
+	reuse bool,
+	addToGroupBy []bool,
+	exprs []*sqlparser.AliasedExpr,
+) (derivedName string, // if we found a derived table, this will contain its name
+	projection Operator, // if an operator needed to be built, it will be returned here
+	found bool, // whether a matching op was found or not
+	offsets []int, // the offsets the expressions received
+) {
 	switch op := operator.(type) {
 	case *SubQuery:
-		src, added, offset := addMultipleColumnsToInput(ctx, op.Outer, reuse, addToGroupBy, exprs)
+		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Outer, reuse, addToGroupBy, exprs)
 		if added {
 			op.Outer = src
 		}
-		return op, added, offset
+		return derivedName, op, added, offset
 
 	case *Distinct:
-		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
 		if added {
 			op.Source = src
 		}
-		return op, added, offset
+		return derivedName, op, added, offset
 
 	case *Limit:
-		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
 		if added {
 			op.Source = src
 		}
-		return op, added, offset
+		return derivedName, op, added, offset
 
 	case *Ordering:
-		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
 		if added {
 			op.Source = src
 		}
-		return op, added, offset
+		return derivedName, op, added, offset
 
 	case *LockAndComment:
-		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
+		derivedName, src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
 		if added {
 			op.Source = src
 		}
-		return op, added, offset
+		return derivedName, op, added, offset
 
 	case selectExpressions:
-		if op.isDerived() {
+		name := op.derivedName()
+		if name != "" {
 			// if the only thing we can push to is a derived table,
 			// we have to add a new projection and can't build on this one
-			return op, false, nil
+			return name, op, false, nil
 		}
 		offset := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
-		return op, true, offset
+		return "", op, true, offset
 
 	case *Union:
 		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
@@ -662,7 +680,7 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator Operat
 		}
 		return addMultipleColumnsToInput(ctx, proj, reuse, addToGroupBy, exprs)
 	default:
-		return op, false, nil
+		return "", op, false, nil
 	}
 }
 

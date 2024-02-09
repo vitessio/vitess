@@ -52,6 +52,12 @@ var (
 // Route represents the instructions to route a read query to
 // one or many vttablets.
 type Route struct {
+	// Route does not take inputs
+	noInputs
+
+	// Route does not need transaction handling
+	noTxNeeded
+
 	// TargetTabletType specifies an explicit target destination tablet type
 	// this is only used in conjunction with TargetDestination
 	TargetTabletType topodatapb.TabletType
@@ -89,12 +95,6 @@ type Route struct {
 	// select count(*) from tbl where lookupColumn = 'not there'
 	// select exists(<subq>)
 	NoRoutesSpecialHandling bool
-
-	// Route does not take inputs
-	noInputs
-
-	// Route does not need transaction handling
-	noTxNeeded
 }
 
 // NewRoute creates a Route.

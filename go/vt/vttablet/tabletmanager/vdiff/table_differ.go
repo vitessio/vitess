@@ -112,7 +112,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer func() {
 		unlock(&err)
 		if err != nil {
-			log.Errorf("UnlockKeyspace %s failed: %v", targetKeyspace, lockErr)
+			log.Errorf("UnlockKeyspace %s failed: %v", targetKeyspace, err)
 		}
 	}()
 
