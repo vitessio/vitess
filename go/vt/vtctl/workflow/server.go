@@ -1063,7 +1063,19 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		}
 		table := ts.Tables()[0]
 
-		if ts.isPartialMigration { // shard level traffic switching is all or nothing
+		if ts.options.UseKeyspaceRoutingRules {
+			keyspaceRoutingRules, err := topotools.GetKeyspaceRoutingRules(ctx, ts.TopoServer())
+			if err != nil {
+				return nil, nil, err
+			}
+			currentTargetKeyspace := keyspaceRoutingRules[ts.sourceKeyspace]
+			if currentTargetKeyspace == ts.targetKeyspace {
+				log.Infof("Keyspace routing rules: routing currently to target, so marking all traffic as switched")
+				state.WritesSwitched = true
+				state.ReplicaCellsNotSwitched = nil
+				state.RdonlyCellsNotSwitched = nil
+			}
+		} else if ts.isPartialMigration { // shard level traffic switching is all or nothing
 			shardRoutingRules, err := s.ts.GetShardRoutingRules(ctx)
 			if err != nil {
 				return nil, nil, err
@@ -1522,12 +1534,11 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
 			return nil, err
 		}
-		return nil, nil
 	}
+
 	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
 	}
-
 	if ms.SourceTimeZone != "" {
 		if err := mz.checkTZConversion(ctx, ms.SourceTimeZone); err != nil {
 			return nil, err
@@ -1605,6 +1616,7 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 	// This needs to be protected with a mutex or a lock. FIXME: confirm this.
 	// Otherwise the map could be overwritten if multiple movetables are run at the same time.
 	if req.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
+		log.Infof("Setting up keyspace routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
 		var keyspaces []string
 		keyspaces = append(keyspaces, sourceKeyspace, targetKeyspace)
 		if req.VReplicationWorkflowOptions.SourceKeyspaceAlias != "" {
@@ -1617,6 +1629,7 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 		if err := updateKeyspaceRoutingRule(ctx, s.ts, routes); err != nil {
 			return err
 		}
+		return nil
 	}
 
 	// Setup table routing rules.
@@ -3052,6 +3065,11 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		}
 	}
 
+	hasReplica, hasRdonly, hasPrimary, err = parseTabletTypes(req.TabletTypes)
+	if err != nil {
+		return nil, err
+	}
+
 	if ts.options.UseKeyspaceRoutingRules && !(hasRdonly && hasReplica && hasPrimary) {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "all traffic needs to be switched for workflow %s: since use of keyspace routing rules was specified", req.Workflow)
 		return nil, err
@@ -3063,10 +3081,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	}
 	if reason != "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot switch traffic for workflow %s at this time: %s", startState.Workflow, reason)
-	}
-	hasReplica, hasRdonly, hasPrimary, err = parseTabletTypes(req.TabletTypes)
-	if err != nil {
-		return nil, err
 	}
 	if hasReplica || hasRdonly {
 		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, timeout, false, direction); err != nil {
@@ -3094,13 +3108,11 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	if direction == DirectionBackward {
 		cmd = "ReverseTraffic"
 	}
-	log.Infof("%s done for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
 	resp := &vtctldatapb.WorkflowSwitchTrafficResponse{}
 	if req.DryRun {
 		resp.Summary = fmt.Sprintf("%s dry run results for workflow %s.%s at %v", cmd, req.Keyspace, req.Workflow, time.Now().UTC().Format(time.RFC822))
 		resp.DryRunResults = dryRunResults
 	} else {
-		log.Infof("SwitchTraffic done for workflow %s.%s", req.Keyspace, req.Workflow)
 		resp.Summary = fmt.Sprintf("%s was successful for workflow %s.%s", cmd, req.Keyspace, req.Workflow)
 		// Reload the state after the SwitchTraffic operation
 		// and return that as a string.
@@ -3111,13 +3123,13 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			workflow = ts.reverseWorkflow
 		}
 		resp.StartState = startState.String()
-		log.Infof("Before reloading workflow state after switching traffic: %+v\n", resp.StartState)
 		_, currentState, err := s.getWorkflowState(ctx, keyspace, workflow)
 		if err != nil {
 			resp.CurrentState = fmt.Sprintf("Error reloading workflow state after switching traffic: %v", err)
 		} else {
 			resp.CurrentState = currentState.String()
 		}
+		log.Infof("SwitchTraffic done for workflow %s.%s, returning response %v", req.Keyspace, req.Workflow, resp)
 	}
 	return resp, nil
 }

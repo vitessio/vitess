@@ -159,7 +159,6 @@ message ShardRoutingRule {
 
 message KeyspaceRoutingRules {
   repeated KeyspaceRoutingRule rules = 1;
-  string rules_hash = 2;
 }
 
 message KeyspaceRoutingRule {

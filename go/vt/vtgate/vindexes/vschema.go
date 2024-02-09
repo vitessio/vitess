@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -1106,6 +1107,11 @@ func (vschema *VSchema) FirstKeyspace() *Keyspace {
 // FindRoutedTable finds a table checking the routing rules.
 func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
 	qualified := tablename
+	routedKeyspace, ok := vschema.KeyspaceRoutingRules[keyspace]
+	if ok {
+		log.Infof("Found keyspace routing rule for %s routed to %s", keyspace, routedKeyspace)
+		keyspace = routedKeyspace
+	}
 	if keyspace != "" {
 		qualified = keyspace + "." + tablename
 	}

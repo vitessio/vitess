@@ -699,31 +699,11 @@ func (vc *vcursorImpl) fixupPartiallyMovedShards(rss []*srvtopo.ResolvedShard) (
 	return rss, nil
 }
 
-// fixupKeyspaceRoutingRules checks if the keyspace has a KeyspaceRoutingRule (true when a keyspace is in
-// the middle of being moved to another keyspace using MoveTables)
-func (vc *vcursorImpl) fixupKeyspaceRoutingRules(rss []*srvtopo.ResolvedShard) ([]*srvtopo.ResolvedShard, error) {
-	if vc.vschema.KeyspaceRoutingRules == nil {
-		return rss, nil
-	}
-	for ind, rs := range rss {
-		targetKeyspace, err := vc.FindRoutedKeyspace(rs.Target.Keyspace)
-		if err != nil {
-			return nil, err
-		}
-		if targetKeyspace == rs.Target.Keyspace {
-			continue
-		}
-		rss[ind] = rs.WithKeyspace(targetKeyspace)
-	}
-	return rss, nil
-}
-
 func (vc *vcursorImpl) ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	rss, values, err := vc.resolver.ResolveDestinations(ctx, keyspace, vc.tabletType, ids, destinations)
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, err = vc.fixupKeyspaceRoutingRules(rss)
 	if enableShardRouting {
 		rss, err = vc.fixupPartiallyMovedShards(rss)
 		if err != nil {
@@ -738,7 +718,6 @@ func (vc *vcursorImpl) ResolveDestinationsMultiCol(ctx context.Context, keyspace
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, err = vc.fixupKeyspaceRoutingRules(rss)
 	if enableShardRouting {
 		rss, err = vc.fixupPartiallyMovedShards(rss)
 		if err != nil {
@@ -1305,11 +1284,9 @@ func (vc *vcursorImpl) VExplainLogging() {
 func (vc *vcursorImpl) GetVExplainLogs() []engine.ExecuteEntry {
 	return vc.safeSession.logging.GetLogs()
 }
+
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
 	return vc.vschema.FindRoutedShard(keyspace, shard)
-}
-func (vc *vcursorImpl) FindRoutedKeyspace(keyspace string) (keyspaceName string, err error) {
-	return vc.vschema.FindRoutedKeyspace(keyspace)
 }
 
 func (vc *vcursorImpl) IsViewsEnabled() bool {

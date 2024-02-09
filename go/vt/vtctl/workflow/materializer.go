@@ -600,6 +600,7 @@ func (mz *materializer) createStreams(ctx context.Context, insertsMap map[string
 }
 
 func (mz *materializer) startStreams(ctx context.Context) error {
+	log.Infof("Starting vreplication streams for workflow %s", mz.ms.Workflow)
 	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
