@@ -324,7 +324,7 @@ func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 
 // SetMySQLMaxExecutionTime sets a query level maximum execution time using a /*+ MAX_EXECUTION_TIME() */ MySQL optimizer hint.
 func (c *ParsedComments) SetMySQLMaxExecutionTime(maxExecutionTime time.Duration) (newComments Comments) {
-	return c.SetMySQLOptimizerHint(OptimizerHintMaxExecutionTime, "", strconv.FormatInt(maxExecutionTime.Milliseconds(), 10))
+	return c.SetMySQLOptimizerHint(OptimizerHintMaxExecutionTime, "", maxExecutionTime.Milliseconds())
 }
 
 // SetMySQLSetVarValue updates or sets the value of the given variable as part of a /*+ SET_VAR() */ MySQL optimizer hint.
@@ -333,7 +333,7 @@ func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComme
 }
 
 // SetMySQLOptimizerHint updates or sets the value of a MySQL optimizer hint.
-func (c *ParsedComments) SetMySQLOptimizerHint(hint, key, value string) (newComments Comments) {
+func (c *ParsedComments) SetMySQLOptimizerHint(hint, key string, value interface{}) (newComments Comments) {
 	keyAndValue := value
 	if key != "" {
 		keyAndValue = fmt.Sprintf("%v=%v", key, value)
