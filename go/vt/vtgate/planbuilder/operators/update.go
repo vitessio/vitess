@@ -169,7 +169,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	target := updStmt.TableExprs[0]
 	atbl, ok := target.(*sqlparser.AliasedTableExpr)
 	if !ok {
-		panic(42)
+		panic(vterrors.VT12001("multi table update"))
 	}
 	tblID := ctx.SemTable.TableSetFor(atbl)
 	tblInfo, err := ctx.SemTable.TableInfoFor(tblID)
