@@ -601,7 +601,7 @@ func TestGetMySQLSetVarValue(t *testing.T) {
 	}
 }
 
-func TestSetMySQLMaxExecutionTime(t *testing.T) {
+func TestSetMySQLMaxExecutionTimeValue(t *testing.T) {
 	tests := []struct {
 		name           string
 		comments       []string
@@ -617,8 +617,8 @@ func TestSetMySQLMaxExecutionTime(t *testing.T) {
 		{
 			name:           "Add to comments",
 			comments:       []string{"/*+ SET_VAR(sort_buffer_size = 16M) */"},
-			maxExecTime:    time.Second * 30,
-			commentsWanted: []string{"/*+ SET_VAR(sort_buffer_size = 16M) MAX_EXECUTION_TIME(30000) */"},
+			maxExecTime:    time.Minute,
+			commentsWanted: []string{"/*+ SET_VAR(sort_buffer_size = 16M) MAX_EXECUTION_TIME(60000) */"},
 		},
 	}
 	for _, tt := range tests {
@@ -626,7 +626,7 @@ func TestSetMySQLMaxExecutionTime(t *testing.T) {
 			c := &ParsedComments{
 				comments: tt.comments,
 			}
-			newComments := c.SetMySQLMaxExecutionTime(tt.maxExecTime)
+			newComments := c.SetMySQLMaxExecutionTimeValue(tt.maxExecTime)
 			require.EqualValues(t, tt.commentsWanted, newComments)
 		})
 	}
