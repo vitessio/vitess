@@ -923,3 +923,13 @@ func (st *SemTable) Clone(n sqlparser.SQLNode) sqlparser.SQLNode {
 		cursor.Replace(sqlparser.CloneExpr(expr))
 	}, st.CopySemanticInfo)
 }
+
+func (st *SemTable) UpdateChildFKExpr(origUpdExpr *sqlparser.UpdateExpr, newExpr sqlparser.Expr) {
+	for _, exprs := range st.childFkToUpdExprs {
+		for idx, updateExpr := range exprs {
+			if updateExpr == origUpdExpr {
+				exprs[idx].Expr = newExpr
+			}
+		}
+	}
+}

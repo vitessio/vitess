@@ -103,10 +103,10 @@ func (u *Update) ShortDescription() string {
 }
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (op Operator) {
-	updClone := sqlparser.CloneRefOfUpdate(updStmt)
-
+	var updClone *sqlparser.Update
 	var vTbl *vindexes.Table
-	op, vTbl = createUpdateOperator(ctx, updStmt)
+
+	op, vTbl, updClone = createUpdateOperator(ctx, updStmt)
 
 	op = &LockAndComment{
 		Source:   op,
@@ -134,7 +134,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	return buildFkOperator(ctx, op, updClone, parentFks, childFks, vTbl)
 }
 
-func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, *vindexes.Table) {
+func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, *vindexes.Table, *sqlparser.Update) {
 	op := crossJoin(ctx, updStmt.TableExprs)
 
 	sqc := &SubQueryBuilder{}
@@ -144,10 +144,17 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 
 	outerID := TableID(op)
 	assignments := make([]SetExpr, len(updStmt.Exprs))
+	// updClone is used in foreign key planning to create the selection statements to be used for verification and selection.
+	// If we encounter subqueries, we want to fix the updClone to use the replaced expression, so that the pulled out subquery's
+	// result is used everywhere instead of running the subquery multiple times, which is wasteful.
+	updClone := sqlparser.CloneRefOfUpdate(updStmt)
 	for idx, updExpr := range updStmt.Exprs {
 		expr, subqs := sqc.pullOutValueSubqueries(ctx, updExpr.Expr, outerID, true)
 		if len(subqs) == 0 {
 			expr = updExpr.Expr
+		} else {
+			updClone.Exprs[idx].Expr = sqlparser.CloneExpr(expr)
+			ctx.SemTable.UpdateChildFKExpr(updExpr, expr)
 		}
 		proj := newProjExpr(aeWrap(expr))
 		if len(subqs) != 0 {
@@ -212,7 +219,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		}
 	}
 
-	return sqc.getRootOperator(updOp, nil), vTbl
+	return sqc.getRootOperator(updOp, nil), vTbl, updClone
 }
 
 func getUpdateVindexInformation(
@@ -231,11 +238,30 @@ func getUpdateVindexInformation(
 }
 
 func buildFkOperator(ctx *plancontext.PlanningContext, updOp Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) Operator {
+	// If there is a subquery container above update operator, we want to do the foreign key planning inside it,
+	// because we want the Inner of the subquery to execute first and its result be used for the entire foreign key update planning.
+	foundSubqc := false
+	TopDown(updOp, TableID, func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		if op, isSubqc := in.(*SubQueryContainer); isSubqc {
+			foundSubqc = true
+			op.Outer = buildFkOperator(ctx, op.Outer, updClone, parentFks, childFks, updatedTable)
+		}
+		return in, NoRewrite
+	}, stopAtUpdateOp)
+	if foundSubqc {
+		return updOp
+	}
+
 	restrictChildFks, cascadeChildFks := splitChildFks(childFks)
 
 	op := createFKCascadeOp(ctx, updOp, updClone, cascadeChildFks, updatedTable)
 
 	return createFKVerifyOp(ctx, op, updClone, parentFks, restrictChildFks, updatedTable)
+}
+
+func stopAtUpdateOp(operator Operator) VisitRule {
+	_, isUpdate := operator.(*Update)
+	return VisitRule(!isUpdate)
 }
 
 // splitChildFks splits the child foreign keys into restrict and cascade list as restrict is handled through Verify operator and cascade is handled through Cascade operator.
