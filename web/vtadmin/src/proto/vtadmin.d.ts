@@ -43044,9 +43044,6 @@ export namespace vschema {
 
         /** KeyspaceRoutingRules rules */
         rules?: (vschema.IKeyspaceRoutingRule[]|null);
-
-        /** KeyspaceRoutingRules rules_hash */
-        rules_hash?: (string|null);
     }
 
     /** Represents a KeyspaceRoutingRules. */
@@ -43060,9 +43057,6 @@ export namespace vschema {
 
         /** KeyspaceRoutingRules rules. */
         public rules: vschema.IKeyspaceRoutingRule[];
-
-        /** KeyspaceRoutingRules rules_hash. */
-        public rules_hash: string;
 
         /**
          * Creates a new KeyspaceRoutingRules instance using the specified properties.

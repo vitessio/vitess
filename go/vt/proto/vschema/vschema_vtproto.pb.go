@@ -312,9 +312,7 @@ func (m *KeyspaceRoutingRules) CloneVT() *KeyspaceRoutingRules {
 	if m == nil {
 		return (*KeyspaceRoutingRules)(nil)
 	}
-	r := &KeyspaceRoutingRules{
-		RulesHash: m.RulesHash,
-	}
+	r := &KeyspaceRoutingRules{}
 	if rhs := m.Rules; rhs != nil {
 		tmpContainer := make([]*KeyspaceRoutingRule, len(rhs))
 		for k, v := range rhs {
@@ -1127,13 +1125,6 @@ func (m *KeyspaceRoutingRules) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.RulesHash) > 0 {
-		i -= len(m.RulesHash)
-		copy(dAtA[i:], m.RulesHash)
-		i = encodeVarint(dAtA, i, uint64(len(m.RulesHash)))
-		i--
-		dAtA[i] = 0x12
-	}
 	if len(m.Rules) > 0 {
 		for iNdEx := len(m.Rules) - 1; iNdEx >= 0; iNdEx-- {
 			size, err := m.Rules[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
@@ -1524,10 +1515,6 @@ func (m *KeyspaceRoutingRules) SizeVT() (n int) {
 			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
-	}
-	l = len(m.RulesHash)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -3759,38 +3746,6 @@ func (m *KeyspaceRoutingRules) UnmarshalVT(dAtA []byte) error {
 			if err := m.Rules[len(m.Rules)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field RulesHash", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.RulesHash = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
