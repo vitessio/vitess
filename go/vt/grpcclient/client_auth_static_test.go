@@ -80,9 +80,10 @@ func TestGetStaticAuthCreds(t *testing.T) {
 	// test SIGHUP signal triggers reload
 	credsOld := creds
 	clientCredsSigChan <- syscall.SIGHUP
+	timeoutChan := time.After(time.Second * 10)
 	for {
 		select {
-		case <-time.After(time.Second * 10):
+		case <-timeoutChan:
 			assert.Fail(t, "timed out waiting for SIGHUP reload of static auth creds")
 			return
 		default:
@@ -104,14 +105,14 @@ func TestLoadStaticAuthCredsFromFile(t *testing.T) {
 		if !assert.Nil(t, err) {
 			assert.FailNowf(t, "cannot create temp file: %s", err.Error())
 		}
-		_, err = f.Write([]byte(`{
+		defer os.Remove(f.Name())
+		fmt.Fprint(f, `{
 			"Username": "test",
 			"Password": "correct horse battery staple"
-		}`))
+		}`)
 		if !assert.Nil(t, err) {
 			assert.FailNowf(t, "cannot read auth file: %s", err.Error())
 		}
-		defer os.Remove(f.Name())
 
 		creds, err := loadStaticAuthCredsFromFile(f.Name())
 		assert.Nil(t, err)
