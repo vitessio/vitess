@@ -65,9 +65,11 @@ const (
 	MaxPriorityValue = 100
 
 	// OptimizerHintMaxExecutionTime is the optimizer hint used in MySQL to set the max execution time for a query.
+	// https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-execution-time
 	OptimizerHintMaxExecutionTime = "MAX_EXECUTION_TIME"
 
 	// OptimizerHintSetVar is the optimizer hint used in MySQL to set the value of a specific session variable for a query.
+	// https://dev.mysql.com/doc/refman/8.0/en/optimizer-hints.html#optimizer-hints-set-var
 	OptimizerHintSetVar = "SET_VAR"
 )
 
