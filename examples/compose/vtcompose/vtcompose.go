@@ -446,7 +446,7 @@ func applyKeyspaceDependentPatches(
 		dockerComposeFile = applyShardPatches(dockerComposeFile, tabAlias, shard, keyspaceData, externalDbInfoMap, opts)
 	} else {
 		// Determine shard range
-		for i := 0; i < keyspaceData.shards; i++ {
+		for i := range keyspaceData.shards {
 			if i == 0 {
 				shard = fmt.Sprintf("-%x", interval)
 			} else if i == (keyspaceData.shards - 1) {
@@ -548,7 +548,7 @@ func generateExternalPrimary(
 ) string {
 
 	aliases := []int{tabAlias + 1} // primary alias, e.g. 201
-	for i := 0; i < keyspaceData.replicaTablets; i++ {
+	for i := range keyspaceData.replicaTablets {
 		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
 	}
 
@@ -611,7 +611,7 @@ func applyTabletPatches(
 		dbInfo = val
 	}
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(tabAlias+1, shard, "primary", keyspaceData.keyspace, dbInfo, opts))
-	for i := 0; i < keyspaceData.replicaTablets; i++ {
+	for i := range keyspaceData.replicaTablets {
 		dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(tabAlias+2+i, shard, "replica", keyspaceData.keyspace, dbInfo, opts))
 	}
 	return dockerComposeFile
