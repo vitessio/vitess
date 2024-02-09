@@ -646,6 +646,37 @@ func TestOrderByBindingTable(t *testing.T) {
 	}
 }
 
+func TestVindexHints(t *testing.T) {
+	// tests that vindex hints point to existing vindexes, or an error should be returned
+	tcases := []struct {
+		sql         string
+		expectedErr string
+	}{{
+		sql:         "select col from t use vindex (your_mama)",
+		expectedErr: "no such vindex found",
+	}, {
+		sql:         "select col from t ignore vindex (your_mama)",
+		expectedErr: "no such vindex found",
+	}, {
+		sql: "select col from t use vindex (id_vindex)",
+	}, {
+		sql: "select col from t ignore vindex (id_vindex)",
+	}}
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			parse, err := sqlparser.NewTestParser().Parse(tc.sql)
+			require.NoError(t, err)
+
+			_, err = AnalyzeStrict(parse, "d", fakeSchemaInfo())
+			if tc.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tc.expectedErr)
+			}
+		})
+	}
+}
+
 func TestGroupByBinding(t *testing.T) {
 	tcases := []struct {
 		sql  string
@@ -1508,15 +1539,15 @@ func TestSingleUnshardedKeyspace(t *testing.T) {
 			query:     "select 1 from t as A, t as B",
 			unsharded: ks1,
 			tables: []*vindexes.Table{
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
+				tableT(),
+				tableT(),
 			},
 		}, {
 			query:     "insert into t select * from t",
 			unsharded: ks1,
 			tables: []*vindexes.Table{
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
+				tableT(),
+				tableT(),
 			},
 		},
 	}
@@ -1622,29 +1653,53 @@ var ks3 = &vindexes.Keyspace{
 // create table t1(id bigint)
 // create table t2(uid bigint, name varchar(255))
 func fakeSchemaInfo() *FakeSI {
-	cols1 := []vindexes.Column{{
-		Name: sqlparser.NewIdentifierCI("id"),
-		Type: querypb.Type_INT64,
-	}}
-	cols2 := []vindexes.Column{{
-		Name: sqlparser.NewIdentifierCI("uid"),
-		Type: querypb.Type_INT64,
-	}, {
-		Name:          sqlparser.NewIdentifierCI("name"),
-		Type:          querypb.Type_VARCHAR,
-		CollationName: "utf8_bin",
-	}, {
-		Name:          sqlparser.NewIdentifierCI("textcol"),
-		Type:          querypb.Type_VARCHAR,
-		CollationName: "big5_bin",
-	}}
 
 	si := &FakeSI{
 		Tables: map[string]*vindexes.Table{
-			"t":  {Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks1},
-			"t1": {Name: sqlparser.NewIdentifierCS("t1"), Columns: cols1, ColumnListAuthoritative: true, Keyspace: ks2},
-			"t2": {Name: sqlparser.NewIdentifierCS("t2"), Columns: cols2, ColumnListAuthoritative: true, Keyspace: ks3},
+			"t":  tableT(),
+			"t1": tableT1(),
+			"t2": tableT2(),
 		},
 	}
 	return si
+}
+
+func tableT() *vindexes.Table {
+	return &vindexes.Table{
+		Name:     sqlparser.NewIdentifierCS("t"),
+		Keyspace: ks1,
+		ColumnVindexes: []*vindexes.ColumnVindex{
+			{Name: "id_vindex"},
+		},
+	}
+}
+func tableT1() *vindexes.Table {
+	return &vindexes.Table{
+		Name: sqlparser.NewIdentifierCS("t1"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewIdentifierCI("id"),
+			Type: querypb.Type_INT64,
+		}},
+		ColumnListAuthoritative: true,
+		Keyspace:                ks2,
+	}
+}
+func tableT2() *vindexes.Table {
+	return &vindexes.Table{
+		Name: sqlparser.NewIdentifierCS("t2"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewIdentifierCI("uid"),
+			Type: querypb.Type_INT64,
+		}, {
+			Name:          sqlparser.NewIdentifierCI("name"),
+			Type:          querypb.Type_VARCHAR,
+			CollationName: "utf8_bin",
+		}, {
+			Name:          sqlparser.NewIdentifierCI("textcol"),
+			Type:          querypb.Type_VARCHAR,
+			CollationName: "big5_bin",
+		}},
+		ColumnListAuthoritative: true,
+		Keyspace:                ks3,
+	}
 }

@@ -1054,6 +1054,11 @@
     }
   },
   {
+    "comment": "Vindex hint on a non-existing vindex",
+    "query": "select * from user use vindex (does_not_exist) where id = 1",
+    "plan": "VT09021: no such vindex found: does_not_exist"
+  },
+  {
     "comment": "sharded limit offset",
     "query": "select user_id from music order by user_id limit 10, 20",
     "plan": {
