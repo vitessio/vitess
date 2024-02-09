@@ -34,16 +34,15 @@ var _ Primitive = (*OnlineDDL)(nil)
 
 // OnlineDDL represents the instructions to perform an online schema change via vtctld
 type OnlineDDL struct {
+	noTxNeeded
+	noInputs
+
 	Keyspace           *vindexes.Keyspace
 	DDL                sqlparser.DDLStatement
 	SQL                string
 	DDLStrategySetting *schema.DDLStrategySetting
 	// TargetDestination specifies an explicit target destination to send the query to.
 	TargetDestination key.Destination
-
-	noTxNeeded
-
-	noInputs
 }
 
 func (v *OnlineDDL) description() PrimitiveDescription {
