@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -279,7 +281,10 @@ outer:
 			}
 		}
 		// we found a hint on a non-existing vindex
-		return &NoSuchVindexFound{VindexName: index.String()}
+		return &NoSuchVindexFound{
+			Table:      fmt.Sprintf("%s.%s", tbl.Keyspace.Name, tbl.Name.String()),
+			VindexName: index.String(),
+		}
 	}
 	return nil
 }

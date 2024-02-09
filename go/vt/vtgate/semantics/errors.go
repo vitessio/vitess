@@ -52,7 +52,11 @@ type (
 	SubqueryColumnCountError       struct{ Expected int }
 	ColumnsMissingInSchemaError    struct{}
 	CantUseMultipleVindexHints     struct{ Table string }
-	NoSuchVindexFound              struct{ VindexName string }
+
+	NoSuchVindexFound struct {
+		Table      string
+		VindexName string
+	}
 
 	UnsupportedMultiTablesInUpdateError struct {
 		ExprCount int
@@ -275,7 +279,7 @@ func (c *CantUseMultipleVindexHints) ErrorCode() vtrpcpb.Code {
 
 // CantUseMultipleVindexHints
 func (c *NoSuchVindexFound) Error() string {
-	return vterrors.VT09021(c.VindexName).Error()
+	return vterrors.VT09021(c.VindexName, c.Table).Error()
 }
 
 func (c *NoSuchVindexFound) ErrorCode() vtrpcpb.Code {

@@ -652,11 +652,11 @@ func TestVindexHints(t *testing.T) {
 		sql         string
 		expectedErr string
 	}{{
-		sql:         "select col from t use vindex (your_mama)",
-		expectedErr: "no such vindex found",
+		sql:         "select col from t use vindex (does_not_exist)",
+		expectedErr: "Vindex '<does_not_exist>' doesn't exist in table '<ks1.t>'",
 	}, {
-		sql:         "select col from t ignore vindex (your_mama)",
-		expectedErr: "no such vindex found",
+		sql:         "select col from t ignore vindex (does_not_exist)",
+		expectedErr: "Vindex '<does_not_exist>' doesn't exist in table '<ks1.t>'",
 	}, {
 		sql: "select col from t use vindex (id_vindex)",
 	}, {
