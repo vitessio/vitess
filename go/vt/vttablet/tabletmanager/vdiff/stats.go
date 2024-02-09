@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var (
@@ -105,33 +104,6 @@ func (vds *vdiffStats) register() {
 			return result
 		},
 	)
-
-	stats.NewStringMapFuncWithMultiLabels(
-		"VDiffStreamingTablets",
-		"Latest tablets used on the source and target for streaming table data",
-		[]string{"workflow", "uuid", "target_shard"},
-		"tablets",
-		func() map[string]string {
-			vds.mu.Lock()
-			defer vds.mu.Unlock()
-			result := make(map[string]string, len(vds.controllers))
-			for _, ct := range vds.controllers {
-				if ct.targetShardStreamer == nil || ct.targetShardStreamer.tablet == nil {
-					// We haven't yet chosen the target shard streamer, so skip it.
-					continue
-				}
-				tt := topoproto.TabletAliasString(ct.targetShardStreamer.tablet.Alias)
-				for _, s := range ct.sources {
-					if s == nil || s.tablet == nil {
-						// We haven't yet chosen the source shard streamer, so skip it.
-						continue
-					}
-					result[fmt.Sprintf("%s.%s.%s", ct.workflow, ct.uuid, s.shard)] =
-						fmt.Sprintf("source:%s,target:%s", topoproto.TabletAliasString(s.tablet.Alias), tt)
-				}
-			}
-			return result
-		})
 
 	stats.NewCountersFuncWithMultiLabels(
 		"VDiffErrors",
