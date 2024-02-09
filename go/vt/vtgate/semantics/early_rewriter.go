@@ -43,7 +43,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	case sqlparser.SelectExprs:
 		return r.handleSelectExprs(cursor, node)
 	case *sqlparser.JoinTableExpr:
-		r.handleJoinTableExpr(node)
+		r.handleJoinTableExprDown(node)
 	case sqlparser.OrderBy:
 		r.clause = "order clause"
 		iter := &orderByIterator{
@@ -72,21 +72,26 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	case *sqlparser.AliasedTableExpr:
 		return r.handleAliasedTable(node)
 	case *sqlparser.Delete:
-		// When we do not have any target, it is a single table delete.
-		// In a single table delete, the table references is always a single aliased table expression.
-		if len(node.Targets) != 0 {
-			return nil
-		}
-		tblExpr, ok := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
-		if !ok {
-			return nil
-		}
-		tblName, err := tblExpr.TableName()
-		if err != nil {
-			return err
-		}
-		node.Targets = append(node.Targets, tblName)
+		return handleDelete(node)
 	}
+	return nil
+}
+
+func handleDelete(del *sqlparser.Delete) error {
+	// When we do not have any target, it is a single table delete.
+	// In a single table delete, the table references is always a single aliased table expression.
+	if len(del.Targets) != 0 {
+		return nil
+	}
+	tblExpr, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil
+	}
+	tblName, err := tblExpr.TableName()
+	if err != nil {
+		return err
+	}
+	del.Targets = append(del.Targets, tblName)
 	return nil
 }
 
@@ -142,35 +147,39 @@ func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
 func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.JoinTableExpr:
-		// this rewriting is done in the `up` phase, because we need the scope to have been
-		// filled in with the available tables
-		if len(node.Condition.Using) == 0 {
-			return nil
-		}
-
-		err := rewriteJoinUsing(r.binder, node)
-		if err != nil {
-			return err
-		}
-
-		// since the binder has already been over the join, we need to invoke it again, so it
-		// can bind columns to the right tables
-		sqlparser.Rewrite(node.Condition.On, nil, func(cursor *sqlparser.Cursor) bool {
-			innerErr := r.binder.up(cursor)
-			if innerErr == nil {
-				return true
-			}
-
-			err = innerErr
-			return false
-		})
-		return err
+		return r.handleJoinTableExprUp(node)
 	case *sqlparser.AliasedTableExpr:
 		// this rewriting is done in the `up` phase, because we need the vindex hints to have been
 		// processed while collecting the tables.
 		return removeVindexHints(node)
 	}
 	return nil
+}
+
+func (r *earlyRewriter) handleJoinTableExprUp(join *sqlparser.JoinTableExpr) error {
+	// this rewriting is done in the `up` phase, because we need the scope to have been
+	// filled in with the available tables
+	if len(join.Condition.Using) == 0 {
+		return nil
+	}
+
+	err := rewriteJoinUsing(r.binder, join)
+	if err != nil {
+		return err
+	}
+
+	// since the binder has already been over the join, we need to invoke it again, so it
+	// can bind columns to the right tables
+	sqlparser.Rewrite(join.Condition.On, nil, func(cursor *sqlparser.Cursor) bool {
+		innerErr := r.binder.up(cursor)
+		if innerErr == nil {
+			return true
+		}
+
+		err = innerErr
+		return false
+	})
+	return err
 }
 
 // removeVindexHints removes the vindex hints from the aliased table expression provided.
@@ -216,8 +225,8 @@ func (r *earlyRewriter) handleSelectExprs(cursor *sqlparser.Cursor, node sqlpars
 	return r.expandStar(cursor, node)
 }
 
-// handleJoinTableExpr processes JOIN table expressions and handles the Straight Join type.
-func (r *earlyRewriter) handleJoinTableExpr(node *sqlparser.JoinTableExpr) {
+// handleJoinTableExprDown processes JOIN table expressions and handles the Straight Join type.
+func (r *earlyRewriter) handleJoinTableExprDown(node *sqlparser.JoinTableExpr) {
 	if node.Join != sqlparser.StraightJoinType {
 		return
 	}
