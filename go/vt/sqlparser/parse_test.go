@@ -3208,22 +3208,75 @@ var (
 		}, {
 			input:  "SELECT id FROM mytable UNION select id FROM testtable UNION select id FROM othertable LIMIT 1 INTO @myId",
 			output: "select id from mytable union select id from testtable union select id from othertable limit 1 into @myId",
-		}, {
+		},
+		{
 			input:  "SELECT 1 INTO OUTFILE 'x.txt'",
 			output: "select 1 into outfile 'x.txt'",
-		}, {
+		},
+		{
 			input:  "SELECT * FROM (VALUES ROW(2,4,8),ROW(1,2,3)) AS t(a,b,c) INTO OUTFILE 'myfile.txt'",
 			output: "select * from (values row(2, 4, 8), row(1, 2, 3)) as t (a, b, c) into outfile 'myfile.txt'",
-		}, {
+		},
+		{
 			input:  "SELECT id INTO OUTFILE 'myfile.txt' FROM mytable ORDER BY id DESC",
 			output: "select id from mytable order by id desc into outfile 'myfile.txt'",
-		}, {
+		},
+		{
 			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t INTO DUMPFILE 'even.dump'",
 			output: "select * from (values row(2, 4, 8)) as t into dumpfile 'even.dump'",
-		}, {
+		},
+		{
 			input:  "SELECT id INTO DUMPFILE 'dump.txt' FROM mytable ORDER BY id DESC LIMIT 15",
 			output: "select id from mytable order by id desc limit 15 into dumpfile 'dump.txt'",
-		}, {
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' columns terminated by 'a'",
+			output: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' escaped by 'c'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b' escaped by 'c'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' lines terminated by 'd'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' lines terminated by 'd'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b' lines terminated by 'd'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' escaped by 'c' lines terminated by 'd'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' character set binary fields terminated by 'a'",
+		},
+		{
+			input:  "table tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
+			output: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' escaped by 'c' lines terminated by 'd'",
+		},
+		{
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT, OUT current INT) SELECT COUNT(*) INTO current FROM inventory WHERE store_id = p_store_id",
 			output: "create procedure proc (in p_store_id INT, out current INT) select COUNT(*) from inventory where store_id = p_store_id into `current`",
 		}, {
@@ -4661,6 +4714,56 @@ func TestInvalid(t *testing.T) {
 		{
 			input: "select sql_cache sql_no_cache * from t",
 			err:   "incorrect usage of SQL_CACHE and SQL_NO_CACHE",
+		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' fields terminated by 'a'",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' enclosed by 'b'",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' escaped by 'c'",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' enclosed by 'b' fields terminated by 'a'",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' escaped by 'c' fields terminated by 'a'",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from tbl into outfile 'outfile.txt' lines terminated by 'd' fields terminated by 'a'",
+			err:   "syntax error",
+		},
+
+		{
+			// TODO: should work
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' enclosed by 'b' enclosed by 'b'",
+			err:   "syntax error",
+		},
+		{
+			// TODO: should work
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' optionally enclosed by 'b' optionally enclosed by 'b'",
+			err:   "syntax error",
+		},
+		{
+			// TODO: should work
+			input: "select * from tbl into outfile 'outfile.txt' fields terminated by 'a' escaped by 'c' escaped by 'c'",
+			err:   "syntax error",
+		},
+		{
+			// TODO: should work
+			input:  "select * from tbl into outfile 'outfile.txt' lines terminated by 'e' starting by 'd'",
+			err:   "syntax error",
+		},
+		{
+			// TODO: should work
+			input:  "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e' starting by 'd' terminated by 'e'",
+			err:   "syntax error",
 		},
 	}
 
