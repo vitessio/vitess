@@ -3,10 +3,6 @@ on:
   pull_request:
     types: [opened, labeled, unlabeled, synchronize]
 
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Check Pull Request labels')
-  cancel-in-progress: true
-
 permissions: read-all
 
 jobs:
