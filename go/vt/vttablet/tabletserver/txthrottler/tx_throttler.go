@@ -91,6 +91,7 @@ type ThrottlerInterface interface {
 	UpdateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error
 	ResetConfiguration()
 	MaxLag(tabletType topodatapb.TabletType) uint32
+<<<<<<< HEAD
 }
 
 // TopologyWatcherInterface defines the public interface that is implemented by
@@ -99,6 +100,8 @@ type ThrottlerInterface interface {
 type TopologyWatcherInterface interface {
 	Start()
 	Stop()
+=======
+>>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
 }
 
 // TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
@@ -192,6 +195,9 @@ type txThrottlerState struct {
 	maxLag             int64
 	done               chan bool
 	waitForTermination sync.WaitGroup
+<<<<<<< HEAD
+>>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
+=======
 >>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
 }
 
@@ -457,6 +463,33 @@ func (ts *txThrottlerState) throttle() bool {
 
 	return maxLag > ts.config.TxThrottlerConfig.TargetReplicationLagSec &&
 		ts.throttler.Throttle(0 /* threadId */) > 0
+<<<<<<< HEAD
+=======
+}
+
+func (ts *txThrottlerStateImpl) updateMaxLag() {
+	defer ts.waitForTermination.Done()
+	// We use half of the target lag to ensure we have enough resolution to see changes in lag below that value
+	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec/2) * time.Second)
+	defer ticker.Stop()
+outerloop:
+	for {
+		select {
+		case <-ticker.C:
+			var maxLag uint32
+
+			for tabletType := range ts.tabletTypes {
+				maxLagPerTabletType := ts.throttler.MaxLag(tabletType)
+				if maxLagPerTabletType > maxLag {
+					maxLag = maxLagPerTabletType
+				}
+			}
+			atomic.StoreInt64(&ts.maxLag, int64(maxLag))
+		case <-ts.done:
+			break outerloop
+		}
+	}
+>>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
 }
 
 func (ts *txThrottlerStateImpl) updateMaxLag() {
@@ -496,8 +529,11 @@ func (ts *txThrottlerState) deallocateResources() {
 	ts.healthCheck = nil
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	// After ts.healthCheck is closed txThrottlerState.StatsUpdate() is guaranteed not
 =======
+=======
+>>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
 	ts.done <- true
 	ts.waitForTermination.Wait()
 	// After ts.healthCheck is closed txThrottlerStateImpl.StatsUpdate() is guaranteed not

@@ -26,6 +26,9 @@ import (
 =======
 	"context"
 	"sync/atomic"
+<<<<<<< HEAD
+>>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
+=======
 >>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
 	"testing"
 	"time"
@@ -56,7 +59,11 @@ func TestDisabledThrottler(t *testing.T) {
 	})
 	assert.Nil(t, throttler.Open())
 <<<<<<< HEAD
+<<<<<<< HEAD
 	assert.False(t, throttler.Throttle(0))
+=======
+	assert.False(t, throttler.Throttle(0, "some-workload"))
+>>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
 =======
 	assert.False(t, throttler.Throttle(0, "some-workload"))
 >>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
@@ -120,6 +127,24 @@ func TestEnabledThrottler(t *testing.T) {
 	call = mockThrottler.EXPECT().Throttle(0)
 	call.Return(1 * time.Second)
 	calls = append(calls, call)
+<<<<<<< HEAD
+=======
+
+	// 3
+	// Nothing gets mocked here because the order of evaluation in txThrottler.Throttle() evaluates first
+	// whether the priority allows for throttling or not, so no need to mock calls in mockThrottler.Throttle()
+
+	// 4
+	// Nothing gets mocked here because the order of evaluation in txThrottlerStateImpl.Throttle() evaluates first
+	// whether there is lag or not, so no call to the underlying mockThrottler is issued.
+
+	call = mockThrottler.EXPECT().Close()
+	calls = append(calls, call)
+
+	for i := 1; i < len(calls); i++ {
+		calls[i].After(calls[i-1])
+	}
+>>>>>>> 2b25639f25 (TxThrottler: dont throttle unless lag (#14789))
 
 	// 3
 	// Nothing gets mocked here because the order of evaluation in txThrottler.Throttle() evaluates first
