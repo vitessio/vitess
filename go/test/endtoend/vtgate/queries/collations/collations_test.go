@@ -17,7 +17,6 @@ limitations under the License.
 package collations
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -59,8 +58,5 @@ func TestCollationTyping(t *testing.T) {
 	defer closer()
 	mcmp.Exec("insert into t1(id, name) values(1,'ß'), (2,'s'), (3,'ss')")
 	mcmp.Exec("insert into t2(id, name) values(1,'ß'), (2,'s'), (3,'ss')")
-
-	res := utils.Exec(t, mcmp.VtConn, `vexplain plan SELECT name from t1 union select name from t2`)
-	fmt.Printf("%v", res.Rows)
 	mcmp.Exec(`SELECT name from t1 union select name from t2`)
 }
