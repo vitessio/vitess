@@ -82,6 +82,7 @@ var Cases = []TestCase{
 	{Run: FnRTrim},
 	{Run: FnTrim},
 	{Run: FnSubstr},
+	{Run: FnLocate},
 	{Run: FnConcat},
 	{Run: FnConcatWs},
 	{Run: FnHex},
@@ -1522,6 +1523,34 @@ func FnSubstr(yield Query) {
 
 			for _, j := range radianInputs {
 				yield(fmt.Sprintf("SUBSTRING(%s, %s, %s)", str, i, j), nil)
+			}
+		}
+	}
+}
+
+func FnLocate(yield Query) {
+	mysqlDocSamples := []string{
+		`LOCATE('bar', 'foobarbar')`,
+		`LOCATE('xbar', 'foobar')`,
+		`LOCATE('bar', 'foobarbar', 5)`,
+		`INSTR('foobarbar', 'bar')`,
+		`INSTR('xbar', 'foobar')`,
+		`POSITION('bar' IN 'foobarbar')`,
+		`POSITION('xbar' IN 'foobar')`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, substr := range locateStrings {
+		for _, str := range locateStrings {
+			yield(fmt.Sprintf("LOCATE(%s, %s)", substr, str), nil)
+			yield(fmt.Sprintf("INSTR(%s, %s)", str, substr), nil)
+			yield(fmt.Sprintf("POSITION(%s IN %s)", str, substr), nil)
+
+			for _, i := range radianInputs {
+				yield(fmt.Sprintf("LOCATE(%s, %s, %s)", substr, str, i), nil)
 			}
 		}
 	}
