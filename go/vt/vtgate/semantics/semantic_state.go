@@ -143,6 +143,7 @@ type (
 		childForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
 		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
 		childFkToUpdExprs         map[string]sqlparser.UpdateExprs
+		collEnv                   *collations.Environment
 	}
 
 	columnName struct {
@@ -640,7 +641,12 @@ func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
 		if !found {
 			return true
 		}
-		return typ.Collation() == collations.Unknown && !sqltypes.IsNumber(typ.Type())
+
+		if !sqltypes.IsText(typ.Type()) {
+			return false
+		}
+
+		return !st.collEnv.IsSupported(typ.Collation())
 	}
 }
 
@@ -806,7 +812,7 @@ func (st *SemTable) SingleKeyspace() (ks *vindexes.Keyspace) {
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
 	// If there is no SemTable, then we cannot compare the expressions.
 	if st == nil {
-		return false
+		return sqlparser.Equals.Expr(a, b)
 	}
 	return st.ASTEquals().Expr(a, b)
 }

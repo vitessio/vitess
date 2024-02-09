@@ -20,6 +20,7 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -275,8 +276,8 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 
 		ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, targetPrimary.DbName())
 
-		// copy excludeRules to prevent data race.
-		copyExcludeRules := append([]*binlogdatapb.Rule(nil), excludeRules...)
+		// Clone excludeRules to prevent data races.
+		copyExcludeRules := slices.Clone(excludeRules)
 		for _, source := range rs.sourceShards {
 			if !key.KeyRangeIntersect(target.KeyRange, source.KeyRange) {
 				continue

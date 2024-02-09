@@ -3440,5 +3440,68 @@
         "unsharded_fk_allow.u_tbl3"
       ]
     }
+  },
+  {
+    "comment": "update query with an uncorrelated subquery",
+    "query": "update u_tbl4 set col41 = (select col14 from u_tbl1 where x = 2 and y = 4) where col4 = 3",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_tbl4 set col41 = (select col14 from u_tbl1 where x = 2 and y = 4) where col4 = 3",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select col14 from u_tbl1 where 1 != 1",
+            "Query": "select col14 from u_tbl1 where x = 2 and y = 4 lock in share mode",
+            "Table": "u_tbl1"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "FKVerify",
+            "Inputs": [
+              {
+                "InputName": "VerifyParent-1",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where 1 != 1",
+                "Query": "select 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where not (u_tbl4.col41) <=> (cast(:__sq1 as SIGNED)) and u_tbl4.col4 = 3 and cast(:__sq1 as SIGNED) is not null and u_tbl1.col14 is null limit 1 for share",
+                "Table": "u_tbl1, u_tbl4"
+              },
+              {
+                "InputName": "PostVerify",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col41 = :__sq1 where col4 = 3",
+                "Table": "u_tbl4"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
+        "unsharded_fk_allow.u_tbl4"
+      ]
+    }
   }
 ]

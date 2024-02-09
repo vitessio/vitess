@@ -76,7 +76,7 @@ func (ap *AggregateParams) String() string {
 	if ap.WAssigned() {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
-	if sqltypes.IsText(ap.Type.Type()) && ap.Type.Collation() != collations.Unknown {
+	if sqltypes.IsText(ap.Type.Type()) && ap.CollationEnv.IsSupported(ap.Type.Collation()) {
 		keyCol += " COLLATE " + ap.CollationEnv.LookupName(ap.Type.Collation())
 	}
 	dispOrigOp := ""

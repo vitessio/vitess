@@ -35,14 +35,14 @@ var _ Primitive = (*VStream)(nil)
 
 // VStream is an operator for streaming specific keyspace, destination
 type VStream struct {
+	noTxNeeded
+	noInputs
+
 	Keyspace          *vindexes.Keyspace
 	TargetDestination key.Destination
 	TableName         string
 	Position          string
 	Limit             int
-
-	noTxNeeded
-	noInputs
 }
 
 // RouteType implements the Primitive interface
