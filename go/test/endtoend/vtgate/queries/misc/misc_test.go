@@ -139,6 +139,7 @@ func TestCast(t *testing.T) {
 
 // TestVindexHints tests that vindex hints work as intended.
 func TestVindexHints(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
