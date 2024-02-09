@@ -81,7 +81,7 @@ func TestDoDupSuppress(t *testing.T) {
 
 	const n = 10
 	wg1.Add(1)
-	for i := 0; i < n; i++ {
+	for range n {
 		wg1.Add(1)
 		wg2.Add(1)
 		go func() {
@@ -119,7 +119,7 @@ func TestPanicDo(t *testing.T) {
 	waited := int32(n)
 	panicCount := int32(0)
 	done := make(chan struct{})
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			defer func() {
 				if err := recover(); err != nil {
@@ -155,7 +155,7 @@ func TestGoexitDo(t *testing.T) {
 	const n = 5
 	waited := int32(n)
 	done := make(chan struct{})
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			var err error
 			defer func() {
@@ -201,7 +201,7 @@ func randKeys(b *testing.B, count, length uint) []string {
 	keys := make([]string, 0, count)
 	key := make([]byte, length)
 
-	for i := uint(0); i < count; i++ {
+	for i := range uint(count) {
 		if _, err := io.ReadFull(rand.Reader, key); err != nil {
 			b.Fatalf("Failed to generate random key %d of %d of length %d: %s", i+1, count, length, err)
 		}
