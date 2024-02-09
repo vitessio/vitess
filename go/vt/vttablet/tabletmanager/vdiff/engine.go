@@ -26,17 +26,16 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 type Engine struct {
@@ -399,7 +398,7 @@ func (vde *Engine) resetControllers() {
 	vde.updateStats()
 }
 
-// UpdateStats must be called with lock held.
+// UpdateStats must be called while holding the engine lock.
 func (vre *Engine) updateStats() {
 	globalStats.mu.Lock()
 	defer globalStats.mu.Unlock()

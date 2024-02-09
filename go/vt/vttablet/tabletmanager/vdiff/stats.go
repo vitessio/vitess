@@ -55,7 +55,7 @@ func (vds *vdiffStats) register() {
 
 	stats.NewCounterFunc(
 		"VDiffErrorCountTotal",
-		"Number of errors encountered across all vdiffs",
+		"Number of errors encountered across all vdiff actions",
 		func() int64 {
 			vds.mu.Lock()
 			defer vds.mu.Unlock()
@@ -134,7 +134,7 @@ func (vds *vdiffStats) register() {
 			defer vds.mu.Unlock()
 			result := make(map[string]int64, len(vds.controllers))
 			for _, ct := range vds.controllers {
-				for key, val := range ct.ErrorCounts.Counts() {
+				for key, val := range ct.Errors.Counts() {
 					result[fmt.Sprintf("%s.%s.%s", ct.workflow, ct.uuid, key)] = val
 				}
 			}

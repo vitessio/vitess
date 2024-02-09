@@ -358,6 +358,10 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		// Confirm that the options were passed through and saved correctly.
 		query := sqlparser.BuildParsedQuery("select options from %s.vdiff where vdiff_uuid = %s",
 			sidecarDBIdentifier, encodeString(vduuid.String())).Query
+		// TODO (mlord): figure out why for a brief moment (N us) the debug/vars value
+		// produced for TabletStateName becomes NOT_SERVING after the vdiff is created
+		// due to the tabletmanager returning "Not connected to mysql".
+		time.Sleep(100 * time.Millisecond)
 		tablets := vc.getVttabletsInKeyspace(t, cell, targetKs, "PRIMARY")
 		require.Greater(t, len(tablets), 0, "no primary tablets found in keyspace %s", targetKs)
 		tablet := maps.Values(tablets)[0]
