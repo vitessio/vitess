@@ -116,8 +116,16 @@ func (vds *vdiffStats) register() {
 			defer vds.mu.Unlock()
 			result := make(map[string]string, len(vds.controllers))
 			for _, ct := range vds.controllers {
+				if ct.targetShardStreamer == nil || ct.targetShardStreamer.tablet == nil {
+					// We haven't yet chosen the target shard streamer, so skip it.
+					continue
+				}
 				tt := topoproto.TabletAliasString(ct.targetShardStreamer.tablet.Alias)
 				for _, s := range ct.sources {
+					if s == nil || s.tablet == nil {
+						// We haven't yet chosen the source shard streamer, so skip it.
+						continue
+					}
 					result[fmt.Sprintf("%s.%s.%s", ct.workflow, ct.uuid, s.shard)] =
 						fmt.Sprintf("source:%s,target:%s", topoproto.TabletAliasString(s.tablet.Alias), tt)
 				}
