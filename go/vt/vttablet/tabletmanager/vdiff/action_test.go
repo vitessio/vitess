@@ -57,7 +57,12 @@ func TestPerformVDiffAction(t *testing.T) {
 		wantErr       error
 	}{
 		{
+			name:    "nil request",
+			wantErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "nil vdiff request"),
+		},
+		{
 			name:    "engine not open",
+			req:     &tabletmanagerdatapb.VDiffRequest{},
 			vde:     &Engine{isOpen: false},
 			wantErr: vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vdiff engine is closed"),
 		},
