@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet"
@@ -56,6 +58,7 @@ type testCase struct {
 	testCLICreateWait   bool // test CLI create and wait until done against this workflow (only needs to be done once)
 	testCLIFlagHandling bool // test vtctldclient flag handling from end-to-end
 	extraVDiffFlags     map[string]string
+	vdiffCount          int64 // Keep track of the number of vdiffs created to test the stats
 }
 
 const (
@@ -117,6 +120,14 @@ var testCases = []*testCase{
 		resumeInsert:   `insert into customer(cid, name, typ) values(2005149600, 'Testy McTester V', 'enterprise'), (2005149650, 'Testy McTester VI', 'enterprise')`,
 		stop:           true,
 	},
+}
+
+func checkVDiffCountStat(t *testing.T, tablet *cluster.VttabletProcess, expectedCount int64) {
+	countStr, err := getDebugVar(t, tablet.Port, []string{"VDiffCount"})
+	require.NoError(t, err, "failed to get VDiffCount stat from %s-%d tablet: %v", tablet.Cell, tablet.TabletUID, err)
+	count, err := strconv.Atoi(countStr)
+	require.NoError(t, err, "failed to convert VDiffCount stat string to int: %v", err)
+	require.Equal(t, expectedCount, int64(count), "expected VDiffCount stat to be %d but got %d", expectedCount, count)
 }
 
 func TestVDiff2(t *testing.T) {
@@ -251,9 +262,12 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		}
 		// Wait for the workflow to catch up again on the deletes.
 		waitForShardsToCatchup()
+		tc.vdiffCount++ // We only did vtctldclient vdiff create
 	} else {
 		vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
+		tc.vdiffCount += 2 // We did vtctlclient AND vtctldclient vdiff create
 	}
+	checkVDiffCountStat(t, vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0]), tc.vdiffCount)
 
 	if tc.autoRetryError {
 		testAutoRetryError(t, tc, allCellNames)
@@ -263,26 +277,37 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		testResume(t, tc, allCellNames)
 	}
 
+	checkVDiffCountStat(t, vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0]), tc.vdiffCount)
+
 	// These are done here so that we have a valid workflow to test the commands against.
 	if tc.stop {
 		testStop(t, ksWorkflow, allCellNames)
+		tc.vdiffCount++ // Does either vtctlclient OR vtctldclient vdiff create
 	}
 	if tc.testCLICreateWait {
 		testCLICreateWait(t, ksWorkflow, allCellNames)
+		tc.vdiffCount++ // Does either vtctlclient OR vtctldclient vdiff create
 	}
 	if tc.testCLIErrors {
 		testCLIErrors(t, ksWorkflow, allCellNames)
 	}
 	if tc.testCLIFlagHandling {
 		testCLIFlagHandling(t, tc.targetKs, tc.workflow, cells[0])
+		tc.vdiffCount++ // Does either vtctlclient OR vtctldclient vdiff create
 	}
 
+	checkVDiffCountStat(t, vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0]), tc.vdiffCount)
+
 	testDelete(t, ksWorkflow, allCellNames)
+	tc.vdiffCount = 0 // All vdiffs are deleted, so reset the count and check
+	checkVDiffCountStat(t, vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0]), tc.vdiffCount)
 
 	// Create another VDiff record to confirm it gets deleted when the workflow is completed.
 	ts := time.Now()
 	uuid, _ := performVDiff2Action(t, false, ksWorkflow, allCellNames, "create", "", false)
 	waitForVDiff2ToComplete(t, false, ksWorkflow, allCellNames, uuid, ts)
+	tc.vdiffCount++
+	checkVDiffCountStat(t, vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0]), tc.vdiffCount)
 
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err)
@@ -291,6 +316,8 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 
 	// Confirm the VDiff data is deleted for the workflow.
 	testNoOrphanedData(t, tc.targetKs, tc.workflow, arrTargetShards)
+	tc.vdiffCount = 0 // All vdiffs are deleted, so reset the count and check
+	checkVDiffCountStat(t, vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0]), tc.vdiffCount)
 }
 
 func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
