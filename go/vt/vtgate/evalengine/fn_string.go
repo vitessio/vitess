@@ -115,46 +115,57 @@ var _ IR = (*builtinPad)(nil)
 var _ IR = (*builtinTrim)(nil)
 
 func insert(str, newstr *evalBytes, pos, l int) []byte {
+	pos--
+
 	cs := colldata.Lookup(str.col.Collation).Charset()
-	strLength := charset.Length(cs, str.bytes)
+	strLen := charset.Length(cs, str.bytes)
 
-	if strLength < pos {
-		return nil
+	if pos < 0 || strLen <= pos {
+		return str.bytes
+	}
+	if l < 0 {
+		l = strLen
 	}
 
-	end := min(pos+l, strLength)
-	b := charset.Slice(cs, str.bytes, pos-1, end)
-	b = append(b, newstr.bytes...)
-
-	if end != strLength {
-		b = append(b, charset.Slice(cs, str.bytes, end, strLength)...)
+	front := charset.Slice(cs, str.bytes, 0, pos)
+	var back []byte
+	if pos+l < strLen {
+		back = charset.Slice(cs, str.bytes, pos+l, strLen)
 	}
-	return b
+
+	res := make([]byte, len(front)+len(newstr.bytes)+len(back))
+
+	copy(res[:len(front)], front)
+	copy(res[len(front):], newstr.bytes)
+	copy(res[len(front)+len(newstr.bytes):], back)
+
+	return res
 }
 
 func (call *builtinInsert) eval(env *ExpressionEnv) (eval, error) {
-	arg, err := call.args(env)
+	args, err := call.args(env)
 	if err != nil {
 		return nil, err
 	}
+	if args[0] == nil || args[3] == nil {
+		return nil, nil
+	}
 
-	str, ok := arg[0].(*evalBytes)
+	str, ok := args[0].(*evalBytes)
 	if !ok {
-		str, err = evalToVarchar(arg[0], call.collate, true)
+		str, err = evalToVarchar(args[0], call.collate, true)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	pos := evalToInt64(arg[1]).i
-	l := evalToInt64(arg[2]).i
+	pos := evalToInt64(args[1]).i
+	l := evalToInt64(args[2]).i
 
-	newstr, ok := arg[3].(*evalBytes)
-	if !ok {
-		newstr, err = evalToVarchar(arg[3], call.collate, true)
-		if err != nil {
-			return nil, err
-		}
+	// We should convert newstr's collation to converted str's collation
+	newstr, err := evalToVarchar(args[3], str.col.Collation, true)
+	if err != nil {
+		return nil, err
 	}
 
 	return newEvalText(insert(str, newstr, int(pos), int(l)), str.col), nil
@@ -185,24 +196,31 @@ func (call *builtinInsert) compile(c *compiler) (ctype, error) {
 
 	skip2 := c.compileNullCheck1(newstr)
 
-	switch {
-	case str.isTextual():
-	default:
-		c.asm.Convert_xc(4, sqltypes.VarChar, c.collation, 0, false)
-	}
-
 	_ = c.compileToInt64(pos, 3)
 	_ = c.compileToInt64(l, 2)
 
-	switch {
-	case newstr.isTextual():
-	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, 0, false)
+	if err != nil {
+		return ctype{}, nil
 	}
 
-	c.asm.Fn_INSERT()
+	col := str.Col
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xce(4, str.Type, call.collate)
+
+		// We fall back to default collation, if str isn't textual
+		col = typedCoercionCollation(sqltypes.VarChar, call.collate)
+	}
+
+	// We should convert newstr's collation to str's converted collation
+	c.asm.Convert_xce(1, newstr.Type, col.Collation)
+
+	c.asm.Fn_INSERT(col)
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.VarChar, Col: str.Col, Flag: flagNullable}, nil
+
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
 }
 
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {

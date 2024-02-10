@@ -1314,20 +1314,37 @@ var JSONExtract_Schema = []*querypb.Field{
 }
 
 func FnInsert(yield Query) {
-	str := []string{
-		"'Quadratic'",
-		"'What'",
-	}
-
-	pos := []string{
+	num := []string{
+		"-1",
 		"3",
 		"4",
+		"10",
+		"20",
+		"'14'",
+		"100",
+		"5",
+		"0",
+		"2",
 	}
 
-	for _, s := range str {
-		for _, p := range pos {
-			yield(fmt.Sprintf("INSERT(%s, %s, %s, %s)", s, p, p, s), nil)
+	for _, s := range insertStrings {
+		for _, ns := range insertStrings {
+			for _, l := range num {
+				for _, p := range num {
+					yield(fmt.Sprintf("INSERT(%s, %s, %s, %s)", s, p, l, ns), nil)
+				}
+			}
 		}
+	}
+
+	mysqlDocSamples := []string{
+		"INSERT('Quadratic', 3, 4, 'What')",
+		"INSERT('Quadratic', -1, 4, 'What')",
+		"INSERT('Quadratic', 3, 100, 'What')",
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
 	}
 }
 
