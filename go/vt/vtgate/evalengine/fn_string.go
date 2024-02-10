@@ -174,7 +174,6 @@ func (call *builtinInsert) eval(env *ExpressionEnv) (eval, error) {
 	pos := evalToInt64(args[1]).i
 	l := evalToInt64(args[2]).i
 
-	// We should convert newstr's collation to converted str's collation
 	newstr, err := evalToVarchar(args[3], str.col.Collation, true)
 	if err != nil {
 		return nil, err
@@ -221,12 +220,9 @@ func (call *builtinInsert) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 	default:
 		c.asm.Convert_xce(4, str.Type, call.collate)
-
-		// We fall back to default collation, if str isn't textual
 		col = typedCoercionCollation(sqltypes.VarChar, call.collate)
 	}
 
-	// We should convert newstr's collation to str's converted collation
 	c.asm.Convert_xce(1, newstr.Type, col.Collation)
 
 	c.asm.Fn_INSERT(col)
