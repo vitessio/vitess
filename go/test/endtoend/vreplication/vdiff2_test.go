@@ -183,6 +183,21 @@ func TestVDiff2(t *testing.T) {
 			testWorkflow(t, vc, tc, tks, []*Cell{zone3, zone2, zone1})
 		})
 	}
+
+	statsTablet := vc.getPrimaryTablet(t, targetKs, targetShards[0])
+
+	// We diffed X rows so confirm that the global total is > 0.
+	countStr, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsComparedTotal"})
+	require.NoError(t, err, "failed to get VDiffRowsComparedTotal stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
+	count, err := strconv.Atoi(countStr)
+	require.NoError(t, err, "failed to convert VDiffRowsComparedTotal stat string to int: %v", err)
+	require.Greater(t, count, 0, "expected VDiffRowsComparedTotal stat to be greater than 0 but got %d", count)
+
+	// The VDiffs should all be cleaned up so the VDiffRowsCompared value, which
+	// is produced from controller info, should be empty.
+	vdrc, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsCompared"})
+	require.NoError(t, err, "failed to get VDiffRowsCompared stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
+	require.Equal(t, "{}", vdrc, "expected VDiffRowsCompared stat to be empty but got %s", vdrc)
 }
 
 func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, cells []*Cell) {
@@ -282,18 +297,18 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	// These are done here so that we have a valid workflow to test the commands against.
 	if tc.stop {
 		testStop(t, ksWorkflow, allCellNames)
-		tc.vdiffCount++ // Does either vtctlclient OR vtctldclient vdiff create
+		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
 	}
 	if tc.testCLICreateWait {
 		testCLICreateWait(t, ksWorkflow, allCellNames)
-		tc.vdiffCount++ // Does either vtctlclient OR vtctldclient vdiff create
+		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
 	}
 	if tc.testCLIErrors {
 		testCLIErrors(t, ksWorkflow, allCellNames)
 	}
 	if tc.testCLIFlagHandling {
 		testCLIFlagHandling(t, tc.targetKs, tc.workflow, cells[0])
-		tc.vdiffCount++ // Does either vtctlclient OR vtctldclient vdiff create
+		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
 	}
 
 	checkVDiffCountStat(t, vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0]), tc.vdiffCount)

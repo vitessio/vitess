@@ -398,7 +398,7 @@ func (vde *Engine) resetControllers() {
 	vde.updateStats()
 }
 
-// UpdateStats must be called while holding the engine lock.
+// updateStats must only be called while holding the engine lock.
 func (vre *Engine) updateStats() {
 	globalStats.mu.Lock()
 	defer globalStats.mu.Unlock()
