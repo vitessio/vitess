@@ -750,8 +750,6 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
-	// We have to reset first as the value is not incremental.
-	td.wd.ct.TableDiffRowCounts.Reset([]string{td.table.Name})
 	td.wd.ct.TableDiffRowCounts.Add([]string{td.table.Name}, dr.ProcessedRows)
 	return nil
 }

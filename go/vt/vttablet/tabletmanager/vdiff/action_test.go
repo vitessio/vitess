@@ -248,8 +248,8 @@ func TestPerformVDiffAction(t *testing.T) {
 			// No VDiffs should be running anymore.
 			require.Equal(t, 0, len(vdiffenv.vde.controllers), "expected no controllers to be running, but found %d",
 				len(vdiffenv.vde.controllers))
-			require.Equal(t, int64(0), globalStats.numControllers(), "expected no controllers to be running, but found %d")
+			require.Equal(t, int64(0), globalStats.numControllers(), "expected no controllers, but found %d")
 		})
-		require.Equal(t, errCount, globalStats.ErrorCount.Get())
+		require.Equal(t, errCount, globalStats.ErrorCount.Get(), "expected error count %d, got %d", errCount, globalStats.ErrorCount.Get())
 	}
 }
