@@ -3921,11 +3921,6 @@ func (asm *assembler) Fn_LAST_DAY() {
 			return 1
 		}
 		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-		if arg.dt.IsZero() {
-			env.vm.stack[env.vm.sp-1] = nil
-			return 1
-		}
-
 		d := lastDay(env.currentTimezone(), arg.dt)
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(d)
 		return 1
@@ -3938,12 +3933,8 @@ func (asm *assembler) Fn_TO_DAYS() {
 			return 1
 		}
 		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-		if arg.dt.Date.IsZero() {
-			env.vm.stack[env.vm.sp-1] = nil
-		} else {
-			numDays := datetime.MysqlDayNumber(arg.dt.Date.Year(), arg.dt.Date.Month(), arg.dt.Date.Day())
-			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(numDays))
-		}
+		numDays := datetime.MysqlDayNumber(arg.dt.Date.Year(), arg.dt.Date.Month(), arg.dt.Date.Day())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(numDays))
 		return 1
 	}, "FN TO_DAYS DATE(SP-1)")
 }
