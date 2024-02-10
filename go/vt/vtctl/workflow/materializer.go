@@ -123,10 +123,10 @@ func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreat
 			return err
 		}
 		vrOptions := &vtctldatapb.VReplicationWorkflowOptions{}
-		if mz.ms.VReplicationWorkflowOptions.AdditionalFilter != "" {
+		if mz.ms.VReplicationWorkflowOptions != nil && mz.ms.VReplicationWorkflowOptions.AdditionalFilter != "" {
 			vrOptions.AdditionalFilter = mz.ms.VReplicationWorkflowOptions.AdditionalFilter
 		}
-		if mz.ms.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
+		if mz.ms.VReplicationWorkflowOptions != nil && mz.ms.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
 			vrOptions.UseKeyspaceRoutingRules = true
 			if mz.ms.VReplicationWorkflowOptions.SourceKeyspaceAlias != "" {
 				vrOptions.SourceKeyspaceAlias = mz.ms.VReplicationWorkflowOptions.SourceKeyspaceAlias
@@ -307,9 +307,13 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			TargetTimeZone:  mz.ms.TargetTimeZone,
 			OnDdl:           binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[mz.ms.OnDdl]),
 		}
-		additionalWhereClause, err := getAdditionalFilter(mz.env.Parser(), mz.ms.VReplicationWorkflowOptions.AdditionalFilter)
-		if err != nil {
-			return nil, err
+		var additionalWhereClause *sqlparser.Where
+		var err error
+		if mz.ms.VReplicationWorkflowOptions != nil {
+			additionalWhereClause, err = getAdditionalFilter(mz.env.Parser(), mz.ms.VReplicationWorkflowOptions.AdditionalFilter)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		for _, ts := range mz.ms.TableSettings {

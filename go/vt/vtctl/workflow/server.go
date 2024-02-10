@@ -1579,10 +1579,10 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 }
 
 func (s *Server) validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateRequest, mz *materializer) error {
-	if req.NoRoutingRules && req.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
+	if req.NoRoutingRules && mz.ms.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use --no-routing-rules and --use-keyspace-routing-rules flags together")
 	}
-	if mz.isPartial && req.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
+	if mz.isPartial && mz.ms.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use --use-keyspace-routing-rules with partial migration")
 	}
 	return nil
@@ -1615,11 +1615,11 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 
 	// This needs to be protected with a mutex or a lock. FIXME: confirm this.
 	// Otherwise the map could be overwritten if multiple movetables are run at the same time.
-	if req.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
+	if mz.ms.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.UseKeyspaceRoutingRules {
 		log.Infof("Setting up keyspace routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
 		var keyspaces []string
 		keyspaces = append(keyspaces, sourceKeyspace, targetKeyspace)
-		if req.VReplicationWorkflowOptions.SourceKeyspaceAlias != "" {
+		if req.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.SourceKeyspaceAlias != "" {
 			keyspaces = append(keyspaces, req.VReplicationWorkflowOptions.SourceKeyspaceAlias)
 		}
 		routes := make(map[string]string)
