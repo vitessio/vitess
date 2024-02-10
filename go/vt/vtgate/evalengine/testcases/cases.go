@@ -70,6 +70,8 @@ var Cases = []TestCase{
 	{Run: FnLength},
 	{Run: FnBitLength},
 	{Run: FnAscii},
+	{Run: FnReverse},
+	{Run: FnSpace},
 	{Run: FnOrd},
 	{Run: FnRepeat},
 	{Run: FnLeft},
@@ -1385,6 +1387,34 @@ func FnBitLength(yield Query) {
 func FnAscii(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("ASCII(%s)", str), nil)
+	}
+}
+
+func FnReverse(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("REVERSE(%s)", str), nil)
+	}
+}
+
+func FnSpace(yield Query) {
+	counts := []string{
+		"0",
+		"12",
+		"23",
+		"-1",
+		"-12393128120",
+		"-432766734237843674326423876243876234786",
+		"'-432766734237843674326423876243876234786'",
+		"432766734237843674326423876243876234786",
+		"1073741825",
+		"1.5",
+		"-3.2",
+		"'jhgjhg'",
+		"6",
+	}
+
+	for _, c := range counts {
+		yield(fmt.Sprintf("SPACE(%s)", c), nil)
 	}
 }
 
