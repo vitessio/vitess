@@ -201,6 +201,13 @@ func TestGenerateInternalTableName(t *testing.T) {
 		assert.True(t, IsInternalOperationTableName(tableName))
 	}
 	{
+		uuid := "4e5dcf80-354b-11eb-82cd-f875a4d24e90"
+		tableName, err := GenerateInternalTableName(InternalTableGCPurgeHint.String(), uuid, ti)
+		require.NoError(t, err)
+		assert.Equal(t, "_vt_prg_4e5dcf80354b11eb82cdf875a4d24e90_20150225110639_", tableName)
+		assert.True(t, IsInternalOperationTableName(tableName))
+	}
+	{
 		uuid := ""
 		tableName, err := GenerateInternalTableName(InternalTableGCPurgeHint.String(), uuid, ti)
 		require.NoError(t, err)

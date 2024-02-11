@@ -26,18 +26,20 @@ import (
 )
 
 func TestGCStates(t *testing.T) {
-	assert.Equal(t, HoldTableGCState, gcStates["hld"])
-	assert.Equal(t, HoldTableGCState, gcStates["HOLD"])
-	assert.Equal(t, PurgeTableGCState, gcStates["prg"])
-	assert.Equal(t, PurgeTableGCState, gcStates["PURGE"])
-	assert.Equal(t, EvacTableGCState, gcStates["evc"])
-	assert.Equal(t, EvacTableGCState, gcStates["EVAC"])
-	assert.Equal(t, DropTableGCState, gcStates["drp"])
-	assert.Equal(t, DropTableGCState, gcStates["DROP"])
+	// These are all hard coded
+	require.Equal(t, HoldTableGCState, gcStates["hld"])
+	require.Equal(t, HoldTableGCState, gcStates["HOLD"])
+	require.Equal(t, PurgeTableGCState, gcStates["prg"])
+	require.Equal(t, PurgeTableGCState, gcStates["PURGE"])
+	require.Equal(t, EvacTableGCState, gcStates["evc"])
+	require.Equal(t, EvacTableGCState, gcStates["EVAC"])
+	require.Equal(t, DropTableGCState, gcStates["drp"])
+	require.Equal(t, DropTableGCState, gcStates["DROP"])
 	_, ok := gcStates["purge"]
-	assert.False(t, ok)
+	require.False(t, ok)
 	_, ok = gcStates["vrp"]
-	assert.False(t, ok)
+	require.False(t, ok)
+	require.Equal(t, 2*4, len(gcStates)) // 4 states, 2 forms each
 }
 
 func TestIsGCTableName(t *testing.T) {
