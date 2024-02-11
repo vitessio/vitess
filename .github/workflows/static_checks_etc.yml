@@ -39,8 +39,10 @@ jobs:
         # generate a push only token and specify that as plain
         # text here:
         #   https://github.com/fossa-contrib/fossa-action#push-only-api-token
+        # BUT, it also requires that the fork have its own
+        # independent integration setup with fossa.com.
         if: github.ref == 'refs/heads/main'
-        uses: fossa-contrib/fossa-action@v2
+        uses: fossa-contrib/fossa-action@v3
         with:
           fossa-api-key: ${{ secrets.FOSSA_API_KEY }}
 
