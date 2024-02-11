@@ -180,7 +180,11 @@ func (call *builtinInsert) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	return newEvalText(insert(str, newstr, int(pos), int(l)), str.col), nil
+	res := insert(str, newstr, int(pos), int(l))
+	if !validMaxLength(int64(len(res)), 1) {
+		return nil, nil
+	}
+	return newEvalText(res, str.col), nil
 }
 
 func (call *builtinInsert) compile(c *compiler) (ctype, error) {
@@ -222,7 +226,16 @@ func (call *builtinInsert) compile(c *compiler) (ctype, error) {
 		col = typedCoercionCollation(sqltypes.VarChar, c.collation)
 	}
 
-	c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
+	switch {
+	case newstr.isTextual():
+		fromCharset := colldata.Lookup(newstr.Col.Collation).Charset()
+		toCharset := colldata.Lookup(col.Collation).Charset()
+		if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
+			c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
+		}
+	default:
+		c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
+	}
 
 	c.asm.Fn_INSERT(col)
 	c.asm.jumpDestination(skip)

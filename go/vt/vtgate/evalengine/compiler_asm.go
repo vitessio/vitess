@@ -2354,7 +2354,14 @@ func (asm *assembler) Fn_INSERT(col collations.TypedCollation) {
 		l := env.vm.stack[env.vm.sp-2].(*evalInt64).i
 		newstr := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
-		env.vm.stack[env.vm.sp-4] = env.vm.arena.newEvalText(insert(str, newstr, int(pos), int(l)), col)
+		res := insert(str, newstr, int(pos), int(l))
+		if !validMaxLength(int64(len(res)), 1) {
+			env.vm.stack[env.vm.sp-4] = nil
+			env.vm.sp -= 3
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-4] = env.vm.arena.newEvalText(res, col)
 		env.vm.sp -= 3
 		return 1
 	}, "FN INSERT VARCHAR(SP-4) INT64(SP-3) INT64(SP-2) VARCHAR(SP-1)")
