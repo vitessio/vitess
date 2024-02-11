@@ -1439,6 +1439,9 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	}
 
 	vreplTableName, err := schema.GenerateInternalTableName(schema.InternalTableVreplicationHint.String(), onlineDDL.UUID, time.Now())
+	if err != nil {
+		return v, err
+	}
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
