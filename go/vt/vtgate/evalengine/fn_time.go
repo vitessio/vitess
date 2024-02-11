@@ -341,6 +341,10 @@ func convertTz(dt datetime.DateTime, from, to *time.Location) (datetime.DateTime
 	if err != nil {
 		return datetime.DateTime{}, false
 	}
+
+	if ts.Unix() < 0 || ts.Unix() >= maxUnixtime {
+		return dt, true
+	}
 	return datetime.NewDateTimeFromStd(ts.In(to)), true
 }
 
@@ -504,7 +508,7 @@ func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
-	return newEvalInt64(int64(d.dt.Date.ToStdTime(env.currentTimezone()).Weekday() + 1)), nil
+	return newEvalInt64(int64(d.dt.Date.Weekday() + 1)), nil
 }
 
 func (call *builtinDayOfWeek) compile(c *compiler) (ctype, error) {
@@ -1494,6 +1498,10 @@ func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
 	}
 
 	ts := dt.dt.ToStdTime(env.now)
+	if ts.Unix() < 0 || ts.Unix() >= maxUnixtime {
+		return newEvalInt64(0)
+	}
+
 	if dt.prec == 0 {
 		return newEvalInt64(ts.Unix())
 	}

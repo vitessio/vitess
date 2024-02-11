@@ -65,12 +65,22 @@ type Action string
 const (
 	/* generic actions */
 
+	CancelAction Action = "cancel"
 	CreateAction Action = "create"
 	DeleteAction Action = "delete"
 	GetAction    Action = "get"
 	PingAction   Action = "ping"
 	PutAction    Action = "put"
 	ReloadAction Action = "reload"
+	RetryAction  Action = "retry"
+
+	// cancel, complete, cleanup, launch, retry
+
+	/* schema-migration-specific actions */
+
+	CleanupSchemaMigrationAction  Action = "cleanup_schema_migration"
+	CompleteSchemaMigrationAction Action = "complete_schema_migration"
+	LaunchSchemaMigrationAction   Action = "launch_schema_migration"
 
 	/* shard-specific actions */
 
@@ -112,10 +122,14 @@ const (
 	SrvKeyspaceResource Resource = "SrvKeyspace"
 	SrvVSchemaResource  Resource = "SrvVSchema"
 
+	/* schema resources */
+
+	SchemaResource          Resource = "Schema"
+	SchemaMigrationResource Resource = "SchemaMigration"
+
 	/* misc resources */
 
 	BackupResource                   Resource = "Backup"
-	SchemaResource                   Resource = "Schema"
 	ShardReplicationPositionResource Resource = "ShardReplicationPosition"
 	WorkflowResource                 Resource = "Workflow"
 

@@ -69,6 +69,8 @@ var Cases = []TestCase{
 	{Run: FnLength},
 	{Run: FnBitLength},
 	{Run: FnAscii},
+	{Run: FnReverse},
+	{Run: FnSpace},
 	{Run: FnOrd},
 	{Run: FnRepeat},
 	{Run: FnLeft},
@@ -1352,6 +1354,34 @@ func FnAscii(yield Query) {
 	}
 }
 
+func FnReverse(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("REVERSE(%s)", str), nil)
+	}
+}
+
+func FnSpace(yield Query) {
+	counts := []string{
+		"0",
+		"12",
+		"23",
+		"-1",
+		"-12393128120",
+		"-432766734237843674326423876243876234786",
+		"'-432766734237843674326423876243876234786'",
+		"432766734237843674326423876243876234786",
+		"1073741825",
+		"1.5",
+		"-3.2",
+		"'jhgjhg'",
+		"6",
+	}
+
+	for _, c := range counts {
+		yield(fmt.Sprintf("SPACE(%s)", c), nil)
+	}
+}
+
 func FnOrd(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("ORD(%s)", str), nil)
@@ -1857,6 +1887,25 @@ func FnTime(yield Query) {
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("TIME(%s)", d), nil)
 	}
+	times := []string{
+		"'00:00:00'",
+		"'asdadsasd'",
+		"'312sadd'",
+		"'11-12-23'",
+		"'0000-11-23'",
+		"'0-0-0'",
+		"00:00",
+		"00:00-00",
+		"00:00:0:0:0:0",
+		"00::00",
+		"12::00",
+		"'00000001'",
+		"'11116656'",
+	}
+
+	for _, d := range times {
+		yield(fmt.Sprintf("TIME(%s)", d), nil)
+	}
 }
 
 func FnUnixTimestamp(yield Query) {
@@ -1898,7 +1947,7 @@ func FnYear(yield Query) {
 }
 
 func FnYearWeek(yield Query) {
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 8; i++ {
 		for _, d := range inputConversions {
 			yield(fmt.Sprintf("YEARWEEK(%s, %d)", d, i), nil)
 		}

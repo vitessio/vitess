@@ -78,7 +78,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	}
 
 	// Creation of the semantic table
-	return analyzer.newSemTable(statement, si.ConnCollation(), si.GetForeignKeyChecksState())
+	return analyzer.newSemTable(statement, si.ConnCollation(), si.GetForeignKeyChecksState(), si.Environment().CollationEnv())
 }
 
 // AnalyzeStrict analyzes the parsed query, and fails the analysis for any possible errors
@@ -98,7 +98,12 @@ func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInf
 	return st, nil
 }
 
-func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID, fkChecksState *bool) (*SemTable, error) {
+func (a *analyzer) newSemTable(
+	statement sqlparser.Statement,
+	coll collations.ID,
+	fkChecksState *bool,
+	env *collations.Environment,
+) (*SemTable, error) {
 	var comments *sqlparser.ParsedComments
 	commentedStmt, isCommented := statement.(sqlparser.Commented)
 	if isCommented {
@@ -133,6 +138,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		childForeignKeysInvolved:  childFks,
 		parentForeignKeysInvolved: parentFks,
 		childFkToUpdExprs:         childFkToUpdExprs,
+		collEnv:                   env,
 	}, nil
 }
 
