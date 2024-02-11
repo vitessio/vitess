@@ -61,7 +61,7 @@ func (s TableGCState) TableHint() InternalTableHint {
 
 const (
 	OldGCTableNameExpression string = `^_vt_(HOLD|PURGE|EVAC|DROP)_([0-f]{32})_([0-9]{14})$`
-	// GCTableNameExpression parses new intrnal table name format, e.g. _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_
+	// GCTableNameExpression parses new internal table name format, e.g. _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_
 	GCTableNameExpression string = `^_vt_(hld|prg|evc|drp)_([0-f]{32})_([0-9]{14})_$`
 )
 
