@@ -1316,23 +1316,10 @@ var JSONExtract_Schema = []*querypb.Field{
 }
 
 func FnInsert(yield Query) {
-	num := []string{
-		"-1",
-		"3",
-		"4",
-		"10",
-		"20",
-		"'14'",
-		"100",
-		"5",
-		"0",
-		"2",
-	}
-
 	for _, s := range insertStrings {
 		for _, ns := range insertStrings {
-			for _, l := range num {
-				for _, p := range num {
+			for _, l := range inputBitwise {
+				for _, p := range inputBitwise {
 					yield(fmt.Sprintf("INSERT(%s, %s, %s, %s)", s, p, l, ns), nil)
 				}
 			}

@@ -327,6 +327,15 @@ func (c *compiler) compileNullCheck3(arg1, arg2, arg3 ctype) *jump {
 	return nil
 }
 
+func (c *compiler) compileNullCheck4(arg1, arg2, arg3, arg4 ctype) *jump {
+	if arg1.nullable() || arg2.nullable() || arg3.nullable() || arg4.nullable() {
+		j := c.asm.jumpFrom()
+		c.asm.NullCheck4(j)
+		return j
+	}
+	return nil
+}
+
 func (c *compiler) compileNullCheckArg(ct ctype, offset int) *jump {
 	if ct.nullable() {
 		j := c.asm.jumpFrom()

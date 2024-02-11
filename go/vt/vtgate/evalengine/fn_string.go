@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"bytes"
+	"math"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -141,7 +142,7 @@ func insert(str, newstr *evalBytes, pos, l int) []byte {
 
 	front := charset.Slice(cs, str.bytes, 0, pos)
 	var back []byte
-	if pos+l < strLen {
+	if pos <= math.MaxInt-l && pos+l < strLen {
 		back = charset.Slice(cs, str.bytes, pos+l, strLen)
 	}
 
@@ -159,7 +160,7 @@ func (call *builtinInsert) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
-	if args[0] == nil || args[3] == nil {
+	if args[0] == nil || args[1] == nil || args[2] == nil || args[3] == nil {
 		return nil, nil
 	}
 
@@ -198,14 +199,12 @@ func (call *builtinInsert) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip1 := c.compileNullCheck3(str, pos, l)
-
 	newstr, err := call.Arguments[3].compile(c)
 	if err != nil {
 		return ctype{}, err
 	}
 
-	skip2 := c.compileNullCheck1(newstr)
+	skip := c.compileNullCheck4(str, pos, l, newstr)
 
 	_ = c.compileToInt64(pos, 3)
 	_ = c.compileToInt64(l, 2)
@@ -219,14 +218,14 @@ func (call *builtinInsert) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xce(4, str.Type, call.collate)
-		col = typedCoercionCollation(sqltypes.VarChar, call.collate)
+		c.asm.Convert_xce(4, sqltypes.VarChar, c.collation)
+		col = typedCoercionCollation(sqltypes.VarChar, c.collation)
 	}
 
-	c.asm.Convert_xce(1, newstr.Type, col.Collation)
+	c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
 
 	c.asm.Fn_INSERT(col)
-	c.asm.jumpDestination(skip1, skip2)
+	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
 }

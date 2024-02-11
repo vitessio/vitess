@@ -215,6 +215,7 @@ var insertStrings = []string{
 	// "\"日本語テスト\"",
 	// "\"한국어 시험\"",
 	// "\"😊😂🤢\"",
+	// "_utf8mb4 'abcABCÅå'",
 	"DATE '2022-10-11'",
 	"TIME '11:02:23'",
 	"'123'",
@@ -223,7 +224,6 @@ var insertStrings = []string{
 	"999999999999999999999999",
 	"-999999999999999999999999",
 	"_binary 'Müller' ",
-	"_utf8mb4 'abcABCÅå'",
 	"_latin1 0xFF",
 	// TODO: support other multibyte encodings
 	// "_dec8 'ÒòÅå'",

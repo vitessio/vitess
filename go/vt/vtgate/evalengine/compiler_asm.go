@@ -3162,6 +3162,17 @@ func (asm *assembler) NullCheck3(j *jump) {
 	}, "NULLCHECK SP-1, SP-2, SP-3")
 }
 
+func (asm *assembler) NullCheck4(j *jump) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-4] == nil || env.vm.stack[env.vm.sp-3] == nil || env.vm.stack[env.vm.sp-2] == nil || env.vm.stack[env.vm.sp-1] == nil {
+			env.vm.stack[env.vm.sp-4] = nil
+			env.vm.sp -= 3
+			return j.offset()
+		}
+		return 1
+	}, "NULLCHECK SP-1, SP-2, SP-3, SP-4")
+}
+
 func (asm *assembler) NullCheckArg(j *jump, offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-1] == nil {
