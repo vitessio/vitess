@@ -1760,8 +1760,7 @@ exit $exit_code
 
 	runGhost := func(execute bool) error {
 		alterOptions := e.parseAlterOptions(ctx, onlineDDL)
-		timeNow := time.Now()
-		forceTableNames := fmt.Sprintf("%s_%s", onlineDDL.UUID, schema.ToReadableTimestamp(timeNow))
+		forceTableNames := fmt.Sprintf("%s_%s", onlineDDL.UUID, schema.ReadableTimestamp())
 
 		if err := e.updateArtifacts(ctx, onlineDDL.UUID,
 			fmt.Sprintf("_%s_gho", forceTableNames),
