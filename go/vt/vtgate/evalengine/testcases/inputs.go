@@ -210,6 +210,7 @@ var insertStrings = []string{
 	"0xAACC",
 	"3.1415926",
 	// MySQL has broken behavior for these inputs,
+	// see https://github.com/mysql/mysql-server/pull/517
 	// "\"Å å\"",
 	// "\"中文测试\"",
 	// "\"日本語テスト\"",
