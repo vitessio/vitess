@@ -45,7 +45,6 @@ func TestWrappable(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.input, func(t *testing.T) {
 			require.Equal(t, tt.output, Wrappable(tt.input))
 		})
