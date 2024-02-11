@@ -319,7 +319,10 @@ func TestPopulateTable(t *testing.T) {
 }
 
 func generateRenameStatement(newFormat bool, fromTableName string, state schema.TableGCState, tm time.Time) (statement string, toTableName string, err error) {
-	return schema.GenerateRenameStatementWithUUID(fromTableName, state, "", tm)
+	if newFormat {
+		return schema.GenerateRenameStatement(fromTableName, state, tm)
+	}
+	return schema.GenerateRenameStatementOldFormat(fromTableName, state, tm)
 }
 
 func TestHold(t *testing.T) {

@@ -155,6 +155,25 @@ func GenerateRenameStatementWithUUID(fromTableName string, state TableGCState, u
 	return fmt.Sprintf("RENAME TABLE `%s` TO %s", fromTableName, toTableName), toTableName, nil
 }
 
+// GenerateRenameStatementWithUUIDNewFormat generates a "RENAME TABLE" statement, where a table is renamed to a GC table, with preset UUID
+func generateRenameStatementWithUUIDOldFormat(fromTableName string, state TableGCState, uuid string, t time.Time) (statement string, toTableName string, err error) {
+	toTableName, err = generateGCTableNameOldFormat(state, uuid, t)
+	if err != nil {
+		return "", "", err
+	}
+	return fmt.Sprintf("RENAME TABLE `%s` TO %s", fromTableName, toTableName), toTableName, nil
+}
+
+// GenerateRenameStatement generates a "RENAME TABLE" statement, where a table is renamed to a GC table.
+func GenerateRenameStatement(fromTableName string, state TableGCState, t time.Time) (statement string, toTableName string, err error) {
+	return GenerateRenameStatementWithUUID(fromTableName, state, "", t)
+}
+
+// GenerateRenameStatement generates a "RENAME TABLE" statement, where a table is renamed to a GC table.
+func GenerateRenameStatementOldFormat(fromTableName string, state TableGCState, t time.Time) (statement string, toTableName string, err error) {
+	return generateRenameStatementWithUUIDOldFormat(fromTableName, state, "", t)
+}
+
 // ParseGCLifecycle parses a comma separated list of gc states and returns a map of indicated states
 func ParseGCLifecycle(gcLifecycle string) (states map[TableGCState]bool, err error) {
 	states = make(map[TableGCState]bool)
