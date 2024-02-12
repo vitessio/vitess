@@ -178,8 +178,7 @@ func TestAggrOnJoin(t *testing.T) {
 		`[[VARCHAR("a")]]`)
 
 	t.Run("Average in join for sharded", func(t *testing.T) {
-		// decimal precision for averages is not properly computed before Vitess 20
-		utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+		utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 		mcmp.AssertMatches(`select avg(a1.val2), avg(a2.val2) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7`,
 			"[[DECIMAL(1.5000) DECIMAL(1.0000)]]")
 
