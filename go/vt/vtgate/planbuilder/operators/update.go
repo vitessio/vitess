@@ -217,7 +217,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		Name:   name,
 	}
 
-	_, cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, targetTbl, assignments)
+	_, cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, targetTbl, tblInfo.GetAliasedTableExpr(), assignments)
 
 	updOp := &Update{
 		DMLCommon: &DMLCommon{
@@ -249,6 +249,7 @@ func getUpdateVindexInformation(
 	ctx *plancontext.PlanningContext,
 	updStmt *sqlparser.Update,
 	table TargetTable,
+	ate *sqlparser.AliasedTableExpr,
 	assignments []SetExpr,
 ) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, *sqlparser.Select, []string) {
 	if !table.VTable.Keyspace.Sharded {
@@ -256,7 +257,7 @@ func getUpdateVindexInformation(
 	}
 
 	primaryVindex, vindexAndPredicates := getVindexInformation(table.ID, table.VTable)
-	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex := buildChangedVindexesValues(ctx, updStmt, table.VTable, primaryVindex.Columns, assignments)
+	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex := buildChangedVindexesValues(ctx, updStmt, table.VTable, ate, primaryVindex.Columns, assignments)
 	return vindexAndPredicates, changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex
 }
 
