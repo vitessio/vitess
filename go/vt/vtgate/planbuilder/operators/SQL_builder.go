@@ -203,23 +203,35 @@ func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
 	}
 }
 
-func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser.Expr) {
-	sel := qb.stmt.(*sqlparser.Select)
-	otherSel := other.stmt.(*sqlparser.Select)
-	sel.From = append(sel.From, otherSel.From...)
-	sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
+type FromStatement interface {
+	GetFrom() []sqlparser.TableExpr
+	SetFrom([]sqlparser.TableExpr)
+	GetWherePredicate() sqlparser.Expr
+	SetWherePredicate(sqlparser.Expr)
+}
 
-	var predicate sqlparser.Expr
-	if sel.Where != nil {
-		predicate = sel.Where.Expr
+var _ FromStatement = (*sqlparser.Select)(nil)
+var _ FromStatement = (*sqlparser.Update)(nil)
+var _ FromStatement = (*sqlparser.Delete)(nil)
+
+func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser.Expr) {
+	stmt := qb.stmt.(FromStatement)
+	otherStmt := other.stmt.(FromStatement)
+	stmt.SetFrom(append(stmt.GetFrom(), otherStmt.GetFrom()...))
+
+	if sel, isSel := stmt.(*sqlparser.Select); isSel {
+		otherSel := otherStmt.(*sqlparser.Select)
+		sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
 	}
-	if otherSel.Where != nil {
+
+	predicate := stmt.GetWherePredicate()
+	if otherPredicate := otherStmt.GetWherePredicate(); otherPredicate != nil {
 		predExprs := sqlparser.SplitAndExpression(nil, predicate)
-		otherExprs := sqlparser.SplitAndExpression(nil, otherSel.Where.Expr)
+		otherExprs := sqlparser.SplitAndExpression(nil, otherPredicate)
 		predicate = qb.ctx.SemTable.AndExpressions(append(predExprs, otherExprs...)...)
 	}
 	if predicate != nil {
-		sel.Where = &sqlparser.Where{Type: sqlparser.WhereClause, Expr: predicate}
+		stmt.SetWherePredicate(predicate)
 	}
 
 	qb.addPredicate(onCondition)
@@ -388,25 +400,13 @@ func buildQuery(op Operator, qb *queryBuilder) {
 }
 
 func buildDelete(op *Delete, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
-	// currently the qb builds a select query underneath.
-	// Will take the `From` and `Where` from this select
-	// and create a delete statement.
-	// TODO: change it to directly produce `delete` statement.
-	sel, ok := qb.stmt.(*sqlparser.Select)
-	if !ok {
-		panic(vterrors.VT13001("expected a select here"))
+	qb.stmt = &sqlparser.Delete{
+		Ignore:  op.Ignore,
+		Targets: sqlparser.TableNames{op.Target.Name},
 	}
+	buildQuery(op.Source, qb)
 
 	qb.dmlOperator = op
-	qb.stmt = &sqlparser.Delete{
-		Ignore:     op.Ignore,
-		Targets:    sqlparser.TableNames{op.Target.Name},
-		TableExprs: sel.From,
-		Where:      sel.Where,
-		Limit:      sel.Limit,
-		OrderBy:    sel.OrderBy,
-	}
 }
 
 func buildUpdate(op *Update, qb *queryBuilder) {

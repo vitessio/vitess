@@ -2662,3 +2662,68 @@ func (node *Delete) GetLimit() *Limit {
 func (node *Delete) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
+
+func (node *Select) GetFrom() []TableExpr {
+	return node.From
+}
+
+func (node *Select) SetFrom(exprs []TableExpr) {
+	node.From = exprs
+}
+
+func (node *Select) GetWherePredicate() Expr {
+	if node.Where == nil {
+		return nil
+	}
+	return node.Where.Expr
+}
+
+func (node *Select) SetWherePredicate(expr Expr) {
+	node.Where = &Where{
+		Type: WhereClause,
+		Expr: expr,
+	}
+}
+func (node *Delete) GetFrom() []TableExpr {
+	return node.TableExprs
+}
+
+func (node *Delete) SetFrom(exprs []TableExpr) {
+	node.TableExprs = exprs
+}
+
+func (node *Delete) GetWherePredicate() Expr {
+	if node.Where == nil {
+		return nil
+	}
+	return node.Where.Expr
+}
+
+func (node *Delete) SetWherePredicate(expr Expr) {
+	node.Where = &Where{
+		Type: WhereClause,
+		Expr: expr,
+	}
+}
+
+func (node *Update) GetFrom() []TableExpr {
+	return node.TableExprs
+}
+
+func (node *Update) SetFrom(exprs []TableExpr) {
+	node.TableExprs = exprs
+}
+
+func (node *Update) GetWherePredicate() Expr {
+	if node.Where == nil {
+		return nil
+	}
+	return node.Where.Expr
+}
+
+func (node *Update) SetWherePredicate(expr Expr) {
+	node.Where = &Where{
+		Type: WhereClause,
+		Expr: expr,
+	}
+}
