@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
@@ -296,7 +297,7 @@ func Init() {
 type TabletConfig struct {
 	DB *dbconfigs.DBConfigs `json:"db,omitempty"`
 
-	UnmanagedTablet bool `json:"-"`
+	UnmanagedTablet bool `json:"unmanaged,omitempty"`
 
 	OltpReadPool ConnPoolConfig `json:"oltpReadPool,omitempty"`
 	OlapReadPool ConnPoolConfig `json:"olapReadPool,omitempty"`
@@ -890,10 +891,8 @@ func (c *TabletConfig) Verify() error {
 
 // verifyUnmanagedTabletConfig checks unmanaged tablet related config for sanity
 func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
-	isUnmanaged := c.UnmanagedTablet
-
 	// Skip checks if tablet is not unmanaged
-	if !isUnmanaged {
+	if !c.UnmanagedTablet {
 		return nil
 	}
 
@@ -906,6 +905,9 @@ func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
 	}
 	if c.DB.App.Password == "" {
 		return errors.New("database app user password not specified")
+	}
+	if !mysqlctl.DisableActiveReparents {
+		return errors.New("fixing replication should be disabled on unmanaged tablets")
 	}
 
 	return c.checkConnectionForExternalMysql()
@@ -926,6 +928,8 @@ func (c *TabletConfig) checkConnectionForExternalMysql() error {
 	if err != nil {
 		return err
 	}
+
+	defer conn.Close()
 
 	return conn.Ping()
 }
