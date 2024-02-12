@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"bytes"
+	"math"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -29,6 +30,11 @@ import (
 )
 
 type (
+	builtinInsert struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinChangeCase struct {
 		CallExpr
 		upcase  bool
@@ -45,6 +51,16 @@ type (
 
 	builtinASCII struct {
 		CallExpr
+	}
+
+	builtinReverse struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinSpace struct {
+		CallExpr
+		collate collations.ID
 	}
 
 	builtinOrd struct {
@@ -96,10 +112,13 @@ type (
 	}
 )
 
+var _ IR = (*builtinInsert)(nil)
 var _ IR = (*builtinChangeCase)(nil)
 var _ IR = (*builtinCharLength)(nil)
 var _ IR = (*builtinLength)(nil)
 var _ IR = (*builtinASCII)(nil)
+var _ IR = (*builtinReverse)(nil)
+var _ IR = (*builtinSpace)(nil)
 var _ IR = (*builtinOrd)(nil)
 var _ IR = (*builtinBitLength)(nil)
 var _ IR = (*builtinCollation)(nil)
@@ -107,6 +126,122 @@ var _ IR = (*builtinWeightString)(nil)
 var _ IR = (*builtinLeftRight)(nil)
 var _ IR = (*builtinPad)(nil)
 var _ IR = (*builtinTrim)(nil)
+
+func insert(str, newstr *evalBytes, pos, l int) []byte {
+	pos--
+
+	cs := colldata.Lookup(str.col.Collation).Charset()
+	strLen := charset.Length(cs, str.bytes)
+
+	if pos < 0 || strLen <= pos {
+		return str.bytes
+	}
+	if l < 0 {
+		l = strLen
+	}
+
+	front := charset.Slice(cs, str.bytes, 0, pos)
+	var back []byte
+	if pos <= math.MaxInt-l && pos+l < strLen {
+		back = charset.Slice(cs, str.bytes, pos+l, strLen)
+	}
+
+	res := make([]byte, len(front)+len(newstr.bytes)+len(back))
+
+	copy(res[:len(front)], front)
+	copy(res[len(front):], newstr.bytes)
+	copy(res[len(front)+len(newstr.bytes):], back)
+
+	return res
+}
+
+func (call *builtinInsert) eval(env *ExpressionEnv) (eval, error) {
+	args, err := call.args(env)
+	if err != nil {
+		return nil, err
+	}
+	if args[0] == nil || args[1] == nil || args[2] == nil || args[3] == nil {
+		return nil, nil
+	}
+
+	str, ok := args[0].(*evalBytes)
+	if !ok {
+		str, err = evalToVarchar(args[0], call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	pos := evalToInt64(args[1]).i
+	l := evalToInt64(args[2]).i
+
+	newstr, err := evalToVarchar(args[3], str.col.Collation, true)
+	if err != nil {
+		return nil, err
+	}
+
+	res := insert(str, newstr, int(pos), int(l))
+	if !validMaxLength(int64(len(res)), 1) {
+		return nil, nil
+	}
+	return newEvalText(res, str.col), nil
+}
+
+func (call *builtinInsert) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	pos, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	l, err := call.Arguments[2].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	newstr, err := call.Arguments[3].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck4(str, pos, l, newstr)
+
+	_ = c.compileToInt64(pos, 3)
+	_ = c.compileToInt64(l, 2)
+
+	if err != nil {
+		return ctype{}, nil
+	}
+
+	col := str.Col
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xce(4, sqltypes.VarChar, c.collation)
+		col = typedCoercionCollation(sqltypes.VarChar, c.collation)
+	}
+
+	switch {
+	case newstr.isTextual():
+		fromCharset := colldata.Lookup(newstr.Col.Collation).Charset()
+		toCharset := colldata.Lookup(col.Collation).Charset()
+		if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
+			c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
+		}
+	default:
+		c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
+	}
+
+	c.asm.Fn_INSERT(col)
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
+}
 
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -251,6 +386,100 @@ func (call *builtinASCII) compile(c *compiler) (ctype, error) {
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(str.Flag)}, nil
+}
+
+func reverse(in *evalBytes) []byte {
+	cs := colldata.Lookup(in.col.Collation).Charset()
+	b := in.bytes
+
+	out, end := make([]byte, len(b)), len(b)
+	for len(b) > 0 {
+		_, size := cs.DecodeRune(b)
+		copy(out[end-size:end], b[:size])
+		b = b[size:]
+		end -= size
+	}
+	return out
+}
+
+func (call *builtinReverse) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	b, ok := arg.(*evalBytes)
+	if !ok {
+		b, err = evalToVarchar(arg, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return newEvalText(reverse(b), b.col), nil
+}
+
+func (call *builtinReverse) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case arg.isTextual():
+	default:
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, 0, false)
+	}
+
+	c.asm.Fn_REVERSE()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: arg.Col, Flag: flagNullable}, nil
+}
+
+func space(num int64) []byte {
+	num = max(num, 0)
+
+	spaces := bytes.Repeat([]byte{0x20}, int(num))
+	return spaces
+}
+
+func (call *builtinSpace) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	num := evalToInt64(arg).i
+
+	if !validMaxLength(1, num) {
+		return nil, nil
+	}
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
+	return newEvalText(space(num), col), nil
+}
+
+func (call *builtinSpace) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	_ = c.compileToInt64(arg, 1)
+
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
+	c.asm.Fn_SPACE(col)
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
 }
 
 func charOrd(b []byte, coll collations.ID) int64 {
