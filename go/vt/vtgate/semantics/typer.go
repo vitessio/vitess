@@ -18,8 +18,11 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+<<<<<<< HEAD
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+=======
+>>>>>>> cd61d85130 (bugfix: wrong field type returned for SUM (#15192))
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
@@ -55,6 +58,7 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		if !ok {
 			return nil
 		}
+<<<<<<< HEAD
 		var inputType sqltypes.Type
 		if arg := node.GetArg(); arg != nil {
 			t, ok := t.exprTypes[arg]
@@ -64,6 +68,15 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		}
 		type_ := code.Type(inputType)
 		t.exprTypes[node] = Type{Type: type_, Collation: collations.DefaultCollationForType(type_)}
+=======
+		var inputType evalengine.Type
+		if arg := node.GetArg(); arg != nil {
+			if tt, ok := t.m[arg]; ok {
+				inputType = tt
+			}
+		}
+		t.m[node] = code.ResolveType(inputType, t.collationEnv)
+>>>>>>> cd61d85130 (bugfix: wrong field type returned for SUM (#15192))
 	}
 	return nil
 }

@@ -89,9 +89,9 @@ func (ap *AggregateParams) String() string {
 
 func (ap *AggregateParams) typ(inputType querypb.Type) querypb.Type {
 	if ap.OrigOpcode != AggregateUnassigned {
-		return ap.OrigOpcode.Type(inputType)
+		return ap.OrigOpcode.SQLType(inputType)
 	}
-	return ap.Opcode.Type(inputType)
+	return ap.Opcode.SQLType(inputType)
 }
 
 type aggregator interface {

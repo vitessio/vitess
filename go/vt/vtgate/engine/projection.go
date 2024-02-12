@@ -158,10 +158,19 @@ func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*query
 			fl |= uint32(querypb.MySqlFlag_NOT_NULL_FLAG)
 		}
 		fields = append(fields, &querypb.Field{
+<<<<<<< HEAD
 			Name:    col,
 			Type:    q,
 			Charset: uint32(cs),
 			Flags:   fl,
+=======
+			Name:         col,
+			Type:         typ.Type(),
+			Charset:      uint32(typ.Collation()),
+			ColumnLength: uint32(typ.Size()),
+			Decimals:     uint32(typ.Scale()),
+			Flags:        fl,
+>>>>>>> cd61d85130 (bugfix: wrong field type returned for SUM (#15192))
 		})
 	}
 	return fields, nil
