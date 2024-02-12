@@ -73,7 +73,7 @@ func (qb *queryBuilder) addTableExpr(
 	if qb.stmt == nil {
 		qb.stmt = &sqlparser.Select{}
 	}
-	stmt := qb.stmt.(sqlparser.AddToFrom)
+	stmt := qb.stmt.(FromStatement)
 	tbl := &sqlparser.AliasedTableExpr{
 		Expr:       tblExpr,
 		Partitions: nil,
@@ -82,7 +82,7 @@ func (qb *queryBuilder) addTableExpr(
 		Columns:    columnAliases,
 	}
 	qb.ctx.SemTable.ReplaceTableSetFor(tableID, tbl)
-	stmt.AddFrom(tbl)
+	stmt.SetFrom(append(stmt.GetFrom(), tbl))
 	qb.tableNames = append(qb.tableNames, tableName)
 }
 

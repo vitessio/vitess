@@ -4916,39 +4916,6 @@ func (cmp *Comparator) RefOfXorExpr(a, b *XorExpr) bool {
 		cmp.Expr(a.Right, b.Right)
 }
 
-// AddToFrom does deep equals between the two objects.
-func (cmp *Comparator) AddToFrom(inA, inB AddToFrom) bool {
-	if inA == nil && inB == nil {
-		return true
-	}
-	if inA == nil || inB == nil {
-		return false
-	}
-	switch a := inA.(type) {
-	case *Delete:
-		b, ok := inB.(*Delete)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfDelete(a, b)
-	case *Select:
-		b, ok := inB.(*Select)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfSelect(a, b)
-	case *Update:
-		b, ok := inB.(*Update)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfUpdate(a, b)
-	default:
-		// this should never happen
-		return false
-	}
-}
-
 // AggrFunc does deep equals between the two objects.
 func (cmp *Comparator) AggrFunc(inA, inB AggrFunc) bool {
 	if inA == nil && inB == nil {

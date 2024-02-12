@@ -4380,22 +4380,6 @@ func VisitRefOfXorExpr(in *XorExpr, f Visit) error {
 	}
 	return nil
 }
-func VisitAddToFrom(in AddToFrom, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	switch in := in.(type) {
-	case *Delete:
-		return VisitRefOfDelete(in, f)
-	case *Select:
-		return VisitRefOfSelect(in, f)
-	case *Update:
-		return VisitRefOfUpdate(in, f)
-	default:
-		// this should never happen
-		return nil
-	}
-}
 func VisitAggrFunc(in AggrFunc, f Visit) error {
 	if in == nil {
 		return nil

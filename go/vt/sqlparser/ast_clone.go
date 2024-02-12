@@ -3410,24 +3410,6 @@ func CloneRefOfXorExpr(n *XorExpr) *XorExpr {
 	return &out
 }
 
-// CloneAddToFrom creates a deep clone of the input.
-func CloneAddToFrom(in AddToFrom) AddToFrom {
-	if in == nil {
-		return nil
-	}
-	switch in := in.(type) {
-	case *Delete:
-		return CloneRefOfDelete(in)
-	case *Select:
-		return CloneRefOfSelect(in)
-	case *Update:
-		return CloneRefOfUpdate(in)
-	default:
-		// this should never happen
-		return nil
-	}
-}
-
 // CloneAggrFunc creates a deep clone of the input.
 func CloneAggrFunc(in AggrFunc) AggrFunc {
 	if in == nil {

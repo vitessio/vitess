@@ -2606,11 +2606,6 @@ func MultiTable(node []TableExpr) bool {
 	return !singleTbl
 }
 
-type AddToFrom interface {
-	Statement
-	AddFrom(tbl TableExpr)
-}
-
 func (node *Select) AddFrom(tbl TableExpr) {
 	node.From = append(node.From, tbl)
 }
