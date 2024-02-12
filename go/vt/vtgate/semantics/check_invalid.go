@@ -24,8 +24,6 @@ import (
 
 func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
-	case *sqlparser.Update:
-		return checkUpdate(node)
 	case *sqlparser.Select:
 		return a.checkSelect(cursor, node)
 	case *sqlparser.Nextval:
@@ -175,21 +173,6 @@ func (a *analyzer) checkSelect(cursor *sqlparser.Cursor, node *sqlparser.Select)
 	}
 	if node.Into != nil {
 		return ShardedError{Inner: &UnsupportedConstruct{errString: "INTO on sharded keyspace"}}
-	}
-	return nil
-}
-
-func checkUpdate(node *sqlparser.Update) error {
-	if len(node.TableExprs) != 1 {
-		return ShardedError{Inner: &UnsupportedMultiTablesInUpdateError{ExprCount: len(node.TableExprs)}}
-	}
-	alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !isAlias {
-		return ShardedError{Inner: &UnsupportedMultiTablesInUpdateError{NotAlias: true}}
-	}
-	_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
-	if isDerived {
-		return &TableNotUpdatableError{Table: alias.As.String()}
 	}
 	return nil
 }
