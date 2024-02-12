@@ -6,10 +6,10 @@
   - **[Query Serving](#query-serving)**
     - [Vindex Hints](#vindex-hints)
 - **[Minor Changes](#minor-changes)**
-
+  - **[New Stats](#new-stats)**
+    - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
 
 ## <a id="major-changes"/>Major Changes
-
 
 ### <a id="query-serving"/>Query Serving
 
@@ -27,3 +27,11 @@ For more information about Vindex hints and its usage, please consult the docume
 
 ## <a id="minor-changes"/>Minor Changes
 
+### <a id="new-stats"/>New Stats
+
+#### <a id="vttablet-query-cache-hits-and-misses"/>VTTablet Query Cache Hits and Misses
+
+VTTablet exposes two counter stats:
+
+ * `QueryCacheHits`: Query engine query cache hits
+ * `QueryCacheMisses`: Query engine query cache misses
