@@ -110,6 +110,11 @@ type (
 		CallExpr
 		collate collations.ID
 	}
+
+	builtinLocate struct {
+		CallExpr
+		collate collations.ID
+	}
 )
 
 var _ IR = (*builtinInsert)(nil)
@@ -1263,6 +1268,111 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 
 	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: tt, Col: col, Flag: flagNullable}, nil
+}
+
+func (call *builtinLocate) eval(env *ExpressionEnv) (eval, error) {
+	substr, err := call.Arguments[0].eval(env)
+	if err != nil || substr == nil {
+		return nil, err
+	}
+
+	str, err := call.Arguments[1].eval(env)
+	if err != nil || str == nil {
+		return nil, err
+	}
+
+	if _, ok := str.(*evalBytes); !ok {
+		str, err = evalToVarchar(str, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	col := str.(*evalBytes).col.Collation
+	substr, err = evalToVarchar(substr, col, true)
+	if err != nil {
+		return nil, err
+	}
+
+	pos := int64(1)
+	if len(call.Arguments) > 2 {
+		p, err := call.Arguments[2].eval(env)
+		if err != nil || p == nil {
+			return nil, err
+		}
+		pos = evalToInt64(p).i
+		if pos < 1 || pos > math.MaxInt {
+			return newEvalInt64(0), nil
+		}
+	}
+
+	var coll colldata.Collation
+	if typeIsTextual(substr.SQLType()) && typeIsTextual(str.SQLType()) {
+		coll = colldata.Lookup(col)
+	} else {
+		coll = colldata.Lookup(collations.CollationBinaryID)
+	}
+	found := colldata.Index(coll, str.ToRawBytes(), substr.ToRawBytes(), int(pos)-1)
+	return newEvalInt64(int64(found) + 1), nil
+}
+
+func (call *builtinLocate) compile(c *compiler) (ctype, error) {
+	substr, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	str, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck2(substr, str)
+	var skip2 *jump
+	if len(call.Arguments) > 2 {
+		l, err := call.Arguments[2].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skip2 = c.compileNullCheck2(str, l)
+		_ = c.compileToInt64(l, 1)
+	}
+
+	if !str.isTextual() {
+		c.asm.Convert_xce(len(call.Arguments)-1, sqltypes.VarChar, c.collation)
+		str.Col = collations.TypedCollation{
+			Collation:    c.collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	fromCharset := colldata.Lookup(substr.Col.Collation).Charset()
+	toCharset := colldata.Lookup(str.Col.Collation).Charset()
+	if !substr.isTextual() || (fromCharset != toCharset && !toCharset.IsSuperset(fromCharset)) {
+		c.asm.Convert_xce(len(call.Arguments), sqltypes.VarChar, str.Col.Collation)
+		substr.Col = collations.TypedCollation{
+			Collation:    str.Col.Collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	var coll colldata.Collation
+	if typeIsTextual(substr.Type) && typeIsTextual(str.Type) {
+		coll = colldata.Lookup(str.Col.Collation)
+	} else {
+		coll = colldata.Lookup(collations.CollationBinaryID)
+	}
+
+	if len(call.Arguments) > 2 {
+		c.asm.Locate3(coll)
+	} else {
+		c.asm.Locate2(coll)
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}, nil
 }
 
 type builtinConcat struct {

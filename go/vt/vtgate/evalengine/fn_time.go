@@ -282,8 +282,8 @@ func (b *builtinDateFormat) eval(env *ExpressionEnv) (eval, error) {
 	case *evalTemporal:
 		t = e.toDateTime(datetime.DefaultPrecision, env.now)
 	default:
-		t = evalToDateTime(date, datetime.DefaultPrecision, env.now, env.sqlmode.AllowZeroDate())
-		if t == nil || t.isZero() {
+		t = evalToDateTime(date, datetime.DefaultPrecision, env.now, false)
+		if t == nil {
 			return nil, nil
 		}
 	}
@@ -379,8 +379,8 @@ func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	dt := evalToDateTime(n, -1, env.now, env.sqlmode.AllowZeroDate())
-	if dt == nil || dt.isZero() {
+	dt := evalToDateTime(n, -1, env.now, false)
+	if dt == nil {
 		return nil, nil
 	}
 
@@ -388,7 +388,7 @@ func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
 	if !ok {
 		return nil, nil
 	}
-	return newEvalDateTime(out, int(dt.prec), env.sqlmode.AllowZeroDate()), nil
+	return newEvalDateTime(out, int(dt.prec), false), nil
 }
 
 func (call *builtinConvertTz) compile(c *compiler) (ctype, error) {
@@ -504,8 +504,8 @@ func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
-	if d == nil || d.isZero() {
+	d := evalToDate(date, env.now, false)
+	if d == nil {
 		return nil, nil
 	}
 	return newEvalInt64(int64(d.dt.Date.Weekday() + 1)), nil
@@ -537,8 +537,8 @@ func (b *builtinDayOfYear) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
-	if d == nil || d.isZero() {
+	d := evalToDate(date, env.now, false)
+	if d == nil {
 		return nil, nil
 	}
 	return newEvalInt64(int64(d.dt.Date.ToStdTime(env.currentTimezone()).YearDay())), nil
@@ -815,7 +815,7 @@ func (b *builtinMakedate) eval(env *ExpressionEnv) (eval, error) {
 	if t.IsZero() {
 		return nil, nil
 	}
-	return newEvalDate(datetime.NewDateTimeFromStd(t).Date, env.sqlmode.AllowZeroDate()), nil
+	return newEvalDate(datetime.NewDateTimeFromStd(t).Date, false), nil
 }
 
 func (call *builtinMakedate) compile(c *compiler) (ctype, error) {
@@ -1189,7 +1189,7 @@ func (b *builtinMonthName) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
+	d := evalToDate(date, env.now, false)
 	if d == nil {
 		return nil, nil
 	}
@@ -1212,7 +1212,7 @@ func (call *builtinMonthName) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD(1, c.sqlmode.AllowZeroDate())
+		c.asm.Convert_xD(1, false)
 	}
 	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	c.asm.Fn_MONTHNAME(col)
@@ -1272,8 +1272,8 @@ func (b *builtinToDays) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	dt := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
-	if dt == nil || dt.isZero() {
+	dt := evalToDate(date, env.now, false)
+	if dt == nil {
 		return nil, nil
 	}
 
@@ -1292,7 +1292,7 @@ func (call *builtinToDays) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD(1, true)
+		c.asm.Convert_xD(1, false)
 	}
 	c.asm.Fn_TO_DAYS()
 	c.asm.jumpDestination(skip)
@@ -1477,8 +1477,8 @@ func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
 	case *evalTemporal:
 		dt = e.toDateTime(int(e.prec), env.now)
 	default:
-		dt = evalToDateTime(date, -1, env.now, env.sqlmode.AllowZeroDate())
-		if dt == nil || dt.isZero() {
+		dt = evalToDateTime(date, -1, env.now, false)
+		if dt == nil {
 			var prec int32
 			switch d := date.(type) {
 			case *evalInt64, *evalUint64:
@@ -1584,8 +1584,8 @@ func (b *builtinWeek) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
-	if d == nil || d.isZero() {
+	d := evalToDate(date, env.now, false)
+	if d == nil {
 		return nil, nil
 	}
 
@@ -1644,8 +1644,8 @@ func (b *builtinWeekDay) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
-	if d == nil || d.isZero() {
+	d := evalToDate(date, env.now, false)
+	if d == nil {
 		return nil, nil
 	}
 	return newEvalInt64(int64(d.dt.Date.Weekday()+6) % 7), nil
@@ -1678,8 +1678,8 @@ func (b *builtinWeekOfYear) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
-	if d == nil || d.isZero() {
+	d := evalToDate(date, env.now, false)
+	if d == nil {
 		return nil, nil
 	}
 
@@ -1750,8 +1750,8 @@ func (b *builtinYearWeek) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
-	if d == nil || d.isZero() {
+	d := evalToDate(date, env.now, false)
+	if d == nil {
 		return nil, nil
 	}
 
