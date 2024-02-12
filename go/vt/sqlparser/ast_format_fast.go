@@ -1616,7 +1616,7 @@ func (node IndexHints) FormatFast(buf *TrackedBuffer) {
 func (node *IndexHint) FormatFast(buf *TrackedBuffer) {
 	buf.WriteByte(' ')
 	buf.WriteString(node.Type.ToString())
-	buf.WriteString("index ")
+	buf.WriteByte(' ')
 	if node.ForType != NoForType {
 		buf.WriteString("for ")
 		buf.WriteString(node.ForType.ToString())

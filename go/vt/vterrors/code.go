@@ -89,6 +89,8 @@ var (
 	VT09017 = errorWithoutState("VT09017", vtrpcpb.Code_FAILED_PRECONDITION, "%s", "Invalid syntax for the statement type.")
 	VT09018 = errorWithoutState("VT09018", vtrpcpb.Code_FAILED_PRECONDITION, "%s", "Invalid syntax for the vindex function statement.")
 	VT09019 = errorWithoutState("VT09019", vtrpcpb.Code_FAILED_PRECONDITION, "keyspace '%s' has cyclic foreign keys", "Vitess doesn't support cyclic foreign keys.")
+	VT09020 = errorWithoutState("VT09020", vtrpcpb.Code_FAILED_PRECONDITION, "can not use multiple vindex hints for table %s", "Vitess does not allow using multiple vindex hints on the same table.")
+	VT09021 = errorWithState("VT09021", vtrpcpb.Code_FAILED_PRECONDITION, KeyDoesNotExist, "Vindex '%s' does not exist in table '%s'", "Vindex hints have to reference an existing vindex, and no such vindex could be found for the given table.")
 
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
 	VT10002 = errorWithoutState("VT10002", vtrpcpb.Code_ABORTED, "'replace into' with foreign key constraints are not allowed", "Foreign key constraints sometimes are not written in binary logs and will cause issue with vreplication workflows like online-ddl.")

@@ -217,6 +217,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
 	vterrors.WrongArguments:               {num: ERWrongArguments, state: SSUnknownSQLState},
 	vterrors.UnknownStmtHandler:           {num: ERUnknownStmtHandler, state: SSUnknownSQLState},
+	vterrors.KeyDoesNotExist:              {num: ERKeyDoesNotExist, state: SSClientError},
 	vterrors.UnknownTimeZone:              {num: ERUnknownTimeZone, state: SSUnknownSQLState},
 	vterrors.RegexpStringNotTerminated:    {num: ERRegexpStringNotTerminated, state: SSUnknownSQLState},
 	vterrors.RegexpBufferOverflow:         {num: ERRegexpBufferOverflow, state: SSUnknownSQLState},

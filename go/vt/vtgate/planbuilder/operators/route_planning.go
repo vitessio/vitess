@@ -205,8 +205,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) []Operat
 
 	// we start by seeding the table with the single routes
 	for i, table := range qg.Tables {
-		solves := ctx.SemTable.TableSetFor(table.Alias)
-		plan := createRoute(ctx, table, solves)
+		plan := createRoute(ctx, table)
 		if qg.NoDeps != nil {
 			plan = plan.AddPredicate(ctx, qg.NoDeps)
 		}
