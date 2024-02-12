@@ -31,7 +31,7 @@ For more information about Vindex hints and its usage, please consult the docume
 
 #### <a id="vttablet-query-cache-hits-and-misses"/>VTTablet Query Cache Hits and Misses
 
-VTTablet exposes two counter stats:
+VTTablet exposes two new counter stats:
 
  * `QueryCacheHits`: Query engine query cache hits
  * `QueryCacheMisses`: Query engine query cache misses
