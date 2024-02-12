@@ -1241,7 +1241,7 @@ func (node IndexHints) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IndexHint) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, " %sindex ", node.Type.ToString())
+	buf.astPrintf(node, " %s ", node.Type.ToString())
 	if node.ForType != NoForType {
 		buf.astPrintf(node, "for %s ", node.ForType.ToString())
 	}

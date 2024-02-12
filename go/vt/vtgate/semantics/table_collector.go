@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -116,7 +118,10 @@ func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sq
 	}
 
 	scope := tc.scoper.currentScope()
-	tableInfo := tc.createTable(t, node, tbl, isInfSchema, vindex)
+	tableInfo, err := tc.createTable(t, node, tbl, isInfSchema, vindex)
+	if err != nil {
+		return err
+	}
 
 	tc.Tables = append(tc.Tables, tableInfo)
 	return scope.addTable(tableInfo)
@@ -229,11 +234,18 @@ func (tc *tableCollector) createTable(
 	tbl *vindexes.Table,
 	isInfSchema bool,
 	vindex vindexes.Vindex,
-) TableInfo {
+) (TableInfo, error) {
+	hint := getVindexHint(alias.Hints)
+
+	if err := checkValidVindexHints(hint, tbl); err != nil {
+		return nil, err
+	}
+
 	table := &RealTable{
 		tableName:    alias.As.String(),
 		ASTNode:      alias,
 		Table:        tbl,
+		VindexHint:   hint,
 		isInfSchema:  isInfSchema,
 		collationEnv: tc.si.Environment().CollationEnv(),
 	}
@@ -252,7 +264,37 @@ func (tc *tableCollector) createTable(
 		return &VindexTable{
 			Table:  table,
 			Vindex: vindex,
+		}, nil
+	}
+	return table, nil
+}
+
+func checkValidVindexHints(hint *sqlparser.IndexHint, tbl *vindexes.Table) error {
+	if hint == nil {
+		return nil
+	}
+outer:
+	for _, index := range hint.Indexes {
+		for _, columnVindex := range tbl.ColumnVindexes {
+			if index.EqualString(columnVindex.Name) {
+				continue outer
+			}
+		}
+		// we found a hint on a non-existing vindex
+		return &NoSuchVindexFound{
+			Table:      fmt.Sprintf("%s.%s", tbl.Keyspace.Name, tbl.Name.String()),
+			VindexName: index.String(),
 		}
 	}
-	return table
+	return nil
+}
+
+// getVindexHint gets the vindex hint from the list of IndexHints.
+func getVindexHint(hints sqlparser.IndexHints) *sqlparser.IndexHint {
+	for _, hint := range hints {
+		if hint.Type.IsVindexHint() {
+			return hint
+		}
+	}
+	return nil
 }
