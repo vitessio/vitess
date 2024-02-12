@@ -1252,7 +1252,7 @@
       "QueryType": "DELETE",
       "Original": "delete from u_tbl2 limit 2",
       "Instructions": {
-        "OperatorType": "DeleteWithInput",
+        "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
           0
@@ -1281,7 +1281,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where id in ::dm_vals for update",
+                "Query": "select u_tbl2.col2 from u_tbl2 where id in ::dml_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -1309,7 +1309,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from u_tbl2 where id in ::dm_vals",
+                "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from u_tbl2 where id in ::dml_vals",
                 "Table": "u_tbl2"
               }
             ]
