@@ -63,7 +63,7 @@ func (vds *vdiffStats) register() {
 
 	stats.NewGaugesFuncWithMultiLabels(
 		"VDiffRestartedTableDiffsCount",
-		"Table diffs restarted due to max-diff-duration counts per table",
+		"Table diffs restarted due to --max-diff-duration counts by table",
 		[]string{"table_name"},
 		func() map[string]int64 {
 			vds.mu.Lock()
@@ -107,7 +107,7 @@ func (vds *vdiffStats) register() {
 
 	stats.NewCountersFuncWithMultiLabels(
 		"VDiffErrors",
-		"Count of specific errors seen when performing a vdiff",
+		"Count of specific errors seen during the lifetime of a vdiff",
 		[]string{"workflow", "uuid", "error"},
 		func() map[string]int64 {
 			vds.mu.Lock()
