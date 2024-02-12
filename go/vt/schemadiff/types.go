@@ -137,8 +137,6 @@ type DiffHints struct {
 	TableQualifierHint          int
 	AlterTableAlgorithmStrategy int
 	EnumReorderStrategy         int
-
-	MySQLServerVersion string // Used to determine specific capabilities such as INSTANT DDL support
 }
 
 const (
