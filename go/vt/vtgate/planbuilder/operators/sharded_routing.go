@@ -115,12 +115,9 @@ func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.Table,
 
 // indexesContains is a helper function that returns whether a given string is part of the IdentifierCI list.
 func indexesContains(indexes []sqlparser.IdentifierCI, name string) bool {
-	for _, index := range indexes {
-		if index.EqualString(name) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(indexes, func(ci sqlparser.IdentifierCI) bool {
+		return ci.EqualString(name)
+	})
 }
 
 func (tr *ShardedRouting) isScatter() bool {

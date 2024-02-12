@@ -1056,7 +1056,7 @@
   {
     "comment": "Vindex hint on a non-existing vindex",
     "query": "select * from user use vindex (does_not_exist) where id = 1",
-    "plan": "VT09021: no such vindex found: does_not_exist"
+    "plan": "VT09021: Vindex 'does_not_exist' does not exist in table 'user.user'"
   },
   {
     "comment": "sharded limit offset",

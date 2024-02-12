@@ -4342,5 +4342,83 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "join table influencing vindex selection with ignore and use vindex syntax",
+    "query": "select u.intcol, u.id from user u use vindex (name_user_map) join music m ignore vindex(user_index) on u.col = m.col where u.name = 'bb' and u.id = 3 and m.user_id = 5 and m.id = 20",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select u.intcol, u.id from user u use vindex (name_user_map) join music m ignore vindex(user_index) on u.col = m.col where u.name = 'bb' and u.id = 3 and m.user_id = 5 and m.id = 20",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1",
+        "JoinVars": {
+          "u_col": 2
+        },
+        "TableName": "`user`_music",
+        "Inputs": [
+          {
+            "OperatorType": "VindexLookup",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              "'bb'"
+            ],
+            "Vindex": "name_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
+                "Values": [
+                  "::name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.intcol, u.id, u.col from `user` as u where 1 != 1",
+                "Query": "select u.intcol, u.id, u.col from `user` as u where u.`name` = 'bb' and u.id = 3",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.user_id = 5 and m.id = 20 and m.col = :u_col",
+            "Table": "music",
+            "Values": [
+              "20"
+            ],
+            "Vindex": "music_user_map"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   }
 ]

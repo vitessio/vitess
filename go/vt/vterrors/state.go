@@ -59,6 +59,7 @@ const (
 	RowIsReferenced2
 	NoReferencedRow2
 	UnknownStmtHandler
+	KeyDoesNotExist
 
 	// not found
 	BadDb
