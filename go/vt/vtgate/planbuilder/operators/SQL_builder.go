@@ -224,6 +224,11 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 		sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
 	}
 
+	qb.mergeWhereClauses(stmt, otherStmt)
+	qb.addPredicate(onCondition)
+}
+
+func (qb *queryBuilder) mergeWhereClauses(stmt, otherStmt FromStatement) {
 	predicate := stmt.GetWherePredicate()
 	if otherPredicate := otherStmt.GetWherePredicate(); otherPredicate != nil {
 		predExprs := sqlparser.SplitAndExpression(nil, predicate)
@@ -233,45 +238,35 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 	if predicate != nil {
 		stmt.SetWherePredicate(predicate)
 	}
-
-	qb.addPredicate(onCondition)
 }
 
 func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser.Expr) {
-	sel := qb.stmt.(*sqlparser.Select)
-	otherSel := other.stmt.(*sqlparser.Select)
+	stmt := qb.stmt.(FromStatement)
+	otherStmt := other.stmt.(FromStatement)
 	var lhs sqlparser.TableExpr
-	if len(sel.From) == 1 {
-		lhs = sel.From[0]
+	fromClause := stmt.GetFrom()
+	if len(fromClause) == 1 {
+		lhs = fromClause[0]
 	} else {
-		lhs = &sqlparser.ParenTableExpr{Exprs: sel.From}
+		lhs = &sqlparser.ParenTableExpr{Exprs: fromClause}
 	}
 	var rhs sqlparser.TableExpr
-	if len(otherSel.From) == 1 {
-		rhs = otherSel.From[0]
+	otherFromClause := otherStmt.GetFrom()
+	if len(otherFromClause) == 1 {
+		rhs = otherFromClause[0]
 	} else {
-		rhs = &sqlparser.ParenTableExpr{Exprs: otherSel.From}
+		rhs = &sqlparser.ParenTableExpr{Exprs: otherFromClause}
 	}
-	sel.From = []sqlparser.TableExpr{&sqlparser.JoinTableExpr{
+	stmt.SetFrom([]sqlparser.TableExpr{&sqlparser.JoinTableExpr{
 		LeftExpr:  lhs,
 		RightExpr: rhs,
 		Join:      sqlparser.LeftJoinType,
 		Condition: &sqlparser.JoinCondition{
 			On: onCondition,
 		},
-	}}
+	}})
 
-	sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
-	var predicate sqlparser.Expr
-	if sel.Where != nil {
-		predicate = sel.Where.Expr
-	}
-	if otherSel.Where != nil {
-		predicate = qb.ctx.SemTable.AndExpressions(predicate, otherSel.Where.Expr)
-	}
-	if predicate != nil {
-		sel.Where = &sqlparser.Where{Type: sqlparser.WhereClause, Expr: predicate}
-	}
+	qb.mergeWhereClauses(stmt, otherStmt)
 }
 
 func (qb *queryBuilder) sortTables() {
