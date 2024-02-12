@@ -73,7 +73,6 @@ func (qb *queryBuilder) addTableExpr(
 	if qb.stmt == nil {
 		qb.stmt = &sqlparser.Select{}
 	}
-	stmt := qb.stmt.(FromStatement)
 	tbl := &sqlparser.AliasedTableExpr{
 		Expr:       tblExpr,
 		Partitions: nil,
@@ -82,7 +81,7 @@ func (qb *queryBuilder) addTableExpr(
 		Columns:    columnAliases,
 	}
 	qb.ctx.SemTable.ReplaceTableSetFor(tableID, tbl)
-	stmt.SetFrom(append(stmt.GetFrom(), tbl))
+	qb.stmt.(FromStatement).SetFrom(append(qb.stmt.(FromStatement).GetFrom(), tbl))
 	qb.tableNames = append(qb.tableNames, tableName)
 }
 
@@ -217,15 +216,30 @@ var _ FromStatement = (*sqlparser.Delete)(nil)
 func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser.Expr) {
 	stmt := qb.stmt.(FromStatement)
 	otherStmt := other.stmt.(FromStatement)
-	stmt.SetFrom(append(stmt.GetFrom(), otherStmt.GetFrom()...))
 
 	if sel, isSel := stmt.(*sqlparser.Select); isSel {
 		otherSel := otherStmt.(*sqlparser.Select)
 		sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
 	}
 
+	newFromClause := append(stmt.GetFrom(), otherStmt.GetFrom()...)
+	stmt.SetFrom(newFromClause)
 	qb.mergeWhereClauses(stmt, otherStmt)
 	qb.addPredicate(onCondition)
+}
+
+func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser.Expr) {
+	stmt := qb.stmt.(FromStatement)
+	otherStmt := other.stmt.(FromStatement)
+
+	if sel, isSel := stmt.(*sqlparser.Select); isSel {
+		otherSel := otherStmt.(*sqlparser.Select)
+		sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
+	}
+
+	newFromClause := []sqlparser.TableExpr{buildOuterJoin(stmt, otherStmt, onCondition)}
+	stmt.SetFrom(newFromClause)
+	qb.mergeWhereClauses(stmt, otherStmt)
 }
 
 func (qb *queryBuilder) mergeWhereClauses(stmt, otherStmt FromStatement) {
@@ -240,9 +254,7 @@ func (qb *queryBuilder) mergeWhereClauses(stmt, otherStmt FromStatement) {
 	}
 }
 
-func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser.Expr) {
-	stmt := qb.stmt.(FromStatement)
-	otherStmt := other.stmt.(FromStatement)
+func buildOuterJoin(stmt FromStatement, otherStmt FromStatement, onCondition sqlparser.Expr) *sqlparser.JoinTableExpr {
 	var lhs sqlparser.TableExpr
 	fromClause := stmt.GetFrom()
 	if len(fromClause) == 1 {
@@ -257,16 +269,15 @@ func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser
 	} else {
 		rhs = &sqlparser.ParenTableExpr{Exprs: otherFromClause}
 	}
-	stmt.SetFrom([]sqlparser.TableExpr{&sqlparser.JoinTableExpr{
+
+	return &sqlparser.JoinTableExpr{
 		LeftExpr:  lhs,
 		RightExpr: rhs,
 		Join:      sqlparser.LeftJoinType,
 		Condition: &sqlparser.JoinCondition{
 			On: onCondition,
 		},
-	}})
-
-	qb.mergeWhereClauses(stmt, otherStmt)
+	}
 }
 
 func (qb *queryBuilder) sortTables() {
