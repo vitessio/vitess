@@ -3041,14 +3041,14 @@ func TestDeleteMultiTable(t *testing.T) {
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
 		bq, bq, bq, bq, bq, bq, bq, bq,
-		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dm_vals for update", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
-		{Sql: "delete from `user` where `user`.id in ::dm_vals", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}}}
+		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dml_vals for update", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}}}
 	assertQueries(t, sbc1, wantQueries)
 
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
-		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dm_vals for update", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
-		{Sql: "delete from `user` where `user`.id in ::dm_vals", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dml_vals for update", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
 	}
 	assertQueries(t, sbc2, wantQueries)
 
@@ -3067,7 +3067,7 @@ func TestDeleteMultiTable(t *testing.T) {
 	testQueryLog(t, executor, logChan, "VindexDelete", "DELETE", "delete from name_user_map where `name` = :name and user_id = :user_id", 1)
 	// select `user`.id, `user`.col from `user` - 8 shard
 	// select 1 from music where music.user_id = 1 and music.col = :user_col - 8 shards
-	// select Id, `name` from `user` where (`user`.id) in ::dm_vals for update - 1 shard
-	// delete from `user` where (`user`.id) in ::dm_vals - 1 shard
+	// select Id, `name` from `user` where (`user`.id) in ::dml_vals for update - 1 shard
+	// delete from `user` where (`user`.id) in ::dml_vals - 1 shard
 	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete `user` from `user` join music on `user`.col = music.col where music.user_id = 1", 18)
 }

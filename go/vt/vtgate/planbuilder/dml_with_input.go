@@ -20,21 +20,21 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-type deleteWithInput struct {
-	input  logicalPlan
-	delete logicalPlan
+type dmlWithInput struct {
+	input logicalPlan
+	dml   logicalPlan
 
 	outputCols []int
 }
 
-var _ logicalPlan = (*deleteWithInput)(nil)
+var _ logicalPlan = (*dmlWithInput)(nil)
 
 // Primitive implements the logicalPlan interface
-func (d *deleteWithInput) Primitive() engine.Primitive {
+func (d *dmlWithInput) Primitive() engine.Primitive {
 	inp := d.input.Primitive()
-	del := d.delete.Primitive()
-	return &engine.DeleteWithInput{
-		Delete:     del,
+	del := d.dml.Primitive()
+	return &engine.DMLWithInput{
+		DML:        del,
 		Input:      inp,
 		OutputCols: d.outputCols,
 	}
