@@ -234,6 +234,42 @@ var insertStrings = []string{
 	// "_ucs2 'AabcÅå'",
 }
 
+var locateStrings = []string{
+	"NULL",
+	"\"\"",
+	"\"a\"",
+	"\"abc\"",
+	"1",
+	"-1",
+	"0123",
+	"0xAACC",
+	"3.1415926",
+	// MySQL has broken behavior for these inputs,
+	// see https://bugs.mysql.com/bug.php?id=113933
+	// "\"Å å\"",
+	// "\"中文测试\"",
+	// "\"日本語テスト\"",
+	// "\"한국어 시험\"",
+	// "\"😊😂🤢\"",
+	// "_utf8mb4 'abcABCÅå'",
+	"DATE '2022-10-11'",
+	"TIME '11:02:23'",
+	"'123'",
+	"9223372036854775807",
+	"-9223372036854775808",
+	"999999999999999999999999",
+	"-999999999999999999999999",
+	"_binary 'Müller' ",
+	"_utf8mb4 'abcABCÅå'",
+	"_latin1 0xFF",
+	// TODO: support other multibyte encodings
+	// "_dec8 'ÒòÅå'",
+	// "_utf8mb3 'abcABCÅå'",
+	// "_utf16 'AabcÅå'",
+	// "_utf32 'AabcÅå'",
+	// "_ucs2 'AabcÅå'",
+}
+
 var inputConversionTypes = []string{
 	"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
 	"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
