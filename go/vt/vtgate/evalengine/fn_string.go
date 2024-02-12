@@ -1281,6 +1281,19 @@ func (call *builtinLocate) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
+	if _, ok := str.(*evalBytes); !ok {
+		str, err = evalToVarchar(str, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	col := str.(*evalBytes).col.Collation
+	substr, err = evalToVarchar(substr, col, true)
+	if err != nil {
+		return nil, err
+	}
+
 	pos := int64(1)
 	if len(call.Arguments) > 2 {
 		p, err := call.Arguments[2].eval(env)
@@ -1293,15 +1306,9 @@ func (call *builtinLocate) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	var col collations.TypedCollation
-	substr, str, col, err = mergeAndCoerceCollations(substr, str, env.collationEnv)
-	if err != nil {
-		return nil, err
-	}
-
 	var coll colldata.Collation
 	if typeIsTextual(substr.SQLType()) && typeIsTextual(str.SQLType()) {
-		coll = colldata.Lookup(col.Collation)
+		coll = colldata.Lookup(col)
 	} else {
 		coll = colldata.Lookup(collations.CollationBinaryID)
 	}
@@ -1331,17 +1338,8 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 		_ = c.compileToInt64(l, 1)
 	}
 
-	if !substr.isTextual() {
-		c.asm.Convert_xc(len(call.Arguments), sqltypes.VarChar, c.collation, 0, false)
-		substr.Col = collations.TypedCollation{
-			Collation:    c.collation,
-			Coercibility: collations.CoerceCoercible,
-			Repertoire:   collations.RepertoireASCII,
-		}
-	}
-
 	if !str.isTextual() {
-		c.asm.Convert_xc(len(call.Arguments)-1, sqltypes.VarChar, c.collation, 0, false)
+		c.asm.Convert_xce(len(call.Arguments)-1, sqltypes.VarChar, c.collation)
 		str.Col = collations.TypedCollation{
 			Collation:    c.collation,
 			Coercibility: collations.CoerceCoercible,
@@ -1349,55 +1347,28 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 		}
 	}
 
-	var merged collations.TypedCollation
-	var coerceLeft colldata.Coercion
-	var coerceRight colldata.Coercion
-
-	if substr.Col.Collation != str.Col.Collation {
-		merged, coerceLeft, coerceRight, err = colldata.Merge(c.env.CollationEnv(), substr.Col, str.Col, colldata.CoercionOptions{
-			ConvertToSuperset:   true,
-			ConvertWithCoercion: true,
-		})
-	} else {
-		merged = substr.Col
-	}
-	if err != nil {
-		return ctype{}, err
+	fromCharset := colldata.Lookup(substr.Col.Collation).Charset()
+	toCharset := colldata.Lookup(str.Col.Collation).Charset()
+	if !substr.isTextual() || (fromCharset != toCharset && !toCharset.IsSuperset(fromCharset)) {
+		c.asm.Convert_xce(len(call.Arguments), sqltypes.VarChar, str.Col.Collation)
+		substr.Col = collations.TypedCollation{
+			Collation:    str.Col.Collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
 	}
 
 	var coll colldata.Collation
 	if typeIsTextual(substr.Type) && typeIsTextual(str.Type) {
-		coll = colldata.Lookup(merged.Collation)
+		coll = colldata.Lookup(str.Col.Collation)
 	} else {
 		coll = colldata.Lookup(collations.CollationBinaryID)
 	}
 
-	if coerceLeft == nil && coerceRight == nil {
-		if len(call.Arguments) > 2 {
-			c.asm.Locate_collate3(coll)
-		} else {
-			c.asm.Locate_collate2(coll)
-		}
+	if len(call.Arguments) > 2 {
+		c.asm.Locate3(coll)
 	} else {
-		if coerceLeft == nil {
-			coerceLeft = func(dst, in []byte) ([]byte, error) { return in, nil }
-		}
-		if coerceRight == nil {
-			coerceRight = func(dst, in []byte) ([]byte, error) { return in, nil }
-		}
-		if len(call.Arguments) > 2 {
-			c.asm.Locate_coerce3(&compiledCoercion{
-				col:   colldata.Lookup(merged.Collation),
-				left:  coerceLeft,
-				right: coerceRight,
-			})
-		} else {
-			c.asm.Locate_coerce2(&compiledCoercion{
-				col:   colldata.Lookup(merged.Collation),
-				left:  coerceLeft,
-				right: coerceRight,
-			})
-		}
+		c.asm.Locate2(coll)
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
