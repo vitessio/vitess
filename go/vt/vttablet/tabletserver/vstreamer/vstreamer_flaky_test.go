@@ -118,18 +118,18 @@ func TestNoBlob(t *testing.T) {
 	defer ts.Close()
 	ts.Init()
 	ts.tests = [][]*VStreamerTestQuery{{
-		{"begin", []VStreamerTestEvent{{typ: "begin"}}},
-		{"insert into t1 values (1, 'blob1', 'aaa')", []VStreamerTestEvent{{typ: "defaultRowEvent"}}},
-		{"update t1 set val = 'bbb'", []VStreamerTestEvent{{typ: "defaultRowEvent"}}},
-		{"commit", []VStreamerTestEvent{{typ: "commit"}}},
-	}, {{"begin", []VStreamerTestEvent{{typ: "begin"}}},
-		{"insert into t2 values (1, 'text1', 'aaa')", []VStreamerTestEvent{{typ: "defaultRowEvent"}}},
-		{"update t2 set val = 'bbb'", []VStreamerTestEvent{{typ: "defaultRowEvent"}}},
-		{"commit", []VStreamerTestEvent{{typ: "commit"}}},
-	}, {{"begin", []VStreamerTestEvent{{typ: "begin"}}},
-		{"insert into t3 values (1, 'text1', 'aaa')", []VStreamerTestEvent{{typ: "defaultRowEvent"}}},
-		{"update t3 set val = 'bbb'", []VStreamerTestEvent{{typ: "defaultRowEvent"}}},
-		{"commit", []VStreamerTestEvent{{typ: "commit"}}},
+		{"begin", nil},
+		{"insert into t1 values (1, 'blob1', 'aaa')", nil},
+		{"update t1 set val = 'bbb'", nil},
+		{"commit", nil},
+	}, {{"begin", nil},
+		{"insert into t2 values (1, 'text1', 'aaa')", nil},
+		{"update t2 set val = 'bbb'", nil},
+		{"commit", nil},
+	}, {{"begin", nil},
+		{"insert into t3 values (1, 'text1', 'aaa')", nil},
+		{"update t3 set val = 'bbb'", nil},
+		{"commit", nil},
 	}}
 	ts.Run()
 }
@@ -144,11 +144,11 @@ func TestSetAndEnum(t *testing.T) {
 	defer ts.Close()
 	ts.Init()
 	ts.tests = [][]*VStreamerTestQuery{{
-		{"begin", []VStreamerTestEvent{{typ: "begin"}}},
-		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", []VStreamerTestEvent{{typ: "defaultRowEvent"}}},
-		{"insert into t1 values (2, 'bbb', 'green', 'M')", []VStreamerTestEvent{{typ: "defaultRowEvent"}}},
-		{"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')", []VStreamerTestEvent{{typ: "defaultRowEvent"}}},
-		{"commit", []VStreamerTestEvent{{typ: "commit"}}},
+		{"begin", nil},
+		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", nil},
+		{"insert into t1 values (2, 'bbb', 'green', 'M')", nil},
+		{"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')", nil},
+		{"commit", nil},
 	}}
 	ts.Run()
 }
