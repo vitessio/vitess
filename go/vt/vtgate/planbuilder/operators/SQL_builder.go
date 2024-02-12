@@ -411,26 +411,13 @@ func buildDelete(op *Delete, qb *queryBuilder) {
 
 func buildUpdate(op *Update, qb *queryBuilder) {
 	updExprs := getUpdateExprs(op)
-
-	buildQuery(op.Source, qb)
-	// currently the qb builds a select query underneath.
-	// Will take the `From` and `Where` from this select
-	// and create a update statement.
-	// TODO: change it to directly produce `update` statement.
-	sel, ok := qb.stmt.(*sqlparser.Select)
-	if !ok {
-		panic(vterrors.VT13001("expected a select here"))
+	upd := &sqlparser.Update{
+		Ignore: op.Ignore,
+		Exprs:  updExprs,
 	}
-
+	qb.stmt = upd
 	qb.dmlOperator = op
-	qb.stmt = &sqlparser.Update{
-		Ignore:     op.Ignore,
-		TableExprs: sel.From,
-		Exprs:      updExprs,
-		Where:      sel.Where,
-		Limit:      sel.Limit,
-		OrderBy:    sel.OrderBy,
-	}
+	buildQuery(op.Source, qb)
 }
 
 func getUpdateExprs(op *Update) sqlparser.UpdateExprs {

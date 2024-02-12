@@ -716,6 +716,10 @@ type (
 	IndexType int8
 )
 
+var _ OrderAndLimit = (*Select)(nil)
+var _ OrderAndLimit = (*Update)(nil)
+var _ OrderAndLimit = (*Delete)(nil)
+
 func (*Union) iStatement()               {}
 func (*Select) iStatement()              {}
 func (*Stream) iStatement()              {}
