@@ -40,11 +40,6 @@
     "plan": "VT12001: unsupported: subqueries in DML"
   },
   {
-    "comment": "scatter update with limit clause",
-    "query": "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1",
-    "plan": "VT12001: unsupported: multi shard UPDATE with LIMIT"
-  },
-  {
     "comment": "update changes primary vindex column",
     "query": "update user set id = 1 where id = 1",
     "plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: user_index"
@@ -67,7 +62,7 @@
   {
     "comment": "update by primary keyspace id, changing one vindex column, limit without order clause",
     "query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 limit 10",
-    "plan": "VT12001: unsupported: you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: email_user_map"
+    "plan": "VT12001: unsupported: Vindex update should have ORDER BY clause when using LIMIT"
   },
   {
     "comment": "update with derived table",

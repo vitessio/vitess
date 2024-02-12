@@ -78,7 +78,7 @@ type (
 	// QuerySignature is used to identify shortcuts in the planning process
 	QuerySignature struct {
 		Aggregation bool
-		Delete      bool
+		Dml         bool
 		Distinct    bool
 		HashJoin    bool
 		SubQueries  bool
@@ -922,4 +922,14 @@ func (st *SemTable) Clone(n sqlparser.SQLNode) sqlparser.SQLNode {
 		}
 		cursor.Replace(sqlparser.CloneExpr(expr))
 	}, st.CopySemanticInfo)
+}
+
+func (st *SemTable) UpdateChildFKExpr(origUpdExpr *sqlparser.UpdateExpr, newExpr sqlparser.Expr) {
+	for _, exprs := range st.childFkToUpdExprs {
+		for idx, updateExpr := range exprs {
+			if updateExpr == origUpdExpr {
+				exprs[idx].Expr = newExpr
+			}
+		}
+	}
 }
