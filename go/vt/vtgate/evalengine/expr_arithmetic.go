@@ -94,7 +94,7 @@ func (op *opArithAdd) compile(c *compiler, left, right IR) (ctype, error) {
 	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
 
-	ct := ctype{Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric, Scale: max(lt.Scale, rt.Scale)}
+	ct := ctype{Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}
 
 	switch lt.Type {
 	case sqltypes.Int64:
@@ -152,7 +152,7 @@ func (op *opArithSub) compile(c *compiler, left, right IR) (ctype, error) {
 	lt = c.compileToNumeric(lt, 2, sqltypes.Float64, true)
 	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 
-	ct := ctype{Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric, Scale: max(lt.Scale, rt.Scale)}
+	ct := ctype{Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}
 	switch lt.Type {
 	case sqltypes.Int64:
 		switch rt.Type {
@@ -240,7 +240,7 @@ func (op *opArithMul) compile(c *compiler, left, right IR) (ctype, error) {
 	rt = c.compileToNumeric(rt, 1, sqltypes.Float64, true)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
 
-	ct := ctype{Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric, Scale: lt.Scale + rt.Scale}
+	ct := ctype{Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}
 	switch lt.Type {
 	case sqltypes.Int64:
 		c.asm.Mul_ii()
