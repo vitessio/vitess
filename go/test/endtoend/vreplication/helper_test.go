@@ -168,6 +168,7 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 	for {
 		qr := execVtgateQuery(t, conn, database, query)
 		require.NotNil(t, qr)
+		log.Infof("query %q returned %v", query, qr.Rows)
 		if want == fmt.Sprintf("%v", qr.Rows) {
 			return
 		}
