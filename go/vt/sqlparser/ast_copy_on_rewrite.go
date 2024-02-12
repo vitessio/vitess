@@ -6634,6 +6634,22 @@ func (c *cow) copyOnRewriteRefOfXorExpr(n *XorExpr, parent SQLNode) (out SQLNode
 	}
 	return
 }
+func (c *cow) copyOnRewriteAddToFrom(n AddToFrom, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	switch n := n.(type) {
+	case *Delete:
+		return c.copyOnRewriteRefOfDelete(n, parent)
+	case *Select:
+		return c.copyOnRewriteRefOfSelect(n, parent)
+	case *Update:
+		return c.copyOnRewriteRefOfUpdate(n, parent)
+	default:
+		// this should never happen
+		return nil, false
+	}
+}
 func (c *cow) copyOnRewriteAggrFunc(n AggrFunc, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false

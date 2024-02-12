@@ -9538,6 +9538,22 @@ func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replace
 	}
 	return true
 }
+func (a *application) rewriteAddToFrom(parent SQLNode, node AddToFrom, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case *Delete:
+		return a.rewriteRefOfDelete(parent, node, replacer)
+	case *Select:
+		return a.rewriteRefOfSelect(parent, node, replacer)
+	case *Update:
+		return a.rewriteRefOfUpdate(parent, node, replacer)
+	default:
+		// this should never happen
+		return true
+	}
+}
 func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer replacerFunc) bool {
 	if node == nil {
 		return true

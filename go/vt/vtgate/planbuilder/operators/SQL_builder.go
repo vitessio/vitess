@@ -40,6 +40,9 @@ type (
 func (qb *queryBuilder) asSelectStatement() sqlparser.SelectStatement {
 	return qb.stmt.(sqlparser.SelectStatement)
 }
+func (qb *queryBuilder) asOrderAndLimit() sqlparser.OrderAndLimit {
+	return qb.stmt.(sqlparser.OrderAndLimit)
+}
 
 func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement, _ Operator, err error) {
 	defer PanicHandler(&err)
@@ -70,17 +73,16 @@ func (qb *queryBuilder) addTableExpr(
 	if qb.stmt == nil {
 		qb.stmt = &sqlparser.Select{}
 	}
-	sel := qb.stmt.(*sqlparser.Select)
-	elems := &sqlparser.AliasedTableExpr{
+	stmt := qb.stmt.(sqlparser.AddToFrom)
+	tbl := &sqlparser.AliasedTableExpr{
 		Expr:       tblExpr,
 		Partitions: nil,
 		As:         sqlparser.NewIdentifierCS(alias),
 		Hints:      hints,
 		Columns:    columnAliases,
 	}
-	qb.ctx.SemTable.ReplaceTableSetFor(tableID, elems)
-	sel.From = append(sel.From, elems)
-	qb.stmt = sel
+	qb.ctx.SemTable.ReplaceTableSetFor(tableID, tbl)
+	stmt.AddFrom(tbl)
 	qb.tableNames = append(qb.tableNames, tableName)
 }
 
@@ -408,13 +410,7 @@ func buildDelete(op *Delete, qb *queryBuilder) {
 }
 
 func buildUpdate(op *Update, qb *queryBuilder) {
-	updExprs := make(sqlparser.UpdateExprs, 0, len(op.Assignments))
-	for _, se := range op.Assignments {
-		updExprs = append(updExprs, &sqlparser.UpdateExpr{
-			Name: se.Name,
-			Expr: se.Expr.EvalExpr,
-		})
-	}
+	updExprs := getUpdateExprs(op)
 
 	buildQuery(op.Source, qb)
 	// currently the qb builds a select query underneath.
@@ -435,6 +431,17 @@ func buildUpdate(op *Update, qb *queryBuilder) {
 		Limit:      sel.Limit,
 		OrderBy:    sel.OrderBy,
 	}
+}
+
+func getUpdateExprs(op *Update) sqlparser.UpdateExprs {
+	updExprs := make(sqlparser.UpdateExprs, 0, len(op.Assignments))
+	for _, se := range op.Assignments {
+		updExprs = append(updExprs, &sqlparser.UpdateExpr{
+			Name: se.Name,
+			Expr: se.Expr.EvalExpr,
+		})
+	}
+	return updExprs
 }
 
 type OpWithAST interface {
@@ -470,13 +477,13 @@ func buildOrdering(op *Ordering, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
 
 	for _, order := range op.Order {
-		qb.asSelectStatement().AddOrder(order.Inner)
+		qb.asOrderAndLimit().AddOrder(order.Inner)
 	}
 }
 
 func buildLimit(op *Limit, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
-	qb.asSelectStatement().SetLimit(op.AST)
+	qb.asOrderAndLimit().SetLimit(op.AST)
 }
 
 func buildTable(op *Table, qb *queryBuilder) {

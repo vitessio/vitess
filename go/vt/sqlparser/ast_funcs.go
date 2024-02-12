@@ -2605,3 +2605,20 @@ func MultiTable(node []TableExpr) bool {
 	_, singleTbl := node[0].(*AliasedTableExpr)
 	return !singleTbl
 }
+
+type AddToFrom interface {
+	Statement
+	AddFrom(tbl TableExpr)
+}
+
+func (node *Select) AddFrom(tbl TableExpr) {
+	node.From = append(node.From, tbl)
+}
+
+func (node *Update) AddFrom(tbl TableExpr) {
+	node.TableExprs = append(node.TableExprs, tbl)
+}
+
+func (node *Delete) AddFrom(tbl TableExpr) {
+	node.TableExprs = append(node.TableExprs, tbl)
+}

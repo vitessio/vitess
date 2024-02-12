@@ -53,16 +53,20 @@ type (
 		Commented
 	}
 
-	// SelectStatement any SELECT statement.
-	SelectStatement interface {
-		Statement
-		InsertRows
-		iSelectStatement()
+	OrderAndLimit interface {
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
 		GetOrderBy() OrderBy
 		GetLimit() *Limit
 		SetLimit(*Limit)
+	}
+
+	// SelectStatement any SELECT statement.
+	SelectStatement interface {
+		Statement
+		InsertRows
+		OrderAndLimit
+		iSelectStatement()
 		GetLock() Lock
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
