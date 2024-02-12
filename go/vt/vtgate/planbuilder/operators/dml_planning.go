@@ -63,6 +63,48 @@ func getVindexInformation(id semantics.TableSet, table *vindexes.Table) (
 	return primaryVindex, vindexesAndPredicates
 }
 
+func createAssignmentExpressions(
+	ctx *plancontext.PlanningContext,
+	assignments []SetExpr,
+	vcol sqlparser.IdentifierCI,
+	subQueriesArgOnChangedVindex []string,
+	vindexValueMap map[string]evalengine.Expr,
+	compExprs []sqlparser.Expr,
+) ([]string, []sqlparser.Expr) {
+	// Searching in order of columns in colvindex.
+	found := false
+	for _, assignment := range assignments {
+		if !vcol.Equal(assignment.Name.Name) {
+			continue
+		}
+		if found {
+			panic(vterrors.VT03015(assignment.Name.Name))
+		}
+		found = true
+		pv, err := evalengine.Translate(assignment.Expr.EvalExpr, &evalengine.Config{
+			ResolveType: ctx.SemTable.TypeForExpr,
+			Collation:   ctx.SemTable.Collation,
+			Environment: ctx.VSchema.Environment(),
+		})
+		if err != nil {
+			panic(invalidUpdateExpr(assignment.Name.Name.String(), assignment.Expr.EvalExpr))
+		}
+
+		if assignment.Expr.Info != nil {
+			sqe, ok := assignment.Expr.Info.(SubQueryExpression)
+			if ok {
+				for _, sq := range sqe {
+					subQueriesArgOnChangedVindex = append(subQueriesArgOnChangedVindex, sq.ArgName)
+				}
+			}
+		}
+
+		vindexValueMap[vcol.String()] = pv
+		compExprs = append(compExprs, sqlparser.NewComparisonExpr(sqlparser.EqualOp, assignment.Name, assignment.Expr.EvalExpr, nil))
+	}
+	return subQueriesArgOnChangedVindex, compExprs
+}
+
 func buildChangedVindexesValues(
 	ctx *plancontext.PlanningContext,
 	update *sqlparser.Update,
@@ -76,52 +118,22 @@ func buildChangedVindexesValues(
 		vindexValueMap := make(map[string]evalengine.Expr)
 		var compExprs []sqlparser.Expr
 		for _, vcol := range vindex.Columns {
-			// Searching in order of columns in colvindex.
-			found := false
-			for _, assignment := range assignments {
-				if !vcol.Equal(assignment.Name.Name) {
-					continue
-				}
-				if found {
-					panic(vterrors.VT03015(assignment.Name.Name))
-				}
-				found = true
-				pv, err := evalengine.Translate(assignment.Expr.EvalExpr, &evalengine.Config{
-					ResolveType: ctx.SemTable.TypeForExpr,
-					Collation:   ctx.SemTable.Collation,
-					Environment: ctx.VSchema.Environment(),
-				})
-				if err != nil {
-					panic(invalidUpdateExpr(assignment.Name.Name.String(), assignment.Expr.EvalExpr))
-				}
-
-				if assignment.Expr.Info != nil {
-					sqe, ok := assignment.Expr.Info.(SubQueryExpression)
-					if ok {
-						for _, sq := range sqe {
-							subQueriesArgOnChangedVindex = append(subQueriesArgOnChangedVindex, sq.ArgName)
-						}
-					}
-				}
-
-				vindexValueMap[vcol.String()] = pv
-				compExprs = append(compExprs, sqlparser.NewComparisonExpr(sqlparser.EqualOp, assignment.Name, assignment.Expr.EvalExpr, nil))
-			}
-		}
-		if len(compExprs) > 0 {
-			selExprs = append(selExprs, aeWrap(sqlparser.AndExpressions(compExprs...)))
+			subQueriesArgOnChangedVindex, compExprs =
+				createAssignmentExpressions(ctx, assignments, vcol, subQueriesArgOnChangedVindex, vindexValueMap, compExprs)
 		}
 		if len(vindexValueMap) == 0 {
 			// Vindex not changing, continue
 			continue
 		}
-
 		if i == 0 {
 			panic(vterrors.VT12001(fmt.Sprintf("you cannot UPDATE primary vindex columns; invalid update on vindex: %v", vindex.Name)))
 		}
 		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
 			panic(vterrors.VT12001(fmt.Sprintf("you can only UPDATE lookup vindexes; invalid update on vindex: %v", vindex.Name)))
 		}
+
+		// Checks done, let's actually add the expressions and the vindex map
+		selExprs = append(selExprs, aeWrap(sqlparser.AndExpressions(compExprs...)))
 		changedVindexes[vindex.Name] = &engine.VindexValues{
 			EvalExprMap: vindexValueMap,
 			Offset:      offset,
