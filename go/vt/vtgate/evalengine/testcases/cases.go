@@ -63,6 +63,7 @@ var Cases = []TestCase{
 	{Run: TupleComparisons},
 	{Run: Comparisons},
 	{Run: InStatement},
+	{Run: FnInsert},
 	{Run: FnLower},
 	{Run: FnUpper},
 	{Run: FnCharLength},
@@ -1312,6 +1313,28 @@ var JSONExtract_Schema = []*querypb.Field{
 		Type:       sqltypes.TypeJSON,
 		ColumnType: "JSON",
 	},
+}
+
+func FnInsert(yield Query) {
+	for _, s := range insertStrings {
+		for _, ns := range insertStrings {
+			for _, l := range inputBitwise {
+				for _, p := range inputBitwise {
+					yield(fmt.Sprintf("INSERT(%s, %s, %s, %s)", s, p, l, ns), nil)
+				}
+			}
+		}
+	}
+
+	mysqlDocSamples := []string{
+		"INSERT('Quadratic', 3, 4, 'What')",
+		"INSERT('Quadratic', -1, 4, 'What')",
+		"INSERT('Quadratic', 3, 100, 'What')",
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
 }
 
 func FnLower(yield Query) {
