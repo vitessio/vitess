@@ -59,7 +59,8 @@ func (vds *vdiffStats) register() {
 			vds.mu.Lock()
 			defer vds.mu.Unlock()
 			return globalStats.ErrorCount.Get()
-		})
+		},
+	)
 
 	stats.NewGaugesFuncWithMultiLabels(
 		"VDiffRestartedTableDiffsCount",
@@ -86,7 +87,8 @@ func (vds *vdiffStats) register() {
 			vds.mu.Lock()
 			defer vds.mu.Unlock()
 			return globalStats.RowsDiffedCount.Get()
-		})
+		},
+	)
 
 	stats.NewGaugesFuncWithMultiLabels(
 		"VDiffRowsCompared",
@@ -119,7 +121,8 @@ func (vds *vdiffStats) register() {
 				}
 			}
 			return result
-		})
+		},
+	)
 
 	stats.NewGaugesFuncWithMultiLabels(
 		"VDiffPhaseTimings",
@@ -135,7 +138,8 @@ func (vds *vdiffStats) register() {
 				}
 			}
 			return result
-		})
+		},
+	)
 }
 
 func (vds *vdiffStats) numControllers() int64 {
