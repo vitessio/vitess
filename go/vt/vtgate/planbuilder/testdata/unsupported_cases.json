@@ -395,18 +395,8 @@
     "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct id)"
   },
   {
-    "comment": "update with derived table",
-    "query": "update (select id from user) as u set id = 4",
-    "plan": "VT03031: the target table (select id from `user`) as u of the UPDATE is not updatable"
-  },
-  {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
+    "comment": "update with multi table reference with multi target update",
     "query": "update ignore user u, music m set u.foo = 21, m.bar = 'abc' where u.col = m.col",
     "plan": "VT12001: unsupported: multi-table UPDATE statement with multi-target column update"
-  },
-  {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "update ignore (select foo, col, bar from user) u, music m set u.foo = 21, u.bar = 'abc' where u.col = m.col",
-    "plan": "VT03031: the target table (select foo, col, bar from `user`) as u of the UPDATE is not updatable"
   }
 ]
