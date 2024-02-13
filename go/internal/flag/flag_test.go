@@ -17,29 +17,292 @@ limitations under the License.
 package flag
 
 import (
-	"flag"
-	"fmt"
+	goflag "flag"
+	"os"
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPreventGlogVFlagFromClobberingVersionFlagShorthand(t *testing.T) {
-	var v bool
+	oldCommandLine := goflag.CommandLine
+	defer func() {
+		goflag.CommandLine = oldCommandLine
+	}()
 
-	flag.BoolVar(&v, "v", true, "test flag description")
+	goflag.CommandLine = goflag.NewFlagSet(os.Args[0], goflag.ExitOnError)
+
+	var v, vtest bool
+
+	goflag.BoolVar(&v, "v", true, "")
 
 	testFlagSet := pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
 	PreventGlogVFlagFromClobberingVersionFlagShorthand(testFlagSet)
 
-	fmt.Println(testFlagSet.Lookup("v"))
-	// f := pflag.Lookup("v")
-	// assert.Equal(t, f.Shorthand, "")
+	f := testFlagSet.Lookup("v")
+	assert.NotNil(t, f)
+	assert.Equal(t, "", f.Shorthand)
 
-	// testFlagSet.BoolVar(&vtest, "vtest", true, "test flag description")
-	// PreventGlogVFlagFromClobberingVersionFlagShorthand(testFlagSet)
+	testFlagSet.BoolVar(&vtest, "vtest", true, "")
+	PreventGlogVFlagFromClobberingVersionFlagShorthand(testFlagSet)
 }
 
 func TestParse(t *testing.T) {
+	oldCommandLine := goflag.CommandLine
+	defer func() {
+		goflag.CommandLine = oldCommandLine
+	}()
 
+	var testFlag bool
+	goflag.CommandLine = goflag.NewFlagSet(os.Args[0], goflag.ExitOnError)
+	goflag.BoolVar(&testFlag, "testFlag", true, "")
+
+	testFlagSet := pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
+
+	Parse(testFlagSet)
+
+	f := testFlagSet.ShorthandLookup("h")
+	assert.NotNil(t, f)
+	assert.Equal(t, "false", f.DefValue)
+
+	f = testFlagSet.Lookup("help")
+	assert.NotNil(t, f)
+	assert.Equal(t, "false", f.DefValue)
+
+	testFlagSet = pflag.NewFlagSet("testFlagSet2", pflag.ExitOnError)
+
+	// If shorthand "h" is already defined, shorthand for "help" should be empty
+	var h bool
+	testFlagSet.BoolVarP(&h, "testH", "h", false, "")
+
+	Parse(testFlagSet)
+	f = testFlagSet.Lookup("help")
+	assert.NotNil(t, f)
+	assert.Equal(t, "", f.Shorthand)
+
+	// Check if AddGoFlagSet was called
+	f = testFlagSet.Lookup("testFlag")
+	assert.NotNil(t, f)
+	assert.Equal(t, "true", f.DefValue)
+}
+
+func TestIsFlagProvided(t *testing.T) {
+	oldPflagCommandLine := pflag.CommandLine
+	defer func() {
+		pflag.CommandLine = oldPflagCommandLine
+	}()
+
+	pflag.CommandLine = pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
+
+	isProvided := IsFlagProvided("testFlag")
+	assert.False(t, isProvided)
+
+	var testFlag bool
+	pflag.BoolVar(&testFlag, "testFlag", false, "")
+
+	// Should return false as testFlag is not set
+	isProvided = IsFlagProvided("testFlag")
+	assert.False(t, isProvided)
+
+	pflag.Parse()
+	_ = pflag.Set("testFlag", "true")
+
+	// Should return true as testFlag is set
+	isProvided = IsFlagProvided("testFlag")
+	assert.True(t, isProvided)
+}
+
+func TestFilterTestFlags(t *testing.T) {
+	oldOsArgs := os.Args
+	defer func() {
+		os.Args = oldOsArgs
+	}()
+
+	os.Args = []string{
+		"-test.run",
+		"TestFilter",
+		"otherArgs1",
+		"otherArgs2",
+		"-test.run=TestFilter",
+	}
+
+	otherArgs, testFlags := filterTestFlags()
+
+	expectedTestFlags := []string{
+		"-test.run",
+		"TestFilter",
+		"-test.run=TestFilter",
+	}
+	expectedOtherArgs := []string{
+		"otherArgs1",
+		"otherArgs2",
+	}
+
+	assert.Equal(t, expectedOtherArgs, otherArgs)
+	assert.Equal(t, expectedTestFlags, testFlags)
+}
+
+func TestParseFlagsForTest(t *testing.T) {
+	oldOsArgs := os.Args
+	oldPflagCommandLine := pflag.CommandLine
+	oldCommandLine := goflag.CommandLine
+
+	defer func() {
+		os.Args = oldOsArgs
+		pflag.CommandLine = oldPflagCommandLine
+		goflag.CommandLine = oldCommandLine
+	}()
+
+	pflag.CommandLine = pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
+
+	os.Args = []string{
+		"-test.run",
+		"TestFilter",
+		"otherArgs1",
+		"otherArgs2",
+		"-test.run=TestFilter",
+	}
+
+	ParseFlagsForTest()
+
+	expectedOsArgs := []string{
+		"otherArgs1",
+		"otherArgs2",
+	}
+
+	assert.Equal(t, expectedOsArgs, os.Args)
+	assert.Equal(t, true, pflag.Parsed())
+}
+
+func TestParsed(t *testing.T) {
+	oldPflagCommandLine := pflag.CommandLine
+	oldCommandLine := goflag.CommandLine
+
+	defer func() {
+		pflag.CommandLine = oldPflagCommandLine
+		goflag.CommandLine = oldCommandLine
+	}()
+
+	pflag.CommandLine = pflag.NewFlagSet("testPflagSet", pflag.ExitOnError)
+	goflag.CommandLine = goflag.NewFlagSet("testGoflagSet", goflag.ExitOnError)
+
+	b := Parsed()
+	assert.False(t, b)
+
+	pflag.Parse()
+	b = Parsed()
+	assert.True(t, b)
+}
+
+func TestLookup(t *testing.T) {
+	oldPflagCommandLine := pflag.CommandLine
+	oldCommandLine := goflag.CommandLine
+
+	defer func() {
+		pflag.CommandLine = oldPflagCommandLine
+		goflag.CommandLine = oldCommandLine
+	}()
+
+	pflag.CommandLine = pflag.NewFlagSet("testPflagSet", pflag.ExitOnError)
+	goflag.CommandLine = goflag.NewFlagSet("testGoflagSet", goflag.ExitOnError)
+
+	var testGoFlag, testPflag, testFlag bool
+
+	goflag.BoolVar(&testGoFlag, "testGoFlag", true, "")
+	goflag.BoolVar(&testFlag, "t", true, "")
+	pflag.BoolVar(&testPflag, "testPflag", true, "")
+
+	testCases := []struct {
+		shorthand string
+		name      string
+	}{
+		{
+			// If single character flag is passed, the shorthand should be the same
+			shorthand: "t",
+			name:      "t",
+		},
+		{
+			shorthand: "",
+			name:      "testGoFlag",
+		},
+		{
+			shorthand: "",
+			name:      "testPflag",
+		},
+	}
+
+	for _, tt := range testCases {
+		f := Lookup(tt.name)
+
+		assert.NotNil(t, f)
+		assert.Equal(t, tt.shorthand, f.Shorthand)
+		assert.Equal(t, tt.name, f.Name)
+	}
+
+	f := Lookup("non-existent-flag")
+	assert.Nil(t, f)
+}
+
+func TestArgs(t *testing.T) {
+	oldPflagCommandLine := pflag.CommandLine
+	oldOsArgs := os.Args
+
+	defer func() {
+		pflag.CommandLine = oldPflagCommandLine
+		os.Args = oldOsArgs
+	}()
+
+	pflag.CommandLine = pflag.NewFlagSet("testPflagSet", pflag.ExitOnError)
+
+	os.Args = []string{
+		"arg0",
+		"arg1",
+		"arg2",
+		"arg3",
+	}
+
+	expectedArgs := []string{
+		"arg1",
+		"arg2",
+		"arg3",
+	}
+
+	pflag.Parse()
+	// Should work equivalent to pflag.Args if there's no double dash
+	args := Args()
+	assert.Equal(t, expectedArgs, args)
+
+	arg := Arg(2)
+	assert.Equal(t, "arg3", arg)
+
+	// Should return empty string if the index is greater than len of CommandLine.args
+	arg = Arg(3)
+	assert.Equal(t, "", arg)
+}
+
+func TestIsZeroValue(t *testing.T) {
+	oldCommandLine := goflag.CommandLine
+
+	defer func() {
+		goflag.CommandLine = oldCommandLine
+	}()
+
+	var testFlag string
+
+	goflag.StringVar(&testFlag, "testflag", "default", "Description of testflag")
+	goflag.Parse()
+
+	f := goflag.Lookup("testflag")
+
+	// Test the isZeroValue function
+	result := isZeroValue(f, "")
+
+	assert.True(t, result)
+
+	// Test again with a non-zero value
+	result = isZeroValue(f, "anyValue")
+	if result {
+		t.Errorf("Expected false, got true. The value 'newvalue' should not be considered as zero value.")
+	}
 }
