@@ -277,6 +277,7 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 		sqlType := col.Type.SQLType()
 		tc.dataType = sqlType.String()
 		tc.dataTypeLowered = strings.ToLower(tc.dataType)
+		tc.collate = col.Type.Options.Collate
 		switch tc.dataTypeLowered {
 		case "int32":
 			tc.len = 11
@@ -291,6 +292,9 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			default:
 				tc.len = 4 * int64(l)
 				tc.charset = 45
+				if tc.dataTypeLowered == "char" && strings.Contains(tc.collate, "bin") {
+					tc.dataType = "BINARY"
+				}
 			}
 			tc.colType = fmt.Sprintf("%s(%d)", tc.dataTypeLowered, l)
 		case "blob":
@@ -369,11 +373,16 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 		if fe.cols[i].skip {
 			continue
 		}
+		if col.dataTypeLowered == "binary" {
+			bv[col.name] = strings.TrimSuffix(bv[col.name], "\\0")
+		}
 		val := []byte(bv[col.name])
 		l := int64(len(val))
 		if col.dataTypeLowered == "binary" {
-			val = append(val, "\x00"...)
-			l++
+			for l < col.len {
+				val = append(val, "\x00"...)
+				l++
+			}
 		}
 		row.Values = append(row.Values, val...)
 		row.Lengths = append(row.Lengths, l)

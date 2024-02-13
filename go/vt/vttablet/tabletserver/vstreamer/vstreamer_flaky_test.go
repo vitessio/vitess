@@ -64,6 +64,7 @@ type TestColumn struct {
 	len, charset            int64
 	dataTypeLowered         string
 	skip                    bool
+	collate                 string
 }
 
 type TestFieldEvent struct {
@@ -146,7 +147,7 @@ func TestSetAndEnum(t *testing.T) {
 		},
 	}
 	defer ts.Close()
-	ts.Init()
+	require.NoError(t, ts.Init())
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", nil},
@@ -158,53 +159,35 @@ func TestSetAndEnum(t *testing.T) {
 }
 
 func TestCellValuePadding(t *testing.T) {
-
-	execStatements(t, []string{
-		"create table t1(id int, val binary(4), primary key(val))",
-		"create table t2(id int, val char(4), primary key(val))",
-		"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-		"drop table t2",
-		"drop table t3",
-	})
-	engine.se.Reload(context.Background())
-	queries := []string{
-		"begin",
-		"insert into t1 values (1, 'aaa\000')",
-		"insert into t1 values (2, 'bbb\000')",
-		"update t1 set id = 11 where val = 'aaa\000'",
-		"insert into t2 values (1, 'aaa')",
-		"insert into t2 values (2, 'bbb')",
-		"update t2 set id = 11 where val = 'aaa'",
-		"insert into t3 values (1, 'aaa')",
-		"insert into t3 values (2, 'bb')",
-		"update t3 set id = 11 where val = 'aaa'",
-		"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id int, val binary(4), primary key(val))",
+			"create table t2(id int, val char(4), primary key(val))",
+			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))"},
 	}
-
-	testcases := []testcase{{
-		input: queries,
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"t1" fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:BINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:4 charset:63 column_type:"binary(4)"}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"1aaa\x00"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"2bbb\x00"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:4 values:"1aaa\x00"} after:{lengths:2 lengths:4 values:"11aaa\x00"}}}`,
-			`type:FIELD field_event:{table_name:"t2" fields:{name:"id" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:CHAR table:"t2" org_table:"t2" database:"vttest" org_name:"val" column_length:16 charset:45 column_type:"char(4)"}}`,
-			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:3 values:"2bbb"}}}`,
-			`type:ROW row_event:{table_name:"t2" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:2 lengths:3 values:"11aaa"}}}`,
-			`type:FIELD field_event:{table_name:"t3" fields:{name:"id" type:INT32 table:"t3" org_table:"t3" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:BINARY table:"t3" org_table:"t3" database:"vttest" org_name:"val" column_length:16 charset:45 column_type:"char(4)"}}`,
-			`type:ROW row_event:{table_name:"t3" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t3" row_changes:{after:{lengths:1 lengths:2 values:"2bb"}}}`,
-			`type:ROW row_event:{table_name:"t3" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:2 lengths:3 values:"11aaa"}}}`,
-			`gtid`,
-			`commit`,
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 'aaa\000')", nil},
+		{"insert into t1 values (2, 'bbb\000')", nil},
+		{"update t1 set id = 11 where val = 'aaa\000'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa\x00"}, after: []string{"11", "aaa\x00"}}}}},
 		}},
+		{"insert into t2 values (1, 'aaa')", nil},
+		{"insert into t2 values (2, 'bbb')", nil},
+		{"update t2 set id = 11 where val = 'aaa'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t2", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"11", "aaa"}}}}},
+		}},
+		{"insert into t3 values (1, 'aaa')", nil},
+		{"insert into t3 values (2, 'bb')", nil},
+		{"update t3 set id = 11 where val = 'aaa'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t3", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"11", "aaa"}}}}},
+		}},
+		{"commit", nil},
 	}}
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
 }
 
 func TestSetStatement(t *testing.T) {
