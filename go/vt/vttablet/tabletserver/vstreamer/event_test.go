@@ -34,6 +34,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+var noEvents = []TestRowEvent{}
+
 type TestQuery struct {
 	query  string
 	events []TestRowEvent
@@ -101,7 +103,7 @@ type TestSpec struct {
 	pkColumns       map[string][]string
 	inited          bool
 	schema          *schemadiff.Schema
-	fieldEvents     map[string]*VStreamerTestFieldEvent
+	fieldEvents     map[string]*TestFieldEvent
 	fieldEventsSent map[string]bool
 	state           map[string]*query.Row
 	metadata        map[string][]string
@@ -121,7 +123,7 @@ func (ts *TestSpec) Init() error {
 	if err != nil {
 		return err
 	}
-	ts.fieldEvents = make(map[string]*VStreamerTestFieldEvent)
+	ts.fieldEvents = make(map[string]*TestFieldEvent)
 	ts.fieldEventsSent = make(map[string]bool)
 	ts.state = make(map[string]*query.Row)
 	ts.metadata = make(map[string][]string)
@@ -265,12 +267,12 @@ func (ts *TestSpec) Run() {
 	runCases(ts.t, ts.options.filter, testcases, "current", nil)
 }
 
-func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *VStreamerTestFieldEvent {
-	var tfe VStreamerTestFieldEvent
+func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFieldEvent {
+	var tfe TestFieldEvent
 	tfe.table = table.Name()
 	tfe.db = testenv.TestDBName
 	for _, col := range table.TableSpec.Columns {
-		tc := VStreamerTestColumn{}
+		tc := TestColumn{}
 		tc.name = col.Name.String()
 		sqlType := col.Type.SQLType()
 		tc.dataType = sqlType.String()
@@ -330,7 +332,7 @@ func (ts *TestSpec) setMetadataMap(table, col, value string) {
 	ts.metadata[getMetadataKey(table, col)] = valuesReversed
 }
 
-func (ts *TestSpec) getMetadataMap(table string, col *VStreamerTestColumn, value string) string {
+func (ts *TestSpec) getMetadataMap(table string, col *TestColumn, value string) string {
 	var bits int64
 	value = strings.Trim(value, "'")
 	meta := ts.metadata[getMetadataKey(table, col.name)]
@@ -352,7 +354,7 @@ func (ts *TestSpec) getMetadataMap(table string, col *VStreamerTestColumn, value
 	return strconv.FormatInt(bits, 10)
 }
 
-func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *VStreamerTestFieldEvent, stmt sqlparser.Statement) string {
+func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFieldEvent, stmt sqlparser.Statement) string {
 	ev := &binlogdata.RowEvent{
 		TableName: table,
 		RowChanges: []*binlogdata.RowChange{
@@ -363,7 +365,10 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *VStreame
 		},
 	}
 	var row query.Row
-	for _, col := range fe.cols {
+	for i, col := range fe.cols {
+		if fe.cols[i].skip {
+			continue
+		}
 		val := []byte(bv[col.name])
 		l := int64(len(val))
 		if col.dataTypeLowered == "binary" {

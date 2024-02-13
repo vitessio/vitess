@@ -59,21 +59,25 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	return false
 }
 
-type VStreamerTestColumn struct {
+type TestColumn struct {
 	name, dataType, colType string
 	len, charset            int64
 	dataTypeLowered         string
+	skip                    bool
 }
 
-type VStreamerTestFieldEvent struct {
+type TestFieldEvent struct {
 	table, db string
-	cols      []*VStreamerTestColumn
+	cols      []*TestColumn
 }
 
-func (tfe *VStreamerTestFieldEvent) String() string {
+func (tfe *TestFieldEvent) String() string {
 	s := fmt.Sprintf("type:FIELD field_event:{table_name:\"%s\"", tfe.table)
 	fld := ""
 	for _, col := range tfe.cols {
+		if col.skip {
+			continue
+		}
 		fld += fmt.Sprintf(" fields:{name:\"%s\" type:%s table:\"%s\" org_table:\"%s\" database:\"%s\" org_name:\"%s\" column_length:%d charset:%d",
 			col.name, col.dataType, tfe.table, tfe.table, tfe.db, col.name, col.len, col.charset)
 		if col.colType != "" {
@@ -267,10 +271,10 @@ func TestSetForeignKeyCheck(t *testing.T) {
 		"commit",
 	}
 
-	fe := &VStreamerTestFieldEvent{
+	fe := &TestFieldEvent{
 		table: "t1",
 		db:    "vttest",
-		cols: []*VStreamerTestColumn{
+		cols: []*TestColumn{
 			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
 			{name: "val", dataType: "BINARY", colType: "binary(4)", len: 4, charset: 63},
 		},
@@ -665,7 +669,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	}
 }
 
-func TestXFilteredVarBinary2(t *testing.T) {
+func TestFilteredVarBinary(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
 		ddls: []string{
@@ -682,14 +686,12 @@ func TestXFilteredVarBinary2(t *testing.T) {
 	}
 	defer ts.Close()
 	require.NoError(t, ts.Init())
-	var emptyList = []TestRowEvent{}
-	_ = emptyList
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
-		{"insert into t1 values (1, 'kepler')", emptyList},
+		{"insert into t1 values (1, 'kepler')", noEvents},
 		{"insert into t1 values (2, 'newton')", nil},
 		{"insert into t1 values (3, 'newton')", nil},
-		{"insert into t1 values (4, 'kepler')", emptyList},
+		{"insert into t1 values (4, 'kepler')", noEvents},
 		{"insert into t1 values (5, 'newton')", nil},
 		{"update t1 set val = 'newton' where id1 = 1", []TestRowEvent{
 			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "newton"}}}}},
@@ -711,125 +713,61 @@ func TestXFilteredVarBinary2(t *testing.T) {
 	ts.Run()
 }
 
-func TestFilteredVarBinary(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
-	execStatements(t, []string{
-		"create table t1(id1 int, val varbinary(128), primary key(id1))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select id1, val from t1 where val = 'newton'",
-		}},
-	}
-
-	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into t1 values (1, 'kepler')",
-			"insert into t1 values (2, 'newton')",
-			"insert into t1 values (3, 'newton')",
-			"insert into t1 values (4, 'kepler')",
-			"insert into t1 values (5, 'newton')",
-			"update t1 set val = 'newton' where id1 = 1",
-			"update t1 set val = 'kepler' where id1 = 2",
-			"update t1 set val = 'newton' where id1 = 2",
-			"update t1 set val = 'kepler' where id1 = 1",
-			"delete from t1 where id1 in (2,3)",
-			"commit",
-		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"t1" fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:6 values:"2newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:6 values:"3newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:6 values:"5newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:6 values:"1newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:6 values:"2newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:6 values:"2newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:6 values:"1newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:6 values:"2newton"}} row_changes:{before:{lengths:1 lengths:6 values:"3newton"}}}`,
-			`gtid`,
-			`commit`,
-		}},
-	}}
-	runCases(t, filter, testcases, "", nil)
-}
-
 func TestFilteredInt(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	ts := &TestSpec{
 		t: t,
 		ddls: []string{
 			"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
 		},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id1, val from t1 where id2 = 200",
+				}},
+			},
+		},
 	}
 	defer ts.Close()
 	require.NoError(t, ts.Init())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select id1, val from t1 where id2 = 200",
+	ts.fieldEvents["t1"].cols[1].skip = true
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 100, 'aaa')", noEvents},
+		{"insert into t1 values (2, 200, 'bbb')", nil},
+		{"insert into t1 values (3, 100, 'ccc')", noEvents},
+		{"insert into t1 values (4, 200, 'ddd')", nil},
+		{"insert into t1 values (5, 200, 'eee')", nil},
+		{"update t1 set val = 'newddd' where id1 = 4", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"4", "ddd"}, after: []string{"4", "newddd"}}}}},
 		}},
-	}
-
-	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into t1 values (1, 100, 'aaa')",
-			"insert into t1 values (2, 200, 'bbb')",
-			"insert into t1 values (3, 100, 'ccc')",
-			"insert into t1 values (4, 200, 'ddd')",
-			"insert into t1 values (5, 200, 'eee')",
-			"update t1 set val = 'newddd' where id1 = 4",
-			"update t1 set id2 = 200 where id1 = 1",
-			"update t1 set id2 = 100 where id1 = 2",
-			"update t1 set id2 = 100 where id1 = 1",
-			"update t1 set id2 = 200 where id1 = 2",
-			"commit",
-		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"t1" fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"2bbb"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"4ddd"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"5eee"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:3 values:"4ddd"} after:{lengths:1 lengths:6 values:"4newddd"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:3 values:"2bbb"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"2bbb"}}}`,
-			`gtid`,
-			`commit`,
+		{"update t1 set id2 = 200 where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "aaa"}}}}},
 		}},
+		{"update t1 set id2 = 100 where id1 = 2", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "bbb"}}}}},
+		}},
+		{"update t1 set id2 = 100 where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa"}}}}},
+		}},
+		{"update t1 set id2 = 200 where id1 = 2", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "bbb"}}}}},
+		}},
+		{"commit", nil},
 	}}
-	runCases(t, filter, testcases, "", nil)
+	ts.Run()
 }
 
-func TestSavepoint(t *testing.T) {
+func TestSavepoint2(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 
 	execStatements(t, []string{
 		"create table stream1(id int, val varbinary(128), primary key(id))",
-		"create table stream2(id int, val varbinary(128), primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table stream1",
-		"drop table stream2",
 	})
 	engine.se.Reload(context.Background())
 	testcases := []testcase{{
@@ -2157,10 +2095,10 @@ func TestGeneratedColumns(t *testing.T) {
 		"commit",
 	}
 
-	fe := &VStreamerTestFieldEvent{
+	fe := &TestFieldEvent{
 		table: "t1",
 		db:    "vttest",
-		cols: []*VStreamerTestColumn{
+		cols: []*TestColumn{
 			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
 			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
 			{name: "val2", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
@@ -2204,10 +2142,10 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 		"commit",
 	}
 
-	fe := &VStreamerTestFieldEvent{
+	fe := &TestFieldEvent{
 		table: "t1",
 		db:    "vttest",
-		cols: []*VStreamerTestColumn{
+		cols: []*TestColumn{
 			{name: "my_row_id", dataType: "UINT64", colType: "bigint unsigned", len: 20, charset: 63},
 			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
 		},
