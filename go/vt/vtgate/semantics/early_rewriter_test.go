@@ -377,7 +377,12 @@ func TestOrderByGroupByLiteral(t *testing.T) {
 
 func TestHavingAndOrderByColumnName(t *testing.T) {
 	schemaInfo := &FakeSI{
-		Tables: map[string]*vindexes.Table{},
+		Tables: map[string]*vindexes.Table{
+			"t1": {
+				Name:       sqlparser.NewIdentifierCS("t1"),
+				PrimaryKey: sqlparser.Columns{sqlparser.NewIdentifierCI("id")},
+			},
+		},
 	}
 	cDB := "db"
 	tcases := []struct {
@@ -409,6 +414,14 @@ func TestHavingAndOrderByColumnName(t *testing.T) {
 	}, {
 		sql:    "select id, id, count(*) from t1 order by id",
 		expSQL: "select id, id, count(*) from t1 order by id asc",
+	}, {
+		// we add any columns being used in the having clause that are
+		// functionally dependent on a column already in the group by clause
+		sql:    "select t1.id, t1.foo-sum(t2.bar) as x from t1 join t2 group by t1.id having x > 5",
+		expSQL: "select t1.id, t1.foo - sum(t2.bar) as x from t1 join t2 group by t1.id, t1.foo having t1.foo - sum(t2.bar) > 5",
+	}, {
+		sql:    "select t1.id, t1.foo-sum(t2.bar) as x from t1 join t2 having x > 5",
+		expSQL: "select t1.id, t1.foo - sum(t2.bar) as x from t1 join t2 having t1.foo - sum(t2.bar) > 5",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
