@@ -85,6 +85,7 @@ func (s *TestRowEventSpec) String() string {
 type TestRowEvent struct {
 	event string
 	spec  *TestRowEventSpec
+	flags int
 }
 
 type TestSpecOptions struct {
@@ -177,7 +178,9 @@ func (ts *TestSpec) Run() {
 			switch {
 			case tq.events != nil && len(tq.events) == 0:
 				continue
-			case tq.events != nil && len(tq.events) > 0:
+			case tq.events != nil &&
+				(len(tq.events) > 0 &&
+					!(len(tq.events) == 1 && tq.events[0].event == "" && tq.events[0].spec == nil)):
 				for _, e := range tq.events {
 					if e.event != "" {
 						output = append(output, e.event)
@@ -189,6 +192,10 @@ func (ts *TestSpec) Run() {
 				}
 				continue
 			default:
+				flags := 0
+				if len(tq.events) == 1 {
+					flags = tq.events[0].flags
+				}
 				stmt, err := sqlparser.NewTestParser().Parse(tq.query)
 				require.NoError(ts.t, err)
 				bv := make(map[string]string)
@@ -254,7 +261,7 @@ func (ts *TestSpec) Run() {
 						output = append(output, fe.String())
 						ts.fieldEventsSent[table] = true
 					}
-					output = append(output, ts.getRowEvent(table, bv, fe, stmt))
+					output = append(output, ts.getRowEvent(table, bv, fe, stmt, uint32(flags)))
 				}
 			}
 
@@ -358,7 +365,7 @@ func (ts *TestSpec) getMetadataMap(table string, col *TestColumn, value string) 
 	return strconv.FormatInt(bits, 10)
 }
 
-func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFieldEvent, stmt sqlparser.Statement) string {
+func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFieldEvent, stmt sqlparser.Statement, flags uint32) string {
 	ev := &binlogdata.RowEvent{
 		TableName: table,
 		RowChanges: []*binlogdata.RowChange{
@@ -367,6 +374,7 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 				After:  nil,
 			},
 		},
+		Flags: flags,
 	}
 	var row query.Row
 	for i, col := range fe.cols {
@@ -451,14 +459,12 @@ func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row, stm
 				}
 			}
 		}
-
 		if skip && !isPKColumn {
 			before.Lengths = append(before.Lengths, -1)
 		} else {
 			before.Values = append(before.Values, currentState.Values[currentValueIndex:currentValueIndex+l]...)
 			before.Lengths = append(before.Lengths, l)
 		}
-
 		if skip {
 			after.Lengths = append(after.Lengths, -1)
 		} else {
