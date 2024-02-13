@@ -45,18 +45,10 @@ const (
 )
 
 func (s TableGCState) TableHint() InternalTableHint {
-	switch s {
-	case HoldTableGCState:
-		return InternalTableGCHoldHint
-	case PurgeTableGCState:
-		return InternalTableGCPurgeHint
-	case EvacTableGCState:
-		return InternalTableGCEvacHint
-	case DropTableGCState:
-		return InternalTableGCDropHint
-	default:
-		return InternalTableUnknownHint
+	if hint, ok := gcStatesTableHints[s]; ok {
+		return hint
 	}
+	return InternalTableUnknownHint
 }
 
 const (
@@ -69,10 +61,15 @@ var (
 	condensedUUIDRegexp  = regexp.MustCompile(`^[0-f]{32}$`)
 	oldGCTableNameRegexp = regexp.MustCompile(OldGCTableNameExpression)
 
-	gcStates = map[string]TableGCState{}
+	gcStates           = map[string]TableGCState{}
+	gcStatesTableHints = map[TableGCState]InternalTableHint{}
 )
 
 func init() {
+	gcStatesTableHints[HoldTableGCState] = InternalTableGCHoldHint
+	gcStatesTableHints[PurgeTableGCState] = InternalTableGCPurgeHint
+	gcStatesTableHints[EvacTableGCState] = InternalTableGCEvacHint
+	gcStatesTableHints[DropTableGCState] = InternalTableGCDropHint
 	for _, gcState := range []TableGCState{HoldTableGCState, PurgeTableGCState, EvacTableGCState, DropTableGCState} {
 		gcStates[string(gcState)] = gcState
 		gcStates[gcState.TableHint().String()] = gcState

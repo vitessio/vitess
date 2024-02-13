@@ -179,7 +179,7 @@ func TestToReadableTimestamp(t *testing.T) {
 	assert.NoError(t, err)
 
 	readableTimestamp := ToReadableTimestamp(ti)
-	assert.Equal(t, readableTimestamp, "20150225110639")
+	assert.Equal(t, "20150225110639", readableTimestamp)
 }
 
 func TestGenerateInternalTableName(t *testing.T) {
