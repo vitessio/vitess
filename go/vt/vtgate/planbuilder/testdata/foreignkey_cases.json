@@ -3128,47 +3128,67 @@
       "QueryType": "DELETE",
       "Original": "delete u from u_tbl6 u join u_tbl5 m on u.col = m.col where u.col2 = 4 and m.col3 = 6",
       "Instructions": {
-        "OperatorType": "FkCascade",
+        "OperatorType": "DeleteWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
         "Inputs": [
           {
-            "InputName": "Selection",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select u_tbl6.col6 from u_tbl6 as u, u_tbl5 as m where 1 != 1",
-            "Query": "select u_tbl6.col6 from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update",
+            "FieldQuery": "select id from u_tbl6 as u, u_tbl5 as m where 1 != 1",
+            "Query": "select id from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update",
             "Table": "u_tbl5, u_tbl6"
           },
           {
-            "InputName": "CascadeChild-1",
-            "OperatorType": "Delete",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "TargetTabletType": "PRIMARY",
-            "BvName": "fkc_vals",
-            "Cols": [
-              0
-            ],
-            "Query": "delete from u_tbl8 where (col8) in ::fkc_vals",
-            "Table": "u_tbl8"
-          },
-          {
-            "InputName": "Parent",
-            "OperatorType": "Delete",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "TargetTabletType": "PRIMARY",
-            "Query": "delete u from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col",
-            "Table": "u_tbl6"
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl6.col6 from u_tbl6 as u where 1 != 1",
+                "Query": "select u_tbl6.col6 from u_tbl6 as u where id in ::dm_vals for update",
+                "Table": "u_tbl6"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals",
+                "Table": "u_tbl8"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl6 as u where id in ::dm_vals",
+                "Table": "u_tbl6"
+              }
+            ]
           }
         ]
       },
@@ -3186,47 +3206,67 @@
       "QueryType": "DELETE",
       "Original": "delete u_tbl10 from u_tbl10 join u_tbl11 using (id) where id = 5",
       "Instructions": {
-        "OperatorType": "FkCascade",
+        "OperatorType": "DeleteWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
         "Inputs": [
           {
-            "InputName": "Selection",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select u_tbl10.col from u_tbl10, u_tbl11 where 1 != 1",
-            "Query": "select u_tbl10.col from u_tbl10, u_tbl11 where u_tbl10.id = 5 and u_tbl10.id = u_tbl11.id for update",
+            "FieldQuery": "select id from u_tbl10, u_tbl11 where 1 != 1",
+            "Query": "select id from u_tbl10, u_tbl11 where u_tbl10.id = 5 and u_tbl10.id = u_tbl11.id for update",
             "Table": "u_tbl10, u_tbl11"
           },
           {
-            "InputName": "CascadeChild-1",
-            "OperatorType": "Delete",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "TargetTabletType": "PRIMARY",
-            "BvName": "fkc_vals",
-            "Cols": [
-              0
-            ],
-            "Query": "delete from u_tbl11 where (col) in ::fkc_vals",
-            "Table": "u_tbl11"
-          },
-          {
-            "InputName": "Parent",
-            "OperatorType": "Delete",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "TargetTabletType": "PRIMARY",
-            "Query": "delete u_tbl10 from u_tbl10, u_tbl11 where u_tbl10.id = 5 and u_tbl10.id = u_tbl11.id",
-            "Table": "u_tbl10"
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl10.col from u_tbl10 where 1 != 1",
+                "Query": "select u_tbl10.col from u_tbl10 where id in ::dm_vals for update",
+                "Table": "u_tbl10"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "delete from u_tbl11 where (col) in ::fkc_vals",
+                "Table": "u_tbl11"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl10 where id in ::dm_vals",
+                "Table": "u_tbl10"
+              }
+            ]
           }
         ]
       },
@@ -3243,27 +3283,25 @@
       "QueryType": "DELETE",
       "Original": "delete u_tbl1 from u_tbl10 join u_tbl1 on u_tbl10.col = u_tbl1.col",
       "Instructions": {
-        "OperatorType": "FkCascade",
+        "OperatorType": "DeleteWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
         "Inputs": [
           {
-            "InputName": "Selection",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select u_tbl1.col1 from u_tbl10, u_tbl1 where 1 != 1",
-            "Query": "select u_tbl1.col1 from u_tbl10, u_tbl1 where u_tbl10.col = u_tbl1.col for update",
+            "FieldQuery": "select id from u_tbl10, u_tbl1 where 1 != 1",
+            "Query": "select id from u_tbl10, u_tbl1 where u_tbl10.col = u_tbl1.col for update",
             "Table": "u_tbl1, u_tbl10"
           },
           {
-            "InputName": "CascadeChild-1",
             "OperatorType": "FkCascade",
-            "BvName": "fkc_vals",
-            "Cols": [
-              0
-            ],
             "Inputs": [
               {
                 "InputName": "Selection",
@@ -3273,25 +3311,59 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
-                "Table": "u_tbl2"
+                "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+                "Query": "select u_tbl1.col1 from u_tbl1 where id in ::dm_vals for update",
+                "Table": "u_tbl1"
               },
               {
                 "InputName": "CascadeChild-1",
-                "OperatorType": "Update",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "BvName": "fkc_vals1",
+                "OperatorType": "FkCascade",
+                "BvName": "fkc_vals",
                 "Cols": [
                   0
                 ],
-                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
-                "Table": "u_tbl3"
+                "Inputs": [
+                  {
+                    "InputName": "Selection",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                    "Table": "u_tbl2"
+                  },
+                  {
+                    "InputName": "CascadeChild-1",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "BvName": "fkc_vals1",
+                    "Cols": [
+                      0
+                    ],
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
+                    "Table": "u_tbl3"
+                  },
+                  {
+                    "InputName": "Parent",
+                    "OperatorType": "Delete",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
+                    "Table": "u_tbl2"
+                  }
+                ]
               },
               {
                 "InputName": "Parent",
@@ -3302,22 +3374,10 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
-                "Table": "u_tbl2"
+                "Query": "delete from u_tbl1 where id in ::dm_vals",
+                "Table": "u_tbl1"
               }
             ]
-          },
-          {
-            "InputName": "Parent",
-            "OperatorType": "Delete",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "unsharded_fk_allow",
-              "Sharded": false
-            },
-            "TargetTabletType": "PRIMARY",
-            "Query": "delete u_tbl1 from u_tbl10, u_tbl1 where u_tbl10.col = u_tbl1.col",
-            "Table": "u_tbl1"
           }
         ]
       },
@@ -3501,6 +3561,83 @@
       "TablesUsed": [
         "unsharded_fk_allow.u_tbl1",
         "unsharded_fk_allow.u_tbl4"
+      ]
+    }
+  },
+  {
+    "comment": "Multi table delete such that the two tables are foreign key related",
+    "query": "delete u_tbl6 from u_tbl6 join u_tbl8 on u_tbl6.id = u_tbl8.id where u_tbl6.id = 4",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u_tbl6 from u_tbl6 join u_tbl8 on u_tbl6.id = u_tbl8.id where u_tbl6.id = 4",
+      "Instructions": {
+        "OperatorType": "DeleteWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select id from u_tbl6, u_tbl8 where 1 != 1",
+            "Query": "select id from u_tbl6, u_tbl8 where u_tbl6.id = 4 and u_tbl6.id = u_tbl8.id for update",
+            "Table": "u_tbl6, u_tbl8"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl6.col6 from u_tbl6 where 1 != 1",
+                "Query": "select u_tbl6.col6 from u_tbl6 where id in ::dm_vals for update",
+                "Table": "u_tbl6"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals",
+                "Table": "u_tbl8"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl6 where id in ::dm_vals",
+                "Table": "u_tbl6"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl6",
+        "unsharded_fk_allow.u_tbl8"
       ]
     }
   }
