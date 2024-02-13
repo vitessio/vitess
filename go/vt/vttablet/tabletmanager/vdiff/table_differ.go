@@ -213,7 +213,7 @@ func (td *tableDiffer) forEachSource(cb func(source *migrationSource) error) err
 }
 
 func (td *tableDiffer) selectTablets(ctx context.Context) error {
-	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.picking_streaming_tablets", td.table.Name), time.Now())
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.picking_streaming_tablets", td.table.Name), time.Now())
 	var (
 		wg                   sync.WaitGroup
 		sourceErr, targetErr error
@@ -289,7 +289,7 @@ func (td *tableDiffer) pickTablet(ctx context.Context, ts *topo.Server, cells []
 }
 
 func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
-	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.syncing_source_streams", td.table.Name), time.Now())
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.syncing_source_streams", td.table.Name), time.Now())
 	// source can be replica, wait for them to at least reach max gtid of all target streams
 	ct := td.wd.ct
 	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
@@ -308,7 +308,7 @@ func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
-	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.syncing_target_streams", td.table.Name), time.Now())
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.syncing_target_streams", td.table.Name), time.Now())
 	ct := td.wd.ct
 	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
 	defer cancel()
@@ -331,7 +331,7 @@ func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
-	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.starting_target_data_streams", td.table.Name), time.Now())
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.starting_target_data_streams", td.table.Name), time.Now())
 	ct := td.wd.ct
 	gtidch := make(chan string, 1)
 	ct.targetShardStreamer.result = make(chan *sqltypes.Result, 1)
@@ -346,7 +346,7 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 }
 
 func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
-	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.starting_source_data_streams", td.table.Name), time.Now())
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.starting_source_data_streams", td.table.Name), time.Now())
 	if err := td.forEachSource(func(source *migrationSource) error {
 		gtidch := make(chan string, 1)
 		source.result = make(chan *sqltypes.Result, 1)
@@ -365,7 +365,7 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 }
 
 func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) error {
-	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.restarting_vreplication_streams", td.table.Name), time.Now())
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.restarting_vreplication_streams", td.table.Name), time.Now())
 	ct := td.wd.ct
 	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
 		encodeString(ct.vde.dbName), encodeString(ct.workflow))
@@ -474,7 +474,7 @@ func (td *tableDiffer) setupRowSorters() {
 }
 
 func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64, maxReportSampleRows int64, stop <-chan time.Time) (*DiffReport, error) {
-	td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.diffing_table", td.table.Name), time.Now())
+	defer td.wd.ct.TableDiffPhaseTimings.Record(fmt.Sprintf("%s.diffing_table", td.table.Name), time.Now())
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
