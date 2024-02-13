@@ -101,7 +101,7 @@ func TestNoBlob(t *testing.T) {
 		env = oldEnv
 	}()
 
-	ts := &VStreamerTestSpec{
+	ts := &TestSpec{
 		t: t,
 		ddls: []string{
 			// t1 has a blob column and a primary key. The blob column will not be in update row events.
@@ -111,13 +111,13 @@ func TestNoBlob(t *testing.T) {
 			// t3 has a text column and a primary key. The text column will not be in update row events.
 			"create table t3(id int, txt text, val varchar(4), primary key(id))",
 		},
-		options: &VStreamerTestSpecOptions{
+		options: &TestSpecOptions{
 			noblob: true,
 		},
 	}
 	defer ts.Close()
-	ts.Init()
-	ts.tests = [][]*VStreamerTestQuery{{
+	require.NoError(t, ts.Init())
+	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 'blob1', 'aaa')", nil},
 		{"update t1 set val = 'bbb'", nil},
@@ -135,7 +135,7 @@ func TestNoBlob(t *testing.T) {
 }
 
 func TestSetAndEnum(t *testing.T) {
-	ts := &VStreamerTestSpec{
+	ts := &TestSpec{
 		t: t,
 		ddls: []string{
 			"create table t1(id int, val binary(4), color set('red','green','blue'), size enum('S','M','L'), primary key(id))",
@@ -143,7 +143,7 @@ func TestSetAndEnum(t *testing.T) {
 	}
 	defer ts.Close()
 	ts.Init()
-	ts.tests = [][]*VStreamerTestQuery{{
+	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", nil},
 		{"insert into t1 values (2, 'bbb', 'green', 'M')", nil},
@@ -665,6 +665,52 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	}
 }
 
+func TestXFilteredVarBinary2(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, val varbinary(128), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id1, val from t1 where val = 'newton'",
+				}},
+			},
+		},
+	}
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	var emptyList = []TestRowEvent{}
+	_ = emptyList
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 'kepler')", emptyList},
+		{"insert into t1 values (2, 'newton')", nil},
+		{"insert into t1 values (3, 'newton')", nil},
+		{"insert into t1 values (4, 'kepler')", emptyList},
+		{"insert into t1 values (5, 'newton')", nil},
+		{"update t1 set val = 'newton' where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "newton"}}}}},
+		}},
+		{"update t1 set val = 'kepler' where id1 = 2", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "newton"}}}}},
+		}},
+		{"update t1 set val = 'newton' where id1 = 2", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "newton"}}}}},
+		}},
+		{"update t1 set val = 'kepler' where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "newton"}}}}},
+		}},
+		{"delete from t1 where id1 in (2,3)", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "newton"}}, {before: []string{"3", "newton"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	ts.Run()
+}
+
 func TestFilteredVarBinary(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -722,15 +768,15 @@ func TestFilteredInt(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	engine.se.Reload(context.Background())
 
-	execStatements(t, []string{
-		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		},
+	}
+	defer ts.Close()
+	require.NoError(t, ts.Init())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2245,10 +2291,16 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				break
 			}
 		}
+
+		numEventsToMatch := len(evs)
 		if len(wantset) != len(evs) {
-			t.Fatalf("%v: evs\n%v, want\n%v, >> got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
+			log.Warningf("%v: evs\n%v, want\n%v, >> got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
+			if len(wantset) < len(evs) {
+				numEventsToMatch = len(wantset)
+			}
 		}
-		for i, want := range wantset {
+		for i := 0; i < numEventsToMatch; i++ {
+			want := wantset[i]
 			// CurrentTime is not testable.
 			evs[i].CurrentTime = 0
 			evs[i].Keyspace = ""
@@ -2307,6 +2359,9 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				}
 			}
 		}
+		if len(wantset) != len(evs) {
+			t.Fatalf("%v: evs\n%v, want\n%v, got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
+		}
 	}
 }
 
@@ -2342,7 +2397,7 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 		timer := time.NewTimer(2 * time.Second)
 		defer timer.Stop()
 
-		t.Logf("Received events: %v", evs)
+		log.Infof("Received events: %v", evs)
 		select {
 		case ch <- evs:
 		case <-ctx.Done():
