@@ -184,6 +184,11 @@ func TestVReplicationStats(t *testing.T) {
 	require.Equal(t, int64(100), testStats.status().Controllers[0].CopyLoopCount)
 	require.Equal(t, int64(200), testStats.status().Controllers[0].CopyRowCount)
 
+	blpStats.ThrottledCounts.Add([]string{"tablet", "vcopier"}, 10)
+	blpStats.ThrottledCounts.Add([]string{"tablet", "vplayer"}, 80)
+	require.Equal(t, int64(10), testStats.controllers[1].blpStats.ThrottledCounts.Counts()["tablet.vcopier"])
+	require.Equal(t, int64(80), testStats.controllers[1].blpStats.ThrottledCounts.Counts()["tablet.vplayer"])
+
 	var tm int64 = 1234567890
 	blpStats.RecordHeartbeat(tm)
 	require.Equal(t, tm, blpStats.Heartbeat())

@@ -580,10 +580,18 @@ func (vr *vreplicator) throttlerAppName() string {
 	return throttlerapp.Concatenate(names...)
 }
 
+// updateTimeThrottled updates the time_throttled field in the _vt.vreplication record
+// with a rate limit so that it's only saved in the database at most once per
+// throttleUpdatesRateLimiter.tickerTime.
+// It also increments the throttled count in the stats to keep track of how many
+// times a VReplication workflow, and the specific sub-component, is throttled by the
+// tablet throttler over time.
 func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {
+	at := appThrottled.String()
+	vr.stats.ThrottledCounts.Add([]string{"tablet", at}, 1)
 	err := vr.throttleUpdatesRateLimiter.Do(func() error {
 		tm := time.Now().Unix()
-		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appThrottled.String())
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, at)
 		if err != nil {
 			return err
 		}

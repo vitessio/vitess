@@ -502,6 +502,21 @@ func (st *vrStats) register() {
 			return result
 		})
 
+	stats.NewCountersFuncWithMultiLabels(
+		"VReplicationThrottledCounts",
+		"The number of times vreplication was throttled by workflow, id, throttler (trx or tablet), and the sub-component that was throttled",
+		[]string{"workflow", "id", "throttler", "component"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64)
+			for _, ct := range st.controllers {
+				for key, val := range ct.blpStats.ErrorCounts.Counts() {
+					result[fmt.Sprintf("%s.%d.%s", ct.workflow, ct.id, key)] = val
+				}
+			}
+			return result
+		})
 }
 
 func (st *vrStats) numControllers() int64 {
