@@ -30,6 +30,8 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		return a.checkSelect(cursor, node)
 	case *sqlparser.Nextval:
 		return a.checkNextVal()
+	case *sqlparser.AliasedTableExpr:
+		return checkAliasedTableExpr(node)
 	case *sqlparser.JoinTableExpr:
 		return a.checkJoin(node)
 	case *sqlparser.LockingFunc:
@@ -188,6 +190,29 @@ func checkUpdate(node *sqlparser.Update) error {
 	_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
 	if isDerived {
 		return &TableNotUpdatableError{Table: alias.As.String()}
+	}
+	return nil
+}
+
+// checkAliasedTableExpr checks the validity of AliasedTableExpr.
+func checkAliasedTableExpr(node *sqlparser.AliasedTableExpr) error {
+	if len(node.Hints) == 0 {
+		return nil
+	}
+	alreadySeenVindexHint := false
+	for _, hint := range node.Hints {
+		if hint.Type.IsVindexHint() {
+			if alreadySeenVindexHint {
+				// TableName is safe to call, because only TableExpr can have hints.
+				// And we already checked for hints being empty.
+				tableName, err := node.TableName()
+				if err != nil {
+					return err
+				}
+				return &CantUseMultipleVindexHints{Table: sqlparser.String(tableName)}
+			}
+			alreadySeenVindexHint = true
+		}
 	}
 	return nil
 }

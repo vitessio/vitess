@@ -28,10 +28,7 @@ import (
 )
 
 type Delete struct {
-	Target           TargetTable
-	OwnedVindexQuery *sqlparser.Select
-	Ignore           bool
-	Source           Operator
+	*DMLCommon
 
 	noColumns
 	noPredicates
@@ -75,13 +72,17 @@ func (d *Delete) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 }
 
 func (d *Delete) ShortDescription() string {
-	return fmt.Sprintf("%s.%s", d.Target.VTable.Keyspace.Name, d.Target.VTable.Name.String())
+	ovq := ""
+	if d.OwnedVindexQuery != nil {
+		ovq = " vindexQuery:%s" + sqlparser.String(d.OwnedVindexQuery)
+	}
+	return fmt.Sprintf("%s.%s%s", d.Target.VTable.Keyspace.Name, d.Target.VTable.Name.String(), ovq)
 }
 
 func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (op Operator) {
 	childFks := ctx.SemTable.GetChildForeignKeysForTable(deleteStmt.Targets[0])
 
-	// We check if delete with input plan is required. Delete with input planning is generally
+	// We check if delete with input plan is required. DML with input planning is generally
 	// slower, because it does a selection and then creates a delete statement wherein we have to
 	// list all the primary key values.
 	if deleteWithInputPlanningRequired(childFks, deleteStmt) {
@@ -156,14 +157,14 @@ func deleteWithInputPlanningForFk(ctx *plancontext.PlanningContext, del *sqlpars
 	if len(leftComp) == 1 {
 		lhs = leftComp[0]
 	}
-	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmVals), nil)
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmlVals), nil)
 
 	del.Targets = sqlparser.TableNames{del.Targets[0]}
 	del.TableExprs = sqlparser.TableExprs{ti.GetAliasedTableExpr()}
 	del.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
 
-	return &DeleteWithInput{
-		Delete: createOperatorFromDelete(ctx, del),
+	return &DMLWithInput{
+		DML:    createOperatorFromDelete(ctx, del),
 		Source: createOperatorFromSelect(ctx, selectStmt),
 		cols:   cols,
 	}
@@ -213,17 +214,19 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 	}
 
 	delOp := &Delete{
-		Target:           targetTbl,
-		Source:           op,
-		Ignore:           bool(del.Ignore),
-		OwnedVindexQuery: ovq,
+		DMLCommon: &DMLCommon{
+			Ignore:           del.Ignore,
+			Target:           targetTbl,
+			OwnedVindexQuery: ovq,
+			Source:           op,
+		},
 	}
 
 	if del.Limit == nil {
 		return delOp
 	}
 
-	addOrdering(ctx, del, delOp)
+	addOrdering(ctx, del.OrderBy, delOp)
 
 	delOp.Source = &Limit{
 		Source: delOp.Source,
@@ -233,12 +236,41 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 	return delOp
 }
 
-func addOrdering(ctx *plancontext.PlanningContext, del *sqlparser.Delete, delOp *Delete) {
-	es := &expressionSet{}
-	ordering := &Ordering{
-		Source: delOp.Source,
+func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table TargetTable, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
+	var selExprs sqlparser.SelectExprs
+	for _, col := range ksidCols {
+		colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
+		selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
 	}
-	for _, order := range del.OrderBy {
+	for _, cv := range table.VTable.Owned {
+		for _, col := range cv.Columns {
+			colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
+			selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
+		}
+	}
+	sqlparser.RemoveKeyspaceInTables(tblExpr)
+	return &sqlparser.Select{
+		SelectExprs: selExprs,
+		From:        del.TableExprs,
+		Where:       del.Where,
+		OrderBy:     del.OrderBy,
+		Limit:       del.Limit,
+		Lock:        sqlparser.ForUpdateLock,
+	}
+}
+
+func makeColName(col sqlparser.IdentifierCI, table TargetTable, isMultiTbl bool) *sqlparser.ColName {
+	if isMultiTbl {
+		return sqlparser.NewColNameWithQualifier(col.String(), table.Name)
+	}
+	return sqlparser.NewColName(col.String())
+}
+
+func addOrdering(ctx *plancontext.PlanningContext, orderBy sqlparser.OrderBy, op Operator) {
+	es := &expressionSet{}
+	ordering := &Ordering{}
+	ordering.SetInputs(op.Inputs())
+	for _, order := range orderBy {
 		if sqlparser.IsNull(order.Expr) {
 			// ORDER BY null can safely be ignored
 			continue
@@ -252,7 +284,7 @@ func addOrdering(ctx *plancontext.PlanningContext, del *sqlparser.Delete, delOp 
 		})
 	}
 	if len(ordering.Order) > 0 {
-		delOp.Source = ordering
+		op.SetInputs([]Operator{ordering})
 	}
 }
 

@@ -63,12 +63,15 @@ var Cases = []TestCase{
 	{Run: TupleComparisons},
 	{Run: Comparisons},
 	{Run: InStatement},
+	{Run: FnInsert},
 	{Run: FnLower},
 	{Run: FnUpper},
 	{Run: FnCharLength},
 	{Run: FnLength},
 	{Run: FnBitLength},
 	{Run: FnAscii},
+	{Run: FnReverse},
+	{Run: FnSpace},
 	{Run: FnOrd},
 	{Run: FnRepeat},
 	{Run: FnLeft},
@@ -79,6 +82,7 @@ var Cases = []TestCase{
 	{Run: FnRTrim},
 	{Run: FnTrim},
 	{Run: FnSubstr},
+	{Run: FnLocate},
 	{Run: FnConcat},
 	{Run: FnConcatWs},
 	{Run: FnHex},
@@ -1312,6 +1316,28 @@ var JSONExtract_Schema = []*querypb.Field{
 	},
 }
 
+func FnInsert(yield Query) {
+	for _, s := range insertStrings {
+		for _, ns := range insertStrings {
+			for _, l := range inputBitwise {
+				for _, p := range inputBitwise {
+					yield(fmt.Sprintf("INSERT(%s, %s, %s, %s)", s, p, l, ns), nil)
+				}
+			}
+		}
+	}
+
+	mysqlDocSamples := []string{
+		"INSERT('Quadratic', 3, 4, 'What')",
+		"INSERT('Quadratic', -1, 4, 'What')",
+		"INSERT('Quadratic', 3, 100, 'What')",
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+}
+
 func FnLower(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("LOWER(%s)", str), nil)
@@ -1349,6 +1375,34 @@ func FnBitLength(yield Query) {
 func FnAscii(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("ASCII(%s)", str), nil)
+	}
+}
+
+func FnReverse(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("REVERSE(%s)", str), nil)
+	}
+}
+
+func FnSpace(yield Query) {
+	counts := []string{
+		"0",
+		"12",
+		"23",
+		"-1",
+		"-12393128120",
+		"-432766734237843674326423876243876234786",
+		"'-432766734237843674326423876243876234786'",
+		"432766734237843674326423876243876234786",
+		"1073741825",
+		"1.5",
+		"-3.2",
+		"'jhgjhg'",
+		"6",
+	}
+
+	for _, c := range counts {
+		yield(fmt.Sprintf("SPACE(%s)", c), nil)
 	}
 }
 
@@ -1469,6 +1523,34 @@ func FnSubstr(yield Query) {
 
 			for _, j := range radianInputs {
 				yield(fmt.Sprintf("SUBSTRING(%s, %s, %s)", str, i, j), nil)
+			}
+		}
+	}
+}
+
+func FnLocate(yield Query) {
+	mysqlDocSamples := []string{
+		`LOCATE('bar', 'foobarbar')`,
+		`LOCATE('xbar', 'foobar')`,
+		`LOCATE('bar', 'foobarbar', 5)`,
+		`INSTR('foobarbar', 'bar')`,
+		`INSTR('xbar', 'foobar')`,
+		`POSITION('bar' IN 'foobarbar')`,
+		`POSITION('xbar' IN 'foobar')`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, substr := range locateStrings {
+		for _, str := range locateStrings {
+			yield(fmt.Sprintf("LOCATE(%s, %s)", substr, str), nil)
+			yield(fmt.Sprintf("INSTR(%s, %s)", str, substr), nil)
+			yield(fmt.Sprintf("POSITION(%s IN %s)", str, substr), nil)
+
+			for _, i := range radianInputs {
+				yield(fmt.Sprintf("LOCATE(%s, %s, %s)", substr, str, i), nil)
 			}
 		}
 	}

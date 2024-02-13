@@ -371,12 +371,11 @@ func (vpp *VindexPlusPredicates) bestOption() *VindexOption {
 func createRoute(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
-	solves semantics.TableSet,
 ) Operator {
 	if queryTable.IsInfSchema {
 		return createInfSchemaRoute(ctx, queryTable)
 	}
-	return findVSchemaTableAndCreateRoute(ctx, queryTable, queryTable.Table, solves, true /*planAlternates*/)
+	return findVSchemaTableAndCreateRoute(ctx, queryTable, queryTable.Table, true /*planAlternates*/)
 }
 
 // findVSchemaTableAndCreateRoute consults the VSchema to find a suitable
@@ -385,7 +384,6 @@ func findVSchemaTableAndCreateRoute(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	tableName sqlparser.TableName,
-	solves semantics.TableSet,
 	planAlternates bool,
 ) *Route {
 	vschemaTable, _, _, tabletType, target, err := ctx.VSchema.FindTableOrVindex(tableName)
@@ -399,7 +397,6 @@ func findVSchemaTableAndCreateRoute(
 		ctx,
 		queryTable,
 		vschemaTable,
-		solves,
 		planAlternates,
 		targeted,
 	)
@@ -442,7 +439,6 @@ func createRouteFromVSchemaTable(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	vschemaTable *vindexes.Table,
-	solves semantics.TableSet,
 	planAlternates bool,
 	targeted Routing,
 ) *Route {
@@ -474,7 +470,7 @@ func createRouteFromVSchemaTable(
 	if targeted != nil {
 		routing = targeted
 	} else {
-		routing = createRoutingForVTable(vschemaTable, solves)
+		routing = createRoutingForVTable(ctx, vschemaTable, queryTable.ID)
 	}
 
 	for _, predicate := range queryTable.Predicates {
@@ -491,14 +487,14 @@ func createRouteFromVSchemaTable(
 		}
 	case *AnyShardRouting:
 		if planAlternates {
-			routing.Alternates = createAlternateRoutesFromVSchemaTable(ctx, queryTable, vschemaTable, solves)
+			routing.Alternates = createAlternateRoutesFromVSchemaTable(ctx, queryTable, vschemaTable)
 		}
 	}
 
 	return plan
 }
 
-func createRoutingForVTable(vschemaTable *vindexes.Table, id semantics.TableSet) Routing {
+func createRoutingForVTable(ctx *plancontext.PlanningContext, vschemaTable *vindexes.Table, id semantics.TableSet) Routing {
 	switch {
 	case vschemaTable.Type == vindexes.TypeSequence:
 		return &SequenceRouting{keyspace: vschemaTable.Keyspace}
@@ -507,7 +503,7 @@ func createRoutingForVTable(vschemaTable *vindexes.Table, id semantics.TableSet)
 	case vschemaTable.Type == vindexes.TypeReference || !vschemaTable.Keyspace.Sharded:
 		return &AnyShardRouting{keyspace: vschemaTable.Keyspace}
 	default:
-		return newShardedRouting(vschemaTable, id)
+		return newShardedRouting(ctx, vschemaTable, id)
 	}
 }
 
@@ -515,7 +511,6 @@ func createAlternateRoutesFromVSchemaTable(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	vschemaTable *vindexes.Table,
-	solves semantics.TableSet,
 ) map[*vindexes.Keyspace]*Route {
 	routes := make(map[*vindexes.Keyspace]*Route)
 
@@ -529,7 +524,6 @@ func createAlternateRoutesFromVSchemaTable(
 					Name:      referenceTable.Name,
 					Qualifier: sqlparser.NewIdentifierCS(ksName),
 				},
-				solves,
 				false, /*planAlternates*/
 			)
 			routes[referenceTable.Keyspace] = route
@@ -540,7 +534,6 @@ func createAlternateRoutesFromVSchemaTable(
 				ctx,
 				queryTable,
 				vschemaTable.Source.TableName,
-				solves,
 				false, /*planAlternates*/
 			)
 			keyspace := route.Routing.Keyspace()

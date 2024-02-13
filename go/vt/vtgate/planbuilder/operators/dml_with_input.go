@@ -24,9 +24,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-type DeleteWithInput struct {
+// DMLWithInput is used to represent a DML Operator taking input from a Source Operator
+type DMLWithInput struct {
 	Source Operator
-	Delete Operator
+	DML    Operator
 
 	cols    []*sqlparser.ColName
 	Offsets []int
@@ -35,25 +36,25 @@ type DeleteWithInput struct {
 	noPredicates
 }
 
-func (d *DeleteWithInput) Clone(inputs []Operator) Operator {
+func (d *DMLWithInput) Clone(inputs []Operator) Operator {
 	newD := *d
 	newD.SetInputs(inputs)
 	return &newD
 }
 
-func (d *DeleteWithInput) Inputs() []Operator {
-	return []Operator{d.Source, d.Delete}
+func (d *DMLWithInput) Inputs() []Operator {
+	return []Operator{d.Source, d.DML}
 }
 
-func (d *DeleteWithInput) SetInputs(inputs []Operator) {
+func (d *DMLWithInput) SetInputs(inputs []Operator) {
 	if len(inputs) != 2 {
-		panic("unexpected number of inputs for DeleteWithInput operator")
+		panic("unexpected number of inputs for DMLWithInput operator")
 	}
 	d.Source = inputs[0]
-	d.Delete = inputs[1]
+	d.DML = inputs[1]
 }
 
-func (d *DeleteWithInput) ShortDescription() string {
+func (d *DMLWithInput) ShortDescription() string {
 	colStrings := slice.Map(d.cols, func(from *sqlparser.ColName) string {
 		return sqlparser.String(from)
 	})
@@ -68,11 +69,11 @@ func (d *DeleteWithInput) ShortDescription() string {
 	return out
 }
 
-func (d *DeleteWithInput) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
+func (d *DMLWithInput) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func (d *DeleteWithInput) planOffsets(ctx *plancontext.PlanningContext) Operator {
+func (d *DMLWithInput) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	for _, col := range d.cols {
 		offset := d.Source.AddColumn(ctx, true, false, aeWrap(col))
 		d.Offsets = append(d.Offsets, offset)
@@ -80,4 +81,4 @@ func (d *DeleteWithInput) planOffsets(ctx *plancontext.PlanningContext) Operator
 	return d
 }
 
-var _ Operator = (*DeleteWithInput)(nil)
+var _ Operator = (*DMLWithInput)(nil)

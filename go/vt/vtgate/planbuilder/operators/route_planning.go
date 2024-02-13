@@ -124,52 +124,6 @@ func buildVindexTableForDML(
 	return vindexTable, routing
 }
 
-func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table TargetTable, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
-	var selExprs sqlparser.SelectExprs
-	for _, col := range ksidCols {
-		colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
-		selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
-	}
-	for _, cv := range table.VTable.Owned {
-		for _, col := range cv.Columns {
-			colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
-			selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
-		}
-	}
-	sqlparser.RemoveKeyspaceInTables(tblExpr)
-	return &sqlparser.Select{
-		SelectExprs: selExprs,
-		From:        del.TableExprs,
-		Where:       del.Where,
-		OrderBy:     del.OrderBy,
-		Limit:       del.Limit,
-		Lock:        sqlparser.ForUpdateLock,
-	}
-}
-
-func makeColName(col sqlparser.IdentifierCI, table TargetTable, isMultiTbl bool) *sqlparser.ColName {
-	if isMultiTbl {
-		return sqlparser.NewColNameWithQualifier(col.String(), table.Name)
-	}
-	return sqlparser.NewColName(col.String())
-}
-
-func getUpdateVindexInformation(
-	ctx *plancontext.PlanningContext,
-	updStmt *sqlparser.Update,
-	vindexTable *vindexes.Table,
-	tableID semantics.TableSet,
-	assignments []SetExpr,
-) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, []string) {
-	if !vindexTable.Keyspace.Sharded {
-		return nil, nil, "", nil
-	}
-
-	primaryVindex, vindexAndPredicates := getVindexInformation(tableID, vindexTable)
-	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex := buildChangedVindexesValues(ctx, updStmt, vindexTable, primaryVindex.Columns, assignments)
-	return vindexAndPredicates, changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex
-}
-
 /*
 		The greedy planner will plan a query by finding first finding the best route plan for every table.
 	    Then, iteratively, it finds the cheapest join that can be produced between the remaining plans,
@@ -205,8 +159,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) []Operat
 
 	// we start by seeding the table with the single routes
 	for i, table := range qg.Tables {
-		solves := ctx.SemTable.TableSetFor(table.Alias)
-		plan := createRoute(ctx, table, solves)
+		plan := createRoute(ctx, table)
 		if qg.NoDeps != nil {
 			plan = plan.AddPredicate(ctx, qg.NoDeps)
 		}

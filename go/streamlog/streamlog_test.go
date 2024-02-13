@@ -18,6 +18,7 @@ package streamlog
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -28,6 +29,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -259,4 +262,125 @@ func TestFile(t *testing.T) {
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)
 	}
+}
+
+func TestShouldEmitLog(t *testing.T) {
+	origQueryLogFilterTag := queryLogFilterTag
+	origQueryLogRowThreshold := queryLogRowThreshold
+	defer func() {
+		SetQueryLogFilterTag(origQueryLogFilterTag)
+		SetQueryLogRowThreshold(origQueryLogRowThreshold)
+	}()
+
+	tests := []struct {
+		sql              string
+		qLogFilterTag    string
+		qLogRowThreshold uint64
+		rowsAffected     uint64
+		rowsReturned     uint64
+		ok               bool
+	}{
+		{
+			sql:              "queryLogThreshold smaller than affected and returned",
+			qLogFilterTag:    "",
+			qLogRowThreshold: 2,
+			rowsAffected:     7,
+			rowsReturned:     7,
+			ok:               true,
+		},
+		{
+			sql:              "queryLogThreshold greater than affected and returned",
+			qLogFilterTag:    "",
+			qLogRowThreshold: 27,
+			rowsAffected:     7,
+			rowsReturned:     17,
+			ok:               false,
+		},
+		{
+			sql:              "this doesn't contains queryFilterTag: TAG",
+			qLogFilterTag:    "special tag",
+			qLogRowThreshold: 10,
+			rowsAffected:     7,
+			rowsReturned:     17,
+			ok:               false,
+		},
+		{
+			sql:              "this contains queryFilterTag: TAG",
+			qLogFilterTag:    "TAG",
+			qLogRowThreshold: 0,
+			rowsAffected:     7,
+			rowsReturned:     17,
+			ok:               true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.sql, func(t *testing.T) {
+			SetQueryLogFilterTag(tt.qLogFilterTag)
+			SetQueryLogRowThreshold(tt.qLogRowThreshold)
+
+			require.Equal(t, tt.ok, ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned))
+		})
+	}
+}
+
+func TestGetFormatter(t *testing.T) {
+	tests := []struct {
+		name           string
+		logger         *StreamLogger[string]
+		params         url.Values
+		val            any
+		expectedErr    string
+		expectedOutput string
+	}{
+		{
+			name: "unexpected value error",
+			logger: &StreamLogger[string]{
+				name: "test-logger",
+			},
+			params: url.Values{
+				"keys": []string{"key1", "key2"},
+			},
+			val:            "temp val",
+			expectedOutput: "Error: unexpected value of type string in test-logger!",
+			expectedErr:    "",
+		},
+		{
+			name: "mock formatter",
+			logger: &StreamLogger[string]{
+				name: "test-logger",
+			},
+			params: url.Values{
+				"keys": []string{"key1", "key2"},
+			},
+			val:         &mockFormatter{err: fmt.Errorf("formatter error")},
+			expectedErr: "formatter error",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			var buffer bytes.Buffer
+			logFormatterFunc := GetFormatter[string](tt.logger)
+			err := logFormatterFunc(&buffer, tt.params, tt.val)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedOutput, buffer.String())
+			} else {
+				require.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
+	}
+}
+
+type mockFormatter struct {
+	called bool
+	err    error
+}
+
+func (mf *mockFormatter) Logf(w io.Writer, params url.Values) error {
+	mf.called = true
+	return mf.err
 }

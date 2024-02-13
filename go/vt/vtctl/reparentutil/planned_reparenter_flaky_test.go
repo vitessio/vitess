@@ -62,8 +62,6 @@ func TestNewPlannedReparenter(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -444,8 +442,6 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -542,8 +538,6 @@ func TestPlannedReparenter_getLockAction(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1063,8 +1057,6 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1676,8 +1668,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1838,8 +1828,6 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2009,8 +1997,6 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2375,8 +2361,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3196,8 +3180,6 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3813,8 +3795,6 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

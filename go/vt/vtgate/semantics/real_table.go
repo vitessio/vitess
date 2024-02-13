@@ -31,6 +31,7 @@ type RealTable struct {
 	dbName, tableName string
 	ASTNode           *sqlparser.AliasedTableExpr
 	Table             *vindexes.Table
+	VindexHint        *sqlparser.IndexHint
 	isInfSchema       bool
 	collationEnv      *collations.Environment
 }
@@ -100,6 +101,11 @@ func (r *RealTable) canShortCut() shortCut {
 // GetVindexTable implements the TableInfo interface
 func (r *RealTable) GetVindexTable() *vindexes.Table {
 	return r.Table
+}
+
+// GetVindexHint implements the TableInfo interface
+func (r *RealTable) GetVindexHint() *sqlparser.IndexHint {
+	return r.VindexHint
 }
 
 // Name implements the TableInfo interface

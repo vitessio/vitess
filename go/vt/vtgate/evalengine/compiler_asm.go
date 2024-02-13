@@ -1430,6 +1430,29 @@ func (asm *assembler) Fn_ASCII() {
 	}, "FN ASCII VARCHAR(SP-1)")
 }
 
+func (asm *assembler) Fn_REVERSE() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		arg.tt = int16(sqltypes.VarChar)
+		arg.bytes = reverse(arg)
+		return 1
+	}, "FN REVERSE VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_SPACE(col collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalInt64).i
+
+		if !validMaxLength(1, arg) {
+			env.vm.stack[env.vm.sp-1] = nil
+			return 1
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(space(arg), col)
+		return 1
+	}, "FN SPACE INT64(SP-1)")
+}
+
 func (asm *assembler) Fn_ORD(col collations.ID) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
@@ -2322,6 +2345,28 @@ func (asm *assembler) Fn_BIT_LENGTH() {
 	}, "FN BIT_LENGTH VARCHAR(SP-1)")
 }
 
+func (asm *assembler) Fn_INSERT(col collations.TypedCollation) {
+	asm.adjustStack(-3)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-4].(*evalBytes)
+		pos := env.vm.stack[env.vm.sp-3].(*evalInt64).i
+		l := env.vm.stack[env.vm.sp-2].(*evalInt64).i
+		newstr := env.vm.stack[env.vm.sp-1].(*evalBytes)
+
+		res := insert(str, newstr, int(pos), int(l))
+		if !validMaxLength(int64(len(res)), 1) {
+			env.vm.stack[env.vm.sp-4] = nil
+			env.vm.sp -= 3
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-4] = env.vm.arena.newEvalText(res, col)
+		env.vm.sp -= 3
+		return 1
+	}, "FN INSERT VARCHAR(SP-4) INT64(SP-3) INT64(SP-2) VARCHAR(SP-1)")
+}
+
 func (asm *assembler) Fn_LUCASE(upcase bool) {
 	if upcase {
 		asm.emit(func(env *ExpressionEnv) int {
@@ -2941,6 +2986,40 @@ func (asm *assembler) Like_collate(expr *LikeExpr, collation colldata.Collation)
 	}, "LIKE VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
 }
 
+func (asm *assembler) Locate3(collation colldata.Collation) {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		substr := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		pos := env.vm.stack[env.vm.sp-1].(*evalInt64)
+		env.vm.sp -= 2
+
+		if pos.i < 1 || pos.i > math.MaxInt {
+			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(0)
+			return 1
+		}
+
+		found := colldata.Index(collation, str.bytes, substr.bytes, int(pos.i)-1)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(found) + 1)
+		return 1
+	}, "LOCATE VARCHAR(SP-3), VARCHAR(SP-2) INT64(SP-1) COLLATE '%s'", collation.Name())
+}
+
+func (asm *assembler) Locate2(collation colldata.Collation) {
+	asm.adjustStack(-1)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		substr := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.sp--
+
+		found := colldata.Index(collation, str.bytes, substr.bytes, 0)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(found) + 1)
+		return 1
+	}, "LOCATE VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
+}
+
 func (asm *assembler) Strcmp(collation collations.TypedCollation) {
 	asm.adjustStack(-1)
 
@@ -3122,6 +3201,17 @@ func (asm *assembler) NullCheck3(j *jump) {
 		}
 		return 1
 	}, "NULLCHECK SP-1, SP-2, SP-3")
+}
+
+func (asm *assembler) NullCheck4(j *jump) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-4] == nil || env.vm.stack[env.vm.sp-3] == nil || env.vm.stack[env.vm.sp-2] == nil || env.vm.stack[env.vm.sp-1] == nil {
+			env.vm.stack[env.vm.sp-4] = nil
+			env.vm.sp -= 3
+			return j.offset()
+		}
+		return 1
+	}, "NULLCHECK SP-1, SP-2, SP-3, SP-4")
 }
 
 func (asm *assembler) NullCheckArg(j *jump, offset int) {
@@ -3777,11 +3867,6 @@ func (asm *assembler) Fn_LAST_DAY() {
 			return 1
 		}
 		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-		if arg.dt.IsZero() {
-			env.vm.stack[env.vm.sp-1] = nil
-			return 1
-		}
-
 		d := lastDay(env.currentTimezone(), arg.dt)
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalDate(d)
 		return 1
@@ -3794,12 +3879,8 @@ func (asm *assembler) Fn_TO_DAYS() {
 			return 1
 		}
 		arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-		if arg.dt.Date.IsZero() {
-			env.vm.stack[env.vm.sp-1] = nil
-		} else {
-			numDays := datetime.MysqlDayNumber(arg.dt.Date.Year(), arg.dt.Date.Month(), arg.dt.Date.Day())
-			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(numDays))
-		}
+		numDays := datetime.MysqlDayNumber(arg.dt.Date.Year(), arg.dt.Date.Month(), arg.dt.Date.Day())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(numDays))
 		return 1
 	}, "FN TO_DAYS DATE(SP-1)")
 }

@@ -140,3 +140,67 @@ func TestDeleteWithLimit(t *testing.T) {
 	require.EqualValues(t, 0, qr.RowsAffected)
 
 }
+
+// TestUpdateWithLimit executed update queries with limit
+func TestUpdateWithLimit(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// initial rows
+	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (2,10), (3,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
+	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
+
+	// check rows
+	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
+		`[[INT64(1) INT64(10)] [INT64(2) INT64(10)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(5)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
+	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
+		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
+
+	// update with limit
+	qr := mcmp.Exec(`update s_tbl set num = 12 order by num, id limit 3`)
+	require.EqualValues(t, 3, qr.RowsAffected)
+
+	qr = mcmp.Exec(`update order_tbl set cust_no = 12 where region_id = 1 limit 1`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	// check rows
+	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
+		`[[INT64(1) INT64(12)] [INT64(2) INT64(12)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
+	// 2 rows matches but limit is 1, so any one of the row can be modified in the table.
+	mcmp.AssertMatchesAnyNoCompare(`select region_id, oid, cust_no from order_tbl order by oid`,
+		`[[INT64(1) INT64(1) INT64(12)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`,
+		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(12)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
+
+	// update with limit
+	qr = mcmp.Exec(`update s_tbl set num = 32 where num > 17 limit 1`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	qr = mcmp.Exec(`update order_tbl set cust_no = cust_no + 10  limit 5`)
+	require.EqualValues(t, 4, qr.RowsAffected)
+
+	// check rows
+	// 2 rows matches `num > 17` but limit is 1 so any one of them will be updated.
+	mcmp.AssertMatchesAnyNoCompare(`select id, num from s_tbl order by id`,
+		`[[INT64(1) INT64(12)] [INT64(2) INT64(12)] [INT64(3) INT64(10)] [INT64(4) INT64(32)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`,
+		`[[INT64(1) INT64(12)] [INT64(2) INT64(12)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(32)]]`)
+	mcmp.AssertMatchesAnyNoCompare(`select region_id, oid, cust_no from order_tbl order by oid`,
+		`[[INT64(1) INT64(1) INT64(22)] [INT64(1) INT64(2) INT64(12)] [INT64(2) INT64(3) INT64(15)] [INT64(2) INT64(4) INT64(65)]]`,
+		`[[INT64(1) INT64(1) INT64(14)] [INT64(1) INT64(2) INT64(22)] [INT64(2) INT64(3) INT64(15)] [INT64(2) INT64(4) INT64(65)]]`)
+
+	// trying with zero limit.
+	qr = mcmp.Exec(`update s_tbl set num = 44 limit 0`)
+	require.EqualValues(t, 0, qr.RowsAffected)
+
+	qr = mcmp.Exec(`update order_tbl set oid = 44 limit 0`)
+	require.EqualValues(t, 0, qr.RowsAffected)
+
+	// trying with limit with no-matching row.
+	qr = mcmp.Exec(`update s_tbl set num = 44 where id > 100 limit 2`)
+	require.EqualValues(t, 0, qr.RowsAffected)
+
+	qr = mcmp.Exec(`update order_tbl set oid = 44 where region_id > 100 limit 2`)
+	require.EqualValues(t, 0, qr.RowsAffected)
+
+}

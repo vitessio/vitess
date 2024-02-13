@@ -295,6 +295,16 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &builtinASCII{CallExpr: call}, nil
+	case "reverse":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinReverse{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "space":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinSpace{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "ord":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -594,6 +604,12 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &builtinStrcmp{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "instr":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		call = CallExpr{Arguments: []IR{call.Arguments[1], call.Arguments[0]}, Method: method}
+		return &builtinLocate{CallExpr: call, collate: ast.cfg.Collation}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}
@@ -719,7 +735,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 
 	case *sqlparser.CurTimeFuncExpr:
 		if call.Fsp > 6 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision 12 specified for '%s'. Maximum is 6.", call.Name.String())
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for '%s'. Maximum is 6.", call.Fsp, call.Name.String())
 		}
 
 		var cexpr = CallExpr{Arguments: nil, Method: call.Name.String()}
@@ -789,6 +805,31 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		}
 		var cexpr = CallExpr{Arguments: args, Method: "SUBSTRING"}
 		return &builtinSubstring{
+			CallExpr: cexpr,
+			collate:  ast.cfg.Collation,
+		}, nil
+	case *sqlparser.LocateExpr:
+		var args []IR
+		substr, err := ast.translateExpr(call.SubStr)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, substr)
+		str, err := ast.translateExpr(call.Str)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, str)
+
+		if call.Pos != nil {
+			to, err := ast.translateExpr(call.Pos)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, to)
+		}
+		var cexpr = CallExpr{Arguments: args, Method: "LOCATE"}
+		return &builtinLocate{
 			CallExpr: cexpr,
 			collate:  ast.cfg.Collation,
 		}, nil
@@ -973,6 +1014,35 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 
 		return &builtinRegexpReplace{
 			CallExpr: CallExpr{Arguments: args, Method: "REGEXP_REPLACE"},
+		}, nil
+
+	case *sqlparser.InsertExpr:
+		str, err := ast.translateExpr(call.Str)
+		if err != nil {
+			return nil, err
+		}
+
+		pos, err := ast.translateExpr(call.Pos)
+		if err != nil {
+			return nil, err
+		}
+
+		len, err := ast.translateExpr(call.Len)
+		if err != nil {
+			return nil, err
+		}
+
+		newstr, err := ast.translateExpr(call.NewStr)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []IR{str, pos, len, newstr}
+
+		var cexpr = CallExpr{Arguments: args, Method: "INSERT"}
+		return &builtinInsert{
+			CallExpr: cexpr,
+			collate:  ast.cfg.Collation,
 		}, nil
 	default:
 		return nil, translateExprNotSupported(call)
