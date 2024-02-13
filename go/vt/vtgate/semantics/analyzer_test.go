@@ -1589,31 +1589,6 @@ func TestNextErrors(t *testing.T) {
 	}
 }
 
-func TestUpdateErrors(t *testing.T) {
-	tests := []struct {
-		query, expectedError string
-	}{
-		{
-			query:         "update t1, t2 set id = 12",
-			expectedError: "VT12001: unsupported: multiple (2) tables in update",
-		}, {
-			query:         "update (select 1 from dual) dt set id = 1",
-			expectedError: "The target table dt of the UPDATE is not updatable",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.query, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(test.query)
-			require.NoError(t, err)
-
-			_, err = AnalyzeStrict(parse, "d", fakeSchemaInfo())
-
-			assert.EqualError(t, err, test.expectedError)
-		})
-	}
-}
-
 // TestScopingSubQueryJoinClause tests the scoping behavior of a subquery containing a join clause.
 // The test ensures that the scoping analysis correctly identifies and handles the relationships
 // between the tables involved in the join operation with the outer query.
