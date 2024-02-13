@@ -55,9 +55,6 @@ type (
 
 	OrderAndLimit interface {
 		AddOrder(*Order)
-		SetOrderBy(OrderBy)
-		GetOrderBy() OrderBy
-		GetLimit() *Limit
 		SetLimit(*Limit)
 	}
 
@@ -76,6 +73,9 @@ type (
 		GetColumns() SelectExprs
 		Commented
 		IsDistinct() bool
+		GetOrderBy() OrderBy
+		SetOrderBy(OrderBy)
+		GetLimit() *Limit
 	}
 
 	// DDLStatement represents any DDL Statement

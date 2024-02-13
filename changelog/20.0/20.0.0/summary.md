@@ -13,7 +13,7 @@
 ## <a id="major-changes"/>Major Changes
 
 
-### <a id="query-compatibility"/>Query Serving
+### <a id="query-compatibility"/>Query Compatibility
 
 #### <a id="vindex-hints"/> Vindex Hints
 

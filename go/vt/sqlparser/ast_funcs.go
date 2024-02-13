@@ -2606,32 +2606,8 @@ func MultiTable(node []TableExpr) bool {
 	return !singleTbl
 }
 
-func (node *Select) AddFrom(tbl TableExpr) {
-	node.From = append(node.From, tbl)
-}
-
-func (node *Update) AddFrom(tbl TableExpr) {
-	node.TableExprs = append(node.TableExprs, tbl)
-}
-
-func (node *Delete) AddFrom(tbl TableExpr) {
-	node.TableExprs = append(node.TableExprs, tbl)
-}
-
 func (node *Update) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
-}
-
-func (node *Update) SetOrderBy(by OrderBy) {
-	node.OrderBy = by
-}
-
-func (node *Update) GetOrderBy() OrderBy {
-	return node.OrderBy
-}
-
-func (node *Update) GetLimit() *Limit {
-	return node.Limit
 }
 
 func (node *Update) SetLimit(limit *Limit) {
@@ -2640,18 +2616,6 @@ func (node *Update) SetLimit(limit *Limit) {
 
 func (node *Delete) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
-}
-
-func (node *Delete) SetOrderBy(by OrderBy) {
-	node.OrderBy = by
-}
-
-func (node *Delete) GetOrderBy() OrderBy {
-	return node.OrderBy
-}
-
-func (node *Delete) GetLimit() *Limit {
-	return node.Limit
 }
 
 func (node *Delete) SetLimit(limit *Limit) {
