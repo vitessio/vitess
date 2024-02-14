@@ -118,6 +118,7 @@ var Cases = []TestCase{
 	{Run: FnCrc32},
 	{Run: FnConv},
 	{Run: FnBin},
+	{Run: FnOct},
 	{Run: FnMD5},
 	{Run: FnSHA1},
 	{Run: FnSHA2},
@@ -672,6 +673,15 @@ func FnBin(yield Query) {
 	}
 	for _, num := range inputBitwise {
 		yield(fmt.Sprintf("BIN(%s)", num), nil)
+	}
+}
+
+func FnOct(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("OCT(%s)", num), nil)
+	}
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("OCT(%s)", num), nil)
 	}
 }
 
