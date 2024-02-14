@@ -65,6 +65,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 func (a *analyzer) lateInit() {
 	a.tables = a.earlyTables.newTableCollector(a.scoper, a)
 	a.binder = newBinder(a.scoper, a, a.tables, a.typer)
+	a.scoper.binder = a.binder
 	a.rewriter = &earlyRewriter{
 		env:             a.si.Environment(),
 		scoper:          a.scoper,
@@ -334,10 +335,8 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	if a.err != nil {
 		return a.err
 	}
-	ks, _ := singleUnshardedKeyspace(a.earlyTables.Tables)
-	if ks != nil {
-		// if we found a single unsharded keyspace in the early walk we can stop here
-		a.singleUnshardedKeyspace = true
+
+	if a.canShortCut(statement) {
 		return nil
 	}
 
@@ -345,6 +344,40 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
+}
+
+// canShortCut checks if we are dealing with a single unsharded keyspace and no tables that have managed foreign keys
+// if so, we can stop the analyzer early
+func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool) {
+	defer func() {
+		a.singleUnshardedKeyspace = canShortCut
+	}()
+	ks, _ := singleUnshardedKeyspace(a.earlyTables.Tables)
+	if ks == nil {
+		return false
+	}
+
+	if !sqlparser.IsDMLStatement(statement) {
+		return true
+	}
+
+	fkMode, err := a.si.ForeignKeyMode(ks.Name)
+	if err != nil {
+		a.err = err
+		return false
+	}
+	if fkMode != vschemapb.Keyspace_managed {
+		return true
+	}
+
+	for _, table := range a.earlyTables.Tables {
+		vtbl := table.GetVindexTable()
+		if len(vtbl.ChildForeignKeys) > 0 || len(vtbl.ParentForeignKeys) > 0 {
+			return false
+		}
+	}
+
+	return true
 }
 
 // earlyUp collects tables in the query, so we can check
@@ -560,7 +593,7 @@ func (a *analyzer) getAllManagedForeignKeys() (map[TableSet][]vindexes.ChildFKIn
 			continue
 		}
 		// Check whether Vitess needs to manage the foreign keys in this keyspace or not.
-		fkMode, err := a.tables.si.ForeignKeyMode(vi.Keyspace.Name)
+		fkMode, err := a.si.ForeignKeyMode(vi.Keyspace.Name)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -568,7 +601,7 @@ func (a *analyzer) getAllManagedForeignKeys() (map[TableSet][]vindexes.ChildFKIn
 			continue
 		}
 		// Cyclic foreign key constraints error is stored in the keyspace.
-		ksErr := a.tables.si.KeyspaceError(vi.Keyspace.Name)
+		ksErr := a.si.KeyspaceError(vi.Keyspace.Name)
 		if ksErr != nil {
 			return nil, nil, ksErr
 		}

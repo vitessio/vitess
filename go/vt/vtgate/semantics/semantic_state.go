@@ -306,7 +306,7 @@ func (st *SemTable) ErrIfFkDependentColumnUpdated(updateExprs sqlparser.UpdateEx
 	for _, updateExpr := range updateExprs {
 		deps := st.RecursiveDeps(updateExpr.Name)
 		if deps.NumberOfTables() != 1 {
-			panic("expected to have single table dependency")
+			return vterrors.VT13001("expected to have single table dependency")
 		}
 		// Get all the child and parent foreign keys for the given table that the update expression belongs to.
 		childFks := st.childForeignKeysInvolved[deps]

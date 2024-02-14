@@ -652,15 +652,15 @@ func TestVindexHints(t *testing.T) {
 		sql         string
 		expectedErr string
 	}{{
-		sql:         "select col from t use vindex (does_not_exist)",
-		expectedErr: "Vindex 'does_not_exist' does not exist in table 'ks1.t'",
+		sql:         "select col from t1 use vindex (does_not_exist)",
+		expectedErr: "Vindex 'does_not_exist' does not exist in table 'ks2.t1'",
 	}, {
-		sql:         "select col from t ignore vindex (does_not_exist)",
-		expectedErr: "Vindex 'does_not_exist' does not exist in table 'ks1.t'",
+		sql:         "select col from t1 ignore vindex (does_not_exist)",
+		expectedErr: "Vindex 'does_not_exist' does not exist in table 'ks2.t1'",
 	}, {
-		sql: "select col from t use vindex (id_vindex)",
+		sql: "select id from t1 use vindex (id_vindex)",
 	}, {
-		sql: "select col from t ignore vindex (id_vindex)",
+		sql: "select id from t1 ignore vindex (id_vindex)",
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -1003,7 +1003,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			errorMessage: "column 'uu.id' not found",
 		}, {
 			query:                "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
-			expectation:          TS1,
+			expectation:          TS2,
 			recursiveExpectation: TS0,
 		}, {
 			query:                "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
@@ -1093,7 +1093,7 @@ func TestScopingWithWITH(t *testing.T) {
 		}, {
 			query:     "with t as (select t1.id, t1.col1 from t1 join t2) select t.col1 from t3 ua join t",
 			direct:    TS3,
-			recursive: TS1,
+			recursive: TS0,
 		}, {
 			query:        "with uu as (select id from t1) select uu.test from uu",
 			errorMessage: "column 'uu.test' not found",
@@ -1105,7 +1105,7 @@ func TestScopingWithWITH(t *testing.T) {
 			errorMessage: "column 'uu.id' not found",
 		}, {
 			query:     "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
-			direct:    TS1,
+			direct:    TS2,
 			recursive: TS0,
 		}, {
 			query:     "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
@@ -1152,15 +1152,15 @@ func TestJoinPredicateDependencies(t *testing.T) {
 		directExpect:    MergeTableSets(TS0, TS1),
 	}, {
 		query:           "select 1 from (select * from t1) x join t2 on x.id = t2.uid",
-		recursiveExpect: MergeTableSets(TS0, TS2),
+		recursiveExpect: MergeTableSets(TS0, TS1),
 		directExpect:    MergeTableSets(TS1, TS2),
 	}, {
 		query:           "select 1 from (select id from t1) x join t2 on x.id = t2.uid",
-		recursiveExpect: MergeTableSets(TS0, TS2),
+		recursiveExpect: MergeTableSets(TS0, TS1),
 		directExpect:    MergeTableSets(TS1, TS2),
 	}, {
 		query:           "select 1 from (select id from t1 union select id from t) x join t2 on x.id = t2.uid",
-		recursiveExpect: MergeTableSets(TS0, TS1, TS3),
+		recursiveExpect: MergeTableSets(TS0, TS1, TS2),
 		directExpect:    MergeTableSets(TS2, TS3),
 	}}
 	for _, query := range queries {
@@ -1521,43 +1521,30 @@ func TestSingleUnshardedKeyspace(t *testing.T) {
 	tests := []struct {
 		query     string
 		unsharded *vindexes.Keyspace
-		tables    []*vindexes.Table
 	}{
 		{
 			query:     "select 1 from t, t1",
 			unsharded: nil, // both tables are unsharded, but from different keyspaces
-			tables:    nil,
 		}, {
 			query:     "select 1 from t2",
 			unsharded: nil,
-			tables:    nil,
 		}, {
 			query:     "select 1 from t, t2",
 			unsharded: nil,
-			tables:    nil,
 		}, {
 			query:     "select 1 from t as A, t as B",
-			unsharded: ks1,
-			tables: []*vindexes.Table{
-				tableT(),
-				tableT(),
-			},
+			unsharded: unsharded,
 		}, {
 			query:     "insert into t select * from t",
-			unsharded: ks1,
-			tables: []*vindexes.Table{
-				tableT(),
-				tableT(),
-			},
+			unsharded: unsharded,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			_, semTable := parseAndAnalyze(t, test.query, "d")
-			queryIsUnsharded, tables := semTable.SingleUnshardedKeyspace()
+			queryIsUnsharded, _ := semTable.SingleUnshardedKeyspace()
 			assert.Equal(t, test.unsharded, queryIsUnsharded)
-			assert.Equal(t, test.tables, tables)
 		})
 	}
 }
@@ -1611,9 +1598,9 @@ func TestScopingSubQueryJoinClause(t *testing.T) {
 
 }
 
-var ks1 = &vindexes.Keyspace{
-	Name:    "ks1",
-	Sharded: true,
+var unsharded = &vindexes.Keyspace{
+	Name:    "unsharded",
+	Sharded: false,
 }
 var ks2 = &vindexes.Keyspace{
 	Name:    "ks2",
@@ -1628,7 +1615,6 @@ var ks3 = &vindexes.Keyspace{
 // create table t1(id bigint)
 // create table t2(uid bigint, name varchar(255))
 func fakeSchemaInfo() *FakeSI {
-
 	si := &FakeSI{
 		Tables: map[string]*vindexes.Table{
 			"t":  tableT(),
@@ -1642,10 +1628,7 @@ func fakeSchemaInfo() *FakeSI {
 func tableT() *vindexes.Table {
 	return &vindexes.Table{
 		Name:     sqlparser.NewIdentifierCS("t"),
-		Keyspace: ks1,
-		ColumnVindexes: []*vindexes.ColumnVindex{
-			{Name: "id_vindex"},
-		},
+		Keyspace: unsharded,
 	}
 }
 func tableT1() *vindexes.Table {
@@ -1656,7 +1639,10 @@ func tableT1() *vindexes.Table {
 			Type: querypb.Type_INT64,
 		}},
 		ColumnListAuthoritative: true,
-		Keyspace:                ks2,
+		ColumnVindexes: []*vindexes.ColumnVindex{
+			{Name: "id_vindex"},
+		},
+		Keyspace: ks2,
 	}
 }
 func tableT2() *vindexes.Table {
