@@ -34,16 +34,20 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-var noEvents = []TestRowEvent{}
+var (
+	noEvents = []TestRowEvent{}
+)
 
 type TestQuery struct {
 	query  string
 	events []TestRowEvent
 }
+
 type TestRowChange struct {
 	before []string
 	after  []string
 }
+
 type TestRowEventSpec struct {
 	table   string
 	changes []TestRowChange
@@ -110,6 +114,14 @@ type TestSpec struct {
 	metadata        map[string][]string
 }
 
+func (ts *TestSpec) getCurrentState(table string) *query.Row {
+	return ts.state[table]
+}
+
+func (ts *TestSpec) setCurrentState(table string, row *query.Row) {
+	ts.state[table] = row
+}
+
 func (ts *TestSpec) Init() error {
 	var err error
 	if ts.inited {
@@ -120,7 +132,7 @@ func (ts *TestSpec) Init() error {
 	if ts.options == nil {
 		ts.options = &TestSpecOptions{}
 	}
-	ts.schema, err = schemadiff.NewSchemaFromQueries(ts.ddls, sqlparser.NewTestParser())
+	ts.schema, err = schemadiff.NewSchemaFromQueries(schemadiff.NewTestEnv(), ts.ddls)
 	if err != nil {
 		return err
 	}
@@ -235,7 +247,7 @@ func (ts *TestSpec) Run() {
 					fe, ok := ts.fieldEvents[table]
 					require.True(ts.t, ok, "field event for table %s not found", table)
 					index := int64(0)
-					state := ts.state[table]
+					state := ts.getCurrentState(table)
 					for i, col := range fe.cols {
 						bv[col.name] = string(state.Values[index : index+state.Lengths[i]])
 						index += state.Lengths[i]
@@ -409,31 +421,24 @@ func (ts *TestSpec) getRowChanges(table string, stmt sqlparser.Statement, row *q
 	switch stmt.(type) {
 	case *sqlparser.Insert:
 		rowChange.After = row
-		ts.state[table] = row
+		ts.setCurrentState(table, row)
 	case *sqlparser.Update:
-		rowChange = *ts.getRowChangeForUpdate(table, row, stmt)
-		ts.state[table] = row
+		rowChange = *ts.getRowChangeForUpdate(table, row)
+		ts.setCurrentState(table, row)
 	case *sqlparser.Delete:
 		rowChange.Before = row
-		ts.state[table] = nil
+		ts.setCurrentState(table, nil)
 	}
 	rowChanges = append(rowChanges, &rowChange)
 	return rowChanges
 }
 
-// isBitSet returns true if the bit at index is set
-func isBitSet(data []byte, index int) bool {
-	byteIndex := index / 8
-	bitMask := byte(1 << (uint(index) & 0x7))
-	return data[byteIndex]&bitMask > 0
-}
-
-func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row, stmt sqlparser.Statement) *binlogdata.RowChange {
+func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *binlogdata.RowChange {
 	var rowChange binlogdata.RowChange
 	var bitmap byte
 	var before, after query.Row
 
-	currentState := ts.state[table]
+	currentState := ts.getCurrentState(table)
 	if currentState == nil {
 		return nil
 	}
@@ -486,7 +491,7 @@ func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row, stm
 }
 
 func (ts *TestSpec) getBefore(table string) *query.Row {
-	currentState := ts.state[table]
+	currentState := ts.getCurrentState(table)
 	if currentState == nil {
 		return nil
 	}
