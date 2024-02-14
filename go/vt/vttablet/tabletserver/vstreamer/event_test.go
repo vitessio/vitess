@@ -35,6 +35,7 @@ import (
 )
 
 var (
+	// noEvents is used to indicate that a query is expected to generate no events.
 	noEvents = []TestRowEvent{}
 )
 
@@ -131,6 +132,7 @@ func (ts *TestSpec) setCurrentState(table string, row *query.Row) {
 	ts.state[table] = row
 }
 
+// Init() initializes the test. It creates the tables and sets up the internal state.
 func (ts *TestSpec) Init() error {
 	var err error
 	if ts.inited {
