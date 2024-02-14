@@ -65,21 +65,6 @@
     "plan": "VT12001: unsupported: Vindex update should have ORDER BY clause when using LIMIT"
   },
   {
-    "comment": "update with derived table",
-    "query": "update (select id from user) as u set id = 4",
-    "plan": "The target table u of the UPDATE is not updatable"
-  },
-  {
-    "comment": "join in update tables",
-    "query": "update user join user_extra on user.id = user_extra.id set user.name = 'foo'",
-    "plan": "VT12001: unsupported: unaliased multiple tables in update"
-  },
-  {
-    "comment": "multiple tables in update",
-    "query": "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id",
-    "plan": "VT12001: unsupported: multiple (2) tables in update"
-  },
-  {
     "comment": "unsharded insert, col list does not match values",
     "query": "insert into unsharded_auto(id, val) values(1)",
     "plan": "VT03006: column count does not match value count with the row"
@@ -408,5 +393,10 @@
     "comment": "count and sum distinct on different columns",
     "query": "SELECT COUNT(DISTINCT col), SUM(DISTINCT id) FROM user",
     "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct id)"
+  },
+  {
+    "comment": "update with multi table reference with multi target update",
+    "query": "update ignore user u, music m set u.foo = 21, m.bar = 'abc' where u.col = m.col",
+    "plan": "VT12001: unsupported: multi-table UPDATE statement with multi-target column update"
   }
 ]
