@@ -1840,5 +1840,28 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "recursive WITH against an unsharded database",
+    "query": "WITH RECURSIVE cte (n) AS ( SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5 ) SELECT cte.n FROM unsharded join cte on unsharded.id = cte.n ",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE cte (n) AS ( SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5 ) SELECT cte.n FROM unsharded join cte on unsharded.id = cte.n ",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "with recursive cte(n) as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select cte.n from unsharded join cte on unsharded.id = cte.n where 1 != 1",
+        "Query": "with recursive cte(n) as (select 1 from dual union all select n + 1 from cte where n < 5) select cte.n from unsharded join cte on unsharded.id = cte.n",
+        "Table": "dual, unsharded"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "main.unsharded"
+      ]
+    }
   }
 ]
