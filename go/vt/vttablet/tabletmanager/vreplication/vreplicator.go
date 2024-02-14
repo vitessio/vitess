@@ -587,11 +587,11 @@ func (vr *vreplicator) throttlerAppName() string {
 // times a VReplication workflow, and the specific sub-component, is throttled by the
 // tablet throttler over time.
 func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {
-	at := appThrottled.String()
-	vr.stats.ThrottledCounts.Add([]string{"tablet", at}, 1)
+	appName := appThrottled.String()
+	vr.stats.ThrottledCounts.Add([]string{"tablet", appName}, 1)
 	err := vr.throttleUpdatesRateLimiter.Do(func() error {
 		tm := time.Now().Unix()
-		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, at)
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appName)
 		if err != nil {
 			return err
 		}
