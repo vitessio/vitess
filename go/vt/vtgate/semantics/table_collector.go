@@ -39,26 +39,31 @@ type tableCollector struct {
 }
 
 type earlyTableCollector struct {
-	si        SchemaInformation
-	currentDb string
-	Tables    []TableInfo
-	done      map[*sqlparser.AliasedTableExpr]TableInfo
+	si         SchemaInformation
+	currentDb  string
+	Tables     []TableInfo
+	done       map[*sqlparser.AliasedTableExpr]TableInfo
+	withTables map[sqlparser.IdentifierCS]any
 }
 
 func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableCollector {
 	return &earlyTableCollector{
-		si:        si,
-		currentDb: currentDb,
-		done:      map[*sqlparser.AliasedTableExpr]TableInfo{},
+		si:         si,
+		currentDb:  currentDb,
+		done:       map[*sqlparser.AliasedTableExpr]TableInfo{},
+		withTables: map[sqlparser.IdentifierCS]any{},
 	}
 }
 
 func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) {
-	aet, ok := cursor.Node().(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return
+	switch node := cursor.Node().(type) {
+	case *sqlparser.AliasedTableExpr:
+		etc.visitAliasedTableExpr(node)
+	case *sqlparser.With:
+		for _, cte := range node.CTEs {
+			etc.withTables[cte.ID] = nil
+		}
 	}
-	etc.visitAliasedTableExpr(aet)
 }
 
 func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTableExpr) {
@@ -82,6 +87,13 @@ func (etc *earlyTableCollector) newTableCollector(scoper *scoper, org originable
 }
 
 func (etc *earlyTableCollector) handleTableName(tbl sqlparser.TableName, aet *sqlparser.AliasedTableExpr) {
+	if tbl.Qualifier.IsEmpty() {
+		_, isCTE := etc.withTables[tbl.Name]
+		if isCTE {
+			// no need to handle these tables here, we wait for the late phase instead
+			return
+		}
+	}
 	tableInfo, err := getTableInfo(aet, tbl, etc.si, etc.currentDb)
 	if err != nil {
 		// this could just be a CTE that we haven't processed, so we'll give it the benefit of the doubt for now
