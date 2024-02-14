@@ -35,15 +35,61 @@ type tableCollector struct {
 	currentDb string
 	org       originable
 	unionInfo map[*sqlparser.Union]unionInfo
+	done      map[*sqlparser.AliasedTableExpr]TableInfo
 }
 
-func newTableCollector(scoper *scoper, si SchemaInformation, currentDb string) *tableCollector {
-	return &tableCollector{
-		scoper:    scoper,
+type earlyTableCollector struct {
+	si        SchemaInformation
+	currentDb string
+	Tables    []TableInfo
+	done      map[*sqlparser.AliasedTableExpr]TableInfo
+}
+
+func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableCollector {
+	return &earlyTableCollector{
 		si:        si,
 		currentDb: currentDb,
-		unionInfo: map[*sqlparser.Union]unionInfo{},
+		done:      map[*sqlparser.AliasedTableExpr]TableInfo{},
 	}
+}
+
+func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) error {
+	aet, ok := cursor.Node().(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil
+	}
+	return etc.visitAliasedTableExpr(aet)
+}
+
+func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTableExpr) error {
+	tbl, ok := aet.Expr.(sqlparser.TableName)
+	if !ok {
+		return nil
+	}
+	return etc.handleTableName(tbl, aet)
+}
+
+func (etc *earlyTableCollector) newTableCollector(scoper *scoper, org originable) *tableCollector {
+	return &tableCollector{
+		Tables:    etc.Tables,
+		scoper:    scoper,
+		si:        etc.si,
+		currentDb: etc.currentDb,
+		unionInfo: map[*sqlparser.Union]unionInfo{},
+		done:      etc.done,
+		org:       org,
+	}
+}
+
+func (etc *earlyTableCollector) handleTableName(tbl sqlparser.TableName, aet *sqlparser.AliasedTableExpr) error {
+	tableInfo, err := getTableInfo(aet, tbl, etc.si, etc.currentDb)
+	if err != nil {
+		return err
+	}
+
+	etc.done[aet] = tableInfo
+	etc.Tables = append(etc.Tables, tableInfo)
+	return nil
 }
 
 func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
@@ -103,28 +149,42 @@ func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr
 	return nil
 }
 
-func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sqlparser.TableName) error {
+func (tc *tableCollector) handleTableName(node *sqlparser.AliasedTableExpr, t sqlparser.TableName) (err error) {
+	var tableInfo TableInfo
+	var found bool
+
+	tableInfo, found = tc.done[node]
+	if !found {
+		tableInfo, err = getTableInfo(node, t, tc.si, tc.currentDb)
+		if err != nil {
+			return err
+		}
+		tc.Tables = append(tc.Tables, tableInfo)
+	}
+
+	scope := tc.scoper.currentScope()
+	return scope.addTable(tableInfo)
+}
+
+func getTableInfo(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, si SchemaInformation, currentDb string) (TableInfo, error) {
 	var tbl *vindexes.Table
 	var vindex vindexes.Vindex
 	isInfSchema := sqlparser.SystemSchema(t.Qualifier.String())
 	var err error
-	tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
+	tbl, vindex, _, _, _, err = si.FindTableOrVindex(t)
 	if err != nil && !isInfSchema {
 		// if we are dealing with a system table, it might not be available in the vschema, but that is OK
-		return err
+		return nil, err
 	}
 	if tbl == nil && vindex != nil {
 		tbl = newVindexTable(t.Name)
 	}
 
-	scope := tc.scoper.currentScope()
-	tableInfo, err := tc.createTable(t, node, tbl, isInfSchema, vindex)
+	tableInfo, err := createTable(t, node, tbl, isInfSchema, vindex, si, currentDb)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	tc.Tables = append(tc.Tables, tableInfo)
-	return scope.addTable(tableInfo)
+	return tableInfo, nil
 }
 
 func (tc *tableCollector) handleDerivedTable(node *sqlparser.AliasedTableExpr, t *sqlparser.DerivedTable) error {
@@ -228,12 +288,14 @@ func (tc *tableCollector) tableInfoFor(id TableSet) (TableInfo, error) {
 	return tc.Tables[offset], nil
 }
 
-func (tc *tableCollector) createTable(
+func createTable(
 	t sqlparser.TableName,
 	alias *sqlparser.AliasedTableExpr,
 	tbl *vindexes.Table,
 	isInfSchema bool,
 	vindex vindexes.Vindex,
+	si SchemaInformation,
+	currentDb string,
 ) (TableInfo, error) {
 	hint := getVindexHint(alias.Hints)
 
@@ -247,13 +309,13 @@ func (tc *tableCollector) createTable(
 		Table:        tbl,
 		VindexHint:   hint,
 		isInfSchema:  isInfSchema,
-		collationEnv: tc.si.Environment().CollationEnv(),
+		collationEnv: si.Environment().CollationEnv(),
 	}
 
 	if alias.As.IsEmpty() {
 		dbName := t.Qualifier.String()
 		if dbName == "" {
-			dbName = tc.currentDb
+			dbName = currentDb
 		}
 
 		table.dbName = dbName

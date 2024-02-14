@@ -986,7 +986,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			recursiveExpectation: MergeTableSets(TS0, TS1),
 		}, {
 			query:                "select t.id from (select * from user) as t join user as u on t.id = u.id",
-			expectation:          TS1,
+			expectation:          TS2,
 			recursiveExpectation: TS0,
 		}, {
 			query:                "select t.col1 from t3 ua join (select t1.id, t1.col1 from t1 join t2) as t",
@@ -1638,11 +1638,11 @@ func TestScopingSubQueryJoinClause(t *testing.T) {
 
 var ks1 = &vindexes.Keyspace{
 	Name:    "ks1",
-	Sharded: false,
+	Sharded: true,
 }
 var ks2 = &vindexes.Keyspace{
 	Name:    "ks2",
-	Sharded: false,
+	Sharded: true,
 }
 var ks3 = &vindexes.Keyspace{
 	Name:    "ks3",

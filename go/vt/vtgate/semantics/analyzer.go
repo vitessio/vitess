@@ -28,19 +28,23 @@ import (
 // analyzer controls the flow of the analysis.
 // It starts the tree walking and controls which part of the analysis sees which parts of the tree
 type analyzer struct {
-	scoper   *scoper
-	tables   *tableCollector
-	binder   *binder
-	typer    *typer
-	rewriter *earlyRewriter
-	sig      QuerySignature
+	scoper      *scoper
+	earlyTables *earlyTableCollector
+	tables      *tableCollector
+	binder      *binder
+	typer       *typer
+	rewriter    *earlyRewriter
+	sig         QuerySignature
+	si          SchemaInformation
+	currentDb   string
 
 	err          error
 	inProjection int
 
-	projErr      error
-	unshardedErr error
-	warning      string
+	projErr                 error
+	unshardedErr            error
+	warning                 string
+	singleUnshardedKeyspace bool
 }
 
 // newAnalyzer create the semantic analyzer
@@ -48,23 +52,25 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	// TODO  dependencies between these components are a little tangled. We should try to clean up
 	s := newScoper()
 	a := &analyzer{
-		scoper: s,
-		tables: newTableCollector(s, si, dbName),
-		typer:  newTyper(si.Environment().CollationEnv()),
+		scoper:      s,
+		earlyTables: newEarlyTableCollector(si, dbName),
+		typer:       newTyper(si.Environment().CollationEnv()),
+		si:          si,
+		currentDb:   dbName,
 	}
 	s.org = a
-	a.tables.org = a
+	return a
+}
 
-	b := newBinder(s, a, a.tables, a.typer)
-	a.binder = b
+func (a *analyzer) lateInit() {
+	a.tables = a.earlyTables.newTableCollector(a.scoper, a)
+	a.binder = newBinder(a.scoper, a, a.tables, a.typer)
 	a.rewriter = &earlyRewriter{
-		env:             si.Environment(),
-		scoper:          s,
-		binder:          b,
+		env:             a.si.Environment(),
+		scoper:          a.scoper,
+		binder:          a.binder,
 		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
 	}
-	s.binder = b
-	return a
 }
 
 // Analyze analyzes the parsed query.
@@ -109,6 +115,32 @@ func (a *analyzer) newSemTable(
 	if isCommented {
 		comments = commentedStmt.GetParsedComments()
 	}
+
+	if a.singleUnshardedKeyspace {
+		return &SemTable{
+			Tables:                    a.earlyTables.Tables,
+			Comments:                  comments,
+			Warning:                   a.warning,
+			Collation:                 coll,
+			ExprTypes:                 map[sqlparser.Expr]evalengine.Type{},
+			NotSingleRouteErr:         a.projErr,
+			NotUnshardedErr:           a.unshardedErr,
+			Recursive:                 ExprDependencies{},
+			Direct:                    ExprDependencies{},
+			Targets:                   map[sqlparser.IdentifierCS]TableSet{},
+			ColumnEqualities:          map[columnName][]sqlparser.Expr{},
+			ExpandedColumns:           map[sqlparser.TableName][]*sqlparser.ColName{},
+			columns:                   map[*sqlparser.Union]sqlparser.SelectExprs{},
+			comparator:                nil,
+			StatementIDs:              a.scoper.statementIDs,
+			QuerySignature:            QuerySignature{},
+			childForeignKeysInvolved:  map[TableSet][]vindexes.ChildFKInfo{},
+			parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
+			childFkToUpdExprs:         map[string]sqlparser.UpdateExprs{},
+			collEnv:                   env,
+		}, nil
+	}
+
 	columns := map[*sqlparser.Union]sqlparser.SelectExprs{}
 	for union, info := range a.tables.unionInfo {
 		columns[union] = info.exprs
@@ -298,8 +330,36 @@ func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet,
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
+	_ = sqlparser.Rewrite(statement, nil, a.earlyUp)
+	if a.err != nil {
+		return a.err
+	}
+	ks, _ := singleUnshardedKeyspace(a.earlyTables.Tables)
+	if ks != nil {
+		// if we found a single unsharded keyspace in the early walk we can stop here
+		a.singleUnshardedKeyspace = true
+		return nil
+	}
+
+	a.lateInit()
+
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
+}
+
+// earlyUp collects tables in the query, so we can check
+// if this a single unsharded query we are dealing with
+func (a *analyzer) earlyUp(cursor *sqlparser.Cursor) bool {
+	if !a.shouldContinue() {
+		return false
+	}
+
+	if err := a.earlyTables.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+
+	return a.shouldContinue()
 }
 
 func (a *analyzer) shouldContinue() bool {

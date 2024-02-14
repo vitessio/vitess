@@ -730,6 +730,10 @@ func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 
 // SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
 func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*vindexes.Table) {
+	return singleUnshardedKeyspace(st.Tables)
+}
+
+func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tables []*vindexes.Table) {
 	validKS := func(this *vindexes.Keyspace) bool {
 		if this == nil || this.Sharded {
 			return false
@@ -744,7 +748,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*
 		return true
 	}
 
-	for _, table := range st.Tables {
+	for _, table := range tableInfos {
 		if _, isDT := table.(*DerivedTable); isDT {
 			continue
 		}
