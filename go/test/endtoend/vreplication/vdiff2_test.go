@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet"
@@ -56,6 +58,7 @@ type testCase struct {
 	testCLICreateWait   bool // test CLI create and wait until done against this workflow (only needs to be done once)
 	testCLIFlagHandling bool // test vtctldclient flag handling from end-to-end
 	extraVDiffFlags     map[string]string
+	vdiffCount          int64 // Keep track of the number of vdiffs created to test the stats
 }
 
 const (
@@ -119,6 +122,14 @@ var testCases = []*testCase{
 	},
 }
 
+func checkVDiffCountStat(t *testing.T, tablet *cluster.VttabletProcess, expectedCount int64) {
+	countStr, err := getDebugVar(t, tablet.Port, []string{"VDiffCount"})
+	require.NoError(t, err, "failed to get VDiffCount stat from %s-%d tablet: %v", tablet.Cell, tablet.TabletUID, err)
+	count, err := strconv.Atoi(countStr)
+	require.NoError(t, err, "failed to convert VDiffCount stat string to int: %v", err)
+	require.Equal(t, expectedCount, int64(count), "expected VDiffCount stat to be %d but got %d", expectedCount, count)
+}
+
 func TestVDiff2(t *testing.T) {
 	cellNames := "zone5,zone1,zone2,zone3,zone4"
 	sourceKs := "product"
@@ -172,6 +183,21 @@ func TestVDiff2(t *testing.T) {
 			testWorkflow(t, vc, tc, tks, []*Cell{zone3, zone2, zone1})
 		})
 	}
+
+	statsTablet := vc.getPrimaryTablet(t, targetKs, targetShards[0])
+
+	// We diffed X rows so confirm that the global total is > 0.
+	countStr, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsComparedTotal"})
+	require.NoError(t, err, "failed to get VDiffRowsComparedTotal stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
+	count, err := strconv.Atoi(countStr)
+	require.NoError(t, err, "failed to convert VDiffRowsComparedTotal stat string to int: %v", err)
+	require.Greater(t, count, 0, "expected VDiffRowsComparedTotal stat to be greater than 0 but got %d", count)
+
+	// The VDiffs should all be cleaned up so the VDiffRowsCompared value, which
+	// is produced from controller info, should be empty.
+	vdrc, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsCompared"})
+	require.NoError(t, err, "failed to get VDiffRowsCompared stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
+	require.Equal(t, "{}", vdrc, "expected VDiffRowsCompared stat to be empty but got %s", vdrc)
 }
 
 func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, cells []*Cell) {
@@ -183,6 +209,8 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
+	statsShard := arrTargetShards[0]
+	statsTablet := vc.getPrimaryTablet(t, tc.targetKs, statsShard)
 	var args []string
 	args = append(args, tc.typ, "--")
 	args = append(args, "--source", tc.sourceKs)
@@ -251,9 +279,21 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		}
 		// Wait for the workflow to catch up again on the deletes.
 		waitForShardsToCatchup()
+		tc.vdiffCount++ // We only did vtctldclient vdiff create
 	} else {
 		vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
+		tc.vdiffCount += 2 // We did vtctlclient AND vtctldclient vdiff create
 	}
+	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
+
+	// Confirm that the VDiffRowsCompared stat -- which is a running count of the rows
+	// compared by vdiff per table at the controller level -- works as expected.
+	vdrc, err := getDebugVar(t, statsTablet.Port, []string{"VDiffRowsCompared"})
+	require.NoError(t, err, "failed to get VDiffRowsCompared stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
+	uuid, jsout := performVDiff2Action(t, false, ksWorkflow, allCellNames, "show", "last", false, "--verbose")
+	expect := gjson.Get(jsout, fmt.Sprintf("Reports.customer.%s", statsShard)).Int()
+	got := gjson.Get(vdrc, fmt.Sprintf("%s.%s.%s", tc.workflow, uuid, "customer")).Int()
+	require.Equal(t, expect, got, "expected VDiffRowsCompared stat to be %d, but got %d", expect, got)
 
 	if tc.autoRetryError {
 		testAutoRetryError(t, tc, allCellNames)
@@ -263,26 +303,37 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		testResume(t, tc, allCellNames)
 	}
 
+	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
+
 	// These are done here so that we have a valid workflow to test the commands against.
 	if tc.stop {
 		testStop(t, ksWorkflow, allCellNames)
+		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
 	}
 	if tc.testCLICreateWait {
 		testCLICreateWait(t, ksWorkflow, allCellNames)
+		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
 	}
 	if tc.testCLIErrors {
 		testCLIErrors(t, ksWorkflow, allCellNames)
 	}
 	if tc.testCLIFlagHandling {
 		testCLIFlagHandling(t, tc.targetKs, tc.workflow, cells[0])
+		tc.vdiffCount++ // We did either vtctlclient OR vtctldclient vdiff create
 	}
 
+	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
+
 	testDelete(t, ksWorkflow, allCellNames)
+	tc.vdiffCount = 0 // All vdiffs are deleted, so reset the count and check
+	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
 
 	// Create another VDiff record to confirm it gets deleted when the workflow is completed.
 	ts := time.Now()
-	uuid, _ := performVDiff2Action(t, false, ksWorkflow, allCellNames, "create", "", false)
+	uuid, _ = performVDiff2Action(t, false, ksWorkflow, allCellNames, "create", "", false)
 	waitForVDiff2ToComplete(t, false, ksWorkflow, allCellNames, uuid, ts)
+	tc.vdiffCount++
+	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
 
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err)
@@ -291,6 +342,8 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 
 	// Confirm the VDiff data is deleted for the workflow.
 	testNoOrphanedData(t, tc.targetKs, tc.workflow, arrTargetShards)
+	tc.vdiffCount = 0 // All vdiffs are deleted, so reset the count and check
+	checkVDiffCountStat(t, statsTablet, tc.vdiffCount)
 }
 
 func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
