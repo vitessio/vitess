@@ -212,7 +212,7 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 		// Now that we have ensured that all the tables are created, we can start populating the foreign keys
 		// in the tables.
 		for tblName, tblInfo := range m {
-			rTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
+			rTbl, _, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
 			if err != nil {
 				log.Errorf("error finding routed table %s: %v", tblName, err)
 				continue
@@ -222,7 +222,7 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 				if schema.IsInternalOperationTableName(fkDef.ReferenceDefinition.ReferencedTable.Name.String()) {
 					continue
 				}
-				parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
+				parentTbl, _, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
 				if err != nil {
 					log.Errorf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err)
 					continue

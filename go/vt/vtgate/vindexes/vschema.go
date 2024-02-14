@@ -819,7 +819,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema, parser
 			var seq *Table
 			if err == nil {
 				// Ensure that sequence tables also obey routing rules.
-				seq, err = vschema.FindRoutedTable(seqks, seqtab, topodatapb.TabletType_PRIMARY)
+				seq, _, err = vschema.FindRoutedTable(seqks, seqtab, topodatapb.TabletType_PRIMARY)
 				if seq == nil && err == nil {
 					err = vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table %s not found", seqtab)
 				}
@@ -1092,54 +1092,63 @@ func (vschema *VSchema) FirstKeyspace() *Keyspace {
 }
 
 // FindRoutedTable finds a table checking the routing rules.
-func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
-	qualified := tablename
+func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, bool, error) {
+	unqualified := tablename
+	var qualified string
 	if keyspace != "" {
 		qualified = keyspace + "." + tablename
 	}
-	fqtn := qualified + TabletTypeSuffix[tabletType]
+	tabletTypeSuffix := TabletTypeSuffix[tabletType]
+	fuqtf := unqualified + tabletTypeSuffix
+	fqtn := qualified + tabletTypeSuffix
+
 	// First look for a fully qualified table name: keyspace.table@tablet_type.
 	// Then look for one without tablet type: keyspace.table.
-	for _, name := range []string{fqtn, qualified} {
+	for _, name := range []string{fqtn, qualified, fuqtf, unqualified} {
 		rr, ok := vschema.RoutingRules[name]
 		if ok {
 			if rr.Error != nil {
-				return nil, rr.Error
+				return nil, false, rr.Error
 			}
 			if len(rr.Tables) == 0 {
-				return nil, vterrors.Errorf(
+				return nil, false, vterrors.Errorf(
 					vtrpcpb.Code_FAILED_PRECONDITION,
 					"table %s has been disabled",
 					tablename,
 				)
 			}
-			return rr.Tables[0], nil
+			unqualifiedDest := false
+			if name == fuqtf || name == unqualified {
+				unqualifiedDest = true
+			}
+			return rr.Tables[0], unqualifiedDest, nil
 		}
 	}
-	return vschema.findTable(
+	table, err := vschema.findTable(
 		keyspace,
 		tablename,
 		true, /* constructUnshardedTableIfNotFound */
 	)
+	return table, false, err
 }
 
 // FindTableOrVindex finds a table or a Vindex by name using Find and FindVindex.
-func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topodatapb.TabletType) (*Table, Vindex, error) {
-	tables, err := vschema.FindRoutedTable(keyspace, name, tabletType)
+func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topodatapb.TabletType) (*Table, Vindex, bool, error) {
+	tables, unqualifiedRoute, err := vschema.FindRoutedTable(keyspace, name, tabletType)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	if tables != nil {
-		return tables, nil, nil
+		return tables, nil, unqualifiedRoute, nil
 	}
 	v, err := vschema.FindVindex(keyspace, name)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	if v != nil {
-		return nil, v, nil
+		return nil, v, false, nil
 	}
-	return nil, nil, NotFoundError{TableName: name}
+	return nil, nil, false, NotFoundError{TableName: name}
 }
 
 func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatement {

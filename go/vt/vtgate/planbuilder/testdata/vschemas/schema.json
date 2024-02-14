@@ -10,7 +10,7 @@
       {
         "from_table": "route2",
         "to_tables": [
-          "main.unsharded"
+          "user.user"
         ]
       },
       {

@@ -1,0 +1,32 @@
+{
+  "routing_rules": {
+    "rules": [
+      {
+        "from_table": "route1",
+        "to_tables": [
+          "uks.unsharded"
+        ]
+      }
+    ]
+  },
+  "keyspaces": {
+    "ks_routed": {
+      "sharded": true,
+      "vindexes": {
+        "hash": {
+          "type": "hash"
+        }
+      },
+      "tables": {
+        "t1": {
+          "column_vindexes": [
+            {
+              "column": "id1",
+              "name": "hash"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

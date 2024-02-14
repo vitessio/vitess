@@ -264,9 +264,13 @@ func (vw *VSchemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.
 	if destKeyspace == "" {
 		destKeyspace = vw.getActualKeyspace()
 	}
-	table, vindex, err := vw.V.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_PRIMARY)
+	table, vindex, unqualifiedRoute, err := vw.V.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
+	}
+	if unqualifiedRoute {
+		destKeyspace = table.Keyspace.Name
+		destTarget = nil
 	}
 	return table, vindex, destKeyspace, destTabletType, destTarget, nil
 }

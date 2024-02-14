@@ -264,7 +264,7 @@ func (rp *RoutingParameters) routedTable(ctx context.Context, vcursor VCursor, b
 			Name:      sqlparser.NewIdentifierCS(tableName),
 			Qualifier: sqlparser.NewIdentifierCS(tableSchema),
 		}
-		routedTable, err := vcursor.FindRoutedTable(tbl)
+		routedTable, _, err := vcursor.FindRoutedTable(tbl)
 		if err != nil {
 			return nil, err
 		}

@@ -278,21 +278,21 @@ func (vc *vcursorImpl) FindView(name sqlparser.TableName) sqlparser.SelectStatem
 	return vc.vschema.FindView(ks, name.Name.String())
 }
 
-func (vc *vcursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Table, error) {
+func (vc *vcursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Table, bool, error) {
 	destKeyspace, destTabletType, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if destKeyspace == "" {
 		destKeyspace = vc.keyspace
 	}
 
-	table, err := vc.vschema.FindRoutedTable(destKeyspace, name.Name.String(), destTabletType)
+	table, unqualifiedRoute, err := vc.vschema.FindRoutedTable(destKeyspace, name.Name.String(), destTabletType)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	return table, nil
+	return table, unqualifiedRoute, nil
 }
 
 // FindTableOrVindex finds the specified table or vindex.
@@ -310,9 +310,13 @@ func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 	if destKeyspace == "" {
 		destKeyspace = vc.getActualKeyspace()
 	}
-	table, vindex, err := vc.vschema.FindTableOrVindex(destKeyspace, name.Name.String(), vc.tabletType)
+	table, vindex, unqualifiedRoute, err := vc.vschema.FindTableOrVindex(destKeyspace, name.Name.String(), vc.tabletType)
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
+	}
+	if unqualifiedRoute {
+		destKeyspace = table.Keyspace.Name
+		dest = nil
 	}
 	return table, vindex, destKeyspace, destTabletType, dest, nil
 }

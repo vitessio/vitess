@@ -243,7 +243,7 @@ func (t *noopVCursor) InTransactionAndIsDML() bool {
 	panic("implement me")
 }
 
-func (t *noopVCursor) FindRoutedTable(sqlparser.TableName) (*vindexes.Table, error) {
+func (t *noopVCursor) FindRoutedTable(sqlparser.TableName) (*vindexes.Table, bool, error) {
 	panic("implement me")
 }
 
@@ -784,9 +784,9 @@ func (f *loggingVCursor) SetPriority(string) {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) FindRoutedTable(tbl sqlparser.TableName) (*vindexes.Table, error) {
+func (f *loggingVCursor) FindRoutedTable(tablename sqlparser.TableName) (*vindexes.Table, bool, error) {
 	f.log = append(f.log, fmt.Sprintf("FindTable(%s)", sqlparser.String(tbl)))
-	return f.tableRoutes.tbl, nil
+	return f.tableRoutes.tbl, false, nil
 }
 
 func (f *loggingVCursor) GetDBDDLPluginName() string {
