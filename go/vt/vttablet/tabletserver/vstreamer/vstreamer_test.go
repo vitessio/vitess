@@ -59,19 +59,6 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	return false
 }
 
-type TestColumn struct {
-	name, dataType, colType string
-	len, charset            int64
-	dataTypeLowered         string
-	skip                    bool
-	collate                 string
-}
-
-type TestFieldEvent struct {
-	table, db string
-	cols      []*TestColumn
-}
-
 func (tfe *TestFieldEvent) String() string {
 	s := fmt.Sprintf("type:FIELD field_event:{table_name:\"%s\"", tfe.table)
 	fld := ""
@@ -139,6 +126,7 @@ func TestNoBlob(t *testing.T) {
 	ts.Run()
 }
 
+// TestSetAndEnum confirms that the events for set and enum columns are correct.
 func TestSetAndEnum(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
@@ -158,6 +146,7 @@ func TestSetAndEnum(t *testing.T) {
 	ts.Run()
 }
 
+// TestCellValuePadding tests that the events are correctly padded for binary columns.
 func TestCellValuePadding(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
@@ -190,12 +179,7 @@ func TestCellValuePadding(t *testing.T) {
 	ts.Run()
 }
 
-// TODO: cannot port this to the new framework since it requires a specific version of MySQL which I don't have atm
 func TestSetStatement(t *testing.T) {
-
-	if testing.Short() {
-		t.Skip()
-	}
 	if !checkIfOptionIsSupported(t, "log_builtin_as_identified_by_password") {
 		// the combination of setting this option and support for "set password" only works on a few flavors
 		log.Info("Cannot test SetStatement on this flavor")
@@ -633,6 +617,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	}
 }
 
+// TestFilteredVarBinary confirms that adding a filter using a varbinary column results in the correct set of events.
 func TestFilteredVarBinary(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
@@ -677,6 +662,7 @@ func TestFilteredVarBinary(t *testing.T) {
 	ts.Run()
 }
 
+// TestFilteredInt confirms that adding a filter using an int column results in the correct set of events.
 func TestFilteredInt(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
@@ -722,6 +708,7 @@ func TestFilteredInt(t *testing.T) {
 	ts.Run()
 }
 
+// TestSavepoint confirms that rolling back to a savepoint drops the dmls that were executed during the savepoint.
 func TestSavepoint(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
@@ -747,6 +734,7 @@ func TestSavepoint(t *testing.T) {
 	ts.Run()
 }
 
+// TestSavepointWithFilter tests that using savepoints with both filtered and unfiltered tables works as expected.
 func TestSavepointWithFilter(t *testing.T) {
 	ts := &TestSpec{
 		t: t,

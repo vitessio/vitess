@@ -16,6 +16,18 @@ limitations under the License.
 
 package vstreamer
 
+// This file contains the test framework for testing the event generation logic in vstreamer.
+// The test framework is designed to be used in the following way:
+// 1. Define a TestSpec with the following fields:
+//    - ddls: a list of create table statements for the tables to be used in the test
+//    - tests: a list of test cases, each test case is a list of TestQuery
+//    - options: test-specific options, if any
+// 2. Call ts.Init() to initialize the test.
+// 3. Call ts.Run() to run the test. This will run the queries and validate the events.
+// 4. Call ts.Close() to clean up the tables created in the test.
+// The test framework will take care of creating the tables, running the queries, and validating the events for
+// simpler cases. For more complex cases, the test framework provides hooks to customize the event generation.
+
 import (
 	"context"
 	"fmt"
@@ -38,6 +50,21 @@ var (
 	// noEvents is used to indicate that a query is expected to generate no events.
 	noEvents = []TestRowEvent{}
 )
+
+// TestColumn has all the attributes of a column required for the test cases.
+type TestColumn struct {
+	name, dataType, colType string
+	len, charset            int64
+	dataTypeLowered         string
+	skip                    bool
+	collate                 string
+}
+
+// TestFieldEvent has all the attributes of a table required for creating a field event.
+type TestFieldEvent struct {
+	table, db string
+	cols      []*TestColumn
+}
 
 // TestQuery represents a database query and the expected events it generates.
 type TestQuery struct {
@@ -192,9 +219,9 @@ func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[
 	tn, _ := ins.Table.TableName()
 	table := tn.Name.String()
 	fe := ts.fieldEvents[table]
-	mids, _ := ins.Rows.(sqlparser.Values)
-	for _, mid := range mids {
-		for i, v := range mid {
+	vals, _ := ins.Rows.(sqlparser.Values)
+	for _, val := range vals {
+		for i, v := range val {
 			bufV := sqlparser.NewTrackedBuffer(nil)
 			v.Format(bufV)
 			s := bufV.String()
@@ -289,6 +316,8 @@ func (ts *TestSpec) Run() {
 					isRowEvent = true
 					del := stmt.(*sqlparser.Delete)
 					table = del.TableExprs[0].(*sqlparser.AliasedTableExpr).As.String()
+				default:
+					require.FailNowf(ts.t, "unsupported statement type", "stmt: %s", stmt)
 				}
 				if isRowEvent {
 					fe := ts.fieldEvents[table]
