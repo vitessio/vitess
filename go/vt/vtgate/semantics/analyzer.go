@@ -45,18 +45,20 @@ type analyzer struct {
 	unshardedErr            error
 	warning                 string
 	singleUnshardedKeyspace bool
+	fullAnalysis            bool
 }
 
 // newAnalyzer create the semantic analyzer
-func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
+func newAnalyzer(dbName string, si SchemaInformation, fullAnalysis bool) *analyzer {
 	// TODO  dependencies between these components are a little tangled. We should try to clean up
 	s := newScoper()
 	a := &analyzer{
-		scoper:      s,
-		earlyTables: newEarlyTableCollector(si, dbName),
-		typer:       newTyper(si.Environment().CollationEnv()),
-		si:          si,
-		currentDb:   dbName,
+		scoper:       s,
+		earlyTables:  newEarlyTableCollector(si, dbName),
+		typer:        newTyper(si.Environment().CollationEnv()),
+		si:           si,
+		currentDb:    dbName,
+		fullAnalysis: fullAnalysis,
 	}
 	s.org = a
 	return a
@@ -76,7 +78,11 @@ func (a *analyzer) lateInit() {
 
 // Analyze analyzes the parsed query.
 func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
-	analyzer := newAnalyzer(currentDb, newSchemaInfo(si))
+	return analyseAndGetSemTable(statement, currentDb, si, false)
+}
+
+func analyseAndGetSemTable(statement sqlparser.Statement, currentDb string, si SchemaInformation, fullAnalysis bool) (*SemTable, error) {
+	analyzer := newAnalyzer(currentDb, newSchemaInfo(si), fullAnalysis)
 
 	// Analysis for initial scope
 	err := analyzer.analyze(statement)
@@ -90,7 +96,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 
 // AnalyzeStrict analyzes the parsed query, and fails the analysis for any possible errors
 func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
-	st, err := Analyze(statement, currentDb, si)
+	st, err := analyseAndGetSemTable(statement, currentDb, si, true)
 	if err != nil {
 		return nil, err
 	}
@@ -349,13 +355,17 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 // canShortCut checks if we are dealing with a single unsharded keyspace and no tables that have managed foreign keys
 // if so, we can stop the analyzer early
 func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool) {
-	defer func() {
-		a.singleUnshardedKeyspace = canShortCut
-	}()
+	if a.fullAnalysis {
+		return false
+	}
 	ks, _ := singleUnshardedKeyspace(a.earlyTables.Tables)
 	if ks == nil {
 		return false
 	}
+
+	defer func() {
+		a.singleUnshardedKeyspace = canShortCut
+	}()
 
 	if !sqlparser.IsDMLStatement(statement) {
 		return true
