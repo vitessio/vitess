@@ -949,7 +949,7 @@ func TestScopingWithWITH(t *testing.T) {
 		}, {
 			query:     "with c as (select x as foo from user), t as (select foo as id from c) select id from t",
 			recursive: TS0,
-			direct:    TS2,
+			direct:    TS3,
 		}, {
 			query:     "with t as (select foo as id from user) select t.id from t",
 			recursive: TS0,
@@ -985,7 +985,7 @@ func TestScopingWithWITH(t *testing.T) {
 			recursive: MergeTableSets(TS0, TS1),
 		}, {
 			query:     "with t as (select * from user) select t.id from t join user as u on t.id = u.id",
-			direct:    TS1,
+			direct:    TS2,
 			recursive: TS0,
 		}, {
 			query:     "with t as (select t1.id, t1.col1 from t1 join t2) select t.col1 from t3 ua join t",
