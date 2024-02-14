@@ -109,7 +109,6 @@ func buildChangedVindexesValues(
 	ctx *plancontext.PlanningContext,
 	update *sqlparser.Update,
 	table *vindexes.Table,
-	ate *sqlparser.AliasedTableExpr,
 	ksidCols []sqlparser.IdentifierCI,
 	assignments []SetExpr,
 ) (vv map[string]*engine.VindexValues, ownedVindexQuery *sqlparser.Select, subQueriesArgOnChangedVindex []string) {
@@ -145,11 +144,8 @@ func buildChangedVindexesValues(
 		return nil, nil, nil
 	}
 	// generate rest of the owned vindex query.
-	tblExpr := sqlparser.NewAliasedTableExpr(sqlparser.TableName{Name: table.Name}, ate.As.String())
 	ovq := &sqlparser.Select{
-		From:        []sqlparser.TableExpr{tblExpr},
 		SelectExprs: selExprs,
-		Where:       update.Where,
 		OrderBy:     update.OrderBy,
 		Limit:       update.Limit,
 		Lock:        sqlparser.ForUpdateLock,
