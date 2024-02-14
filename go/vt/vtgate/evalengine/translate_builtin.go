@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -1051,6 +1052,32 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		return &builtinInsert{
 			CallExpr: cexpr,
 			collate:  ast.cfg.Collation,
+		}, nil
+	case *sqlparser.CharExpr:
+		args := make([]IR, 0, len(call.Exprs))
+		for _, expr := range call.Exprs {
+			arg, err := ast.translateExpr(expr)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, arg)
+		}
+
+		var cexpr = CallExpr{Arguments: args, Method: "CHAR"}
+		var coll collations.ID
+		if call.Charset == "" {
+			coll = collations.CollationBinaryID
+		} else {
+			var err error
+			coll, err = ast.translateConvertCharset(call.Charset, false)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return &builtinChar{
+			CallExpr: cexpr,
+			collate:  coll,
 		}, nil
 	default:
 		return nil, translateExprNotSupported(call)

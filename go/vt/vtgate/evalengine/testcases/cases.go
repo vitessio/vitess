@@ -85,6 +85,7 @@ var Cases = []TestCase{
 	{Run: FnLocate},
 	{Run: FnConcat},
 	{Run: FnConcatWs},
+	{Run: FnChar},
 	{Run: FnHex},
 	{Run: FnUnhex},
 	{Run: FnCeil},
@@ -1611,6 +1612,31 @@ func FnConcatWs(yield Query) {
 		for _, str2 := range inputStrings {
 			for _, str3 := range inputConversions {
 				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+}
+
+func FnChar(yield Query) {
+	mysqlDocSamples := []string{
+		`CHAR(77,121,83,81,'76')`,
+		`CHAR(77,77.3,'77.3')`,
+		`CHAR(77,121,83,81,'76' USING utf8mb4)`,
+		`CHAR(77,77.3,'77.3' USING utf8mb4)`,
+		`HEX(CHAR(1,0))`,
+		`HEX(CHAR(256))`,
+		`HEX(CHAR(1,0,0))`,
+		`HEX(CHAR(256*256)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, i1 := range radianInputs {
+		for _, i2 := range inputBitwise {
+			for _, i3 := range inputConversions {
+				yield(fmt.Sprintf("CHAR(%s, %s, %s)", i1, i2, i3), nil)
 			}
 		}
 	}
