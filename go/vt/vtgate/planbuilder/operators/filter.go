@@ -39,9 +39,13 @@ type Filter struct {
 	Truncate int
 }
 
-func newFilter(op Operator, expr sqlparser.Expr) Operator {
+func newFilterSinglePredicate(op Operator, expr sqlparser.Expr) Operator {
+	return newFilter(op, expr)
+}
+
+func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
 	return &Filter{
-		Source: op, Predicates: []sqlparser.Expr{expr},
+		Source: op, Predicates: expr,
 	}
 }
 
