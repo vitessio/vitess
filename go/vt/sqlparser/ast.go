@@ -53,16 +53,17 @@ type (
 		Commented
 	}
 
+	OrderAndLimit interface {
+		AddOrder(*Order)
+		SetLimit(*Limit)
+	}
+
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
 		Statement
 		InsertRows
+		OrderAndLimit
 		iSelectStatement()
-		AddOrder(*Order)
-		SetOrderBy(OrderBy)
-		GetOrderBy() OrderBy
-		GetLimit() *Limit
-		SetLimit(*Limit)
 		GetLock() Lock
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
@@ -72,6 +73,9 @@ type (
 		GetColumns() SelectExprs
 		Commented
 		IsDistinct() bool
+		GetOrderBy() OrderBy
+		SetOrderBy(OrderBy)
+		GetLimit() *Limit
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -711,6 +715,10 @@ type (
 	// IndexType is the type of index in a DDL statement
 	IndexType int8
 )
+
+var _ OrderAndLimit = (*Select)(nil)
+var _ OrderAndLimit = (*Update)(nil)
+var _ OrderAndLimit = (*Delete)(nil)
 
 func (*Union) iStatement()               {}
 func (*Select) iStatement()              {}
