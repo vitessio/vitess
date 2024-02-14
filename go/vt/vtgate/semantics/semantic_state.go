@@ -439,11 +439,8 @@ func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 	return 0, columnNotSupportedErr
 }
 
-// SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
-func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.Table) {
-	var ks *vindexes.Keyspace
-	var tables []*vindexes.Table
-	for _, table := range st.Tables {
+func singleUnshardedKeyspace(in []TableInfo) (ks *vindexes.Keyspace, tables []*vindexes.Table) {
+	for _, table := range in {
 		vindexTable := table.GetVindexTable()
 
 		if vindexTable == nil {
@@ -484,7 +481,12 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 		}
 		tables = append(tables, vindexTable)
 	}
-	return ks, tables
+	return
+}
+
+// SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
+func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.Table) {
+	return singleUnshardedKeyspace(st.Tables)
 }
 
 // EqualsExpr compares two expressions using the semantic analysis information.

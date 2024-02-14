@@ -1132,7 +1132,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = 'foo' where 1 != 1",
-                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = 'foo' where (u_tbl8.col8) in ::fkc_vals and u_tbl9.col9 is null limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = 'foo' where u_tbl9.col9 is null and (u_tbl8.col8) in ::fkc_vals limit 1 lock in share mode",
                 "Table": "u_tbl8, u_tbl9"
               },
               {
@@ -1208,7 +1208,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = 'foo' where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = 'foo' where (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = 'foo' where u_tbl3.col3 is null and (u_tbl4.col4) in ::fkc_vals limit 1 lock in share mode",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -1220,7 +1220,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (u_tbl9.col9) not in (('foo')) and u_tbl4.col4 = u_tbl9.col9 limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and ('foo' is null or (u_tbl9.col9) not in (('foo'))) and u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and ('foo' is null or (u_tbl9.col9) not in (('foo'))) limit 1 lock in share mode",
                 "Table": "u_tbl4, u_tbl9"
               },
               {
@@ -1297,7 +1297,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = :v1 where u_tbl3.col3 is null and (u_tbl4.col4) in ::fkc_vals limit 1 lock in share mode",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -1309,7 +1309,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (:v1 is null or (u_tbl9.col9) not in ((:v1))) and u_tbl4.col4 = u_tbl9.col9 limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (:v1 is null or (u_tbl9.col9) not in ((:v1))) and u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (:v1 is null or (u_tbl9.col9) not in ((:v1))) limit 1 lock in share mode",
                 "Table": "u_tbl4, u_tbl9"
               },
               {
