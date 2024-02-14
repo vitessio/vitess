@@ -145,7 +145,6 @@ func handleCollection(collection string, getFunc func(*http.Request) (any, error
 
 		// JSON encode response.
 		data, err := vtctl.MarshalJSON(obj)
-		log.Flush()
 		if err != nil {
 			return fmt.Errorf("cannot marshal data: %v", err)
 		}

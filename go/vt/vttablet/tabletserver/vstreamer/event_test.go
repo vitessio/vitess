@@ -38,21 +38,25 @@ var (
 	noEvents = []TestRowEvent{}
 )
 
+// TestQuery represents a database query and the expected events it generates.
 type TestQuery struct {
 	query  string
 	events []TestRowEvent
 }
 
+// TestRowChange represents the before and after state of a row due to a dml
 type TestRowChange struct {
 	before []string
 	after  []string
 }
 
+// TestRowEventSpec is used for defining a custom row event.
 type TestRowEventSpec struct {
 	table   string
 	changes []TestRowChange
 }
 
+// Generates a string representation for a custom row event.
 func (s *TestRowEventSpec) String() string {
 	ev := &binlogdata.RowEvent{
 		TableName: s.table,
@@ -86,32 +90,37 @@ func (s *TestRowEventSpec) String() string {
 	return vEvent.String()
 }
 
+// TestRowEvent is used to define either the actual row event string (the `event` field) or a custom row event
+// (the `spec` field). Only one should be specified. If a test validates `flags` of a RowEvent then it is set.
 type TestRowEvent struct {
 	event string
 	spec  *TestRowEventSpec
 	flags int
 }
 
+// TestSpecOptions has any non-standard test-specific options which can modify the event generation behaviour.
 type TestSpecOptions struct {
 	noblob bool
 	filter *binlogdata.Filter
 }
 
+// TestSpec is defined one per unit test.
 type TestSpec struct {
+	// test=specific parameters
 	t       *testing.T
-	ddls    []string
-	input   []string
-	tests   [][]*TestQuery
-	options *TestSpecOptions
+	ddls    []string         // create table statements
+	tests   [][]*TestQuery   // list of input queries and expected events for each query
+	options *TestSpecOptions // test-specific options
 
-	tables          []string
-	pkColumns       map[string][]string
-	inited          bool
-	schema          *schemadiff.Schema
-	fieldEvents     map[string]*TestFieldEvent
-	fieldEventsSent map[string]bool
-	state           map[string]*query.Row
-	metadata        map[string][]string
+	// internal state
+	inited          bool                       // whether the test has been initialized
+	tables          []string                   // list of tables in the schema (created in `ddls`)
+	pkColumns       map[string][]string        // map of table name to primary key columns
+	schema          *schemadiff.Schema         // parsed schema from `ddls` using `schemadiff`
+	fieldEvents     map[string]*TestFieldEvent // map of table name to field event for the table
+	fieldEventsSent map[string]bool            // whether the field event has been sent for the table in the test
+	state           map[string]*query.Row      // last row inserted for each table. Useful to generate events only for inserts
+	metadata        map[string][]string        // list of enum/set values for enum/set columns
 }
 
 func (ts *TestSpec) getCurrentState(table string) *query.Row {
@@ -169,11 +178,61 @@ func (ts *TestSpec) Init() error {
 	return nil
 }
 
+// Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
 func (ts *TestSpec) Close() {
 	dropStatement := fmt.Sprintf("drop tables %s", strings.Join(ts.schema.TableNames(), ", "))
 	execStatement(ts.t, dropStatement)
 }
 
+func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[string]string) {
+	bv := make(map[string]string)
+	ins := stmt.(*sqlparser.Insert)
+	tn, _ := ins.Table.TableName()
+	table := tn.Name.String()
+	fe := ts.fieldEvents[table]
+	mids, _ := ins.Rows.(sqlparser.Values)
+	for _, mid := range mids {
+		for i, v := range mid {
+			bufV := sqlparser.NewTrackedBuffer(nil)
+			v.Format(bufV)
+			s := bufV.String()
+			switch fe.cols[i].dataTypeLowered {
+			case "varchar", "char", "binary", "varbinary", "blob", "text":
+				s = strings.Trim(s, "'")
+			case "set", "enum":
+				s = ts.getMetadataMap(table, fe.cols[i], s)
+			}
+			bv[fe.cols[i].name] = s
+		}
+	}
+	return table, bv
+}
+
+func (ts *TestSpec) getBindVarsForUpdate(stmt sqlparser.Statement) (string, map[string]string) {
+	bv := make(map[string]string)
+	upd := stmt.(*sqlparser.Update)
+	buf := sqlparser.NewTrackedBuffer(nil)
+	upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
+	table := buf.String()
+	fe, ok := ts.fieldEvents[table]
+	require.True(ts.t, ok, "field event for table %s not found", table)
+	index := int64(0)
+	state := ts.getCurrentState(table)
+	for i, col := range fe.cols {
+		bv[col.name] = string(state.Values[index : index+state.Lengths[i]])
+		index += state.Lengths[i]
+	}
+	for _, expr := range upd.Exprs {
+		bufV := sqlparser.NewTrackedBuffer(nil)
+		bufN := sqlparser.NewTrackedBuffer(nil)
+		expr.Expr.Format(bufV)
+		expr.Name.Format(bufN)
+		bv[bufN.String()] = strings.Trim(bufV.String(), "'")
+	}
+	return table, bv
+}
+
+// Run() runs the test. It first initializes the test, then runs the queries and validates the events.
 func (ts *TestSpec) Run() {
 	require.NoError(ts.t, engine.se.Reload(context.Background()))
 	if !ts.inited {
@@ -188,9 +247,9 @@ func (ts *TestSpec) Run() {
 			var table string
 			input = append(input, tq.query)
 			switch {
-			case tq.events != nil && len(tq.events) == 0:
+			case tq.events != nil && len(tq.events) == 0: // when an input query is expected to generate no events
 				continue
-			case tq.events != nil &&
+			case tq.events != nil && // when we define the actual events either as a serialized string or as a TestRowEvent
 				(len(tq.events) > 0 &&
 					!(len(tq.events) == 1 && tq.events[0].event == "" && tq.events[0].spec == nil)):
 				for _, e := range tq.events {
@@ -204,6 +263,7 @@ func (ts *TestSpec) Run() {
 				}
 				continue
 			default:
+				// when we don't define the actual events, we generate them based on the input query
 				flags := 0
 				if len(tq.events) == 1 {
 					flags = tq.events[0].flags
@@ -219,46 +279,10 @@ func (ts *TestSpec) Run() {
 					output = append(output, "gtid", "commit")
 				case *sqlparser.Insert:
 					isRowEvent = true
-					ins := stmt.(*sqlparser.Insert)
-					tn, _ := ins.Table.TableName()
-					table = tn.Name.String()
-					fe := ts.fieldEvents[table]
-					mids, _ := ins.Rows.(sqlparser.Values)
-					for _, mid := range mids {
-						for i, v := range mid {
-							bufV := sqlparser.NewTrackedBuffer(nil)
-							v.Format(bufV)
-							s := bufV.String()
-							switch fe.cols[i].dataTypeLowered {
-							case "varchar", "char", "binary", "varbinary", "blob", "text":
-								s = strings.Trim(s, "'")
-							case "set", "enum":
-								s = ts.getMetadataMap(table, fe.cols[i], s)
-							}
-							bv[fe.cols[i].name] = s
-						}
-					}
+					table, bv = ts.getBindVarsForInsert(stmt)
 				case *sqlparser.Update:
 					isRowEvent = true
-					upd := stmt.(*sqlparser.Update)
-					buf := sqlparser.NewTrackedBuffer(nil)
-					upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
-					table = buf.String()
-					fe, ok := ts.fieldEvents[table]
-					require.True(ts.t, ok, "field event for table %s not found", table)
-					index := int64(0)
-					state := ts.getCurrentState(table)
-					for i, col := range fe.cols {
-						bv[col.name] = string(state.Values[index : index+state.Lengths[i]])
-						index += state.Lengths[i]
-					}
-					for _, expr := range upd.Exprs {
-						bufV := sqlparser.NewTrackedBuffer(nil)
-						bufN := sqlparser.NewTrackedBuffer(nil)
-						expr.Expr.Format(bufV)
-						expr.Name.Format(bufN)
-						bv[bufN.String()] = strings.Trim(bufV.String(), "'")
-					}
+					table, bv = ts.getBindVarsForUpdate(stmt)
 				case *sqlparser.Delete:
 					isRowEvent = true
 					del := stmt.(*sqlparser.Delete)
@@ -267,7 +291,7 @@ func (ts *TestSpec) Run() {
 				if isRowEvent {
 					fe := ts.fieldEvents[table]
 					if fe == nil {
-						panic(fmt.Sprintf("field event for table %s not found", table))
+						require.FailNowf(ts.t, "field event for table %s not found", table)
 					}
 					if !ts.fieldEventsSent[table] {
 						output = append(output, fe.String())
@@ -280,7 +304,6 @@ func (ts *TestSpec) Run() {
 		}
 		tc.input = input
 		tc.output = append(tc.output, output)
-		log.Flush()
 		testcases = append(testcases, tc)
 	}
 	runCases(ts.t, ts.options.filter, testcases, "current", nil)

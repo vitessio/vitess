@@ -186,7 +186,6 @@ func TestPlayerInvisibleColumns(t *testing.T) {
 		output := qh.Expect(tcases.output)
 		expectNontxQueries(t, output)
 		time.Sleep(1 * time.Second)
-		log.Flush()
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
@@ -3094,7 +3093,6 @@ func TestPlayerNoBlob(t *testing.T) {
 		output := qh.Expect(tcases.output)
 		expectNontxQueries(t, output)
 		time.Sleep(1 * time.Second)
-		log.Flush()
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
@@ -3333,7 +3331,6 @@ func TestPlayerBatchMode(t *testing.T) {
 			}
 			expectNontxQueries(t, output)
 			time.Sleep(1 * time.Second)
-			log.Flush()
 			if tcase.table != "" {
 				expectData(t, tcase.table, tcase.data)
 			}
