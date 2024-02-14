@@ -58,4 +58,4 @@ USER vitess
 COPY docker/vttestserver/setup_vschema_folder.sh /vt/setup_vschema_folder.sh
 COPY docker/vttestserver/run.sh /vt/run.sh
 
-CMD /vt/run.sh "8.0.21-vitess"
+CMD /vt/run.sh "8.0.30-Vitess"
