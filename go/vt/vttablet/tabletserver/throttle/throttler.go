@@ -791,6 +791,7 @@ func (throttler *Throttler) generateTabletProbeFunction(ctx context.Context, clu
 			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
 			// We therefore renew the heartbeats lease.
 			throttler.requestHeartbeats()
+			go stats.GetOrNewCounter("ThrottlerProbeRecentlyChecked", "probe recently checked").Add(1)
 		}
 		return mySQLThrottleMetric
 	}
@@ -1186,6 +1187,7 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		// If this tablet is a REPLICA or RDONLY, we want to advertise to the PRIMARY that someone did a recent check,
 		// so that the PRIMARY knows it must renew the heartbeat lease.
 		checkResult.RecentlyChecked = true
+		go stats.GetOrNewCounter("ThrottlerRecentlyChecked", "recently checked").Add(1)
 	}
 
 	return checkResult
