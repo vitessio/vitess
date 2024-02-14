@@ -44,7 +44,10 @@ comment: # https://docs.codecov.com/docs/pull-request-comments
 
 coverage:
   status: # https://docs.codecov.com/docs/commit-status
+    patch:
+      default:
+        informational: true # Don't ever fail the codecov/patch test
     project:
       default:
-        informational: true # Don't ever fail the codecov/project or codecov/patch tests
+        informational: true # Don't ever fail the codecov/project test
 
