@@ -55,12 +55,12 @@ func TestVDiffStats(t *testing.T) {
 		time.Sleep(sleepTime)
 	}
 	want := int64(1.2 * float64(sleepTime)) // Allow 20% overhead for recording timing
-	record("initialize")
-	require.Greater(t, want, testStats.controllers[id].TableDiffPhaseTimings.Histograms()["initialize"].Total())
-	record("selecting_tablets")
-	require.Greater(t, want, testStats.controllers[id].TableDiffPhaseTimings.Histograms()["selecting_tablets"].Total())
-	record("diff")
-	require.Greater(t, want, testStats.controllers[id].TableDiffPhaseTimings.Histograms()["diff"].Total())
+	record(string(initializing))
+	require.Greater(t, want, testStats.controllers[id].TableDiffPhaseTimings.Histograms()[string(initializing)].Total())
+	record(string(pickingTablets))
+	require.Greater(t, want, testStats.controllers[id].TableDiffPhaseTimings.Histograms()[string(pickingTablets)].Total())
+	record(string(diffingTable))
+	require.Greater(t, want, testStats.controllers[id].TableDiffPhaseTimings.Histograms()[string(diffingTable)].Total())
 
 	testStats.ErrorCount.Set(11)
 	require.Equal(t, int64(11), testStats.ErrorCount.Get())
