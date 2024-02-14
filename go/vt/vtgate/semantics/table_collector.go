@@ -53,20 +53,20 @@ func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableC
 	}
 }
 
-func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) error {
+func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) {
 	aet, ok := cursor.Node().(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil
+		return
 	}
-	return etc.visitAliasedTableExpr(aet)
+	etc.visitAliasedTableExpr(aet)
 }
 
-func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTableExpr) error {
+func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTableExpr) {
 	tbl, ok := aet.Expr.(sqlparser.TableName)
 	if !ok {
-		return nil
+		return
 	}
-	return etc.handleTableName(tbl, aet)
+	etc.handleTableName(tbl, aet)
 }
 
 func (etc *earlyTableCollector) newTableCollector(scoper *scoper, org originable) *tableCollector {
@@ -81,15 +81,15 @@ func (etc *earlyTableCollector) newTableCollector(scoper *scoper, org originable
 	}
 }
 
-func (etc *earlyTableCollector) handleTableName(tbl sqlparser.TableName, aet *sqlparser.AliasedTableExpr) error {
+func (etc *earlyTableCollector) handleTableName(tbl sqlparser.TableName, aet *sqlparser.AliasedTableExpr) {
 	tableInfo, err := getTableInfo(aet, tbl, etc.si, etc.currentDb)
 	if err != nil {
-		return err
+		// this could just be a CTE that we haven't processed, so we'll give it the benefit of the doubt for now
+		return
 	}
 
 	etc.done[aet] = tableInfo
 	etc.Tables = append(etc.Tables, tableInfo)
-	return nil
 }
 
 func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {

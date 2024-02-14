@@ -383,16 +383,8 @@ func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool)
 // earlyUp collects tables in the query, so we can check
 // if this a single unsharded query we are dealing with
 func (a *analyzer) earlyUp(cursor *sqlparser.Cursor) bool {
-	if !a.shouldContinue() {
-		return false
-	}
-
-	if err := a.earlyTables.up(cursor); err != nil {
-		a.setError(err)
-		return false
-	}
-
-	return a.shouldContinue()
+	a.earlyTables.up(cursor)
+	return true
 }
 
 func (a *analyzer) shouldContinue() bool {

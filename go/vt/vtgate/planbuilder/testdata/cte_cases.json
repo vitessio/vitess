@@ -1369,8 +1369,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select u.* from (select * from unsharded where 1 != 1) as u where 1 != 1",
-        "Query": "select u.* from (select * from unsharded) as u",
+        "FieldQuery": "with u as (select * from unsharded where 1 != 1) select u.* from u where 1 != 1",
+        "Query": "with u as (select * from unsharded) select u.* from u",
         "Table": "unsharded"
       },
       "TablesUsed": [
@@ -1709,8 +1709,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select col from (select col from unsharded join unsharded_b where 1 != 1) as u join unsharded_a as ua where 1 != 1",
-        "Query": "select col from (select col from unsharded join unsharded_b) as u join unsharded_a as ua limit 1",
+        "FieldQuery": "with u as (select col from unsharded join unsharded_b where 1 != 1) select col from u join unsharded_a as ua where 1 != 1",
+        "Query": "with u as (select col from unsharded join unsharded_b) select col from u join unsharded_a as ua limit 1",
         "Table": "unsharded, unsharded_a, unsharded_b"
       },
       "TablesUsed": [
