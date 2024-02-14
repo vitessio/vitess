@@ -128,7 +128,7 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 }
 
 func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	return AddPredicate(ctx, j, expr, false, newFilter)
+	return AddPredicate(ctx, j, expr, false, newFilterSinglePredicate)
 }
 
 var _ JoinOp = (*Join)(nil)
