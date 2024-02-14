@@ -16,8 +16,6 @@ limitations under the License.
 
 package errors
 
-import "errors"
-
 // Wrapped is used to unwrap an error created by errors.Join() in Go 1.20
 type Wrapped interface {
 	Unwrap() []error
@@ -55,14 +53,4 @@ func UnwrapFirst(err error) error {
 		return nil
 	}
 	return UnwrapAll(err)[0]
-}
-
-// UnwrappedIs returns 'true' if any of the unwrapped error complies with golang's errors.Is(target)
-func UnwrappedIs(err, target error) bool {
-	for _, serr := range UnwrapAll(err) {
-		if errors.Is(serr, target) {
-			return true
-		}
-	}
-	return false
 }
