@@ -32,7 +32,7 @@ import (
 func TestExpandStar(t *testing.T) {
 	ks := &vindexes.Keyspace{
 		Name:    "main",
-		Sharded: false,
+		Sharded: true,
 	}
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{
@@ -483,7 +483,7 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 func TestRewriteNot(t *testing.T) {
 	ks := &vindexes.Keyspace{
 		Name:    "main",
-		Sharded: false,
+		Sharded: true,
 	}
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{
@@ -535,7 +535,7 @@ func TestRewriteNot(t *testing.T) {
 func TestConstantFolding(t *testing.T) {
 	ks := &vindexes.Keyspace{
 		Name:    "main",
-		Sharded: false,
+		Sharded: true,
 	}
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{
@@ -612,13 +612,13 @@ func TestDeleteTargetTableRewrite(t *testing.T) {
 		sql    string
 		target string
 	}{{
-		sql:    "delete from t",
-		target: "t",
-	}, {
-		sql:    "delete from t t1",
+		sql:    "delete from t1",
 		target: "t1",
 	}, {
-		sql:    "delete t2 from t t1, t t2",
+		sql:    "delete from t1 XYZ",
+		target: "XYZ",
+	}, {
+		sql:    "delete t2 from t1 t1, t t2",
 		target: "t2",
 	}, {
 		sql:    "delete t2,t1 from t t1, t t2",

@@ -147,11 +147,11 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 						tbl["t1"],
 						&DerivedTable{},
 					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_managed,
-							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
-						},
+				},
+				si: &FakeSI{
+					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+						"ks":           vschemapb.Keyspace_managed,
+						"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 					},
 				},
 			},
@@ -176,10 +176,10 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 						tbl["t2"],
 						tbl["t3"],
 					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_managed,
-						},
+				},
+				si: &FakeSI{
+					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+						"ks": vschemapb.Keyspace_managed,
 					},
 				},
 			},
@@ -193,14 +193,14 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 						tbl["t0"], tbl["t1"],
 						&DerivedTable{},
 					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_managed,
-							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
-						},
-						KsError: map[string]error{
-							"ks": fmt.Errorf("VT09019: keyspace 'ks' has cyclic foreign keys"),
-						},
+				},
+				si: &FakeSI{
+					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+						"ks":           vschemapb.Keyspace_managed,
+						"ks_unmanaged": vschemapb.Keyspace_unmanaged,
+					},
+					KsError: map[string]error{
+						"ks": fmt.Errorf("VT09019: keyspace 'ks' has cyclic foreign keys"),
 					},
 				},
 			},
@@ -355,11 +355,11 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 						tbl["t0"],
 						tbl["t1"],
 					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_managed,
-							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
-						},
+				},
+				si: &FakeSI{
+					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+						"ks":           vschemapb.Keyspace_managed,
+						"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 					},
 				},
 			},
@@ -394,10 +394,10 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 						tbl["t4"],
 						tbl["t5"],
 					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_managed,
-						},
+				},
+				si: &FakeSI{
+					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+						"ks": vschemapb.Keyspace_managed,
 					},
 				},
 			},
@@ -438,11 +438,11 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 						tbl["t0"],
 						tbl["t1"],
 					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_managed,
-							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
-						},
+				},
+				si: &FakeSI{
+					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+						"ks":           vschemapb.Keyspace_managed,
+						"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 					},
 				},
 			},
@@ -470,11 +470,11 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 						tbl["t0"],
 						tbl["t1"],
 					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_managed,
-							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
-						},
+				},
+				si: &FakeSI{
+					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+						"ks":           vschemapb.Keyspace_managed,
+						"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 					},
 				},
 			},
@@ -507,11 +507,11 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 						tbl["t6"],
 						tbl["t1"],
 					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks":           vschemapb.Keyspace_managed,
-							"ks_unmanaged": vschemapb.Keyspace_unmanaged,
-						},
+				},
+				si: &FakeSI{
+					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+						"ks":           vschemapb.Keyspace_managed,
+						"ks_unmanaged": vschemapb.Keyspace_unmanaged,
 					},
 				},
 			},
@@ -541,10 +541,10 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 						tbl["t2"],
 						tbl["t3"],
 					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_managed,
-						},
+				},
+				si: &FakeSI{
+					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+						"ks": vschemapb.Keyspace_managed,
 					},
 				},
 			},
@@ -559,10 +559,10 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 						tbl["t2"],
 						tbl["t3"],
 					},
-					si: &FakeSI{
-						KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
-							"ks": vschemapb.Keyspace_managed,
-						},
+				},
+				si: &FakeSI{
+					KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
+						"ks": vschemapb.Keyspace_managed,
 					},
 				},
 			},
