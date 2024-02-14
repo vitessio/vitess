@@ -28,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var T0 TableSet
+var NoTables TableSet
 
 var (
 	// Just here to make outputs more readable
@@ -598,7 +598,7 @@ func TestOrderByBindingTable(t *testing.T) {
 		TS0,
 	}, {
 		"select 1 as c from tabl order by c",
-		T0,
+		NoTables,
 	}, {
 		"select name, name from t1, t2 order by name",
 		TS1,
@@ -710,7 +710,7 @@ func TestGroupByBinding(t *testing.T) {
 		TS0,
 	}, {
 		"select 1 as c from tabl group by c",
-		T0,
+		NoTables,
 	}, {
 		"select t1.id from t1, t2 group by id",
 		TS0,
@@ -759,13 +759,13 @@ func TestHavingBinding(t *testing.T) {
 		TS0,
 	}, {
 		"select col from tabl having 1 = 1",
-		T0,
+		NoTables,
 	}, {
 		"select col as c from tabl having c = 1",
 		TS0,
 	}, {
 		"select 1 as c from tabl having c = 1",
-		T0,
+		NoTables,
 	}, {
 		"select t1.id from t1, t2 having id = 1",
 		TS0,
@@ -959,11 +959,11 @@ func TestScopingWithWITH(t *testing.T) {
 			errorMessage: "column 't.id2' not found",
 		}, {
 			query:     "with t as (select 42 as id) select id from t",
-			recursive: T0,
+			recursive: NoTables,
 			direct:    TS1,
 		}, {
 			query:     "with t as (select 42 as id) select t.id from t",
-			recursive: T0,
+			recursive: NoTables,
 			direct:    TS1,
 		}, {
 			query:        "with t as (select 42 as id) select ks.t.id from t",
@@ -1006,8 +1006,8 @@ func TestScopingWithWITH(t *testing.T) {
 			recursive: TS0,
 		}, {
 			query:     "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
-			direct:    T0,
-			recursive: T0,
+			direct:    NoTables,
+			recursive: NoTables,
 		}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {

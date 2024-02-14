@@ -28,38 +28,38 @@ import (
 
 func TestScopingWDerivedTables(t *testing.T) {
 	queries := []struct {
-		query                string
-		errorMessage         string
-		recursiveExpectation TableSet
-		expectation          TableSet
+		query         string
+		errorMessage  string
+		recursiveDeps TableSet
+		directDeps    TableSet
 	}{
 		{
-			query:                "select id from (select x as id from user) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS1,
+			query:         "select id from (select x as id from user) as t",
+			recursiveDeps: TS0,
+			directDeps:    TS1,
 		}, {
-			query:                "select id from (select foo as id from user) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS1,
+			query:         "select id from (select foo as id from user) as t",
+			recursiveDeps: TS0,
+			directDeps:    TS1,
 		}, {
-			query:                "select id from (select foo as id from (select x as foo from user) as c) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS2,
+			query:         "select id from (select foo as id from (select x as foo from user) as c) as t",
+			recursiveDeps: TS0,
+			directDeps:    TS2,
 		}, {
-			query:                "select t.id from (select foo as id from user) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS1,
+			query:         "select t.id from (select foo as id from user) as t",
+			recursiveDeps: TS0,
+			directDeps:    TS1,
 		}, {
 			query:        "select t.id2 from (select foo as id from user) as t",
 			errorMessage: "column 't.id2' not found",
 		}, {
-			query:                "select id from (select 42 as id) as t",
-			recursiveExpectation: T0,
-			expectation:          TS1,
+			query:         "select id from (select 42 as id) as t",
+			recursiveDeps: NoTables,
+			directDeps:    TS1,
 		}, {
-			query:                "select t.id from (select 42 as id) as t",
-			recursiveExpectation: T0,
-			expectation:          TS1,
+			query:         "select t.id from (select 42 as id) as t",
+			recursiveDeps: NoTables,
+			directDeps:    TS1,
 		}, {
 			query:        "select ks.t.id from (select 42 as id) as t",
 			errorMessage: "column 'ks.t.id' not found",
@@ -67,25 +67,25 @@ func TestScopingWDerivedTables(t *testing.T) {
 			query:        "select * from (select id, id from user) as t",
 			errorMessage: "Duplicate column name 'id'",
 		}, {
-			query:                "select t.baz = 1 from (select id as baz from user) as t",
-			expectation:          TS1,
-			recursiveExpectation: TS0,
+			query:         "select t.baz = 1 from (select id as baz from user) as t",
+			directDeps:    TS1,
+			recursiveDeps: TS0,
 		}, {
-			query:                "select t.id from (select * from user, music) as t",
-			expectation:          TS2,
-			recursiveExpectation: MergeTableSets(TS0, TS1),
+			query:         "select t.id from (select * from user, music) as t",
+			directDeps:    TS2,
+			recursiveDeps: MergeTableSets(TS0, TS1),
 		}, {
-			query:                "select t.id from (select * from user, music) as t order by t.id",
-			expectation:          TS2,
-			recursiveExpectation: MergeTableSets(TS0, TS1),
+			query:         "select t.id from (select * from user, music) as t order by t.id",
+			directDeps:    TS2,
+			recursiveDeps: MergeTableSets(TS0, TS1),
 		}, {
-			query:                "select t.id from (select * from user) as t join user as u on t.id = u.id",
-			expectation:          TS2,
-			recursiveExpectation: TS0,
+			query:         "select t.id from (select * from user) as t join user as u on t.id = u.id",
+			directDeps:    TS2,
+			recursiveDeps: TS0,
 		}, {
-			query:                "select t.col1 from t3 ua join (select t1.id, t1.col1 from t1 join t2) as t",
-			expectation:          TS3,
-			recursiveExpectation: TS1,
+			query:         "select t.col1 from t3 ua join (select t1.id, t1.col1 from t1 join t2) as t",
+			directDeps:    TS3,
+			recursiveDeps: TS1,
 		}, {
 			query:        "select uu.test from (select id from t1) uu",
 			errorMessage: "column 'uu.test' not found",
@@ -96,13 +96,17 @@ func TestScopingWDerivedTables(t *testing.T) {
 			query:        "select uu.id from (select id as col from t1) uu",
 			errorMessage: "column 'uu.id' not found",
 		}, {
-			query:                "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
-			expectation:          TS2,
-			recursiveExpectation: TS0,
+			query:         "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
+			directDeps:    TS2,
+			recursiveDeps: TS0,
 		}, {
-			query:                "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
-			expectation:          T0,
-			recursiveExpectation: T0,
+			query:         "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
+			directDeps:    NoTables,
+			recursiveDeps: NoTables,
+		}, {
+			query:         "select uu.count from (select count(*) as `count` from t1) uu",
+			directDeps:    TS1,
+			recursiveDeps: TS0,
 		}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
@@ -110,7 +114,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			require.NoError(t, err)
 			st, err := Analyze(parse, "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewIdentifierCS("t")},
+					"t": {Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks2},
 				},
 			})
 
@@ -122,8 +126,8 @@ func TestScopingWDerivedTables(t *testing.T) {
 			default:
 				require.NoError(t, err)
 				sel := parse.(*sqlparser.Select)
-				assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
-				assert.Equal(t, query.expectation, st.DirectDeps(extract(sel, 0)), "DirectDeps")
+				assert.Equal(t, query.recursiveDeps, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
+				assert.Equal(t, query.directDeps, st.DirectDeps(extract(sel, 0)), "DirectDeps")
 			}
 		})
 	}
