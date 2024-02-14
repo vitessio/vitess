@@ -190,7 +190,7 @@ func getTableInfo(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, si Sc
 		tbl = newVindexTable(t.Name)
 	}
 
-	return createTable(t, node, tbl, isInfSchema, vindex, si, currentDb), nil
+	return createTable(t, node, tbl, isInfSchema, vindex, currentDb), nil
 }
 
 func (tc *tableCollector) addSelectDerivedTable(sel *sqlparser.Select, node *sqlparser.AliasedTableExpr) error {
@@ -284,7 +284,6 @@ func createTable(
 	tbl *vindexes.Table,
 	isInfSchema bool,
 	vindex vindexes.Vindex,
-	si SchemaInformation,
 	currentDb string,
 ) TableInfo {
 	table := &RealTable{
