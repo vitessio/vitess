@@ -5660,5 +5660,173 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "update with multi table join with single target",
+    "query": "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "ue_id": 0
+            },
+            "TableName": "user_extra_`user`",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select ue.id from user_extra as ue where 1 != 1",
+                "Query": "select ue.id from user_extra as ue lock in share mode",
+                "Table": "user_extra"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.id from `user` as u where 1 != 1",
+                "Query": "select u.id from `user` as u where u.id = :ue_id lock in share mode",
+                "Table": "`user`",
+                "Values": [
+                  ":ue_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "ChangedVindexValues": [
+              "name_user_map:3"
+            ],
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select Id, `Name`, Costly, u.`name` = 'foo' from `user` as u where u.id in ::dml_vals for update",
+            "Query": "update `user` as u set u.`name` = 'foo' where u.id in ::dml_vals",
+            "Table": "user",
+            "Values": [
+              "::dml_vals"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update with multi table join with single target modifying lookup vindex",
+    "query": "update user join user_extra on user.id = user_extra.id set user.name = 'foo'",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user join user_extra on user.id = user_extra.id set user.name = 'foo'",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "user_extra_id": 0
+            },
+            "TableName": "user_extra_`user`",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+                "Query": "select user_extra.id from user_extra lock in share mode",
+                "Table": "user_extra"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id from `user` where 1 != 1",
+                "Query": "select `user`.id from `user` where `user`.id = :user_extra_id lock in share mode",
+                "Table": "`user`",
+                "Values": [
+                  ":user_extra_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "ChangedVindexValues": [
+              "name_user_map:3"
+            ],
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select Id, `Name`, Costly, `user`.`name` = 'foo' from `user` where `user`.id in ::dml_vals for update",
+            "Query": "update `user` set `user`.`name` = 'foo' where `user`.id in ::dml_vals",
+            "Table": "user",
+            "Values": [
+              "::dml_vals"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update with multi table reference with multi target update on a derived table",
+    "query": "update ignore (select foo, col, bar from user) u, music m set u.foo = 21, u.bar = 'abc' where u.col = m.col",
+    "plan": "VT03031: the target table (select foo, col, bar from `user`) as u of the UPDATE is not updatable"
+  },
+  {
+    "comment": "update with derived table",
+    "query": "update (select id from user) as u set id = 4",
+    "plan": "VT03031: the target table (select id from `user`) as u of the UPDATE is not updatable"
   }
 ]
