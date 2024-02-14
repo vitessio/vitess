@@ -104,7 +104,7 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
 
 	// assert that there is indeed only 1 row in tablets[1
-	res := utils.RunSQL(context.Background(), t, `select msg from vt_insert_test;`, tablets[1])
+	res := utils.RunSQL(context.Background(), t, `select msg from vt_insert_test`, tablets[1])
 	assert.Equal(t, 1, len(res.Rows))
 
 	// Perform a graceful reparent operation
@@ -217,8 +217,8 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 
 	if !downPrimary {
 		// commands to stop the current primary
-		demoteCommands := "SET GLOBAL read_only = ON; FLUSH TABLES WITH READ LOCK; UNLOCK TABLES"
-		utils.RunSQL(ctx, t, demoteCommands, tablets[0])
+		demoteCommands := []string{"SET GLOBAL read_only = ON", "FLUSH TABLES WITH READ LOCK", "UNLOCK TABLES"}
+		utils.RunSQLs(ctx, t, demoteCommands, tablets[0])
 
 		//Get the position of the old primary and wait for the new one to catch up.
 		err := utils.WaitForReplicationPosition(t, tablets[0], tablets[1])

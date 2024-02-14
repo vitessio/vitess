@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -33,6 +34,17 @@ import (
 )
 
 // This file contains the methods related to queries.
+
+var (
+	ErrExecuteFetchMultipleResults = vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected multiple results. Use ExecuteFetchMulti instead.")
+)
+
+const (
+	// Use as `maxrows` in `ExecuteFetch` and related functions, to indicate no rows should be fetched.
+	// This is different than specifying `0`, because `0` means "expect zero results", while this means
+	// "do not attempt to read any results into memory".
+	FETCH_NO_ROWS = math.MinInt
+)
 
 //
 // Client side methods.
@@ -303,8 +315,33 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 //	 2. if the server closes the connection when a command is in flight,
 //	    readComQueryResponse will fail, and we'll return CRServerLost(2013).
 func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
-	result, _, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
+	result, more, err := c.ExecuteFetchMulti(query, maxrows, wantfields)
+	if more {
+		// Multiple results are unexpected. Prioritize this "unexpected" error over whatever error we got from the first result.
+		err = errors.Join(ErrExecuteFetchMultipleResults, err)
+	}
+	// draining to make the connection clean.
+	err = c.drainMoreResults(more, err)
 	return result, err
+}
+
+// ExecuteFetchMultiDrain is for executing multiple statements in one call, but without
+// caring for any results. The function returns an error if any of the statements fail.
+// The function drains the query results of all statements, even if there's an error.
+func (c *Conn) ExecuteFetchMultiDrain(query string) (err error) {
+	_, more, err := c.ExecuteFetchMulti(query, FETCH_NO_ROWS, false)
+	return c.drainMoreResults(more, err)
+}
+
+// drainMoreResults ensures to drain all query results, even if there's an error.
+// We collect all errors until we consume all results.
+func (c *Conn) drainMoreResults(more bool, err error) error {
+	for more {
+		var moreErr error
+		_, more, _, moreErr = c.ReadQueryResult(FETCH_NO_ROWS, false)
+		err = errors.Join(err, moreErr)
+	}
+	return err
 }
 
 // ExecuteFetchMulti is for fetching multiple results from a multi-statement result.
@@ -458,6 +495,11 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			defer c.recycleReadPacket()
 			// Error packet.
 			return nil, false, 0, ParseErrorPacket(data)
+		}
+
+		if maxrows == FETCH_NO_ROWS {
+			c.recycleReadPacket()
+			continue
 		}
 
 		// Check we're not over the limit before we add more.

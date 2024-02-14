@@ -512,6 +512,16 @@ func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) 
 	return executeQuery(conn, query)
 }
 
+// MultiQueryTabletWithDB lets you execute multiple queries on a specific DB in this tablet.
+func (vttablet *VttabletProcess) MultiQueryTabletWithDB(query string, dbname string) error {
+	conn, err := vttablet.defaultConn(dbname)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return executeMultiQuery(conn, query)
+}
+
 // executeQuery will retry the query up to 10 times with a small sleep in between each try.
 // This allows the tests to be more robust in the face of transient failures.
 func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
@@ -534,6 +544,26 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	}
 
 	return result, err
+}
+
+// executeMultiQuery will retry the given multi query up to 10 times with a small sleep in between each try.
+// This allows the tests to be more robust in the face of transient failures.
+func executeMultiQuery(dbConn *mysql.Conn, query string) (err error) {
+	retries := 10
+	retryDelay := 1 * time.Second
+	for i := 0; i < retries; i++ {
+		if i > 0 {
+			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
+			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
+		}
+		err = dbConn.ExecuteFetchMultiDrain(query)
+		if err == nil {
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+
+	return err
 }
 
 // GetDBVar returns first matching database variable's value

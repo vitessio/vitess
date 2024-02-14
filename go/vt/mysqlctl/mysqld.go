@@ -412,7 +412,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		}()
 		err = cmd.Start()
 		if err != nil {
-			return err
+			return vterrors.Wrapf(err, "failed to start mysqld")
 		}
 
 		mysqld.mutex.Lock()
