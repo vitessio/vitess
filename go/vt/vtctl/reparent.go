@@ -39,14 +39,6 @@ func init() {
 		help:   "Reparent a tablet to the current primary in the shard. This only works if the current replication position matches the last known reparent action.",
 	})
 	addCommand("Shards", command{
-		name:         "InitShardPrimary",
-		method:       commandInitShardPrimary,
-		params:       "[--force] [--wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
-		help:         "Sets the initial primary for a shard. Will make all other tablets in the shard replicas of the provided tablet. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead.",
-		deprecated:   true,
-		deprecatedBy: "PlannedReparentShard",
-	})
-	addCommand("Shards", command{
 		name:   "PlannedReparentShard",
 		method: commandPlannedReparentShard,
 		params: "--keyspace_shard=<keyspace/shard> [--new_primary=<tablet alias>] [--avoid_tablet=<tablet alias>] [--wait_replicas_timeout=<duration>]",
@@ -83,30 +75,6 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	return wr.ReparentTablet(ctx, tabletAlias)
-}
-
-func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	if mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
-	}
-
-	force := subFlags.Bool("force", false, "will force the reparent even if the provided tablet is not writable or the shard primary")
-	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action InitShardPrimary requires <keyspace/shard> <tablet alias>")
-	}
-	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(1))
-	if err != nil {
-		return err
-	}
-	return wr.InitShardPrimary(ctx, keyspace, shard, tabletAlias, *force, *waitReplicasTimeout)
 }
 
 func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
