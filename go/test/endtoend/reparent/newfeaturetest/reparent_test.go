@@ -131,8 +131,8 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 			utils.RunSQL(ctx, t, "set global super_read_only = 0", tablet)
 		}
 
-		utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_slave;", tablet)
-		utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_master;", tablet)
+		utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_slave", tablet)
+		utils.RunSQL(ctx, t, "UNINSTALL PLUGIN rpl_semi_sync_master", tablet)
 	}
 
 	utils.ValidateTopology(t, clusterInstance, true)

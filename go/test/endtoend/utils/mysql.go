@@ -45,7 +45,17 @@ const mysqlShutdownTimeout = 1 * time.Minute
 // The mysql.ConnParams to connect to the new database is returned, along with a function to
 // teardown the database.
 func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
-	mysqlParam, _, closer, error := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, schemaSQL...)
+	// Even though we receive schemaSQL as a variadic argument, we ensure to further split it into singular statements.
+	parser := sqlparser.NewTestParser()
+	var sqls []string
+	for _, sql := range schemaSQL {
+		split, err := parser.SplitStatementToPieces(sql)
+		if err != nil {
+			return mysql.ConnParams{}, nil, err
+		}
+		sqls = append(sqls, split...)
+	}
+	mysqlParam, _, closer, error := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, sqls...)
 	return mysqlParam, closer, error
 }
 
