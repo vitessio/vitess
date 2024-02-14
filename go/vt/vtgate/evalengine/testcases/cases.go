@@ -116,6 +116,7 @@ var Cases = []TestCase{
 	{Run: FnTruncate},
 	{Run: FnCrc32},
 	{Run: FnConv},
+	{Run: FnBin},
 	{Run: FnMD5},
 	{Run: FnSHA1},
 	{Run: FnSHA2},
@@ -661,6 +662,15 @@ func FnConv(yield Query) {
 				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
 			}
 		}
+	}
+}
+
+func FnBin(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("BIN(%s)", num), nil)
+	}
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("BIN(%s)", num), nil)
 	}
 }
 

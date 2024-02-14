@@ -2008,7 +2008,7 @@ func (asm *assembler) Fn_CONV_bu(offset int, baseOffset int) {
 		i, err := fastparse.ParseInt64(arg.string(), int(base.i))
 		u = uint64(i)
 		if errors.Is(err, fastparse.ErrOverflow) {
-			u, _ = fastparse.ParseUint64(arg.string(), int(base.i))
+			u, _ = fastparse.ParseUint64WithNeg(arg.string(), int(base.i))
 		}
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(u)
 		return 1

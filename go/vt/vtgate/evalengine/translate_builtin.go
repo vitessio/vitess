@@ -255,6 +255,14 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &builtinConv{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "bin":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		args = append(args, NewLiteralInt(10))
+		args = append(args, NewLiteralInt(2))
+		var cexpr = CallExpr{Arguments: args, Method: "BIN"}
+		return &builtinConv{CallExpr: cexpr, collate: ast.cfg.Collation}, nil
 	case "left", "right":
 		if len(args) != 2 {
 			return nil, argError(method)
