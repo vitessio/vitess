@@ -105,10 +105,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 	needsFilter, exprPerSource := u.predicatePerSource(expr, offsets)
 	if needsFilter {
-		return &Filter{
-			Source:     u,
-			Predicates: []sqlparser.Expr{expr},
-		}
+		return newFilter(u, expr)
 	}
 
 	for i, src := range u.Sources {
