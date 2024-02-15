@@ -1332,7 +1332,7 @@ func (call *builtinConv) eval(env *ExpressionEnv) (eval, error) {
 		i, err := fastparse.ParseInt64(nStr.string(), int(fromBase))
 		u = uint64(i)
 		if errors.Is(err, fastparse.ErrOverflow) {
-			u, _ = fastparse.ParseUint64(nStr.string(), int(fromBase))
+			u, _ = fastparse.ParseUint64WithNeg(nStr.string(), int(fromBase))
 		}
 	}
 

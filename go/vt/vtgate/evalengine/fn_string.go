@@ -1643,3 +1643,87 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 
 	return ctype{Type: tt, Flag: args[0].Flag, Col: tc}, nil
 }
+
+type builtinChar struct {
+	CallExpr
+	collate collations.ID
+}
+
+var _ IR = (*builtinChar)(nil)
+
+func (call *builtinChar) eval(env *ExpressionEnv) (eval, error) {
+	vals := make([]eval, 0, len(call.Arguments))
+	for _, arg := range call.Arguments {
+		a, err := arg.eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if a == nil {
+			continue
+		}
+		vals = append(vals, a)
+	}
+
+	buf := make([]byte, 0, len(vals))
+	for _, v := range vals {
+		buf = encodeChar(buf, uint32(evalToInt64(v).i))
+	}
+	if call.collate == collations.CollationBinaryID {
+		return newEvalBinary(buf), nil
+	}
+
+	cs := colldata.Lookup(call.collate).Charset()
+	if !charset.Validate(cs, buf) {
+		return nil, nil
+	}
+
+	return newEvalText(buf, collations.TypedCollation{
+		Collation:    call.collate,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}), nil
+}
+
+func (call *builtinChar) compile(c *compiler) (ctype, error) {
+	for _, arg := range call.Arguments {
+		a, err := arg.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		j := c.compileNullCheck1(a)
+		switch a.Type {
+		case sqltypes.Int64:
+			// No-op, already correct type
+		case sqltypes.Uint64:
+			c.asm.Convert_ui(1)
+		default:
+			c.asm.Convert_xi(1)
+		}
+		c.asm.jumpDestination(j)
+	}
+	tt := sqltypes.VarBinary
+	if call.collate != collations.CollationBinaryID {
+		tt = sqltypes.VarChar
+	}
+	col := collations.TypedCollation{
+		Collation:    call.collate,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+	c.asm.Fn_CHAR(tt, col, len(call.Arguments))
+	return ctype{Type: tt, Flag: flagNullable, Col: col}, nil
+}
+
+func encodeChar(buf []byte, i uint32) []byte {
+	switch {
+	case i < 0x100:
+		buf = append(buf, byte(i))
+	case i < 0x10000:
+		buf = append(buf, byte(i>>8), byte(i))
+	case i < 0x1000000:
+		buf = append(buf, byte(i>>16), byte(i>>8), byte(i))
+	default:
+		buf = append(buf, byte(i>>24), byte(i>>16), byte(i>>8), byte(i))
+	}
+	return buf
+}
