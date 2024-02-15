@@ -244,7 +244,7 @@ func TestMultiTableUpdate(t *testing.T) {
 
 // TestDeleteWithSubquery executed delete queries with subqueries
 func TestDeleteWithSubquery(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
 
 	mcmp, closer := start(t)
 	defer closer()
