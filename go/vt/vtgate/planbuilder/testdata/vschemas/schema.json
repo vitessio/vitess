@@ -26,6 +26,12 @@
         ]
       },
       {
+        "from_table": "second_user.bar",
+        "to_tables": [
+          "user.music"
+        ]
+      },
+      {
         "from_table": "primary_redirect@primary",
         "to_tables": [
           "user.user"
@@ -489,8 +495,7 @@
       "sharded": true,
       "vindexes": {
         "hash_dup": {
-          "type": "hash_test",
-          "owner": "user"
+          "type": "hash_test"
         }
       },
       "tables": {
