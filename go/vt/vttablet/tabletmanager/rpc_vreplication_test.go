@@ -196,7 +196,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				TargetKeyspace:     targetKs,
 				Workflow:           wf,
 				Cells:              tenv.cells,
-				IncludeTables:      []string{"zt", "wut", "t1"},
+				IncludeTables:      []string{"zt", "t1", "wut"},
 				SourceTimeZone:     "EDT",
 				OnDdl:              binlogdatapb.OnDDLAction_EXEC.String(),
 				StopAfterCopy:      true,
@@ -204,7 +204,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 				DeferSecondaryKeys: true,
 				AutoStart:          true,
 			},
-			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"wut\" filter:\"select * from wut\"} rules:{match:\"zt\" filter:\"select * from zt\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
+			query: fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"zt\" filter:\"select * from zt\"} rules:{match:\"t1\" filter:\"select * from t1\"} rules:{match:\"wut\" filter:\"select * from wut\"}} on_ddl:EXEC stop_after_copy:true source_time_zone:\"EDT\" target_time_zone:\"UTC\"', '', 0, 0, '%s', '', now(), 0, 'Stopped', '%s', 1, 0, 1)`,
 				insertVReplicationPrefix, wf, sourceKs, shard, tenv.cells[0], tenv.dbName),
 		},
 		{

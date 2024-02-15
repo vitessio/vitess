@@ -34,6 +34,8 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+const testWorkflowFlavor = workflowFlavorVtctl
+
 // TestFKWorkflow runs a MoveTables workflow with atomic copy for a db with foreign key constraints.
 // It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,
 // i.e. with foreign_key_checks=0.
@@ -95,7 +97,7 @@ func TestFKWorkflow(t *testing.T) {
 		},
 		sourceKeyspace: sourceKeyspace,
 		atomicCopy:     true,
-	}, workflowFlavorRandom)
+	}, testWorkflowFlavor)
 	mt.Create()
 
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
@@ -293,7 +295,7 @@ func testFKCancel(t *testing.T, vc *VitessCluster) {
 		},
 		sourceKeyspace: sourceKeyspace,
 		atomicCopy:     true,
-	}, workflowFlavorRandom)
+	}, testWorkflowFlavor)
 	mt.Create()
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	mt.Cancel()

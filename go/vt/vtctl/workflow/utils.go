@@ -71,8 +71,7 @@ func SortTablesByForeignKeyConstraints(vtenv *vtenv.Environment, schema *tabletm
 }
 
 func Reversed[T any](s []T) []T {
-	reversed := make([]T, len(s))
-	copy(reversed, s)
+	reversed := slices.Clone(s)
 	slices.Reverse(reversed)
 	return reversed
 }
