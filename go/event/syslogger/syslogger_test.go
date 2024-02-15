@@ -25,12 +25,14 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/event"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type TestEvent struct {
-	triggered bool
-	priority  syslog.Priority
-	message   string
+	triggered	bool
+	priority	syslog.Priority
+	message		string
 }
 
 func (ev *TestEvent) Syslog() (syslog.Priority, string) {
@@ -38,12 +40,12 @@ func (ev *TestEvent) Syslog() (syslog.Priority, string) {
 	return ev.priority, ev.message
 }
 
-var _ Syslogger = (*TestEvent)(nil) // compile-time interface check
+var _ Syslogger = (*TestEvent)(nil)	// compile-time interface check
 
 type fakeWriter struct {
-	priority syslog.Priority
-	message  string
-	err      error // if non-nil, force an error to be returned
+	priority	syslog.Priority
+	message		string
+	err		error	// if non-nil, force an error to be returned
 }
 
 func (fw *fakeWriter) write(pri syslog.Priority, msg string) error {
@@ -55,14 +57,14 @@ func (fw *fakeWriter) write(pri syslog.Priority, msg string) error {
 	fw.message = msg
 	return nil
 }
-func (fw *fakeWriter) Alert(msg string) error   { return fw.write(syslog.LOG_ALERT, msg) }
-func (fw *fakeWriter) Crit(msg string) error    { return fw.write(syslog.LOG_CRIT, msg) }
-func (fw *fakeWriter) Debug(msg string) error   { return fw.write(syslog.LOG_DEBUG, msg) }
-func (fw *fakeWriter) Emerg(msg string) error   { return fw.write(syslog.LOG_EMERG, msg) }
-func (fw *fakeWriter) Err(msg string) error     { return fw.write(syslog.LOG_ERR, msg) }
-func (fw *fakeWriter) Info(msg string) error    { return fw.write(syslog.LOG_INFO, msg) }
-func (fw *fakeWriter) Notice(msg string) error  { return fw.write(syslog.LOG_NOTICE, msg) }
-func (fw *fakeWriter) Warning(msg string) error { return fw.write(syslog.LOG_WARNING, msg) }
+func (fw *fakeWriter) Alert(msg string) error	{ return fw.write(syslog.LOG_ALERT, msg) }
+func (fw *fakeWriter) Crit(msg string) error	{ return fw.write(syslog.LOG_CRIT, msg) }
+func (fw *fakeWriter) Debug(msg string) error	{ return fw.write(syslog.LOG_DEBUG, msg) }
+func (fw *fakeWriter) Emerg(msg string) error	{ return fw.write(syslog.LOG_EMERG, msg) }
+func (fw *fakeWriter) Err(msg string) error	{ return fw.write(syslog.LOG_ERR, msg) }
+func (fw *fakeWriter) Info(msg string) error	{ return fw.write(syslog.LOG_INFO, msg) }
+func (fw *fakeWriter) Notice(msg string) error	{ return fw.write(syslog.LOG_NOTICE, msg) }
+func (fw *fakeWriter) Warning(msg string) error	{ return fw.write(syslog.LOG_WARNING, msg) }
 
 // TestSyslog checks that our callback works.
 func TestSyslog(t *testing.T) {
@@ -70,10 +72,8 @@ func TestSyslog(t *testing.T) {
 
 	ev := new(TestEvent)
 	event.Dispatch(ev)
+	assert.True(t, ev.triggered, "Syslog() was not called on event that implements Syslogger")
 
-	if !ev.triggered {
-		t.Errorf("Syslog() was not called on event that implements Syslogger")
-	}
 }
 
 // TestBadWriter verifies we are still triggering (to normal logs) if
@@ -87,55 +87,40 @@ func TestBadWriter(t *testing.T) {
 	wantLevel := "ERROR"
 	ev := &TestEvent{priority: syslog.LOG_ALERT, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().msg, wantMsg) {
-		t.Errorf("error log msg [%s], want msg [%s]", tl.getLog().msg, wantMsg)
-	}
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().msg, wantMsg), "error log msg [%s], want msg [%s]", tl.getLog().msg, wantMsg)
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel), "error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
+
 	ev = &TestEvent{priority: syslog.LOG_CRIT, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel), "error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
+
 	ev = &TestEvent{priority: syslog.LOG_ERR, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel), "error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
+
 	ev = &TestEvent{priority: syslog.LOG_EMERG, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel), "error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
 
 	wantLevel = "WARNING"
 	ev = &TestEvent{priority: syslog.LOG_WARNING, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel), "error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
 
 	wantLevel = "INFO"
 	ev = &TestEvent{priority: syslog.LOG_INFO, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel), "error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
+
 	ev = &TestEvent{priority: syslog.LOG_NOTICE, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel), "error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
+
 	ev = &TestEvent{priority: syslog.LOG_DEBUG, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel), "error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
+	assert.True(t, ev.triggered, "passed nil writer to client")
 
-	if !ev.triggered {
-		t.Errorf("passed nil writer to client")
-	}
 }
 
 // TestWriteError checks that we don't panic on a write error.
@@ -150,10 +135,8 @@ func TestInvalidSeverity(t *testing.T) {
 	writer = fw
 
 	event.Dispatch(&TestEvent{priority: syslog.Priority(123), message: "log me"})
+	assert.NotEqual(t, "log me", fw.message, "message was logged despite invalid severity")
 
-	if fw.message == "log me" {
-		t.Errorf("message was logged despite invalid severity")
-	}
 }
 
 func testSeverity(sev syslog.Priority, t *testing.T) {
@@ -161,13 +144,9 @@ func testSeverity(sev syslog.Priority, t *testing.T) {
 	writer = fw
 
 	event.Dispatch(&TestEvent{priority: sev, message: "log me"})
+	assert.Equal(t, sev, fw.priority, "wrong priority: got %v, want %v", fw.priority, sev)
+	assert.Equal(t, "log me", fw.message, `wrong message: got "%v", want "%v"`, fw.message, "log me")
 
-	if fw.priority != sev {
-		t.Errorf("wrong priority: got %v, want %v", fw.priority, sev)
-	}
-	if fw.message != "log me" {
-		t.Errorf(`wrong message: got "%v", want "%v"`, fw.message, "log me")
-	}
 }
 
 func TestEmerg(t *testing.T) {

@@ -18,6 +18,8 @@ package cache
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type CacheValue struct {
@@ -27,24 +29,13 @@ type CacheValue struct {
 func TestInitialState(t *testing.T) {
 	cache := NewLRUCache[*CacheValue](5)
 	l, sz, c, e, h, m := cache.Len(), cache.UsedCapacity(), cache.MaxCapacity(), cache.Evictions(), cache.Hits(), cache.Misses()
-	if l != 0 {
-		t.Errorf("length = %v, want 0", l)
-	}
-	if sz != 0 {
-		t.Errorf("size = %v, want 0", sz)
-	}
-	if c != 5 {
-		t.Errorf("capacity = %v, want 5", c)
-	}
-	if e != 0 {
-		t.Errorf("evictions = %v, want 0", c)
-	}
-	if h != 0 {
-		t.Errorf("hits = %v, want 0", c)
-	}
-	if m != 0 {
-		t.Errorf("misses = %v, want 0", c)
-	}
+	assert.Equal(t, 0, l, "length = %v, want 0", l)
+	assert.Equal(t, int64(0), sz, "size = %v, want 0", sz)
+	assert.Equal(t, int64(5), c, "capacity = %v, want 5", c)
+	assert.Equal(t, int64(0), e, "evictions = %v, want 0", c)
+	assert.Equal(t, int64(0), h, "hits = %v, want 0", c)
+	assert.Equal(t, int64(0), m, "misses = %v, want 0", c)
+
 }
 
 func TestSetInsertsValue(t *testing.T) {
@@ -137,12 +128,8 @@ func TestCapacityIsObeyed(t *testing.T) {
 	// Insert one more; something should be evicted to make room.
 	cache.Set("key4", value)
 	sz, evictions := cache.UsedCapacity(), cache.Evictions()
-	if sz != size {
-		t.Errorf("post-evict cache.UsedCapacity() = %v, expected %v", sz, size)
-	}
-	if evictions != 1 {
-		t.Errorf("post-evict cache.Evictions() = %v, expected 1", evictions)
-	}
+	assert.Equal(t, size, sz, "post-evict cache.UsedCapacity() = %v, expected %v", sz, size)
+	assert.Equal(t, int64(1), evictions, "post-evict cache.Evictions() = %v, expected 1", evictions)
 
 	// Check various other stats
 	if l := cache.Len(); int64(l) != size {

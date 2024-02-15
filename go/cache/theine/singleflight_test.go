@@ -32,6 +32,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDo(t *testing.T) {
@@ -42,9 +44,8 @@ func TestDo(t *testing.T) {
 	if got, want := fmt.Sprintf("%v (%T)", v, v), "bar (string)"; got != want {
 		t.Errorf("Do = %v; want %v", got, want)
 	}
-	if err != nil {
-		t.Errorf("Do error = %v", err)
-	}
+	assert.NoError(t, err, "Do error = %v", err)
+
 }
 
 func TestDoErr(t *testing.T) {
@@ -53,12 +54,9 @@ func TestDoErr(t *testing.T) {
 	v, err, _ := g.Do("key", func() (string, error) {
 		return "", someErr
 	})
-	if err != someErr {
-		t.Errorf("Do error = %v; want someErr %v", err, someErr)
-	}
-	if v != "" {
-		t.Errorf("unexpected non-nil value %#v", v)
-	}
+	assert.Equal(t, someErr, err, "Do error = %v; want someErr %v", err, someErr)
+	assert.Equal(t, "", v, "unexpected non-nil value %#v", v)
+
 }
 
 func TestDoDupSuppress(t *testing.T) {
@@ -72,9 +70,9 @@ func TestDoDupSuppress(t *testing.T) {
 			wg1.Done()
 		}
 		v := <-c
-		c <- v // pump; make available for any future calls
+		c <- v	// pump; make available for any future calls
 
-		time.Sleep(10 * time.Millisecond) // let more goroutines enter Do
+		time.Sleep(10 * time.Millisecond)	// let more goroutines enter Do
 
 		return v, nil
 	}
@@ -159,9 +157,8 @@ func TestGoexitDo(t *testing.T) {
 		go func() {
 			var err error
 			defer func() {
-				if err != nil {
-					t.Errorf("Error should be nil, but got: %v", err)
-				}
+				assert.NoError(t, err, "Error should be nil, but got: %v", err)
+
 				if atomic.AddInt32(&waited, -1) == 0 {
 					close(done)
 				}

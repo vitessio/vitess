@@ -18,6 +18,8 @@ package history
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHistory(t *testing.T) {
@@ -33,9 +35,8 @@ func TestHistory(t *testing.T) {
 		t.Errorf("len(records): want %v, got %v. records: %+v", want, got, q)
 	}
 	for i, record := range records {
-		if record != want[i] {
-			t.Errorf("record doesn't match: want %v, got %v", want[i], record)
-		}
+		assert.Equal(t, want[i], record, "record doesn't match: want %v, got %v", want[i], record)
+
 	}
 
 	for ; i < 6; i++ {
@@ -48,9 +49,8 @@ func TestHistory(t *testing.T) {
 		t.Errorf("len(records): want %v, got %v. records: %+v", want, got, q)
 	}
 	for i, record := range records {
-		if record != want[i] {
-			t.Errorf("record doesn't match: want %v, got %v", want[i], record)
-		}
+		assert.Equal(t, want[i], record, "record doesn't match: want %v, got %v", want[i], record)
+
 	}
 }
 
