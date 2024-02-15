@@ -7,6 +7,8 @@
     - [Vindex Hints](#vindex-hints)
     - [Update with Limit Support](#update-limit)
     - [Update with Multi Table Support](#multi-table-update)
+  - **[Flag changes](#flag-changes)**
+    - [`pprof-http` default change](#pprof-http-default)
 - **[Minor Changes](#minor-changes)**
 
 
@@ -42,6 +44,14 @@ Support is added for sharded multi-table update with column update on single tar
 Example: `update t1 join t2 on t1.id = t2.id join t3 on t1.col = t3.col set t1.baz = 'abc', t1.apa = 23 where t3.foo = 5 and t2.bar = 7`
 
 More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/update.html)
+
+### <a id="flag-changes"/>Flag Changes
+
+#### <a id="pprof-http-default"/> `pprof-http` Default Change
+
+The `--pprof-http` flag, which was introduced in v19 with a default of `true`, has now been changed to default to `false`.
+This makes HTTP `pprof` endpoints now an *opt-in* feature, rather than opt-out.
+To continue enabling these endpoints, explicitly set `--pprof-http` when starting up Vitess components.
 
 
 ## <a id="minor-changes"/>Minor Changes
