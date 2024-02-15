@@ -2587,7 +2587,7 @@ func (ct *ColumnType) Invisible() bool {
 	return ct.Options.Invisible != nil && *ct.Options.Invisible
 }
 
-func (node *Delete) isSingleAliasExpr() bool {
+func (node *Delete) IsSingleAliasExpr() bool {
 	if len(node.Targets) > 1 {
 		return false
 	}
