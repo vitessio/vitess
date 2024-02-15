@@ -35,8 +35,6 @@ github.com/DataDog/datadog-agent/pkg/obfuscate v0.50.2/go.mod h1:A4nLJvxlg6BO/8/
 github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.50.2 h1:7jn5EOu84uph4sd+pB3vF8LnsdTjhh+1/NnCvfNpG4A=
 github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.50.2/go.mod h1:Vc+snp0Bey4MrrJyiV2tVxxJb6BmLomPvN1RgAvjGaQ=
 github.com/DataDog/datadog-go v3.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
-github.com/DataDog/datadog-go v4.8.3+incompatible h1:fNGaYSuObuQb5nzeTQqowRAd9bpDIRRV4/gUtIBjh8Q=
-github.com/DataDog/datadog-go v4.8.3+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/DataDog/datadog-go/v5 v5.5.0 h1:G5KHeB8pWBNXT4Jtw0zAkhdxEAWSpWH00geHI6LDrKU=
 github.com/DataDog/datadog-go/v5 v5.5.0/go.mod h1:K9kcYBlxkcPP8tvvjZZKs/m1edNAUFzBbdpTUKfCsuw=
 github.com/DataDog/go-libddwaf/v2 v2.2.3 h1:LpKE8AYhVrEhlmlw6FGD41udtDf7zW/aMdLNbCXpegQ=
