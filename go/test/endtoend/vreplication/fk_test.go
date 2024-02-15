@@ -279,9 +279,9 @@ func (ls *fkLoadSimulator) exec(query string) *sqltypes.Result {
 	return qr
 }
 
-// testFKCancel confirms that a MoveTables with tables with foreign key constraints, such that the parent table is
-// lexico-graphically before the child table, can be cancelled. In such cases the child tables (which come later in
-// the sorted order) need to be dropped first.
+// testFKCancel confirms that a MoveTables workflow which includes tables with foreign key
+// constraints, where the parent table is lexicographically sorted before the child table and
+// thus may be dropped first, can be successfully cancelled.
 func testFKCancel(t *testing.T, vc *VitessCluster) {
 	var targetKeyspace = "fktarget"
 	var sourceKeyspace = "fksource"
