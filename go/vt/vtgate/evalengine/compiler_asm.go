@@ -2008,7 +2008,7 @@ func (asm *assembler) Fn_CONV_bu(offset int, baseOffset int) {
 		i, err := fastparse.ParseInt64(arg.string(), int(base.i))
 		u = uint64(i)
 		if errors.Is(err, fastparse.ErrOverflow) {
-			u, _ = fastparse.ParseUint64(arg.string(), int(base.i))
+			u, _ = fastparse.ParseUint64WithNeg(arg.string(), int(base.i))
 		}
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(u)
 		return 1
@@ -4204,6 +4204,29 @@ func (asm *assembler) Fn_CONCAT_WS(tt querypb.Type, tc collations.TypedCollation
 		env.vm.sp -= args
 		return 1
 	}, "FN CONCAT_WS VARCHAR(SP-1) VARCHAR(SP-2)...VARCHAR(SP-N)")
+}
+
+func (asm *assembler) Fn_CHAR(tt querypb.Type, tc collations.TypedCollation, args int) {
+	cs := colldata.Lookup(tc.Collation).Charset()
+	asm.adjustStack(-(args - 1))
+	asm.emit(func(env *ExpressionEnv) int {
+		buf := make([]byte, 0, args)
+		for i := 0; i < args; i++ {
+			if env.vm.stack[env.vm.sp-args+i] == nil {
+				continue
+			}
+			arg := env.vm.stack[env.vm.sp-args+i].(*evalInt64)
+			buf = encodeChar(buf, uint32(arg.i))
+		}
+
+		if charset.Validate(cs, buf) {
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalRaw(buf, tt, tc)
+		} else {
+			env.vm.stack[env.vm.sp-args] = nil
+		}
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN CHAR INT64(SP-1) INT64(SP-2)...INT64(SP-N)")
 }
 
 func (asm *assembler) Fn_BIN_TO_UUID0(col collations.TypedCollation) {
