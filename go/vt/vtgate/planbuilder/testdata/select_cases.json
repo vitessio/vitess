@@ -1506,8 +1506,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select col1, col2 from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
-        "Query": "select col1, col2 from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
+        "FieldQuery": "select * from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
+        "Query": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
         "Table": "unsharded"
       },
       "TablesUsed": [
@@ -2693,7 +2693,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from (select col, count(*) as a from unsharded where 1 != 1 group by col) as f left join unsharded as u on f.col = u.id where 1 != 1",
-        "Query": "select 1 from (select col, count(*) as a from unsharded group by col having count(*) > 0 limit 0, 12) as f left join unsharded as u on f.col = u.id",
+        "Query": "select 1 from (select col, count(*) as a from unsharded group by col having a > 0 limit 0, 12) as f left join unsharded as u on f.col = u.id",
         "Table": "unsharded"
       },
       "TablesUsed": [

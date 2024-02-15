@@ -240,12 +240,12 @@ func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete
 	var selExprs sqlparser.SelectExprs
 	for _, col := range ksidCols {
 		colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
-		selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
+		selExprs = append(selExprs, aeWrap(colName))
 	}
 	for _, cv := range table.VTable.Owned {
 		for _, col := range cv.Columns {
 			colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
-			selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
+			selExprs = append(selExprs, aeWrap(colName))
 		}
 	}
 	sqlparser.RemoveKeyspaceInTables(tblExpr)

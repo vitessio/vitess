@@ -109,6 +109,7 @@ func buildChangedVindexesValues(
 	ctx *plancontext.PlanningContext,
 	update *sqlparser.Update,
 	table *vindexes.Table,
+	ate *sqlparser.AliasedTableExpr,
 	ksidCols []sqlparser.IdentifierCI,
 	assignments []SetExpr,
 ) (vv map[string]*engine.VindexValues, ownedVindexQuery *sqlparser.Select, subQueriesArgOnChangedVindex []string) {
@@ -144,11 +145,7 @@ func buildChangedVindexesValues(
 		return nil, nil, nil
 	}
 	// generate rest of the owned vindex query.
-	aTblExpr, ok := update.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		panic(vterrors.VT12001("UPDATE on complex table expression"))
-	}
-	tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: table.Name}, As: aTblExpr.As}
+	tblExpr := sqlparser.NewAliasedTableExpr(sqlparser.TableName{Name: table.Name}, ate.As.String())
 	ovq := &sqlparser.Select{
 		From:        []sqlparser.TableExpr{tblExpr},
 		SelectExprs: selExprs,

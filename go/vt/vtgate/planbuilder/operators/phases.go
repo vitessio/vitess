@@ -79,7 +79,7 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 	case subquerySettling:
 		return s.SubQueries
 	case dmlWithInput:
-		return s.Dml
+		return s.DML
 	default:
 		return true
 	}
