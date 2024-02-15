@@ -22,9 +22,13 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
+
+	"vitess.io/vitess/go/vt/schemadiff"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -51,7 +55,31 @@ import (
 
 const reverseSuffix = "_reverse"
 
-func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace string) ([]string, error) {
+func SortTablesByForeignKeyConstraints(vtenv *vtenv.Environment, schema *tabletmanagerdatapb.SchemaDefinition) []string {
+	var sourceDDLs []string
+	for _, td := range schema.TableDefinitions {
+		sourceDDLs = append(sourceDDLs, td.Schema)
+	}
+	env := schemadiff.NewEnv(vtenv, vtenv.CollationEnv().DefaultConnectionCharset())
+	normalizedSchema, err := schemadiff.NewSchemaFromQueries(env, sourceDDLs)
+	if err != nil {
+		log.Error(vterrors.Wrapf(err, "getKeyspaceTables: failed to normalize schema via schemadiff"))
+	}
+	tables := normalizedSchema.TableNames()
+	log.Infof("Normalized tables are %v", tables)
+	return tables
+}
+
+func Reversed[T any](s []T) []T {
+	reversed := make([]T, len(s))
+	copy(reversed, s)
+	slices.Reverse(reversed)
+	return reversed
+}
+
+func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace string,
+	env *vtenv.Environment, atomicCopy bool) ([]string, error) {
+
 	shards, err := ts.GetServingShards(ctx, keyspace)
 	if err != nil {
 		return nil, err
@@ -79,6 +107,11 @@ func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 	var sourceTables []string
 	for _, td := range schema.TableDefinitions {
 		sourceTables = append(sourceTables, td.Name)
+	}
+	if atomicCopy {
+		sourceTables = SortTablesByForeignKeyConstraints(env, schema)
+	} else {
+		sort.Strings(sourceTables)
 	}
 	return sourceTables, nil
 }

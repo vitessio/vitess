@@ -485,8 +485,9 @@ func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Conte
 }
 
 func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
+	log.Infof("Removing tables from source keyspaces")
 	err := ts.ForAllSources(func(source *MigrationSource) error {
-		for _, tableName := range ts.Tables() {
+		for _, tableName := range Reversed(ts.Tables()) {
 			primaryDbName, err := sqlescape.EnsureEscaped(source.GetPrimary().DbName())
 			if err != nil {
 				return err
@@ -1067,10 +1068,9 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 }
 
 func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
-	log.Flush()
 	err := ts.ForAllTargets(func(target *MigrationTarget) error {
 		log.Infof("ForAllTargets: %+v", target)
-		for _, tableName := range ts.Tables() {
+		for _, tableName := range Reversed(ts.Tables()) {
 			primaryDbName, err := sqlescape.EnsureEscaped(target.GetPrimary().DbName())
 			if err != nil {
 				return err

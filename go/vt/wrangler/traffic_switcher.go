@@ -942,18 +942,15 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 				for _, rule := range bls.Filter.Rules {
 					ts.tables = append(ts.tables, rule.Match)
 				}
-				sort.Strings(ts.tables)
 			} else {
 				var tables []string
 				for _, rule := range bls.Filter.Rules {
 					tables = append(tables, rule.Match)
 				}
-				sort.Strings(tables)
 				if !reflect.DeepEqual(ts.tables, tables) {
 					return nil, fmt.Errorf("table lists are mismatched across streams: %v vs %v", ts.tables, tables)
 				}
 			}
-
 			if _, ok := ts.sources[bls.Shard]; ok {
 				continue
 			}
@@ -1767,8 +1764,9 @@ func getRenameFileName(tableName string) string {
 }
 
 func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {
+	log.Infof("Removing tables from source keyspaces")
 	err := ts.ForAllSources(func(source *workflow.MigrationSource) error {
-		for _, tableName := range ts.Tables() {
+		for _, tableName := range workflow.Reversed(ts.Tables()) {
 			primaryDbName, err := sqlescape.EnsureEscaped(source.GetPrimary().DbName())
 			if err != nil {
 				return err
@@ -1882,9 +1880,9 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 }
 
 func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
-	log.Infof("removeTargetTables")
+	log.Infof("Removing tables from target keyspaces")
 	err := ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
-		for _, tableName := range ts.Tables() {
+		for _, tableName := range workflow.Reversed(ts.Tables()) {
 			primaryDbName, err := sqlescape.EnsureEscaped(target.GetPrimary().DbName())
 			if err != nil {
 				return err

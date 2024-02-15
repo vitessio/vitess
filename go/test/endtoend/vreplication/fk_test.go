@@ -77,9 +77,12 @@ func TestFKWorkflow(t *testing.T) {
 		}()
 		go ls.simulateLoad()
 	}
+
 	targetKeyspace := "fktarget"
 	targetTabletId := 200
 	vc.AddKeyspace(t, []*Cell{cell}, targetKeyspace, shardName, initialFKTargetVSchema, "", 0, 0, targetTabletId, sourceKsOpts)
+
+	testFKCancel(t, vc)
 
 	workflowName := "fk"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
@@ -122,6 +125,7 @@ func TestFKWorkflow(t *testing.T) {
 		cancel()
 		<-ch
 	}
+	mt.Complete()
 }
 
 func insertInitialFKData(t *testing.T) {
@@ -136,6 +140,9 @@ func insertInitialFKData(t *testing.T) {
 		log.Infof("Done inserting initial FK data")
 		waitForRowCount(t, vtgateConn, db, "parent", 2)
 		waitForRowCount(t, vtgateConn, db, "child", 3)
+		waitForRowCount(t, vtgateConn, db, "t1", 2)
+		waitForRowCount(t, vtgateConn, db, "t2", 3)
+
 	})
 }
 
@@ -268,4 +275,26 @@ func (ls *fkLoadSimulator) exec(query string) *sqltypes.Result {
 	qr := execVtgateQuery(t, vtgateConn, "fksource", query)
 	require.NotNil(t, qr)
 	return qr
+}
+
+// testFKCancel confirms that a MoveTables with tables with foreign key constraints, such that the parent table is
+// lexico-graphically before the child table, can be cancelled. In such cases the child tables (which come later in
+// the sorted order) need to be dropped first.
+func testFKCancel(t *testing.T, vc *VitessCluster) {
+	var targetKeyspace = "fktarget"
+	var sourceKeyspace = "fksource"
+	var workflowName = "wf2"
+	var ksWorkflow = fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
+	mt := newMoveTables(vc, &moveTablesWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   workflowName,
+			targetKeyspace: targetKeyspace,
+		},
+		sourceKeyspace: sourceKeyspace,
+		atomicCopy:     true,
+	}, workflowFlavorRandom)
+	mt.Create()
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	mt.Cancel()
 }

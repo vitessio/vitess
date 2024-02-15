@@ -1395,7 +1395,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if vschema == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vschema found for target keyspace %s", targetKeyspace)
 	}
-	ksTables, err := getTablesInKeyspace(ctx, sourceTopo, s.tmc, sourceKeyspace)
+	ksTables, err := getTablesInKeyspace(ctx, sourceTopo, s.tmc, sourceKeyspace, s.env, req.AtomicCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -2596,18 +2596,15 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 				for _, rule := range bls.Filter.Rules {
 					ts.tables = append(ts.tables, rule.Match)
 				}
-				sort.Strings(ts.tables)
 			} else {
 				var tables []string
 				for _, rule := range bls.Filter.Rules {
 					tables = append(tables, rule.Match)
 				}
-				sort.Strings(tables)
 				if !reflect.DeepEqual(ts.tables, tables) {
 					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table lists are mismatched across streams: %v vs %v", ts.tables, tables)
 				}
 			}
-
 			if _, ok := ts.sources[bls.Shard]; ok {
 				continue
 			}

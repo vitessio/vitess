@@ -66,6 +66,7 @@ type materializer struct {
 	targetShards          []*topo.ShardInfo
 	isPartial             bool
 	primaryVindexesDiffer bool
+	sourceTableDDLs       []string
 }
 
 const (
@@ -173,7 +174,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		if len(strings.TrimSpace(tableSpecs)) > 0 {
 			tables = strings.Split(tableSpecs, ",")
 		}
-		ksTables, err := wr.getKeyspaceTables(ctx, sourceKeyspace, wr.sourceTs)
+		ksTables, err := wr.getKeyspaceTables(ctx, sourceKeyspace, wr.sourceTs, atomicCopy)
 		if err != nil {
 			return err
 		}
@@ -391,7 +392,7 @@ func (wr *Wrangler) validateSourceTablesExist(sourceKeyspace string, ksTables, t
 	return nil
 }
 
-func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.Server) ([]string, error) {
+func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.Server, atomicCopy bool) ([]string, error) {
 	shards, err := ts.GetServingShards(ctx, ks)
 	if err != nil {
 		return nil, err
@@ -414,11 +415,16 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("got table schemas from source primary %v.", primary)
+	log.Infof("got table schemas from source primary %v", primary)
 
 	var sourceTables []string
 	for _, td := range schema.TableDefinitions {
 		sourceTables = append(sourceTables, td.Name)
+	}
+	if atomicCopy {
+		sourceTables = workflow.SortTablesByForeignKeyConstraints(wr.env, schema)
+	} else {
+		sort.Strings(sourceTables)
 	}
 	return sourceTables, nil
 }
@@ -1022,6 +1028,7 @@ func (wr *Wrangler) prepareMaterializerStreams(ctx context.Context, ms *vtctldat
 	if err != nil {
 		return nil, err
 	}
+
 	if err := mz.deploySchema(ctx); err != nil {
 		return nil, err
 	}
@@ -1358,6 +1365,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 			OnDdl:           binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[mz.ms.OnDdl]),
 		}
 		for _, ts := range mz.ms.TableSettings {
+			log.Infof("Generating insert for table %s", ts.TargetTable)
 			rule := &binlogdatapb.Rule{
 				Match: ts.TargetTable,
 			}
