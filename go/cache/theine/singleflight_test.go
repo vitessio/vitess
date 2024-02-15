@@ -41,10 +41,9 @@ func TestDo(t *testing.T) {
 	v, err, _ := g.Do("key", func() (string, error) {
 		return "bar", nil
 	})
-	if got, want := fmt.Sprintf("%v (%T)", v, v), "bar (string)"; got != want {
-		t.Errorf("Do = %v; want %v", got, want)
-	}
-	assert.NoError(t, err, "Do error = %v", err)
+
+	assert.Equal(t, "bar (string)", fmt.Sprintf("%v (%T)", v, v), "incorrect Do value")
+	assert.NoError(t, err, "got Do error")
 
 }
 
@@ -54,8 +53,9 @@ func TestDoErr(t *testing.T) {
 	v, err, _ := g.Do("key", func() (string, error) {
 		return "", someErr
 	})
-	assert.Equal(t, someErr, err, "Do error = %v; want someErr %v", err, someErr)
-	assert.Equal(t, "", v, "unexpected non-nil value %#v", v)
+
+	assert.ErrorIs(t, err, someErr, "incorrect Do error")
+	assert.Empty(t, v, "unexpected non-empty value")
 
 }
 
@@ -79,20 +79,18 @@ func TestDoDupSuppress(t *testing.T) {
 
 	const n = 10
 	wg1.Add(1)
-	for i := 0; i < n; i++ {
+	for range n {
 		wg1.Add(1)
 		wg2.Add(1)
 		go func() {
 			defer wg2.Done()
 			wg1.Done()
 			v, err, _ := g.Do("key", fn)
-			if err != nil {
-				t.Errorf("Do error: %v", err)
+			if !assert.NoError(t, err, "unexpected Do error") {
 				return
 			}
-			if s := v; s != "bar" {
-				t.Errorf("Do = %T %v; want %q", v, v, "bar")
-			}
+
+			assert.Equal(t, "bar", v, "unexpected Do value")
 		}()
 	}
 	wg1.Wait()
@@ -100,9 +98,8 @@ func TestDoDupSuppress(t *testing.T) {
 	// least reached the line before the Do.
 	c <- "bar"
 	wg2.Wait()
-	if got := atomic.LoadInt32(&calls); got <= 0 || got >= n {
-		t.Errorf("number of calls = %d; want over 0 and less than %d", got, n)
-	}
+	got := atomic.LoadInt32(&calls)
+	assert.True(t, got > 0 && got < n, "number of calls not between 0 and %d", n)
 }
 
 // Test singleflight behaves correctly after Do panic.
@@ -117,7 +114,7 @@ func TestPanicDo(t *testing.T) {
 	waited := int32(n)
 	panicCount := int32(0)
 	done := make(chan struct{})
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			defer func() {
 				if err := recover(); err != nil {
@@ -135,11 +132,9 @@ func TestPanicDo(t *testing.T) {
 
 	select {
 	case <-done:
-		if panicCount != n {
-			t.Errorf("Expect %d panic, but got %d", n, panicCount)
-		}
+		assert.Equal(t, int32(n), panicCount, "unexpected number of panics")
 	case <-time.After(time.Second):
-		t.Fatalf("Do hangs")
+		require.Fail(t, "Do hangs")
 	}
 }
 
@@ -153,12 +148,11 @@ func TestGoexitDo(t *testing.T) {
 	const n = 5
 	waited := int32(n)
 	done := make(chan struct{})
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			var err error
 			defer func() {
-				assert.NoError(t, err, "Error should be nil, but got: %v", err)
-
+				assert.NoError(t, err)
 				if atomic.AddInt32(&waited, -1) == 0 {
 					close(done)
 				}
@@ -170,7 +164,7 @@ func TestGoexitDo(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatalf("Do hangs")
+		require.Fail(t, "Do hangs")
 	}
 }
 
@@ -198,10 +192,9 @@ func randKeys(b *testing.B, count, length uint) []string {
 	keys := make([]string, 0, count)
 	key := make([]byte, length)
 
-	for i := uint(0); i < count; i++ {
-		if _, err := io.ReadFull(rand.Reader, key); err != nil {
-			b.Fatalf("Failed to generate random key %d of %d of length %d: %s", i+1, count, length, err)
-		}
+	for i := range uint(count) {
+		_, err := io.ReadFull(rand.Reader, key)
+		require.NoError(b, err, "Failed to generate random key %d of %d length %d", i+1, count, length)
 		keys = append(keys, string(key))
 	}
 	return keys
