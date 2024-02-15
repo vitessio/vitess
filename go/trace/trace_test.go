@@ -96,7 +96,6 @@ func TestNewFromString(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.label, func(t *testing.T) {
 			span, ctx, err := NewFromString(context.Background(), tt.parent, tt.label)
 			if tt.expectedErr == "" {
