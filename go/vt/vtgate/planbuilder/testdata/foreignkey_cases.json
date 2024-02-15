@@ -1265,8 +1265,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select id from u_tbl2 where 1 != 1",
-            "Query": "select id from u_tbl2 limit 2 for update",
+            "FieldQuery": "select u_tbl2.id from u_tbl2 where 1 != 1",
+            "Query": "select u_tbl2.id from u_tbl2 limit 2 for update",
             "Table": "u_tbl2"
           },
           {
@@ -1281,7 +1281,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where id in ::dml_vals for update",
+                "Query": "select u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -1309,7 +1309,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl2 where id in ::dml_vals",
+                "Query": "delete from u_tbl2 where u_tbl2.id in ::dml_vals",
                 "Table": "u_tbl2"
               }
             ]
@@ -3141,8 +3141,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select id from u_tbl6 as u, u_tbl5 as m where 1 != 1",
-            "Query": "select id from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update",
+            "FieldQuery": "select u_tbl6.id from u_tbl6 as u, u_tbl5 as m where 1 != 1",
+            "Query": "select u_tbl6.id from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update",
             "Table": "u_tbl5, u_tbl6"
           },
           {
@@ -3157,7 +3157,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl6.col6 from u_tbl6 as u where 1 != 1",
-                "Query": "select u_tbl6.col6 from u_tbl6 as u where id in ::dml_vals for update",
+                "Query": "select u_tbl6.col6 from u_tbl6 as u where u_tbl6.id in ::dml_vals for update",
                 "Table": "u_tbl6"
               },
               {
@@ -3185,7 +3185,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl6 as u where id in ::dml_vals",
+                "Query": "delete from u_tbl6 as u where u_tbl6.id in ::dml_vals",
                 "Table": "u_tbl6"
               }
             ]
@@ -3219,8 +3219,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select id from u_tbl10, u_tbl11 where 1 != 1",
-            "Query": "select id from u_tbl10, u_tbl11 where u_tbl10.id = 5 and u_tbl10.id = u_tbl11.id for update",
+            "FieldQuery": "select u_tbl10.id from u_tbl10, u_tbl11 where 1 != 1",
+            "Query": "select u_tbl10.id from u_tbl10, u_tbl11 where u_tbl10.id = 5 and u_tbl10.id = u_tbl11.id for update",
             "Table": "u_tbl10, u_tbl11"
           },
           {
@@ -3235,7 +3235,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl10.col from u_tbl10 where 1 != 1",
-                "Query": "select u_tbl10.col from u_tbl10 where id in ::dml_vals for update",
+                "Query": "select u_tbl10.col from u_tbl10 where u_tbl10.id in ::dml_vals for update",
                 "Table": "u_tbl10"
               },
               {
@@ -3263,7 +3263,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl10 where id in ::dml_vals",
+                "Query": "delete from u_tbl10 where u_tbl10.id in ::dml_vals",
                 "Table": "u_tbl10"
               }
             ]
@@ -3296,8 +3296,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select id from u_tbl10, u_tbl1 where 1 != 1",
-            "Query": "select id from u_tbl10, u_tbl1 where u_tbl10.col = u_tbl1.col for update",
+            "FieldQuery": "select u_tbl1.id from u_tbl10, u_tbl1 where 1 != 1",
+            "Query": "select u_tbl1.id from u_tbl10, u_tbl1 where u_tbl10.col = u_tbl1.col for update",
             "Table": "u_tbl1, u_tbl10"
           },
           {
@@ -3312,7 +3312,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
-                "Query": "select u_tbl1.col1 from u_tbl1 where id in ::dml_vals for update",
+                "Query": "select u_tbl1.col1 from u_tbl1 where u_tbl1.id in ::dml_vals for update",
                 "Table": "u_tbl1"
               },
               {
@@ -3374,7 +3374,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl1 where id in ::dml_vals",
+                "Query": "delete from u_tbl1 where u_tbl1.id in ::dml_vals",
                 "Table": "u_tbl1"
               }
             ]
@@ -3409,8 +3409,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select id from u_tbl1 where 1 != 1",
-            "Query": "select id from u_tbl1 order by id asc limit 1 for update",
+            "FieldQuery": "select u_tbl1.id from u_tbl1 where 1 != 1",
+            "Query": "select u_tbl1.id from u_tbl1 order by id asc limit 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -3425,7 +3425,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
-                "Query": "select u_tbl1.col1 from u_tbl1 where id in ::dml_vals for update",
+                "Query": "select u_tbl1.col1 from u_tbl1 where u_tbl1.id in ::dml_vals for update",
                 "Table": "u_tbl1"
               },
               {
@@ -3487,7 +3487,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl1 where id in ::dml_vals",
+                "Query": "delete from u_tbl1 where u_tbl1.id in ::dml_vals",
                 "Table": "u_tbl1"
               }
             ]
@@ -3750,8 +3750,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select id from u_tbl6, u_tbl8 where 1 != 1",
-            "Query": "select id from u_tbl6, u_tbl8 where u_tbl6.id = 4 and u_tbl6.id = u_tbl8.id for update",
+            "FieldQuery": "select u_tbl6.id from u_tbl6, u_tbl8 where 1 != 1",
+            "Query": "select u_tbl6.id from u_tbl6, u_tbl8 where u_tbl6.id = 4 and u_tbl6.id = u_tbl8.id for update",
             "Table": "u_tbl6, u_tbl8"
           },
           {
@@ -3766,7 +3766,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl6.col6 from u_tbl6 where 1 != 1",
-                "Query": "select u_tbl6.col6 from u_tbl6 where id in ::dml_vals for update",
+                "Query": "select u_tbl6.col6 from u_tbl6 where u_tbl6.id in ::dml_vals for update",
                 "Table": "u_tbl6"
               },
               {
@@ -3794,7 +3794,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl6 where id in ::dml_vals",
+                "Query": "delete from u_tbl6 where u_tbl6.id in ::dml_vals",
                 "Table": "u_tbl6"
               }
             ]

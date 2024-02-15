@@ -146,7 +146,7 @@ func deleteWithInputPlanningForFk(ctx *plancontext.PlanningContext, del *sqlpars
 	var leftComp sqlparser.ValTuple
 	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
 	for _, col := range vTbl.PrimaryKey {
-		colName := sqlparser.NewColName(col.String())
+		colName := sqlparser.NewColNameWithQualifier(col.String(), vTbl.GetTableName())
 		selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(colName))
 		cols = append(cols, colName)
 		leftComp = append(leftComp, colName)
