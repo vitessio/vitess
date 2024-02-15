@@ -5830,7 +5830,7 @@
     "plan": "VT03031: the target table (select id from `user`) as u of the UPDATE is not updatable"
   },
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
+    "comment": "Delete with routed table on music",
     "query": "delete from second_user.bar",
     "plan": {
       "QueryType": "DELETE",
@@ -5855,7 +5855,7 @@
     }
   },
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
+    "comment": "Update with routed table on music",
     "query": "update second_user.bar set col = 23",
     "plan": {
       "QueryType": "UPDATE",
@@ -5877,7 +5877,7 @@
     }
   },
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
+    "comment": "Insert with routed table on music",
     "query": "insert into second_user.bar(id) values (2)",
     "plan": {
       "QueryType": "INSERT",
