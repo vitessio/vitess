@@ -4966,8 +4966,8 @@
         "Query": "insert into music(id, user_id) values (:_id_0, :_user_id_0)",
         "TableName": "music",
         "VindexValues": {
-          "music_user_map": "2",
-          "user_index": "null"
+          "music_user_map": "INT64(2)",
+          "user_index": "NULL"
         }
       },
       "TablesUsed": [
