@@ -122,11 +122,14 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 	case "JSON":
 		return evalToJSON(e)
 	case "DATETIME":
-		switch p := c.Length; {
-		case p > 6:
+		p := c.Length
+		if !c.HasLength {
+			p = 0
+		}
+		if p > 6 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for 'CONVERT'. Maximum is 6.", p)
 		}
-		if dt := evalToDateTime(e, c.Length, env.now, env.sqlmode.AllowZeroDate()); dt != nil {
+		if dt := evalToDateTime(e, p, env.now, env.sqlmode.AllowZeroDate()); dt != nil {
 			return dt, nil
 		}
 		return nil, nil
@@ -136,11 +139,14 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return nil, nil
 	case "TIME":
-		switch p := c.Length; {
-		case p > 6:
+		p := c.Length
+		if !c.HasLength {
+			p = 0
+		}
+		if p > 6 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for 'CONVERT'. Maximum is 6.", p)
 		}
-		if t := evalToTime(e, c.Length); t != nil {
+		if t := evalToTime(e, p); t != nil {
 			return t, nil
 		}
 		return nil, nil
@@ -224,18 +230,24 @@ func (conv *ConvertExpr) compile(c *compiler) (ctype, error) {
 		convt = c.compileToDate(arg, 1)
 
 	case "DATETIME":
-		switch p := conv.Length; {
-		case p > 6:
+		p := conv.Length
+		if !conv.HasLength {
+			p = 0
+		}
+		if p > 6 {
 			return ctype{}, c.unsupported(conv)
 		}
-		convt = c.compileToDateTime(arg, 1, conv.Length)
+		convt = c.compileToDateTime(arg, 1, p)
 
 	case "TIME":
-		switch p := conv.Length; {
-		case p > 6:
+		p := conv.Length
+		if !conv.HasLength {
+			p = 0
+		}
+		if p > 6 {
 			return ctype{}, c.unsupported(conv)
 		}
-		convt = c.compileToTime(arg, 1, conv.Length)
+		convt = c.compileToTime(arg, 1, p)
 
 	default:
 		return ctype{}, c.unsupported(conv)

@@ -964,8 +964,6 @@ func CloneRefOfColumnType(n *ColumnType) *ColumnType {
 	}
 	out := *n
 	out.Options = CloneRefOfColumnTypeOptions(n.Options)
-	out.Length = CloneRefOfLiteral(n.Length)
-	out.Scale = CloneRefOfLiteral(n.Scale)
 	out.Charset = CloneColumnCharset(n.Charset)
 	out.EnumValues = CloneSliceOfString(n.EnumValues)
 	return &out
@@ -1054,8 +1052,6 @@ func CloneRefOfConvertType(n *ConvertType) *ConvertType {
 		return nil
 	}
 	out := *n
-	out.Length = CloneRefOfLiteral(n.Length)
-	out.Scale = CloneRefOfLiteral(n.Scale)
 	out.Charset = CloneColumnCharset(n.Charset)
 	return &out
 }
@@ -4666,7 +4662,6 @@ func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	}
 	out := *n
 	out.Column = CloneIdentifierCI(n.Column)
-	out.Length = CloneRefOfLiteral(n.Length)
 	out.Expression = CloneExpr(n.Expression)
 	return &out
 }

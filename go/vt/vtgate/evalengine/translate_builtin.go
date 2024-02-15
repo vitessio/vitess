@@ -656,10 +656,8 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		}
 		if call.As != nil {
 			ws.Cast = strings.ToLower(call.As.Type)
-			ws.Len, ws.HasLen, err = ast.translateIntegral(call.As.Length)
-			if err != nil {
-				return nil, err
-			}
+			ws.Len = call.As.Length
+			ws.HasLen = call.As.Length >= 0
 		}
 		return ws, nil
 

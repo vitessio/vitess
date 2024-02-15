@@ -695,11 +695,11 @@ func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
 func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	buf.astPrintf(ct, "%#s", ct.Type)
 
-	if ct.Length != nil && ct.Scale != nil {
-		buf.astPrintf(ct, "(%v,%v)", ct.Length, ct.Scale)
+	if ct.Length >= 0 && ct.Scale >= 0 {
+		buf.astPrintf(ct, "(%d,%d)", ct.Length, ct.Scale)
 
-	} else if ct.Length != nil {
-		buf.astPrintf(ct, "(%v)", ct.Length)
+	} else if ct.Length >= 0 {
+		buf.astPrintf(ct, "(%d)", ct.Length)
 	}
 
 	if ct.EnumValues != nil {
@@ -823,8 +823,8 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 			buf.astPrintf(idx, "(%v)", col.Expression)
 		} else {
 			buf.astPrintf(idx, "%v", col.Column)
-			if col.Length != nil {
-				buf.astPrintf(idx, "(%v)", col.Length)
+			if col.Length >= 0 {
+				buf.astPrintf(idx, "(%d)", col.Length)
 			}
 		}
 		if col.Direction == DescOrder {
@@ -1851,10 +1851,10 @@ func (node *ConvertUsingExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *ConvertType) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%#s", node.Type)
-	if node.Length != nil {
-		buf.astPrintf(node, "(%v", node.Length)
-		if node.Scale != nil {
-			buf.astPrintf(node, ", %v", node.Scale)
+	if node.Length >= 0 {
+		buf.astPrintf(node, "(%d", node.Length)
+		if node.Scale >= 0 {
+			buf.astPrintf(node, ", %d", node.Scale)
 		}
 		buf.astPrintf(node, ")")
 	}

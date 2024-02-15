@@ -19,7 +19,6 @@ package schema
 import (
 	"context"
 	"maps"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -315,8 +314,8 @@ func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 	cols := make([]vindexes.Column, 0, len(tblSpec.Columns))
 	for _, column := range tblSpec.Columns {
 		colCollation := getColumnCollation(tblCollation, column)
-		size := getColumnNumber(column.Type.Length)
-		scale := getColumnNumber(column.Type.Scale)
+		size := int32(column.Type.Length)
+		scale := int32(column.Type.Scale)
 		nullable := getColumnNullable(column.Type.Options.Null)
 		cols = append(cols,
 			vindexes.Column{
@@ -339,20 +338,6 @@ func getColumnNullable(null *bool) bool {
 		return true
 	}
 	return *null
-}
-
-func getColumnNumber(lit *sqlparser.Literal) int32 {
-	if lit == nil {
-		return 0
-	}
-	if lit.Type != sqlparser.IntVal {
-		return 0
-	}
-	val, err := strconv.ParseInt(lit.Val, 10, 32)
-	if err != nil {
-		return 0
-	}
-	return int32(val)
 }
 
 func getForeignKeys(tblSpec *sqlparser.TableSpec) []*sqlparser.ForeignKeyDefinition {

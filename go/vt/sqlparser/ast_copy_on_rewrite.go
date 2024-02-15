@@ -1445,18 +1445,6 @@ func (c *cow) copyOnRewriteRefOfColumnType(n *ColumnType, parent SQLNode) (out S
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Length, changedLength := c.copyOnRewriteRefOfLiteral(n.Length, n)
-		_Scale, changedScale := c.copyOnRewriteRefOfLiteral(n.Scale, n)
-		if changedLength || changedScale {
-			res := *n
-			res.Length, _ = _Length.(*Literal)
-			res.Scale, _ = _Scale.(*Literal)
-			out = &res
-			if c.cloned != nil {
-				c.cloned(n, out)
-			}
-			changed = true
-		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -1616,18 +1604,6 @@ func (c *cow) copyOnRewriteRefOfConvertType(n *ConvertType, parent SQLNode) (out
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Length, changedLength := c.copyOnRewriteRefOfLiteral(n.Length, n)
-		_Scale, changedScale := c.copyOnRewriteRefOfLiteral(n.Scale, n)
-		if changedLength || changedScale {
-			res := *n
-			res.Length, _ = _Length.(*Literal)
-			res.Scale, _ = _Scale.(*Literal)
-			out = &res
-			if c.cloned != nil {
-				c.cloned(n, out)
-			}
-			changed = true
-		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)

@@ -2109,11 +2109,11 @@ func (cmp *Comparator) RefOfColumnType(a, b *ColumnType) bool {
 		return false
 	}
 	return a.Type == b.Type &&
+		a.Length == b.Length &&
 		a.Unsigned == b.Unsigned &&
 		a.Zerofill == b.Zerofill &&
+		a.Scale == b.Scale &&
 		cmp.RefOfColumnTypeOptions(a.Options, b.Options) &&
-		cmp.RefOfLiteral(a.Length, b.Length) &&
-		cmp.RefOfLiteral(a.Scale, b.Scale) &&
 		cmp.ColumnCharset(a.Charset, b.Charset) &&
 		cmp.SliceOfString(a.EnumValues, b.EnumValues)
 }
@@ -2213,8 +2213,8 @@ func (cmp *Comparator) RefOfConvertType(a, b *ConvertType) bool {
 		return false
 	}
 	return a.Type == b.Type &&
-		cmp.RefOfLiteral(a.Length, b.Length) &&
-		cmp.RefOfLiteral(a.Scale, b.Scale) &&
+		a.Length == b.Length &&
+		a.Scale == b.Scale &&
 		cmp.ColumnCharset(a.Charset, b.Charset)
 }
 
@@ -7550,8 +7550,8 @@ func (cmp *Comparator) RefOfIndexColumn(a, b *IndexColumn) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.IdentifierCI(a.Column, b.Column) &&
-		cmp.RefOfLiteral(a.Length, b.Length) &&
+	return a.Length == b.Length &&
+		cmp.IdentifierCI(a.Column, b.Column) &&
 		cmp.Expr(a.Expression, b.Expression) &&
 		a.Direction == b.Direction
 }

@@ -546,8 +546,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <boolean> array_opt
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt partition_comment partition_data_directory partition_index_directory
-%type <integer> func_datetime_precision
+%type <literal> partition_comment partition_data_directory partition_index_directory
+%type <integer> length_opt func_datetime_precision
 %type <columnCharset> charset_opt
 %type <str> collate_opt
 %type <boolean> binary_opt
@@ -2011,39 +2011,39 @@ numeric_type:
 int_type:
   BIT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | BOOL
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | BOOLEAN
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | TINYINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | SMALLINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | MEDIUMINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | INT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | INTEGER
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | BIGINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 
 decimal_type:
@@ -2093,126 +2093,126 @@ REAL double_length_opt
 time_type:
   DATE
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | TIME length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2, Scale: -1}
   }
 | TIMESTAMP length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2, Scale: -1}
   }
 | DATETIME length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2, Scale: -1}
   }
 | YEAR length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2, Scale: -1}
   }
 
 char_type:
   CHAR length_opt charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
+    $$ = &ColumnType{Type: string($1), Length: $2, Scale: -1, Charset: $3}
   }
 | CHAR length_opt BYTE
   {
     // CHAR BYTE is an alias for binary. See also:
     // https://dev.mysql.com/doc/refman/8.0/en/string-type-syntax.html
-    $$ = &ColumnType{Type: "binary", Length: $2}
+    $$ = &ColumnType{Type: "binary", Length: $2, Scale: -1}
   }
 | VARCHAR length_opt charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
+    $$ = &ColumnType{Type: string($1), Length: $2, Scale: -1, Charset: $3}
   }
 | BINARY length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2, Scale: -1}
   }
 | VARBINARY length_opt
   {
-    $$ = &ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2, Scale: -1}
   }
 | TEXT charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1, Charset: $2}
   }
 | TINYTEXT charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1, Charset: $2}
   }
 | MEDIUMTEXT charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1, Charset: $2}
   }
 | LONGTEXT charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1, Charset: $2}
   }
 | BLOB
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | TINYBLOB
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | MEDIUMBLOB
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | LONGBLOB
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | JSON
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | ENUM '(' enum_values ')' charset_opt
   {
-    $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+    $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Length: -1, Scale: -1}
   }
 // need set_values / SetValues ?
 | SET '(' enum_values ')' charset_opt
   {
-    $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+    $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Length: -1, Scale: -1}
   }
 
 spatial_type:
   GEOMETRY
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | POINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | LINESTRING
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | POLYGON
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | GEOMETRYCOLLECTION
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | MULTIPOINT
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | MULTILINESTRING
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 | MULTIPOLYGON
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: -1, Scale: -1}
   }
 
 enum_values:
@@ -2228,22 +2228,25 @@ enum_values:
 
 length_opt:
   {
-    $$ = nil
+    $$ = -1
   }
 | '(' INTEGRAL ')'
   {
-    $$ = NewIntLiteral($2)
+    $$ = convertStringToInt($2)
   }
 
 double_length_opt:
   {
-    $$ = LengthScaleOption{}
+    $$ = LengthScaleOption{
+      Length: -1,
+      Scale: -1,
+    }
   }
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
-        Scale: NewIntLiteral($4),
+        Length: convertStringToInt($2),
+        Scale: convertStringToInt($4),
     }
   }
 
@@ -2255,25 +2258,30 @@ double_length_opt
 | '(' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
+        Length: convertStringToInt($2),
+        Scale: -1,
     }
   }
 
 decimal_length_opt:
   {
-    $$ = LengthScaleOption{}
+    $$ = LengthScaleOption{
+      Length: -1,
+      Scale: -1,
+    }
   }
 | '(' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
+        Length: convertStringToInt($2),
+        Scale: -1,
     }
   }
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
-        Scale: NewIntLiteral($4),
+        Length: convertStringToInt($2),
+        Scale: convertStringToInt($4),
     }
   }
 
@@ -2533,7 +2541,7 @@ index_column:
   }
 | openb expression closeb asc_desc_opt
   {
-    $$ = &IndexColumn{Expression: $2, Direction: $4}
+    $$ = &IndexColumn{Expression: $2, Length: -1, Direction: $4}
   }
 
 constraint_definition:
@@ -5513,7 +5521,7 @@ function_call_keyword
     // To convert a string expression to a binary string, these constructs are equivalent:
     //    CAST(expr AS BINARY)
     //    BINARY expr
-    $$ = &ConvertExpr{Expr: $2, Type: &ConvertType{Type: $1}}
+    $$ = &ConvertExpr{Expr: $2, Type: &ConvertType{Type: $1, Length: -1, Scale: -1}}
   }
 | DEFAULT default_opt
   {
@@ -7094,29 +7102,29 @@ convert_type_weight_string:
   }
 | AS BINARY '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+    $$ = &ConvertType{Type: string($2), Length: convertStringToInt($4), Scale: -1}
   }
 | AS CHAR '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+    $$ = &ConvertType{Type: string($2), Length: convertStringToInt($4), Scale: -1}
   }
 
 convert_type:
   BINARY length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = &ConvertType{Type: string($1), Length: $2, Scale: -1}
   }
 | CHAR length_opt charset_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3}
+    $$ = &ConvertType{Type: string($1), Length: $2, Scale: -1, Charset: $3}
   }
 | DATE
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: string($1), Length: -1, Scale: -1}
   }
 | DATETIME length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = &ConvertType{Type: string($1), Length: $2, Scale: -1}
   }
 | DECIMAL_TYPE decimal_length_opt
   {
@@ -7126,43 +7134,43 @@ convert_type:
   }
 | JSON
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: string($1), Length: -1, Scale: -1}
   }
 | NCHAR length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = &ConvertType{Type: string($1), Length: $2, Scale: -1}
   }
 | SIGNED
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: string($1), Length: -1, Scale: -1}
   }
 | SIGNED INTEGER
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: string($1), Length: -1, Scale: -1}
   }
 | TIME length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = &ConvertType{Type: string($1), Length: $2, Scale: -1}
   }
 | UNSIGNED
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: string($1), Length: -1, Scale: -1}
   }
 | UNSIGNED INTEGER
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: string($1), Length: -1, Scale: -1}
   }
 | FLOAT_TYPE length_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = &ConvertType{Type: string($1), Length: $2, Scale: -1}
   }
 | DOUBLE
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: string($1), Length: -1, Scale: -1}
   }
 | REAL
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: string($1), Length: -1, Scale: -1}
   }
 
 array_opt:

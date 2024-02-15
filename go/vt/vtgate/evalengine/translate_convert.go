@@ -72,20 +72,14 @@ func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *s
 		return nil, err
 	}
 
-	convert.Length, convert.HasLength, err = ast.translateIntegral(convertType.Length)
-	if err != nil {
-		return nil, err
-	}
-
-	convert.Scale, convert.HasScale, err = ast.translateIntegral(convertType.Scale)
-	if err != nil {
-		return nil, err
-	}
-
+	convert.Length = convertType.Length
+	convert.HasLength = convertType.Length >= 0
+	convert.Scale = convertType.Scale
+	convert.HasScale = convertType.Scale >= 0
 	convert.Type = strings.ToUpper(convertType.Type)
 	switch convert.Type {
 	case "DECIMAL":
-		if convert.Length < convert.Scale {
+		if convert.HasLength && convert.HasScale && convert.Length < convert.Scale {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '%s').",
 				"", // TODO: column name

@@ -522,7 +522,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			// We can remove the length except when we have a boolean, which is
 			// stored as a tinyint(1) and treated special.
 			if !isBool(col.Type) {
-				col.Type.Length = nil
+				col.Type.Length = -1
 			}
 		}
 
@@ -530,10 +530,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		// "show create table" reports it as a tinyint(1).
 		if col.Type.Type == "boolean" {
 			col.Type.Type = "tinyint"
-			col.Type.Length = &sqlparser.Literal{
-				Type: sqlparser.IntVal,
-				Val:  "1",
-			}
+			col.Type.Length = 1
 
 			if col.Type.Options.Default != nil {
 				val, ok := col.Type.Options.Default.(sqlparser.BoolVal)
@@ -562,18 +559,16 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 				col.Type.Type = "double"
 			}
 
-			if col.Type.Length != nil && col.Type.Scale == nil && col.Type.Length.Type == sqlparser.IntVal {
-				if l, err := strconv.ParseInt(col.Type.Length.Val, 10, 64); err == nil {
-					// See https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html, but the docs are
-					// subtly wrong. We use a float for a precision of 24, not a double as the documentation
-					// mentioned. Validated against the actual behavior of MySQL.
-					if l <= 24 {
-						col.Type.Type = "float"
-					} else {
-						col.Type.Type = "double"
-					}
+			if col.Type.Length >= 0 && col.Type.Scale == -1 {
+				// See https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html, but the docs are
+				// subtly wrong. We use a float for a precision of 24, not a double as the documentation
+				// mentioned. Validated against the actual behavior of MySQL.
+				if col.Type.Length <= 24 {
+					col.Type.Type = "float"
+				} else {
+					col.Type.Type = "double"
 				}
-				col.Type.Length = nil
+				col.Type.Length = -1
 			}
 		}
 
@@ -627,7 +622,7 @@ func (c *CreateTableEntity) normalizeIndexOptions() {
 }
 
 func isBool(colType *sqlparser.ColumnType) bool {
-	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length != nil && sqlparser.CanonicalString(colType.Length) == "1"
+	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length == 1
 }
 
 func (c *CreateTableEntity) normalizePartitionOptions() {
@@ -653,7 +648,7 @@ func newPrimaryKeyIndexDefinitionSingleColumn(name sqlparser.IdentifierCI) *sqlp
 			Name: sqlparser.NewIdentifierCI("PRIMARY"),
 			Type: sqlparser.IndexTypePrimary,
 		},
-		Columns: []*sqlparser.IndexColumn{{Column: name}},
+		Columns: []*sqlparser.IndexColumn{{Column: name, Length: -1}},
 	}
 	return index
 }
@@ -778,7 +773,7 @@ func (c *CreateTableEntity) normalizeForeignKeyIndexes() {
 				},
 			}
 			for _, col := range fk.Source {
-				indexColumn := &sqlparser.IndexColumn{Column: col}
+				indexColumn := &sqlparser.IndexColumn{Column: col, Length: -1}
 				indexDefinition.Columns = append(indexDefinition.Columns, indexColumn)
 			}
 			c.TableSpec.Indexes = append(c.TableSpec.Indexes, indexDefinition)

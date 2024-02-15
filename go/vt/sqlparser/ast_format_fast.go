@@ -905,16 +905,16 @@ func (col *ColumnDefinition) FormatFast(buf *TrackedBuffer) {
 func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString(ct.Type)
 
-	if ct.Length != nil && ct.Scale != nil {
+	if ct.Length >= 0 && ct.Scale >= 0 {
 		buf.WriteByte('(')
-		ct.Length.FormatFast(buf)
+		buf.WriteString(fmt.Sprintf("%d", ct.Length))
 		buf.WriteByte(',')
-		ct.Scale.FormatFast(buf)
+		buf.WriteString(fmt.Sprintf("%d", ct.Scale))
 		buf.WriteByte(')')
 
-	} else if ct.Length != nil {
+	} else if ct.Length >= 0 {
 		buf.WriteByte('(')
-		ct.Length.FormatFast(buf)
+		buf.WriteString(fmt.Sprintf("%d", ct.Length))
 		buf.WriteByte(')')
 	}
 
@@ -1109,9 +1109,9 @@ func (idx *IndexDefinition) FormatFast(buf *TrackedBuffer) {
 			buf.WriteByte(')')
 		} else {
 			col.Column.FormatFast(buf)
-			if col.Length != nil {
+			if col.Length >= 0 {
 				buf.WriteByte('(')
-				col.Length.FormatFast(buf)
+				buf.WriteString(fmt.Sprintf("%d", col.Length))
 				buf.WriteByte(')')
 			}
 		}
@@ -2484,12 +2484,12 @@ func (node *ConvertUsingExpr) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node *ConvertType) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Type)
-	if node.Length != nil {
+	if node.Length >= 0 {
 		buf.WriteByte('(')
-		node.Length.FormatFast(buf)
-		if node.Scale != nil {
+		buf.WriteString(fmt.Sprintf("%d", node.Length))
+		if node.Scale >= 0 {
 			buf.WriteString(", ")
-			node.Scale.FormatFast(buf)
+			buf.WriteString(fmt.Sprintf("%d", node.Scale))
 		}
 		buf.WriteByte(')')
 	}
