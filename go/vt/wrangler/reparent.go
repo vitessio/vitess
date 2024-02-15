@@ -78,13 +78,13 @@ func (wr *Wrangler) InitShardPrimary(ctx context.Context, keyspace, shard string
 func (wr *Wrangler) PlannedReparentShard(
 	ctx context.Context,
 	keyspace, shard string,
-	prsOp reparentutil.PlannedReparentOptions,
+	opts reparentutil.PlannedReparentOptions,
 ) (err error) {
 	_, err = reparentutil.NewPlannedReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
 		ctx,
 		keyspace,
 		shard,
-		prsOp,
+		opts,
 	)
 
 	return err
@@ -92,12 +92,12 @@ func (wr *Wrangler) PlannedReparentShard(
 
 // EmergencyReparentShard will make the provided tablet the primary for
 // the shard, when the old primary is completely unreachable.
-func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, ersOp reparentutil.EmergencyReparentOptions) (err error) {
+func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, opts reparentutil.EmergencyReparentOptions) (err error) {
 	_, err = reparentutil.NewEmergencyReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
 		ctx,
 		keyspace,
 		shard,
-		ersOp,
+		opts,
 	)
 
 	return err
