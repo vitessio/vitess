@@ -122,7 +122,7 @@ func TestNewFromFloat(t *testing.T) {
 	for _, x := range testTable {
 		s := x.short
 		d := NewFromFloat(x.float)
-		assert.Equal(t, s, d.String(), "expected %s, got %s (float: %v) (%s, %d)", s, d.String(), x.float, d.value.String(), d.exp)
+		assert.Equal(t, s, d.String())
 
 	}
 
@@ -155,7 +155,7 @@ func TestNewFromFloatRandom(t *testing.T) {
 			continue
 		}
 		got := NewFromFloat(in)
-		assert.True(t, want.Equal(got), "in: %v, expected %s (%s, %d), got %s (%s, %d) ", in, want.String(), want.value.String(), want.exp, got.String(), got.value.String(), got.exp)
+		assert.True(t, want.Equal(got))
 
 	}
 }
@@ -189,7 +189,7 @@ func TestNewFromFloat32Random(t *testing.T) {
 			continue
 		}
 		got := NewFromFloat32(in)
-		assert.True(t, want.Equal(got), "in: %v, expected %s (%s, %d), got %s (%s, %d) ", in, want.String(), want.value.String(), want.exp, got.String(), got.value.String(), got.exp)
+		assert.True(t, want.Equal(got))
 
 	}
 }
@@ -310,8 +310,8 @@ func TestNewFromStringErrs(t *testing.T) {
 
 	for s, o := range tests {
 		out, err := NewFromString(s)
-		assert.Error(t, err, "error expected when parsing %s", s)
-		assert.Equal(t, o, out.String(), "expected %s, got %s", o, out.String())
+		assert.Error(t, err)
+		assert.Equal(t, o, out.String())
 
 	}
 }
@@ -341,7 +341,7 @@ func TestNewFromStringDeepEquals(t *testing.T) {
 		if err1 != nil || err2 != nil {
 			t.Errorf("error parsing strings to decimals")
 		}
-		assert.Equal(t, cmp.expected, reflect.DeepEqual(d1, d2), "comparison result is different from expected results for %s and %s", cmp.str1, cmp.str2)
+		assert.Equal(t, cmp.expected, reflect.DeepEqual(d1, d2))
 
 	}
 }
@@ -398,8 +398,7 @@ func TestNewFromInt(t *testing.T) {
 
 	for input, s := range tests {
 		d := NewFromInt(input)
-		assert.Equal(t, s, d.String(), "expected %s, got %s (%s, %d)", s, d.String(),
-			d.value.String(), d.exp)
+		assert.Equal(t, s, d.String())
 
 	}
 }
@@ -482,14 +481,14 @@ func TestDecimal_RoundAndStringFixed(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := d.Round(test.places)
-		assert.True(t, got.Equal(expected), "Rounding %s to %d places, got %s, expected %s", d, test.places, got, expected)
+		assert.True(t, got.Equal(expected))
 
 		// test StringFixed
 		if test.expectedFixed == "" {
 			test.expectedFixed = test.expected
 		}
 		gotStr := d.StringFixed(test.places)
-		assert.Equal(t, test.expectedFixed, gotStr, "(%s).StringFixed(%d): got %s, expected %s", d, test.places, gotStr, test.expectedFixed)
+		assert.Equal(t, test.expectedFixed, gotStr)
 
 	}
 }
@@ -519,7 +518,7 @@ func TestDecimal_Add(t *testing.T) {
 			t.FailNow()
 		}
 		c := a.Add(b)
-		assert.Equal(t, res, c.String(), "expected %s, got %s", res, c.String())
+		assert.Equal(t, res, c.String())
 
 	}
 }
@@ -553,7 +552,7 @@ func TestDecimal_Sub(t *testing.T) {
 			t.FailNow()
 		}
 		c := a.sub(b)
-		assert.Equal(t, res, c.String(), "expected %s, got %s", res, c.String())
+		assert.Equal(t, res, c.String())
 
 	}
 }
@@ -573,7 +572,7 @@ func TestDecimal_Neg(t *testing.T) {
 			t.FailNow()
 		}
 		b := a.Neg()
-		assert.Equal(t, res, b.String(), "expected %s, got %s", res, b.String())
+		assert.Equal(t, res, b.String())
 
 	}
 }
@@ -581,7 +580,7 @@ func TestDecimal_Neg(t *testing.T) {
 func TestDecimal_NegFromEmpty(t *testing.T) {
 	a := Decimal{}
 	b := a.Neg()
-	assert.Equal(t, "0", b.String(), "expected %s, got %s", "0", b)
+	assert.Equal(t, "0", b.String())
 
 }
 
@@ -609,13 +608,13 @@ func TestDecimal_Mul(t *testing.T) {
 			t.FailNow()
 		}
 		c := a.mul(b)
-		assert.Equal(t, res, c.String(), "expected %s, got %s", res, c.String())
+		assert.Equal(t, res, c.String())
 
 	}
 
 	// positive scale
 	c := New(1234, 5).mul(New(45, -1))
-	assert.Equal(t, "555300000", c.String(), "Expected %s, got %s", "555300000", c.String())
+	assert.Equal(t, "555300000", c.String())
 
 }
 
@@ -651,10 +650,10 @@ func TestDecimal_Div(t *testing.T) {
 		}
 		got := num.div(denom)
 		expected, _ := NewFromString(expectedStr)
-		assert.True(t, got.Equal(expected), "expected %v when dividing %v by %v, got %v", expected, num, denom, got)
+		assert.True(t, got.Equal(expected))
 
 		got2 := num.divRound(denom, int32(divisionPrecision))
-		assert.True(t, got2.Equal(expected), "expected %v on divRound (%v,%v), got %v", expected, num, denom, got2)
+		assert.True(t, got2.Equal(expected))
 
 	}
 
@@ -686,7 +685,7 @@ func TestDecimal_Div(t *testing.T) {
 					expected = "-" + expectedAbs
 				}
 				got := num.div(denom)
-				assert.Equal(t, expected, got.String(), "expected %s when dividing %v by %v, got %v", expected, num, denom, got)
+				assert.Equal(t, expected, got.String())
 
 			}
 		}
@@ -728,9 +727,8 @@ func TestDecimal_QuoRem(t *testing.T) {
 			t.Errorf("bad QuoRem division %s , %s , %d got %v, %v expected %s , %s",
 				inp4.d, inp4.d2, prec, q, r, inp4.q, inp4.r)
 		}
-		assert.True(t, d.Equal(d2.mul(q).Add(r)), "not fitting: d=%v, d2= %v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
-		assert.True(t, q.Equal(q.Truncate(prec)), "quotient wrong precision: d=%v, d2= %v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
-
+		assert.True(t, d.Equal(d2.mul(q).Add(r)))
+		assert.True(t, q.Equal(q.Truncate(prec)))
 		if r.Abs().Cmp(d2.Abs().mul(New(1, -prec))) >= 0 {
 			t.Errorf("remainder too large: d=%v, d2= %v, prec=%d, q=%v, r=%v",
 				d, d2, prec, q, r)
@@ -786,9 +784,9 @@ func TestDecimal_QuoRem2(t *testing.T) {
 		q, r := d.QuoRem(d2, prec)
 		assert.
 			// rule 1: d = d2*q +r
-			True(t, d.Equal(d2.mul(q).Add(r)), "not fitting, d=%v, d2=%v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
+			True(t, d.Equal(d2.mul(q).Add(r)))
 		assert.True(t, // rule 2: q is integral multiple of 10^(-prec)
-			q.Equal(q.Truncate(prec)), "quotient wrong precision, d=%v, d2=%v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
+			q.Equal(q.Truncate(prec)))
 
 		// rule 3: abs(r)<abs(d) * 10^(-prec)
 		if r.Abs().Cmp(d2.Abs().mul(New(1, -prec))) >= 0 {
@@ -852,7 +850,7 @@ func TestDecimal_DivRound(t *testing.T) {
 		if x.Cmp(d2.Abs().mul(New(-1, -prec))) <= 0 {
 			t.Errorf("wrong rounding, got: %v/%v prec=%d is about %v", d, d2, prec, q)
 		}
-		assert.True(t, q.Equal(result), "rounded division wrong %s / %s scale %d = %s, got %v", s.d, s.d2, prec, s.result, q)
+		assert.True(t, q.Equal(result))
 
 	}
 }
@@ -910,7 +908,7 @@ func TestDecimal_Mod(t *testing.T) {
 			t.FailNow()
 		}
 		c := a.mod(b)
-		assert.Equal(t, res, c.String(), "expected %s, got %s", res, c.String())
+		assert.Equal(t, res, c.String())
 
 	}
 }
@@ -928,7 +926,7 @@ func TestDecimal_Overflow(t *testing.T) {
 
 func TestDecimal_Scale(t *testing.T) {
 	a := New(1234, -3)
-	assert.Equal(t, -3, a.Exponent(), "error")
+	assert.Equal(t, int32(-3), a.Exponent())
 
 }
 
@@ -937,7 +935,7 @@ func TestDecimal_Abs1(t *testing.T) {
 	b := New(1234, -4)
 
 	c := a.Abs()
-	assert.Equal(t, 0, c.Cmp(b), "error")
+	assert.Equal(t, 0, c.Cmp(b))
 
 }
 
@@ -946,7 +944,7 @@ func TestDecimal_Abs2(t *testing.T) {
 	b := New(1234, -4)
 
 	c := b.Abs()
-	assert.NotEqual(t, 0, c.Cmp(a), "error")
+	assert.NotEqual(t, 0, c.Cmp(a))
 
 }
 
@@ -961,14 +959,14 @@ func TestDecimal_ScalesNotEqual(t *testing.T) {
 func TestDecimal_Cmp1(t *testing.T) {
 	a := New(123, 3)
 	b := New(-1234, 2)
-	assert.Equal(t, 1, a.Cmp(b), "Error")
+	assert.Equal(t, 1, a.Cmp(b))
 
 }
 
 func TestDecimal_Cmp2(t *testing.T) {
 	a := New(123, 3)
 	b := New(1234, 2)
-	assert.Equal(t, -1, a.Cmp(b), "Error")
+	assert.Equal(t, -1, a.Cmp(b))
 
 }
 
@@ -994,19 +992,19 @@ func TestDecimal_IsInteger(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, testCase.IsInteger, d.isInteger(), "expect %t, got %t, for %s", testCase.IsInteger, d.isInteger(), testCase.Dec)
+		assert.Equal(t, testCase.IsInteger, d.isInteger())
 
 	}
 }
 
 func TestDecimal_Sign(t *testing.T) {
-	assert.Equal(t, 0, Zero.Sign(), "%q should have sign 0", Zero)
+	assert.Equal(t, 0, Zero.Sign())
 
 	one := New(1, 0)
-	assert.Equal(t, 1, one.Sign(), "%q should have sign 1", one)
+	assert.Equal(t, 1, one.Sign())
 
 	mone := New(-1, 0)
-	assert.Equal(t, -1, mone.Sign(), "%q should have sign -1", mone)
+	assert.Equal(t, -1, mone.Sign())
 
 }
 

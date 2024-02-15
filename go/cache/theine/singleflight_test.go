@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDo(t *testing.T) {
@@ -54,8 +55,8 @@ func TestDoErr(t *testing.T) {
 		return "", someErr
 	})
 
-	assert.ErrorIs(t, err, someErr, "incorrect Do error")
-	assert.Empty(t, v, "unexpected non-empty value")
+	assert.Equal(t, someErr, err)
+	assert.Equal(t, "", v)
 
 }
 
@@ -70,9 +71,9 @@ func TestDoDupSuppress(t *testing.T) {
 			wg1.Done()
 		}
 		v := <-c
-		c <- v	// pump; make available for any future calls
+		c <- v // pump; make available for any future calls
 
-		time.Sleep(10 * time.Millisecond)	// let more goroutines enter Do
+		time.Sleep(10 * time.Millisecond) // let more goroutines enter Do
 
 		return v, nil
 	}
@@ -153,6 +154,7 @@ func TestGoexitDo(t *testing.T) {
 			var err error
 			defer func() {
 				assert.NoError(t, err)
+
 				if atomic.AddInt32(&waited, -1) == 0 {
 					close(done)
 				}

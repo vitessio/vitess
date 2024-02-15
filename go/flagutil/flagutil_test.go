@@ -21,26 +21,26 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStringList(t *testing.T) {
 	p := StringListValue([]string{})
 	var _ pflag.Value = &p
 	wanted := map[string]string{
-		"0ala,ma,kota":		"0ala.ma.kota",
-		`1ala\,ma,kota`:	"1ala,ma.kota",
-		`2ala\\,ma,kota`:	`2ala\.ma.kota`,
-		"3ala,":		"3ala.",
+		"0ala,ma,kota":   "0ala.ma.kota",
+		`1ala\,ma,kota`:  "1ala,ma.kota",
+		`2ala\\,ma,kota`: `2ala\.ma.kota`,
+		"3ala,":          "3ala.",
 	}
 	for in, out := range wanted {
 		if err := p.Set(in); err != nil {
 			t.Errorf("v.Set(%v): %v", in, err)
 			continue
 		}
-		assert.Equal(t, out, strings.Join(p, "."), "want %#v, got %#v", strings.Split(out, "."), p)
-		assert.Equal(t, in, p.String(), "v.String(): want %#v, got %#v", in, p.String())
+		assert.Equal(t, out, strings.Join(p, "."))
+		assert.Equal(t, in, p.String())
 
 	}
 }
@@ -58,9 +58,9 @@ func TestEmptyStringList(t *testing.T) {
 }
 
 type pair struct {
-	in	string
-	out	map[string]string
-	err	error
+	in  string
+	out map[string]string
+	err error
 }
 
 func TestStringMap(t *testing.T) {
@@ -68,16 +68,16 @@ func TestStringMap(t *testing.T) {
 	var _ pflag.Value = &v
 	wanted := []pair{
 		{
-			in:	"tag1:value1,tag2:value2",
-			out:	map[string]string{"tag1": "value1", "tag2": "value2"},
+			in:  "tag1:value1,tag2:value2",
+			out: map[string]string{"tag1": "value1", "tag2": "value2"},
 		},
 		{
-			in:	`tag1:1:value1\,,tag2:value2`,
-			out:	map[string]string{"tag1": "1:value1,", "tag2": "value2"},
+			in:  `tag1:1:value1\,,tag2:value2`,
+			out: map[string]string{"tag1": "1:value1,", "tag2": "value2"},
 		},
 		{
-			in:	`tag1:1:value1\,,tag2`,
-			err:	errInvalidKeyValuePair,
+			in:  `tag1:1:value1\,,tag2`,
+			err: errInvalidKeyValuePair,
 		},
 	}
 	for _, want := range wanted {

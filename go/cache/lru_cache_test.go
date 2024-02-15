@@ -30,11 +30,11 @@ func TestInitialState(t *testing.T) {
 	cache := NewLRUCache[*CacheValue](5)
 	l, sz, c, e, h, m := cache.Len(), cache.UsedCapacity(), cache.MaxCapacity(), cache.Evictions(), cache.Hits(), cache.Misses()
 	assert.Equal(t, 0, l, "length = %v, want 0", l)
-	assert.Equal(t, int64(0), sz, "size = %v, want 0", sz)
-	assert.Equal(t, int64(5), c, "capacity = %v, want 5", c)
-	assert.Equal(t, int64(0), e, "evictions = %v, want 0", c)
-	assert.Equal(t, int64(0), h, "hits = %v, want 0", c)
-	assert.Equal(t, int64(0), m, "misses = %v, want 0", c)
+	assert.Equal(t, int64(0), sz)
+	assert.Equal(t, int64(5), c)
+	assert.Equal(t, int64(0), e)
+	assert.Equal(t, int64(0), h)
+	assert.Equal(t, int64(0), m)
 
 }
 
@@ -128,8 +128,8 @@ func TestCapacityIsObeyed(t *testing.T) {
 	// Insert one more; something should be evicted to make room.
 	cache.Set("key4", value)
 	sz, evictions := cache.UsedCapacity(), cache.Evictions()
-	assert.Equal(t, size, sz, "post-evict cache.UsedCapacity() = %v, expected %v", sz, size)
-	assert.Equal(t, int64(1), evictions, "post-evict cache.Evictions() = %v, expected 1", evictions)
+	assert.Equal(t, size, sz)
+	assert.Equal(t, int64(1), evictions)
 
 	// Check various other stats
 	if l := cache.Len(); int64(l) != size {

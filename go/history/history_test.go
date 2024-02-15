@@ -35,7 +35,7 @@ func TestHistory(t *testing.T) {
 		t.Errorf("len(records): want %v, got %v. records: %+v", want, got, q)
 	}
 	for i, record := range records {
-		assert.Equal(t, want[i], record, "record doesn't match: want %v, got %v", want[i], record)
+		assert.Equal(t, want[i], record)
 
 	}
 
@@ -49,7 +49,7 @@ func TestHistory(t *testing.T) {
 		t.Errorf("len(records): want %v, got %v. records: %+v", want, got, q)
 	}
 	for i, record := range records {
-		assert.Equal(t, want[i], record, "record doesn't match: want %v, got %v", want[i], record)
+		assert.Equal(t, want[i], record)
 
 	}
 }
