@@ -63,6 +63,7 @@ var Cases = []TestCase{
 	{Run: TupleComparisons},
 	{Run: Comparisons},
 	{Run: InStatement},
+	{Run: FnElt},
 	{Run: FnInsert},
 	{Run: FnLower},
 	{Run: FnUpper},
@@ -1313,6 +1314,56 @@ var JSONExtract_Schema = []*querypb.Field{
 		Type:       sqltypes.TypeJSON,
 		ColumnType: "JSON",
 	},
+}
+
+func FnElt(yield Query) {
+	for _, s1 := range inputStrings {
+		for _, n := range inputBitwise {
+			yield(fmt.Sprintf("ELT(%s, %s)", n, s1), nil)
+		}
+	}
+
+	for _, s1 := range inputStrings {
+		for _, s2 := range inputStrings {
+			for _, n := range inputBitwise {
+				yield(fmt.Sprintf("ELT(%s, %s, %s)", n, s1, s2), nil)
+			}
+		}
+	}
+
+	for _, s1 := range inputStrings {
+		for _, s2 := range inputStrings {
+			for _, s3 := range inputStrings {
+				for _, n := range inputBitwise {
+					yield(fmt.Sprintf("ELT(%s, %s, %s, %s)", n, s1, s2, s3), nil)
+				}
+			}
+		}
+	}
+
+	validIndex := []string{
+		"1",
+		"2",
+		"3",
+	}
+	for _, s1 := range inputStrings {
+		for _, s2 := range inputStrings {
+			for _, s3 := range inputStrings {
+				for _, n := range validIndex {
+					yield(fmt.Sprintf("ELT(%s, %s, %s, %s)", n, s1, s2, s3), nil)
+				}
+			}
+		}
+	}
+
+	mysqlDocSamples := []string{
+		"ELT(1, 'Aa', 'Bb', 'Cc', 'Dd')",
+		"ELT(4, 'Aa', 'Bb', 'Cc', 'Dd')",
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
 }
 
 func FnInsert(yield Query) {

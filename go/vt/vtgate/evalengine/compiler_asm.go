@@ -2345,6 +2345,23 @@ func (asm *assembler) Fn_BIT_LENGTH() {
 	}, "FN BIT_LENGTH VARCHAR(SP-1)")
 }
 
+func (asm *assembler) Fn_ELT(args int, tt sqltypes.Type, tc collations.TypedCollation) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		i := env.vm.stack[env.vm.sp-args].(*evalInt64)
+
+		if i.i < 1 || int(i.i) >= args || env.vm.stack[env.vm.sp-args+int(i.i)] == nil {
+			env.vm.stack[env.vm.sp-args] = nil
+		} else {
+			b := env.vm.stack[env.vm.sp-args+int(i.i)].(*evalBytes)
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalRaw(b.bytes, tt, tc)
+		}
+
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN ELT INT64(SP-%d) VARCHAR(SP-%d)...VARCHAR(SP-1)", args, args-1)
+}
+
 func (asm *assembler) Fn_INSERT(col collations.TypedCollation) {
 	asm.adjustStack(-3)
 

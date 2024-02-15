@@ -30,6 +30,11 @@ import (
 )
 
 type (
+	builtinElt struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinInsert struct {
 		CallExpr
 		collate collations.ID
@@ -112,6 +117,7 @@ type (
 	}
 )
 
+var _ IR = (*builtinElt)(nil)
 var _ IR = (*builtinInsert)(nil)
 var _ IR = (*builtinChangeCase)(nil)
 var _ IR = (*builtinCharLength)(nil)
@@ -126,6 +132,114 @@ var _ IR = (*builtinWeightString)(nil)
 var _ IR = (*builtinLeftRight)(nil)
 var _ IR = (*builtinPad)(nil)
 var _ IR = (*builtinTrim)(nil)
+
+func (call *builtinElt) eval(env *ExpressionEnv) (eval, error) {
+	var ca collationAggregation
+	tt := sqltypes.VarChar
+
+	args, err := call.args(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if args[0] == nil {
+		return nil, nil
+	}
+
+	i := evalToInt64(args[0]).i
+	if i < 1 || i >= int64(len(args)) || args[i] == nil {
+		return nil, nil
+	}
+
+	for _, arg := range args[1:] {
+		if arg == nil {
+			continue
+		}
+
+		tt = concatSQLType(arg.SQLType(), tt)
+		err = ca.add(evalCollation(arg), env.collationEnv)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	tc := ca.result()
+	// If we only had numbers, we instead fall back to the default
+	// collation instead of using the numeric collation.
+	if tc.Coercibility == collations.CoerceNumeric {
+		tc = typedCoercionCollation(tt, call.collate)
+	}
+
+	b, err := evalToVarchar(args[i], tc.Collation, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return newEvalRaw(tt, b.bytes, b.col), nil
+}
+
+func (call *builtinElt) compile(c *compiler) (ctype, error) {
+	args := make([]ctype, len(call.Arguments))
+
+	var ca collationAggregation
+	tt := sqltypes.VarChar
+
+	var skip *jump
+	for i, arg := range call.Arguments {
+		var err error
+		args[i], err = arg.compile(c)
+		if err != nil {
+			return ctype{}, nil
+		}
+
+		if i == 0 {
+			skip = c.compileNullCheck1(args[i])
+			continue
+		}
+
+		tt = concatSQLType(args[i].Type, tt)
+		err = ca.add(args[i].Col, c.env.CollationEnv())
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+
+	tc := ca.result()
+	// If we only had numbers, we instead fall back to the default
+	// collation instead of using the numeric collation.
+	if tc.Coercibility == collations.CoerceNumeric {
+		tc = typedCoercionCollation(tt, call.collate)
+	}
+
+	_ = c.compileToInt64(args[0], len(args))
+
+	for i, arg := range args[1:] {
+		offset := len(args) - (i + 1)
+		skip := c.compileNullCheckOffset(arg, offset)
+
+		switch arg.Type {
+		case sqltypes.VarBinary, sqltypes.Binary, sqltypes.Blob:
+			if tc.Collation != collations.CollationBinaryID {
+				c.asm.Convert_xce(offset, arg.Type, tc.Collation)
+			}
+		case sqltypes.VarChar, sqltypes.Char, sqltypes.Text:
+			fromCharset := colldata.Lookup(arg.Col.Collation).Charset()
+			toCharset := colldata.Lookup(tc.Collation).Charset()
+			if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
+				c.asm.Convert_xce(offset, arg.Type, tc.Collation)
+			}
+		default:
+			c.asm.Convert_xce(offset, arg.Type, tc.Collation)
+		}
+
+		c.asm.jumpDestination(skip)
+	}
+
+	c.asm.Fn_ELT(len(args), tt, tc)
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: tt, Col: tc, Flag: flagNullable}, nil
+}
 
 func insert(str, newstr *evalBytes, pos, l int) []byte {
 	pos--
