@@ -1652,6 +1652,28 @@
     }
   },
   {
+    "comment": "routing table on music",
+    "query": "select * from second_user.bar where id > 2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from second_user.bar where id > 2",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from music as bar where 1 != 1",
+        "Query": "select * from music as bar where id > 2",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
     "comment": "testing SingleRow Projection",
     "query": "select 42",
     "plan": {
