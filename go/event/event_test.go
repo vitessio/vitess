@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type testInterface1 interface {
@@ -56,10 +58,8 @@ func TestStaticListener(t *testing.T) {
 	AddListener(func(testEvent1) { triggered = true })
 	AddListener(func(testEvent2) { t.Errorf("wrong listener type triggered") })
 	Dispatch(testEvent1{})
+	assert.True(t, triggered, "static listener failed to trigger")
 
-	if !triggered {
-		t.Errorf("static listener failed to trigger")
-	}
 }
 
 func TestPointerListener(t *testing.T) {
@@ -69,10 +69,8 @@ func TestPointerListener(t *testing.T) {
 	AddListener(func(ev *testEvent2) { ev.triggered = true })
 	AddListener(func(testEvent2) { t.Errorf("non-pointer listener triggered on pointer type") })
 	Dispatch(testEvent)
+	assert.True(t, testEvent.triggered, "pointer listener failed to trigger")
 
-	if !testEvent.triggered {
-		t.Errorf("pointer listener failed to trigger")
-	}
 }
 
 func TestInterfaceListener(t *testing.T) {
@@ -82,10 +80,8 @@ func TestInterfaceListener(t *testing.T) {
 	AddListener(func(testInterface1) { triggered = true })
 	AddListener(func(testInterface2) { t.Errorf("interface listener triggered on non-matching type") })
 	Dispatch(testEvent1{})
+	assert.True(t, triggered, "interface listener failed to trigger")
 
-	if !triggered {
-		t.Errorf("interface listener failed to trigger")
-	}
 }
 
 func TestEmptyInterfaceListener(t *testing.T) {
@@ -94,10 +90,8 @@ func TestEmptyInterfaceListener(t *testing.T) {
 	triggered := false
 	AddListener(func(any) { triggered = true })
 	Dispatch("this should match any")
+	assert.True(t, triggered, "any listener failed to trigger")
 
-	if !triggered {
-		t.Errorf("any listener failed to trigger")
-	}
 }
 
 func TestMultipleListeners(t *testing.T) {
@@ -144,7 +138,6 @@ func TestBadListenerWrongType(t *testing.T) {
 
 	defer func() {
 		err := recover()
-
 		if err == nil {
 			t.Errorf("bad listener type (not a func) failed to trigger panic")
 		}
@@ -186,10 +179,8 @@ func TestDispatchPointerToValueInterfaceListener(t *testing.T) {
 		triggered = true
 	})
 	Dispatch(&testEvent1{})
+	assert.True(t, triggered, "Dispatch by pointer failed to trigger interface listener")
 
-	if !triggered {
-		t.Errorf("Dispatch by pointer failed to trigger interface listener")
-	}
 }
 
 func TestDispatchValueToValueInterfaceListener(t *testing.T) {
@@ -200,10 +191,8 @@ func TestDispatchValueToValueInterfaceListener(t *testing.T) {
 		triggered = true
 	})
 	Dispatch(testEvent1{})
+	assert.True(t, triggered, "Dispatch by value failed to trigger interface listener")
 
-	if !triggered {
-		t.Errorf("Dispatch by value failed to trigger interface listener")
-	}
 }
 
 func TestDispatchPointerToPointerInterfaceListener(t *testing.T) {
@@ -212,10 +201,8 @@ func TestDispatchPointerToPointerInterfaceListener(t *testing.T) {
 	triggered := false
 	AddListener(func(testInterface2) { triggered = true })
 	Dispatch(&testEvent2{})
+	assert.True(t, triggered, "interface listener failed to trigger for pointer")
 
-	if !triggered {
-		t.Errorf("interface listener failed to trigger for pointer")
-	}
 }
 
 func TestDispatchValueToPointerInterfaceListener(t *testing.T) {
@@ -245,10 +232,8 @@ func TestDispatchUpdate(t *testing.T) {
 
 	ev := &testUpdateEvent{}
 	DispatchUpdate(ev, "hello")
+	assert.True(t, triggered, "listener failed to trigger on DispatchUpdate()")
 
-	if !triggered {
-		t.Errorf("listener failed to trigger on DispatchUpdate()")
-	}
 	want := "hello"
 	if got := ev.update.(string); got != want {
 		t.Errorf("ev.update = %#v, want %#v", got, want)
