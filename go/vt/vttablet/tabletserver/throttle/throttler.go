@@ -465,6 +465,8 @@ func (throttler *Throttler) Disable() bool {
 	return true
 }
 
+var alreadyLogged = make(map[string]int)
+
 // retryReadAndApplyThrottlerConfig() is called by Open(), read throttler config from topo, applies it, and starts watching
 // for topo changes.
 // But also, we're in an Open() function, which blocks state manager's operation, and affects
@@ -502,7 +504,13 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 			})
 			return
 		}
-		log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
+
+		errorMessage := fmt.Sprintf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err)
+		if alreadyLogged[errorMessage] == 0 {
+			log.Errorf(errorMessage)
+		}
+		alreadyLogged[errorMessage]++
+
 		select {
 		case <-ctx.Done():
 			// Throttler is not open so no need to keep retrying.

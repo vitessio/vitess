@@ -773,6 +773,8 @@ func (t *explainTablet) analyzeWhere(selStmt *sqlparser.Select, tableColumnMap m
 	return inColName, inVal, rowCount, nil, nil
 }
 
+var alreadyLogged = make(map[string]int)
+
 func (t *explainTablet) analyzeExpressions(selStmt *sqlparser.Select, tableColumnMap map[sqlparser.IdentifierCS]map[string]querypb.Type) ([]string, []querypb.Type) {
 	colNames := make([]string, 0, 4)
 	colTypes := make([]querypb.Type, 0, 4)
@@ -835,7 +837,11 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			}
 
 			if colType == querypb.Type_NULL_TYPE {
-				log.Errorf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
+				errorMessage := fmt.Sprintf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
+				if alreadyLogged[errorMessage] == 0 {
+					log.Errorf(errorMessage)
+				}
+				alreadyLogged[errorMessage]++
 			}
 
 			colNames = append(colNames, col)
@@ -847,7 +853,11 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			colType := colTypeMap[col]
 
 			if colType == querypb.Type_NULL_TYPE {
-				log.Errorf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
+				errorMessage := fmt.Sprintf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
+				if alreadyLogged[errorMessage] == 0 {
+					log.Errorf(errorMessage)
+				}
+				alreadyLogged[errorMessage]++
 			}
 
 			colNames = append(colNames, col)
