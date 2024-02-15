@@ -1,75 +1,9 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "delete from second_user.bar",
+    "query": "",
     "plan": {
-      "QueryType": "DELETE",
-      "Original": "delete from second_user.bar",
-      "Instructions": {
-        "OperatorType": "Delete",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "TargetTabletType": "PRIMARY",
-        "KsidLength": 1,
-        "KsidVindex": "user_index",
-        "OwnedVindexQuery": "select user_id, id from music as bar for update",
-        "Query": "delete from music as bar",
-        "Table": "music"
-      },
-      "TablesUsed": [
-        "user.music"
-      ]
-    }
-  },
-  {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "update second_user.bar set col = 23",
-    "plan": {
-      "QueryType": "UPDATE",
-      "Original": "update second_user.bar set col = 23",
-      "Instructions": {
-        "OperatorType": "Update",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "TargetTabletType": "PRIMARY",
-        "Query": "update music as bar set col = 23",
-        "Table": "music"
-      },
-      "TablesUsed": [
-        "user.music"
-      ]
-    }
-  },
-  {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "insert into second_user.bar(id) values (2)",
-    "plan": {
-      "QueryType": "INSERT",
-      "Original": "insert into second_user.bar(id) values (2)",
-      "Instructions": {
-        "OperatorType": "Insert",
-        "Variant": "Sharded",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "TargetTabletType": "PRIMARY",
-        "Query": "insert into music(id, user_id) values (:_id_0, :_user_id_0)",
-        "TableName": "music",
-        "VindexValues": {
-          "music_user_map": "2",
-          "user_index": "null"
-        }
-      },
-      "TablesUsed": [
-        "user.music"
-      ]
+
     }
   }
 ]
