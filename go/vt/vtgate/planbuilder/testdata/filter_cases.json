@@ -4086,7 +4086,7 @@
           "Sharded": false
         },
         "FieldQuery": "select col + 2 as a from unsharded where 1 != 1",
-        "Query": "select col + 2 as a from unsharded having col + 2 = 42",
+        "Query": "select col + 2 as a from unsharded having a = 42",
         "Table": "unsharded"
       },
       "TablesUsed": [

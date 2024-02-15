@@ -28,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var T0 TableSet
+var NoTables TableSet
 
 var (
 	// Just here to make outputs more readable
@@ -598,7 +598,7 @@ func TestOrderByBindingTable(t *testing.T) {
 		TS0,
 	}, {
 		"select 1 as c from tabl order by c",
-		T0,
+		NoTables,
 	}, {
 		"select name, name from t1, t2 order by name",
 		TS1,
@@ -679,7 +679,7 @@ func TestGroupByBinding(t *testing.T) {
 		TS0,
 	}, {
 		"select 1 as c from tabl group by c",
-		T0,
+		NoTables,
 	}, {
 		"select t1.id from t1, t2 group by id",
 		TS0,
@@ -728,13 +728,13 @@ func TestHavingBinding(t *testing.T) {
 		TS0,
 	}, {
 		"select col from tabl having 1 = 1",
-		T0,
+		NoTables,
 	}, {
 		"select col as c from tabl having c = 1",
 		TS0,
 	}, {
 		"select 1 as c from tabl having c = 1",
-		T0,
+		NoTables,
 	}, {
 		"select t1.id from t1, t2 having id = 1",
 		TS0,
@@ -901,109 +901,6 @@ func TestUnionWithOrderBy(t *testing.T) {
 	assert.Equal(t, TS1, d2)
 }
 
-func TestScopingWDerivedTables(t *testing.T) {
-	queries := []struct {
-		query                string
-		errorMessage         string
-		recursiveExpectation TableSet
-		expectation          TableSet
-	}{
-		{
-			query:                "select id from (select x as id from user) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS1,
-		}, {
-			query:                "select id from (select foo as id from user) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS1,
-		}, {
-			query:                "select id from (select foo as id from (select x as foo from user) as c) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS2,
-		}, {
-			query:                "select t.id from (select foo as id from user) as t",
-			recursiveExpectation: TS0,
-			expectation:          TS1,
-		}, {
-			query:        "select t.id2 from (select foo as id from user) as t",
-			errorMessage: "column 't.id2' not found",
-		}, {
-			query:                "select id from (select 42 as id) as t",
-			recursiveExpectation: T0,
-			expectation:          TS1,
-		}, {
-			query:                "select t.id from (select 42 as id) as t",
-			recursiveExpectation: T0,
-			expectation:          TS1,
-		}, {
-			query:        "select ks.t.id from (select 42 as id) as t",
-			errorMessage: "column 'ks.t.id' not found",
-		}, {
-			query:        "select * from (select id, id from user) as t",
-			errorMessage: "Duplicate column name 'id'",
-		}, {
-			query:                "select t.baz = 1 from (select id as baz from user) as t",
-			expectation:          TS1,
-			recursiveExpectation: TS0,
-		}, {
-			query:                "select t.id from (select * from user, music) as t",
-			expectation:          TS2,
-			recursiveExpectation: MergeTableSets(TS0, TS1),
-		}, {
-			query:                "select t.id from (select * from user, music) as t order by t.id",
-			expectation:          TS2,
-			recursiveExpectation: MergeTableSets(TS0, TS1),
-		}, {
-			query:                "select t.id from (select * from user) as t join user as u on t.id = u.id",
-			expectation:          TS1,
-			recursiveExpectation: TS0,
-		}, {
-			query:                "select t.col1 from t3 ua join (select t1.id, t1.col1 from t1 join t2) as t",
-			expectation:          TS3,
-			recursiveExpectation: TS1,
-		}, {
-			query:        "select uu.test from (select id from t1) uu",
-			errorMessage: "column 'uu.test' not found",
-		}, {
-			query:        "select uu.id from (select id as col from t1) uu",
-			errorMessage: "column 'uu.id' not found",
-		}, {
-			query:        "select uu.id from (select id as col from t1) uu",
-			errorMessage: "column 'uu.id' not found",
-		}, {
-			query:                "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
-			expectation:          TS1,
-			recursiveExpectation: TS0,
-		}, {
-			query:                "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
-			expectation:          T0,
-			recursiveExpectation: T0,
-		}}
-	for _, query := range queries {
-		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(query.query)
-			require.NoError(t, err)
-			st, err := Analyze(parse, "user", &FakeSI{
-				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewIdentifierCS("t")},
-				},
-			})
-
-			switch {
-			case query.errorMessage != "" && err != nil:
-				require.EqualError(t, err, query.errorMessage)
-			case query.errorMessage != "":
-				require.EqualError(t, st.NotUnshardedErr, query.errorMessage)
-			default:
-				require.NoError(t, err)
-				sel := parse.(*sqlparser.Select)
-				assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
-				assert.Equal(t, query.expectation, st.DirectDeps(extract(sel, 0)), "DirectDeps")
-			}
-		})
-	}
-}
-
 func TestScopingWithWITH(t *testing.T) {
 	queries := []struct {
 		query             string
@@ -1021,7 +918,7 @@ func TestScopingWithWITH(t *testing.T) {
 		}, {
 			query:     "with c as (select x as foo from user), t as (select foo as id from c) select id from t",
 			recursive: TS0,
-			direct:    TS2,
+			direct:    TS3,
 		}, {
 			query:     "with t as (select foo as id from user) select t.id from t",
 			recursive: TS0,
@@ -1031,11 +928,11 @@ func TestScopingWithWITH(t *testing.T) {
 			errorMessage: "column 't.id2' not found",
 		}, {
 			query:     "with t as (select 42 as id) select id from t",
-			recursive: T0,
+			recursive: NoTables,
 			direct:    TS1,
 		}, {
 			query:     "with t as (select 42 as id) select t.id from t",
-			recursive: T0,
+			recursive: NoTables,
 			direct:    TS1,
 		}, {
 			query:        "with t as (select 42 as id) select ks.t.id from t",
@@ -1057,12 +954,12 @@ func TestScopingWithWITH(t *testing.T) {
 			recursive: MergeTableSets(TS0, TS1),
 		}, {
 			query:     "with t as (select * from user) select t.id from t join user as u on t.id = u.id",
-			direct:    TS1,
+			direct:    TS2,
 			recursive: TS0,
 		}, {
 			query:     "with t as (select t1.id, t1.col1 from t1 join t2) select t.col1 from t3 ua join t",
 			direct:    TS3,
-			recursive: TS1,
+			recursive: TS0,
 		}, {
 			query:        "with uu as (select id from t1) select uu.test from uu",
 			errorMessage: "column 'uu.test' not found",
@@ -1074,12 +971,12 @@ func TestScopingWithWITH(t *testing.T) {
 			errorMessage: "column 'uu.id' not found",
 		}, {
 			query:     "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
-			direct:    TS1,
+			direct:    TS2,
 			recursive: TS0,
 		}, {
 			query:     "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
-			direct:    T0,
-			recursive: T0,
+			direct:    NoTables,
+			recursive: NoTables,
 		}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
@@ -1121,15 +1018,15 @@ func TestJoinPredicateDependencies(t *testing.T) {
 		directExpect:    MergeTableSets(TS0, TS1),
 	}, {
 		query:           "select 1 from (select * from t1) x join t2 on x.id = t2.uid",
-		recursiveExpect: MergeTableSets(TS0, TS2),
+		recursiveExpect: MergeTableSets(TS0, TS1),
 		directExpect:    MergeTableSets(TS1, TS2),
 	}, {
 		query:           "select 1 from (select id from t1) x join t2 on x.id = t2.uid",
-		recursiveExpect: MergeTableSets(TS0, TS2),
+		recursiveExpect: MergeTableSets(TS0, TS1),
 		directExpect:    MergeTableSets(TS1, TS2),
 	}, {
 		query:           "select 1 from (select id from t1 union select id from t) x join t2 on x.id = t2.uid",
-		recursiveExpect: MergeTableSets(TS0, TS1, TS3),
+		recursiveExpect: MergeTableSets(TS0, TS1, TS2),
 		directExpect:    MergeTableSets(TS2, TS3),
 	}}
 	for _, query := range queries {
@@ -1144,107 +1041,6 @@ func TestJoinPredicateDependencies(t *testing.T) {
 			expr := sel.From[0].(*sqlparser.JoinTableExpr).Condition.On
 			assert.Equal(t, query.recursiveExpect, st.RecursiveDeps(expr), "RecursiveDeps")
 			assert.Equal(t, query.directExpect, st.DirectDeps(expr), "DirectDeps")
-		})
-	}
-}
-
-func TestDerivedTablesOrderClause(t *testing.T) {
-	queries := []struct {
-		query                string
-		recursiveExpectation TableSet
-		expectation          TableSet
-	}{{
-		query:                "select 1 from (select id from user) as t order by id",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select id from (select id from user) as t order by id",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select id from (select id from user) as t order by t.id",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select id as foo from (select id from user) as t order by foo",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select bar from (select id as bar from user) as t order by bar",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select bar as foo from (select id as bar from user) as t order by bar",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select bar as foo from (select id as bar from user) as t order by foo",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select bar as foo from (select id as bar, oo from user) as t order by oo",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}, {
-		query:                "select bar as foo from (select id, oo from user) as t(bar,oo) order by bar",
-		recursiveExpectation: TS0,
-		expectation:          TS1,
-	}}
-	si := &FakeSI{Tables: map[string]*vindexes.Table{"t": {Name: sqlparser.NewIdentifierCS("t")}}}
-	for _, query := range queries {
-		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(query.query)
-			require.NoError(t, err)
-
-			st, err := Analyze(parse, "user", si)
-			require.NoError(t, err)
-
-			sel := parse.(*sqlparser.Select)
-			assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(sel.OrderBy[0].Expr), "RecursiveDeps")
-			assert.Equal(t, query.expectation, st.DirectDeps(sel.OrderBy[0].Expr), "DirectDeps")
-
-		})
-	}
-}
-
-func TestScopingWComplexDerivedTables(t *testing.T) {
-	queries := []struct {
-		query            string
-		errorMessage     string
-		rightExpectation TableSet
-		leftExpectation  TableSet
-	}{
-		{
-			query:            "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
-			rightExpectation: TS0,
-			leftExpectation:  TS0,
-		},
-		{
-			query:            "select 1 from user.user uu where exists (select 1 from user.user as uu where exists (select 1 from (select 1 from user.t1) uu where uu.user_id = uu.id))",
-			rightExpectation: TS1,
-			leftExpectation:  TS1,
-		},
-	}
-	for _, query := range queries {
-		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(query.query)
-			require.NoError(t, err)
-			st, err := Analyze(parse, "user", &FakeSI{
-				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewIdentifierCS("t")},
-				},
-			})
-			if query.errorMessage != "" {
-				require.EqualError(t, err, query.errorMessage)
-			} else {
-				require.NoError(t, err)
-				sel := parse.(*sqlparser.Select)
-				comparisonExpr := sel.Where.Expr.(*sqlparser.ExistsExpr).Subquery.Select.(*sqlparser.Select).Where.Expr.(*sqlparser.ExistsExpr).Subquery.Select.(*sqlparser.Select).Where.Expr.(*sqlparser.ComparisonExpr)
-				left := comparisonExpr.Left
-				right := comparisonExpr.Right
-				assert.Equal(t, query.leftExpectation, st.RecursiveDeps(left), "Left RecursiveDeps")
-				assert.Equal(t, query.rightExpectation, st.RecursiveDeps(right), "Right RecursiveDeps")
-			}
 		})
 	}
 }
@@ -1368,36 +1164,6 @@ func BenchmarkAnalyzeSubQueries(b *testing.B) {
 	}
 }
 
-func BenchmarkAnalyzeDerivedTableQueries(b *testing.B) {
-	queries := []string{
-		"select id from (select x as id from user) as t",
-		"select id from (select foo as id from user) as t",
-		"select id from (select foo as id from (select x as foo from user) as c) as t",
-		"select t.id from (select foo as id from user) as t",
-		"select t.id2 from (select foo as id from user) as t",
-		"select id from (select 42 as id) as t",
-		"select t.id from (select 42 as id) as t",
-		"select ks.t.id from (select 42 as id) as t",
-		"select * from (select id, id from user) as t",
-		"select t.baz = 1 from (select id as baz from user) as t",
-		"select t.id from (select * from user, music) as t",
-		"select t.id from (select * from user, music) as t order by t.id",
-		"select t.id from (select * from user) as t join user as u on t.id = u.id",
-		"select t.col1 from t3 ua join (select t1.id, t1.col1 from t1 join t2) as t",
-		"select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
-		"select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
-	}
-
-	for i := 0; i < b.N; i++ {
-		for _, query := range queries {
-			parse, err := sqlparser.NewTestParser().Parse(query)
-			require.NoError(b, err)
-
-			_, _ = Analyze(parse, "d", fakeSchemaInfo())
-		}
-	}
-}
-
 func BenchmarkAnalyzeHavingQueries(b *testing.B) {
 	queries := []string{
 		"select col from tabl having col = 1",
@@ -1490,43 +1256,30 @@ func TestSingleUnshardedKeyspace(t *testing.T) {
 	tests := []struct {
 		query     string
 		unsharded *vindexes.Keyspace
-		tables    []*vindexes.Table
 	}{
 		{
 			query:     "select 1 from t, t1",
 			unsharded: nil, // both tables are unsharded, but from different keyspaces
-			tables:    nil,
 		}, {
 			query:     "select 1 from t2",
 			unsharded: nil,
-			tables:    nil,
 		}, {
 			query:     "select 1 from t, t2",
 			unsharded: nil,
-			tables:    nil,
 		}, {
 			query:     "select 1 from t as A, t as B",
-			unsharded: ks1,
-			tables: []*vindexes.Table{
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
-			},
+			unsharded: unsharded,
 		}, {
 			query:     "insert into t select * from t",
-			unsharded: ks1,
-			tables: []*vindexes.Table{
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
-				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
-			},
+			unsharded: unsharded,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			_, semTable := parseAndAnalyze(t, test.query, "d")
-			queryIsUnsharded, tables := semTable.SingleUnshardedKeyspace()
+			queryIsUnsharded, _ := semTable.SingleUnshardedKeyspace()
 			assert.Equal(t, test.unsharded, queryIsUnsharded)
-			assert.Equal(t, test.tables, tables)
 		})
 	}
 }
@@ -1605,13 +1358,13 @@ func TestScopingSubQueryJoinClause(t *testing.T) {
 
 }
 
-var ks1 = &vindexes.Keyspace{
-	Name:    "ks1",
+var unsharded = &vindexes.Keyspace{
+	Name:    "unsharded",
 	Sharded: false,
 }
 var ks2 = &vindexes.Keyspace{
 	Name:    "ks2",
-	Sharded: false,
+	Sharded: true,
 }
 var ks3 = &vindexes.Keyspace{
 	Name:    "ks3",
@@ -1641,7 +1394,7 @@ func fakeSchemaInfo() *FakeSI {
 
 	si := &FakeSI{
 		Tables: map[string]*vindexes.Table{
-			"t":  {Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks1},
+			"t":  {Name: sqlparser.NewIdentifierCS("t"), Keyspace: unsharded},
 			"t1": {Name: sqlparser.NewIdentifierCS("t1"), Columns: cols1, ColumnListAuthoritative: true, Keyspace: ks2},
 			"t2": {Name: sqlparser.NewIdentifierCS("t2"), Columns: cols2, ColumnListAuthoritative: true, Keyspace: ks3},
 		},

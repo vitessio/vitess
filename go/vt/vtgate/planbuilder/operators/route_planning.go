@@ -580,7 +580,7 @@ func pushJoinPredicates(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr
 	}
 
 	for _, expr := range exprs {
-		AddPredicate(ctx, op, expr, true, newFilter)
+		AddPredicate(ctx, op, expr, true, newFilterSinglePredicate)
 	}
 
 	return op
