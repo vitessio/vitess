@@ -84,7 +84,7 @@ func TestTabletInitialBackup(t *testing.T) {
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
 	err = localCluster.VtctldClientProcess.ExecuteCommand(
-		"SetReadWrite", primary.Alias)
+		"SetWritable", primary.Alias, "true")
 	require.Nil(t, err)
 	err = localCluster.VtctldClientProcess.ExecuteCommand(
 		"TabletExternallyReparented", primary.Alias)
