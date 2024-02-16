@@ -188,6 +188,7 @@ type QueryEngine struct {
 	// stats
 	// Note: queryErrorCountsWithCode is similar to queryErrorCounts except it contains error code as an additional dimension
 	queryCounts, queryCountsWithTabletType, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
+	queryCacheHits, queryCacheMisses                                                                                                     *stats.CounterFunc
 
 	// stats flags
 	enablePerWorkloadTableMetrics bool
@@ -279,6 +280,12 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	})
 	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", func() int64 {
 		return qe.plans.Metrics.Evicted()
+	})
+	qe.queryCacheHits = env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query cache hits", func() int64 {
+		return qe.plans.Metrics.Hits()
+	})
+	qe.queryCacheMisses = env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query cache misses", func() int64 {
+		return qe.plans.Metrics.Misses()
 	})
 
 	labels := []string{"Table", "Plan"}
