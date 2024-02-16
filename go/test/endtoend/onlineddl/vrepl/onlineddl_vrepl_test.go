@@ -923,7 +923,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 			uuid = row.AsString("uuid", "")
 		}
 	} else {
-		params := cluster.ApplySchemaParams{DDLStrategy: ddlStrategy, UUIDList: providedUUIDList, MigrationContext: providedMigrationContext}
+		params := cluster.ApplySchemaParams{DDLStrategy: ddlStrategy, UUIDs: providedUUIDList, MigrationContext: providedMigrationContext}
 		output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, params)
 		if expectError == "" {
 			assert.NoError(t, err)

@@ -97,7 +97,7 @@ func VtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory str
 type ApplySchemaParams struct {
 	DDLStrategy      string
 	MigrationContext string
-	UUIDList         string
+	UUIDs            string
 	CallerID         string
 	BatchSize        int
 }
@@ -114,8 +114,8 @@ func (vtctldclient *VtctldClientProcess) ApplySchemaWithOutput(keyspace string, 
 	if params.DDLStrategy != "" {
 		args = append(args, "--ddl-strategy", params.DDLStrategy)
 	}
-	if params.UUIDList != "" {
-		args = append(args, "--uuid-list", params.UUIDList)
+	if params.UUIDs != "" {
+		args = append(args, "--uuid", params.UUIDs)
 	}
 	if params.BatchSize > 0 {
 		args = append(args, "--batch-size", fmt.Sprintf("%d", params.BatchSize))
