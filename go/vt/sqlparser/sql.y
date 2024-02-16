@@ -16,6 +16,8 @@ limitations under the License.
 %{
 package sqlparser
 
+import "vitess.io/vitess/go/ptr"
+
 func setParseTree(yylex yyLexer, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
@@ -191,6 +193,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   partitionByType PartitionByType
   definer 	*Definer
   integer 	int
+  intPtr *int
 
   JSONTableExpr	*JSONTableExpr
   jtColumnDefinition *JtColumnDefinition
@@ -546,7 +549,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <boolean> array_opt
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt partition_comment partition_data_directory partition_index_directory
+%type <literal> partition_comment partition_data_directory partition_index_directory
+%type <intPtr> length_opt
 %type <integer> func_datetime_precision
 %type <columnCharset> charset_opt
 %type <str> collate_opt
@@ -1473,14 +1477,12 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt NULL
   {
-    val := true
-    $1.Null = &val
+    $1.Null = ptr.Of(true)
     $$ = $1
   }
 | column_attribute_list_opt NOT NULL
   {
-    val := false
-    $1.Null = &val
+    $1.Null = ptr.Of(false)
     $$ = $1
   }
 | column_attribute_list_opt DEFAULT openb expression closeb
@@ -1534,14 +1536,12 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt VISIBLE
   {
-    val := false
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(false)
     $$ = $1
   }
 | column_attribute_list_opt INVISIBLE
   {
-    val := true
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(true)
     $$ = $1
   }
 | column_attribute_list_opt ENGINE_ATTRIBUTE equal_opt STRING
@@ -1588,14 +1588,12 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt NULL
   {
-    val := true
-    $1.Null = &val
+    $1.Null = ptr.Of(true)
     $$ = $1
   }
 | generated_column_attribute_list_opt NOT NULL
   {
-    val := false
-    $1.Null = &val
+    $1.Null = ptr.Of(false)
     $$ = $1
   }
 | generated_column_attribute_list_opt COMMENT_KEYWORD STRING
@@ -1610,14 +1608,12 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt VISIBLE
   {
-    val := false
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(false)
     $$ = $1
   }
 | generated_column_attribute_list_opt INVISIBLE
   {
-    val := true
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(true)
     $$ = $1
   }
 
@@ -2232,7 +2228,7 @@ length_opt:
   }
 | '(' INTEGRAL ')'
   {
-    $$ = NewIntLiteral($2)
+    $$ = ptr.Of(convertStringToInt($2))
   }
 
 double_length_opt:
@@ -2242,8 +2238,8 @@ double_length_opt:
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
-        Scale: NewIntLiteral($4),
+        Length: ptr.Of(convertStringToInt($2)),
+        Scale: ptr.Of(convertStringToInt($4)),
     }
   }
 
@@ -2255,7 +2251,7 @@ double_length_opt
 | '(' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
+        Length: ptr.Of(convertStringToInt($2)),
     }
   }
 
@@ -2266,14 +2262,14 @@ decimal_length_opt:
 | '(' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
+        Length: ptr.Of(convertStringToInt($2)),
     }
   }
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
-        Scale: NewIntLiteral($4),
+        Length: ptr.Of(convertStringToInt($2)),
+        Scale: ptr.Of(convertStringToInt($4)),
     }
   }
 
@@ -3021,13 +3017,11 @@ alter_option:
   }
 | ALTER column_opt column_name SET VISIBLE
   {
-    val := false
-    $$ = &AlterColumn{Column: $3, Invisible:&val}
+    $$ = &AlterColumn{Column: $3, Invisible: ptr.Of(false)}
   }
 | ALTER column_opt column_name SET INVISIBLE
   {
-    val := true
-    $$ = &AlterColumn{Column: $3, Invisible:&val}
+    $$ = &AlterColumn{Column: $3, Invisible: ptr.Of(true)}
   }
 | ALTER CHECK ci_identifier enforced
   {
@@ -3772,14 +3766,12 @@ partition_definition_attribute_list_opt:
   }
 | partition_definition_attribute_list_opt partition_max_rows
   {
-    val := $2
-    $1.MaxRows = &val
+    $1.MaxRows = ptr.Of($2)
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_min_rows
   {
-    val := $2
-    $1.MinRows = &val
+    $1.MinRows = ptr.Of($2)
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_tablespace_name
@@ -3840,14 +3832,12 @@ subpartition_definition_attribute_list_opt:
   }
 | subpartition_definition_attribute_list_opt partition_max_rows
   {
-    val := $2
-    $1.MaxRows = &val
+    $1.MaxRows = ptr.Of($2)
     $$ = $1
   }
 | subpartition_definition_attribute_list_opt partition_min_rows
   {
-    val := $2
-    $1.MinRows = &val
+    $1.MinRows = ptr.Of($2)
     $$ = $1
   }
 | subpartition_definition_attribute_list_opt partition_tablespace_name
@@ -7088,11 +7078,11 @@ convert_type_weight_string:
   }
 | AS BINARY '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+    $$ = &ConvertType{Type: string($2), Length: ptr.Of(convertStringToInt($4))}
   }
 | AS CHAR '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+    $$ = &ConvertType{Type: string($2), Length: ptr.Of(convertStringToInt($4))}
   }
 
 convert_type:

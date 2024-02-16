@@ -147,6 +147,14 @@
           "name": "hash"
         }
       ]
+    },
+    "bet_logs": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
     }
   }
 }

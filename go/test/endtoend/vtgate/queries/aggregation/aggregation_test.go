@@ -557,6 +557,27 @@ func TestComplexAggregation(t *testing.T) {
 	})
 }
 
+func TestJoinAggregation(t *testing.T) {
+	// This is new functionality in Vitess 20
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493)")
+
+	mcmp.Exec(`insert into bet_logs(id, merchant_game_id, bet_amount, game_id) values
+		(1, 1, 22.5, 40), (2, 1, 15.3, 40),
+		(3, 2, 22.5, 40), (4, 2, 15.3, 40),
+		(5, 3, 22.5, 40), (6, 3, 15.3, 40),
+		(7, 3, 22.5, 40), (8, 4, 15.3, 40)
+`)
+
+	mcmp.Exec("set @@sql_mode = ' '")
+	mcmp.Exec(`SELECT t1.name, SUM(b.bet_amount) AS bet_amount FROM bet_logs as b LEFT JOIN t1 ON b.merchant_game_id = t1.t1_id GROUP BY b.merchant_game_id`)
+	mcmp.Exec(`SELECT t1.name, CAST(SUM(b.bet_amount) AS DECIMAL(20,6)) AS bet_amount FROM bet_logs as b LEFT JOIN t1 ON b.merchant_game_id = t1.t1_id GROUP BY b.merchant_game_id`)
+}
+
 // TestGroupConcatAggregation tests the group_concat function with vitess doing the aggregation.
 func TestGroupConcatAggregation(t *testing.T) {
 	mcmp, closer := start(t)
