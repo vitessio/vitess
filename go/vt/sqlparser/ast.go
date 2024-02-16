@@ -1815,10 +1815,10 @@ type ColumnType struct {
 	Options *ColumnTypeOptions
 
 	// Numeric field options
-	Length   *Literal
+	Length   *int
 	Unsigned bool
 	Zerofill bool
-	Scale    *Literal
+	Scale    *int
 
 	// Text field options
 	Charset ColumnCharset
@@ -3427,8 +3427,8 @@ func (ListArg) iColTuple()   {}
 // ConvertType represents the type in call to CONVERT(expr, type)
 type ConvertType struct {
 	Type    string
-	Length  *Literal
-	Scale   *Literal
+	Length  *int
+	Scale   *int
 	Charset ColumnCharset
 }
 
