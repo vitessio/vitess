@@ -208,7 +208,7 @@ func NewStore[K cachekey, V cacheval](maxsize int64, doorkeeper bool) *Store[K, 
 		writebufsize: writeBufSize,
 	}
 	s.shards = make([]*Shard[K, V], 0, s.shardCount)
-	for i := 0; i < int(s.shardCount); i++ {
+	for range s.shardCount {
 		s.shards = append(s.shards, NewShard[K, V](uint(dequeSize), doorkeeper))
 	}
 

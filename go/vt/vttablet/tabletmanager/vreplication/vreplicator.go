@@ -330,8 +330,8 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	req := &tabletmanagerdatapb.GetSchemaRequest{
 		Tables: []string{"/.*/"},
 		ExcludeTables: []string{
+			"/" + schema.OldGCTableNameExpression + "/",
 			"/" + schema.GCTableNameExpression + "/",
-			"/" + schema.NewGCTableNameExpression + "/",
 		},
 	}
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)

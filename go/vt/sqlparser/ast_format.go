@@ -177,7 +177,7 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 	if node.Ignore {
 		buf.literal("ignore ")
 	}
-	if node.Targets != nil && !node.isSingleAliasExpr() {
+	if node.Targets != nil && !node.IsSingleAliasExpr() {
 		buf.astPrintf(node, "%v ", node.Targets)
 	}
 	prefix := "from "

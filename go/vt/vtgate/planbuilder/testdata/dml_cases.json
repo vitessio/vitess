@@ -5828,5 +5828,78 @@
     "comment": "update with derived table",
     "query": "update (select id from user) as u set id = 4",
     "plan": "VT03031: the target table (select id from `user`) as u of the UPDATE is not updatable"
+  },
+  {
+    "comment": "Delete with routed table on music",
+    "query": "delete from second_user.bar",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from second_user.bar",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "OwnedVindexQuery": "select user_id, id from music as bar for update",
+        "Query": "delete from music as bar",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "Update with routed table on music",
+    "query": "update second_user.bar set col = 23",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update second_user.bar set col = 23",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update music as bar set col = 23",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "Insert with routed table on music",
+    "query": "insert into second_user.bar(id) values (2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into second_user.bar(id) values (2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert into music(id, user_id) values (:_id_0, :_user_id_0)",
+        "TableName": "music",
+        "VindexValues": {
+          "music_user_map": "2",
+          "user_index": "null"
+        }
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
   }
 ]

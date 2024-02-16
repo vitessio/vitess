@@ -1426,8 +1426,8 @@ func TestCancelSchemaMigration(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -1930,6 +1930,8 @@ func TestCleanupSchemaMigration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
@@ -2132,6 +2134,8 @@ func TestForceCutOverSchemaMigration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
@@ -2333,11 +2337,11 @@ func TestCompleteSchemaMigration(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-			ctx, Complete := context.WithCancel(context.Background())
-			defer Complete()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -5998,7 +6002,6 @@ func TestGetSchemaMigrations(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -7664,11 +7667,11 @@ func TestLaunchSchemaMigration(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-			ctx, Launch := context.WithCancel(context.Background())
-			defer Launch()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{

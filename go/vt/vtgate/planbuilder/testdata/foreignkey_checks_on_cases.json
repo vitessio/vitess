@@ -1265,8 +1265,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select id from u_tbl2 where 1 != 1",
-            "Query": "select id from u_tbl2 limit 2 for update",
+            "FieldQuery": "select u_tbl2.id from u_tbl2 where 1 != 1",
+            "Query": "select u_tbl2.id from u_tbl2 limit 2 for update",
             "Table": "u_tbl2"
           },
           {
@@ -1281,7 +1281,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select u_tbl2.col2 from u_tbl2 where id in ::dml_vals for update",
+                "Query": "select u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -1309,7 +1309,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from u_tbl2 where id in ::dml_vals",
+                "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from u_tbl2 where u_tbl2.id in ::dml_vals",
                 "Table": "u_tbl2"
               }
             ]
