@@ -81,13 +81,13 @@ func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *s
 			if *convert.Length > decimal.MyMaxPrecision {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 					"Too-big precision %d specified for '%s'. Maximum is %d.",
-					convert.Length, sqlparser.String(expr), decimal.MyMaxPrecision)
+					*convert.Length, sqlparser.String(expr), decimal.MyMaxPrecision)
 			}
 			if convert.Scale != nil {
 				if *convert.Scale > decimal.MyMaxScale {
 					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 						"Too big scale %d specified for column '%s'. Maximum is %d.",
-						convert.Scale, sqlparser.String(expr), decimal.MyMaxScale)
+						*convert.Scale, sqlparser.String(expr), decimal.MyMaxScale)
 				}
 				if *convert.Length < *convert.Scale {
 					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
