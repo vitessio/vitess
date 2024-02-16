@@ -210,7 +210,11 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 		assert.EqualValues(t, 1, result.RowsAffected, "insert into returned RowsAffected")
 	}
 
-	qr, more, err = conn.ExecuteFetchMulti("update a set name = concat(name, ' updated'); select * from a; select count(*) from a", 300, true)
+	// Verify that a ExecuteFetchMultiDrain leaves the connection/packet in valid state.
+	err = conn.ExecuteFetchMultiDrain("update a set name = concat(name, ', multi drain 1'); select * from a; select count(*) from a")
+	expectNoError(t, err)
+	// If the previous command leaves packet in invalid state, this will fail.
+	qr, more, err = conn.ExecuteFetchMulti("update a set name = concat(name, ', fetch multi'); select * from a; select count(*) from a", 300, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
 	assert.EqualValues(t, 255, qr.RowsAffected)
@@ -224,6 +228,13 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(2)", more, false)
 	assert.EqualValues(t, 1, len(qr.Rows), "ReadQueryResult(1)")
+
+	// Verify that a ExecuteFetchMultiDrain is happy to operate again after all the above.
+	err = conn.ExecuteFetchMultiDrain("update a set name = concat(name, ', multi drain 2'); select * from a; select count(*) from a")
+	expectNoError(t, err)
+
+	err = conn.ExecuteFetchMultiDrain("update b set name = concat(name, ' nonexistent table'); select * from a; select count(*) from a")
+	require.Error(t, err)
 
 	_, err = conn.ExecuteFetch("drop table a", 10, true)
 	require.NoError(t, err)

@@ -1438,7 +1438,10 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return v, err
 	}
 
-	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
+	vreplTableName, err := schema.GenerateInternalTableName(schema.InternalTableVreplicationHint.String(), onlineDDL.UUID, time.Now())
+	if err != nil {
+		return v, err
+	}
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
@@ -1757,7 +1760,7 @@ exit $exit_code
 
 	runGhost := func(execute bool) error {
 		alterOptions := e.parseAlterOptions(ctx, onlineDDL)
-		forceTableNames := fmt.Sprintf("%s_%s", onlineDDL.UUID, ReadableTimestamp())
+		forceTableNames := fmt.Sprintf("%s_%s", onlineDDL.UUID, schema.ReadableTimestamp())
 
 		if err := e.updateArtifacts(ctx, onlineDDL.UUID,
 			fmt.Sprintf("_%s_gho", forceTableNames),
@@ -1988,7 +1991,7 @@ export MYSQL_PWD
 
 	runPTOSC := func(execute bool) error {
 		os.Setenv("MYSQL_PWD", onlineDDLPassword)
-		newTableName := fmt.Sprintf("_%s_%s_new", onlineDDL.UUID, ReadableTimestamp())
+		newTableName := fmt.Sprintf("_%s_%s_new", onlineDDL.UUID, schema.ReadableTimestamp())
 
 		if err := e.updateArtifacts(ctx, onlineDDL.UUID,
 			fmt.Sprintf("_%s_old", onlineDDL.Table),

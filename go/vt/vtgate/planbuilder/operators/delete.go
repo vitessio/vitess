@@ -74,7 +74,15 @@ func (d *Delete) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 func (d *Delete) ShortDescription() string {
 	ovq := ""
 	if d.OwnedVindexQuery != nil {
-		ovq = " vindexQuery:%s" + sqlparser.String(d.OwnedVindexQuery)
+		var cols, orderby, limit string
+		cols = fmt.Sprintf("COLUMNS: [%s]", sqlparser.String(d.OwnedVindexQuery.SelectExprs))
+		if len(d.OwnedVindexQuery.OrderBy) > 0 {
+			orderby = fmt.Sprintf(" ORDERBY: [%s]", sqlparser.String(d.OwnedVindexQuery.OrderBy))
+		}
+		if d.OwnedVindexQuery.Limit != nil {
+			limit = fmt.Sprintf(" LIMIT: [%s]", sqlparser.String(d.OwnedVindexQuery.Limit))
+		}
+		ovq = fmt.Sprintf(" vindexQuery(%s%s%s)", cols, orderby, limit)
 	}
 	return fmt.Sprintf("%s.%s%s", d.Target.VTable.Keyspace.Name, d.Target.VTable.Name.String(), ovq)
 }
@@ -82,15 +90,16 @@ func (d *Delete) ShortDescription() string {
 func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (op Operator) {
 	childFks := ctx.SemTable.GetChildForeignKeysForTable(deleteStmt.Targets[0])
 
-	// If the delete statement has a limit and has foreign keys, we will use a DMLWithInput
-	// operator wherein we do a selection first and use that output for the subsequent deletes.
-	if len(childFks) > 0 && deleteStmt.Limit != nil {
-		return deletePlanningForLimitFk(ctx, deleteStmt)
+	// We check if delete with input plan is required. DML with input planning is generally
+	// slower, because it does a selection and then creates a delete statement wherein we have to
+	// list all the primary key values.
+	if deleteWithInputPlanningRequired(childFks, deleteStmt) {
+		return deleteWithInputPlanningForFk(ctx, deleteStmt)
 	}
 
 	delClone := sqlparser.CloneRefOfDelete(deleteStmt)
-	delOp := createDeleteOperator(ctx, deleteStmt)
-	op = delOp
+	var vTbl *vindexes.Table
+	op, vTbl = createDeleteOperator(ctx, deleteStmt)
 
 	if deleteStmt.Comments != nil {
 		op = &LockAndComment{
@@ -104,10 +113,26 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return op
 	}
 
-	return createFkCascadeOpForDelete(ctx, op, delClone, childFks, delOp.Target.VTable)
+	return createFkCascadeOpForDelete(ctx, op, delClone, childFks, vTbl)
 }
 
-func deletePlanningForLimitFk(ctx *plancontext.PlanningContext, del *sqlparser.Delete) Operator {
+func deleteWithInputPlanningRequired(childFks []vindexes.ChildFKInfo, deleteStmt *sqlparser.Delete) bool {
+	// If there are no foreign keys, we don't need to use delete with input.
+	if len(childFks) == 0 {
+		return false
+	}
+	// Limit requires delete with input.
+	if deleteStmt.Limit != nil {
+		return true
+	}
+	// If there are no limit clauses, and it is not a multi-delete, we don't need delete with input.
+	// TODO: In the future, we can check if the tables involved in the multi-table delete are related by foreign keys or not.
+	// If they aren't then we don't need the multi-table delete. But this check isn't so straight-forward. We need to check if the two
+	// tables are connected in the undirected graph built from the tables related by foreign keys.
+	return !deleteStmt.IsSingleAliasExpr()
+}
+
+func deleteWithInputPlanningForFk(ctx *plancontext.PlanningContext, del *sqlparser.Delete) Operator {
 	delClone := ctx.SemTable.Clone(del).(*sqlparser.Delete)
 	del.Limit = nil
 	del.OrderBy = nil
@@ -129,7 +154,7 @@ func deletePlanningForLimitFk(ctx *plancontext.PlanningContext, del *sqlparser.D
 	var leftComp sqlparser.ValTuple
 	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
 	for _, col := range vTbl.PrimaryKey {
-		colName := sqlparser.NewColName(col.String())
+		colName := sqlparser.NewColNameWithQualifier(col.String(), vTbl.GetTableName())
 		selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(colName))
 		cols = append(cols, colName)
 		leftComp = append(leftComp, colName)
@@ -141,6 +166,9 @@ func deletePlanningForLimitFk(ctx *plancontext.PlanningContext, del *sqlparser.D
 		lhs = leftComp[0]
 	}
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmlVals), nil)
+
+	del.Targets = sqlparser.TableNames{del.Targets[0]}
+	del.TableExprs = sqlparser.TableExprs{ti.GetAliasedTableExpr()}
 	del.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
 
 	return &DMLWithInput{
@@ -150,11 +178,12 @@ func deletePlanningForLimitFk(ctx *plancontext.PlanningContext, del *sqlparser.D
 	}
 }
 
-func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) *Delete {
+func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) (Operator, *vindexes.Table) {
 	op := crossJoin(ctx, del.TableExprs)
 
+	sqc := &SubQueryBuilder{}
 	if del.Where != nil {
-		op = addWherePredicates(ctx, del.Where.Expr, op)
+		op = addWherePredsToSubQueryBuilder(ctx, del.Where.Expr, op, sqc)
 	}
 
 	target := del.Targets[0]
@@ -187,9 +216,8 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 	var ovq *sqlparser.Select
 	if vTbl.Keyspace.Sharded && vTbl.Type == vindexes.TypeTable {
 		primaryVindex, _ := getVindexInformation(tblID, vTbl)
-		ate := tblInfo.GetAliasedTableExpr()
 		if len(vTbl.Owned) > 0 {
-			ovq = generateOwnedVindexQuery(ate, del, targetTbl, primaryVindex.Columns)
+			ovq = generateOwnedVindexQuery(del, targetTbl, primaryVindex.Columns)
 		}
 	}
 
@@ -202,37 +230,31 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 		},
 	}
 
-	if del.Limit == nil {
-		return delOp
+	if del.Limit != nil {
+		addOrdering(ctx, del.OrderBy, delOp)
+		delOp.Source = &Limit{
+			Source: delOp.Source,
+			AST:    del.Limit,
+		}
 	}
 
-	addOrdering(ctx, del.OrderBy, delOp)
-
-	delOp.Source = &Limit{
-		Source: delOp.Source,
-		AST:    del.Limit,
-	}
-
-	return delOp
+	return sqc.getRootOperator(delOp, nil), vTbl
 }
 
-func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table TargetTable, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
+func generateOwnedVindexQuery(del *sqlparser.Delete, table TargetTable, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
 	var selExprs sqlparser.SelectExprs
 	for _, col := range ksidCols {
 		colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
-		selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
+		selExprs = append(selExprs, aeWrap(colName))
 	}
 	for _, cv := range table.VTable.Owned {
 		for _, col := range cv.Columns {
 			colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
-			selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
+			selExprs = append(selExprs, aeWrap(colName))
 		}
 	}
-	sqlparser.RemoveKeyspaceInTables(tblExpr)
 	return &sqlparser.Select{
 		SelectExprs: selExprs,
-		From:        del.TableExprs,
-		Where:       del.Where,
 		OrderBy:     del.OrderBy,
 		Limit:       del.Limit,
 		Lock:        sqlparser.ForUpdateLock,

@@ -82,8 +82,10 @@ var Cases = []TestCase{
 	{Run: FnRTrim},
 	{Run: FnTrim},
 	{Run: FnSubstr},
+	{Run: FnLocate},
 	{Run: FnConcat},
 	{Run: FnConcatWs},
+	{Run: FnChar},
 	{Run: FnHex},
 	{Run: FnUnhex},
 	{Run: FnCeil},
@@ -115,6 +117,8 @@ var Cases = []TestCase{
 	{Run: FnTruncate},
 	{Run: FnCrc32},
 	{Run: FnConv},
+	{Run: FnBin},
+	{Run: FnOct},
 	{Run: FnMD5},
 	{Run: FnSHA1},
 	{Run: FnSHA2},
@@ -660,6 +664,24 @@ func FnConv(yield Query) {
 				yield(fmt.Sprintf("CONV(%s, %s, %s)", num1, num2, num3), nil)
 			}
 		}
+	}
+}
+
+func FnBin(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("BIN(%s)", num), nil)
+	}
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("BIN(%s)", num), nil)
+	}
+}
+
+func FnOct(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("OCT(%s)", num), nil)
+	}
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("OCT(%s)", num), nil)
 	}
 }
 
@@ -1527,6 +1549,34 @@ func FnSubstr(yield Query) {
 	}
 }
 
+func FnLocate(yield Query) {
+	mysqlDocSamples := []string{
+		`LOCATE('bar', 'foobarbar')`,
+		`LOCATE('xbar', 'foobar')`,
+		`LOCATE('bar', 'foobarbar', 5)`,
+		`INSTR('foobarbar', 'bar')`,
+		`INSTR('xbar', 'foobar')`,
+		`POSITION('bar' IN 'foobarbar')`,
+		`POSITION('xbar' IN 'foobar')`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, substr := range locateStrings {
+		for _, str := range locateStrings {
+			yield(fmt.Sprintf("LOCATE(%s, %s)", substr, str), nil)
+			yield(fmt.Sprintf("INSTR(%s, %s)", str, substr), nil)
+			yield(fmt.Sprintf("POSITION(%s IN %s)", str, substr), nil)
+
+			for _, i := range radianInputs {
+				yield(fmt.Sprintf("LOCATE(%s, %s, %s)", substr, str, i), nil)
+			}
+		}
+	}
+}
+
 func FnConcat(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("CONCAT(%s)", str), nil)
@@ -1572,6 +1622,31 @@ func FnConcatWs(yield Query) {
 		for _, str2 := range inputStrings {
 			for _, str3 := range inputConversions {
 				yield(fmt.Sprintf("CONCAT_WS(%s, %s, %s)", str1, str2, str3), nil)
+			}
+		}
+	}
+}
+
+func FnChar(yield Query) {
+	mysqlDocSamples := []string{
+		`CHAR(77,121,83,81,'76')`,
+		`CHAR(77,77.3,'77.3')`,
+		`CHAR(77,121,83,81,'76' USING utf8mb4)`,
+		`CHAR(77,77.3,'77.3' USING utf8mb4)`,
+		`HEX(CHAR(1,0))`,
+		`HEX(CHAR(256))`,
+		`HEX(CHAR(1,0,0))`,
+		`HEX(CHAR(256*256)`,
+	}
+
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
+
+	for _, i1 := range radianInputs {
+		for _, i2 := range inputBitwise {
+			for _, i3 := range inputConversions {
+				yield(fmt.Sprintf("CHAR(%s, %s, %s)", i1, i2, i3), nil)
 			}
 		}
 	}

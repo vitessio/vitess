@@ -73,16 +73,24 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
-	// get a connection
+	// Get a connection.
 	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	// disable binlogs if necessary
+	// Disable binlogs if necessary.
 	if req.DisableBinlogs {
 		_, err := conn.ExecuteFetch("SET sql_log_bin = OFF", 0, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Disable FK checks if requested.
+	if req.DisableForeignKeyChecks {
+		_, err := conn.ExecuteFetch("SET SESSION foreign_key_checks = OFF", 0, false)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +138,17 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		}
 	}
 
-	// re-enable binlogs if necessary
+	// Re-enable FK checks if necessary.
+	if req.DisableForeignKeyChecks && !conn.IsClosed() {
+		_, err := conn.ExecuteFetch("SET SESSION foreign_key_checks = ON", 0, false)
+		if err != nil {
+			// If we can't reset the FK checks flag,
+			// let's just close the connection.
+			conn.Close()
+		}
+	}
+
+	// Re-enable binlogs if necessary.
 	if req.DisableBinlogs && !conn.IsClosed() {
 		_, err := conn.ExecuteFetch("SET sql_log_bin = ON", 0, false)
 		if err != nil {

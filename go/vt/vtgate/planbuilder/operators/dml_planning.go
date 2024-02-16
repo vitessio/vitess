@@ -144,15 +144,8 @@ func buildChangedVindexesValues(
 		return nil, nil, nil
 	}
 	// generate rest of the owned vindex query.
-	aTblExpr, ok := update.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		panic(vterrors.VT12001("UPDATE on complex table expression"))
-	}
-	tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: table.Name}, As: aTblExpr.As}
 	ovq := &sqlparser.Select{
-		From:        []sqlparser.TableExpr{tblExpr},
 		SelectExprs: selExprs,
-		Where:       update.Where,
 		OrderBy:     update.OrderBy,
 		Limit:       update.Limit,
 		Lock:        sqlparser.ForUpdateLock,

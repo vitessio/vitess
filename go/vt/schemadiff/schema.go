@@ -1003,7 +1003,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 
 	// Check and assign capabilities:
 	// Reminder: schemadiff assumes a MySQL flavor, so we only check for MySQL capabilities.
-	if capableOf := capabilities.MySQLVersionCapableOf(hints.MySQLServerVersion); capableOf != nil {
+	if capableOf := capabilities.MySQLVersionCapableOf(s.env.MySQLVersion()); capableOf != nil {
 		for _, diff := range schemaDiff.UnorderedDiffs() {
 			switch diff := diff.(type) {
 			case *AlterTableEntityDiff:

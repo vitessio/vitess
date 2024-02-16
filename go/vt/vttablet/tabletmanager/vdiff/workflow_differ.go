@@ -235,7 +235,13 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	return nil
 }
 
-func (wd *workflowDiffer) diff(ctx context.Context) error {
+func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
+	defer func() {
+		if err != nil {
+			globalStats.ErrorCount.Add(1)
+			wd.ct.Errors.Add([]string{err.Error()}, 1)
+		}
+	}()
 	dbClient := wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return err

@@ -97,12 +97,22 @@ func (u *Update) TablesUsed() []string {
 func (u *Update) ShortDescription() string {
 	ovq := ""
 	if u.OwnedVindexQuery != nil {
-		ovq = " vindexQuery:%s" + sqlparser.String(u.OwnedVindexQuery)
+		var cols, orderby, limit string
+		cols = fmt.Sprintf("COLUMNS: [%s]", sqlparser.String(u.OwnedVindexQuery.SelectExprs))
+		if len(u.OwnedVindexQuery.OrderBy) > 0 {
+			orderby = fmt.Sprintf(" ORDERBY: [%s]", sqlparser.String(u.OwnedVindexQuery.OrderBy))
+		}
+		if u.OwnedVindexQuery.Limit != nil {
+			limit = fmt.Sprintf(" LIMIT: [%s]", sqlparser.String(u.OwnedVindexQuery.Limit))
+		}
+		ovq = fmt.Sprintf(" vindexQuery(%s%s%s)", cols, orderby, limit)
 	}
 	return fmt.Sprintf("%s.%s%s", u.Target.VTable.Keyspace.Name, u.Target.VTable.Name.String(), ovq)
 }
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (op Operator) {
+	errIfUpdateNotSupported(ctx, updStmt)
+
 	var updClone *sqlparser.Update
 	var vTbl *vindexes.Table
 
@@ -134,6 +144,31 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	return buildFkOperator(ctx, op, updClone, parentFks, childFks, vTbl)
 }
 
+func errIfUpdateNotSupported(ctx *plancontext.PlanningContext, stmt *sqlparser.Update) {
+	var vTbl *vindexes.Table
+	for _, ue := range stmt.Exprs {
+		tblInfo, err := ctx.SemTable.TableInfoForExpr(ue.Name)
+		if err != nil {
+			panic(err)
+		}
+		if _, isATable := tblInfo.(*semantics.RealTable); !isATable {
+			var tblName string
+			ate := tblInfo.GetAliasedTableExpr()
+			if ate != nil {
+				tblName = sqlparser.String(ate)
+			}
+			panic(vterrors.VT03032(tblName))
+		}
+
+		if vTbl == nil {
+			vTbl = tblInfo.GetVindexTable()
+		}
+		if vTbl != tblInfo.GetVindexTable() {
+			panic(vterrors.VT12001("multi-table UPDATE statement with multi-target column update"))
+		}
+	}
+}
+
 func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, *vindexes.Table, *sqlparser.Update) {
 	op := crossJoin(ctx, updStmt.TableExprs)
 
@@ -148,6 +183,8 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	// If we encounter subqueries, we want to fix the updClone to use the replaced expression, so that the pulled out subquery's
 	// result is used everywhere instead of running the subquery multiple times, which is wasteful.
 	updClone := sqlparser.CloneRefOfUpdate(updStmt)
+	var tblInfo semantics.TableInfo
+	var err error
 	for idx, updExpr := range updStmt.Exprs {
 		expr, subqs := sqc.pullOutValueSubqueries(ctx, updExpr.Expr, outerID, true)
 		if len(subqs) == 0 {
@@ -164,19 +201,13 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 			Name: updExpr.Name,
 			Expr: proj,
 		}
+		tblInfo, err = ctx.SemTable.TableInfoForExpr(updExpr.Name)
+		if err != nil {
+			panic(err)
+		}
 	}
 
-	target := updStmt.TableExprs[0]
-	atbl, ok := target.(*sqlparser.AliasedTableExpr)
-	if !ok {
-		panic(vterrors.VT12001("multi table update"))
-	}
-	tblID := ctx.SemTable.TableSetFor(atbl)
-	tblInfo, err := ctx.SemTable.TableInfoFor(tblID)
-	if err != nil {
-		panic(err)
-	}
-
+	tblID := ctx.SemTable.TableSetFor(tblInfo.GetAliasedTableExpr())
 	vTbl := tblInfo.GetVindexTable()
 	// Reference table should update the source table.
 	if vTbl.Type == vindexes.TypeReference && vTbl.Source != nil {
