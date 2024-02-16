@@ -106,7 +106,7 @@ type Stats struct {
 	PartialQueryCount     *stats.CountersWithMultiLabels
 	PartialQueryCacheSize *stats.CountersWithMultiLabels
 
-	ThrottledCounts *stats.CountersWithMultiLabels
+	ThrottledCounts *stats.CountersWithMultiLabels // By throttler and component
 }
 
 // RecordHeartbeat updates the time the last heartbeat from vstreamer was seen

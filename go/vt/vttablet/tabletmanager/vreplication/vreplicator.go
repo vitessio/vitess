@@ -589,6 +589,7 @@ func (vr *vreplicator) throttlerAppName() string {
 func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {
 	appName := appThrottled.String()
 	vr.stats.ThrottledCounts.Add([]string{"tablet", appName}, 1)
+	globalStats.ThrottledCount.Add(1)
 	err := vr.throttleUpdatesRateLimiter.Do(func() error {
 		tm := time.Now().Unix()
 		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appName)
