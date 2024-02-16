@@ -231,7 +231,7 @@ func TestLogStatsFormatJSONV2(t *testing.T) {
 		streamlog.SetRedactDebugUIQueries(true)
 		var buf bytes.Buffer
 		assert.Nil(t, logStats.Logf(&buf, nil))
-		assert.Equal(t, `{"CallInfo":"","Username":"","ImmediateCaller":"","EffectiveCaller":"","RewrittenSQL":"[REDACTED]","TotalTime":1000001234,"ResponseSize":1,"Method":"test","PlanType":"","OriginalSQL":"sql","RowsAffected":0,"NumberOfQueries":1,"StartTime":"2017-01-01T01:02:03Z","EndTime":"2017-01-01T01:02:04.000001234Z","MysqlResponseTime":0,"WaitingForConnection":0,"QuerySources":2,"TransactionID":12345,"ReservedID":0,"CachedPlan":false}`, strings.TrimSpace(buf.String()))
+		assert.Equal(t, `{"CallInfo":"","Username":"","ImmediateCaller":"","EffectiveCaller":"","RewrittenSQL":"[REDACTED]","TotalTime":1000001234,"ResponseSize":1,"Method":"test","PlanType":"","OriginalSQL":"sql","BindVariables":{"bytesVal":{"Type":"VARBINARY","Value":null},"intVal":{"Type":"INT64","Value":null}},"RowsAffected":0,"NumberOfQueries":1,"StartTime":"2017-01-01T01:02:03Z","EndTime":"2017-01-01T01:02:04.000001234Z","MysqlResponseTime":0,"WaitingForConnection":0,"QuerySources":2,"TransactionID":12345,"ReservedID":0,"CachedPlan":false}`, strings.TrimSpace(buf.String()))
 		assert.Nil(t, json.Unmarshal(buf.Bytes(), &cmpStats))
 	}
 }

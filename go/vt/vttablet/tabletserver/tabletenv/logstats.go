@@ -123,6 +123,9 @@ func (stats *LogStats) TotalTime() time.Duration {
 // RewrittenSQL returns a semicolon separated list of SQL statements
 // that were executed.
 func (stats *LogStats) RewrittenSQL() string {
+	if streamlog.GetRedactDebugUIQueries() {
+		return "[REDACTED]"
+	}
 	return strings.Join(stats.rewrittenSqls, "; ")
 }
 
@@ -193,20 +196,14 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		return nil
 	}
 
-	rewrittenSQL := "[REDACTED]"
 	formattedBindVars := "\"[REDACTED]\""
-
-	if !streamlog.GetRedactDebugUIQueries() {
-		rewrittenSQL = stats.RewrittenSQL()
-
+	if !streamlog.GetRedactDebugUIQueries() && !streamlog.UseQueryLogJSONV2() {
 		_, fullBindParams := params["full"]
 		formattedBindVars = sqltypes.FormatBindVariables(
 			streamlog.BindVariablesToProto(stats.BindVariables),
 			fullBindParams,
 			streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON,
 		)
-	} else {
-		stats.BindVariables = nil
 	}
 
 	// TODO: remove username here we fully enforce immediate caller id
@@ -226,7 +223,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 				LogStats:        *stats,
 				Username:        username,
 				CallInfo:        callInfo,
-				RewrittenSQL:    rewrittenSQL,
+				RewrittenSQL:    stats.RewrittenSQL(),
 				ResponseSize:    stats.SizeOfResponse(),
 				TotalTime:       stats.TotalTime(),
 			})
@@ -249,7 +246,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		stats.OriginalSQL,
 		formattedBindVars,
 		stats.NumberOfQueries,
-		rewrittenSQL,
+		stats.RewrittenSQL(),
 		stats.FmtQuerySources(),
 		stats.MysqlResponseTime.Seconds(),
 		stats.WaitingForConnection.Seconds(),

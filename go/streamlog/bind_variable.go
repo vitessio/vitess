@@ -74,10 +74,14 @@ func (bv *BindVariable) UnmarshalJSON(b []byte) error {
 //   {"Type":"VARBINARY","Value":"FmtAtEq6S9Y="}
 func (bv BindVariable) MarshalJSON() ([]byte, error) {
 	// convert querypb.Type integer to string and pass along Value.
-	return json.Marshal(map[string]interface{}{
+	out := map[string]interface{}{
 		"Type":  bv.Type.String(),
 		"Value": bv.Value,
-	})
+	}
+	if GetRedactDebugUIQueries() {
+		out["Value"] = nil
+	}
+	return json.Marshal(out)
 }
 
 // BindVariablesToProto converts a string-map of BindVariable to a string-map of *querypb.BindVariable.

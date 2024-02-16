@@ -144,15 +144,13 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	}()
 
 	formattedBindVars := "\"[REDACTED]\""
-	if !streamlog.GetRedactDebugUIQueries() {
+	if !streamlog.GetRedactDebugUIQueries() && !streamlog.UseQueryLogJSONV2() {
 		_, fullBindParams := params["full"]
 		formattedBindVars = sqltypes.FormatBindVariables(
 			streamlog.BindVariablesToProto(stats.BindVariables),
 			fullBindParams,
 			streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON,
 		)
-	} else {
-		stats.BindVariables = nil
 	}
 
 	// TODO: remove username here we fully enforce immediate caller id
