@@ -88,7 +88,7 @@ func TestTranslateSimplification(t *testing.T) {
 		{"coalesce(NULL, NULL)", ok("COALESCE(NULL, NULL)"), ok("NULL")},
 		{"coalesce(NULL)", ok("COALESCE(NULL)"), ok("NULL")},
 		{"weight_string('foobar')", ok(`WEIGHT_STRING(VARCHAR("foobar"))`), ok("VARBINARY(\"\\x1c\\xe5\\x1d\\xdd\\x1d\\xdd\\x1c`\\x1cG\\x1e3\")")},
-		{"weight_string('foobar' as char(12))", ok(`WEIGHT_STRING(VARCHAR("foobar") AS CHAR(12))`), ok("VARBINARY(\"\\x1c\\xe5\\x1d\\xdd\\x1d\\xdd\\x1c`\\x1cG\\x1e3\")")},
+		{"weight_string('foobar' as char(12))", ok(`WEIGHT_STRING(VARCHAR("foobar") as char(12))`), ok("VARBINARY(\"\\x1c\\xe5\\x1d\\xdd\\x1d\\xdd\\x1c`\\x1cG\\x1e3\")")},
 		{"case when 1 = 1 then 2 else 3 end", ok("CASE WHEN INT64(1) = INT64(1) THEN INT64(2) ELSE INT64(3)"), ok("INT64(2)")},
 		{"case when null then 2 when 12 = 4 then 'ohnoes' else 42 end", ok(`CASE WHEN NULL THEN INT64(2) WHEN INT64(12) = INT64(4) THEN VARCHAR("ohnoes") ELSE INT64(42)`), ok(`VARCHAR("42")`)},
 		{"convert('a', char(2) character set utf8mb4)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET utf8mb4_0900_ai_ci)`), ok(`VARCHAR("a")`)},

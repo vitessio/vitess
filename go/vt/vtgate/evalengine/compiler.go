@@ -449,7 +449,7 @@ func (c *compiler) compileToJSONKey(key ctype) error {
 	if key.Type == sqltypes.VarBinary {
 		return nil
 	}
-	c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+	c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, nil)
 	return nil
 }
 

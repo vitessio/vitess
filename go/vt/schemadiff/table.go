@@ -25,9 +25,9 @@ import (
 
 	golcs "github.com/yudai/golcs"
 
-	"vitess.io/vitess/go/mysql/collations/colldata"
-
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -494,10 +494,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		// "show create table" reports it as a tinyint(1).
 		if col.Type.Type == "boolean" {
 			col.Type.Type = "tinyint"
-			col.Type.Length = &sqlparser.Literal{
-				Type: sqlparser.IntVal,
-				Val:  "1",
-			}
+			col.Type.Length = ptr.Of(1)
 
 			if col.Type.Options.Default != nil {
 				val, ok := col.Type.Options.Default.(sqlparser.BoolVal)
@@ -526,16 +523,14 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 				col.Type.Type = "double"
 			}
 
-			if col.Type.Length != nil && col.Type.Scale == nil && col.Type.Length.Type == sqlparser.IntVal {
-				if l, err := strconv.ParseInt(col.Type.Length.Val, 10, 64); err == nil {
-					// See https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html, but the docs are
-					// subtly wrong. We use a float for a precision of 24, not a double as the documentation
-					// mentioned. Validated against the actual behavior of MySQL.
-					if l <= 24 {
-						col.Type.Type = "float"
-					} else {
-						col.Type.Type = "double"
-					}
+			if col.Type.Length != nil && col.Type.Scale == nil {
+				// See https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html, but the docs are
+				// subtly wrong. We use a float for a precision of 24, not a double as the documentation
+				// mentioned. Validated against the actual behavior of MySQL.
+				if *col.Type.Length <= 24 {
+					col.Type.Type = "float"
+				} else {
+					col.Type.Type = "double"
 				}
 				col.Type.Length = nil
 			}
@@ -594,7 +589,7 @@ func (c *CreateTableEntity) normalizeIndexOptions() {
 }
 
 func isBool(colType *sqlparser.ColumnType) bool {
-	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length != nil && sqlparser.CanonicalString(colType.Length) == "1"
+	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length != nil && *colType.Length == 1
 }
 
 func (c *CreateTableEntity) normalizePartitionOptions() {

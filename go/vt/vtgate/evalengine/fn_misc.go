@@ -125,7 +125,7 @@ func (call *builtinInetAton) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	c.asm.Fn_INET_ATON()
@@ -199,7 +199,7 @@ func (call *builtinInet6Aton) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	c.asm.Fn_INET6_ATON()
@@ -313,7 +313,7 @@ func (call *builtinIsIPV4) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	c.asm.Fn_IS_IPV4()
@@ -419,7 +419,7 @@ func (call *builtinIsIPV6) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	c.asm.Fn_IS_IPV6()
@@ -498,7 +498,7 @@ func (call *builtinBinToUUID) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	col := defaultCoercionCollation(call.collate)
@@ -556,7 +556,7 @@ func (call *builtinIsUUID) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 	c.asm.Fn_IS_UUID()
 
@@ -633,7 +633,7 @@ func (call *builtinUUIDToBin) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	ct := ctype{Type: sqltypes.VarBinary, Flag: nullableFlags(arg.Flag), Col: collationBinary}

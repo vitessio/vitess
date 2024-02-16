@@ -581,7 +581,7 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		switch {
 		case matchType.isTextual():
 		default:
-			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+			c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 		}
 	}
 
@@ -774,7 +774,7 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 		switch {
 		case matchType.isTextual():
 		default:
-			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+			c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 		}
 	}
 
@@ -1031,7 +1031,7 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		switch {
 		case matchType.isTextual():
 		default:
-			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+			c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 		}
 	}
 

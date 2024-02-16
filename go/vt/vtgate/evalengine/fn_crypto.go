@@ -68,7 +68,7 @@ func (call *builtinMD5) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.Binary, nil)
 	}
 
 	col := defaultCoercionCollation(c.cfg.Collation)
@@ -116,7 +116,7 @@ func (call *builtinSHA1) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.Binary, nil)
 	}
 	col := defaultCoercionCollation(c.cfg.Collation)
 	c.asm.Fn_SHA1(col)
@@ -190,7 +190,7 @@ func (call *builtinSHA2) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(2, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(2, sqltypes.Binary, nil)
 	}
 
 	switch bits.Type {

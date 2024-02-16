@@ -49,7 +49,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"go/format"
 	"os"
 	"regexp"
 	"sort"
@@ -58,6 +57,8 @@ import (
 	"unicode"
 
 	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/tools/codegen"
 )
 
 // the following are adjustable
@@ -3326,7 +3327,7 @@ func exit(status int) {
 	if ftable != nil {
 		ftable.Flush()
 		ftable = nil
-		gofmt()
+		_ = codegen.GoImports(oflag)
 	}
 	if foutput != nil {
 		foutput.Flush()
@@ -3337,18 +3338,6 @@ func exit(status int) {
 		stderr = nil
 	}
 	os.Exit(status)
-}
-
-func gofmt() {
-	src, err := os.ReadFile(oflag)
-	if err != nil {
-		return
-	}
-	src, err = format.Source(src)
-	if err != nil {
-		return
-	}
-	os.WriteFile(oflag, src, 0666)
 }
 
 const fastAppendHelperText = `
