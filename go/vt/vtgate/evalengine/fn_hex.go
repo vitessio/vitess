@@ -73,7 +73,7 @@ func (call *builtinHex) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		c.asm.Fn_HEX_c(t, col)
 	default:
-		c.asm.Convert_xc(1, t, c.collation, 0, false)
+		c.asm.Convert_xc(1, t, c.collation, nil)
 		c.asm.Fn_HEX_c(t, col)
 	}
 
@@ -191,7 +191,7 @@ func (call *builtinUnhex) compile(c *compiler) (ctype, error) {
 	case str.Type == sqltypes.TypeJSON:
 		c.asm.Fn_UNHEX_j(t)
 	default:
-		c.asm.Convert_xb(1, t, 0, false)
+		c.asm.Convert_xb(1, t, nil)
 		c.asm.Fn_UNHEX_b(t)
 	}
 
