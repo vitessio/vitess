@@ -11,10 +11,10 @@
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
 - **[Minor Changes](#minor-changes)**
-
+  - **[New Stats](#new-stats)**
+    - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
 
 ## <a id="major-changes"/>Major Changes
-
 
 ### <a id="query-compatibility"/>Query Compatibility
 
@@ -64,3 +64,11 @@ To continue enabling these endpoints, explicitly set `--pprof-http` when startin
 
 ## <a id="minor-changes"/>Minor Changes
 
+### <a id="new-stats"/>New Stats
+
+#### <a id="vttablet-query-cache-hits-and-misses"/>VTTablet Query Cache Hits and Misses
+
+VTTablet exposes two new counter stats:
+
+ * `QueryCacheHits`: Query engine query cache hits
+ * `QueryCacheMisses`: Query engine query cache misses
