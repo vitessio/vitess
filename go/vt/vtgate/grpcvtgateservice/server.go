@@ -19,6 +19,7 @@ package grpcvtgateservice
 
 import (
 	"context"
+	"sync"
 
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
@@ -176,6 +177,59 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	}, nil
 }
 
+// streamSender is used to send messages on a stream. It is required to ensure that all the Send messages are sent from the same go-routine
+// to ensure that we don't break the gRPC contract.
+type streamSender struct {
+	ch chan *streamResponseWrapper
+}
+
+// streamResponseWrapper is a used to wrap the response and the error together in a single element to ensure we pair the response
+// with the error message we receive on sending it.
+type streamResponseWrapper struct {
+	resp *vtgatepb.StreamExecuteResponse
+	err  error
+	wg   sync.WaitGroup
+}
+
+// newStreamSender creates a new streamSender.
+func newStreamSender() *streamSender {
+	return &streamSender{
+		ch: make(chan *streamResponseWrapper),
+	}
+}
+
+// start spins the go routine meant to be used to send all the messages.
+func (ss *streamSender) start(stream vtgateservicepb.Vitess_StreamExecuteServer) {
+	go func() {
+		// Keep reading from the channel until it has been closed.
+		for srw := range ss.ch {
+			// Send the response on the stream and mark the wait group completed, once the message has been sent.
+			srw.err = stream.Send(srw.resp)
+			srw.wg.Done()
+		}
+	}()
+}
+
+// close closes the stream sender.
+func (ss *streamSender) close() {
+	close(ss.ch)
+}
+
+// sendMessage sends a message using the stream sender.
+func (ss *streamSender) sendMessage(resp *vtgatepb.StreamExecuteResponse) error {
+	// create a new stream wrapper
+	sh := &streamResponseWrapper{
+		resp: resp,
+		wg:   sync.WaitGroup{},
+	}
+	// Add to the wait group and send the message on the channel.
+	sh.wg.Add(1)
+	ss.ch <- sh
+	// We now wait for the message to be sent and the error field populated.
+	sh.wg.Wait()
+	return sh.err
+}
+
 // StreamExecute is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream vtgateservicepb.Vitess_StreamExecuteServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
@@ -187,12 +241,15 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
+	ss := newStreamSender()
+	ss.start(stream)
+	defer ss.close()
+
 	session, vtgErr := vtg.server.StreamExecute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, func(value *sqltypes.Result) error {
-		// Send is not safe to call concurrently, but vtgate
-		// guarantees that it's not.
-		return stream.Send(&vtgatepb.StreamExecuteResponse{
+		resp := &vtgatepb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(value),
-		})
+		}
+		return ss.sendMessage(resp)
 	})
 
 	var errs []error
@@ -203,7 +260,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	if sendSessionInStreaming {
 		// even if there is an error, session could have been modified.
 		// So, this needs to be sent back to the client. Session is sent in the last stream response.
-		lastErr := stream.Send(&vtgatepb.StreamExecuteResponse{
+		lastErr := ss.sendMessage(&vtgatepb.StreamExecuteResponse{
 			Session: session,
 		})
 		if lastErr != nil {
