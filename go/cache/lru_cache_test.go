@@ -35,7 +35,6 @@ func TestInitialState(t *testing.T) {
 	assert.Equal(t, int64(0), e)
 	assert.Equal(t, int64(0), h)
 	assert.Equal(t, int64(0), m)
-
 }
 
 func TestSetInsertsValue(t *testing.T) {
