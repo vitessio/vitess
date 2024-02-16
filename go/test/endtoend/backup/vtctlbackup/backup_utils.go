@@ -1034,7 +1034,7 @@ func terminateBackup(t *testing.T, alias string) {
 		args...,
 	)
 
-	reader, _ := tmpProcess.StderrPipe()
+	reader, _ := tmpProcess.StdoutPipe()
 	err := tmpProcess.Start()
 	require.Nil(t, err)
 	found := false
@@ -1068,7 +1068,7 @@ func terminateRestore(t *testing.T) {
 		args...,
 	)
 
-	reader, _ := tmpProcess.StderrPipe()
+	reader, _ := tmpProcess.StdoutPipe()
 	err := tmpProcess.Start()
 	require.Nil(t, err)
 	found := false
