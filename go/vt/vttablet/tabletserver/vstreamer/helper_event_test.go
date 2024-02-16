@@ -37,6 +37,7 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -424,10 +425,8 @@ func getMetadataKey(table, col string) string {
 
 func (ts *TestSpec) setMetadataMap(table, col, value string) {
 	values := strings.Split(value, ",")
-	valuesReversed := make([]string, len(values))
-	for i, v := range values {
-		valuesReversed[len(values)-1-i] = v
-	}
+	valuesReversed := slices.Clone(values)
+	slices.Reverse(valuesReversed)
 	ts.metadata[getMetadataKey(table, col)] = valuesReversed
 }
 
