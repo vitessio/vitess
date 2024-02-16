@@ -688,6 +688,8 @@ func buildUpdateLogicalPlan(
 	var vindexes []*vindexes.ColumnVindex
 	vQuery := ""
 	if len(upd.ChangedVindexValues) > 0 {
+		upd.OwnedVindexQuery.From = stmt.GetFrom()
+		upd.OwnedVindexQuery.Where = stmt.Where
 		vQuery = sqlparser.String(upd.OwnedVindexQuery)
 		vindexes = upd.Target.VTable.ColumnVindexes
 		if upd.OwnedVindexQuery.Limit != nil && len(upd.OwnedVindexQuery.OrderBy) == 0 {
@@ -709,6 +711,8 @@ func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Rout
 	var vindexes []*vindexes.ColumnVindex
 	vQuery := ""
 	if del.OwnedVindexQuery != nil {
+		del.OwnedVindexQuery.From = stmt.GetFrom()
+		del.OwnedVindexQuery.Where = stmt.Where
 		vQuery = sqlparser.String(del.OwnedVindexQuery)
 		vindexes = del.Target.VTable.Owned
 	}

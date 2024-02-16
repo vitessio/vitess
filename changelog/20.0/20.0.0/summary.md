@@ -7,6 +7,7 @@
     - [Vindex Hints](#vindex-hints)
     - [Update with Limit Support](#update-limit)
     - [Update with Multi Table Support](#multi-table-update)
+    - [Delete with Subquery Support](#delete-subquery)
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
 - **[Minor Changes](#minor-changes)**
@@ -44,6 +45,13 @@ Support is added for sharded multi-table update with column update on single tar
 Example: `update t1 join t2 on t1.id = t2.id join t3 on t1.col = t3.col set t1.baz = 'abc', t1.apa = 23 where t3.foo = 5 and t2.bar = 7`
 
 More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/update.html)
+
+#### <a id="delete-subquery"/> Delete with Subquery Support
+
+Support is added for sharded table delete with subquery
+
+Example: `delete from t1 where id in (select col from t2 where foo = 32 and bar = 43)`
+
 
 ### <a id="flag-changes"/>Flag Changes
 

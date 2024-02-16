@@ -74,7 +74,15 @@ func (d *Delete) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 func (d *Delete) ShortDescription() string {
 	ovq := ""
 	if d.OwnedVindexQuery != nil {
-		ovq = " vindexQuery:%s" + sqlparser.String(d.OwnedVindexQuery)
+		var cols, orderby, limit string
+		cols = fmt.Sprintf("COLUMNS: [%s]", sqlparser.String(d.OwnedVindexQuery.SelectExprs))
+		if len(d.OwnedVindexQuery.OrderBy) > 0 {
+			orderby = fmt.Sprintf(" ORDERBY: [%s]", sqlparser.String(d.OwnedVindexQuery.OrderBy))
+		}
+		if d.OwnedVindexQuery.Limit != nil {
+			limit = fmt.Sprintf(" LIMIT: [%s]", sqlparser.String(d.OwnedVindexQuery.Limit))
+		}
+		ovq = fmt.Sprintf(" vindexQuery(%s%s%s)", cols, orderby, limit)
 	}
 	return fmt.Sprintf("%s.%s%s", d.Target.VTable.Keyspace.Name, d.Target.VTable.Name.String(), ovq)
 }
@@ -90,8 +98,8 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	}
 
 	delClone := sqlparser.CloneRefOfDelete(deleteStmt)
-	delOp := createDeleteOperator(ctx, deleteStmt)
-	op = delOp
+	var vTbl *vindexes.Table
+	op, vTbl = createDeleteOperator(ctx, deleteStmt)
 
 	if deleteStmt.Comments != nil {
 		op = &LockAndComment{
@@ -105,7 +113,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return op
 	}
 
-	return createFkCascadeOpForDelete(ctx, op, delClone, childFks, delOp.Target.VTable)
+	return createFkCascadeOpForDelete(ctx, op, delClone, childFks, vTbl)
 }
 
 func deleteWithInputPlanningRequired(childFks []vindexes.ChildFKInfo, deleteStmt *sqlparser.Delete) bool {
@@ -170,11 +178,12 @@ func deleteWithInputPlanningForFk(ctx *plancontext.PlanningContext, del *sqlpars
 	}
 }
 
-func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) *Delete {
+func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) (Operator, *vindexes.Table) {
 	op := crossJoin(ctx, del.TableExprs)
 
+	sqc := &SubQueryBuilder{}
 	if del.Where != nil {
-		op = addWherePredicates(ctx, del.Where.Expr, op)
+		op = addWherePredsToSubQueryBuilder(ctx, del.Where.Expr, op, sqc)
 	}
 
 	target := del.Targets[0]
@@ -207,9 +216,8 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 	var ovq *sqlparser.Select
 	if vTbl.Keyspace.Sharded && vTbl.Type == vindexes.TypeTable {
 		primaryVindex, _ := getVindexInformation(tblID, vTbl)
-		ate := tblInfo.GetAliasedTableExpr()
 		if len(vTbl.Owned) > 0 {
-			ovq = generateOwnedVindexQuery(ate, del, targetTbl, primaryVindex.Columns)
+			ovq = generateOwnedVindexQuery(del, targetTbl, primaryVindex.Columns)
 		}
 	}
 
@@ -222,21 +230,18 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 		},
 	}
 
-	if del.Limit == nil {
-		return delOp
+	if del.Limit != nil {
+		addOrdering(ctx, del.OrderBy, delOp)
+		delOp.Source = &Limit{
+			Source: delOp.Source,
+			AST:    del.Limit,
+		}
 	}
 
-	addOrdering(ctx, del.OrderBy, delOp)
-
-	delOp.Source = &Limit{
-		Source: delOp.Source,
-		AST:    del.Limit,
-	}
-
-	return delOp
+	return sqc.getRootOperator(delOp, nil), vTbl
 }
 
-func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table TargetTable, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
+func generateOwnedVindexQuery(del *sqlparser.Delete, table TargetTable, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
 	var selExprs sqlparser.SelectExprs
 	for _, col := range ksidCols {
 		colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
@@ -248,11 +253,8 @@ func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete
 			selExprs = append(selExprs, aeWrap(colName))
 		}
 	}
-	sqlparser.RemoveKeyspaceInTables(tblExpr)
 	return &sqlparser.Select{
 		SelectExprs: selExprs,
-		From:        del.TableExprs,
-		Where:       del.Where,
 		OrderBy:     del.OrderBy,
 		Limit:       del.Limit,
 		Lock:        sqlparser.ForUpdateLock,
