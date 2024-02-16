@@ -43,9 +43,8 @@ func TestDo(t *testing.T) {
 		return "bar", nil
 	})
 
-	assert.Equal(t, "bar (string)", fmt.Sprintf("%v (%T)", v, v), "incorrect Do value")
-	assert.NoError(t, err, "got Do error")
-
+	assert.Equal(t, "bar (string)", fmt.Sprintf("%v (%T)", v, v))
+	assert.NoError(t, err)
 }
 
 func TestDoErr(t *testing.T) {
@@ -57,7 +56,6 @@ func TestDoErr(t *testing.T) {
 
 	assert.Equal(t, someErr, err)
 	assert.Equal(t, "", v)
-
 }
 
 func TestDoDupSuppress(t *testing.T) {
@@ -87,11 +85,11 @@ func TestDoDupSuppress(t *testing.T) {
 			defer wg2.Done()
 			wg1.Done()
 			v, err, _ := g.Do("key", fn)
-			if !assert.NoError(t, err, "unexpected Do error") {
+			if !assert.NoError(t, err) {
 				return
 			}
 
-			assert.Equal(t, "bar", v, "unexpected Do value")
+			assert.Equal(t, "bar", v)
 		}()
 	}
 	wg1.Wait()
@@ -100,7 +98,7 @@ func TestDoDupSuppress(t *testing.T) {
 	c <- "bar"
 	wg2.Wait()
 	got := atomic.LoadInt32(&calls)
-	assert.True(t, got > 0 && got < n, "number of calls not between 0 and %d", n)
+	assert.True(t, got > 0 && got < n)
 }
 
 // Test singleflight behaves correctly after Do panic.
@@ -133,7 +131,7 @@ func TestPanicDo(t *testing.T) {
 
 	select {
 	case <-done:
-		assert.Equal(t, int32(n), panicCount, "unexpected number of panics")
+		assert.Equal(t, int32(n), panicCount)
 	case <-time.After(time.Second):
 		require.Fail(t, "Do hangs")
 	}
