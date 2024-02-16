@@ -585,7 +585,9 @@ func (vr *vreplicator) throttlerAppName() string {
 // throttleUpdatesRateLimiter.tickerTime.
 // It also increments the throttled count in the stats to keep track of how many
 // times a VReplication workflow, and the specific sub-component, is throttled by the
-// tablet throttler over time.
+// tablet throttler over time. It also increments the global throttled count to keep
+// track of how many times in total vreplication has been throttled across all workflows
+// (both ones that currently exist and ones that no longer do).
 func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {
 	appName := appThrottled.String()
 	vr.stats.ThrottledCounts.Add([]string{"tablet", appName}, 1)
