@@ -69,9 +69,16 @@ func (bv *BindVariable) UnmarshalJSON(b []byte) error {
 //
 // This allows a *querypb.BindVariable that would have marshaled
 // to this:
-//   {"Type":10262,"Value":"FmtAtEq6S9Y="}
+//
+//	{"Type":10262,"Value":"FmtAtEq6S9Y="}
+//
 // to marshal to this:
-//   {"Type":"VARBINARY","Value":"FmtAtEq6S9Y="}
+//
+//	{"Type":"VARBINARY","Value":"FmtAtEq6S9Y="}
+//
+// or if query redaction is enabled, like this:
+//
+//	{"Type":"VARBINARY","Value":null}
 func (bv BindVariable) MarshalJSON() ([]byte, error) {
 	// convert querypb.Type integer to string and pass along Value.
 	out := map[string]interface{}{
