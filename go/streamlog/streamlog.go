@@ -51,6 +51,7 @@ var (
 	queryLogFilterTag    string
 	queryLogRowThreshold uint64
 	queryLogFormat       = "text"
+	queryLogJSONV2       bool
 )
 
 func GetRedactDebugUIQueries() bool {
@@ -77,6 +78,14 @@ func SetQueryLogFormat(newQueryLogFormat string) {
 	queryLogFormat = newQueryLogFormat
 }
 
+func UseQueryLogJSONV2() bool {
+	return queryLogJSONV2
+}
+
+func SetQueryLogJSONV2(enabled bool) {
+	queryLogJSONV2 = enabled
+}
+
 func init() {
 	servenv.OnParseFor("vtcombo", registerStreamLogFlags)
 	servenv.OnParseFor("vttablet", registerStreamLogFlags)
@@ -89,6 +98,9 @@ func registerStreamLogFlags(fs *pflag.FlagSet) {
 
 	// QueryLogFormat controls the format of the query log (either text or json)
 	fs.StringVar(&queryLogFormat, "querylog-format", queryLogFormat, "format for query logs (\"text\" or \"json\")")
+
+	// QueryLogJSONFormat controls whether the new querylog json format is used
+	fs.BoolVar(&queryLogJSONV2, "querylog-json-v2", false, "use v2 format for querylog-format=json")
 
 	// QueryLogFilterTag contains an optional string that must be present in the query for it to be logged
 	fs.StringVar(&queryLogFilterTag, "querylog-filter-tag", queryLogFilterTag, "string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization")

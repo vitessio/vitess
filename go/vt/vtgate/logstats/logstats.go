@@ -36,14 +36,13 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// LogStats records the stats for a single vtgate query
 type LogStats struct {
-	Ctx            context.Context
+	Ctx            context.Context `json:"-"`
 	Method         string
 	TabletType     string
 	StmtType       string
 	SQL            string
-	BindVariables  map[string]*querypb.BindVariable
+	BindVariables  map[string]streamlog.BindVariable `json:",omitempty"`
 	StartTime      time.Time
 	EndTime        time.Time
 	ShardQueries   uint64
@@ -52,22 +51,34 @@ type LogStats struct {
 	PlanTime       time.Duration
 	ExecuteTime    time.Duration
 	CommitTime     time.Duration
-	Error          error
+	Error          error `json:",omitempty"`
 	TablesUsed     []string
 	SessionUUID    string
 	CachedPlan     bool
 	ActiveKeyspace string // ActiveKeyspace is the selected keyspace `use ks`
 }
 
+type LogStatsJSON struct {
+	RemoteAddr      string
+	Username        string
+	ImmediateCaller string
+	EffectiveCaller string
+	LogStats
+}
+
 // NewLogStats constructs a new LogStats with supplied Method and ctx
 // field values, and the StartTime field set to the present time.
 func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindVars map[string]*querypb.BindVariable) *LogStats {
+	parsedBindVars := make(map[string]streamlog.BindVariable, len(bindVars))
+	for key, bindVar := range bindVars {
+		parsedBindVars[key] = streamlog.NewBindVariable(bindVar)
+	}
 	return &LogStats{
 		Ctx:           ctx,
 		Method:        methodName,
 		SQL:           sql,
 		SessionUUID:   sessionUUID,
-		BindVariables: bindVars,
+		BindVariables: parsedBindVars,
 		StartTime:     time.Now(),
 	}
 }
@@ -140,10 +151,12 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	if !streamlog.GetRedactDebugUIQueries() {
 		_, fullBindParams := params["full"]
 		formattedBindVars = sqltypes.FormatBindVariables(
-			stats.BindVariables,
+			streamlog.BindVariablesToProto(stats.BindVariables),
 			fullBindParams,
 			streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON,
 		)
+	} else {
+		stats.BindVariables = nil
 	}
 
 	// TODO: remove username here we fully enforce immediate caller id
@@ -154,6 +167,16 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	case streamlog.QueryLogFormatText:
 		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%v\t%v\t%q\n"
 	case streamlog.QueryLogFormatJSON:
+		if streamlog.UseQueryLogJSONV2() {
+			// flag --querylog-json-v2
+			return json.NewEncoder(w).Encode(LogStatsJSON{
+				EffectiveCaller: stats.EffectiveCaller(),
+				ImmediateCaller: stats.ImmediateCaller(),
+				LogStats:        *stats,
+				RemoteAddr:      remoteAddr,
+				Username:        username,
+			})
+		}
 		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q, \"TabletType\": %q, \"SessionUUID\": %q, \"Cached Plan\": %v, \"TablesUsed\": %v, \"ActiveKeyspace\": %q}\n"
 	}
 

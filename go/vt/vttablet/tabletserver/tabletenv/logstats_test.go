@@ -17,6 +17,7 @@ limitations under the License.
 package tabletenv
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,11 +27,13 @@ import (
 	"time"
 
 	"github.com/google/safehtml/testconversions"
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/callinfo/fakecallinfo"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -63,7 +66,9 @@ func TestLogStatsFormat(t *testing.T) {
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
 	logStats.OriginalSQL = "sql"
-	logStats.BindVariables = map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}
+	logStats.BindVariables = map[string]streamlog.BindVariable{
+		"intVal": streamlog.NewBindVariable(sqltypes.Int64BindVariable(1)),
+	}
 	logStats.AddRewrittenSQL("sql with pii", time.Now())
 	logStats.MysqlResponseTime = 0
 	logStats.TransactionID = 12345
@@ -123,7 +128,9 @@ func TestLogStatsFormat(t *testing.T) {
 
 	// Make sure formatting works for string bind vars. We can't do this as part of a single
 	// map because the output ordering is undefined.
-	logStats.BindVariables = map[string]*querypb.BindVariable{"strVal": sqltypes.StringBindVariable("abc")}
+	logStats.BindVariables = map[string]streamlog.BindVariable{
+		"strVal": streamlog.NewBindVariable(sqltypes.StringBindVariable("abc")),
+	}
 
 	streamlog.SetQueryLogFormat("text")
 	got = testFormat(logStats, url.Values(params))
@@ -157,7 +164,9 @@ func TestLogStatsFilter(t *testing.T) {
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
 	logStats.OriginalSQL = "sql /* LOG_THIS_QUERY */"
-	logStats.BindVariables = map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}
+	logStats.BindVariables = map[string]streamlog.BindVariable{
+		"intVal": streamlog.NewBindVariable(sqltypes.Int64BindVariable(1)),
+	}
 	logStats.AddRewrittenSQL("sql with pii", time.Now())
 	logStats.MysqlResponseTime = 0
 	logStats.Rows = [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}
@@ -181,6 +190,49 @@ func TestLogStatsFilter(t *testing.T) {
 	want = ""
 	if got != want {
 		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
+	}
+}
+
+func TestLogStatsFormatJSONV2(t *testing.T) {
+	defer func() {
+		streamlog.SetRedactDebugUIQueries(false)
+		streamlog.SetQueryLogFormat("text")
+		streamlog.SetQueryLogJSONV2(false)
+	}()
+	logStats := NewLogStats(context.Background(), "test")
+	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
+	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
+	logStats.OriginalSQL = "sql"
+	logStats.BindVariables = map[string]streamlog.BindVariable{
+		"bytesVal": streamlog.NewBindVariable(sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6"))),
+		"intVal":   streamlog.NewBindVariable(sqltypes.Int64BindVariable(1)),
+	}
+	logStats.AddRewrittenSQL("sql with pii", time.Now())
+	logStats.MysqlResponseTime = 0
+	logStats.TransactionID = 12345
+	logStats.Rows = [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}
+	streamlog.SetQueryLogFormat("json")
+	streamlog.SetQueryLogJSONV2(true)
+	var cmpStats LogStatsJSON
+	{
+		// unredacted bind variables
+		streamlog.SetRedactDebugUIQueries(false)
+		var buf bytes.Buffer
+		assert.Nil(t, logStats.Logf(&buf, nil))
+		assert.Equal(t, `{"CallInfo":"","Username":"","ImmediateCaller":"","EffectiveCaller":"","RewrittenSQL":"sql with pii","TotalTime":1000001234,"ResponseSize":1,"Method":"test","PlanType":"","OriginalSQL":"sql","BindVariables":{"bytesVal":{"Type":"VARBINARY","Value":"FmtAtEq6S9Y="},"intVal":{"Type":"INT64","Value":"MQ=="}},"RowsAffected":0,"NumberOfQueries":1,"StartTime":"2017-01-01T01:02:03Z","EndTime":"2017-01-01T01:02:04.000001234Z","MysqlResponseTime":0,"WaitingForConnection":0,"QuerySources":2,"TransactionID":12345,"ReservedID":0,"CachedPlan":false}`, strings.TrimSpace(buf.String()))
+		assert.Nil(t, json.Unmarshal(buf.Bytes(), &cmpStats))
+		assert.Equal(t, querypb.Type_VARBINARY, cmpStats.BindVariables["bytesVal"].Type)
+		assert.Equal(t, []byte("\x16k@\xb4J\xbaK\xd6"), cmpStats.BindVariables["bytesVal"].Value)
+		assert.Equal(t, querypb.Type_INT64, cmpStats.BindVariables["intVal"].Type)
+		assert.Equal(t, []byte("1"), cmpStats.BindVariables["intVal"].Value)
+	}
+	{
+		// redacted bind variables
+		streamlog.SetRedactDebugUIQueries(true)
+		var buf bytes.Buffer
+		assert.Nil(t, logStats.Logf(&buf, nil))
+		assert.Equal(t, `{"CallInfo":"","Username":"","ImmediateCaller":"","EffectiveCaller":"","RewrittenSQL":"[REDACTED]","TotalTime":1000001234,"ResponseSize":1,"Method":"test","PlanType":"","OriginalSQL":"sql","RowsAffected":0,"NumberOfQueries":1,"StartTime":"2017-01-01T01:02:03Z","EndTime":"2017-01-01T01:02:04.000001234Z","MysqlResponseTime":0,"WaitingForConnection":0,"QuerySources":2,"TransactionID":12345,"ReservedID":0,"CachedPlan":false}`, strings.TrimSpace(buf.String()))
+		assert.Nil(t, json.Unmarshal(buf.Bytes(), &cmpStats))
 	}
 }
 

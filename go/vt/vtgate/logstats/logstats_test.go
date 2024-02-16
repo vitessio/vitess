@@ -66,15 +66,19 @@ func TestLogStatsFormat(t *testing.T) {
 	logStats.TabletType = "PRIMARY"
 	logStats.ActiveKeyspace = "db"
 	params := map[string][]string{"full": {}}
-	intBindVar := map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}
-	stringBindVar := map[string]*querypb.BindVariable{"strVal": sqltypes.StringBindVariable("abc")}
+	intBindVar := map[string]streamlog.BindVariable{
+		"intVal": streamlog.NewBindVariable(sqltypes.Int64BindVariable(1)),
+	}
+	stringBindVar := map[string]streamlog.BindVariable{
+		"strVal": streamlog.NewBindVariable(sqltypes.StringBindVariable("abc")),
+	}
 
 	tests := []struct {
 		name     string
 		redact   bool
 		format   string
 		expected string
-		bindVars map[string]*querypb.BindVariable
+		bindVars map[string]streamlog.BindVariable
 	}{
 		{ // 0
 			redact:   false,
@@ -145,6 +149,48 @@ func TestLogStatsFormat(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, test.expected, string(formatted))
 		})
+	}
+}
+
+func TestLogStatsFormatJSONV2(t *testing.T) {
+	defer func() {
+		streamlog.SetRedactDebugUIQueries(false)
+		streamlog.SetQueryLogFormat("text")
+		streamlog.SetQueryLogJSONV2(false)
+	}()
+	logStats := NewLogStats(context.Background(), "test", "select * from testtable where name = :strVal and message = :bytesVal", "suuid", nil)
+	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
+	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
+	logStats.StmtType = "select"
+	logStats.TablesUsed = []string{"ks1.tbl1", "ks2.tbl2"}
+	logStats.TabletType = "PRIMARY"
+	logStats.ActiveKeyspace = "db"
+	logStats.BindVariables = map[string]streamlog.BindVariable{
+		"strVal":   streamlog.NewBindVariable(sqltypes.StringBindVariable("abc")),
+		"bytesVal": streamlog.NewBindVariable(sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6"))),
+	}
+	streamlog.SetQueryLogFormat("json")
+	streamlog.SetQueryLogJSONV2(true)
+	var cmpStats LogStatsJSON
+	{
+		// unredacted bind variables
+		streamlog.SetRedactDebugUIQueries(false)
+		var buf bytes.Buffer
+		assert.Nil(t, logStats.Logf(&buf, nil))
+		assert.Equal(t, `{"RemoteAddr":"","Username":"","ImmediateCaller":"","EffectiveCaller":"","Method":"test","TabletType":"PRIMARY","StmtType":"select","SQL":"select * from testtable where name = :strVal and message = :bytesVal","BindVariables":{"bytesVal":{"Type":"VARBINARY","Value":"FmtAtEq6S9Y="},"strVal":{"Type":"VARCHAR","Value":"YWJj"}},"StartTime":"2017-01-01T01:02:03Z","EndTime":"2017-01-01T01:02:04.000001234Z","ShardQueries":0,"RowsAffected":0,"RowsReturned":0,"PlanTime":0,"ExecuteTime":0,"CommitTime":0,"TablesUsed":["ks1.tbl1","ks2.tbl2"],"SessionUUID":"suuid","CachedPlan":false,"ActiveKeyspace":"db"}`, strings.TrimSpace(buf.String()))
+		assert.Nil(t, json.Unmarshal(buf.Bytes(), &cmpStats))
+		assert.Equal(t, querypb.Type_VARBINARY, cmpStats.BindVariables["bytesVal"].Type)
+		assert.Equal(t, []byte("\x16k@\xb4J\xbaK\xd6"), cmpStats.BindVariables["bytesVal"].Value)
+		assert.Equal(t, querypb.Type_VARCHAR, cmpStats.BindVariables["strVal"].Type)
+		assert.Equal(t, []byte("abc"), cmpStats.BindVariables["strVal"].Value)
+	}
+	{
+		// redacted bind variables
+		streamlog.SetRedactDebugUIQueries(true)
+		var buf bytes.Buffer
+		assert.Nil(t, logStats.Logf(&buf, nil))
+		assert.Equal(t, `{"RemoteAddr":"","Username":"","ImmediateCaller":"","EffectiveCaller":"","Method":"test","TabletType":"PRIMARY","StmtType":"select","SQL":"select * from testtable where name = :strVal and message = :bytesVal","StartTime":"2017-01-01T01:02:03Z","EndTime":"2017-01-01T01:02:04.000001234Z","ShardQueries":0,"RowsAffected":0,"RowsReturned":0,"PlanTime":0,"ExecuteTime":0,"CommitTime":0,"TablesUsed":["ks1.tbl1","ks2.tbl2"],"SessionUUID":"suuid","CachedPlan":false,"ActiveKeyspace":"db"}`, strings.TrimSpace(buf.String()))
+		assert.Nil(t, json.Unmarshal(buf.Bytes(), &cmpStats))
 	}
 }
 
