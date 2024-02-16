@@ -74,7 +74,7 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	}
 
 	// Reparent using SSL (this will also check replication works)
-	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspace, shardName, clusterInstance.Cell, primaryTablet.TabletUID)
+	err = clusterInstance.VtctldClientProcess.InitializeShard(keyspace, shardName, clusterInstance.Cell, primaryTablet.TabletUID)
 	if isClientCertPassed {
 		require.NoError(t, err)
 	} else {

@@ -393,12 +393,12 @@ func TestReparenting(t *testing.T) {
 
 	// do planned reparenting, make one replica as primary
 	// and validate client connection count in correspond tablets
-	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard", "--",
-		"--keyspace_shard", userKeyspace+"/-80",
-		"--new_primary", shard0Replica.Alias)
+	clusterInstance.VtctldClientProcess.ExecuteCommand(
+		"PlannedReparentShard",
+		userKeyspace+"/-80",
+		"--new-primary", shard0Replica.Alias)
 	// validate topology
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)
 
 	// Verify connection has migrated.
@@ -417,12 +417,12 @@ func TestReparenting(t *testing.T) {
 	stream.Next()
 
 	// make old primary again as new primary
-	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard", "--",
-		"--keyspace_shard", userKeyspace+"/-80",
-		"--new_primary", shard0Primary.Alias)
+	clusterInstance.VtctldClientProcess.ExecuteCommand(
+		"PlannedReparentShard",
+		userKeyspace+"/-80",
+		"--new-primary", shard0Primary.Alias)
 	// validate topology
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)
 	time.Sleep(10 * time.Second)
 	assertClientCount(t, 1, shard0Primary)

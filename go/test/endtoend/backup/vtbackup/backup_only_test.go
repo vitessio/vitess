@@ -83,10 +83,10 @@ func TestTabletInitialBackup(t *testing.T) {
 	restore(t, primary, "replica", "NOT_SERVING")
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
-	err = localCluster.VtctlclientProcess.ExecuteCommand(
+	err = localCluster.VtctldClientProcess.ExecuteCommand(
 		"SetReadWrite", primary.Alias)
 	require.Nil(t, err)
-	err = localCluster.VtctlclientProcess.ExecuteCommand(
+	err = localCluster.VtctldClientProcess.ExecuteCommand(
 		"TabletExternallyReparented", primary.Alias)
 	require.Nil(t, err)
 	restore(t, replica1, "replica", "SERVING")
@@ -277,7 +277,7 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 
 	if initShardPrimary {
 		// choose primary and start replication
-		err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
+		err := localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
 		require.Nil(t, err)
 	}
 }
@@ -339,7 +339,7 @@ func tearDown(t *testing.T, initMysql bool) {
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
 		resetTabletDirectory(t, tablet, initMysql)
 		// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
-		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
+		err := localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", tablet.Alias)
 		require.Nil(t, err)
 	}
 }
