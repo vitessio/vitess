@@ -172,6 +172,7 @@ Flags:
       --querylog-buffer-size int                                         Maximum number of buffered query logs before throttling log output (default 10)
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
+      --querylog-json-v2                                                 use v2 format for querylog-format=json
       --querylog-row-threshold uint                                      Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)

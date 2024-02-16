@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -1546,7 +1547,7 @@ func (tsv *TabletServer) execRequest(
 	logStats := tabletenv.NewLogStats(ctx, requestName)
 	logStats.Target = target
 	logStats.OriginalSQL = sql
-	logStats.BindVariables = sqltypes.CopyBindVariables(bindVariables)
+	logStats.BindVariables = streamlog.NewBindVariables(sqltypes.CopyBindVariables(bindVariables))
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
 
 	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {

@@ -1093,7 +1093,7 @@ func (e *Executor) getPlan(
 	}
 
 	logStats.SQL = comments.Leading + query + comments.Trailing
-	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
+	logStats.BindVariables = streamlog.NewBindVariables(sqltypes.CopyBindVariables(bindVars))
 
 	return e.cacheAndBuildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, logStats)
 }

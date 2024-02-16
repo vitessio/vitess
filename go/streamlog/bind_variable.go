@@ -33,6 +33,15 @@ func NewBindVariable(bv *querypb.BindVariable) BindVariable {
 	return BindVariable(*bv)
 }
 
+// NewBindVariables returns a string-map of wrapped *querypb.BindVariable objects.
+func NewBindVariables(bvs map[string]*querypb.BindVariable) map[string]BindVariable {
+	out := make(map[string]BindVariable, len(bvs))
+	for key, bindVar := range bvs {
+		out[key] = NewBindVariable(bindVar)
+	}
+	return out
+}
+
 // UnmarshalJSON unmarshals the custom BindVariable json-format.
 // See MarshalJSON for more information.
 func (bv *BindVariable) UnmarshalJSON(b []byte) error {

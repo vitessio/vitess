@@ -69,16 +69,12 @@ type LogStatsJSON struct {
 // NewLogStats constructs a new LogStats with supplied Method and ctx
 // field values, and the StartTime field set to the present time.
 func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindVars map[string]*querypb.BindVariable) *LogStats {
-	parsedBindVars := make(map[string]streamlog.BindVariable, len(bindVars))
-	for key, bindVar := range bindVars {
-		parsedBindVars[key] = streamlog.NewBindVariable(bindVar)
-	}
 	return &LogStats{
 		Ctx:           ctx,
 		Method:        methodName,
 		SQL:           sql,
 		SessionUUID:   sessionUUID,
-		BindVariables: parsedBindVars,
+		BindVariables: streamlog.NewBindVariables(bindVars),
 		StartTime:     time.Now(),
 	}
 }
