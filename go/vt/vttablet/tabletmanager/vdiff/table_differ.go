@@ -214,6 +214,7 @@ func (td *tableDiffer) forEachSource(cb func(source *migrationSource) error) err
 		wg.Add(1)
 		go func(source *migrationSource) {
 			defer wg.Done()
+			log.Flush()
 			if err := cb(source); err != nil {
 				allErrors.RecordError(err)
 			}
@@ -308,6 +309,7 @@ func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 	defer cancel()
 
 	if err := td.forEachSource(func(source *migrationSource) error {
+		log.Flush()
 		if err := ct.tmc.WaitForPosition(waitCtx, source.tablet, replication.EncodePosition(source.position)); err != nil {
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(source.tablet.Alias))
 		}

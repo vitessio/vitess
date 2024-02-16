@@ -67,7 +67,7 @@ func (tfe *TestFieldEvent) String() string {
 			continue
 		}
 		fld += fmt.Sprintf(" fields:{name:\"%s\" type:%s table:\"%s\" org_table:\"%s\" database:\"%s\" org_name:\"%s\" column_length:%d charset:%d",
-			col.name, col.dataType, tfe.table, tfe.table, tfe.db, col.name, col.len, col.charset)
+			col.name, col.dataType, tfe.table, tfe.table, tfe.db, col.name, col.len, col.collationID)
 		if col.colType != "" {
 			fld += fmt.Sprintf(" column_type:\"%s\"", col.colType)
 		}
@@ -2021,11 +2021,11 @@ func TestGeneratedColumns(t *testing.T) {
 		table: "t1",
 		db:    "vttest",
 		cols: []*TestColumn{
-			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
-			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
-			{name: "val2", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
-			{name: "val3", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
-			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, collationID: 63},
+			{name: "val2", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, collationID: 63},
+			{name: "val3", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, collationID: 63},
+			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 		},
 	}
 
@@ -2068,8 +2068,8 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 		table: "t1",
 		db:    "vttest",
 		cols: []*TestColumn{
-			{name: "my_row_id", dataType: "UINT64", colType: "bigint unsigned", len: 20, charset: 63},
-			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+			{name: "my_row_id", dataType: "UINT64", colType: "bigint unsigned", len: 20, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, collationID: 63},
 		},
 	}
 

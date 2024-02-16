@@ -28,6 +28,12 @@ package vstreamer
 // The test framework will take care of creating the tables, running the queries, and validating the events for
 // simpler cases. For more complex cases, the test framework provides hooks to customize the event generation.
 
+// Note: To simplify the initial implementation, the test framework is designed to be used in the vstreamer package only.
+// It makes several assumptions about  how the test cases are written. For example, queries are expected to
+// use single quotes for string literals, for example:
+// `"insert into t1 values (1, 'blob1', 'aaa')"`.
+// The test framework will not work if the queries use double quotes for string literals at the moment.
+
 import (
 	"context"
 	"fmt"
@@ -37,14 +43,25 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
-
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 )
+
+const (
+	lengthInt  = 11
+	lengthBlob = 65535
+	lengthText = 262140
+	lengthSet  = 56
+)
+
+func getDefaultCollationID() int64 {
+	return 45
+}
 
 var (
 	// noEvents is used to indicate that a query is expected to generate no events.
@@ -54,10 +71,10 @@ var (
 // TestColumn has all the attributes of a column required for the test cases.
 type TestColumn struct {
 	name, dataType, colType string
-	len, charset            int64
+	len, collationID        int64
 	dataTypeLowered         string
 	skip                    bool
-	collate                 string
+	collationName           string
 }
 
 // TestFieldEvent has all the attributes of a table required for creating a field event.
@@ -165,8 +182,7 @@ func (ts *TestSpec) Init() error {
 	if ts.inited {
 		return nil
 	}
-
-	ts.inited = true
+	defer func() { ts.inited = true }()
 	if ts.options == nil {
 		ts.options = &TestSpecOptions{}
 	}
@@ -180,6 +196,7 @@ func (ts *TestSpec) Init() error {
 	ts.metadata = make(map[string][]string)
 	ts.pkColumns = make(map[string][]string)
 	// create tables
+	require.Equal(ts.t, len(ts.ddls), len(ts.schema.Tables()), "number of tables in ddls and schema do not match")
 	for i, t := range ts.schema.Tables() {
 		execStatement(ts.t, ts.ddls[i])
 		fe := ts.getFieldEvent(t)
@@ -188,6 +205,7 @@ func (ts *TestSpec) Init() error {
 		var pkColumns []string
 		var hasPK bool
 		for _, index := range t.TableSpec.Indexes {
+			require.NotNil(ts.t, index.Info, "index.Info is nil")
 			if index.Info.Type == sqlparser.IndexTypePrimary {
 				for _, col := range index.Columns {
 					pkColumns = append(pkColumns, col.Column.String())
@@ -216,10 +234,12 @@ func (ts *TestSpec) Close() {
 func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[string]string) {
 	bv := make(map[string]string)
 	ins := stmt.(*sqlparser.Insert)
-	tn, _ := ins.Table.TableName()
+	tn, err := ins.Table.TableName()
+	require.NoError(ts.t, err)
 	table := tn.Name.String()
 	fe := ts.fieldEvents[table]
-	vals, _ := ins.Rows.(sqlparser.Values)
+	vals, ok := ins.Rows.(sqlparser.Values)
+	require.True(ts.t, ok, "insert statement does not have values")
 	for _, val := range vals {
 		for i, v := range val {
 			bufV := sqlparser.NewTrackedBuffer(nil)
@@ -240,9 +260,10 @@ func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[
 func (ts *TestSpec) getBindVarsForUpdate(stmt sqlparser.Statement) (string, map[string]string) {
 	bv := make(map[string]string)
 	upd := stmt.(*sqlparser.Update)
-	buf := sqlparser.NewTrackedBuffer(nil)
-	upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
-	table := buf.String()
+	//buf := sqlparser.NewTrackedBuffer(nil)
+	table := sqlparser.String(upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr)
+	//upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
+	//table := buf.String()
 	fe, ok := ts.fieldEvents[table]
 	require.True(ts.t, ok, "field event for table %s not found", table)
 	index := int64(0)
@@ -343,49 +364,50 @@ func (ts *TestSpec) Run() {
 func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFieldEvent {
 	var tfe TestFieldEvent
 	tfe.table = table.Name()
-	tfe.db = testenv.TestDBName
+	tfe.db = testenv.DBName
 	for _, col := range table.TableSpec.Columns {
 		tc := TestColumn{}
 		tc.name = col.Name.String()
 		sqlType := col.Type.SQLType()
 		tc.dataType = sqlType.String()
 		tc.dataTypeLowered = strings.ToLower(tc.dataType)
-		tc.collate = col.Type.Options.Collate
+		tc.collationName = col.Type.Options.Collate
 		switch tc.dataTypeLowered {
 		case "int32":
-			tc.len = 11
-			tc.charset = 63
+			tc.len = lengthInt
+			tc.collationID = collations.CollationBinaryID
 			tc.colType = "int(11)"
 		case "varchar", "varbinary", "char", "binary":
-			l, _ := strconv.Atoi(col.Type.Length.Val)
+			l, err := strconv.Atoi(col.Type.Length.Val)
+			require.NoError(ts.t, err)
 			switch tc.dataTypeLowered {
 			case "binary", "varbinary":
 				tc.len = int64(l)
-				tc.charset = 63
+				tc.collationID = collations.CollationBinaryID
 			default:
 				tc.len = 4 * int64(l)
-				tc.charset = 45
-				if tc.dataTypeLowered == "char" && strings.Contains(tc.collate, "bin") {
+				tc.collationID = getDefaultCollationID()
+				if tc.dataTypeLowered == "char" && strings.Contains(tc.collationName, "bin") {
 					tc.dataType = "BINARY"
 				}
 			}
 			tc.colType = fmt.Sprintf("%s(%d)", tc.dataTypeLowered, l)
 		case "blob":
-			tc.len = 65535
-			tc.charset = 63
+			tc.len = lengthBlob
+			tc.collationID = collations.CollationBinaryID
 			tc.colType = "blob"
 		case "text":
-			tc.len = 262140
-			tc.charset = 45
+			tc.len = lengthText
+			tc.collationID = getDefaultCollationID()
 			tc.colType = "text"
 		case "set":
-			tc.len = 56
-			tc.charset = 45
+			tc.len = lengthSet
+			tc.collationID = getDefaultCollationID()
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
 		case "enum":
 			tc.len = int64(len(col.Type.EnumValues) + 1)
-			tc.charset = 45
+			tc.collationID = getDefaultCollationID()
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
 		default:

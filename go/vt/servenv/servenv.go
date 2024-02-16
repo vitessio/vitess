@@ -166,6 +166,7 @@ func fireOnCloseHooks(timeout time.Duration) bool {
 
 // fireHooksWithTimeout returns true iff all the hooks finish before the timeout.
 func fireHooksWithTimeout(timeout time.Duration, name string, hookFn func()) bool {
+	defer log.Flush()
 	log.Infof("Firing %s hooks and waiting up to %v for them", name, timeout)
 
 	timer := time.NewTimer(timeout)
