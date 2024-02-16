@@ -87,6 +87,10 @@ type filePosQueryEvent struct {
 	filePosFakeEvent
 }
 
+func (ev filePosQueryEvent) Bytes() []byte {
+	panic("not implemented")
+}
+
 func newFilePosQueryEvent(query string, ts uint32) filePosQueryEvent {
 	return filePosQueryEvent{
 		query: query,
@@ -219,6 +223,10 @@ func (ev filePosFakeEvent) IsPseudo() bool {
 type filePosGTIDEvent struct {
 	filePosFakeEvent
 	gtid filePosGTID
+}
+
+func (ev filePosGTIDEvent) Bytes() []byte {
+	panic("not implemented")
 }
 
 func newFilePosGTIDEvent(file string, pos int, timestamp uint32) filePosGTIDEvent {

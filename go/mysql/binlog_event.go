@@ -122,6 +122,9 @@ type BinlogEvent interface {
 
 	// IsPseudo is for custom implementations of GTID.
 	IsPseudo() bool
+
+	// Bytes returns the binary representation of the event
+	Bytes() []byte
 }
 
 // BinlogFormat contains relevant data from the FORMAT_DESCRIPTION_EVENT.

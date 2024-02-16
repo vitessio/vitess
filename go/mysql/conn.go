@@ -266,6 +266,36 @@ func (c *Conn) startWriterBuffering() {
 	c.bufferedWriter.Reset(c.Conn)
 }
 
+// endWriterBuffering must be called to terminate startWriteBuffering.
+func (c *Conn) endWriterBuffering() error {
+	// TODO: The main vitess repo has added locking around writer buffering
+	//       We shoud dig in deeper and port that over
+	//c.bufMu.Lock()
+	//defer c.bufMu.Unlock()
+
+	if c.bufferedWriter == nil {
+		return nil
+	}
+
+	defer func() {
+		c.bufferedWriter.Reset(nil)
+		writersPool.Put(c.bufferedWriter)
+		c.bufferedWriter = nil
+	}()
+
+	// TODO: Consider porting over the flush timer
+	// c.stopFlushTimer()
+	return c.bufferedWriter.Flush()
+}
+
+//// stopFlushTimer must be called while holding lock on bufMu.
+//func (c *Conn) stopFlushTimer() {
+//	if c.flushTimer != nil {
+//		c.flushTimer.Stop()
+//		c.flushTimer = nil
+//	}
+//}
+
 // flush flushes the written data to the socket.
 // This must be called to terminate startBuffering.
 func (c *Conn) flush() error {
@@ -1359,6 +1389,21 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			c.writeErrorPacketFromError(err)
 		}
 
+	case ComBinlogDumpGTID:
+		ok := c.handleComBinlogDumpGTID(handler, data)
+		if !ok {
+			// TODO: Why not return an error from handleComBinlogDumpGTID?
+			return fmt.Errorf("error handling ComBinlogDumpGTID packet: %v", data)
+		}
+		return nil
+
+	case ComRegisterReplica:
+		panic("ComRegisterReplica not implemented")
+		// TODO: Seems like we probably need this command implemented, too? But this hasn't triggered
+		//       in our quick Vitess <-> Vitess test.
+		//return c.handleComRegisterReplica(handler, data)
+
+
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
@@ -1369,6 +1414,30 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	}
 
 	return nil
+}
+
+func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {
+	c.recycleReadPacket()
+	kontinue = true
+
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.endWriterBuffering(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			kontinue = false
+		}
+	}()
+
+	logFile, logPos, position, err := c.parseComBinlogDumpGTID(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		return false
+	}
+	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
+		log.Error(err.Error())
+		return false
+	}
+	return kontinue
 }
 
 // writeNumRows writes the specified number of rows to the handler, the end result, and flushes

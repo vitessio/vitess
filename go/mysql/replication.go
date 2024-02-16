@@ -77,3 +77,30 @@ func (c *Conn) SemiSyncExtensionLoaded() bool {
 	}
 	return len(qr.Rows) >= 1
 }
+
+// WriteBinlogEvent writes a binlog event as part of a replication stream
+// https://dev.mysql.com/doc/internals/en/binlog-network-stream.html
+// https://dev.mysql.com/doc/internals/en/binlog-event.html
+func (c *Conn) WriteBinlogEvent(ev BinlogEvent, semiSyncEnabled bool) error {
+	extraBytes := 1 // OK packet
+	if semiSyncEnabled {
+		extraBytes += 2
+	}
+
+	// TODO: Vitess uses startEphemerlPacketWithHeader, but we don't have that method ported
+	//       over, so we use startEphemeralPacket instead with a 0 length header instead
+	//data, pos := c.startEphemeralPacketWithHeader(len(ev.Bytes()) + extraBytes)
+
+	data, pos := c.startEphemeralPacket(len(ev.Bytes()) + extraBytes), 0
+	pos = writeByte(data, pos, 0) // "OK" prefix
+	if semiSyncEnabled {
+		pos = writeByte(data, pos, 0xef) // semi sync indicator
+		pos = writeByte(data, pos, 0)    // no ack expected
+	}
+	_ = writeEOFString(data, pos, string(ev.Bytes()))
+	if err := c.writeEphemeralPacket(); err != nil {
+		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
+	}
+	return nil
+}
+

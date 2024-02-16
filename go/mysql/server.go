@@ -90,7 +90,7 @@ type Handler interface {
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
 
-	// InitDB is called once at the beginning to set db name,
+	// ComInitDB is called once at the beginning to set db name,
 	// and subsequently for every ComInitDB event.
 	ComInitDB(c *Conn, schemaName string) error
 
@@ -134,6 +134,12 @@ type Handler interface {
 	// and the Vitess layer needs to parse the query to identify the query parameters so that the correct response
 	// packets can be sent.
 	ParserOptionsForConnection(c *Conn) (sqlparser.ParserOptions, error)
+
+	// ComRegisterReplica is called when a connection receives a ComRegisterReplica request
+	ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error
+
+	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
+	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error
 }
 
 // ResultSpoolFn is the callback function used by ComQuery and related functions to handle rows returned by a query
