@@ -298,7 +298,7 @@ func performResharding(t *testing.T) {
 	err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, vSchema)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "create", "--source-shards=0", "--target-shards=-80,80-", "--workflow", "ks.reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "create", "--source-shards=0", "--target-shards=-80,80-", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
 
 	waitTimeout := 30 * time.Second
@@ -307,14 +307,14 @@ func performResharding(t *testing.T) {
 
 	waitForNoWorkflowLag(t, clusterInstance, "ks.reshardWorkflow")
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "--tablet-types=rdonly", "SwitchTraffic", "--workflow", "ks.reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "--tablet-types=rdonly", "SwitchTraffic", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "--tablet-types=replica", "SwitchTraffic", "--workflow", "ks.reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "--tablet-types=replica", "SwitchTraffic", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
 
 	// then serve primary from the split shards
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "--tablet-types=primary", "SwitchTraffic", "--workflow", "ks.reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "--tablet-types=primary", "SwitchTraffic", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
 
 	// remove the original tablets in the original shard
