@@ -298,7 +298,7 @@ func performResharding(t *testing.T) {
 	err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, vSchema)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "--source-shards=0", "--target-shards=-80,80-", "create", "--worflow", "ks.reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "create", "--source-shards=0", "--target-shards=-80,80-", "--worflow", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
 	waitTimeout := 30 * time.Second
