@@ -41,6 +41,8 @@ import (
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
+const DBName = "vttest"
+
 // Env contains all the env vars for a test against a mysql instance.
 type Env struct {
 	cluster *vttest.LocalCluster
@@ -65,7 +67,7 @@ type Env struct {
 // Init initializes an Env.
 func Init(ctx context.Context) (*Env, error) {
 	te := &Env{
-		KeyspaceName: "vttest",
+		KeyspaceName: DBName,
 		ShardName:    "0",
 		Cells:        []string{"cell1"},
 	}
@@ -89,7 +91,7 @@ func Init(ctx context.Context) (*Env, error) {
 					Shards: []*vttestpb.Shard{
 						{
 							Name:           "0",
-							DbNameOverride: "vttest",
+							DbNameOverride: DBName,
 						},
 					},
 				},
