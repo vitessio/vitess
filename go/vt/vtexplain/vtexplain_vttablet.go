@@ -834,7 +834,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 				}
 			}
 
-			if colType == querypb.Type_NULL_TYPE {
+			if colType == querypb.Type_NULL_TYPE && col != "column_name" {
 				log.Errorf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
 			}
 
@@ -846,7 +846,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			col := strings.ToLower(node.Name.String())
 			colType := colTypeMap[col]
 
-			if colType == querypb.Type_NULL_TYPE {
+			if colType == querypb.Type_NULL_TYPE && col != "column_name" {
 				log.Errorf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
 			}
 
