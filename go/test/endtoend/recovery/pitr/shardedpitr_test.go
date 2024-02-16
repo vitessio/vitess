@@ -307,14 +307,14 @@ func performResharding(t *testing.T) {
 
 	waitForNoWorkflowLag(t, clusterInstance, "ks.reshardWorkflow")
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "--tablet-types=rdonly", "SwitchTraffic", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "SwitchTraffic", "--tablet-types=rdonly", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "--tablet-types=replica", "SwitchTraffic", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "SwitchTraffic", "--tablet-types=replica", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
 
 	// then serve primary from the split shards
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "--tablet-types=primary", "SwitchTraffic", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "SwitchTraffic", "--tablet-types=primary", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
 
 	// remove the original tablets in the original shard
