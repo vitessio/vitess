@@ -283,10 +283,10 @@ func (ls *fkLoadSimulator) exec(query string) *sqltypes.Result {
 // constraints, where the parent table is lexicographically sorted before the child table and
 // thus may be dropped first, can be successfully cancelled.
 func testFKCancel(t *testing.T, vc *VitessCluster) {
-	var targetKeyspace = "fktarget"
-	var sourceKeyspace = "fksource"
-	var workflowName = "wf2"
-	var ksWorkflow = fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
+	targetKeyspace := "fktarget"
+	sourceKeyspace := "fksource"
+	workflowName := "wf2"
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, workflowName)
 	mt := newMoveTables(vc, &moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
