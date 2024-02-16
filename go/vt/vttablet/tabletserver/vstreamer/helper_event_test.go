@@ -379,8 +379,7 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			tc.collationID = collations.CollationBinaryID
 			tc.colType = "int(11)"
 		case "varchar", "varbinary", "char", "binary":
-			l, err := strconv.Atoi(col.Type.Length.Val)
-			require.NoError(ts.t, err)
+			l := *col.Type.Length
 			switch tc.dataTypeLowered {
 			case "binary", "varbinary":
 				tc.len = int64(l)
