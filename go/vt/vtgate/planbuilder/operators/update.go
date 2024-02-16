@@ -97,7 +97,15 @@ func (u *Update) TablesUsed() []string {
 func (u *Update) ShortDescription() string {
 	ovq := ""
 	if u.OwnedVindexQuery != nil {
-		ovq = " vindexQuery:%s" + sqlparser.String(u.OwnedVindexQuery)
+		var cols, orderby, limit string
+		cols = fmt.Sprintf("COLUMNS: [%s]", sqlparser.String(u.OwnedVindexQuery.SelectExprs))
+		if len(u.OwnedVindexQuery.OrderBy) > 0 {
+			orderby = fmt.Sprintf(" ORDERBY: [%s]", sqlparser.String(u.OwnedVindexQuery.OrderBy))
+		}
+		if u.OwnedVindexQuery.Limit != nil {
+			limit = fmt.Sprintf(" LIMIT: [%s]", sqlparser.String(u.OwnedVindexQuery.Limit))
+		}
+		ovq = fmt.Sprintf(" vindexQuery(%s%s%s)", cols, orderby, limit)
 	}
 	return fmt.Sprintf("%s.%s%s", u.Target.VTable.Keyspace.Name, u.Target.VTable.Name.String(), ovq)
 }
@@ -217,7 +225,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		Name:   name,
 	}
 
-	_, cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, targetTbl, tblInfo.GetAliasedTableExpr(), assignments)
+	_, cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, targetTbl, assignments)
 
 	updOp := &Update{
 		DMLCommon: &DMLCommon{
@@ -249,7 +257,6 @@ func getUpdateVindexInformation(
 	ctx *plancontext.PlanningContext,
 	updStmt *sqlparser.Update,
 	table TargetTable,
-	ate *sqlparser.AliasedTableExpr,
 	assignments []SetExpr,
 ) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, *sqlparser.Select, []string) {
 	if !table.VTable.Keyspace.Sharded {
@@ -257,7 +264,7 @@ func getUpdateVindexInformation(
 	}
 
 	primaryVindex, vindexAndPredicates := getVindexInformation(table.ID, table.VTable)
-	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex := buildChangedVindexesValues(ctx, updStmt, table.VTable, ate, primaryVindex.Columns, assignments)
+	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex := buildChangedVindexesValues(ctx, updStmt, table.VTable, primaryVindex.Columns, assignments)
 	return vindexAndPredicates, changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex
 }
 

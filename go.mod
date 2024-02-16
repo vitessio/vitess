@@ -50,7 +50,7 @@ require (
 	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
 	github.com/planetscale/vtprotobuf v0.5.0
 	github.com/prometheus/client_golang v1.18.0
-	github.com/prometheus/common v0.46.0 // indirect
+	github.com/prometheus/common v0.46.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/sjmudd/stopwatch v0.1.1
 	github.com/soheilhy/cmux v0.1.5

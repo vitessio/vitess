@@ -279,6 +279,7 @@ func TestOne(t *testing.T) {
 	lv := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, lv)
 	addPKs(t, lv, "user", []string{"user", "music"})
+	addPKs(t, lv, "main", []string{"unsharded"})
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:           lv,
 		TestBuilder: TestBuilder,

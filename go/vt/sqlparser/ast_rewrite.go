@@ -1817,20 +1817,12 @@ func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, r
 			return true
 		}
 	}
-	if !a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
-		parent.(*ColumnType).Length = newNode.(*Literal)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
-		parent.(*ColumnType).Scale = newNode.(*Literal)
-	}) {
-		return false
-	}
 	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -2082,20 +2074,12 @@ func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType,
 			return true
 		}
 	}
-	if !a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
-		parent.(*ConvertType).Length = newNode.(*Literal)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
-		parent.(*ConvertType).Scale = newNode.(*Literal)
-	}) {
-		return false
-	}
 	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}

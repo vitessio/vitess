@@ -71,11 +71,11 @@ const (
 	numInitialRows   = 10
 )
 
-type state struct {
+type TestState struct {
 	tables []string
 }
 
-var testState = &state{}
+var testState = &TestState{}
 
 var positions map[string]string
 var allEvents []*binlogdatapb.VEvent
