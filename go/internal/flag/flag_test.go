@@ -33,7 +33,7 @@ func TestPreventGlogVFlagFromClobberingVersionFlagShorthand(t *testing.T) {
 
 	goflag.CommandLine = goflag.NewFlagSet(os.Args[0], goflag.ExitOnError)
 
-	var v, vtest bool
+	var v bool
 
 	goflag.BoolVar(&v, "v", true, "")
 
@@ -44,7 +44,7 @@ func TestPreventGlogVFlagFromClobberingVersionFlagShorthand(t *testing.T) {
 	assert.NotNil(t, f)
 	assert.Equal(t, "", f.Shorthand)
 
-	testFlagSet.BoolVar(&vtest, "vtest", true, "")
+	// The function should not throw any error if -v flag is already defined
 	PreventGlogVFlagFromClobberingVersionFlagShorthand(testFlagSet)
 }
 
@@ -282,27 +282,16 @@ func TestArgs(t *testing.T) {
 }
 
 func TestIsZeroValue(t *testing.T) {
-	oldCommandLine := goflag.CommandLine
-
-	defer func() {
-		goflag.CommandLine = oldCommandLine
-	}()
-
 	var testFlag string
 
-	goflag.StringVar(&testFlag, "testflag", "default", "Description of testflag")
-	goflag.Parse()
+	testFlagSet := goflag.NewFlagSet("testFlagSet", goflag.ExitOnError)
+	testFlagSet.StringVar(&testFlag, "testflag", "default", "Description of testflag")
 
-	f := goflag.Lookup("testflag")
+	f := testFlagSet.Lookup("testflag")
 
-	// Test the isZeroValue function
 	result := isZeroValue(f, "")
-
 	assert.True(t, result)
 
-	// Test again with a non-zero value
 	result = isZeroValue(f, "anyValue")
-	if result {
-		t.Errorf("Expected false, got true. The value 'newvalue' should not be considered as zero value.")
-	}
+	assert.False(t, result)
 }

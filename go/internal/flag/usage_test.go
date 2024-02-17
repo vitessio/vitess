@@ -92,23 +92,10 @@ func TestSetUsageWithNilFlagFilterAndPreface(t *testing.T) {
 	assert.Contains(t, output, "test epilogue")
 }
 
-type testBool struct{}
-
-func (t testBool) IsBoolFlag() bool {
-	return true
-}
-
-func (t testBool) String() string {
-	return "true"
-}
-
-func (t testBool) Set(s string) error {
-	return nil
-}
-
 func TestSetUsageWithBoolFlag(t *testing.T) {
 	fs := goflag.NewFlagSet("test2", goflag.ExitOnError)
-	fs.Var(testBool{}, "t", "`t` flag")
+	var tBool bool
+	fs.BoolVar(&tBool, "t", true, "`t` flag")
 
 	opts := UsageOptions{
 		Preface: func(w io.Writer) {
