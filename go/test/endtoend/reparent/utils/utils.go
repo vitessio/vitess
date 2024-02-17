@@ -332,7 +332,7 @@ func Ers(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, to
 func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet, preventCrossCellPromotion bool) (string, error) {
 	var args []string
 	if timeout != "" {
-		args = append(args, "--action-timeout", timeout)
+		args = append(args, "--action_timeout", timeout)
 	}
 	args = append(args, "EmergencyReparentShard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
 	if tab != nil {
