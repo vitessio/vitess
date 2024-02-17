@@ -499,7 +499,7 @@ func insertRow(t *testing.T, id int, productName string, isSlow bool) {
 func createRestoreKeyspace(t *testing.T, timeToRecover, restoreKeyspaceName string) {
 	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace",
 		"--type=SNAPSHOT", "--base-keyspace="+keyspaceName,
-		"--snapshot-time", timeToRecover, restoreKeyspaceName)
+		"--snapshot-timestamp", timeToRecover, restoreKeyspaceName)
 	log.Info(output)
 	require.NoError(t, err)
 }
