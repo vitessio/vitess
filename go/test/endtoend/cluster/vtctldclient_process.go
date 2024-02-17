@@ -22,8 +22,11 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // VtctldClientProcess is a generic handle for a running vtctldclient command .
@@ -195,6 +198,21 @@ func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sid
 		log.Errorf("CreateKeyspace returned err: %s, output: %s", err, output)
 	}
 	return err
+}
+
+// GetTablet executes vtctldclient command to get a tablet, and parses the response.
+func (vtctldclient *VtctldClientProcess) GetTablet(alias string) (*topodatapb.Tablet, error) {
+	data, err := vtctldclient.ExecuteCommandWithOutput("GetTablet", alias)
+	if err != nil {
+		return nil, err
+	}
+
+	var tablet topodatapb.Tablet
+	err = json2.Unmarshal([]byte(data), &tablet)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to parse tablet output: %s", data)
+	}
+	return &tablet, nil
 }
 
 // OnlineDDLShowRecent responds with recent schema migration list
