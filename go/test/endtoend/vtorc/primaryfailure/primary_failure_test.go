@@ -113,7 +113,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	curPrimary := shard0.Vttablets[0]
 
 	// Promote the first tablet as the primary
-	err := clusterInfo.ClusterInstance.VtctlclientProcess.InitializeShard(keyspace.Name, shard0.Name, clusterInfo.ClusterInstance.Cell, curPrimary.TabletUID)
+	err := clusterInfo.ClusterInstance.VtctldClientProcess.InitializeShard(keyspace.Name, shard0.Name, clusterInfo.ClusterInstance.Cell, curPrimary.TabletUID)
 	require.NoError(t, err)
 
 	// find the replica and rdonly tablets
@@ -442,9 +442,9 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	utils.DisableGlobalRecoveries(t, clusterInfo.ClusterInstance.VTOrcProcesses[0])
 
 	// stop replication on the replica and rdonly.
-	err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replica.Alias)
+	err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", replica.Alias)
 	require.NoError(t, err)
-	err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rdonly.Alias)
+	err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", rdonly.Alias)
 	require.NoError(t, err)
 
 	// check that aheadRdonly is able to replicate. We also want to add some queries to aheadRdonly which will not be there in replica and rdonly
@@ -669,7 +669,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	utils.DisableGlobalRecoveries(t, clusterInfo.ClusterInstance.VTOrcProcesses[0])
 
 	// stop replication on the crossCellReplica.
-	err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", crossCellReplica.Alias)
+	err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", crossCellReplica.Alias)
 	require.NoError(t, err)
 
 	// check that rdonly and replica are able to replicate. We also want to add some queries to replica which will not be there in crossCellReplica
@@ -679,7 +679,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	utils.ResetPrimaryLogs(t, curPrimary)
 
 	// start replication back on the crossCellReplica.
-	err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", crossCellReplica.Alias)
+	err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommand("StartReplication", crossCellReplica.Alias)
 	require.NoError(t, err)
 
 	// enable recoveries back on vtorc so that it can repair
@@ -750,7 +750,7 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	utils.DisableGlobalRecoveries(t, clusterInfo.ClusterInstance.VTOrcProcesses[0])
 
 	// stop replication on the replica.
-	err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replica.Alias)
+	err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", replica.Alias)
 	require.NoError(t, err)
 
 	// check that rdonly and crossCellReplica are able to replicate. We also want to add some queries to crossCenterReplica which will not be there in replica
@@ -760,7 +760,7 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	utils.ResetPrimaryLogs(t, curPrimary)
 
 	// start replication back on the replica.
-	err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", replica.Alias)
+	err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommand("StartReplication", replica.Alias)
 	require.NoError(t, err)
 
 	// enable recoveries back on vtorc so that it can repair

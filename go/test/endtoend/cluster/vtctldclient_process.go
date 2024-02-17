@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // VtctldClientProcess is a generic handle for a running vtctldclient command .
@@ -95,6 +96,11 @@ func VtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory str
 		VtctldClientMajorVersion: version,
 	}
 	return vtctldclient
+}
+
+// ApplyRoutingRules applies the given routing rules.
+func (vtctldclient *VtctldClientProcess) ApplyRoutingRules(json string) error {
+	return vtctldclient.ExecuteCommand("ApplyRoutingRules", "--rules", json)
 }
 
 type ApplySchemaParams struct {
@@ -198,6 +204,21 @@ func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sid
 		log.Errorf("CreateKeyspace returned err: %s, output: %s", err, output)
 	}
 	return err
+}
+
+// GetShard executes the vtctldclient command to get a shard, and parses the response.
+func (vtctldclient *VtctldClientProcess) GetShard(keyspace string, shard string) (*vtctldatapb.Shard, error) {
+	data, err := vtctldclient.ExecuteCommandWithOutput("GetShard", fmt.Sprintf("%s/%s", keyspace, shard))
+	if err != nil {
+		return nil, err
+	}
+
+	var si vtctldatapb.Shard
+	err = json2.Unmarshal([]byte(data), &si)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to parse shard output: %s", data)
+	}
+	return &si, nil
 }
 
 // GetTablet executes vtctldclient command to get a tablet, and parses the response.
