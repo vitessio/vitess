@@ -376,7 +376,7 @@ func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		args = append(args, "--ping-tablets")
 	}
 	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
-	require.Empty(t, out)
+	require.Contains(t, out, "no issues found")
 	require.NoError(t, err)
 }
 
