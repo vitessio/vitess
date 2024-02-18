@@ -1250,11 +1250,18 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 	if err != nil {
 		return err
 	}
+	var mysqlbinlogErrFile *os.File
 	{
 		name, err := binaryPath(dir, "mysqlbinlog")
 		if err != nil {
 			return err
 		}
+		mysqlbinlogErrFile, err = os.CreateTemp("", "err-mysqlbinlog-")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(mysqlbinlogErrFile.Name())
+
 		args := []string{}
 		if gtids := req.BinlogRestorePosition; gtids != "" {
 			args = append(args,
@@ -1274,7 +1281,8 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		mysqlbinlogCmd = exec.Command(name, args...)
 		mysqlbinlogCmd.Dir = dir
 		mysqlbinlogCmd.Env = env
-		log.Infof("ApplyBinlogFile: running mysqlbinlog command: %#v", mysqlbinlogCmd)
+		mysqlbinlogCmd.Stderr = mysqlbinlogErrFile
+		log.Infof("ApplyBinlogFile: running mysqlbinlog command: %#v with errfile=%v", mysqlbinlogCmd, mysqlbinlogErrFile.Name())
 		pipe, err = mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
 		if err != nil {
 			return err
@@ -1344,6 +1352,12 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 	}
 	// Wait for both to complete:
 	if err := mysqlbinlogCmd.Wait(); err != nil {
+		if mysqlbinlogErrFile != nil {
+			errFileContent, _ := os.ReadFile(mysqlbinlogErrFile.Name())
+			if len(errFileContent) > 0 {
+				err = vterrors.Wrapf(err, "with error output: %s", string(errFileContent))
+			}
+		}
 		return vterrors.Wrapf(err, "mysqlbinlog command failed")
 	}
 	if err := mysqlCmd.Wait(); err != nil {
