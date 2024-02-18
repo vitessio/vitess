@@ -229,7 +229,11 @@ func TestDeleteKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	_ = clusterForKSTest.VtctldClientProcess.CreateKeyspace("test_delete_keyspace", sidecar.DefaultName)
 	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--", "--keyspace=test_delete_keyspace", "--shard=0", "zone1-0000000100", "primary")
+	_ = clusterForKSTest.InitTablet(&cluster.Vttablet{
+		Type:      "primary",
+		TabletUID: 100,
+		Cell:      "zone1",
+	}, "test_delete_keyspace", "0")
 
 	// Can't delete keyspace if there are shards present.
 	err := clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteKeyspace", "test_delete_keyspace")
@@ -247,7 +251,12 @@ func TestDeleteKeyspace(t *testing.T) {
 	// Start over and this time use recursive DeleteKeyspace to do everything.
 	_ = clusterForKSTest.VtctldClientProcess.CreateKeyspace("test_delete_keyspace", sidecar.DefaultName)
 	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--", "--port=1234", "--bind-address=127.0.0.1", "--keyspace=test_delete_keyspace", "--shard=0", "zone1-0000000100", "primary")
+	_ = clusterForKSTest.InitTablet(&cluster.Vttablet{
+		Type:      "primary",
+		TabletUID: 100,
+		Cell:      "zone1",
+		HTTPPort:  1234,
+	}, "test_delete_keyspace", "0")
 
 	// Create the serving/replication entries and check that they exist,
 	//  so we can later check they're deleted.

@@ -335,8 +335,11 @@ func (cluster *LocalProcessCluster) InitTablet(tablet *Vttablet, keyspace string
 		Shard:    shard,
 	}
 
-	if tablet.Type == "rdonly" {
+	switch tablet.Type {
+	case "rdonly":
 		tabletpb.Type = topodatapb.TabletType_RDONLY
+	case "primary":
+		tabletpb.Type = topodatapb.TabletType_PRIMARY
 	}
 
 	if tablet.MySQLPort > 0 {
