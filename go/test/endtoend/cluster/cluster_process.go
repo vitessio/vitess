@@ -319,6 +319,41 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	return nil
 }
 
+// InitTablet initializes a tablet record in the topo server. It does not start the tablet process.
+func (cluster *LocalProcessCluster) InitTablet(tablet *Vttablet, keyspace string, shard string) error {
+	tabletpb := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: tablet.Cell,
+			Uid:  uint32(tablet.TabletUID),
+		},
+		Hostname: cluster.Hostname,
+		Type:     topodatapb.TabletType_REPLICA,
+		PortMap: map[string]int32{
+			"vt": int32(tablet.HTTPPort),
+		},
+		Keyspace: keyspace,
+		Shard:    shard,
+	}
+
+	if tablet.Type == "rdonly" {
+		tabletpb.Type = topodatapb.TabletType_RDONLY
+	}
+
+	if tablet.MySQLPort > 0 {
+		tabletpb.PortMap["mysql"] = int32(tablet.MySQLPort)
+	}
+
+	if tablet.GrpcPort > 0 {
+		tabletpb.PortMap["grpc"] = int32(tablet.GrpcPort)
+	}
+
+	allowPrimaryOverride := false
+	createShardAndKeyspace := true
+	allowUpdate := true
+
+	return cluster.TopoProcess.Server.InitTablet(context.Background(), tabletpb, allowPrimaryOverride, createShardAndKeyspace, allowUpdate)
+}
+
 // StartKeyspace starts required number of shard and the corresponding tablets
 // keyspace : struct containing keyspace name, Sqlschema to apply, VSchema to apply
 // shardName : list of shard names
