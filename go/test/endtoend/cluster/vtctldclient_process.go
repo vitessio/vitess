@@ -206,6 +206,21 @@ func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sid
 	return err
 }
 
+// GetKeyspace executes the vtctldclient command to get a shard, and parses the response.
+func (vtctldclient *VtctldClientProcess) GetKeyspace(keyspace string) (*vtctldatapb.Keyspace, error) {
+	data, err := vtctldclient.ExecuteCommandWithOutput("GetKeyspace", keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	var ks vtctldatapb.Keyspace
+	err = json2.Unmarshal([]byte(data), &ks)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to parse keyspace output: %s", data)
+	}
+	return &ks, nil
+}
+
 // GetShard executes the vtctldclient command to get a shard, and parses the response.
 func (vtctldclient *VtctldClientProcess) GetShard(keyspace string, shard string) (*vtctldatapb.Shard, error) {
 	data, err := vtctldclient.ExecuteCommandWithOutput("GetShard", fmt.Sprintf("%s/%s", keyspace, shard))

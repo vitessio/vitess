@@ -152,26 +152,23 @@ func TestDurabilityPolicyField(t *testing.T) {
 	out, err = vtctldClientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)
 
-	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace", "--", "--durability-policy=semi_sync", "ks_durability")
+	out, err = clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", "--durability-policy=semi_sync", "ks_durability")
 	require.NoError(t, err, out)
 	checkDurabilityPolicy(t, "semi_sync")
 
-	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
+	out, err = clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)
 }
 
 func checkDurabilityPolicy(t *testing.T, durabilityPolicy string) {
-	var keyspace topodata.Keyspace
-	out, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetKeyspace", "ks_durability")
-	require.NoError(t, err, out)
-	err = json.Unmarshal([]byte(out), &keyspace)
+	ks, err := clusterForKSTest.VtctldClientProcess.GetKeyspace("ks_durability")
 	require.NoError(t, err)
-	require.Equal(t, keyspace.DurabilityPolicy, durabilityPolicy)
+	require.Equal(t, ks.Keyspace.DurabilityPolicy, durabilityPolicy)
 }
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
+	output, err := clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
 	require.Nil(t, err)
 	assert.Contains(t, strings.Split(output, "\n"), keyspaceUnshardedName)
 	assert.Contains(t, strings.Split(output, "\n"), keyspaceShardedName)
@@ -218,12 +215,7 @@ func TestShardNames(t *testing.T) {
 
 func TestGetKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspaceUnshardedName)
-	require.Nil(t, err)
-
-	var keyspace topodata.Keyspace
-
-	err = json.Unmarshal([]byte(output), &keyspace)
+	_, err := clusterForKSTest.VtctldClientProcess.GetKeyspace(keyspaceUnshardedName)
 	require.Nil(t, err)
 }
 
