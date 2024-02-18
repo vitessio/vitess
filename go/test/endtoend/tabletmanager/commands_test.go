@@ -188,23 +188,23 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expe
 func TestShardReplicationFix(t *testing.T) {
 	// make sure the replica is in the replication graph, 2 nodes: 1 primary, 1 replica
 	defer cluster.PanicHandler(t)
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	result, err := clusterInstance.TopoProcess.Server.GetShardReplication(context.Background(), cell, keyspaceName, shardName)
 	require.Nil(t, err, "error should be Nil")
-	assertNodeCount(t, result, int(3))
+	assert.Len(t, result.Nodes, 3)
 
 	// Manually add a bogus entry to the replication graph, and check it is removed by ShardReplicationFix
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, fmt.Sprintf("%s-9000", cell))
 	require.Nil(t, err, "error should be Nil")
 
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	result, err = clusterInstance.TopoProcess.Server.GetShardReplication(context.Background(), cell, keyspaceName, shardName)
 	require.Nil(t, err, "error should be Nil")
-	assertNodeCount(t, result, int(4))
+	assert.Len(t, result.Nodes, 4)
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationFix", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	result, err = clusterInstance.TopoProcess.Server.GetShardReplication(context.Background(), cell, keyspaceName, shardName)
 	require.Nil(t, err, "error should be Nil")
-	assertNodeCount(t, result, int(3))
+	assert.Len(t, result.Nodes, 3)
 }
 
 func TestGetSchema(t *testing.T) {
@@ -219,14 +219,4 @@ func TestGetSchema(t *testing.T) {
 	assert.Contains(t, []string{getSchemaT1Results8030, getSchemaT1Results80, getSchemaT1Results57}, t1Create.String())
 	v1Create := gjson.Get(res, "table_definitions.#(name==\"v1\").schema")
 	assert.Equal(t, getSchemaV1Results, v1Create.String())
-}
-
-func assertNodeCount(t *testing.T, result string, want int) {
-	resultMap := make(map[string]any)
-	err := json.Unmarshal([]byte(result), &resultMap)
-	require.Nil(t, err)
-
-	nodes := reflect.ValueOf(resultMap["nodes"])
-	got := nodes.Len()
-	assert.Equal(t, want, got)
 }

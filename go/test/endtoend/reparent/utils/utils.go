@@ -18,12 +18,10 @@ package utils
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -608,12 +606,12 @@ func CheckReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttab
 
 // CheckReparentFromOutside checks that cluster was reparented from outside
 func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, downPrimary bool, baseTime int64) {
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, KeyspaceShard)
+	result, err := clusterInstance.TopoProcess.Server.GetShardReplication(context.Background(), cell1, KeyspaceName, ShardName)
 	require.Nil(t, err, "error should be Nil")
 	if !downPrimary {
-		assertNodeCount(t, result, int(3))
+		assert.Len(t, result.Nodes, 3)
 	} else {
-		assertNodeCount(t, result, int(2))
+		assert.Len(t, result.Nodes, 2)
 	}
 
 	// make sure the primary status page says it's the primary
@@ -656,16 +654,6 @@ func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string)
 		isAtleast = true
 	}
 	return isAtleast
-}
-
-func assertNodeCount(t *testing.T, result string, want int) {
-	resultMap := make(map[string]any)
-	err := json.Unmarshal([]byte(result), &resultMap)
-	require.NoError(t, err)
-
-	nodes := reflect.ValueOf(resultMap["nodes"])
-	got := nodes.Len()
-	assert.Equal(t, want, got)
 }
 
 // CheckDBvar checks the db var

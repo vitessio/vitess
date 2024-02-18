@@ -17,6 +17,7 @@ limitations under the License.
 package sequence
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"flag"
@@ -261,8 +262,8 @@ func TestDeleteKeyspace(t *testing.T) {
 	// Create the serving/replication entries and check that they exist,
 	//  so we can later check they're deleted.
 	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", cell, "test_delete_keyspace/0")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspaces", "test_delete_keyspace", cell)
+	_, _ = clusterForKSTest.TopoProcess.Server.GetShardReplication(context.Background(), cell, "test_delete_keyspace", "0")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", cell, "test_delete_keyspace")
 
 	// Recursive DeleteKeyspace
 	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteKeyspace", "--recursive", "test_delete_keyspace")
@@ -274,7 +275,9 @@ func TestDeleteKeyspace(t *testing.T) {
 	require.Error(t, err)
 	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetTablet", "zone1-0000000100")
 	require.Error(t, err)
-	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", cell, "test_delete_keyspace/0")
+	_, err = clusterForKSTest.TopoProcess.Server.GetShardReplication(context.Background(), cell, "test_delete_keyspace", "0")
+	require.Error(t, err)
+	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", cell, "test_delete_keyspace")
 	require.Error(t, err)
 	ksMap, err := clusterForKSTest.VtctldClientProcess.GetSrvKeyspaces("test_delete_keyspace", cell)
 	require.NoError(t, err)
