@@ -510,7 +510,7 @@ func RestartTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, t
 	tab.MysqlctlProcess.InitMysql = false
 	err := tab.MysqlctlProcess.Start()
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitTablet(tab, tab.Cell, KeyspaceName, Hostname, ShardName)
+	err = clusterInstance.InitTablet(tab, KeyspaceName, ShardName)
 	require.NoError(t, err)
 }
 
@@ -519,7 +519,7 @@ func ResurrectTablet(ctx context.Context, t *testing.T, clusterInstance *cluster
 	tab.MysqlctlProcess.InitMysql = false
 	err := tab.MysqlctlProcess.Start()
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitTablet(tab, tab.Cell, KeyspaceName, Hostname, ShardName)
+	err = clusterInstance.InitTablet(tab, KeyspaceName, ShardName)
 	require.NoError(t, err)
 
 	// As there is already a primary the new replica will come directly in SERVING state
