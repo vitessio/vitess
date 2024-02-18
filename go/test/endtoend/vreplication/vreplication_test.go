@@ -1183,7 +1183,7 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 			insertMoreProductsForSourceThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We
 			// expect it to NOT get them in the first place, we expect the additional rows
-			// to **not appear** in the materialized view
+			// to **not appear** in the materialized view.
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
 				// Confirm that we updated the stats on the target tablets as expected.
