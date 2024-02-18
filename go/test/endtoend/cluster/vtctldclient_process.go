@@ -22,8 +22,11 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // VtctldClientProcess is a generic handle for a running vtctldclient command .
@@ -141,6 +144,19 @@ func (vtctldclient *VtctldClientProcess) ApplyVSchema(keyspace string, json stri
 		"--vschema", json,
 		keyspace,
 	)
+}
+
+// GetSrvKeyspaces returns a mapping of cell to srv keyspace for the given keyspace.
+func (vtctldclient *VtctldClientProcess) GetSrvKeyspaces(keyspace string, cells ...string) (ksMap map[string]*topodatapb.SrvKeyspace, err error) {
+	args := append([]string{"GetSrvKeyspaces", keyspace}, cells...)
+	out, err := vtctldclient.ExecuteCommandWithOutput(args...)
+	if err != nil {
+		return nil, err
+	}
+
+	ksMap = map[string]*topodatapb.SrvKeyspace{}
+	err = json2.Unmarshal([]byte(out), &ksMap)
+	return ksMap, err
 }
 
 // PlannedReparentShard executes vtctlclient command to make specified tablet the primary for the shard.
