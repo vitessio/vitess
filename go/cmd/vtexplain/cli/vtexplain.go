@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtexplain"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -182,7 +183,9 @@ func parseAndRun() error {
 	if err != nil {
 		return err
 	}
-	vte, err := vtexplain.Init(context.Background(), env, vschema, schema, ksShardMap, opts)
+	ctx := context.Background()
+	ts := memorytopo.NewServer(ctx, vtexplain.Cell)
+	vte, err := vtexplain.Init(ctx, env, ts, vschema, schema, ksShardMap, opts)
 	if err != nil {
 		return err
 	}

@@ -20,12 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -73,7 +75,8 @@ create table t2 (
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	vte, err := Init(ctx, vtenv.NewTestEnv(), testVSchema, testSchema, "", opts)
+	ts := memorytopo.NewServer(ctx, Cell)
+	vte, err := Init(ctx, vtenv.NewTestEnv(), ts, testVSchema, testSchema, "", opts)
 	require.NoError(t, err)
 	defer vte.Stop()
 
@@ -132,17 +135,22 @@ create table test_partitioned (
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ts := memorytopo.NewServer(ctx, Cell)
+	vte := initTest(ctx, ts, ModeMulti, defaultTestOpts(), &testopts{}, t)
 	defer vte.Stop()
 
 	tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts(), env.CollationEnv())
 	vte.setGlobalTabletEnv(tabletEnv)
 
 	tablet := vte.newTablet(ctx, env, defaultTestOpts(), &topodatapb.Tablet{
-		Keyspace: "test_keyspace",
+		Keyspace: "ks_sharded",
 		Shard:    "-80",
-		Alias:    &topodatapb.TabletAlias{},
-	})
+		Alias: &topodatapb.TabletAlias{
+			Cell: Cell,
+		},
+	}, ts)
+
+	time.Sleep(10 * time.Millisecond)
 	se := tablet.tsv.SchemaEngine()
 	tables := se.GetSchema()
 
