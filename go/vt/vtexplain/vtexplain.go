@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate"
 
 	"vitess.io/vitess/go/jsonutil"
@@ -54,7 +55,7 @@ func init() {
 }
 
 const (
-	vtexplainCell = "explainCell"
+	Cell = "explainCell"
 
 	// ModeMulti is the default mode with autocommit implemented at vtgate
 	ModeMulti = "multi"
@@ -181,7 +182,7 @@ type TabletActions struct {
 }
 
 // Init sets up the fake execution environment
-func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) (*VTExplain, error) {
+func Init(ctx context.Context, ts *topo.Server, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) (*VTExplain, error) {
 	// Verify options
 	if opts.ReplicationMode != "ROW" && opts.ReplicationMode != "STATEMENT" {
 		return nil, fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
@@ -201,7 +202,7 @@ func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts
 		Autocommit:   true,
 	}}
 	vte.setGlobalTabletEnv(tabletEnv)
-	err = vte.initVtgateExecutor(ctx, vSchemaStr, ksShardMapStr, opts)
+	err = vte.initVtgateExecutor(ctx, ts, vSchemaStr, ksShardMapStr, opts)
 	if err != nil {
 		return nil, fmt.Errorf("initVtgateExecutor: %v", err.Error())
 	}
