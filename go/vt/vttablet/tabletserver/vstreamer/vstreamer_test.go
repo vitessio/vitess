@@ -1034,8 +1034,6 @@ func TestREKeyRange(t *testing.T) {
 	defer func() {
 		ignoreKeyspaceShardInFieldAndRowEvents = true
 	}()
-	// Needed for this test to run if run standalone
-	engine.watcherOnce.Do(engine.setWatch)
 
 	execStatements(t, []string{
 		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
@@ -1127,7 +1125,6 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	engine.watcherOnce.Do(engine.setWatch)
 	engine.se.Reload(context.Background())
 
 	execStatements(t, []string{
@@ -1186,8 +1183,6 @@ func TestREMultiColumnVindex(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	engine.watcherOnce.Do(engine.setWatch)
-
 	execStatements(t, []string{
 		"create table t1(region int, id int, val varbinary(128), primary key(id))",
 	})
@@ -1998,66 +1993,69 @@ func TestNoFutureGTID(t *testing.T) {
 }
 
 func TestFilteredMultipleWhere(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
+		},
 	}
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, id3 int, val varbinary(128), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id1, val from t1 where in_keyrange('-80') and id2 = 200 and id3 = 1000 and val = 'newton'",
+				}},
+			},
+			customFieldEvents: true,
+		},
+	}
+	_ = fe
+	defer ts.Close() // Ensure clean-up
 
-	execStatements(t, []string{
-		"create table t1(id1 int, id2 int, id3 int, val varbinary(128), primary key(id1))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
+	require.NoError(t, ts.Init())
 
 	setVSchema(t, shardedVSchema)
 	defer env.SetVSchema("{}")
 
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select id1, val from t1 where in_keyrange('-80') and id2 = 200 and id3 = 1000 and val = 'newton'",
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 100, 1000, 'kepler')", noEvents},
+		{"insert into t1 values (2, 200, 1000, 'newton')", []TestRowEvent{
+			{event: fe.String()},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "newton"}}}}},
 		}},
-	}
-
-	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into t1 values (1, 100, 1000, 'kepler')",
-			"insert into t1 values (2, 200, 1000, 'newton')",
-			"insert into t1 values (3, 100, 2000, 'kepler')",
-			"insert into t1 values (128, 200, 1000, 'newton')",
-			"insert into t1 values (5, 200, 2000, 'kepler')",
-			"insert into t1 values (129, 200, 1000, 'kepler')",
-			"commit",
-		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"t1" fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:6 values:"2newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:3 lengths:6 values:"128newton"}}}`,
-			`gtid`,
-			`commit`,
+		{"insert into t1 values (3, 100, 2000, 'kepler')", noEvents},
+		{"insert into t1 values (128, 200, 1000, 'newton')", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"128", "newton"}}}}},
 		}},
+		{"insert into t1 values (5, 200, 2000, 'kepler')", noEvents},
+		{"insert into t1 values (129, 200, 1000, 'kepler')", noEvents},
+		{"commit", nil},
 	}}
-	runCases(t, filter, testcases, "", nil)
+	ts.Run()
 }
 
 // TestGeneratedColumns just confirms that generated columns are sent in a vstream as expected
 func TestGeneratedColumns(t *testing.T) {
-	execStatements(t, []string{
-		"create table t1(id int, val varbinary(6), val2 varbinary(6) as (concat(id, val)), val3 varbinary(6) as (concat(val, id)), id2 int, primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-	queries := []string{
-		"begin",
-		"insert into t1(id, val, id2) values (1, 'aaa', 10)",
-		"insert into t1(id, val, id2) values (2, 'bbb', 20)",
-		"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id int, val varbinary(6), val2 varbinary(6) as (concat(id, val)), val3 varbinary(6) as (concat(val, id)), id2 int, primary key(id))",
+		},
+		options: &TestSpecOptions{
+			customFieldEvents: true,
+		},
 	}
+	defer ts.Close()
+
+	require.NoError(t, ts.Init())
 
 	fe := &TestFieldEvent{
 		table: "t1",
@@ -2071,18 +2069,18 @@ func TestGeneratedColumns(t *testing.T) {
 		},
 	}
 
-	testcases := []testcase{{
-		input: queries,
-		output: [][]string{{
-			`begin`,
-			fe.String(),
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"1aaa1aaaaaa110"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 lengths:4 lengths:4 lengths:2 values:"2bbb2bbbbbb220"}}}`,
-			`gtid`,
-			`commit`,
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1(id, val, id2) values (1, 'aaa', 10)", []TestRowEvent{
+			{event: fe.String()},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "aaa", "1aaa", "aaa1", "10"}}}}},
 		}},
+		{"insert into t1(id, val, id2) values (2, 'bbb', 20)", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "bbb", "2bbb", "bbb2", "20"}}}}},
+		}},
+		{"commit", nil},
 	}}
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
 }
 
 // TestGeneratedInvisiblePrimaryKey validates that generated invisible primary keys are sent in row events.
@@ -2090,21 +2088,19 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 	if !env.HasCapability(testenv.ServerCapabilityGeneratedInvisiblePrimaryKey) {
 		t.Skip("skipping test as server does not support generated invisible primary keys")
 	}
-	execStatements(t, []string{
-		"SET @@session.sql_generate_invisible_primary_key=ON;",
-		"create table t1(val varbinary(6))",
-		"SET @@session.sql_generate_invisible_primary_key=OFF;",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-	queries := []string{
-		"begin",
-		"insert into t1 values ('aaa')",
-		"update t1 set val = 'bbb' where my_row_id = 1",
-		"commit",
+
+	execStatement(t, "SET @@session.sql_generate_invisible_primary_key=ON")
+	defer execStatement(t, "SET @@session.sql_generate_invisible_primary_key=OFF")
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(val varbinary(6))",
+		},
+		options: nil,
 	}
+	defer ts.Close()
+
+	require.NoError(t, ts.Init())
 
 	fe := &TestFieldEvent{
 		table: "t1",
@@ -2115,18 +2111,18 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 		},
 	}
 
-	testcases := []testcase{{
-		input: queries,
-		output: [][]string{{
-			`begin`,
-			fe.String(),
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:3 values:"1bbb"}}}`,
-			`gtid`,
-			`commit`,
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values ('aaa')", []TestRowEvent{
+			{event: fe.String()},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "aaa"}}}}},
 		}},
+		{"update t1 set val = 'bbb' where my_row_id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"1", "bbb"}}}}},
+		}},
+		{"commit", nil},
 	}}
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
 }
 
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {

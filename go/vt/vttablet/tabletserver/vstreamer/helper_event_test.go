@@ -143,8 +143,9 @@ type TestRowEvent struct {
 
 // TestSpecOptions has any non-standard test-specific options which can modify the event generation behaviour.
 type TestSpecOptions struct {
-	noblob bool
-	filter *binlogdata.Filter
+	noblob            bool
+	filter            *binlogdata.Filter
+	customFieldEvents bool
 }
 
 // TestSpec is defined one per unit test.
@@ -180,6 +181,7 @@ func (ts *TestSpec) Init() error {
 	if ts.inited {
 		return nil
 	}
+	engine.watcherOnce.Do(engine.setWatch)
 	defer func() { ts.inited = true }()
 	if ts.options == nil {
 		ts.options = &TestSpecOptions{}
@@ -352,7 +354,7 @@ func (ts *TestSpec) Run() {
 					if fe == nil {
 						require.FailNowf(ts.t, "field event for table %s not found", table)
 					}
-					if !ts.fieldEventsSent[table] {
+					if !ts.options.customFieldEvents && !ts.fieldEventsSent[table] {
 						output = append(output, fe.String())
 						ts.fieldEventsSent[table] = true
 					}
