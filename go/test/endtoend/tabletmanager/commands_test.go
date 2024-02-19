@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
@@ -32,6 +33,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
@@ -143,44 +146,39 @@ func TestHook(t *testing.T) {
 	// test a regular program works
 	defer cluster.PanicHandler(t)
 	runHookAndAssert(t, []string{
-		"ExecuteHook", "--", primaryTablet.Alias, "test.sh", "--flag1", "--param1=hello"}, "0", false, "")
+		"ExecuteHook", primaryTablet.Alias, "test.sh", "--", "--flag1", "--param1=hello"}, 0, false, "")
 
 	// test stderr output
 	runHookAndAssert(t, []string{
-		"ExecuteHook", "--", primaryTablet.Alias, "test.sh", "--to-stderr"}, "0", false, "ERR: --to-stderr\n")
+		"ExecuteHook", primaryTablet.Alias, "test.sh", "--", "--to-stderr"}, 0, false, "ERR: --to-stderr\n")
 
 	// test commands that fail
 	runHookAndAssert(t, []string{
-		"ExecuteHook", "--", primaryTablet.Alias, "test.sh", "--exit-error"}, "1", false, "ERROR: exit status 1\n")
+		"ExecuteHook", primaryTablet.Alias, "test.sh", "--", "--exit-error"}, 1, false, "ERROR: exit status 1\n")
 
 	// test hook that is not present
 	runHookAndAssert(t, []string{
-		"ExecuteHook", "--", primaryTablet.Alias, "not_here.sh", "--exit-error"}, "-1", false, "missing hook")
+		"ExecuteHook", primaryTablet.Alias, "not_here.sh", "--", "--exit-error"}, -1, false, "missing hook")
 
 	// test hook with invalid name
 
 	runHookAndAssert(t, []string{
-		"ExecuteHook", "--", primaryTablet.Alias, "/bin/ls"}, "-1", true, "hook name cannot have")
+		"ExecuteHook", primaryTablet.Alias, "/bin/ls"}, -1, true, "hook name cannot have")
 }
 
-func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expectedError bool, expectedStderr string) {
-
-	hr, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(params...)
+func runHookAndAssert(t *testing.T, params []string, expectedStatus int64, expectedError bool, expectedStderr string) {
+	hr, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(params...)
 	if expectedError {
 		assert.Error(t, err, "Expected error")
 	} else {
 		require.Nil(t, err)
 
-		resultMap := make(map[string]any)
-		err = json.Unmarshal([]byte(hr), &resultMap)
+		var resp vtctldatapb.ExecuteHookResponse
+		err = json2.Unmarshal([]byte(hr), &resp)
 		require.Nil(t, err)
 
-		exitStatus := reflect.ValueOf(resultMap["ExitStatus"]).Float()
-		status := fmt.Sprintf("%.0f", exitStatus)
-		assert.Equal(t, expectedStatus, status)
-
-		stderr := reflect.ValueOf(resultMap["Stderr"]).String()
-		assert.Contains(t, stderr, expectedStderr)
+		assert.Equal(t, expectedStatus, resp.HookResult.ExitStatus)
+		assert.Contains(t, resp.HookResult.Stderr, expectedStderr)
 	}
 
 }
