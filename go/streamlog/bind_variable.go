@@ -25,47 +25,27 @@ import (
 
 var ErrUnrecognizedBindVarType = errors.New("unrecognized bind variable type")
 
+// BindVariableValue is used to store querypb.BindVariable values.
+type BindVariableValue struct {
+	Type  string
+	Value []byte
+}
+
+// MarshalJSON renders the BindVariableValue as json and optionally redacts the value.
+func (bv BindVariableValue) MarshalJSON() ([]byte, error) {
+	out := map[string]interface{}{
+		"Type":  bv.Type,
+		"Value": bv.Value,
+	}
+	if GetRedactDebugUIQueries() {
+		out["Value"] = nil
+	}
+	return json.Marshal(out)
+}
+
 // BindVariable is a wrapper for marshal/unmarshaling querypb.BindVariable as json.
-type BindVariable querypb.BindVariable
-
-// NewBindVariable returns a wrapped *querypb.BindVariable object.
-func NewBindVariable(bv *querypb.BindVariable) BindVariable {
-	return BindVariable(*bv)
-}
-
-// NewBindVariables returns a string-map of wrapped *querypb.BindVariable objects.
-func NewBindVariables(bvs map[string]*querypb.BindVariable) map[string]BindVariable {
-	out := make(map[string]BindVariable, len(bvs))
-	for key, bindVar := range bvs {
-		out[key] = NewBindVariable(bindVar)
-	}
-	return out
-}
-
-// UnmarshalJSON unmarshals the custom BindVariable json-format.
-// See MarshalJSON for more information.
-func (bv *BindVariable) UnmarshalJSON(b []byte) error {
-	in := struct {
-		Type  string
-		Value []byte
-	}{}
-	if err := json.Unmarshal(b, &in); err != nil {
-		return err
-	}
-	// convert type string to querypb.Type and pass along Value.
-	typeVal, found := querypb.Type_value[in.Type]
-	if !found {
-		return ErrUnrecognizedBindVarType
-	}
-	bv.Type = querypb.Type(typeVal)
-	bv.Value = in.Value
-	return nil
-}
-
-// MarshalJSON renders the wrapped *querypb.BindVariable as json. It
-// ensures that the "Type" field is a string representation of the
-// variable type instead of an integer-based code that is less
-// portable and human-readable.
+// It ensures that the "Type" field is a string representation of the variable
+// type instead of an integer-based code that is less portable and human-readable.
 //
 // This allows a *querypb.BindVariable that would have marshaled
 // to this:
@@ -79,10 +59,40 @@ func (bv *BindVariable) UnmarshalJSON(b []byte) error {
 // or if query redaction is enabled, like this:
 //
 //	{"Type":"VARBINARY","Value":null}
+type BindVariable struct {
+	Type   string
+	Value  []byte
+	Values []*BindVariableValue
+}
+
+// NewBindVariable returns a wrapped *querypb.BindVariable object.
+func NewBindVariable(bv *querypb.BindVariable) BindVariable {
+	newBv := BindVariable{
+		Type:  bv.Type.String(),
+		Value: bv.Value,
+	}
+	for _, val := range bv.Values {
+		newBv.Values = append(newBv.Values, &BindVariableValue{
+			Type:  val.Type.String(),
+			Value: val.Value,
+		})
+	}
+	return newBv
+}
+
+// NewBindVariables returns a string-map of wrapped *querypb.BindVariable objects.
+func NewBindVariables(bvs map[string]*querypb.BindVariable) map[string]BindVariable {
+	out := make(map[string]BindVariable, len(bvs))
+	for key, bindVar := range bvs {
+		out[key] = NewBindVariable(bindVar)
+	}
+	return out
+}
+
+// MarshalJSON renders the BindVariable as json and optionally redacts the value.
 func (bv BindVariable) MarshalJSON() ([]byte, error) {
-	// convert querypb.Type integer to string and pass along Value.
 	out := map[string]interface{}{
-		"Type":  bv.Type.String(),
+		"Type":  bv.Type,
 		"Value": bv.Value,
 	}
 	if GetRedactDebugUIQueries() {
@@ -91,12 +101,40 @@ func (bv BindVariable) MarshalJSON() ([]byte, error) {
 	return json.Marshal(out)
 }
 
+// bindVariablesValuesToProto converts a slice of *BindVariableValue to *querypb.Value.
+func bindVariablesValuesToProto(vals []*BindVariableValue) ([]*querypb.Value, error) {
+	values := make([]*querypb.Value, len(vals))
+	for _, val := range vals {
+		varType, found := querypb.Type_value[val.Type]
+		if !found {
+			return nil, ErrUnrecognizedBindVarType
+		}
+		values = append(values, &querypb.Value{
+			Type:  querypb.Type(varType),
+			Value: val.Value,
+		})
+	}
+	return values, nil
+}
+
 // BindVariablesToProto converts a string-map of BindVariable to a string-map of *querypb.BindVariable.
-func BindVariablesToProto(bvs map[string]BindVariable) map[string]*querypb.BindVariable {
+func BindVariablesToProto(bvs map[string]BindVariable) (map[string]*querypb.BindVariable, error) {
 	out := make(map[string]*querypb.BindVariable, len(bvs))
 	for key, bindVar := range bvs {
-		bv := querypb.BindVariable(bindVar)
-		out[key] = &bv
+		// convert type string to querypb.Type.
+		varType, found := querypb.Type_value[bindVar.Type]
+		if !found {
+			return nil, ErrUnrecognizedBindVarType
+		}
+		values, err := bindVariablesValuesToProto(bindVar.Values)
+		if err != nil {
+			return nil, err
+		}
+		out[key] = &querypb.BindVariable{
+			Type:   querypb.Type(varType),
+			Value:  bindVar.Value,
+			Values: values,
+		}
 	}
-	return out
+	return out, nil
 }

@@ -33,8 +33,6 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/callinfo/fakecallinfo"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestLogStats(t *testing.T) {
@@ -221,9 +219,9 @@ func TestLogStatsFormatJSONV2(t *testing.T) {
 		assert.Nil(t, logStats.Logf(&buf, nil))
 		assert.Equal(t, `{"CallInfo":"","Username":"","ImmediateCaller":"","EffectiveCaller":"","RewrittenSQL":"sql with pii","TotalTime":1000001234,"ResponseSize":1,"Method":"test","PlanType":"","OriginalSQL":"sql","BindVariables":{"bytesVal":{"Type":"VARBINARY","Value":"FmtAtEq6S9Y="},"intVal":{"Type":"INT64","Value":"MQ=="}},"RowsAffected":0,"NumberOfQueries":1,"StartTime":"2017-01-01T01:02:03Z","EndTime":"2017-01-01T01:02:04.000001234Z","MysqlResponseTime":0,"WaitingForConnection":0,"QuerySources":2,"TransactionID":12345,"ReservedID":0,"CachedPlan":false}`, strings.TrimSpace(buf.String()))
 		assert.Nil(t, json.Unmarshal(buf.Bytes(), &cmpStats))
-		assert.Equal(t, querypb.Type_VARBINARY, cmpStats.BindVariables["bytesVal"].Type)
+		assert.Equal(t, "VARBINARY", cmpStats.BindVariables["bytesVal"].Type)
 		assert.Equal(t, []byte("\x16k@\xb4J\xbaK\xd6"), cmpStats.BindVariables["bytesVal"].Value)
-		assert.Equal(t, querypb.Type_INT64, cmpStats.BindVariables["intVal"].Type)
+		assert.Equal(t, "INT64", cmpStats.BindVariables["intVal"].Type)
 		assert.Equal(t, []byte("1"), cmpStats.BindVariables["intVal"].Value)
 	}
 	{

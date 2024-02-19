@@ -146,8 +146,12 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	formattedBindVars := "\"[REDACTED]\""
 	if !streamlog.GetRedactDebugUIQueries() && !streamlog.UseQueryLogJSONV2() {
 		_, fullBindParams := params["full"]
+		bindVarsProto, err := streamlog.BindVariablesToProto(stats.BindVariables)
+		if err != nil {
+			return err
+		}
 		formattedBindVars = sqltypes.FormatBindVariables(
-			streamlog.BindVariablesToProto(stats.BindVariables),
+			bindVarsProto,
 			fullBindParams,
 			streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON,
 		)

@@ -179,9 +179,9 @@ func TestLogStatsFormatJSONV2(t *testing.T) {
 		assert.Nil(t, logStats.Logf(&buf, nil))
 		assert.Equal(t, `{"RemoteAddr":"","Username":"","ImmediateCaller":"","EffectiveCaller":"","Method":"test","TabletType":"PRIMARY","StmtType":"select","SQL":"select * from testtable where name = :strVal and message = :bytesVal","BindVariables":{"bytesVal":{"Type":"VARBINARY","Value":"FmtAtEq6S9Y="},"strVal":{"Type":"VARCHAR","Value":"YWJj"}},"StartTime":"2017-01-01T01:02:03Z","EndTime":"2017-01-01T01:02:04.000001234Z","ShardQueries":0,"RowsAffected":0,"RowsReturned":0,"PlanTime":0,"ExecuteTime":0,"CommitTime":0,"TablesUsed":["ks1.tbl1","ks2.tbl2"],"SessionUUID":"suuid","CachedPlan":false,"ActiveKeyspace":"db"}`, strings.TrimSpace(buf.String()))
 		assert.Nil(t, json.Unmarshal(buf.Bytes(), &cmpStats))
-		assert.Equal(t, querypb.Type_VARBINARY, cmpStats.BindVariables["bytesVal"].Type)
+		assert.Equal(t, "VARBINARY", cmpStats.BindVariables["bytesVal"].Type)
 		assert.Equal(t, []byte("\x16k@\xb4J\xbaK\xd6"), cmpStats.BindVariables["bytesVal"].Value)
-		assert.Equal(t, querypb.Type_VARCHAR, cmpStats.BindVariables["strVal"].Type)
+		assert.Equal(t, "VARCHAR", cmpStats.BindVariables["strVal"].Type)
 		assert.Equal(t, []byte("abc"), cmpStats.BindVariables["strVal"].Value)
 	}
 	{
