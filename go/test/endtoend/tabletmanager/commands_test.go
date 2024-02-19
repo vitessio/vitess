@@ -148,7 +148,7 @@ func TestActionAndTimeout(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// try a frontend RefreshState that should timeout as the tablet is busy running the other one
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias, "--wait-timeout", "2s")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias, "--wait_timeout", "2s")
 	assert.Error(t, err, "timeout as tablet is in Sleep")
 }
 
