@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtcombo"
 	"vitess.io/vitess/go/vt/vtctld"
@@ -63,14 +64,17 @@ var (
 		"If true, vtcombo will use the flags defined in topo/server.go to open topo server")
 	plannerName = flags.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
 
-	tpb             vttestpb.VTTestTopology
-	ts              *topo.Server
-	resilientServer *srvtopo.ResilientServer
+	tpb               vttestpb.VTTestTopology
+	ts                *topo.Server
+	resilientServer   *srvtopo.ResilientServer
+	tabletTypesToWait []topodatapb.TabletType
 )
 
 func init() {
 	flags.Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
 	flags.Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
+
+	flags.Var((*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet_types_to_wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
 
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
@@ -273,18 +277,29 @@ func main() {
 
 	// vtgate configuration and init
 	resilientServer = srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
-	tabletTypesToWait := []topodatapb.TabletType{
-		topodatapb.TabletType_PRIMARY,
-		topodatapb.TabletType_REPLICA,
-		topodatapb.TabletType_RDONLY,
+
+	tabletTypes := make([]topodatapb.TabletType, 0, 1)
+	if len(tabletTypesToWait) != 0 {
+		for _, tt := range tabletTypesToWait {
+			if topoproto.IsServingType(tt) {
+				tabletTypes = append(tabletTypes, tt)
+			}
+		}
+
+		if len(tabletTypes) == 0 {
+			log.Exitf("tablet_types_to_wait should contain at least one serving tablet type")
+		}
+	} else {
+		tabletTypes = append(tabletTypes, topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY)
 	}
+
 	plannerVersion, _ := plancontext.PlannerNameToVersion(*plannerName)
 
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
 	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
 	// pass nil for healthcheck, it will get created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait, plannerVersion)
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypes, plannerVersion)
 
 	// vtctld configuration and init
 	err = vtctld.InitVtctld(ts)
