@@ -44,8 +44,8 @@ func TestPreventGlogVFlagFromClobberingVersionFlagShorthand(t *testing.T) {
 	assert.NotNil(t, f)
 	assert.Equal(t, "", f.Shorthand)
 
-	// The function should not throw any error if -v flag is already defined
-	PreventGlogVFlagFromClobberingVersionFlagShorthand(testFlagSet)
+	// The function should not panic if -v flag is already defined
+	assert.NotPanics(t, func() { PreventGlogVFlagFromClobberingVersionFlagShorthand(testFlagSet) })
 }
 
 func TestParse(t *testing.T) {
@@ -96,21 +96,21 @@ func TestIsFlagProvided(t *testing.T) {
 	pflag.CommandLine = pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
 
 	isProvided := IsFlagProvided("testFlag")
-	assert.False(t, isProvided)
+	assert.False(t, isProvided, "expected IsFlagProvided to return false as provided flag doesn't exist, got true")
 
 	var testFlag bool
 	pflag.BoolVar(&testFlag, "testFlag", false, "")
 
 	// Should return false as testFlag is not set
 	isProvided = IsFlagProvided("testFlag")
-	assert.False(t, isProvided)
+	assert.False(t, isProvided, "expected IsFlagProvided to return false as no flag was provided, got true")
 
 	pflag.Parse()
 	_ = pflag.Set("testFlag", "true")
 
 	// Should return true as testFlag is set
 	isProvided = IsFlagProvided("testFlag")
-	assert.True(t, isProvided)
+	assert.True(t, isProvided, "expected IsFlagProvided to return true after providing the flag, got false")
 }
 
 func TestFilterTestFlags(t *testing.T) {
@@ -188,11 +188,11 @@ func TestParsed(t *testing.T) {
 	goflag.CommandLine = goflag.NewFlagSet("testGoflagSet", goflag.ExitOnError)
 
 	b := Parsed()
-	assert.False(t, b)
+	assert.False(t, b, "expected Parsed to return false as command-line flags weren't parsed, got true")
 
 	pflag.Parse()
 	b = Parsed()
-	assert.True(t, b)
+	assert.True(t, b, "expected Parsed to return true as command-line flags were parsed, got false")
 }
 
 func TestLookup(t *testing.T) {
@@ -290,8 +290,8 @@ func TestIsZeroValue(t *testing.T) {
 	f := testFlagSet.Lookup("testflag")
 
 	result := isZeroValue(f, "")
-	assert.True(t, result)
+	assert.True(t, result, "expected isZeroValue to return true as empty string represents zero value for string flag, got false")
 
 	result = isZeroValue(f, "anyValue")
-	assert.False(t, result)
+	assert.False(t, result, "expected isZeroValue to return false as non-empty string doesn't represent zero value for string flag, got true")
 }
