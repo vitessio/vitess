@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -150,7 +151,13 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 			return err
 		}
 	}
-	return wr.PlannedReparentShard(ctx, keyspace, shard, newPrimaryAlias, avoidTabletAlias, *waitReplicasTimeout, *tolerableReplicationLag)
+
+	return wr.PlannedReparentShard(ctx, keyspace, shard, reparentutil.PlannedReparentOptions{
+		NewPrimaryAlias:     newPrimaryAlias,
+		AvoidPrimaryAlias:   avoidTabletAlias,
+		WaitReplicasTimeout: *waitReplicasTimeout,
+		TolerableReplLag:    *tolerableReplicationLag,
+	})
 }
 
 func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
@@ -190,8 +197,14 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 			return err
 		}
 	}
-	unreachableReplicas := topoproto.ParseTabletSet(*ignoreReplicasList)
-	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout, unreachableReplicas, *preventCrossCellPromotion, *waitForAllTablets)
+
+	return wr.EmergencyReparentShard(ctx, keyspace, shard, reparentutil.EmergencyReparentOptions{
+		NewPrimaryAlias:           tabletAlias,
+		WaitAllTablets:            *waitForAllTablets,
+		WaitReplicasTimeout:       *waitReplicasTimeout,
+		IgnoreReplicas:            topoproto.ParseTabletSet(*ignoreReplicasList),
+		PreventCrossCellPromotion: *preventCrossCellPromotion,
+	})
 }
 
 func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
