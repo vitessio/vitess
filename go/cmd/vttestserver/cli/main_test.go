@@ -186,6 +186,39 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestCreateDbaTCPUser tests that the vt_dba_tcp user is created and can connect through TCP/IP connection
+// when --initialize_with_vt_dba_tcp is set to true.
+func TestCreateDbaTCPUser(t *testing.T) {
+	conf := config
+	defer resetConfig(conf)
+
+	clusterInstance, err := startCluster("--initialize_with_vt_dba_tcp=true")
+	assert.NoError(t, err)
+	defer clusterInstance.TearDown()
+
+	defer func() {
+		if t.Failed() {
+			cluster.PrintFiles(t, clusterInstance.Env.Directory(), "init_db_with_vt_dba_tcp.sql")
+		}
+	}()
+
+	// Ensure that the vt_dba_tcp user was created and can connect through TCP/IP connection.
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host:  "127.0.0.1",
+		Uname: "vt_dba_tcp",
+		Port:  clusterInstance.Env.PortForProtocol("mysql", ""),
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	assert.NoError(t, err)
+	defer conn.Close()
+
+	// Ensure that the existing vt_dba user remains unaffected, meaning it cannot connect through TCP/IP connection.
+	vtParams.Uname = "vt_dba"
+	_, err = mysql.Connect(ctx, &vtParams)
+	assert.Error(t, err)
+}
+
 func TestCanGetKeyspaces(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
