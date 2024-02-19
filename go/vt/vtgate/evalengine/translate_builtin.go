@@ -627,6 +627,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		}
 		call = CallExpr{Arguments: []IR{call.Arguments[1], call.Arguments[0]}, Method: method}
 		return &builtinLocate{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "replace":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinReplace{CallExpr: call, collate: ast.cfg.Collation}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}

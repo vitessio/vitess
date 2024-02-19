@@ -3022,6 +3022,19 @@ func (asm *assembler) Locate2(collation colldata.Collation) {
 	}, "LOCATE VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
 }
 
+func (asm *assembler) Replace() {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		from := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		to := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.sp -= 2
+		str.bytes = replace(str.bytes, from.bytes, to.bytes)
+		return 1
+	}, "REPLACE VARCHAR(SP-3), VARCHAR(SP-2) VARCHAR(SP-1)")
+}
+
 func (asm *assembler) Strcmp(collation collations.TypedCollation) {
 	asm.adjustStack(-1)
 

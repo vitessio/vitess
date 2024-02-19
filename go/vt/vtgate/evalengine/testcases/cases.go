@@ -83,6 +83,7 @@ var Cases = []TestCase{
 	{Run: FnTrim},
 	{Run: FnSubstr},
 	{Run: FnLocate},
+	{Run: FnReplace},
 	{Run: FnConcat},
 	{Run: FnConcatWs},
 	{Run: FnChar},
@@ -1572,6 +1573,33 @@ func FnLocate(yield Query) {
 
 			for _, i := range radianInputs {
 				yield(fmt.Sprintf("LOCATE(%s, %s, %s)", substr, str, i), nil)
+			}
+		}
+	}
+}
+
+func FnReplace(yield Query) {
+	cases := []string{
+		`REPLACE('www.mysql.com', 'w', 'Ww')`,
+		// MySQL doesn't do collation matching for replace, only
+		// byte equivalence, but make sure to check.
+		`REPLACE('straße', 'ss', 'b')`,
+		`REPLACE('straße', 'ß', 'b')`,
+		// From / to strings are converted into the collation of
+		// the input string.
+		`REPLACE('fooÿbar', _latin1 0xFF, _latin1 0xFE)`,
+		// First occurence is replaced
+		`replace('fff', 'ff', 'gg')`,
+	}
+
+	for _, q := range cases {
+		yield(q, nil)
+	}
+
+	for _, substr := range inputStrings {
+		for _, str := range inputStrings {
+			for _, i := range inputStrings {
+				yield(fmt.Sprintf("REPLACE(%s, %s, %s)", substr, str, i), nil)
 			}
 		}
 	}
