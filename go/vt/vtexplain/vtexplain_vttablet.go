@@ -474,8 +474,8 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 			}
 			tEnv.addResult(query, tEnv.getResult(likeQuery))
 
-			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", mysqlctl.EncodeEntityName(sanitizedLikeTable))
-			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", mysqlctl.EncodeEntityName(sanitizedTable))
+			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqltypes.EncodeStringSQL(sanitizedLikeTable))
+			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqltypes.EncodeStringSQL(sanitizedTable))
 			if tEnv.getResult(likeQuery) == nil {
 				return nil, fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
@@ -516,7 +516,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 		tEnv.addResult("SELECT * FROM "+backtickedTable+" WHERE 1 != 1", &sqltypes.Result{
 			Fields: rowTypes,
 		})
-		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", mysqlctl.EncodeEntityName(sanitizedTable))
+		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqltypes.EncodeStringSQL(sanitizedTable))
 		tEnv.addResult(query, &sqltypes.Result{
 			Fields: colTypes,
 			Rows:   colValues,
