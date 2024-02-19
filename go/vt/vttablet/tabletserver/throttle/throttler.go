@@ -316,7 +316,9 @@ func (throttler *Throttler) normalizeThrottlerConfig(throttlerConfig *topodatapb
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
 	log.Infof("Throttler: WatchSrvKeyspaceCallback called with: %+v", srvks)
 	if err != nil {
-		log.Errorf("WatchSrvKeyspaceCallback error: %v", err)
+		if !topo.IsErrType(err, topo.Interrupted) && !errors.Is(err, context.Canceled) {
+			log.Errorf("WatchSrvKeyspaceCallback error: %v", err)
+		}
 		return false
 	}
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
@@ -472,7 +474,7 @@ func (throttler *Throttler) Open() error {
 			defer requestCancel()
 			throttlerConfig, err := throttler.readThrottlerConfig(requestCtx)
 			if err == nil {
-				log.Errorf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
+				log.Infof("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig)
 				// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
 				// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
 				// attempt to read the throttler config; but we just want to ensure they don't step on each other
