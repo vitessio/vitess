@@ -62,9 +62,8 @@ type (
 
 	builtinWeightString struct {
 		CallExpr
-		Cast   string
-		Len    int
-		HasLen bool
+		Cast string
+		Len  *int
 	}
 
 	builtinLeftRight struct {
@@ -151,7 +150,7 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
 	}
 
 	c.asm.Fn_LUCASE(call.upcase)
@@ -244,7 +243,7 @@ func (call *builtinASCII) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	c.asm.Fn_ASCII()
@@ -299,7 +298,7 @@ func (call *builtinOrd) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		col = str.Col.Collation
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, call.collate, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, call.collate, nil)
 	}
 
 	c.asm.Fn_ORD(col)
@@ -382,7 +381,7 @@ func (expr *builtinRepeat) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, nil)
 	}
 	_ = c.compileToInt64(repeat, 1)
 
@@ -434,7 +433,7 @@ func (c *builtinWeightString) eval(env *ExpressionEnv) (eval, error) {
 			typ = sqltypes.Blob
 		}
 
-		weights, _, err = evalWeightString(weights, evalToBinary(input), c.Len, 0)
+		weights, _, err = evalWeightString(weights, evalToBinary(input), *c.Len, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -469,7 +468,7 @@ func (c *builtinWeightString) eval(env *ExpressionEnv) (eval, error) {
 		} else {
 			var strLen int
 			if c.Cast == "char" {
-				strLen = c.Len
+				strLen = *c.Len
 			}
 			weights, _, err = evalWeightString(weights, val, strLen, 0)
 		}
@@ -499,14 +498,14 @@ func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(str)
 	if call.Cast == "binary" {
 		if !sqltypes.IsBinary(str.Type) {
-			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+			c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 		}
 		switch str.Type {
 		case sqltypes.Blob, sqltypes.Text, sqltypes.TypeJSON:
 			typ = sqltypes.Blob
 		}
 
-		c.asm.Fn_WEIGHT_STRING(typ, call.Len)
+		c.asm.Fn_WEIGHT_STRING(typ, *call.Len)
 		c.asm.jumpDestination(skip)
 		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
 	}
@@ -527,7 +526,7 @@ func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
 		}
 		var strLen int
 		if call.Cast == "char" {
-			strLen = call.Len
+			strLen = *call.Len
 		}
 		c.asm.Fn_WEIGHT_STRING(typ, strLen)
 
@@ -597,7 +596,7 @@ func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		col = str.Col
 	default:
-		c.asm.Convert_xc(2, sqltypes.VarChar, col.Collation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, col.Collation, nil)
 	}
 	_ = c.compileToInt64(l, 1)
 
@@ -890,7 +889,7 @@ func (call *builtinTrim) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		col = str.Col
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, col.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, col.Collation, nil)
 	}
 
 	if len(call.Arguments) == 1 {
@@ -1014,7 +1013,7 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 		col = str.Col
 	default:
 		tt = sqltypes.VarChar
-		c.asm.Convert_xc(2, tt, col.Collation, 0, false)
+		c.asm.Convert_xc(2, tt, col.Collation, nil)
 	}
 	_ = c.compileToInt64(p, 1)
 
