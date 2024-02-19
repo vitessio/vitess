@@ -61,7 +61,7 @@ const (
 )
 
 func getDefaultCollationID() int64 {
-	return 45
+	return 45 // utf8mb4_general_ci
 }
 
 var (
