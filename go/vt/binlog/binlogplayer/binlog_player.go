@@ -105,6 +105,8 @@ type Stats struct {
 
 	PartialQueryCount     *stats.CountersWithMultiLabels
 	PartialQueryCacheSize *stats.CountersWithMultiLabels
+
+	ThrottledCounts *stats.CountersWithMultiLabels // By throttler and component
 }
 
 // RecordHeartbeat updates the time the last heartbeat from vstreamer was seen
@@ -174,6 +176,7 @@ func NewStats() *Stats {
 	bps.TableCopyTimings = stats.NewTimings("", "", "Table")
 	bps.PartialQueryCacheSize = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	bps.PartialQueryCount = stats.NewCountersWithMultiLabels("", "", []string{"type"})
+	bps.ThrottledCounts = stats.NewCountersWithMultiLabels("", "", []string{"throttler", "component"})
 	return bps
 }
 
@@ -369,13 +372,14 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 			if backoff == throttler.NotThrottled {
 				break
 			}
+			blp.blplStats.ThrottledCounts.Add([]string{"trx", "binlogplayer"}, 1)
 			// We don't bother checking for context cancellation here because the
 			// sleep will block only up to 1 second. (Usually, backoff is 1s / rate
 			// e.g. a rate of 1000 TPS results into a backoff of 1 ms.)
 			time.Sleep(backoff)
 		}
 
-		// get the response
+		// Get the response.
 		response, err := stream.Recv()
 		// Check context before checking error, because canceled
 		// contexts could be wrapped as regular errors.

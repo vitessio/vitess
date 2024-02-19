@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/stats"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
@@ -132,7 +133,9 @@ func TestStatusHtml(t *testing.T) {
 func TestVReplicationStats(t *testing.T) {
 	blpStats := binlogplayer.NewStats()
 	defer blpStats.Stop()
-	testStats := &vrStats{}
+	testStats := &vrStats{
+		ThrottledCount: stats.NewCounter("", ""),
+	}
 	testStats.isOpen = true
 	testStats.controllers = map[int32]*controller{
 		1: {
@@ -183,6 +186,14 @@ func TestVReplicationStats(t *testing.T) {
 	blpStats.CopyRowCount.Add(200)
 	require.Equal(t, int64(100), testStats.status().Controllers[0].CopyLoopCount)
 	require.Equal(t, int64(200), testStats.status().Controllers[0].CopyRowCount)
+
+	testStats.ThrottledCount.Add(99)
+	require.Equal(t, int64(99), testStats.ThrottledCount.Get())
+
+	blpStats.ThrottledCounts.Add([]string{"tablet", "vcopier"}, 10)
+	blpStats.ThrottledCounts.Add([]string{"tablet", "vplayer"}, 80)
+	require.Equal(t, int64(10), testStats.controllers[1].blpStats.ThrottledCounts.Counts()["tablet.vcopier"])
+	require.Equal(t, int64(80), testStats.controllers[1].blpStats.ThrottledCounts.Counts()["tablet.vplayer"])
 
 	var tm int64 = 1234567890
 	blpStats.RecordHeartbeat(tm)
