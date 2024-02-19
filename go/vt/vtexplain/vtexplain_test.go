@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -48,7 +49,7 @@ type testopts struct {
 	shardmap map[string]map[string]*topo.ShardInfo
 }
 
-func initTest(mode string, opts *Options, topts *testopts, t *testing.T) *VTExplain {
+func initTest(ts *topo.Server, mode string, opts *Options, topts *testopts, t *testing.T) *VTExplain {
 	schema, err := os.ReadFile("testdata/test-schema.sql")
 	require.NoError(t, err)
 
@@ -64,7 +65,7 @@ func initTest(mode string, opts *Options, topts *testopts, t *testing.T) *VTExpl
 	}
 
 	opts.ExecutionMode = mode
-	vte, err := Init(string(vSchema), string(schema), shardmap, opts)
+	vte, err := Init(ts, string(vSchema), string(schema), shardmap, opts)
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 	return vte
 }
@@ -85,7 +86,9 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 
 func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testing.T) {
 	t.Run(testcase, func(t *testing.T) {
-		vte := initTest(mode, opts, topts, t)
+		ts := memorytopo.NewServer(Cell)
+		vte := initTest(ts, mode, opts, topts, t)
+		defer vte.Stop()
 
 		sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
 		sql, err := os.ReadFile(sqlFile)
@@ -171,7 +174,9 @@ func TestExplain(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ts := memorytopo.NewServer(Cell)
+	vte := initTest(ts, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	defer vte.Stop()
 
 	tests := []struct {
 		SQL string
@@ -208,7 +213,9 @@ func TestErrors(t *testing.T) {
 }
 
 func TestJSONOutput(t *testing.T) {
-	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ts := memorytopo.NewServer(Cell)
+	vte := initTest(ts, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	defer vte.Stop()
 	sql := "select 1 from user where id = 1"
 	explains, err := vte.Run(sql)
 	require.NoError(t, err, "vtexplain error")
@@ -353,7 +360,8 @@ func TestInit(t *testing.T) {
   }
 }`
 	schema := "create table table_missing_primary_vindex (id int primary key)"
-	_, err := Init(vschema, schema, "", defaultTestOpts())
+	ts := memorytopo.NewServer(Cell)
+	_, err := Init(ts, vschema, schema, "", defaultTestOpts())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing primary col vindex")
 }

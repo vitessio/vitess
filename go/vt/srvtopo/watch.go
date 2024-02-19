@@ -200,8 +200,11 @@ func (entry *watchEntry) onErrorLocked(err error, init bool) {
 			entry.value = nil
 		}
 	} else {
-		entry.lastError = fmt.Errorf("ResilientWatch stream failed for %v: %w", entry.key, err)
-		log.Errorf("%v", entry.lastError)
+		if !topo.IsErrType(err, topo.Interrupted) {
+			// No need to log if we're explicitly interrupted.
+			entry.lastError = fmt.Errorf("ResilientWatch stream failed for %v: %w", entry.key, err)
+			log.Errorf("%v", entry.lastError)
+		}
 
 		// Even though we didn't get a new value, update the lastValueTime
 		// here since the watch was successfully running before and we want
