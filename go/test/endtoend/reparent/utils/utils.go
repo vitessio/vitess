@@ -559,7 +559,7 @@ func GetNewPrimary(t *testing.T, clusterInstance *cluster.LocalProcessCluster) *
 // GetShardReplicationPositions gets the shards replication positions.
 // This should not generally be called directly, instead use the WaitForReplicationToCatchup method.
 func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, doPrint bool) []string {
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
 		"ShardReplicationPositions", fmt.Sprintf("%s/%s", keyspaceName, shardName))
 	require.NoError(t, err)
 	strArray := strings.Split(output, "\n")
