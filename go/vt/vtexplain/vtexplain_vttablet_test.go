@@ -19,10 +19,12 @@ package vtexplain
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -67,7 +69,8 @@ create table t2 (
 		NumShards:       2,
 	}
 
-	vte, err := Init(testVSchema, testSchema, "", opts)
+	ts := memorytopo.NewServer(Cell)
+	vte, err := Init(ts, testVSchema, testSchema, "", opts)
 	require.NoError(t, err)
 	defer vte.Stop()
 
@@ -123,16 +126,21 @@ create table test_partitioned (
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
-	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ts := memorytopo.NewServer(Cell)
+	vte := initTest(ts, ModeMulti, defaultTestOpts(), &testopts{}, t)
 
 	tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts())
 	vte.setGlobalTabletEnv(tabletEnv)
 
 	tablet := vte.newTablet(defaultTestOpts(), &topodatapb.Tablet{
-		Keyspace: "test_keyspace",
+		Keyspace: "ks_sharded",
 		Shard:    "-80",
-		Alias:    &topodatapb.TabletAlias{},
-	})
+		Alias: &topodatapb.TabletAlias{
+			Cell: Cell,
+		},
+	}, ts)
+
+	time.Sleep(10 * time.Millisecond)
 	se := tablet.tsv.SchemaEngine()
 	tables := se.GetSchema()
 
