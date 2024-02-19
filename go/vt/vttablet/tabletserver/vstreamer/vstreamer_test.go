@@ -995,46 +995,35 @@ func TestOther(t *testing.T) {
 	customRun("filePos")
 }
 
+// TestRegexp tests a filter which has a regexp suffix.
 func TestRegexp(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
-	execStatements(t, []string{
-		"create table yes_stream(id int, val varbinary(128), primary key(id))",
-		"create table no_stream(id int, val varbinary(128), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table yes_stream",
-		"drop table no_stream",
-	})
-	engine.se.Reload(context.Background())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match: "/yes.*/",
-		}},
-	}
-
-	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into yes_stream values (1, 'aaa')",
-			"insert into no_stream values (2, 'bbb')",
-			"update yes_stream set val='bbb' where id = 1",
-			"update no_stream set val='bbb' where id = 2",
-			"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table yes_stream(id int, val varbinary(128), primary key(id))",
+			"create table no_stream(id int, val varbinary(128), primary key(id))",
 		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"yes_stream" fields:{name:"id" type:INT32 table:"yes_stream" org_table:"yes_stream" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"yes_stream" org_table:"yes_stream" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"yes_stream" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"yes_stream" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:3 values:"1bbb"}}}`,
-			`gtid`,
-			`commit`,
-		}},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match: "/yes.*/",
+				}},
+			},
+		},
+	}
+	defer ts.Close()
+
+	require.NoError(t, ts.Init())
+
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into yes_stream values (1, 'aaa')", nil},
+		{"insert into no_stream values (2, 'bbb')", noEvents},
+		{"update yes_stream set val='bbb' where id = 1", nil},
+		{"update no_stream set val='bbb' where id = 2", noEvents},
+		{"commit", nil},
 	}}
-	runCases(t, filter, testcases, "", nil)
+	ts.Run()
 }
 
 func TestREKeyRange(t *testing.T) {
@@ -1250,43 +1239,44 @@ func TestREMultiColumnVindex(t *testing.T) {
 	cancel()
 }
 
+// TestSelectFilter tests a filter with an in_keyrange function, used in a sharded keyspace.
 func TestSelectFilter(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	engine.se.Reload(context.Background())
-
-	execStatements(t, []string{
-		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select id2, val from t1 where in_keyrange(id2, 'hash', '-80')",
-		}},
-	}
-
-	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into t1 values (4, 1, 'aaa')",
-			"insert into t1 values (2, 4, 'aaa')",
-			"commit",
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
 		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"t1" fields:{name:"id2" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`gtid`,
-			`commit`,
+	}
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id2, val from t1 where in_keyrange(id2, 'hash', '-80')",
+				}},
+			},
+		},
+	}
+	defer ts.Close()
+
+	require.NoError(t, ts.Init())
+
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (4, 1, 'aaa')", []TestRowEvent{
+			{event: fe.String()},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "aaa"}}}}},
 		}},
+		{"insert into t1 values (2, 4, 'aaa')", noEvents}, // not in keyrange
+		{"commit", nil},
 	}}
-	runCases(t, filter, testcases, "", nil)
+	ts.Run()
 }
 
 func TestDDLAddColumn(t *testing.T) {
