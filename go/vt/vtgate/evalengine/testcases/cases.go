@@ -63,6 +63,7 @@ var Cases = []TestCase{
 	{Run: TupleComparisons},
 	{Run: Comparisons},
 	{Run: InStatement},
+	{Run: FnField},
 	{Run: FnElt},
 	{Run: FnInsert},
 	{Run: FnLower},
@@ -1314,6 +1315,23 @@ var JSONExtract_Schema = []*querypb.Field{
 		Type:       sqltypes.TypeJSON,
 		ColumnType: "JSON",
 	},
+}
+
+func FnField(yield Query) {
+	// for _, s1 := range inputFieldStrings {
+	// 	for _, s2 := range inputFieldStrings {
+	// 		for _, s3 := range inputFieldStrings {
+	// 			yield(fmt.Sprintf("FIELD(%s, %s, %s)", s1, s2, s3), nil)
+	// 		}
+	// 	}
+	// }
+
+	mysqlDocSamples := []string{
+		"FIELD('😊😂🤢', '😂🤢', '😊😂', '😊😂🤢')",
+	}
+	for _, q := range mysqlDocSamples {
+		yield(q, nil)
+	}
 }
 
 func FnElt(yield Query) {

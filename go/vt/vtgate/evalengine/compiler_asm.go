@@ -30,6 +30,7 @@ import (
 	"math"
 	"math/bits"
 	"net/netip"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -2343,6 +2344,36 @@ func (asm *assembler) Fn_BIT_LENGTH() {
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(len(arg.bytes) * 8))
 		return 1
 	}, "FN BIT_LENGTH VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_FIELD(args int) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-args] == nil {
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= args - 1
+			return 1
+		}
+
+		tar := env.vm.stack[env.vm.sp-args].(*evalBytes)
+
+		for i := range args - 1 {
+			if env.vm.stack[env.vm.sp-args+i+1] == nil {
+				continue
+			}
+
+			str := env.vm.stack[env.vm.sp-args+i+1].(*evalBytes)
+			if reflect.DeepEqual(str, tar) {
+				env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
+				env.vm.sp -= args - 1
+				return 1
+			}
+		}
+
+		env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN FIELD VARCHAR(SP-%d)...VARCHAR(SP-1)", args)
 }
 
 func (asm *assembler) Fn_ELT(args int, tt sqltypes.Type, tc collations.TypedCollation) {

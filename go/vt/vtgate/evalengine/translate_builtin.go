@@ -265,6 +265,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &builtinPad{CallExpr: call, collate: ast.cfg.Collation, left: method == "lpad"}, nil
+	case "field":
+		if len(args) < 2 {
+			return nil, argError(method)
+		}
+		return &builtinField{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "elt":
 		if len(args) < 2 {
 			return nil, argError(method)

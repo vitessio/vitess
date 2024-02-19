@@ -19,6 +19,7 @@ package evalengine
 import (
 	"bytes"
 	"math"
+	"reflect"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -30,6 +31,11 @@ import (
 )
 
 type (
+	builtinField struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinElt struct {
 		CallExpr
 		collate collations.ID
@@ -117,6 +123,7 @@ type (
 	}
 )
 
+var _ IR = (*builtinField)(nil)
 var _ IR = (*builtinElt)(nil)
 var _ IR = (*builtinInsert)(nil)
 var _ IR = (*builtinChangeCase)(nil)
@@ -132,6 +139,87 @@ var _ IR = (*builtinWeightString)(nil)
 var _ IR = (*builtinLeftRight)(nil)
 var _ IR = (*builtinPad)(nil)
 var _ IR = (*builtinTrim)(nil)
+
+func (call *builtinField) eval(env *ExpressionEnv) (eval, error) {
+	args, err := call.args(env)
+	if err != nil {
+		return nil, err
+	}
+
+	strs := make([]*evalBytes, len(args))
+
+	tt := ""
+	for _, arg := range args {
+		switch arg.(type) {
+		case *evalBytes:
+			if tt == "n" {
+				tt = "f"
+			} else {
+				tt = "s"
+			}
+		case evalNumeric:
+			if tt == "s" {
+				tt = "f"
+			} else {
+				tt = "n"
+			}
+		}
+	}
+
+	// switch tt {
+	// case "s":
+	// 	for i, arg := range args {
+	// 		strs[i], err = evalToVarchar(arg, call.collate, false)
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 	}
+	// case "n":
+	// 	for i, arg := range args {
+	// 		strs[i], err = evalToIn(arg, call.collate, false)
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 	}
+	// }
+
+	for i, str := range strs[1:] {
+		if reflect.DeepEqual(str, strs[0]) {
+			return newEvalInt64(int64(i + 1)), nil
+		}
+	}
+
+	return newEvalInt64(0), nil
+}
+
+func (call *builtinField) compile(c *compiler) (ctype, error) {
+	strs := make([]ctype, len(call.Arguments))
+
+	for i, arg := range call.Arguments {
+		var err error
+		strs[i], err = arg.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+
+	for i, str := range strs {
+		offset := len(strs) - i
+		skip := c.compileNullCheckOffset(str, offset)
+
+		switch {
+		case str.isTextual():
+		default:
+			c.asm.Convert_xce(offset, sqltypes.VarChar, c.collation)
+		}
+
+		c.asm.jumpDestination(skip)
+	}
+
+	c.asm.Fn_FIELD(len(call.Arguments))
+
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+}
 
 func (call *builtinElt) eval(env *ExpressionEnv) (eval, error) {
 	var ca collationAggregation
