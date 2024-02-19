@@ -83,3 +83,39 @@ func TestOrderBy(t *testing.T) {
 		mcmp.AssertMatches("select id1, id2 from t4 order by reverse(id2) desc", `[[INT64(5) VARCHAR("test")] [INT64(8) VARCHAR("F")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(2) VARCHAR("Abc")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(1) VARCHAR("a")]]`)
 	}
 }
+
+func TestOrderByComplex(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into user(id, col, email) values(1,1,'a'), (2,2,'Abc'), (3,3,'b'), (4,4,'c'), (5,2,'test'), (6,1,'test'), (7,2,'a'), (8,3,'b'), (9,4,'c3'), (10,2,'d')")
+
+	queries := []string{
+		"select email, max(col) from user group by email order by col",
+		"select email, max(col) from user group by email order by col + 1",
+		"select email, max(col) from user group by email order by max(col)",
+		"select email, max(col) from user group by email order by max(col) + 1",
+		"select email, max(col) from user group by email order by min(col)",
+		"select email, max(col) as col from user group by email order by col",
+		"select email, max(col) as col from user group by email order by max(col)",
+		"select email, max(col) as col from user group by email order by col + 1",
+		"select email, max(col) as col from user group by email order by email + col",
+		"select email, max(col) as col from user group by email order by email + max(col)",
+		"select email, max(col) as col from user group by email order by email, col",
+		"select email, max(col) as xyz from user group by email order by email, xyz",
+		"select email, max(col) as xyz from user group by email order by email, max(xyz)",
+		"select email, max(col) as xyz from user group by email order by email, abs(xyz)",
+		"select email, max(col) as xyz from user group by email order by email, max(col)",
+		"select email, max(col) as xyz from user group by email order by email, abs(col)",
+		"select email, max(col) as xyz from user group by email order by xyz + email",
+		"select email, max(col) as xyz from user group by email order by abs(xyz) + email",
+		"select email, max(col) as xyz from user group by email order by abs(xyz)",
+		"select email, max(col) as xyz from user group by email order by abs(col)",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			mcmp.ExecAllowAndCompareError(query)
+		})
+	}
+}
