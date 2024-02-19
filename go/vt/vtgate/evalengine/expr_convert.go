@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -28,10 +29,9 @@ import (
 type (
 	ConvertExpr struct {
 		UnaryExpr
-		Type                string
-		Length, Scale       int
-		HasLength, HasScale bool
-		Collation           collations.ID
+		Type          string
+		Length, Scale *int
+		Collation     collations.ID
 	}
 
 	ConvertUsingExpr struct {
@@ -46,10 +46,10 @@ var _ Expr = (*ConvertUsingExpr)(nil)
 func (c *ConvertExpr) returnUnsupportedError() error {
 	var err error
 	switch {
-	case c.HasLength && c.HasScale:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s(%d,%d)", c.Type, c.Length, c.Scale)
-	case c.HasLength:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s(%d)", c.Type, c.Length)
+	case c.Length != nil && c.Scale != nil:
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s(%d,%d)", c.Type, *c.Length, *c.Scale)
+	case c.Length != nil:
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s(%d)", c.Type, *c.Length)
 	default:
 		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", c.Type)
 	}
@@ -59,11 +59,11 @@ func (c *ConvertExpr) returnUnsupportedError() error {
 func (c *ConvertExpr) decimalPrecision() (int32, int32) {
 	m := 10
 	d := 0
-	if c.HasLength {
-		m = c.Length
+	if c.Length != nil {
+		m = *c.Length
 	}
-	if c.HasScale {
-		d = c.Scale
+	if c.Scale != nil {
+		d = *c.Scale
 	}
 	if m == 0 && d == 0 {
 		m = 10
@@ -83,8 +83,8 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 	switch c.Type {
 	case "BINARY":
 		b := evalToBinary(e)
-		if c.HasLength {
-			b.truncateInPlace(c.Length)
+		if c.Length != nil {
+			b.truncateInPlace(*c.Length)
 		}
 		b.tt = int16(c.convertToBinaryType(e.SQLType()))
 		return b, nil
@@ -95,8 +95,8 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 			// return NULL on error
 			return nil, nil
 		}
-		if c.HasLength {
-			t.truncateInPlace(c.Length)
+		if c.Length != nil {
+			t.truncateInPlace(*c.Length)
 		}
 		t.tt = int16(c.convertToCharType(e.SQLType()))
 		return t, nil
@@ -107,8 +107,8 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		f, _ := evalToFloat(e)
 		return f, nil
 	case "FLOAT":
-		if c.HasLength {
-			switch p := c.Length; {
+		if c.Length != nil {
+			switch p := *c.Length; {
 			case p > 53:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for 'CONVERT'. Maximum is 53.", p)
 			}
@@ -121,11 +121,11 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 	case "JSON":
 		return evalToJSON(e)
 	case "DATETIME":
-		switch p := c.Length; {
-		case p > 6:
+		p := ptr.Unwrap(c.Length, 0)
+		if p > 6 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for 'CONVERT'. Maximum is 6.", p)
 		}
-		if dt := evalToDateTime(e, c.Length); dt != nil {
+		if dt := evalToDateTime(e, p); dt != nil {
 			return dt, nil
 		}
 		return nil, nil
@@ -135,11 +135,11 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return nil, nil
 	case "TIME":
-		switch p := c.Length; {
-		case p > 6:
+		p := ptr.Unwrap(c.Length, 0)
+		if p > 6 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for 'CONVERT'. Maximum is 6.", p)
 		}
-		if t := evalToTime(e, c.Length); t != nil {
+		if t := evalToTime(e, p); t != nil {
 			return t, nil
 		}
 		return nil, nil
@@ -184,8 +184,8 @@ func (c *ConvertExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqlty
 }
 
 func (c *ConvertExpr) convertToBinaryType(tt sqltypes.Type) sqltypes.Type {
-	if c.HasLength {
-		if c.Length > 64*1024 {
+	if c.Length != nil {
+		if *c.Length > 64*1024 {
 			return sqltypes.Blob
 		}
 	} else if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
@@ -195,9 +195,9 @@ func (c *ConvertExpr) convertToBinaryType(tt sqltypes.Type) sqltypes.Type {
 }
 
 func (c *ConvertExpr) convertToCharType(tt sqltypes.Type) sqltypes.Type {
-	if c.HasLength {
+	if c.Length != nil {
 		col := colldata.Lookup(c.Collation)
-		length := c.Length * col.Charset().MaxWidth()
+		length := *c.Length * col.Charset().MaxWidth()
 		if length > 64*1024 {
 			return sqltypes.Text
 		}
@@ -219,18 +219,18 @@ func (conv *ConvertExpr) compile(c *compiler) (ctype, error) {
 	switch conv.Type {
 	case "BINARY":
 		convt = ctype{Type: conv.convertToBinaryType(arg.Type), Col: collationBinary}
-		c.asm.Convert_xb(1, convt.Type, conv.Length, conv.HasLength)
+		c.asm.Convert_xb(1, convt.Type, conv.Length)
 
 	case "CHAR", "NCHAR":
 		convt = ctype{
 			Type: conv.convertToCharType(arg.Type),
 			Col:  collations.TypedCollation{Collation: conv.Collation},
 		}
-		c.asm.Convert_xc(1, convt.Type, convt.Col.Collation, conv.Length, conv.HasLength)
+		c.asm.Convert_xc(1, convt.Type, convt.Col.Collation, conv.Length)
 
 	case "DECIMAL":
-		convt = ctype{Type: sqltypes.Decimal, Col: collationNumeric}
 		m, d := conv.decimalPrecision()
+		convt = ctype{Type: sqltypes.Decimal, Col: collationNumeric}
 		c.asm.Convert_xd(1, m, d)
 
 	case "DOUBLE", "REAL":
@@ -256,18 +256,18 @@ func (conv *ConvertExpr) compile(c *compiler) (ctype, error) {
 		convt = c.compileToDate(arg, 1)
 
 	case "DATETIME":
-		switch p := conv.Length; {
-		case p > 6:
+		p := ptr.Unwrap(conv.Length, 0)
+		if p > 6 {
 			return ctype{}, c.unsupported(conv)
 		}
-		convt = c.compileToDateTime(arg, 1, conv.Length)
+		convt = c.compileToDateTime(arg, 1, p)
 
 	case "TIME":
-		switch p := conv.Length; {
-		case p > 6:
+		p := ptr.Unwrap(conv.Length, 0)
+		if p > 6 {
 			return ctype{}, c.unsupported(conv)
 		}
-		convt = c.compileToTime(arg, 1, conv.Length)
+		convt = c.compileToTime(arg, 1, p)
 
 	default:
 		return ctype{}, c.unsupported(conv)
@@ -306,7 +306,7 @@ func (conv *ConvertUsingExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck1(ct)
-	c.asm.Convert_xc(1, sqltypes.VarChar, conv.Collation, 0, false)
+	c.asm.Convert_xc(1, sqltypes.VarChar, conv.Collation, nil)
 	c.asm.jumpDestination(skip)
 
 	col := collations.TypedCollation{

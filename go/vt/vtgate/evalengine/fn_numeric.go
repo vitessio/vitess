@@ -1428,7 +1428,7 @@ func (expr *builtinCrc32) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.Binary, nil)
 	}
 
 	c.asm.Fn_CRC32()
@@ -1540,7 +1540,7 @@ func (expr *builtinConv) compile(c *compiler) (ctype, error) {
 	switch {
 	case n.isTextual():
 	default:
-		c.asm.Convert_xb(3, t, 0, false)
+		c.asm.Convert_xb(3, t, nil)
 	}
 
 	if n.isHexOrBitLiteral() {

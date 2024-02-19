@@ -171,7 +171,7 @@ func (c *builtinWeightString) format(w *formatter, depth int) {
 	c.Expr.format(w, depth)
 
 	if c.Cast != "" {
-		fmt.Fprintf(w, " AS %s(%d)", strings.ToUpper(c.Cast), c.Len)
+		fmt.Fprintf(w, " as %s(%d)", c.Cast, *c.Len)
 	}
 	w.WriteByte(')')
 }
@@ -195,10 +195,10 @@ func (c *ConvertExpr) format(buf *formatter, depth int) {
 	c.Inner.format(buf, depth)
 
 	switch {
-	case c.HasLength && c.HasScale:
-		fmt.Fprintf(buf, ", %s(%d,%d)", c.Type, c.Length, c.Scale)
-	case c.HasLength:
-		fmt.Fprintf(buf, ", %s(%d)", c.Type, c.Length)
+	case c.Length != nil && c.Scale != nil:
+		_, _ = fmt.Fprintf(buf, ", %s(%d,%d)", c.Type, *c.Length, *c.Scale)
+	case c.Length != nil:
+		_, _ = fmt.Fprintf(buf, ", %s(%d)", c.Type, *c.Length)
 	default:
 		fmt.Fprintf(buf, ", %s", c.Type)
 	}

@@ -964,8 +964,8 @@ func CloneRefOfColumnType(n *ColumnType) *ColumnType {
 	}
 	out := *n
 	out.Options = CloneRefOfColumnTypeOptions(n.Options)
-	out.Length = CloneRefOfLiteral(n.Length)
-	out.Scale = CloneRefOfLiteral(n.Scale)
+	out.Length = CloneRefOfInt(n.Length)
+	out.Scale = CloneRefOfInt(n.Scale)
 	out.Charset = CloneColumnCharset(n.Charset)
 	out.EnumValues = CloneSliceOfString(n.EnumValues)
 	return &out
@@ -1054,8 +1054,8 @@ func CloneRefOfConvertType(n *ConvertType) *ConvertType {
 		return nil
 	}
 	out := *n
-	out.Length = CloneRefOfLiteral(n.Length)
-	out.Scale = CloneRefOfLiteral(n.Scale)
+	out.Length = CloneRefOfInt(n.Length)
+	out.Scale = CloneRefOfInt(n.Scale)
 	out.Charset = CloneColumnCharset(n.Charset)
 	return &out
 }
@@ -4334,6 +4334,15 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	return &out
 }
 
+// CloneRefOfInt creates a deep clone of the input.
+func CloneRefOfInt(n *int) *int {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneColumnCharset creates a deep clone of the input.
 func CloneColumnCharset(n ColumnCharset) ColumnCharset {
 	return *CloneRefOfColumnCharset(&n)
@@ -4510,15 +4519,6 @@ func CloneComments(n Comments) Comments {
 	return res
 }
 
-// CloneRefOfInt creates a deep clone of the input.
-func CloneRefOfInt(n *int) *int {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
 // CloneSliceOfRefOfPartitionDefinition creates a deep clone of the input.
 func CloneSliceOfRefOfPartitionDefinition(n []*PartitionDefinition) []*PartitionDefinition {
 	if n == nil {
@@ -4666,7 +4666,7 @@ func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	}
 	out := *n
 	out.Column = CloneIdentifierCI(n.Column)
-	out.Length = CloneRefOfLiteral(n.Length)
+	out.Length = CloneRefOfInt(n.Length)
 	out.Expression = CloneExpr(n.Expression)
 	return &out
 }

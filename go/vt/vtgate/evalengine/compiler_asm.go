@@ -1025,15 +1025,16 @@ func (asm *assembler) Convert_ui(offset int) {
 	}, "CONV UINT64(SP-%d), INT64", offset)
 }
 
-func (asm *assembler) Convert_xb(offset int, t sqltypes.Type, length int, hasLength bool) {
-	if hasLength {
+func (asm *assembler) Convert_xb(offset int, t sqltypes.Type, length *int) {
+	if length != nil {
+		l := *length
 		asm.emit(func(env *ExpressionEnv) int {
 			arg := evalToBinary(env.vm.stack[env.vm.sp-offset])
-			arg.truncateInPlace(length)
+			arg.truncateInPlace(l)
 			arg.tt = int16(t)
 			env.vm.stack[env.vm.sp-offset] = arg
 			return 1
-		}, "CONV (SP-%d), VARBINARY[%d]", offset, length)
+		}, "CONV (SP-%d), VARBINARY[%d]", offset, l)
 	} else {
 		asm.emit(func(env *ExpressionEnv) int {
 			arg := evalToBinary(env.vm.stack[env.vm.sp-offset])
@@ -1044,19 +1045,20 @@ func (asm *assembler) Convert_xb(offset int, t sqltypes.Type, length int, hasLen
 	}
 }
 
-func (asm *assembler) Convert_xc(offset int, t sqltypes.Type, collation collations.ID, length int, hasLength bool) {
-	if hasLength {
+func (asm *assembler) Convert_xc(offset int, t sqltypes.Type, collation collations.ID, length *int) {
+	if length != nil {
+		l := *length
 		asm.emit(func(env *ExpressionEnv) int {
 			arg, err := evalToVarchar(env.vm.stack[env.vm.sp-offset], collation, true)
 			if err != nil {
 				env.vm.stack[env.vm.sp-offset] = nil
 			} else {
-				arg.truncateInPlace(length)
+				arg.truncateInPlace(l)
 				arg.tt = int16(t)
 				env.vm.stack[env.vm.sp-offset] = arg
 			}
 			return 1
-		}, "CONV (SP-%d), VARCHAR[%d]", offset, length)
+		}, "CONV (SP-%d), VARCHAR[%d]", offset, l)
 	} else {
 		asm.emit(func(env *ExpressionEnv) int {
 			arg, err := evalToVarchar(env.vm.stack[env.vm.sp-offset], collation, true)

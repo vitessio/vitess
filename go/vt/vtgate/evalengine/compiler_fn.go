@@ -76,7 +76,7 @@ func (c *compiler) compileFn_length(arg Expr, asm_ins func()) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, nil)
 	}
 
 	asm_ins()

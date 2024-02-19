@@ -628,7 +628,7 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck2(lt, rt)
 
 	if !lt.isTextual() {
-		c.asm.Convert_xc(2, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.cfg.Collation, nil)
 		lt.Col = collations.TypedCollation{
 			Collation:    c.cfg.Collation,
 			Coercibility: collations.CoerceCoercible,
@@ -637,7 +637,7 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	if !rt.isTextual() {
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, nil)
 		rt.Col = collations.TypedCollation{
 			Collation:    c.cfg.Collation,
 			Coercibility: collations.CoerceCoercible,
