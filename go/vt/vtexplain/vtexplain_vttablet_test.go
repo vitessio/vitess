@@ -74,6 +74,10 @@ create table t2 (
 	require.NoError(t, err)
 	defer vte.Stop()
 
+	// Check if the correct schema query is registered.
+	_, found := vte.globalTabletEnv.schemaQueries["SELECT COLUMN_NAME as column_name\n\t\tFROM INFORMATION_SCHEMA.COLUMNS\n\t\tWHERE TABLE_SCHEMA = database() AND TABLE_NAME = 't1'\n\t\tORDER BY ORDINAL_POSITION"]
+	assert.True(t, found)
+
 	sql := "SELECT * FROM t1 INNER JOIN t2 ON t1.id = t2.id"
 
 	_, err = vte.Run(sql)
