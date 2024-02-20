@@ -394,9 +394,6 @@ func TestMissingTables(t *testing.T) {
 
 // todo: migrate to new framework
 func TestVStreamCopySimpleFlow(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
 	execStatements(t, []string{
 		"create table t1(id11 int, id12 int, primary key(id11))",
 		"create table t2(id21 int, id22 int, primary key(id21))",
@@ -482,9 +479,6 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 
 // todo: migrate to new framework
 func TestVStreamCopyWithDifferentFilters(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
 	execStatements(t, []string{
 		"create table t1(id1 int, id2 int, id3 int, primary key(id1))",
 		"create table t2a(id1 int, id2 int, primary key(id1))",
@@ -776,10 +770,6 @@ func TestSavepointWithFilter(t *testing.T) {
 
 // todo: migrate to new framework
 func TestStatements(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	execStatements(t, []string{
 		"create table stream1(id int, val varbinary(128), primary key(id))",
 		"create table stream2(id int, val varbinary(128), primary key(id))",
@@ -878,10 +868,6 @@ func TestStatements(t *testing.T) {
 // mariadb. So, we just show that vreplication transmits "OTHER" events
 // if the binlog is affected by the statement.
 func TestOther(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	execStatements(t, []string{
 		"create table stream1(id int, val varbinary(128), primary key(id))",
 		"create table stream2(id int, val varbinary(128), primary key(id))",
@@ -977,9 +963,6 @@ func TestRegexp(t *testing.T) {
 
 // todo: migrate to new framework
 func TestREKeyRange(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
 	ignoreKeyspaceShardInFieldAndRowEvents = false
 	defer func() {
 		ignoreKeyspaceShardInFieldAndRowEvents = true
@@ -1073,9 +1056,6 @@ func TestREKeyRange(t *testing.T) {
 
 // todo: migrate to new framework
 func TestInKeyRangeMultiColumn(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
 	engine.se.Reload(context.Background())
 
 	execStatements(t, []string{
@@ -1132,9 +1112,6 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 
 // todo: migrate to new framework
 func TestREMultiColumnVindex(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
 	execStatements(t, []string{
 		"create table t1(region int, id int, val varbinary(128), primary key(id))",
 	})
@@ -1228,10 +1205,6 @@ func TestSelectFilter(t *testing.T) {
 
 // todo: migrate to new framework
 func TestDDLAddColumn(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	execStatements(t, []string{
 		"create table ddl_test1(id int, val1 varbinary(128), primary key(id))",
 		"create table ddl_test2(id int, val1 varbinary(128), primary key(id))",
@@ -1308,9 +1281,6 @@ func TestDDLAddColumn(t *testing.T) {
 
 // todo: migrate to new framework
 func TestDDLDropColumn(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
 	env.SchemaEngine.Reload(context.Background())
 	execStatement(t, "create table ddl_test2(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))")
 	defer execStatement(t, "drop table ddl_test2")
@@ -1344,10 +1314,6 @@ func TestDDLDropColumn(t *testing.T) {
 
 // todo: migrate to new framework
 func TestUnsentDDL(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	execStatement(t, "create table unsent(id int, val varbinary(128), primary key(id))")
 
 	testcases := []testcase{{
@@ -1371,10 +1337,6 @@ func TestUnsentDDL(t *testing.T) {
 
 // todo: migrate to new framework
 func TestBuffering(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	reset := AdjustPacketSize(10)
 	defer reset()
 
@@ -1471,9 +1433,6 @@ func TestBuffering(t *testing.T) {
 
 // todo: migrate to new framework
 func TestBestEffortNameInFieldEvent(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
 	filter := &binlogdatapb.Filter{
 		FieldEventMode: binlogdatapb.Filter_BEST_EFFORT,
 		Rules: []*binlogdatapb.Rule{{
@@ -1525,9 +1484,6 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 func TestInternalTables(t *testing.T) {
 	if version.GoOS == "darwin" {
 		t.Skip("internal online ddl table matching doesn't work on Mac because it is case insensitive")
-	}
-	if testing.Short() {
-		t.Skip()
 	}
 	filter := &binlogdatapb.Filter{
 		FieldEventMode: binlogdatapb.Filter_BEST_EFFORT,
@@ -1582,10 +1538,6 @@ func TestInternalTables(t *testing.T) {
 
 // todo: migrate to new framework
 func TestTypes(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	// Modeled after vttablet endtoend compatibility tests.
 	execStatements(t, []string{
 		"create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))",
@@ -1753,10 +1705,6 @@ func TestJSON(t *testing.T) {
 
 // todo: migrate to new framework
 func TestExternalTable(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	execStatements(t, []string{
 		"create database external",
 		"create table external.ext(id int, val varbinary(128), primary key(id))",
@@ -1784,10 +1732,6 @@ func TestExternalTable(t *testing.T) {
 
 // todo: migrate to new framework
 func TestJournal(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	execStatements(t, []string{
 		"create table if not exists _vt.resharding_journal(id int, db_name varchar(128), val blob, primary key(id))",
 	})
@@ -1825,10 +1769,6 @@ func TestJournal(t *testing.T) {
 // todo: migrate to new framework
 // TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	oldEngine := engine
@@ -1852,9 +1792,6 @@ func TestMinimalMode(t *testing.T) {
 
 // todo: migrate to new framework
 func TestStatementMode(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
 	execStatements(t, []string{
 		"create table stream1(id int, val varbinary(128), primary key(id))",
 		"create table stream2(id int, val varbinary(128), primary key(id))",
@@ -1891,10 +1828,6 @@ func TestStatementMode(t *testing.T) {
 
 // todo: migrate to new framework
 func TestHeartbeat(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1908,10 +1841,6 @@ func TestHeartbeat(t *testing.T) {
 
 // todo: migrate to new framework
 func TestNoFutureGTID(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	// Execute something to make sure we have ranges in GTIDs.
 	execStatements(t, []string{
 		"create table stream1(id int, val varbinary(128), primary key(id))",
