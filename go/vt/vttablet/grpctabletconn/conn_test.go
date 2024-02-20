@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/sqltypes"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 	"vitess.io/vitess/go/vt/servenv"
@@ -148,6 +149,31 @@ func (m *mockQueryClient) ReserveBeginStreamExecute(ctx context.Context, in *que
 	return nil, fmt.Errorf("A general error")
 }
 
+func (m *mockQueryClient) VStream(ctx context.Context, in *binlogdatapb.VStreamRequest, opts ...grpc.CallOption) (queryservicepb.Query_VStreamClient, error) {
+	m.lastCallCtx = ctx
+	return nil, fmt.Errorf("A general error")
+}
+
+func (m *mockQueryClient) VStreamRows(ctx context.Context, in *binlogdatapb.VStreamRowsRequest, opts ...grpc.CallOption) (queryservicepb.Query_VStreamRowsClient, error) {
+	m.lastCallCtx = ctx
+	return nil, fmt.Errorf("A general error")
+}
+
+func (m *mockQueryClient) VStreamTables(ctx context.Context, in *binlogdatapb.VStreamTablesRequest, opts ...grpc.CallOption) (queryservicepb.Query_VStreamTablesClient, error) {
+	m.lastCallCtx = ctx
+	return nil, fmt.Errorf("A general error")
+}
+
+func (m *mockQueryClient) VStreamResults(ctx context.Context, in *binlogdatapb.VStreamResultsRequest, opts ...grpc.CallOption) (queryservicepb.Query_VStreamResultsClient, error) {
+	m.lastCallCtx = ctx
+	return nil, fmt.Errorf("A general error")
+}
+
+func (m *mockQueryClient) GetSchema(ctx context.Context, in *querypb.GetSchemaRequest, opts ...grpc.CallOption) (queryservicepb.Query_GetSchemaClient, error) {
+	m.lastCallCtx = ctx
+	return nil, fmt.Errorf("A general error")
+}
+
 var _ queryservicepb.QueryClient = (*mockQueryClient)(nil)
 
 // TestGoRoutineLeakPrevention tests that after all the RPCs that stream queries, we end up closing the context that was passed to it, to prevent go routines from being leaked.
@@ -174,6 +200,31 @@ func TestGoRoutineLeakPrevention(t *testing.T) {
 	require.Error(t, mqc.lastCallCtx.Err())
 
 	_, _ = qc.ReserveStreamExecute(context.Background(), nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.Error(t, mqc.lastCallCtx.Err())
+
+	_ = qc.VStream(context.Background(), &binlogdatapb.VStreamRequest{}, func(events []*binlogdatapb.VEvent) error {
+		return nil
+	})
+	require.Error(t, mqc.lastCallCtx.Err())
+
+	_ = qc.VStreamRows(context.Background(), &binlogdatapb.VStreamRowsRequest{}, func(response *binlogdatapb.VStreamRowsResponse) error {
+		return nil
+	})
+	require.Error(t, mqc.lastCallCtx.Err())
+
+	_ = qc.VStreamResults(context.Background(), nil, "", func(response *binlogdatapb.VStreamResultsResponse) error {
+		return nil
+	})
+	require.Error(t, mqc.lastCallCtx.Err())
+
+	_ = qc.VStreamTables(context.Background(), &binlogdatapb.VStreamTablesRequest{}, func(response *binlogdatapb.VStreamTablesResponse) error {
+		return nil
+	})
+	require.Error(t, mqc.lastCallCtx.Err())
+
+	_ = qc.GetSchema(context.Background(), nil, querypb.SchemaTableType_TABLES, nil, func(schemaRes *querypb.GetSchemaResponse) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
