@@ -473,6 +473,10 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 
 // BeginStreamExecute starts a transaction and runs an Execute.
 func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.TransactionState, err error) {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -856,6 +860,9 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 
 // ReserveBeginStreamExecute implements the queryservice interface
 func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.ReservedTransactionState, err error) {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -967,6 +974,9 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 
 // ReserveStreamExecute implements the queryservice interface
 func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.ReservedState, err error) {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
