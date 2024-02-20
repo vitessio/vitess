@@ -19,7 +19,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/vt/logutil"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -275,4 +274,17 @@ func TestSSECustomerFileBase64Key(t *testing.T) {
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
 	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
 	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
+}
+
+func Test_getS3Transport(t *testing.T) {
+	transport := getS3Transport()
+
+	// checking some of the values are present in the returned transport and match the http.DefaultTransport.
+	assert.Equal(t, http.DefaultTransport.(*http.Transport).IdleConnTimeout, transport.IdleConnTimeout)
+	assert.Equal(t, http.DefaultTransport.(*http.Transport).MaxIdleConns, transport.MaxIdleConns)
+	assert.NotNil(t, transport.DialContext)
+	assert.NotNil(t, transport.Proxy)
+
+	newTransport := getS3Transport()
+	assert.Same(t, transport, newTransport) // new call should return the same transport
 }
