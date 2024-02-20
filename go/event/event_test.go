@@ -58,7 +58,7 @@ func TestStaticListener(t *testing.T) {
 	AddListener(func(testEvent1) { triggered = true })
 	AddListener(func(testEvent2) { t.Errorf("wrong listener type triggered") })
 	Dispatch(testEvent1{})
-	assert.True(t, triggered)
+	assert.True(t, triggered, "static listener failed to trigger")
 }
 
 func TestPointerListener(t *testing.T) {
@@ -68,7 +68,7 @@ func TestPointerListener(t *testing.T) {
 	AddListener(func(ev *testEvent2) { ev.triggered = true })
 	AddListener(func(testEvent2) { t.Errorf("non-pointer listener triggered on pointer type") })
 	Dispatch(testEvent)
-	assert.True(t, testEvent.triggered)
+	assert.True(t, testEvent.triggered, "pointer listener failed to trigger")
 }
 
 func TestInterfaceListener(t *testing.T) {
@@ -78,7 +78,7 @@ func TestInterfaceListener(t *testing.T) {
 	AddListener(func(testInterface1) { triggered = true })
 	AddListener(func(testInterface2) { t.Errorf("interface listener triggered on non-matching type") })
 	Dispatch(testEvent1{})
-	assert.True(t, triggered)
+	assert.True(t, triggered, "interface listener failed to trigger")
 }
 
 func TestEmptyInterfaceListener(t *testing.T) {
@@ -87,8 +87,7 @@ func TestEmptyInterfaceListener(t *testing.T) {
 	triggered := false
 	AddListener(func(any) { triggered = true })
 	Dispatch("this should match any")
-	assert.True(t, triggered)
-
+	assert.True(t, triggered, "empty listener failed to trigger")
 }
 
 func TestMultipleListeners(t *testing.T) {
@@ -176,7 +175,7 @@ func TestDispatchPointerToValueInterfaceListener(t *testing.T) {
 		triggered = true
 	})
 	Dispatch(&testEvent1{})
-	assert.True(t, triggered)
+	assert.True(t, triggered, "Dispatch by pointer failed to trigger interface listener")
 
 }
 
@@ -188,8 +187,7 @@ func TestDispatchValueToValueInterfaceListener(t *testing.T) {
 		triggered = true
 	})
 	Dispatch(testEvent1{})
-	assert.True(t, triggered)
-
+	assert.True(t, triggered, "Dispatch by value failed to trigger interface listener")
 }
 
 func TestDispatchPointerToPointerInterfaceListener(t *testing.T) {
@@ -198,7 +196,7 @@ func TestDispatchPointerToPointerInterfaceListener(t *testing.T) {
 	triggered := false
 	AddListener(func(testInterface2) { triggered = true })
 	Dispatch(&testEvent2{})
-	assert.True(t, triggered)
+	assert.True(t, triggered, "interface listener failed to trigger for pointer")
 
 }
 
