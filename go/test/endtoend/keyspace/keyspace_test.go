@@ -21,10 +21,10 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
-	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/key"
 
 	"github.com/stretchr/testify/assert"
@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
@@ -168,10 +169,15 @@ func checkDurabilityPolicy(t *testing.T, durabilityPolicy string) {
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	output, err := clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
+	data, err := clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
 	require.Nil(t, err)
-	assert.Contains(t, strings.Split(output, "\n"), keyspaceUnshardedName)
-	assert.Contains(t, strings.Split(output, "\n"), keyspaceShardedName)
+
+	var namesByCell = map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{}
+	err = json2.Unmarshal([]byte(data), &namesByCell)
+	require.NoError(t, err)
+
+	assert.Contains(t, namesByCell[cell].Names, keyspaceUnshardedName)
+	assert.Contains(t, namesByCell[cell].Names, keyspaceShardedName)
 }
 
 func TestGetSrvKeyspacePartitions(t *testing.T) {
