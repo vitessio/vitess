@@ -84,7 +84,7 @@ Flags:
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
       --grpc_server_keepalive_time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
       --grpc_server_keepalive_timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
-      --healthcheck-dial-concurrency int                                 Maxiumum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000. (default 1024)
+      --healthcheck-dial-concurrency int                                 Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000. (default 1024)
   -h, --help                                                             help for vtctld
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
