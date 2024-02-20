@@ -353,3 +353,28 @@ func setVSchema(t *testing.T, vschema string) {
 		t.Error("vschema did not get updated")
 	}
 }
+
+func insertLotsOfData(t *testing.T, numRows int) {
+	query1 := "insert into t1 (id11, id12) values"
+	s := ""
+	for i := 1; i <= numRows; i++ {
+		if s != "" {
+			s += ","
+		}
+		s += fmt.Sprintf("(%d,%d)", i, i*10)
+	}
+	query1 += s
+	query2 := "insert into t2 (id21, id22) values"
+	s = ""
+	for i := 1; i <= numRows; i++ {
+		if s != "" {
+			s += ","
+		}
+		s += fmt.Sprintf("(%d,%d)", i, i*20)
+	}
+	query2 += s
+	execStatements(t, []string{
+		query1,
+		query2,
+	})
+}

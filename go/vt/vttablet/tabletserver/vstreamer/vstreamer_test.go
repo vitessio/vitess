@@ -131,7 +131,6 @@ func TestNoBlob(t *testing.T) {
 	ts.Run()
 }
 
-// todo: migrate to new framework
 // TestSetAndEnum confirms that the events for set and enum columns are correct.
 func TestSetAndEnum(t *testing.T) {
 	ts := &TestSpec{
@@ -214,7 +213,8 @@ func TestColumnCollationHandling(t *testing.T) {
 	ts.Run()
 }
 
-// todo: migrate to new framework
+// This test is not ported to the new test framework because it only runs on old deprecated versions of MySQL.
+// We leave the test for older flavors until we EOL them.
 func TestSetStatement(t *testing.T) {
 	if !checkIfOptionIsSupported(t, "log_builtin_as_identified_by_password") {
 		// the combination of setting this option and support for "set password" only works on a few flavors
@@ -279,48 +279,31 @@ func TestSetForeignKeyCheck(t *testing.T) {
 
 }
 
-// todo: migrate to new framework
 func TestStmtComment(t *testing.T) {
-
-	if testing.Short() {
-		t.Skip()
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id int, val varbinary(128), primary key(id))",
+		},
+		options: nil,
 	}
+	defer ts.Close()
 
-	execStatements(t, []string{
-		"create table t1(id int, val varbinary(128), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-	queries := []string{
-		"begin",
-		"insert into t1 values (1, 'aaa')",
-		"commit",
-		"/*!40000 ALTER TABLE `t1` DISABLE KEYS */",
-	}
-	testcases := []testcase{{
-		input: queries,
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"t1" fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`gtid`,
-			`commit`,
-		}, {
-			`gtid`,
-			`other`,
-		}},
+	require.NoError(t, ts.Init())
+
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 'aaa')", nil},
+		{"commit", nil},
+		{"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", []TestRowEvent{
+			{restart: true, event: "gtid"},
+			{event: "other"}},
+		},
 	}}
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
 }
 
-// todo: migrate to new framework
 func TestVersion(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
 	oldEngine := engine
 	defer func() {
 		engine = oldEngine
@@ -367,36 +350,7 @@ func TestVersion(t *testing.T) {
 	assert.True(t, proto.Equal(mt, dbSchema.Tables[0]))
 }
 
-func insertLotsOfData(t *testing.T, numRows int) {
-	query1 := "insert into t1 (id11, id12) values"
-	s := ""
-	for i := 1; i <= numRows; i++ {
-		if s != "" {
-			s += ","
-		}
-		s += fmt.Sprintf("(%d,%d)", i, i*10)
-	}
-	query1 += s
-	query2 := "insert into t2 (id21, id22) values"
-	s = ""
-	for i := 1; i <= numRows; i++ {
-		if s != "" {
-			s += ","
-		}
-		s += fmt.Sprintf("(%d,%d)", i, i*20)
-	}
-	query2 += s
-	execStatements(t, []string{
-		query1,
-		query2,
-	})
-}
-
-// todo: migrate to new framework
 func TestMissingTables(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
 	engine.se.Reload(context.Background())
 	execStatements(t, []string{
 		"create table t1(id11 int, id12 int, primary key(id11))",
@@ -418,6 +372,23 @@ func TestMissingTables(t *testing.T) {
 			Filter: "select * from t1",
 		}},
 	}
+	ts := &TestSpec{t: t}
+	ts.Init()
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id11", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "id12", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+		},
+	}
+	bv := make(map[string]string)
+	bv["id11"] = "101"
+	bv["id12"] = "1010"
+	insert := "insert into t1 values (101, 1010)"
+	stmt, err := sqlparser.NewTestParser().Parse(insert)
+	require.NoError(t, err)
+	rowEvent := ts.getRowEvent("t1", bv, fe, stmt, 0)
 	testcases := []testcase{
 		{
 			input:  []string{},
@@ -426,7 +397,7 @@ func TestMissingTables(t *testing.T) {
 
 		{
 			input: []string{
-				"insert into t1 values (101, 1010)",
+				insert,
 			},
 			output: [][]string{
 				{
@@ -440,8 +411,9 @@ func TestMissingTables(t *testing.T) {
 				},
 				{
 					"begin",
-					"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
-					"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:3 lengths:4 values:\"1011010\"}}}",
+					fe.String(),
+					rowEvent,
+					// "type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:3 lengths:4 values:\"1011010\"}}}",
 					"gtid",
 					"commit",
 				},

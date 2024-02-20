@@ -48,8 +48,6 @@ const (
 	DefaultCollationName = "utf8mb4_0900_ai_ci"
 )
 
-var DefaultCollationID = collations.MySQL8().LookupByName(DefaultCollationName)
-
 var (
 	// These are exported to coordinate on version specific
 	// behavior between the testenv and its users.

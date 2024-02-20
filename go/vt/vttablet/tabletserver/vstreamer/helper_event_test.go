@@ -136,9 +136,10 @@ func (s *TestRowEventSpec) String() string {
 // TestRowEvent is used to define either the actual row event string (the `event` field) or a custom row event
 // (the `spec` field). Only one should be specified. If a test validates `flags` of a RowEvent then it is set.
 type TestRowEvent struct {
-	event string
-	spec  *TestRowEventSpec
-	flags int
+	event   string
+	spec    *TestRowEventSpec
+	flags   int
+	restart bool
 }
 
 // TestSpecOptions has any non-standard test-specific options which can modify the event generation behaviour.
@@ -312,6 +313,10 @@ func (ts *TestSpec) Run() {
 				(len(tq.events) > 0 &&
 					!(len(tq.events) == 1 && tq.events[0].event == "" && tq.events[0].spec == nil)):
 				for _, e := range tq.events {
+					if e.restart {
+						tc.output = append(tc.output, output)
+						output = []string{}
+					}
 					if e.event != "" {
 						output = append(output, e.event)
 					} else if e.spec != nil {
@@ -361,7 +366,6 @@ func (ts *TestSpec) Run() {
 					output = append(output, ts.getRowEvent(table, bv, fe, stmt, uint32(flags)))
 				}
 			}
-
 		}
 		tc.input = input
 		tc.output = append(tc.output, output)
