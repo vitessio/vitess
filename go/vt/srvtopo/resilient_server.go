@@ -79,16 +79,10 @@ type ResilientServer struct {
 
 // NewResilientServer creates a new ResilientServer
 // based on the provided topo.Server.
-func NewResilientServer(ctx context.Context, base *topo.Server, counterPrefix string) *ResilientServer {
+func NewResilientServer(ctx context.Context, base *topo.Server, counts *stats.CountersWithSingleLabel) *ResilientServer {
 	if srvTopoCacheRefresh > srvTopoCacheTTL {
 		log.Fatalf("srv_topo_cache_refresh must be less than or equal to srv_topo_cache_ttl")
 	}
-
-	metric := ""
-	if counterPrefix != "" {
-		metric = counterPrefix + "Counts"
-	}
-	counts := stats.NewCountersWithSingleLabel(metric, "Resilient srvtopo server operations", "type")
 
 	return &ResilientServer{
 		topoServer:            base,

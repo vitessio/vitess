@@ -28,7 +28,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -140,18 +139,13 @@ var _ queryservice.QueryService = (*TabletServer)(nil)
 var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(ctx context.Context, env *vtenv.Environment, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
-	return NewTabletServer(ctx, env, name, tabletenv.NewCurrentConfig(), topoServer, alias)
+func NewServer(ctx context.Context, env *vtenv.Environment, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias, srvTopoCounts *stats.CountersWithSingleLabel) *TabletServer {
+	return NewTabletServer(ctx, env, name, tabletenv.NewCurrentConfig(), topoServer, alias, srvTopoCounts)
 }
-
-var (
-	tsOnce        sync.Once
-	srvTopoServer srvtopo.Server
-)
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias) *TabletServer {
+func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias, srvTopoCounts *stats.CountersWithSingleLabel) *TabletServer {
 	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
 		exporter:               exporter,
@@ -166,7 +160,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	}
 	tsv.QueryTimeout.Store(config.Oltp.QueryTimeout.Nanoseconds())
 
-	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(ctx, topoServer, "TabletSrvTopo") })
+	srvTopoServer := srvtopo.NewResilientServer(ctx, topoServer, srvTopoCounts)
 
 	tabletTypeFunc := func() topodatapb.TabletType {
 		if tsv.sm == nil || tsv.sm.Target() == nil {

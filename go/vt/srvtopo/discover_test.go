@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -59,7 +60,8 @@ func TestFindAllTargets(t *testing.T) {
 		srvTopoCacheTTL = 1 * time.Second
 
 	}()
-	rs := NewResilientServer(ctx, ts, "TestFindAllKeyspaceShards")
+	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	rs := NewResilientServer(ctx, ts, counts)
 
 	// No keyspace / shards.
 	ks, err := FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})

@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -105,7 +106,7 @@ type explainTablet struct {
 
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
-func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opts *Options, t *topodatapb.Tablet, ts *topo.Server) *explainTablet {
+func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opts *Options, t *topodatapb.Tablet, ts *topo.Server, srvTopoCounts *stats.CountersWithSingleLabel) *explainTablet {
 	db := fakesqldb.New(nil)
 	sidecardb.AddSchemaInitQueries(db, true, env.Parser())
 
@@ -120,7 +121,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 	config.EnableTableGC = false
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(ctx, env, topoproto.TabletAliasString(t.Alias), config, ts, t.Alias)
+	tsv := tabletserver.NewTabletServer(ctx, env, topoproto.TabletAliasString(t.Alias), config, ts, t.Alias, srvTopoCounts)
 
 	tablet := explainTablet{db: db, tsv: tsv, vte: vte, collationEnv: env.CollationEnv()}
 	db.Handler = &tablet
