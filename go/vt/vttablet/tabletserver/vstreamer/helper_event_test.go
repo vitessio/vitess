@@ -45,6 +45,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -60,10 +61,6 @@ const (
 	lengthSet  = 56
 )
 
-func getDefaultCollationID() int64 {
-	return 45 // utf8mb4_general_ci
-}
-
 var (
 	// noEvents is used to indicate that a query is expected to generate no events.
 	noEvents = []TestRowEvent{}
@@ -72,10 +69,10 @@ var (
 // TestColumn has all the attributes of a column required for the test cases.
 type TestColumn struct {
 	name, dataType, colType string
-	len, collationID        int64
+	collationID             collations.ID
+	len                     int64
 	dataTypeLowered         string
 	skip                    bool
-	collationName           string
 }
 
 // TestFieldEvent has all the attributes of a table required for creating a field event.
@@ -374,7 +371,15 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 		sqlType := col.Type.SQLType()
 		tc.dataType = sqlType.String()
 		tc.dataTypeLowered = strings.ToLower(tc.dataType)
-		tc.collationName = col.Type.Options.Collate
+		collationName := col.Type.Options.Collate
+		if collationName == "" {
+			// Use the default, which is derived from the mysqld server default set
+			// in the testenv.
+			tc.collationID = testenv.DefaultCollationID
+		} else {
+			tc.collationID = collations.MySQL8().LookupByName(collationName)
+		}
+		collation := colldata.Lookup(tc.collationID)
 		switch tc.dataTypeLowered {
 		case "int32":
 			tc.len = lengthInt
@@ -387,31 +392,31 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 				tc.len = int64(l)
 				tc.collationID = collations.CollationBinaryID
 			default:
-				tc.len = 4 * int64(l)
-				tc.collationID = getDefaultCollationID()
-				if tc.dataTypeLowered == "char" && strings.Contains(tc.collationName, "bin") {
+				tc.len = int64(collation.Charset().MaxWidth()) * int64(l)
+				if tc.dataTypeLowered == "char" && collation.IsBinary() {
 					tc.dataType = "BINARY"
 				}
+				tc.collationID = testenv.DefaultCollationID
 			}
 			tc.colType = fmt.Sprintf("%s(%d)", tc.dataTypeLowered, l)
 		case "blob":
 			tc.len = lengthBlob
-			tc.collationID = collations.CollationBinaryID
 			tc.colType = "blob"
+			tc.collationID = collations.CollationBinaryID
 		case "text":
 			tc.len = lengthText
-			tc.collationID = getDefaultCollationID()
 			tc.colType = "text"
+			tc.collationID = testenv.DefaultCollationID
 		case "set":
 			tc.len = lengthSet
-			tc.collationID = getDefaultCollationID()
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
+			tc.collationID = testenv.DefaultCollationID
 		case "enum":
 			tc.len = int64(len(col.Type.EnumValues) + 1)
-			tc.collationID = getDefaultCollationID()
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
+			tc.collationID = testenv.DefaultCollationID
 		default:
 			log.Infof(fmt.Sprintf("unknown sqlTypeString %s", tc.dataTypeLowered))
 		}
