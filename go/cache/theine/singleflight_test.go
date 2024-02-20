@@ -54,8 +54,8 @@ func TestDoErr(t *testing.T) {
 		return "", someErr
 	})
 
-	assert.Equal(t, someErr, err)
-	assert.Equal(t, "", v)
+	assert.ErrorIs(t, err, someErr, "incorrect Do error")
+	assert.Empty(t, v, "unexpected non-empty value")
 }
 
 func TestDoDupSuppress(t *testing.T) {
@@ -98,7 +98,8 @@ func TestDoDupSuppress(t *testing.T) {
 	c <- "bar"
 	wg2.Wait()
 	got := atomic.LoadInt32(&calls)
-	assert.True(t, got > 0 && got < n)
+	assert.Greater(t, got, int32(0))
+	assert.Less(t, got, int32(n))
 }
 
 // Test singleflight behaves correctly after Do panic.
