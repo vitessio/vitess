@@ -25,17 +25,16 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/prometheus/common/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
@@ -132,6 +131,7 @@ func TestNoBlob(t *testing.T) {
 	ts.Run()
 }
 
+// todo: migrate to new framework
 // TestSetAndEnum confirms that the events for set and enum columns are correct.
 func TestSetAndEnum(t *testing.T) {
 	ts := &TestSpec{
@@ -214,6 +214,7 @@ func TestColumnCollationHandling(t *testing.T) {
 	ts.Run()
 }
 
+// todo: migrate to new framework
 func TestSetStatement(t *testing.T) {
 	if !checkIfOptionIsSupported(t, "log_builtin_as_identified_by_password") {
 		// the combination of setting this option and support for "set password" only works on a few flavors
@@ -234,7 +235,7 @@ func TestSetStatement(t *testing.T) {
 		"insert into t1 values (1, 'aaa')",
 		"commit",
 		"set global log_builtin_as_identified_by_password=1",
-		"SET PASSWORD FOR 'vt_appdebug'@'localhost'='*AA17DA66C7C714557F5485E84BCAFF2C209F2F53'", //select password('vtappdebug_password');
+		"SET PASSWORD FOR 'vt_appdebug'@'localhost'='*AA17DA66C7C714557F5485E84BCAFF2C209F2F53'", // select password('vtappdebug_password');
 	}
 	testcases := []testcase{{
 		input: queries,
@@ -278,6 +279,7 @@ func TestSetForeignKeyCheck(t *testing.T) {
 
 }
 
+// todo: migrate to new framework
 func TestStmtComment(t *testing.T) {
 
 	if testing.Short() {
@@ -313,6 +315,7 @@ func TestStmtComment(t *testing.T) {
 	runCases(t, nil, testcases, "current", nil)
 }
 
+// todo: migrate to new framework
 func TestVersion(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -389,6 +392,7 @@ func insertLotsOfData(t *testing.T, numRows int) {
 	})
 }
 
+// todo: migrate to new framework
 func TestMissingTables(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -447,6 +451,7 @@ func TestMissingTables(t *testing.T) {
 	runCases(t, filter, testcases, startPos, nil)
 }
 
+// todo: migrate to new framework
 func TestVStreamCopySimpleFlow(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -534,6 +539,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	log.Infof("Pos at end of test: %s", primaryPosition(t))
 }
 
+// todo: migrate to new framework
 func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -827,6 +833,7 @@ func TestSavepointWithFilter(t *testing.T) {
 	ts.Run()
 }
 
+// todo: migrate to new framework
 func TestStatements(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -924,6 +931,7 @@ func TestStatements(t *testing.T) {
 	runCases(t, nil, testcases, "current", nil)
 }
 
+// todo: migrate to new framework
 // TestOther tests "other" and "priv" statements. These statements can
 // produce very different events depending on the version of mysql or
 // mariadb. So, we just show that vreplication transmits "OTHER" events
@@ -1026,6 +1034,7 @@ func TestRegexp(t *testing.T) {
 	ts.Run()
 }
 
+// todo: migrate to new framework
 func TestREKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1121,6 +1130,7 @@ func TestREKeyRange(t *testing.T) {
 	cancel()
 }
 
+// todo: migrate to new framework
 func TestInKeyRangeMultiColumn(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1179,6 +1189,7 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 	cancel()
 }
 
+// todo: migrate to new framework
 func TestREMultiColumnVindex(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1274,6 +1285,7 @@ func TestSelectFilter(t *testing.T) {
 	ts.Run()
 }
 
+// todo: migrate to new framework
 func TestDDLAddColumn(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1354,6 +1366,7 @@ func TestDDLAddColumn(t *testing.T) {
 	}})
 }
 
+// todo: migrate to new framework
 func TestDDLDropColumn(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1389,6 +1402,7 @@ func TestDDLDropColumn(t *testing.T) {
 	}
 }
 
+// todo: migrate to new framework
 func TestUnsentDDL(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1415,6 +1429,7 @@ func TestUnsentDDL(t *testing.T) {
 	runCases(t, filter, testcases, "", nil)
 }
 
+// todo: migrate to new framework
 func TestBuffering(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1520,6 +1535,7 @@ func TestBuffering(t *testing.T) {
 // collation information, however, in the binlog_row_metadata in 8.0 but
 // not in 5.7. So in 5.7 our best effort uses varchar with its default
 // collation for text fields.
+// todo: migrate to new framework
 func TestBestEffortNameInFieldEvent(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1574,6 +1590,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 	runCases(t, filter, testcases, position, nil)
 }
 
+// todo: migrate to new framework
 // test that vstreamer ignores tables created by OnlineDDL
 func TestInternalTables(t *testing.T) {
 	if version.GoOS == "darwin" {
@@ -1633,6 +1650,7 @@ func TestInternalTables(t *testing.T) {
 	runCases(t, filter, testcases, position, nil)
 }
 
+// todo: migrate to new framework
 func TestTypes(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1760,6 +1778,7 @@ func TestTypes(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
+// todo: migrate to new framework
 func TestJSON(t *testing.T) {
 	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
 		// If it's a syntax error, MySQL is an older version. Skip this test.
@@ -1802,6 +1821,7 @@ func TestJSON(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
+// todo: migrate to new framework
 func TestExternalTable(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1832,6 +1852,7 @@ func TestExternalTable(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
+// todo: migrate to new framework
 func TestJournal(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1871,6 +1892,7 @@ func TestJournal(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
+// todo: migrate to new framework
 // TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
 	if testing.Short() {
@@ -1898,6 +1920,7 @@ func TestMinimalMode(t *testing.T) {
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 
+// todo: migrate to new framework
 func TestStatementMode(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1936,6 +1959,7 @@ func TestStatementMode(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
+// todo: migrate to new framework
 func TestHeartbeat(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1952,6 +1976,7 @@ func TestHeartbeat(t *testing.T) {
 	cancel()
 }
 
+// todo: migrate to new framework
 func TestNoFutureGTID(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -2123,242 +2148,4 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 		{"commit", nil},
 	}}
 	ts.Run()
-}
-
-func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	wg, ch := startStream(ctx, t, filter, position, tablePK)
-	defer wg.Wait()
-	// If position is 'current', we wait for a heartbeat to be
-	// sure the vstreamer has started.
-	if position == "current" {
-		log.Infof("Starting stream with current position")
-		expectLog(ctx, t, "current pos", ch, [][]string{{`gtid`, `type:OTHER`}})
-	}
-
-	log.Infof("Starting to run test cases")
-	for _, tcase := range testcases {
-		switch input := tcase.input.(type) {
-		case []string:
-			execStatements(t, input)
-		case string:
-			execStatement(t, input)
-		default:
-			t.Fatalf("unexpected input: %#v", input)
-		}
-		engine.se.Reload(ctx)
-		expectLog(ctx, t, tcase.input, ch, tcase.output)
-	}
-
-	cancel()
-	if evs, ok := <-ch; ok {
-		t.Fatalf("unexpected evs: %v", evs)
-	}
-	log.Infof("Last line of runCases")
-}
-
-func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
-	timer := time.NewTimer(1 * time.Minute)
-	defer timer.Stop()
-	for _, wantset := range output {
-		var evs []*binlogdatapb.VEvent
-		for {
-			select {
-			case allevs, ok := <-ch:
-				if !ok {
-					t.Fatal("expectLog: not ok, stream ended early")
-				}
-				for _, ev := range allevs {
-					// Ignore spurious heartbeats that can happen on slow machines.
-					if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
-						continue
-					}
-					if ev.Throttled {
-						continue
-					}
-					evs = append(evs, ev)
-				}
-			case <-ctx.Done():
-				t.Fatalf("expectLog: Done(), stream ended early")
-			case <-timer.C:
-				t.Fatalf("expectLog: timed out waiting for events: %v", wantset)
-			}
-			if len(evs) != 0 {
-				break
-			}
-		}
-
-		numEventsToMatch := len(evs)
-		if len(wantset) != len(evs) {
-			log.Warningf("%v: evs\n%v, want\n%v, >> got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
-			if len(wantset) < len(evs) {
-				numEventsToMatch = len(wantset)
-			}
-		}
-		for i := 0; i < numEventsToMatch; i++ {
-			want := wantset[i]
-			// CurrentTime is not testable.
-			evs[i].CurrentTime = 0
-			evs[i].Keyspace = ""
-			evs[i].Shard = ""
-			switch want {
-			case "begin":
-				if evs[i].Type != binlogdatapb.VEventType_BEGIN {
-					t.Fatalf("%v (%d): event: %v, want gtid or begin", input, i, evs[i])
-				}
-			case "gtid":
-				if evs[i].Type != binlogdatapb.VEventType_GTID {
-					t.Fatalf("%v (%d): event: %v, want gtid", input, i, evs[i])
-				}
-			case "lastpk":
-				if evs[i].Type != binlogdatapb.VEventType_LASTPK {
-					t.Fatalf("%v (%d): event: %v, want lastpk", input, i, evs[i])
-				}
-			case "commit":
-				if evs[i].Type != binlogdatapb.VEventType_COMMIT {
-					t.Fatalf("%v (%d): event: %v, want commit", input, i, evs[i])
-				}
-			case "other":
-				if evs[i].Type != binlogdatapb.VEventType_OTHER {
-					t.Fatalf("%v (%d): event: %v, want other", input, i, evs[i])
-				}
-			case "ddl":
-				if evs[i].Type != binlogdatapb.VEventType_DDL {
-					t.Fatalf("%v (%d): event: %v, want ddl", input, i, evs[i])
-				}
-			case "copy_completed":
-				if evs[i].Type != binlogdatapb.VEventType_COPY_COMPLETED {
-					t.Fatalf("%v (%d): event: %v, want copy_completed", input, i, evs[i])
-				}
-			default:
-				evs[i].Timestamp = 0
-				if evs[i].Type == binlogdatapb.VEventType_FIELD {
-					for j := range evs[i].FieldEvent.Fields {
-						evs[i].FieldEvent.Fields[j].Flags = 0
-						if ignoreKeyspaceShardInFieldAndRowEvents {
-							evs[i].FieldEvent.Keyspace = ""
-							evs[i].FieldEvent.Shard = ""
-						}
-					}
-				}
-				if ignoreKeyspaceShardInFieldAndRowEvents && evs[i].Type == binlogdatapb.VEventType_ROW {
-					evs[i].RowEvent.Keyspace = ""
-					evs[i].RowEvent.Shard = ""
-				}
-				if !testRowEventFlags && evs[i].Type == binlogdatapb.VEventType_ROW {
-					evs[i].RowEvent.Flags = 0
-				}
-				want = env.RemoveAnyDeprecatedDisplayWidths(want)
-				if got := fmt.Sprintf("%v", evs[i]); got != want {
-					log.Errorf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
-					t.Fatalf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
-				}
-			}
-		}
-		if len(wantset) != len(evs) {
-			t.Fatalf("%v: evs\n%v, want\n%v, got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
-		}
-	}
-}
-
-func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string, tablePKs []*binlogdatapb.TableLastPK) (*sync.WaitGroup, <-chan []*binlogdatapb.VEvent) {
-	switch position {
-	case "":
-		position = primaryPosition(t)
-	case "vscopy":
-		position = ""
-	}
-
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	ch := make(chan []*binlogdatapb.VEvent)
-
-	go func() {
-		defer close(ch)
-		defer wg.Done()
-		vstream(ctx, t, position, tablePKs, filter, ch)
-	}()
-	return &wg, ch
-}
-
-func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, ch chan []*binlogdatapb.VEvent) error {
-	if filter == nil {
-		filter = &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{{
-				Match: "/.*/",
-			}},
-		}
-	}
-	return engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
-		timer := time.NewTimer(2 * time.Second)
-		defer timer.Stop()
-
-		log.Infof("Received events: %v", evs)
-		select {
-		case ch <- evs:
-		case <-ctx.Done():
-			return fmt.Errorf("engine.Stream Done() stream ended early")
-		case <-timer.C:
-			t.Log("VStream timed out waiting for events")
-			return io.EOF
-		}
-		return nil
-	})
-}
-
-func execStatement(t *testing.T, query string) {
-	t.Helper()
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func execStatements(t *testing.T, queries []string) {
-	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func primaryPosition(t *testing.T) string {
-	t.Helper()
-	// We use the engine's cp because there is one test that overrides
-	// the flavor to FilePos. If so, we have to obtain the position
-	// in that flavor format.
-	connParam, err := engine.env.Config().DB.DbaWithDB().MysqlParams()
-	if err != nil {
-		t.Fatal(err)
-	}
-	conn, err := mysql.Connect(context.Background(), connParam)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	pos, err := conn.PrimaryPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return replication.EncodePosition(pos)
-}
-
-func setVSchema(t *testing.T, vschema string) {
-	t.Helper()
-
-	curCount := engine.vschemaUpdates.Get()
-	if err := env.SetVSchema(vschema); err != nil {
-		t.Fatal(err)
-	}
-	// Wait for curCount to go up.
-	updated := false
-	for i := 0; i < 10; i++ {
-		if engine.vschemaUpdates.Get() != curCount {
-			updated = true
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !updated {
-		log.Infof("vschema did not get updated")
-		t.Error("vschema did not get updated")
-	}
 }
