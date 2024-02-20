@@ -120,7 +120,7 @@ func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
 
 	// change the RDONLY tablet to SPARE
 	rdOnlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
-	err = clusterInstance.VtctlclientChangeTabletType(rdOnlyTablet, topodata.TabletType_SPARE)
+	err = clusterInstance.VtctldClientProcess.ChangeTabletType(rdOnlyTablet, topodata.TabletType_SPARE)
 	require.NoError(t, err)
 	// Change it back to RDONLY afterward as the cluster is re-used.
 	defer func() {

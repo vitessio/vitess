@@ -706,7 +706,7 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 }
 
 func WaitForTabletToBeServing(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, timeout time.Duration) {
-	vTablet, err := clusterInstance.VtctlclientGetTablet(tablet)
+	vTablet, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.NoError(t, err)
 
 	tConn, err := tabletconn.GetDialer()(vTablet, false)

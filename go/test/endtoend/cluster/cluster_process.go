@@ -38,7 +38,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/syscallutil"
@@ -894,7 +893,7 @@ func (cluster *LocalProcessCluster) ExecOnTablet(ctx context.Context, vttablet *
 		return nil, err
 	}
 
-	tablet, err := cluster.VtctlclientGetTablet(vttablet)
+	tablet, err := cluster.VtctldClientProcess.GetTablet(vttablet.Alias)
 	if err != nil {
 		return nil, err
 	}
@@ -937,7 +936,7 @@ func (cluster *LocalProcessCluster) ExecOnVTGate(ctx context.Context, addr strin
 // returns the responses. It returns an error if the stream ends with fewer than
 // `count` responses.
 func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vttablet *Vttablet, count int) (responses []*querypb.StreamHealthResponse, err error) {
-	tablet, err := cluster.VtctlclientGetTablet(vttablet)
+	tablet, err := cluster.VtctldClientProcess.GetTablet(vttablet.Alias)
 	if err != nil {
 		return nil, err
 	}
@@ -972,7 +971,7 @@ func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vtta
 // StreamTabletHealthUntil invokes a HealthStream on a local cluster Vttablet and
 // returns the responses. It waits until a certain condition is met. The amount of time to wait is an input that it takes.
 func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context, vttablet *Vttablet, timeout time.Duration, condition func(shr *querypb.StreamHealthResponse) bool) error {
-	tablet, err := cluster.VtctlclientGetTablet(vttablet)
+	tablet, err := cluster.VtctldClientProcess.GetTablet(vttablet.Alias)
 	if err != nil {
 		return err
 	}
@@ -1007,20 +1006,6 @@ func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context,
 		return errors.New("timeout exceed while waiting for the condition in StreamHealth")
 	}
 	return err
-}
-
-func (cluster *LocalProcessCluster) VtctlclientGetTablet(tablet *Vttablet) (*topodatapb.Tablet, error) {
-	result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", "--", tablet.Alias)
-	if err != nil {
-		return nil, err
-	}
-
-	var ti topodatapb.Tablet
-	if err := json2.Unmarshal([]byte(result), &ti); err != nil {
-		return nil, err
-	}
-
-	return &ti, nil
 }
 
 func (cluster *LocalProcessCluster) VtctlclientChangeTabletType(tablet *Vttablet, tabletType topodatapb.TabletType) error {

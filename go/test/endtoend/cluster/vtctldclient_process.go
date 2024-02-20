@@ -152,6 +152,15 @@ func (vtctldclient *VtctldClientProcess) ApplyVSchema(keyspace string, json stri
 	)
 }
 
+// ChangeTabletType changes the type of the given tablet.
+func (vtctldclient *VtctldClientProcess) ChangeTabletType(tablet *Vttablet, tabletType topodatapb.TabletType) error {
+	return vtctldclient.ExecuteCommand(
+		"ChangeTabletType",
+		tablet.Alias,
+		tabletType.String(),
+	)
+}
+
 // GetSrvKeyspaces returns a mapping of cell to srv keyspace for the given keyspace.
 func (vtctldclient *VtctldClientProcess) GetSrvKeyspaces(keyspace string, cells ...string) (ksMap map[string]*topodatapb.SrvKeyspace, err error) {
 	args := append([]string{"GetSrvKeyspaces", keyspace}, cells...)
