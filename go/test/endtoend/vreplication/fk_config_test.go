@@ -67,7 +67,7 @@ insert into t2 values(1, 1, 't21'), (2, 1, 't22'), (3, 2, 't23');
         }
       ]
     },
-	"t1": {
+    "t1": {
       "column_vindexes": [
         {
           "column": "id",
@@ -75,7 +75,7 @@ insert into t2 values(1, 1, 't21'), (2, 1, 't22'), (3, 2, 't23');
         }
       ]
     },
-	"t2": {
+    "t2": {
       "column_vindexes": [
         {
           "column": "t1id",

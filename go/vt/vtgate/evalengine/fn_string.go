@@ -114,6 +114,31 @@ type (
 		CallExpr
 		collate collations.ID
 	}
+
+	builtinChar struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinRepeat struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinConcat struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinConcatWs struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinReplace struct {
+		CallExpr
+		collate collations.ID
+	}
 )
 
 var _ IR = (*builtinInsert)(nil)
@@ -129,7 +154,15 @@ var _ IR = (*builtinCollation)(nil)
 var _ IR = (*builtinWeightString)(nil)
 var _ IR = (*builtinLeftRight)(nil)
 var _ IR = (*builtinPad)(nil)
+var _ IR = (*builtinStrcmp)(nil)
 var _ IR = (*builtinTrim)(nil)
+var _ IR = (*builtinSubstring)(nil)
+var _ IR = (*builtinLocate)(nil)
+var _ IR = (*builtinChar)(nil)
+var _ IR = (*builtinRepeat)(nil)
+var _ IR = (*builtinConcat)(nil)
+var _ IR = (*builtinConcatWs)(nil)
+var _ IR = (*builtinReplace)(nil)
 
 func insert(str, newstr *evalBytes, pos, l int) []byte {
 	pos--
@@ -554,11 +587,6 @@ func (call *builtinOrd) compile(c *compiler) (ctype, error) {
 //     error: `ERROR 2020 (HY000): Got packet bigger than 'max_allowed_packet' bytes` and the client gets disconnected.
 //   - `> max_allowed_packet`, no error and returns `NULL`.
 const maxRepeatLength = 1073741824
-
-type builtinRepeat struct {
-	CallExpr
-	collate collations.ID
-}
 
 func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	arg1, arg2, err := call.arg2(env)
@@ -1374,11 +1402,6 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}, nil
 }
 
-type builtinConcat struct {
-	CallExpr
-	collate collations.ID
-}
-
 func concatSQLType(arg sqltypes.Type, tt sqltypes.Type) sqltypes.Type {
 	if arg == sqltypes.TypeJSON {
 		return sqltypes.Blob
@@ -1505,11 +1528,6 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 	c.asm.jumpDestination(skips...)
 
 	return ctype{Type: tt, Flag: f, Col: tc}, nil
-}
-
-type builtinConcatWs struct {
-	CallExpr
-	collate collations.ID
 }
 
 func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
@@ -1643,13 +1661,6 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 	return ctype{Type: tt, Flag: args[0].Flag, Col: tc}, nil
 }
 
-type builtinChar struct {
-	CallExpr
-	collate collations.ID
-}
-
-var _ IR = (*builtinChar)(nil)
-
 func (call *builtinChar) eval(env *ExpressionEnv) (eval, error) {
 	vals := make([]eval, 0, len(call.Arguments))
 	for _, arg := range call.Arguments {
@@ -1725,4 +1736,120 @@ func encodeChar(buf []byte, i uint32) []byte {
 		buf = append(buf, byte(i>>24), byte(i>>16), byte(i>>8), byte(i))
 	}
 	return buf
+}
+
+func (call *builtinReplace) eval(env *ExpressionEnv) (eval, error) {
+	str, err := call.Arguments[0].eval(env)
+	if err != nil || str == nil {
+		return nil, err
+	}
+
+	fromStr, err := call.Arguments[1].eval(env)
+	if err != nil || fromStr == nil {
+		return nil, err
+	}
+
+	toStr, err := call.Arguments[2].eval(env)
+	if err != nil || toStr == nil {
+		return nil, err
+	}
+
+	if _, ok := str.(*evalBytes); !ok {
+		str, err = evalToVarchar(str, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	col := str.(*evalBytes).col
+	fromStr, err = evalToVarchar(fromStr, col.Collation, true)
+	if err != nil {
+		return nil, err
+	}
+
+	toStr, err = evalToVarchar(toStr, col.Collation, true)
+	if err != nil {
+		return nil, err
+	}
+
+	strBytes := str.(*evalBytes).bytes
+	fromBytes := fromStr.(*evalBytes).bytes
+	toBytes := toStr.(*evalBytes).bytes
+
+	out := replace(strBytes, fromBytes, toBytes)
+	return newEvalRaw(str.SQLType(), out, col), nil
+}
+
+func (call *builtinReplace) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	fromStr, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	toStr, err := call.Arguments[2].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck3(str, fromStr, toStr)
+	if !str.isTextual() {
+		c.asm.Convert_xce(3, sqltypes.VarChar, c.collation)
+		str.Col = collations.TypedCollation{
+			Collation:    c.collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	fromCharset := colldata.Lookup(fromStr.Col.Collation).Charset()
+	toCharset := colldata.Lookup(toStr.Col.Collation).Charset()
+	strCharset := colldata.Lookup(str.Col.Collation).Charset()
+	if !fromStr.isTextual() || (fromCharset != strCharset && !strCharset.IsSuperset(fromCharset)) {
+		c.asm.Convert_xce(2, sqltypes.VarChar, str.Col.Collation)
+		fromStr.Col = collations.TypedCollation{
+			Collation:    str.Col.Collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	if !toStr.isTextual() || (toCharset != strCharset && !strCharset.IsSuperset(toCharset)) {
+		c.asm.Convert_xce(1, sqltypes.VarChar, str.Col.Collation)
+		toStr.Col = collations.TypedCollation{
+			Collation:    str.Col.Collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	c.asm.Replace()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: str.Col, Flag: flagNullable}, nil
+}
+
+func replace(str, from, to []byte) []byte {
+	if len(from) == 0 {
+		return str
+	}
+	n := bytes.Count(str, from)
+	if n == 0 {
+		return str
+	}
+
+	out := make([]byte, len(str)+n*(len(to)-len(from)))
+	end := 0
+	start := 0
+	for i := 0; i < n; i++ {
+		pos := start + bytes.Index(str[start:], from)
+		end += copy(out[end:], str[start:pos])
+		end += copy(out[end:], to)
+		start = pos + len(from)
+	}
+	end += copy(out[end:], str[start:])
+	return out[0:end]
 }

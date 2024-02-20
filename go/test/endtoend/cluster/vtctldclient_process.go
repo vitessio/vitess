@@ -152,6 +152,19 @@ func (vtctldclient *VtctldClientProcess) ApplyVSchema(keyspace string, json stri
 	)
 }
 
+// GetSrvKeyspaces returns a mapping of cell to srv keyspace for the given keyspace.
+func (vtctldclient *VtctldClientProcess) GetSrvKeyspaces(keyspace string, cells ...string) (ksMap map[string]*topodatapb.SrvKeyspace, err error) {
+	args := append([]string{"GetSrvKeyspaces", keyspace}, cells...)
+	out, err := vtctldclient.ExecuteCommandWithOutput(args...)
+	if err != nil {
+		return nil, err
+	}
+
+	ksMap = map[string]*topodatapb.SrvKeyspace{}
+	err = json2.Unmarshal([]byte(out), &ksMap)
+	return ksMap, err
+}
+
 // PlannedReparentShard executes vtctlclient command to make specified tablet the primary for the shard.
 func (vtctldclient *VtctldClientProcess) PlannedReparentShard(Keyspace string, Shard string, alias string) (err error) {
 	output, err := vtctldclient.ExecuteCommandWithOutput(
