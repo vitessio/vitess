@@ -3307,7 +3307,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			ts.Logger().Infof("Initializing target sequences")
 			// Writes are blocked so we can safely initialize the sequence tables but
 			// we also want to use a shorter timeout than the parent context.
-			// We use up at most half of the overall timeout.
+			// We use at most half of the overall timeout.
 			initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
 			defer cancel()
 			if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {

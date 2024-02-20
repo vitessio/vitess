@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -625,7 +626,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			ts.Logger().Infof("Initializing target sequences")
 			// Writes are blocked so we can safely initialize the sequence tables but
 			// we also want to use a shorter timeout than the parent context.
-			// We use up at most half of the overall timeout.
+			// We use at most half of the overall timeout.
 			initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
 			defer cancel()
 			if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
@@ -2201,7 +2202,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 			qr, terr := ts.wr.ExecuteFetchAsApp(ictx, primary.GetAlias(), true, query.Query, 1)
 			if terr != nil || len(qr.Rows) != 1 {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %v in order to initialize the backing sequence table: %v",
-					ts.targetKeyspace, sequenceMetadata.usingTableName, primary.Alias, terr)
+					ts.targetKeyspace, sequenceMetadata.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
 			}
 			rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
 			maxID := int64(0)
@@ -2209,7 +2210,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 				maxID, terr = rawVal.ToInt64()
 				if terr != nil {
 					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %v in order to initialize the backing sequence table: %v",
-						ts.targetKeyspace, sequenceMetadata.usingTableName, primary.Alias, terr)
+						ts.targetKeyspace, sequenceMetadata.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
 				}
 			}
 			srMu.Lock()
