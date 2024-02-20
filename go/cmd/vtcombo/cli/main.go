@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtcombo"
 	"vitess.io/vitess/go/vt/vtctld"
@@ -77,9 +78,10 @@ In particular, it contains:
 	plannerName           string
 	vschemaPersistenceDir string
 
-	tpb             vttestpb.VTTestTopology
-	ts              *topo.Server
-	resilientServer *srvtopo.ResilientServer
+	tpb               vttestpb.VTTestTopology
+	ts                *topo.Server
+	resilientServer   *srvtopo.ResilientServer
+	tabletTypesToWait []topodatapb.TabletType
 
 	env *vtenv.Environment
 )
@@ -113,6 +115,8 @@ func init() {
 
 	Main.Flags().Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
 	Main.Flags().Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
+
+	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet_types_to_wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
 
 	// We're going to force the value later, so don't even bother letting the
 	// user know about this flag.
@@ -294,11 +298,22 @@ func run(cmd *cobra.Command, args []string) (err error) {
 
 	// vtgate configuration and init
 	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, "ResilientSrvTopoServer")
-	tabletTypesToWait := []topodatapb.TabletType{
-		topodatapb.TabletType_PRIMARY,
-		topodatapb.TabletType_REPLICA,
-		topodatapb.TabletType_RDONLY,
+
+	tabletTypes := make([]topodatapb.TabletType, 0, 1)
+	if len(tabletTypesToWait) != 0 {
+		for _, tt := range tabletTypesToWait {
+			if topoproto.IsServingType(tt) {
+				tabletTypes = append(tabletTypes, tt)
+			}
+		}
+
+		if len(tabletTypes) == 0 {
+			log.Exitf("tablet_types_to_wait should contain at least one serving tablet type")
+		}
+	} else {
+		tabletTypes = append(tabletTypes, topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY)
 	}
+
 	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerName)
 
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
@@ -306,7 +321,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
 
 	// pass nil for healthcheck, it will get created
-	vtg := vtgate.Init(context.Background(), env, nil, resilientServer, tpb.Cells[0], tabletTypesToWait, plannerVersion)
+	vtg := vtgate.Init(context.Background(), env, nil, resilientServer, tpb.Cells[0], tabletTypes, plannerVersion)
 
 	// vtctld configuration and init
 	err = vtctld.InitVtctld(env, ts)
