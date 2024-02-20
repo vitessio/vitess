@@ -51,6 +51,7 @@ var (
 It can also be used to compare data between two topologies.`,
 		Args:    cobra.NoArgs,
 		PreRunE: servenv.CobraPreRunE,
+		Version: servenv.AppVersion.String(),
 		RunE:    run,
 	}
 )

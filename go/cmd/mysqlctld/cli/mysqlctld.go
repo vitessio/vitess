@@ -64,6 +64,7 @@ var (
 	--mysql_port=17100 \
 	--socket_file=/path/to/socket_file`,
 		Args:    cobra.NoArgs,
+		Version: servenv.AppVersion.String(),
 		PreRunE: servenv.CobraPreRunE,
 		RunE:    run,
 	}
