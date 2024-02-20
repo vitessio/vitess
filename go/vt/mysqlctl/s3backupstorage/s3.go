@@ -83,6 +83,9 @@ var (
 
 	// path component delimiter
 	delimiter = "/"
+
+	// use a shared transport for all connections
+	defaultS3Transport *http.Transport
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -445,9 +448,7 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 	if bs._client == nil {
 		logLevel := getLogLevel()
 
-		tlsClientConf := &tls.Config{InsecureSkipVerify: tlsSkipVerifyCert}
-		httpTransport := &http.Transport{TLSClientConfig: tlsClientConf}
-		httpClient := &http.Client{Transport: httpTransport}
+		httpClient := &http.Client{Transport: getS3Transport()}
 
 		session, err := session.NewSession()
 		if err != nil {
@@ -494,6 +495,19 @@ func objName(parts ...string) *string {
 	}
 	res += strings.Join(parts, delimiter)
 	return &res
+}
+
+// This creates a new transport based off http.DefaultTransport the first time and returns the same
+// transport on subsequent calls so connections can be reused as part of the same transport.
+func getS3Transport() *http.Transport {
+	if defaultS3Transport == nil {
+		tlsClientConf := &tls.Config{InsecureSkipVerify: tlsSkipVerifyCert}
+
+		defaultS3Transport = http.DefaultTransport.(*http.Transport).Clone()
+		defaultS3Transport.TLSClientConfig = tlsClientConf
+	}
+
+	return defaultS3Transport
 }
 
 func init() {
