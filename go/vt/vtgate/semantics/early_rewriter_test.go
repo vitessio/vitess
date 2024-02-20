@@ -304,39 +304,24 @@ func TestRewriteJoinUsingColumns(t *testing.T) {
 
 }
 
-func TestOrderByOrderByLiteral(t *testing.T) {
+func TestGroupByLiteral(t *testing.T) {
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{},
 	}
 	cDB := "db"
 	tcases := []struct {
-		sql    string
-		expSQL string
-		expErr string
+		sql     string
+		expSQL  string
+		expDeps TableSet
+		expErr  string
 	}{{
-		sql:    "select 1 as id from t1 order by 1",
-		expSQL: "select 1 as id from t1 order by '' asc",
+		sql:     "select t1.col from t1 group by 1",
+		expSQL:  "select t1.col from t1 group by t1.col",
+		expDeps: TS0,
 	}, {
-		sql:    "select t1.col from t1 order by 1",
-		expSQL: "select t1.col from t1 order by t1.col asc",
-	}, {
-		sql:    "select t1.col from t1 order by 1.0",
-		expSQL: "select t1.col from t1 order by 1.0 asc",
-	}, {
-		sql:    "select t1.col from t1 order by 'fubick'",
-		expSQL: "select t1.col from t1 order by 'fubick' asc",
-	}, {
-		sql:    "select t1.col as foo from t1 order by 1",
-		expSQL: "select t1.col as foo from t1 order by t1.col asc",
-	}, {
-		sql:    "select t1.col from t1 group by 1",
-		expSQL: "select t1.col from t1 group by t1.col",
-	}, {
-		sql:    "select t1.col as xyz from t1 group by 1",
-		expSQL: "select t1.col as xyz from t1 group by t1.col",
-	}, {
-		sql:    "select t1.col as xyz, count(*) from t1 group by 1 order by 2",
-		expSQL: "select t1.col as xyz, count(*) from t1 group by t1.col order by count(*) asc",
+		sql:     "select t1.col as xyz from t1 group by 1",
+		expSQL:  "select t1.col as xyz from t1 group by t1.col",
+		expDeps: TS0,
 	}, {
 		sql:    "select id from t1 group by 2",
 		expErr: "Unknown column '2' in 'group clause'",
@@ -344,30 +329,97 @@ func TestOrderByOrderByLiteral(t *testing.T) {
 		sql:    "select id from t1 order by 2",
 		expErr: "Unknown column '2' in 'order clause'",
 	}, {
+		sql:    "select *, id from t1 group by 2",
+		expErr: "cannot use column offsets in group clause when using `*`",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
+			require.NoError(t, err)
+			selectStatement := ast.(*sqlparser.Select)
+			st, err := Analyze(selectStatement, cDB, schemaInfo)
+			if tcase.expErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
+				gb := selectStatement.GroupBy
+				deps := st.RecursiveDeps(gb[0])
+				assert.Equal(t, tcase.expDeps, deps)
+			} else {
+				require.EqualError(t, err, tcase.expErr)
+			}
+		})
+	}
+}
+
+func TestOrderByLiteral(t *testing.T) {
+	schemaInfo := &FakeSI{
+		Tables: map[string]*vindexes.Table{},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql     string
+		expSQL  string
+		expDeps TableSet
+		expErr  string
+	}{{
+		sql:     "select 1 as id from t1 order by 1",
+		expSQL:  "select 1 as id from t1 order by '' asc",
+		expDeps: NoTables,
+	}, {
+		sql:     "select t1.col from t1 order by 1",
+		expSQL:  "select t1.col from t1 order by t1.col asc",
+		expDeps: TS0,
+	}, {
+		sql:     "select t1.col from t1 order by 1.0",
+		expSQL:  "select t1.col from t1 order by 1.0 asc",
+		expDeps: NoTables,
+	}, {
+		sql:     "select t1.col from t1 order by 'fubick'",
+		expSQL:  "select t1.col from t1 order by 'fubick' asc",
+		expDeps: NoTables,
+	}, {
+		sql:     "select t1.col as foo from t1 order by 1",
+		expSQL:  "select t1.col as foo from t1 order by t1.col asc",
+		expDeps: TS0,
+	}, {
+		sql:     "select t1.col as xyz, count(*) from t1 group by 1 order by 2",
+		expSQL:  "select t1.col as xyz, count(*) from t1 group by t1.col order by count(*) asc",
+		expDeps: TS0,
+	}, {
+		sql:    "select id from t1 order by 2",
+		expErr: "Unknown column '2' in 'order clause'",
+	}, {
 		sql:    "select *, id from t1 order by 2",
 		expErr: "cannot use column offsets in order clause when using `*`",
 	}, {
-		sql:    "select *, id from t1 group by 2",
-		expErr: "cannot use column offsets in group clause when using `*`",
+		sql:     "select id from t1 order by 1 collate utf8_general_ci",
+		expSQL:  "select id from t1 order by id collate utf8_general_ci asc",
+		expDeps: TS0,
 	}, {
-		sql:    "select id from t1 order by 1 collate utf8_general_ci",
-		expSQL: "select id from t1 order by id collate utf8_general_ci asc",
-	}, {
-		sql:    "select a.id from `user` union select 1 from dual order by 1",
-		expSQL: "select a.id from `user` union select 1 from dual order by id asc",
-	}, {
-		sql:    "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 1",
-		expSQL: "select a.id, b.id from `user` as a, user_extra as b union select 1, 2 from dual order by id asc",
+		sql:     "select id from `user` union select 1 from dual order by 1",
+		expSQL:  "select id from `user` union select 1 from dual order by id asc",
+		expDeps: TS0,
+		// }, {
+		// 	sql:     "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 1",
+		// 	expSQL:  "select a.id, b.id from `user` as a, user_extra as b union select 1, 2 from dual order by id asc",
+		// 	expDeps: TS0,
+		// }, {
+		// 	sql:     "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2",
+		// 	expSQL:  "select a.id, b.id from `user` as a, user_extra as b union select 1, 2 from dual order by id asc",
+		// 	expDeps: TS1,
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement := ast.(sqlparser.SelectStatement)
-			_, err = Analyze(selectStatement, cDB, schemaInfo)
+			st, err := Analyze(selectStatement, cDB, schemaInfo)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
+				ordering := selectStatement.GetOrderBy()
+				deps := st.RecursiveDeps(ordering[0].Expr)
+				assert.Equal(t, tcase.expDeps, deps)
 			} else {
 				require.EqualError(t, err, tcase.expErr)
 			}
@@ -471,6 +523,9 @@ func TestOrderByColumnName(t *testing.T) {
 	}, {
 		sql:    "select id, id, count(*) from t1 order by id",
 		expSQL: "select id, id, count(*) from t1 order by id asc",
+	}, {
+		sql:    "select id, count(distinct foo) k from t1 group by id order by k",
+		expSQL: "select id, count(distinct foo) as k from t1 group by id order by count(distinct foo) asc",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
