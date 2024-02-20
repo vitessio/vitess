@@ -255,7 +255,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 					"maxval",
 					"int64",
 				),
-				"5",
+				"NULL",
 			),
 		)
 		tme.tmeDB.AddQuery(fmt.Sprintf(maxValForSequence, "ks2", "t2"),
@@ -271,7 +271,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		// Now tell the fakesqldb used by the global keyspace tablets to expect
 		// the sequence management related queries against the target keyspace.
 		gfdb.AddQuery(
-			sqlparser.BuildParsedQuery(sqlInitSequenceTable, sqlescape.EscapeID("vt_global"), sqlescape.EscapeID("t1_seq"), 6, 6, 6).Query,
+			sqlparser.BuildParsedQuery(sqlInitSequenceTable, sqlescape.EscapeID("vt_global"), sqlescape.EscapeID("t1_seq"), 1, 1, 1).Query,
 			&sqltypes.Result{RowsAffected: 0},
 		)
 		gfdb.AddQuery(
