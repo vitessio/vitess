@@ -77,7 +77,7 @@ func MakeTestResult(fields []*querypb.Field, rows ...string) *Result {
 	for i, row := range rows {
 		result.Rows[i] = make([]Value, len(fields))
 		for j, col := range split(row) {
-			if col == "null" {
+			if strings.ToLower(col) == "null" {
 				result.Rows[i][j] = NULL
 				continue
 			}

@@ -3182,6 +3182,20 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			sw.cancelMigration(ctx, sm)
 			return handleError("failed to create the reverse vreplication streams", err)
 		}
+
+		// Initialize any target sequences, if there are any, before allowing new writes.
+		if req.InitializeTargetSequences && len(sequenceMetadata) > 0 {
+			ts.Logger().Infof("Initializing target sequences")
+			// Writes are blocked so we can safely initialize the sequence tables but
+			// we also want to use a shorter timeout than the parent context.
+			// We use at most half of the overall timeout.
+			initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
+			defer cancel()
+			if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
+				sw.cancelMigration(ctx, sm)
+				return handleError(fmt.Sprintf("failed to initialize the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
+			}
+		}
 	} else {
 		if cancel {
 			return handleError("invalid cancel", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "traffic switching has reached the point of no return, cannot cancel"))
@@ -3197,17 +3211,6 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	// traffic can be redirected to target shards.
 	if err := sw.createJournals(ctx, sourceWorkflows); err != nil {
 		return handleError("failed to create the journal", err)
-	}
-	// Initialize any target sequences, if there are any, before allowing new writes.
-	if req.InitializeTargetSequences && len(sequenceMetadata) > 0 {
-		// Writes are blocked so we can safely initialize the sequence tables but
-		// we also want to use a shorter timeout than the parent context.
-		// We use up at most half of the overall timeout.
-		initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
-		defer cancel()
-		if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
-			return handleError(fmt.Sprintf("failed to initialize the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
-		}
 	}
 	if err := sw.allowTargetWrites(ctx); err != nil {
 		return handleError(fmt.Sprintf("failed to allow writes in the %s keyspace", ts.TargetKeyspaceName()), err)
