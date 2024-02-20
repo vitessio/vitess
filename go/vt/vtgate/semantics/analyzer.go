@@ -69,10 +69,11 @@ func (a *analyzer) lateInit() {
 	a.binder = newBinder(a.scoper, a, a.tables, a.typer)
 	a.scoper.binder = a.binder
 	a.rewriter = &earlyRewriter{
-		env:             a.si.Environment(),
-		scoper:          a.scoper,
 		binder:          a.binder,
+		scoper:          a.scoper,
 		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
+		env:             a.si.Environment(),
+		aliasMapCache:   map[*sqlparser.Select]map[string]exprContainer{},
 	}
 }
 
@@ -232,10 +233,6 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if err := a.scoper.up(cursor); err != nil {
-		a.setError(err)
-		return false
-	}
 	if err := a.tables.up(cursor); err != nil {
 		a.setError(err)
 		return false
@@ -254,6 +251,11 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	if err := a.rewriter.up(cursor); err != nil {
 		a.setError(err)
 		return true
+	}
+
+	if err := a.scoper.up(cursor); err != nil {
+		a.setError(err)
+		return false
 	}
 
 	a.leaveProjection(cursor)
