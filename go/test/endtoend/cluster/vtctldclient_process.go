@@ -22,7 +22,11 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // VtctldClientProcess is a generic handle for a running vtctldclient command .
@@ -93,6 +97,68 @@ func VtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory str
 	return vtctldclient
 }
 
+type ApplySchemaParams struct {
+	DDLStrategy      string
+	MigrationContext string
+	UUIDs            string
+	CallerID         string
+	BatchSize        int
+}
+
+// ApplySchemaWithOutput applies SQL schema to the keyspace
+func (vtctldclient *VtctldClientProcess) ApplySchemaWithOutput(keyspace string, sql string, params ApplySchemaParams) (result string, err error) {
+	args := []string{
+		"ApplySchema",
+		"--sql", sql,
+	}
+	if params.MigrationContext != "" {
+		args = append(args, "--migration-context", params.MigrationContext)
+	}
+	if params.DDLStrategy != "" {
+		args = append(args, "--ddl-strategy", params.DDLStrategy)
+	}
+	if params.UUIDs != "" {
+		args = append(args, "--uuid", params.UUIDs)
+	}
+	if params.BatchSize > 0 {
+		args = append(args, "--batch-size", fmt.Sprintf("%d", params.BatchSize))
+	}
+	if params.CallerID != "" {
+		args = append(args, "--caller-id", params.CallerID)
+	}
+	args = append(args, keyspace)
+	return vtctldclient.ExecuteCommandWithOutput(args...)
+}
+
+// ApplySchema applies SQL schema to the keyspace
+func (vtctldclient *VtctldClientProcess) ApplySchema(keyspace string, sql string) error {
+	message, err := vtctldclient.ApplySchemaWithOutput(keyspace, sql, ApplySchemaParams{DDLStrategy: "direct -allow-zero-in-date"})
+
+	return vterrors.Wrap(err, message)
+}
+
+// ApplyVSchema applies vitess schema (JSON format) to the keyspace
+func (vtctldclient *VtctldClientProcess) ApplyVSchema(keyspace string, json string) (err error) {
+	return vtctldclient.ExecuteCommand(
+		"ApplyVSchema",
+		"--vschema", json,
+		keyspace,
+	)
+}
+
+// GetSrvKeyspaces returns a mapping of cell to srv keyspace for the given keyspace.
+func (vtctldclient *VtctldClientProcess) GetSrvKeyspaces(keyspace string, cells ...string) (ksMap map[string]*topodatapb.SrvKeyspace, err error) {
+	args := append([]string{"GetSrvKeyspaces", keyspace}, cells...)
+	out, err := vtctldclient.ExecuteCommandWithOutput(args...)
+	if err != nil {
+		return nil, err
+	}
+
+	ksMap = map[string]*topodatapb.SrvKeyspace{}
+	err = json2.Unmarshal([]byte(out), &ksMap)
+	return ksMap, err
+}
+
 // PlannedReparentShard executes vtctlclient command to make specified tablet the primary for the shard.
 func (vtctldclient *VtctldClientProcess) PlannedReparentShard(Keyspace string, Shard string, alias string) (err error) {
 	output, err := vtctldclient.ExecuteCommandWithOutput(
@@ -101,6 +167,32 @@ func (vtctldclient *VtctldClientProcess) PlannedReparentShard(Keyspace string, S
 		"--new-primary", alias)
 	if err != nil {
 		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
+	}
+	return err
+}
+
+// InitializeShard executes vtctldclient command to make specified tablet the primary for the shard.
+func (vtctldclient *VtctldClientProcess) InitializeShard(keyspace string, shard string, cell string, uid int) error {
+	output, err := vtctldclient.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", keyspace, shard),
+		"--wait-replicas-timeout", "31s",
+		"--new-primary", fmt.Sprintf("%s-%d", cell, uid))
+	if err != nil {
+		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
+	}
+	return err
+}
+
+// InitShardPrimary executes vtctldclient command to make specified tablet the primary for the shard.
+func (vtctldclient *VtctldClientProcess) InitShardPrimary(keyspace string, shard string, cell string, uid int) error {
+	output, err := vtctldclient.ExecuteCommandWithOutput(
+		"InitShardPrimary",
+		"--force", "--wait-replicas-timeout", "31s",
+		fmt.Sprintf("%s/%s", keyspace, shard),
+		fmt.Sprintf("%s-%d", cell, uid))
+	if err != nil {
+		log.Errorf("error in InitShardPrimary output %s, err %s", output, err.Error())
 	}
 	return err
 }
