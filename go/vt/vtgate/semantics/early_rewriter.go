@@ -29,6 +29,7 @@ import (
 
 type earlyRewriter struct {
 	binder          *binder
+	typer           *typer
 	scoper          *scoper
 	clause          string
 	warning         string
@@ -259,7 +260,12 @@ func (it *orderByIterator) replace(e sqlparser.Expr) (err error) {
 
 	sqlparser.Rewrite(e, nil, func(cursor *sqlparser.Cursor) bool {
 		err = it.r.binder.up(cursor)
-		return true
+		if err != nil {
+			return false
+		}
+		err = it.r.typer.up(cursor)
+
+		return err == nil
 	})
 
 	return nil

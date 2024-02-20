@@ -70,6 +70,7 @@ func (a *analyzer) lateInit() {
 	a.scoper.binder = a.binder
 	a.rewriter = &earlyRewriter{
 		binder:          a.binder,
+		typer:           a.typer,
 		scoper:          a.scoper,
 		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
 		env:             a.si.Environment(),
