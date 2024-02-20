@@ -449,7 +449,7 @@ func primaryBackup(t *testing.T) {
 	}()
 	verifyInitialReplication(t)
 
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
 	require.Error(t, err)
 	assert.Contains(t, output, "type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 
