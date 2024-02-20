@@ -84,6 +84,7 @@ If no keyspace name is present, VTExplain will return the following error:
 			"```\nvtexplain -- -shards 128 --vschema-file vschema.json --schema-file schema.sql --replication-mode \"ROW\" --output-mode text --sql \"INSERT INTO users (user_id, name) VALUES(1, 'john')\"\n```\n",
 		Args:    cobra.NoArgs,
 		PreRunE: servenv.CobraPreRunE,
+		Version: servenv.AppVersion.String(),
 		RunE:    run,
 	}
 )

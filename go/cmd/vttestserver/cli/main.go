@@ -104,6 +104,7 @@ func New() (cmd *cobra.Command) {
 		Short:   "vttestserver allows users to spawn a self-contained Vitess server for local testing/CI.",
 		Args:    cobra.NoArgs,
 		PreRunE: servenv.CobraPreRunE,
+		Version: servenv.AppVersion.String(),
 		RunE:    run,
 	}
 
