@@ -23,15 +23,15 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/vt/key"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/key"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -42,7 +42,7 @@ var (
 	cell                  = "zone1"
 	cell2                 = "zone2"
 	hostname              = "localhost"
-	servedTypes           = map[topodata.TabletType]bool{topodata.TabletType_PRIMARY: true, topodata.TabletType_REPLICA: true, topodata.TabletType_RDONLY: true}
+	servedTypes           = map[topodatapb.TabletType]bool{topodatapb.TabletType_PRIMARY: true, topodatapb.TabletType_REPLICA: true, topodatapb.TabletType_RDONLY: true}
 	sqlSchema             = `create table vt_insert_test (
 								id bigint auto_increment,
 								msg varchar(64),
@@ -213,7 +213,7 @@ func TestShardNames(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, keyspaceShardedName)
 	require.Nil(t, err)
-	var srvKeyspace topodata.SrvKeyspace
+	var srvKeyspace topodatapb.SrvKeyspace
 
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
 	require.Nil(t, err)
@@ -388,7 +388,7 @@ func TestKeyspaceToShardName(t *testing.T) {
 
 	// for each served type PRIMARY REPLICA RDONLY, the shard ref count should match
 	for _, partition := range srvKeyspace.Partitions {
-		if partition.ServedType == topodata.TabletType_PRIMARY {
+		if partition.ServedType == topodatapb.TabletType_PRIMARY {
 			for _, shardRef := range partition.ShardReferences {
 				shardKIDs := shardKIdMap[shardRef.Name]
 				for _, kid := range shardKIDs {
@@ -403,7 +403,7 @@ func TestKeyspaceToShardName(t *testing.T) {
 	srvKeyspace = getSrvKeyspace(t, cell, keyspaceUnshardedName)
 
 	for _, partition := range srvKeyspace.Partitions {
-		if partition.ServedType == topodata.TabletType_PRIMARY {
+		if partition.ServedType == topodatapb.TabletType_PRIMARY {
 			for _, shardRef := range partition.ShardReferences {
 				assert.Equal(t, shardRef.Name, keyspaceUnshardedName)
 			}
@@ -418,10 +418,10 @@ func packKeyspaceID(keyspaceID uint64) []byte {
 	return (keybytes[:])
 }
 
-func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodata.SrvKeyspace {
+func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodatapb.SrvKeyspace {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
 	require.Nil(t, err)
-	var srvKeyspace topodata.SrvKeyspace
+	var srvKeyspace topodatapb.SrvKeyspace
 
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
 	require.Nil(t, err)
