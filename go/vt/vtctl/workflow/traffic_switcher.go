@@ -1432,16 +1432,16 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 				MaxRows: 1,
 			})
 			if terr != nil || len(qr.Rows) != 1 {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
-					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %v in order to initialize the backing sequence table: %v",
+					ts.targetKeyspace, sequenceMetadata.usingTableName, primary.Alias, terr)
 			}
 			rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
 			maxID := int64(0)
 			if !rawVal.IsNull() { // If it's NULL then there are no rows and 0 remains the max
 				maxID, terr = rawVal.ToInt64()
 				if terr != nil {
-					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
-						ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %v in order to initialize the backing sequence table: %v",
+						ts.targetKeyspace, sequenceMetadata.usingTableName, primary.Alias, terr)
 				}
 			}
 			srMu.Lock()
