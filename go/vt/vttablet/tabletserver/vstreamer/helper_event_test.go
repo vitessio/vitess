@@ -269,10 +269,10 @@ func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[
 func (ts *TestSpec) getBindVarsForUpdate(stmt sqlparser.Statement) (string, map[string]string) {
 	bv := make(map[string]string)
 	upd := stmt.(*sqlparser.Update)
-	//buf := sqlparser.NewTrackedBuffer(nil)
+	// buf := sqlparser.NewTrackedBuffer(nil)
 	table := sqlparser.String(upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr)
-	//upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
-	//table := buf.String()
+	// upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
+	// table := buf.String()
 	fe, ok := ts.fieldEvents[table]
 	require.True(ts.t, ok, "field event for table %s not found", table)
 	index := int64(0)
@@ -405,6 +405,7 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 				if tc.dataTypeLowered == "char" && collation.IsBinary() {
 					tc.dataType = "BINARY"
 				}
+				tc.collationID = testenv.DefaultCollationID
 			}
 			tc.colType = fmt.Sprintf("%s(%d)", tc.dataTypeLowered, l)
 		case "blob":
@@ -414,14 +415,17 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 		case "text":
 			tc.len = lengthText
 			tc.colType = "text"
+			tc.collationID = testenv.DefaultCollationID
 		case "set":
 			tc.len = lengthSet
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
+			tc.collationID = testenv.DefaultCollationID
 		case "enum":
 			tc.len = int64(len(col.Type.EnumValues) + 1)
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
+			tc.collationID = testenv.DefaultCollationID
 		default:
 			log.Infof(fmt.Sprintf("unknown sqlTypeString %s", tc.dataTypeLowered))
 		}

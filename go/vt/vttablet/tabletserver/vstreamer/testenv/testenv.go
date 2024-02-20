@@ -43,7 +43,12 @@ import (
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
-const DBName = "vttest"
+const (
+	DBName               = "vttest"
+	DefaultCollationName = "utf8mb4_0900_ai_ci"
+)
+
+var DefaultCollationID = collations.MySQL8().LookupByName(DefaultCollationName)
 
 var (
 	// These are exported to coordinate on version specific
