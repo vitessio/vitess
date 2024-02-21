@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -41,7 +42,12 @@ import (
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
-const DBName = "vttest"
+const (
+	DBName               = "vttest"
+	DefaultCollationName = "utf8mb4_0900_ai_ci"
+)
+
+var DefaultCollationID = collations.MySQL8().LookupByName(DefaultCollationName)
 
 // Env contains all the env vars for a test against a mysql instance.
 type Env struct {
@@ -98,7 +104,7 @@ func Init(ctx context.Context) (*Env, error) {
 			},
 		},
 		OnlyMySQL:  true,
-		Charset:    "utf8mb4_general_ci",
+		Charset:    DefaultCollationName,
 		ExtraMyCnf: strings.Split(os.Getenv("EXTRA_MY_CNF"), ":"),
 	}
 	te.cluster = &vttest.LocalCluster{
