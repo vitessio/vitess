@@ -17,8 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -32,17 +30,6 @@ type Delete struct {
 
 	noColumns
 	noPredicates
-}
-
-type TargetTable struct {
-	ID     semantics.TableSet
-	VTable *vindexes.Table
-	Name   sqlparser.TableName
-}
-
-// Introduces implements the PhysicalOperator interface
-func (d *Delete) introducesTableID() semantics.TableSet {
-	return d.Target.ID
 }
 
 // Clone implements the Operator interface
@@ -63,28 +50,16 @@ func (d *Delete) SetInputs(inputs []Operator) {
 	d.Source = inputs[0]
 }
 
-func (d *Delete) TablesUsed() []string {
-	return SingleQualifiedIdentifier(d.Target.VTable.Keyspace, d.Target.VTable.Name)
-}
-
 func (d *Delete) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
+func (d *Delete) TablesUsed() []string {
+	return SingleQualifiedIdentifier(d.Target.VTable.Keyspace, d.Target.VTable.Name)
+}
+
 func (d *Delete) ShortDescription() string {
-	ovq := ""
-	if d.OwnedVindexQuery != nil {
-		var cols, orderby, limit string
-		cols = fmt.Sprintf("COLUMNS: [%s]", sqlparser.String(d.OwnedVindexQuery.SelectExprs))
-		if len(d.OwnedVindexQuery.OrderBy) > 0 {
-			orderby = fmt.Sprintf(" ORDERBY: [%s]", sqlparser.String(d.OwnedVindexQuery.OrderBy))
-		}
-		if d.OwnedVindexQuery.Limit != nil {
-			limit = fmt.Sprintf(" LIMIT: [%s]", sqlparser.String(d.OwnedVindexQuery.Limit))
-		}
-		ovq = fmt.Sprintf(" vindexQuery(%s%s%s)", cols, orderby, limit)
-	}
-	return fmt.Sprintf("%s.%s%s", d.Target.VTable.Keyspace.Name, d.Target.VTable.Name.String(), ovq)
+	return shortDesc(d.Target, d.OwnedVindexQuery)
 }
 
 func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (op Operator) {
