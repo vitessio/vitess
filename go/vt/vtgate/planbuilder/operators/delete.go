@@ -69,7 +69,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	// slower, because it does a selection and then creates a delete statement wherein we have to
 	// list all the primary key values.
 	if deleteWithInputPlanningRequired(childFks, deleteStmt) {
-		return deleteWithInputPlanningForFk(ctx, deleteStmt)
+		return createDeleteWithInputOp(ctx, deleteStmt)
 	}
 
 	delClone := sqlparser.CloneRefOfDelete(deleteStmt)
@@ -107,7 +107,7 @@ func deleteWithInputPlanningRequired(childFks []vindexes.ChildFKInfo, deleteStmt
 	return !deleteStmt.IsSingleAliasExpr()
 }
 
-func deleteWithInputPlanningForFk(ctx *plancontext.PlanningContext, del *sqlparser.Delete) Operator {
+func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.Delete) Operator {
 	delClone := ctx.SemTable.Clone(del).(*sqlparser.Delete)
 	del.Limit = nil
 	del.OrderBy = nil
@@ -119,7 +119,29 @@ func deleteWithInputPlanningForFk(ctx *plancontext.PlanningContext, del *sqlpars
 		Limit:   delClone.Limit,
 		Lock:    sqlparser.ForUpdateLock,
 	}
-	ts := ctx.SemTable.Targets[del.Targets[0].Name]
+
+	op, cols := createDeleteOpWithTarget(ctx, del.Targets[0])
+	for _, col := range cols {
+		selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(col))
+	}
+
+	op = &DMLWithInput{
+		DML:    op,
+		Source: createOperatorFromSelect(ctx, selectStmt),
+		cols:   cols,
+	}
+
+	if del.Comments != nil {
+		op = &LockAndComment{
+			Source:   op,
+			Comments: del.Comments,
+		}
+	}
+	return op
+}
+
+func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target sqlparser.TableName) (Operator, []*sqlparser.ColName) {
+	ts := ctx.SemTable.Targets[target.Name]
 	ti, err := ctx.SemTable.TableInfoFor(ts)
 	if err != nil {
 		panic(vterrors.VT13001(err.Error()))
@@ -130,7 +152,6 @@ func deleteWithInputPlanningForFk(ctx *plancontext.PlanningContext, del *sqlpars
 	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
 	for _, col := range vTbl.PrimaryKey {
 		colName := sqlparser.NewColNameWithQualifier(col.String(), vTbl.GetTableName())
-		selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(colName))
 		cols = append(cols, colName)
 		leftComp = append(leftComp, colName)
 		ctx.SemTable.Recursive[colName] = ts
@@ -142,15 +163,12 @@ func deleteWithInputPlanningForFk(ctx *plancontext.PlanningContext, del *sqlpars
 	}
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmlVals), nil)
 
-	del.Targets = sqlparser.TableNames{del.Targets[0]}
-	del.TableExprs = sqlparser.TableExprs{ti.GetAliasedTableExpr()}
-	del.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
-
-	return &DMLWithInput{
-		DML:    createOperatorFromDelete(ctx, del),
-		Source: createOperatorFromSelect(ctx, selectStmt),
-		cols:   cols,
+	del := &sqlparser.Delete{
+		TableExprs: sqlparser.TableExprs{ti.GetAliasedTableExpr()},
+		Targets:    sqlparser.TableNames{target},
+		Where:      sqlparser.NewWhere(sqlparser.WhereClause, compExpr),
 	}
+	return createOperatorFromDelete(ctx, del), cols
 }
 
 func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) (Operator, *vindexes.Table) {
