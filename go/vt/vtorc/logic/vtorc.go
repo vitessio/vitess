@@ -336,8 +336,6 @@ func onHealthTick() {
 // nolint SA1015: using time.Tick leaks the underlying ticker
 func ContinuousDiscovery() {
 	log.Infof("continuous discovery: setting up")
-	continuousDiscoveryStartTime := time.Now()
-	checkAndRecoverWaitPeriod := 3 * instancePollSecondsDuration()
 	recentDiscoveryOperationKeys = cache.New(instancePollSecondsDuration(), time.Second)
 
 	go handleDiscoveryRequests()
@@ -350,10 +348,6 @@ func ContinuousDiscovery() {
 	var snapshotTopologiesTick <-chan time.Time
 	if config.Config.SnapshotTopologiesIntervalHours > 0 {
 		snapshotTopologiesTick = time.Tick(time.Duration(config.Config.SnapshotTopologiesIntervalHours) * time.Hour)
-	}
-
-	runCheckAndRecoverOperationsTimeRipe := func() bool {
-		return time.Since(continuousDiscoveryStartTime) >= checkAndRecoverWaitPeriod
 	}
 
 	go func() {
@@ -401,11 +395,7 @@ func ContinuousDiscovery() {
 						} else {
 							return
 						}
-						if runCheckAndRecoverOperationsTimeRipe() {
-							CheckAndRecover()
-						} else {
-							log.Infof("Waiting for %+v seconds to pass before running failure detection/recovery", checkAndRecoverWaitPeriod.Seconds())
-						}
+						CheckAndRecover()
 					}()
 				}
 			}()
@@ -416,27 +406,30 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
-			// Create a wait group
-			var wg sync.WaitGroup
-
-			// Refresh all keyspace information.
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				RefreshAllKeyspacesAndShards()
-			}()
-
-			// Refresh all tablets.
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				refreshAllTablets()
-			}()
-
-			// Wait for both the refreshes to complete
-			wg.Wait()
-			// We have completed one discovery cycle in the entirety of it. We should update the process health.
-			process.FirstDiscoveryCycleComplete.Store(true)
+			refreshAllInformation()
 		}
 	}
+}
+
+// refreshAllInformation refreshes both shard and tablet information. This is meant to be run on tablet topo ticks.
+func refreshAllInformation() {
+	// Create a wait group
+	var wg sync.WaitGroup
+
+	// Refresh all keyspace information.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		RefreshAllKeyspacesAndShards()
+	}()
+
+	// Refresh all tablets.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		refreshAllTablets()
+	}()
+
+	// Wait for both the refreshes to complete
+	wg.Wait()
 }

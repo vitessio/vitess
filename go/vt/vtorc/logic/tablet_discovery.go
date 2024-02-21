@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -70,7 +71,16 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
 		log.Error(err)
 	}
+	// We refresh all information from the topo once before we start the ticks to do it on an timer.
+	populateAllInformation()
 	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
+}
+
+// populateAllInformation initializes all the information for VTOrc to function.
+func populateAllInformation() {
+	refreshAllInformation()
+	// We have completed one discovery cycle in the entirety of it. We should update the process health.
+	process.FirstDiscoveryCycleComplete.Store(true)
 }
 
 // refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
