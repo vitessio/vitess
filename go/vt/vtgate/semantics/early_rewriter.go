@@ -29,13 +29,17 @@ import (
 
 type earlyRewriter struct {
 	binder          *binder
-	typer           *typer
 	scoper          *scoper
 	clause          string
 	warning         string
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 	env             *vtenv.Environment
 	aliasMapCache   map[*sqlparser.Select]map[string]exprContainer
+
+	// reAnalyze is used when we are running in the late stage, after the other parts of semantic analysis
+	// have happened, and we are introducing or changing the AST. We invoke it so all parts of the query have been
+	// typed, scoped and bound correctly
+	reAnalyze func(n sqlparser.SQLNode) error
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -172,16 +176,8 @@ func (r *earlyRewriter) handleJoinTableExprUp(join *sqlparser.JoinTableExpr) err
 
 	// since the binder has already been over the join, we need to invoke it again, so it
 	// can bind columns to the right tables
-	sqlparser.Rewrite(join.Condition.On, nil, func(cursor *sqlparser.Cursor) bool {
-		innerErr := r.binder.up(cursor)
-		if innerErr == nil {
-			return true
-		}
 
-		err = innerErr
-		return false
-	})
-	return err
+	return r.reAnalyze(join.Condition.On)
 }
 
 // removeVindexHints removes the vindex hints from the aliased table expression provided.
@@ -257,18 +253,7 @@ func (it *orderByIterator) replace(e sqlparser.Expr) (err error) {
 		return vterrors.VT13001("went past the last item")
 	}
 	it.node[it.idx].Expr = e
-
-	sqlparser.Rewrite(e, nil, func(cursor *sqlparser.Cursor) bool {
-		err = it.r.binder.up(cursor)
-		if err != nil {
-			return false
-		}
-		err = it.r.typer.up(cursor)
-
-		return err == nil
-	})
-
-	return nil
+	return it.r.reAnalyze(e)
 }
 
 type exprIterator struct {

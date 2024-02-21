@@ -70,11 +70,11 @@ func (a *analyzer) lateInit() {
 	a.scoper.binder = a.binder
 	a.rewriter = &earlyRewriter{
 		binder:          a.binder,
-		typer:           a.typer,
 		scoper:          a.scoper,
 		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
 		env:             a.si.Environment(),
 		aliasMapCache:   map[*sqlparser.Select]map[string]exprContainer{},
+		reAnalyze:       a.lateAnalyze,
 	}
 }
 
@@ -351,6 +351,10 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 	a.lateInit()
 
+	return a.lateAnalyze(statement)
+}
+
+func (a *analyzer) lateAnalyze(statement sqlparser.SQLNode) error {
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
 }
