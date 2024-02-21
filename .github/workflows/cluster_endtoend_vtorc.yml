@@ -23,7 +23,7 @@ jobs:
       run: |
         totalMem=$(free -g | awk 'NR==2 {print $2}')
         echo "total memory $totalMem GB"
-        if [[ "$totalMem" -lt 15 ]]; then 
+        if [[ "$totalMem" -lt 31 ]]; then 
           echo "Less memory than required"
           exit 1
         fi
