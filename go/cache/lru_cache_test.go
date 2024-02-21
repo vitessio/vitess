@@ -29,7 +29,7 @@ type CacheValue struct {
 func TestInitialState(t *testing.T) {
 	cache := NewLRUCache[*CacheValue](5)
 	l, sz, c, e, h, m := cache.Len(), cache.UsedCapacity(), cache.MaxCapacity(), cache.Evictions(), cache.Hits(), cache.Misses()
-	assert.Equal(t, 0, l)
+	assert.Zero(t, l)
 	assert.EqualValues(t, 0, sz)
 	assert.EqualValues(t, 5, c)
 	assert.EqualValues(t, 0, e)
@@ -128,7 +128,7 @@ func TestCapacityIsObeyed(t *testing.T) {
 	cache.Set("key4", value)
 	sz, evictions := cache.UsedCapacity(), cache.Evictions()
 	assert.Equal(t, size, sz)
-	assert.Equal(t, int64(1), evictions)
+	assert.EqualValues(t, 1, evictions)
 
 	// Check various other stats
 	if l := cache.Len(); int64(l) != size {

@@ -925,7 +925,7 @@ func TestDecimal_Overflow(t *testing.T) {
 
 func TestDecimal_Scale(t *testing.T) {
 	a := New(1234, -3)
-	assert.Equal(t, int32(-3), a.Exponent())
+	assert.EqualValues(t, -3, a.Exponent())
 
 }
 
@@ -934,7 +934,7 @@ func TestDecimal_Abs1(t *testing.T) {
 	b := New(1234, -4)
 
 	c := a.Abs()
-	assert.Equal(t, 0, c.Cmp(b))
+	assert.Zero(t, c.Cmp(b))
 
 }
 

@@ -132,7 +132,7 @@ func TestPanicDo(t *testing.T) {
 
 	select {
 	case <-done:
-		assert.Equal(t, int32(n), panicCount)
+		assert.EqualValues(t, n, panicCount)
 	case <-time.After(time.Second):
 		require.Fail(t, "Do hangs")
 	}
