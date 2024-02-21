@@ -23,17 +23,21 @@ import (
 	"os"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+const mysqlShutdownTimeout = 1 * time.Minute
 
 // NewMySQL creates a new MySQL server using the local mysqld binary. The name of the database
 // will be set to `dbName`. SQL queries that need to be executed on the new MySQL instance
@@ -41,7 +45,17 @@ import (
 // The mysql.ConnParams to connect to the new database is returned, along with a function to
 // teardown the database.
 func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
-	mysqlParam, _, closer, error := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, schemaSQL...)
+	// Even though we receive schemaSQL as a variadic argument, we ensure to further split it into singular statements.
+	parser := sqlparser.NewTestParser()
+	var sqls []string
+	for _, sql := range schemaSQL {
+		split, err := parser.SplitStatementToPieces(sql)
+		if err != nil {
+			return mysql.ConnParams{}, nil, err
+		}
+		sqls = append(sqls, split...)
+	}
+	mysqlParam, _, closer, error := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, sqls...)
 	return mysqlParam, closer, error
 }
 
@@ -58,7 +72,7 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 	var cfg dbconfigs.DBConfigs
 	// ensure the DBA username is 'root' instead of the system's default username so that mysqladmin can shutdown
 	cfg.Dba.User = "root"
-	cfg.InitWithSocket(mycnf.SocketFile)
+	cfg.InitWithSocket(mycnf.SocketFile, collations.MySQL8())
 	return mysqlctl.NewMysqld(&cfg), mycnf, nil
 }
 
@@ -96,7 +110,7 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 	}
 	return params, mysqld, func() {
 		ctx := context.Background()
-		_ = mysqld.Teardown(ctx, mycnf, true)
+		_ = mysqld.Teardown(ctx, mycnf, true, mysqlShutdownTimeout)
 	}, nil
 }
 
@@ -155,7 +169,9 @@ func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
 	return nil
 }
 
-func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, compareColumns bool) error {
+func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, compareColumnNames bool) error {
+	t.Helper()
+
 	if vtQr == nil && mysqlQr == nil {
 		return nil
 	}
@@ -168,29 +184,30 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn
 		return errors.New("MySQL result is 'nil' while Vitess' is not.\n")
 	}
 
-	var errStr string
-	if compareColumns {
-		vtColCount := len(vtQr.Fields)
-		myColCount := len(mysqlQr.Fields)
-		if vtColCount > 0 && myColCount > 0 {
-			if vtColCount != myColCount {
-				t.Errorf("column count does not match: %d vs %d", vtColCount, myColCount)
-				errStr += fmt.Sprintf("column count does not match: %d vs %d\n", vtColCount, myColCount)
-			}
+	vtColCount := len(vtQr.Fields)
+	myColCount := len(mysqlQr.Fields)
 
-			var vtCols []string
-			var myCols []string
-			for i, vtField := range vtQr.Fields {
-				vtCols = append(vtCols, vtField.Name)
-				myCols = append(myCols, mysqlQr.Fields[i].Name)
-			}
-			if !assert.Equal(t, myCols, vtCols, "column names do not match - the expected values are what mysql produced") {
-				errStr += "column names do not match - the expected values are what mysql produced\n"
-				errStr += fmt.Sprintf("Not equal: \nexpected: %v\nactual: %v\n", myCols, vtCols)
-			}
+	if vtColCount != myColCount {
+		t.Errorf("column count does not match: %d vs %d", vtColCount, myColCount)
+	}
+
+	if vtColCount > 0 {
+		var vtCols []string
+		var myCols []string
+		for i, vtField := range vtQr.Fields {
+			myField := mysqlQr.Fields[i]
+			checkFields(t, myField.Name, vtField, myField)
+
+			vtCols = append(vtCols, vtField.Name)
+			myCols = append(myCols, myField.Name)
+		}
+
+		if compareColumnNames && !assert.Equal(t, myCols, vtCols, "column names do not match - the expected values are what mysql produced") {
+			t.Errorf("column names do not match - the expected values are what mysql produced\nNot equal: \nexpected: %v\nactual: %v\n", myCols, vtCols)
 		}
 	}
-	stmt, err := sqlparser.Parse(query)
+
+	stmt, err := sqlparser.NewTestParser().Parse(query)
 	if err != nil {
 		t.Error(err)
 		return err
@@ -204,7 +221,7 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn
 		return nil
 	}
 
-	errStr += "Query (" + query + ") results mismatched.\nVitess Results:\n"
+	errStr := "Query (" + query + ") results mismatched.\nVitess Results:\n"
 	for _, row := range vtQr.Rows {
 		errStr += fmt.Sprintf("%s\n", row)
 	}
@@ -222,6 +239,20 @@ func compareVitessAndMySQLResults(t *testing.T, query string, vtConn *mysql.Conn
 	}
 	t.Error(errStr)
 	return errors.New(errStr)
+}
+
+func checkFields(t *testing.T, columnName string, vtField, myField *querypb.Field) {
+	t.Helper()
+	if vtField.Type != myField.Type {
+		t.Errorf("for column %s field types do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Type.String(), vtField.Type.String())
+	}
+
+	// starting in Vitess 20, decimal types are properly sized in their field information
+	if BinaryIsAtLeastAtVersion(20, "vtgate") && vtField.Type == sqltypes.Decimal {
+		if vtField.Decimals != myField.Decimals {
+			t.Errorf("for column %s field decimals count do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Decimals, vtField.Decimals)
+		}
+	}
 }
 
 func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error) {

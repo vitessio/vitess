@@ -47,6 +47,7 @@ const (
 	WrongValueCountOnRow
 	WrongValue
 	WrongArguments
+	BadNullError
 
 	// failed precondition
 	NoDB
@@ -58,6 +59,7 @@ const (
 	RowIsReferenced2
 	NoReferencedRow2
 	UnknownStmtHandler
+	KeyDoesNotExist
 
 	// not found
 	BadDb

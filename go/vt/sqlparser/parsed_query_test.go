@@ -27,7 +27,8 @@ import (
 )
 
 func TestNewParsedQuery(t *testing.T) {
-	stmt, err := Parse("select * from a where id =:id")
+	parser := NewTestParser()
+	stmt, err := parser.Parse("select * from a where id =:id")
 	if err != nil {
 		t.Error(err)
 		return
@@ -35,7 +36,7 @@ func TestNewParsedQuery(t *testing.T) {
 	pq := NewParsedQuery(stmt)
 	want := &ParsedQuery{
 		Query:         "select * from a where id = :id",
-		bindLocations: []bindLocation{{offset: 27, length: 3}},
+		bindLocations: []BindLocation{{Offset: 27, Length: 3}},
 	}
 	if !reflect.DeepEqual(pq, want) {
 		t.Errorf("GenerateParsedQuery: %+v, want %+v", pq, want)
@@ -135,8 +136,9 @@ func TestGenerateQuery(t *testing.T) {
 		},
 	}
 
+	parser := NewTestParser()
 	for _, tcase := range tcases {
-		tree, err := Parse(tcase.query)
+		tree, err := parser.Parse(tcase.query)
 		if err != nil {
 			t.Errorf("parse failed for %s: %v", tcase.desc, err)
 			continue

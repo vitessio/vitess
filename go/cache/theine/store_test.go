@@ -52,7 +52,7 @@ func TestProcessDeque(t *testing.T) {
 	shard := store.shards[index]
 	shard.qsize = 10
 
-	for i := keyint(0); i < 5; i++ {
+	for i := range keyint(5) {
 		entry := &Entry[keyint, cachedint]{key: i}
 		entry.cost.Store(1)
 		store.shards[index].deque.PushFront(entry)
@@ -74,9 +74,9 @@ func TestProcessDeque(t *testing.T) {
 func TestDoorKeeperDynamicSize(t *testing.T) {
 	store := NewStore[keyint, cachedint](200000, true)
 	shard := store.shards[0]
-	require.True(t, shard.dookeeper.Capacity == 512)
-	for i := keyint(0); i < 5000; i++ {
+	require.True(t, shard.doorkeeper.Capacity == 512)
+	for i := range keyint(5000) {
 		shard.set(i, &Entry[keyint, cachedint]{})
 	}
-	require.True(t, shard.dookeeper.Capacity > 100000)
+	require.True(t, shard.doorkeeper.Capacity > 100000)
 }

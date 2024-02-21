@@ -26,11 +26,19 @@ import (
 	"vitess.io/vitess/go/hack"
 )
 
+func ParseUint64(s string, base int) (uint64, error) {
+	return parseUint64(s, base, false)
+}
+
+func ParseUint64WithNeg(s string, base int) (uint64, error) {
+	return parseUint64(s, base, true)
+}
+
 // ParseUint64 parses uint64 from s.
 //
 // It is equivalent to strconv.ParseUint(s, base, 64) in case it succeeds,
 // but on error it will return the best effort value of what it has parsed so far.
-func ParseUint64(s string, base int) (uint64, error) {
+func parseUint64(s string, base int, allowNeg bool) (uint64, error) {
 	if len(s) == 0 {
 		return 0, fmt.Errorf("cannot parse uint64 from empty string")
 	}
@@ -43,6 +51,22 @@ func ParseUint64(s string, base int) (uint64, error) {
 			break
 		}
 		i++
+	}
+
+	if i >= uint(len(s)) {
+		return 0, fmt.Errorf("cannot parse uint64 from %q", s)
+	}
+	// For some reason, MySQL parses things as uint64 even with
+	// a negative sign and then turns it into the 2s complement value.
+	minus := s[i] == '-'
+	if minus {
+		if !allowNeg {
+			return 0, fmt.Errorf("cannot parse uint64 from %q", s)
+		}
+		i++
+		if i >= uint(len(s)) {
+			return 0, fmt.Errorf("cannot parse uint64 from %q", s)
+		}
 	}
 
 	d := uint64(0)
@@ -75,17 +99,23 @@ next:
 			cutoff = math.MaxUint64/uint64(base) + 1
 		}
 		if d >= cutoff {
+			if minus {
+				return 0, fmt.Errorf("cannot parse uint64 from %q: %w", s, ErrOverflow)
+			}
 			return math.MaxUint64, fmt.Errorf("cannot parse uint64 from %q: %w", s, ErrOverflow)
 		}
 		v := d*uint64(base) + uint64(b)
 		if v < d {
+			if minus {
+				return 0, fmt.Errorf("cannot parse uint64 from %q: %w", s, ErrOverflow)
+			}
 			return math.MaxUint64, fmt.Errorf("cannot parse uint64 from %q: %w", s, ErrOverflow)
 		}
 		d = v
 		i++
 	}
 	if i <= j {
-		return d, fmt.Errorf("cannot parse uint64 from %q", s)
+		return uValue(d, minus), fmt.Errorf("cannot parse uint64 from %q", s)
 	}
 
 	for i < uint(len(s)) {
@@ -97,9 +127,9 @@ next:
 
 	if i < uint(len(s)) {
 		// Unparsed tail left.
-		return d, fmt.Errorf("unparsed tail left after parsing uint64 from %q: %q", s, s[i:])
+		return uValue(d, minus), fmt.Errorf("unparsed tail left after parsing uint64 from %q: %q", s, s[i:])
 	}
-	return d, nil
+	return uValue(d, minus), nil
 }
 
 var ErrOverflow = errors.New("overflow")
@@ -123,6 +153,9 @@ func ParseInt64(s string, base int) (int64, error) {
 		i++
 	}
 
+	if i >= uint(len(s)) {
+		return 0, fmt.Errorf("cannot parse int64 from %q", s)
+	}
 	minus := s[i] == '-'
 	if minus {
 		i++
@@ -160,21 +193,15 @@ next:
 		default:
 			cutoff = math.MaxInt64/uint64(base) + 1
 		}
-		if d >= cutoff {
-			if minus {
-				return math.MinInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
-			}
+		if !minus && d >= cutoff {
 			return math.MaxInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
 		}
 
-		v := d*uint64(base) + uint64(b)
-		if v < d {
-			if minus {
-				return math.MinInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
-			}
-			return math.MaxInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
+		if minus && d > cutoff {
+			return math.MinInt64, fmt.Errorf("cannot parse int64 from %q: %w", s, ErrOverflow)
 		}
-		d = v
+
+		d = d*uint64(base) + uint64(b)
 		i++
 	}
 
@@ -263,4 +290,11 @@ func isSpace(c byte) bool {
 	default:
 		return false
 	}
+}
+
+func uValue(v uint64, neg bool) uint64 {
+	if neg {
+		return -v
+	}
+	return v
 }

@@ -28,7 +28,7 @@ Flags:
       --json                                                        Output JSON instead of human-readable table
       --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
-      --log_backtrace_at traceLocation                              when logging hits line file:N, emit a stack trace (default :0)
+      --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
       --log_dir string                                              If non-empty, write log files in this directory
       --log_err_stacks                                              log stack traces for errors
       --log_rotate_max_size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
@@ -38,15 +38,16 @@ Flags:
       --mysql_server_version string                                 MySQL server version to advertise. (default "8.0.30-Vitess")
       --parallel int                                                DMLs only: Number of threads executing the same query in parallel. Useful for simple load testing. (default 1)
       --pprof strings                                               enable profiling
+      --pprof-http                                                  enable pprof http endpoints
       --purge_logs_interval duration                                how often try to remove old logs (default 1h0m0s)
       --qps int                                                     queries per second to throttle each thread at.
       --security_policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                                               vtgate server to connect to
-      --stderrthreshold severity                                    logs at or above this threshold go to stderr (default 1)
+      --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)
       --streaming                                                   use a streaming query
       --target string                                               keyspace:shard@tablet_type
       --timeout duration                                            timeout for queries (default 30s)
       --use_random_sequence                                         use random sequence for generating [min_sequence_id, max_sequence_id)
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
-      --vmodule moduleSpec                                          comma-separated list of pattern=N settings for file-filtered logging
+      --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging

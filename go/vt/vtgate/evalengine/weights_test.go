@@ -77,7 +77,7 @@ func TestTinyWeightStrings(t *testing.T) {
 					return cmp
 				}
 
-				cmp, err := NullsafeCompare(a, b, tc.col)
+				cmp, err := NullsafeCompare(a, b, collations.MySQL8(), tc.col)
 				require.NoError(t, err)
 
 				fullComparisons++
@@ -88,7 +88,7 @@ func TestTinyWeightStrings(t *testing.T) {
 				a := items[i]
 				b := items[i+1]
 
-				cmp, err := NullsafeCompare(a, b, tc.col)
+				cmp, err := NullsafeCompare(a, b, collations.MySQL8(), tc.col)
 				require.NoError(t, err)
 
 				if cmp > 0 {
@@ -136,7 +136,7 @@ func TestWeightStrings(t *testing.T) {
 				items := make([]item, 0, Length)
 				for i := 0; i < Length; i++ {
 					v := tc.gen()
-					w, _, err := WeightString(nil, v, typ, tc.col, tc.len, tc.prec)
+					w, _, err := WeightString(nil, v, typ, tc.col, tc.len, tc.prec, 0)
 					require.NoError(t, err)
 
 					items = append(items, item{value: v, weight: string(w)})
@@ -156,12 +156,12 @@ func TestWeightStrings(t *testing.T) {
 					a := items[i]
 					b := items[i+1]
 
-					v1, err := valueToEvalCast(a.value, typ, tc.col)
+					v1, err := valueToEvalCast(a.value, typ, tc.col, 0)
 					require.NoError(t, err)
-					v2, err := valueToEvalCast(b.value, typ, tc.col)
+					v2, err := valueToEvalCast(b.value, typ, tc.col, 0)
 					require.NoError(t, err)
 
-					cmp, err := evalCompareNullSafe(v1, v2)
+					cmp, err := evalCompareNullSafe(v1, v2, collations.MySQL8())
 					require.NoError(t, err)
 
 					if cmp > 0 {

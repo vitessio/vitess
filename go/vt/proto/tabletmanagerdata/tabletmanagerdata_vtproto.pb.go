@@ -792,10 +792,11 @@ func (m *ExecuteFetchAsDbaRequest) CloneVT() *ExecuteFetchAsDbaRequest {
 		return (*ExecuteFetchAsDbaRequest)(nil)
 	}
 	r := &ExecuteFetchAsDbaRequest{
-		DbName:         m.DbName,
-		MaxRows:        m.MaxRows,
-		DisableBinlogs: m.DisableBinlogs,
-		ReloadSchema:   m.ReloadSchema,
+		DbName:                  m.DbName,
+		MaxRows:                 m.MaxRows,
+		DisableBinlogs:          m.DisableBinlogs,
+		ReloadSchema:            m.ReloadSchema,
+		DisableForeignKeyChecks: m.DisableForeignKeyChecks,
 	}
 	if rhs := m.Query; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
@@ -2076,9 +2077,10 @@ func (m *VDiffReportOptions) CloneVT() *VDiffReportOptions {
 		return (*VDiffReportOptions)(nil)
 	}
 	r := &VDiffReportOptions{
-		OnlyPks:    m.OnlyPks,
-		DebugQuery: m.DebugQuery,
-		Format:     m.Format,
+		OnlyPks:       m.OnlyPks,
+		DebugQuery:    m.DebugQuery,
+		Format:        m.Format,
+		MaxSampleRows: m.MaxSampleRows,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2104,6 +2106,7 @@ func (m *VDiffCoreOptions) CloneVT() *VDiffCoreOptions {
 		TimeoutSeconds:        m.TimeoutSeconds,
 		MaxExtraRowsToCompare: m.MaxExtraRowsToCompare,
 		UpdateTableStats:      m.UpdateTableStats,
+		MaxDiffSeconds:        m.MaxDiffSeconds,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2155,6 +2158,11 @@ func (m *UpdateVReplicationWorkflowRequest) CloneVT() *UpdateVReplicationWorkflo
 		tmpContainer := make([]topodata.TabletType, len(rhs))
 		copy(tmpContainer, rhs)
 		r.TabletTypes = tmpContainer
+	}
+	if rhs := m.Shards; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.Shards = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -4040,6 +4048,16 @@ func (m *ExecuteFetchAsDbaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.DisableForeignKeyChecks {
+		i--
+		if m.DisableForeignKeyChecks {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
 	}
 	if m.ReloadSchema {
 		i--
@@ -7194,6 +7212,11 @@ func (m *VDiffReportOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.MaxSampleRows != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.MaxSampleRows))
+		i--
+		dAtA[i] = 0x20
+	}
 	if len(m.Format) > 0 {
 		i -= len(m.Format)
 		copy(dAtA[i:], m.Format)
@@ -7253,6 +7276,11 @@ func (m *VDiffCoreOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.MaxDiffSeconds != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.MaxDiffSeconds))
+		i--
+		dAtA[i] = 0x48
 	}
 	if m.UpdateTableStats {
 		i--
@@ -7406,6 +7434,15 @@ func (m *UpdateVReplicationWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) 
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Shards) > 0 {
+		for iNdEx := len(m.Shards) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Shards[iNdEx])
+			copy(dAtA[i:], m.Shards[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.Shards[iNdEx])))
+			i--
+			dAtA[i] = 0x3a
+		}
 	}
 	if m.State != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.State))
@@ -8351,6 +8388,9 @@ func (m *ExecuteFetchAsDbaRequest) SizeVT() (n int) {
 		n += 2
 	}
 	if m.ReloadSchema {
+		n += 2
+	}
+	if m.DisableForeignKeyChecks {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -9448,6 +9488,9 @@ func (m *VDiffReportOptions) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.MaxSampleRows != 0 {
+		n += 1 + sov(uint64(m.MaxSampleRows))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9482,6 +9525,9 @@ func (m *VDiffCoreOptions) SizeVT() (n int) {
 	}
 	if m.UpdateTableStats {
 		n += 2
+	}
+	if m.MaxDiffSeconds != 0 {
+		n += 1 + sov(uint64(m.MaxDiffSeconds))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -9540,6 +9586,12 @@ func (m *UpdateVReplicationWorkflowRequest) SizeVT() (n int) {
 	}
 	if m.State != 0 {
 		n += 1 + sov(uint64(m.State))
+	}
+	if len(m.Shards) > 0 {
+		for _, s := range m.Shards {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -13692,6 +13744,26 @@ func (m *ExecuteFetchAsDbaRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ReloadSchema = bool(v != 0)
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DisableForeignKeyChecks", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DisableForeignKeyChecks = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -17807,7 +17879,7 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Concurrency |= int64(b&0x7F) << shift
+				m.Concurrency |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -20376,6 +20448,25 @@ func (m *VDiffReportOptions) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Format = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxSampleRows", wireType)
+			}
+			m.MaxSampleRows = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxSampleRows |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -20595,6 +20686,25 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.UpdateTableStats = bool(v != 0)
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxDiffSeconds", wireType)
+			}
+			m.MaxDiffSeconds = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxDiffSeconds |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -20995,6 +21105,38 @@ func (m *UpdateVReplicationWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Shards", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Shards = append(m.Shards, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

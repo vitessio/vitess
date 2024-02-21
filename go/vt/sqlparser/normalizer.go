@@ -149,7 +149,7 @@ func (nz *normalizer) walkUpSelect(cursor *Cursor) bool {
 	parent := cursor.Parent()
 	switch parent.(type) {
 	case *Order, GroupBy:
-		return false
+		return true
 	case *Limit:
 		nz.convertLiteral(node, cursor)
 	default:
@@ -165,7 +165,7 @@ func validateLiteral(node *Literal) error {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect DATE value: '%s'", node.Val)
 		}
 	case TimeVal:
-		if _, _, ok := datetime.ParseTime(node.Val, -1); !ok {
+		if _, _, state := datetime.ParseTime(node.Val, -1); state != datetime.TimeOK {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect TIME value: '%s'", node.Val)
 		}
 	case TimestampVal:

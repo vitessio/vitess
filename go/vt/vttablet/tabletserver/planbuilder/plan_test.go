@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
@@ -73,6 +74,7 @@ func TestDDLPlan(t *testing.T) {
 
 func testPlan(t *testing.T, fileName string) {
 	t.Helper()
+	parser := sqlparser.NewTestParser()
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile(fileName) {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -81,9 +83,9 @@ func testPlan(t *testing.T, fileName string) {
 			}
 			var plan *Plan
 			var err error
-			statement, err := sqlparser.Parse(tcase.input)
+			statement, err := parser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName", false)
+				plan, err = Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
 			}
 			PassthroughDMLs = false
 
@@ -111,6 +113,7 @@ func testPlan(t *testing.T, fileName string) {
 
 func TestPlanInReservedConn(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
+	parser := sqlparser.NewTestParser()
 	for tcase := range iterateExecFile("exec_cases.txt") {
 		t.Run(tcase.input, func(t *testing.T) {
 			if strings.Contains(tcase.options, "PassthroughDMLs") {
@@ -118,9 +121,9 @@ func TestPlanInReservedConn(t *testing.T) {
 			}
 			var plan *Plan
 			var err error
-			statement, err := sqlparser.Parse(tcase.input)
+			statement, err := parser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName", false)
+				plan, err = Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
 			}
 			PassthroughDMLs = false
 
@@ -154,6 +157,7 @@ func TestCustom(t *testing.T) {
 		t.Log("No schemas to test")
 		return
 	}
+	parser := sqlparser.NewTestParser()
 	for _, schemFile := range testSchemas {
 		schem := loadSchema(schemFile)
 		t.Logf("Testing schema %s", schemFile)
@@ -167,11 +171,11 @@ func TestCustom(t *testing.T) {
 		for _, file := range files {
 			t.Logf("Testing file %s", file)
 			for tcase := range iterateExecFile(file) {
-				statement, err := sqlparser.Parse(tcase.input)
+				statement, err := parser.Parse(tcase.input)
 				if err != nil {
 					t.Fatalf("Got error: %v, parsing sql: %v", err.Error(), tcase.input)
 				}
-				plan, err := Build(statement, schem, "dbName", false)
+				plan, err := Build(vtenv.NewTestEnv(), statement, schem, "dbName", false)
 				var out string
 				if err != nil {
 					out = err.Error()
@@ -192,10 +196,11 @@ func TestCustom(t *testing.T) {
 
 func TestStreamPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
+	parser := sqlparser.NewTestParser()
 	for tcase := range iterateExecFile("stream_cases.txt") {
 		var plan *Plan
 		var err error
-		statement, err := sqlparser.Parse(tcase.input)
+		statement, err := parser.Parse(tcase.input)
 		if err == nil {
 			plan, err = BuildStreaming(statement, testSchema)
 		}
@@ -252,13 +257,14 @@ func TestMessageStreamingPlan(t *testing.T) {
 
 func TestLockPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
+	parser := sqlparser.NewTestParser()
 	for tcase := range iterateExecFile("lock_cases.txt") {
 		t.Run(tcase.input, func(t *testing.T) {
 			var plan *Plan
 			var err error
-			statement, err := sqlparser.Parse(tcase.input)
+			statement, err := parser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName", false)
+				plan, err = Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
 			}
 
 			var out string

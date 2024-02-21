@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -46,6 +47,8 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
+
+const mysqlShutdownTimeout = 1 * time.Minute
 
 func setBuiltinBackupMysqldDeadline(t time.Duration) time.Duration {
 	old := mysqlctl.BuiltinBackupMysqldTimeout
@@ -146,7 +149,7 @@ func TestExecuteBackup(t *testing.T) {
 
 	fakeStats := backupstats.NewFakeStats()
 
-	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -154,16 +157,17 @@ func TestExecuteBackup(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
-		Concurrency:  2,
-		HookExtraEnv: map[string]string{},
-		TopoServer:   ts,
-		Keyspace:     keyspace,
-		Shard:        shard,
-		Stats:        fakeStats,
+		Concurrency:          2,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Stats:                fakeStats,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
-	assert.True(t, ok)
+	assert.Equal(t, mysqlctl.BackupUsable, backupResult)
 
 	var destinationCloseStats int
 	var destinationOpenStats int
@@ -205,7 +209,7 @@ func TestExecuteBackup(t *testing.T) {
 	mysqld.ExpectedExecuteSuperQueryCurrent = 0 // resest the index of what queries we've run
 	mysqld.ShutdownTime = time.Minute           // reminder that shutdownDeadline is 1s
 
-	ok, err = be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+	backupResult, err = be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -213,14 +217,15 @@ func TestExecuteBackup(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
-		HookExtraEnv: map[string]string{},
-		TopoServer:   ts,
-		Keyspace:     keyspace,
-		Shard:        shard,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	assert.Error(t, err)
-	assert.False(t, ok)
+	assert.Equal(t, mysqlctl.BackupUnusable, backupResult)
 }
 
 func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
@@ -291,7 +296,7 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 		"SET GLOBAL innodb_fast_shutdown=0": {},
 	}
 
-	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -299,16 +304,17 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
-		Concurrency: 2,
-		TopoServer:  ts,
-		Keyspace:    keyspace,
-		Shard:       shard,
-		Stats:       backupstats.NewFakeStats(),
-		UpgradeSafe: true,
+		Concurrency:          2,
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Stats:                backupstats.NewFakeStats(),
+		UpgradeSafe:          true,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
-	assert.True(t, ok)
+	assert.Equal(t, mysqlctl.BackupUsable, backupResult)
 }
 
 // TestExecuteBackupWithCanceledContext tests the ability of the backup function to gracefully handle cases where errors
@@ -377,7 +383,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	cancelledCtx, cancelCtx := context.WithCancel(context.Background())
 	cancelCtx()
 
-	ok, err := be.ExecuteBackup(cancelledCtx, mysqlctl.BackupParams{
+	backupResult, err := be.ExecuteBackup(cancelledCtx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -385,18 +391,19 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
-		Stats:        backupstats.NewFakeStats(),
-		Concurrency:  2,
-		HookExtraEnv: map[string]string{},
-		TopoServer:   ts,
-		Keyspace:     keyspace,
-		Shard:        shard,
+		Stats:                backupstats.NewFakeStats(),
+		Concurrency:          2,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.Error(t, err)
 	// all four files will fail
 	require.ErrorContains(t, err, "context canceled;context canceled;context canceled;context canceled")
-	assert.False(t, ok)
+	assert.Equal(t, mysqlctl.BackupUnusable, backupResult)
 }
 
 // TestExecuteRestoreWithCanceledContext tests the ability of the restore function to gracefully handle cases where errors
@@ -461,7 +468,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	defer mysqld.Close()
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 
-	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
 		Mysqld: mysqld,
 		Cnf: &mysqlctl.Mycnf{
@@ -469,16 +476,17 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
-		Stats:        backupstats.NewFakeStats(),
-		Concurrency:  2,
-		HookExtraEnv: map[string]string{},
-		TopoServer:   ts,
-		Keyspace:     keyspace,
-		Shard:        shard,
+		Stats:                backupstats.NewFakeStats(),
+		Concurrency:          2,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
-	assert.True(t, ok)
+	assert.Equal(t, mysqlctl.BackupUsable, backupResult)
 
 	// Now try to restore the above backup.
 	bh = filebackupstorage.NewBackupHandle(nil, "", "", true)
@@ -500,19 +508,20 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
 			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
 		},
-		Logger:              logutil.NewConsoleLogger(),
-		Mysqld:              mysqld,
-		Concurrency:         2,
-		HookExtraEnv:        map[string]string{},
-		DeleteBeforeRestore: false,
-		DbName:              "test",
-		Keyspace:            "test",
-		Shard:               "-",
-		StartTime:           time.Now(),
-		RestoreToPos:        replication.Position{},
-		RestoreToTimestamp:  time.Time{},
-		DryRun:              false,
-		Stats:               fakeStats,
+		Logger:               logutil.NewConsoleLogger(),
+		Mysqld:               mysqld,
+		Concurrency:          2,
+		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		RestoreToPos:         replication.Position{},
+		RestoreToTimestamp:   time.Time{},
+		DryRun:               false,
+		Stats:                fakeStats,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
 	}
 
 	// Successful restore.
@@ -593,9 +602,9 @@ func needInnoDBRedoLogSubdir() (needIt bool, err error) {
 		return needIt, err
 	}
 	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
-	_, capableOf, _ := mysql.GetFlavor(versionStr, nil)
+	capableOf := mysql.ServerVersionCapableOf(versionStr)
 	if capableOf == nil {
 		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
 	}
-	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
+	return capableOf(capabilities.DynamicRedoLogCapacityFlavorCapability)
 }

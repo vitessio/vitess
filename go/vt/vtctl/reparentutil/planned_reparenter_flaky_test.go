@@ -62,8 +62,6 @@ func TestNewPlannedReparenter(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -444,8 +442,6 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -542,8 +538,6 @@ func TestPlannedReparenter_getLockAction(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -615,6 +609,114 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 				},
 			},
 			shouldErr: false,
+		},
+		{
+			name: "new primary provided - replication lag is tolerable",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: &replicationdatapb.Status{
+							Position:              "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
+							ReplicationLagSeconds: 2,
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			opts: &PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				TolerableReplLag: 10 * time.Second,
+			},
+			expectedIsNoop: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "new primary provided - replication lag is not tolerable",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: &replicationdatapb.Status{
+							Position:              "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2",
+							ReplicationLagSeconds: 25,
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			opts: &PlannedReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				TolerableReplLag: 10 * time.Second,
+			},
+			expectedIsNoop: true,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  500,
+					},
+				}, nil),
+			},
+			shouldErr: true,
 		},
 		{
 			name: "invariants hold with primary selection",
@@ -745,10 +847,10 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			shouldErr:      false,
 		},
 		{
-			// this doesn't cause an actual error from ChooseNewPrimary, because
+			// this doesn't cause an actual error from ElectNewPrimary, because
 			// there is no way to do that other than something going horribly wrong
 			// in go runtime, however we do check that we
-			// get a non-nil result from ChooseNewPrimary in preflightChecks and
+			// get a non-nil result from ElectNewPrimary in preflightChecks and
 			// bail out if we don't, so we're forcing that case here.
 			name: "cannot choose new primary-elect",
 			ev: &events.Reparent{
@@ -779,9 +881,12 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			shouldErr:      true,
 		},
 		{
-			name:      "primary-elect is not in tablet map",
-			ev:        &events.Reparent{},
-			tabletMap: map[string]*topo.TabletInfo{},
+			name: "primary-elect is not in tablet map",
+			ev: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					PrimaryAlias: nil,
+				}, nil),
+			}, tabletMap: map[string]*topo.TabletInfo{},
 			opts: &PlannedReparentOptions{
 				NewPrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -952,8 +1057,6 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1565,8 +1668,6 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1727,8 +1828,6 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1898,8 +1997,6 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2264,8 +2361,6 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3085,8 +3180,6 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3702,8 +3795,6 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

@@ -493,7 +493,7 @@ func TestVStreamCopyResume(t *testing.T) {
 					// Also, to ensure that the client can resume properly, make sure that
 					// the Fields value is present in the sqltypes.Result field and not missing.
 					// It's not guaranteed that BOTH shards have streamed a row yet as the order
-					// of events in the stream is non-determinstic. So we check to be sure that
+					// of events in the stream is non-deterministic. So we check to be sure that
 					// at least one shard has copied rows and thus has a full TableLastPK proto
 					// message.
 					eventStr := ev.String()

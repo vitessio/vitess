@@ -154,6 +154,15 @@ func Exec(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
 	return qr
 }
 
+// ExecMulti executes the given (potential multi) queries using the given connection.
+// The test fails if any of the queries produces an error
+func ExecMulti(t testing.TB, conn *mysql.Conn, query string) error {
+	t.Helper()
+	err := conn.ExecuteFetchMultiDrain(query)
+	require.NoError(t, err, "for query: "+query)
+	return err
+}
+
 // ExecCompareMySQL executes the given query against both Vitess and MySQL and compares
 // the two result set. If there is a mismatch, the difference will be printed and the
 // test will fail. If the query produces an error in either Vitess or MySQL, the test
@@ -236,16 +245,17 @@ func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*int
 		case <-timeout:
 			return fmt.Errorf("schema tracking didn't mark table t2 as authoritative until timeout")
 		default:
-			time.Sleep(1 * time.Second)
 			res, err := readVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]
 			if !fieldPresent {
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 			authoritativeBool, isBool := authoritative.(bool)
 			if !isBool || !authoritativeBool {
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 			return nil
@@ -255,58 +265,78 @@ func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*int
 
 // WaitForKsError waits for the ks error field to be populated and returns it.
 func WaitForKsError(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string) string {
+	var errString string
+	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]interface{}) bool {
+		ksErr, fieldPresent := keyspace["error"]
+		if !fieldPresent {
+			return false
+		}
+		var ok bool
+		errString, ok = ksErr.(string)
+		return ok
+	})
+	return errString
+}
+
+// WaitForVschemaCondition waits for the condition to be true
+func WaitForVschemaCondition(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string, conditionMet func(t *testing.T, keyspace map[string]interface{}) bool) {
 	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("schema tracking did not find error in '%s'", ks)
-			return ""
+			t.Fatalf("schema tracking did not met the condition within the time for keyspace: %s", ks)
 		default:
-			time.Sleep(1 * time.Second)
 			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
 			kss := convertToMap(*res)["keyspaces"]
 			ksMap := convertToMap(convertToMap(kss)[ks])
-			ksErr, fieldPresent := ksMap["error"]
-			if !fieldPresent {
-				break
+			if conditionMet(t, ksMap) {
+				return
 			}
-			errString, isErr := ksErr.(string)
-			if !isErr {
-				break
-			}
-			return errString
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
 
+// WaitForTableDeletions waits for a table to be deleted
+func WaitForTableDeletions(ctx context.Context, t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) {
+	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]interface{}) bool {
+		tablesMap := keyspace["tables"]
+		_, isPresent := convertToMap(tablesMap)[tbl]
+		return !isPresent
+	})
+}
+
 // WaitForColumn waits for a table's column to be present
-func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
+func WaitForColumn(t testing.TB, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
 	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:
 			return fmt.Errorf("schema tracking did not find column '%s' in table '%s'", col, tbl)
 		default:
-			time.Sleep(1 * time.Second)
 			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]
 			if !fieldPresent {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			authoritativeBool, isBool := authoritative.(bool)
 			if !isBool || !authoritativeBool {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			colMap, exists := t2Map["columns"]
 			if !exists {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			colList, isSlice := colMap.([]interface{})
 			if !isSlice {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			for _, c := range colList {
 				colDef, isMap := c.(map[string]interface{})
@@ -317,6 +347,7 @@ func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, c
 					return nil
 				}
 			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
@@ -330,7 +361,10 @@ func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
 }
 
 func convertToMap(input interface{}) map[string]interface{} {
-	output := input.(map[string]interface{})
+	output, ok := input.(map[string]interface{})
+	if !ok {
+		return make(map[string]interface{})
+	}
 	return output
 }
 

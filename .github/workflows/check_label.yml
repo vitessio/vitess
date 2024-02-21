@@ -3,10 +3,6 @@ on:
   pull_request:
     types: [opened, labeled, unlabeled, synchronize]
 
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Check Pull Request labels')
-  cancel-in-progress: true
-
 permissions: read-all
 
 jobs:
@@ -67,6 +63,12 @@ jobs:
           if cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'NeedsIssue' ; then
             echo "Expecting PR to not have the NeedsIssue label; please create a linked issue and remove the label."
             exit 1
+          fi
+          if cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'NeedsBackportReason' ; then
+            if cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'Backport to:'; then
+              echo "Expecting PR to not have the NeedsBackportReason label; please add your justification to the PR description and remove the label."
+              exit 1
+            fi
           fi
           
 

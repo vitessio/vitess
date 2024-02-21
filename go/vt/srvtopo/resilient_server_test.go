@@ -811,7 +811,7 @@ func TestSrvKeyspaceListener(t *testing.T) {
 		srvTopoCacheRefresh = 1 * time.Second
 	}()
 
-	rs := NewResilientServer(ctx, ts, "TestGetSrvKeyspaceWatcher")
+	rs := NewResilientServer(ctx, ts, "TestGetSrvKeyspaceListener")
 
 	cancelCtx, cancelFunc := context.WithCancel(context.Background())
 	var callbackCount atomic.Int32

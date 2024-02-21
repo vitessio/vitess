@@ -1817,20 +1817,12 @@ func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, r
 			return true
 		}
 	}
-	if !a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
-		parent.(*ColumnType).Length = newNode.(*Literal)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
-		parent.(*ColumnType).Scale = newNode.(*Literal)
-	}) {
-		return false
-	}
 	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -2082,20 +2074,12 @@ func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType,
 			return true
 		}
 	}
-	if !a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
-		parent.(*ConvertType).Length = newNode.(*Literal)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
-		parent.(*ConvertType).Scale = newNode.(*Literal)
-	}) {
-		return false
-	}
 	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -2455,13 +2439,17 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}) {
 		return false
 	}
+	for x, el := range node.TableExprs {
+		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*Delete).TableExprs[idx] = newNode.(TableExpr)
+			}
+		}(x)) {
+			return false
+		}
+	}
 	if !a.rewriteTableNames(node, node.Targets, func(newNode, parent SQLNode) {
 		parent.(*Delete).Targets = newNode.(TableNames)
-	}) {
-		return false
-	}
-	if !a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
-		parent.(*Delete).TableExprs = newNode.(TableExprs)
 	}) {
 		return false
 	}
@@ -8680,10 +8668,14 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
-		parent.(*Update).TableExprs = newNode.(TableExprs)
-	}) {
-		return false
+	for x, el := range node.TableExprs {
+		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*Update).TableExprs[idx] = newNode.(TableExpr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if !a.rewriteUpdateExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*Update).Exprs = newNode.(UpdateExprs)

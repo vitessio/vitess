@@ -167,27 +167,27 @@ func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalE
 }
 
 // ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
-// The function returns a boolean that indicates if the backup is usable, and an overall error.
-func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+// The function returns a BackupResult that indicates the usability of the backup, and an overall error.
+func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
 	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
 		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
 
 	return be.executeFullBackup(ctx, params, bh)
 }
 
-// executeFullBackup returns a boolean that indicates if the backup is usable,
+// executeFullBackup returns a BackupResult that indicates the usability of the backup,
 // and an overall error.
-func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (complete bool, finalErr error) {
+func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (backupResult BackupResult, finalErr error) {
 	if params.IncrementalFromPos != "" {
-		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "incremental backups not supported in xtrabackup engine.")
+		return BackupUnusable, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "incremental backups not supported in xtrabackup engine.")
 	}
 	if xtrabackupUser == "" {
-		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
+		return BackupUnusable, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
 	}
 
 	// an extension is required when using an external compressor
 	if backupStorageCompress && ExternalCompressorCmd != "" && ExternalCompressorExt == "" {
-		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT,
+		return BackupUnusable, vterrors.New(vtrpc.Code_INVALID_ARGUMENT,
 			"flag --external-compressor-extension not provided when using an external compressor")
 	}
 
@@ -198,20 +198,20 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	}
 
 	if err != nil {
-		return false, vterrors.Wrap(err, "unable to obtain a connection to the database")
+		return BackupUnusable, vterrors.Wrap(err, "unable to obtain a connection to the database")
 	}
 	pos, err := conn.PrimaryPosition()
 	if err != nil {
-		return false, vterrors.Wrap(err, "unable to obtain primary position")
+		return BackupUnusable, vterrors.Wrap(err, "unable to obtain primary position")
 	}
 	serverUUID, err := conn.GetServerUUID()
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get server uuid")
+		return BackupUnusable, vterrors.Wrap(err, "can't get server uuid")
 	}
 
 	mysqlVersion, err := params.Mysqld.GetVersionString(ctx)
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get MySQL version")
+		return BackupUnusable, vterrors.Wrap(err, "can't get MySQL version")
 	}
 
 	flavor := pos.GTIDSet.Flavor()
@@ -229,14 +229,14 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	params.Logger.Infof("Starting backup with %v stripe(s)", numStripes)
 	replicationPosition, err := be.backupFiles(ctx, params, bh, backupFileName, numStripes, flavor)
 	if err != nil {
-		return false, err
+		return BackupUnusable, err
 	}
 
 	// open the MANIFEST
 	params.Logger.Infof("Writing backup MANIFEST")
 	mwc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)
 	if err != nil {
-		return false, vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
+		return BackupUnusable, vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
 	}
 	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
@@ -244,6 +244,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	bm := &xtraBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
+			BackupName:     bh.Name(),
 			BackupMethod:   xtrabackupEngineName,
 			Position:       replicationPosition,
 			PurgedPosition: replicationPosition,
@@ -273,14 +274,14 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
-		return false, vterrors.Wrapf(err, "cannot JSON encode %v", backupManifestFileName)
+		return BackupUnusable, vterrors.Wrapf(err, "cannot JSON encode %v", backupManifestFileName)
 	}
 	if _, err := mwc.Write([]byte(data)); err != nil {
-		return false, vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
+		return BackupUnusable, vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
 
 	params.Logger.Infof("Backup completed")
-	return true, nil
+	return BackupUsable, nil
 }
 
 func (be *XtrabackupEngine) backupFiles(
@@ -484,7 +485,7 @@ func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestorePa
 		return nil, err
 	}
 
-	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
+	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger, params.MysqlShutdownTimeout); err != nil {
 		return nil, err
 	}
 

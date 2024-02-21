@@ -97,53 +97,53 @@ CREATE TABLE allDefaults (
 }
 `
 
-	createProcSQL = `use vt_customer;
+	createProcSQL = []string{`
 CREATE PROCEDURE sp_insert()
 BEGIN
 	insert into allDefaults () values ();
 END;
-
+`, `
 CREATE PROCEDURE sp_delete()
 BEGIN
 	delete from allDefaults;
 END;
-
+`, `
 CREATE PROCEDURE sp_multi_dml()
 BEGIN
 	insert into allDefaults () values ();
 	delete from allDefaults;
 END;
-
+`, `
 CREATE PROCEDURE sp_variable()
 BEGIN
 	insert into allDefaults () values ();
 	SELECT min(id) INTO @myvar FROM allDefaults;
 	DELETE FROM allDefaults WHERE id = @myvar;
 END;
-
+`, `
 CREATE PROCEDURE sp_select()
 BEGIN
 	SELECT * FROM allDefaults;
 END;
-
+`, `
 CREATE PROCEDURE sp_all()
 BEGIN
 	insert into allDefaults () values ();
     select * from allDefaults;
 	delete from allDefaults;
 END;
-
+`, `
 CREATE PROCEDURE in_parameter(IN val int)
 BEGIN
 	insert into allDefaults(id) values(val);
 END;
-
+`, `
 CREATE PROCEDURE out_parameter(OUT val int)
 BEGIN
 	insert into allDefaults(id) values (128);
 	select 128 into val from dual;
 END;
-`
+`}
 )
 
 var enableSettingsPool bool
@@ -179,7 +179,7 @@ func runAllTests(m *testing.M) int {
 		SchemaSQL: SchemaSQL,
 		VSchema:   VSchema,
 	}
-	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3", "--queryserver-config-max-result-size", "30"}
+	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3s", "--queryserver-config-max-result-size", "30"}
 	if enableSettingsPool {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-settings-pool")
 	}
@@ -196,7 +196,7 @@ func runAllTests(m *testing.M) int {
 	}
 
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
-	if _, err := primaryTablet.QueryTablet(createProcSQL, KeyspaceName, false); err != nil {
+	if err := primaryTablet.QueryTabletMultiple(createProcSQL, KeyspaceName, true); err != nil {
 		log.Fatal(err.Error())
 		return 1
 	}
@@ -332,13 +332,11 @@ func TestCallProcedure(t *testing.T) {
 
 	utils.AssertMatches(t, conn, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("'CALL' not supported in sharded mode")]]`)
 
-	_, err = conn.ExecuteFetch(`CALL sp_select()`, 1000, true)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
+	err = conn.ExecuteFetchMultiDrain(`CALL sp_select()`)
+	require.ErrorContains(t, err, "Multi-Resultset not supported in stored procedure")
 
-	_, err = conn.ExecuteFetch(`CALL sp_all()`, 1000, true)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
+	err = conn.ExecuteFetchMultiDrain(`CALL sp_all()`)
+	require.ErrorContains(t, err, "Multi-Resultset not supported in stored procedure")
 
 	qr = utils.Exec(t, conn, `CALL sp_delete()`)
 	require.GreaterOrEqual(t, 1, int(qr.RowsAffected))

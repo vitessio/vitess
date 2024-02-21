@@ -173,7 +173,7 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *querypb.Target, t
 	return 0, nil
 }
 
-// rollbackTransactionID is a test transactin id for Rollback.
+// rollbackTransactionID is a test transaction id for Rollback.
 const rollbackTransactionID int64 = 999044
 
 // Rollback is part of the queryservice.QueryService interface

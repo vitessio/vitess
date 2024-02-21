@@ -43,7 +43,8 @@ func BenchmarkVisitLargeExpression(b *testing.B) {
 
 func TestReplaceWorksInLaterCalls(t *testing.T) {
 	q := "select * from tbl1"
-	stmt, err := Parse(q)
+	parser := NewTestParser()
+	stmt, err := parser.Parse(q)
 	require.NoError(t, err)
 	count := 0
 	Rewrite(stmt, func(cursor *Cursor) bool {
@@ -67,7 +68,8 @@ func TestReplaceWorksInLaterCalls(t *testing.T) {
 
 func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {
 	q := "select * from tbl1"
-	stmt, err := Parse(q)
+	parser := NewTestParser()
+	stmt, err := parser.Parse(q)
 	require.NoError(t, err)
 	count := 0
 	Rewrite(stmt, func(cursor *Cursor) bool {
@@ -94,7 +96,8 @@ func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {
 }
 
 func TestChangeValueTypeGivesError(t *testing.T) {
-	parse, err := Parse("select * from a join b on a.id = b.id")
+	parser := NewTestParser()
+	parse, err := parser.Parse("select * from a join b on a.id = b.id")
 	require.NoError(t, err)
 
 	defer func() {

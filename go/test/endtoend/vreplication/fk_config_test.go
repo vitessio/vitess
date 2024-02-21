@@ -20,16 +20,24 @@ var (
 	initialFKSchema = `
 create table parent(id int, name varchar(128), primary key(id)) engine=innodb;
 create table child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade) engine=innodb;
+create view vparent as select * from parent;
+create table t1(id int, name varchar(128), primary key(id)) engine=innodb;
+create table t2(id int, t1id int, name varchar(128), primary key(id), foreign key(t1id) references t1(id) on delete cascade) engine=innodb;
 `
 	initialFKData = `
 insert into parent values(1, 'parent1'), (2, 'parent2');
-insert into child values(1, 1, 'child11'), (2, 1, 'child21'), (3, 2, 'child32');`
+insert into child values(1, 1, 'child11'), (2, 1, 'child21'), (3, 2, 'child32');
+insert into t1 values(1, 't11'), (2, 't12');
+insert into t2 values(1, 1, 't21'), (2, 1, 't22'), (3, 2, 't23');
+`
 
 	initialFKSourceVSchema = `
 {
   "tables": {
 	"parent": {},
-	"child": {}
+	"child": {},
+	"t1": {},
+	"t2": {}
   }
 }
 `
@@ -55,6 +63,22 @@ insert into child values(1, 1, 'child11'), (2, 1, 'child21'), (3, 2, 'child32');
       "column_vindexes": [
         {
           "column": "parent_id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "t1": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "t2": {
+      "column_vindexes": [
+        {
+          "column": "t1id",
           "name": "reverse_bits"
         }
       ]

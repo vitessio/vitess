@@ -45,9 +45,17 @@ var (
 	backupEngineImplementation = builtinBackupEngineName
 )
 
+type BackupResult int
+
+const (
+	BackupUnusable BackupResult = iota
+	BackupEmpty
+	BackupUsable
+)
+
 // BackupEngine is the interface to take a backup with a given engine.
 type BackupEngine interface {
-	ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error)
+	ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error)
 	ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool
 }
 
@@ -77,23 +85,26 @@ type BackupParams struct {
 	Stats backupstats.Stats
 	// UpgradeSafe indicates whether the backup is safe for upgrade and created with innodb_fast_shutdown=0
 	UpgradeSafe bool
+	// MysqlShutdownTimeout defines how long we wait during MySQL shutdown if that is part of the backup process.
+	MysqlShutdownTimeout time.Duration
 }
 
 func (b *BackupParams) Copy() BackupParams {
 	return BackupParams{
-		Cnf:                b.Cnf,
-		Mysqld:             b.Mysqld,
-		Logger:             b.Logger,
-		Concurrency:        b.Concurrency,
-		HookExtraEnv:       b.HookExtraEnv,
-		TopoServer:         b.TopoServer,
-		Keyspace:           b.Keyspace,
-		Shard:              b.Shard,
-		TabletAlias:        b.TabletAlias,
-		BackupTime:         b.BackupTime,
-		IncrementalFromPos: b.IncrementalFromPos,
-		Stats:              b.Stats,
-		UpgradeSafe:        b.UpgradeSafe,
+		Cnf:                  b.Cnf,
+		Mysqld:               b.Mysqld,
+		Logger:               b.Logger,
+		Concurrency:          b.Concurrency,
+		HookExtraEnv:         b.HookExtraEnv,
+		TopoServer:           b.TopoServer,
+		Keyspace:             b.Keyspace,
+		Shard:                b.Shard,
+		TabletAlias:          b.TabletAlias,
+		BackupTime:           b.BackupTime,
+		IncrementalFromPos:   b.IncrementalFromPos,
+		Stats:                b.Stats,
+		UpgradeSafe:          b.UpgradeSafe,
+		MysqlShutdownTimeout: b.MysqlShutdownTimeout,
 	}
 }
 
@@ -130,24 +141,27 @@ type RestoreParams struct {
 	DryRun bool
 	// Stats let's restore engines report detailed restore timings.
 	Stats backupstats.Stats
+	// MysqlShutdownTimeout defines how long we wait during MySQL shutdown if that is part of the backup process.
+	MysqlShutdownTimeout time.Duration
 }
 
 func (p *RestoreParams) Copy() RestoreParams {
 	return RestoreParams{
-		Cnf:                 p.Cnf,
-		Mysqld:              p.Mysqld,
-		Logger:              p.Logger,
-		Concurrency:         p.Concurrency,
-		HookExtraEnv:        p.HookExtraEnv,
-		DeleteBeforeRestore: p.DeleteBeforeRestore,
-		DbName:              p.DbName,
-		Keyspace:            p.Keyspace,
-		Shard:               p.Shard,
-		StartTime:           p.StartTime,
-		RestoreToPos:        p.RestoreToPos,
-		RestoreToTimestamp:  p.RestoreToTimestamp,
-		DryRun:              p.DryRun,
-		Stats:               p.Stats,
+		Cnf:                  p.Cnf,
+		Mysqld:               p.Mysqld,
+		Logger:               p.Logger,
+		Concurrency:          p.Concurrency,
+		HookExtraEnv:         p.HookExtraEnv,
+		DeleteBeforeRestore:  p.DeleteBeforeRestore,
+		DbName:               p.DbName,
+		Keyspace:             p.Keyspace,
+		Shard:                p.Shard,
+		StartTime:            p.StartTime,
+		RestoreToPos:         p.RestoreToPos,
+		RestoreToTimestamp:   p.RestoreToTimestamp,
+		DryRun:               p.DryRun,
+		Stats:                p.Stats,
+		MysqlShutdownTimeout: p.MysqlShutdownTimeout,
 	}
 }
 
@@ -263,6 +277,9 @@ type IncrementalBackupDetails struct {
 // their own custom fields by embedding this struct anonymously into their own
 // custom struct, as long as their custom fields don't have conflicting names.
 type BackupManifest struct {
+	// BackupName is the name of the backup, which is also the name of the directory
+	BackupName string
+
 	// BackupMethod is the name of the backup engine that created this backup.
 	// If this is empty, the backup engine is assumed to be "builtin" since that
 	// was the only engine that ever left this field empty. All new backup
@@ -402,9 +419,9 @@ func (p *RestorePath) String() string {
 	return sb.String()
 }
 
-// FindLatestSuccessfulBackup returns the handle and manifest for the last good backup,
+// findLatestSuccessfulBackup returns the handle and manifest for the last good backup,
 // which can be either full or increment
-func FindLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs []backupstorage.BackupHandle, excludeBackupName string) (backupstorage.BackupHandle, *BackupManifest, error) {
+func findLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs []backupstorage.BackupHandle, excludeBackupName string) (backupstorage.BackupHandle, *BackupManifest, error) {
 	for index := len(bhs) - 1; index >= 0; index-- {
 		bh := bhs[index]
 		if bh.Name() == excludeBackupName {
@@ -425,8 +442,8 @@ func FindLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs 
 	return nil, nil, ErrNoCompleteBackup
 }
 
-// FindLatestSuccessfulBackupPosition returns the position of the last known successful backup
-func FindLatestSuccessfulBackupPosition(ctx context.Context, params BackupParams, excludeBackupName string) (backupName string, pos replication.Position, err error) {
+// findLatestSuccessfulBackupPosition returns the position of the last known successful backup
+func findLatestSuccessfulBackupPosition(ctx context.Context, params BackupParams, excludeBackupName string) (backupName string, pos replication.Position, err error) {
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return "", pos, err
@@ -440,12 +457,38 @@ func FindLatestSuccessfulBackupPosition(ctx context.Context, params BackupParams
 	if err != nil {
 		return "", pos, vterrors.Wrap(err, "ListBackups failed")
 	}
-	bh, manifest, err := FindLatestSuccessfulBackup(ctx, params.Logger, bhs, excludeBackupName)
+	bh, manifest, err := findLatestSuccessfulBackup(ctx, params.Logger, bhs, excludeBackupName)
 	if err != nil {
 		return "", pos, vterrors.Wrap(err, "FindLatestSuccessfulBackup failed")
 	}
 	pos = manifest.Position
 	return bh.Name(), pos, nil
+}
+
+// findBackupPosition returns the position of a given backup, assuming the backup exists.
+func findBackupPosition(ctx context.Context, params BackupParams, backupName string) (pos replication.Position, err error) {
+	bs, err := backupstorage.GetBackupStorage()
+	if err != nil {
+		return pos, err
+	}
+	defer bs.Close()
+
+	backupDir := GetBackupDir(params.Keyspace, params.Shard)
+	bhs, err := bs.ListBackups(ctx, backupDir)
+	if err != nil {
+		return pos, vterrors.Wrap(err, "ListBackups failed")
+	}
+	for _, bh := range bhs {
+		if bh.Name() != backupName {
+			continue
+		}
+		manifest, err := GetBackupManifest(ctx, bh)
+		if err != nil {
+			return pos, vterrors.Wrapf(err, "GetBackupManifest failed for backup: %v", backupName)
+		}
+		return manifest.Position, nil
+	}
+	return pos, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "could not find backup %q for %s/%s", backupName, params.Keyspace, params.Shard)
 }
 
 // FindBackupToRestore returns a path, a sequence of backup handles, to be restored.
@@ -584,10 +627,10 @@ func validateMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe b
 	return fmt.Errorf("running MySQL version %q is newer than backup MySQL version %q which is not safe to upgrade", to, from)
 }
 
-func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger) error {
+func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, mysqlShutdownTimeout time.Duration) error {
 	// shutdown mysqld if it is running
 	logger.Infof("Restore: shutdown mysqld")
-	if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
+	if err := mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout); err != nil {
 		return err
 	}
 

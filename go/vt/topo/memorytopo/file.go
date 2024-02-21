@@ -30,6 +30,8 @@ import (
 
 // Create is part of topo.Conn interface.
 func (c *Conn) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
+	c.factory.callstats.Add([]string{"Create"}, 1)
+
 	if err := c.dial(ctx); err != nil {
 		return nil, err
 	}
@@ -74,6 +76,8 @@ func (c *Conn) Create(ctx context.Context, filePath string, contents []byte) (to
 
 // Update is part of topo.Conn interface.
 func (c *Conn) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
+	c.factory.callstats.Add([]string{"Update"}, 1)
+
 	if err := c.dial(ctx); err != nil {
 		return nil, err
 	}
@@ -152,6 +156,8 @@ func (c *Conn) Update(ctx context.Context, filePath string, contents []byte, ver
 
 // Get is part of topo.Conn interface.
 func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	c.factory.callstats.Add([]string{"Get"}, 1)
+
 	if err := c.dial(ctx); err != nil {
 		return nil, nil, err
 	}
@@ -177,6 +183,8 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 
 // List is part of the topo.Conn interface.
 func (c *Conn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
+	c.factory.callstats.Add([]string{"List"}, 1)
+
 	if err := c.dial(ctx); err != nil {
 		return nil, err
 	}
@@ -186,6 +194,9 @@ func (c *Conn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, 
 
 	if c.factory.err != nil {
 		return nil, c.factory.err
+	}
+	if c.factory.listErr != nil {
+		return nil, c.factory.listErr
 	}
 
 	dir, file := path.Split(filePathPrefix)
@@ -236,6 +247,8 @@ func gatherChildren(n *node, dirPath string) []topo.KVInfo {
 
 // Delete is part of topo.Conn interface.
 func (c *Conn) Delete(ctx context.Context, filePath string, version topo.Version) error {
+	c.factory.callstats.Add([]string{"Delete"}, 1)
+
 	if err := c.dial(ctx); err != nil {
 		return err
 	}

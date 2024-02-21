@@ -17,12 +17,14 @@ limitations under the License.
 package trace
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"testing"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExtractMapFromString(t *testing.T) {
@@ -46,4 +48,30 @@ func TestErrorConditions(t *testing.T) {
 
 	_, err = extractMapFromString("this is not base64") // malformed base64
 	assert.Error(t, err)
+}
+
+func TestNewClientSpan(t *testing.T) {
+	svc := openTracingService{
+		Tracer: &fakeTracer{},
+	}
+	clientSpan := svc.NewClientSpan(nil, "test-svc", "test-label")
+	require.NotEmpty(t, clientSpan)
+
+	clientSpan = svc.New(clientSpan, "client-span")
+	require.NotEmpty(t, clientSpan)
+
+	spanFromCtx, ok := svc.FromContext(context.Background())
+	require.False(t, ok)
+	require.Nil(t, spanFromCtx)
+
+	ctx := svc.NewContext(context.TODO(), clientSpan)
+	require.NotNil(t, ctx)
+	clientSpan.Finish()
+
+	spanFromCtx, ok = svc.FromContext(ctx)
+	require.True(t, ok)
+	require.NotEmpty(t, spanFromCtx)
+
+	ctx = svc.NewContext(context.TODO(), &mockSpan{})
+	require.Nil(t, ctx)
 }

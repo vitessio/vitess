@@ -31,10 +31,11 @@ var _ Primitive = (*Projection)(nil)
 
 // Projection can evaluate expressions and project the results
 type Projection struct {
+	noTxNeeded
+
 	Cols  []string
 	Exprs []evalengine.Expr
 	Input Primitive
-	noTxNeeded
 }
 
 // RouteType implements the Primitive interface
@@ -88,8 +89,11 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var once sync.Once
 	var fields []*querypb.Field
+	var mu sync.Mutex
 	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		var err error
+		mu.Lock()
+		defer mu.Unlock()
 		if wantfields {
 			once.Do(func() {
 				fields, err = p.evalFields(env, qr.Fields)
@@ -149,15 +153,17 @@ func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*query
 		if err != nil {
 			return nil, err
 		}
-		fl := mysql.FlagsForColumn(typ.Type, typ.Coll)
-		if !sqltypes.IsNull(typ.Type) && !typ.Nullable {
+		fl := mysql.FlagsForColumn(typ.Type(), typ.Collation())
+		if !sqltypes.IsNull(typ.Type()) && !typ.Nullable() {
 			fl |= uint32(querypb.MySqlFlag_NOT_NULL_FLAG)
 		}
 		fields = append(fields, &querypb.Field{
-			Name:    col,
-			Type:    typ.Type,
-			Charset: uint32(typ.Coll),
-			Flags:   fl,
+			Name:         col,
+			Type:         typ.Type(),
+			Charset:      uint32(typ.Collation()),
+			ColumnLength: uint32(typ.Size()),
+			Decimals:     uint32(typ.Scale()),
+			Flags:        fl,
 		})
 	}
 	return fields, nil

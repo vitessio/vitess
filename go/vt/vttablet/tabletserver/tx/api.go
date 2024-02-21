@@ -126,7 +126,7 @@ func (p *Properties) RecordQuery(query string) {
 func (p *Properties) InTransaction() bool { return p != nil }
 
 // String returns a printable version of the transaction
-func (p *Properties) String(sanitize bool) string {
+func (p *Properties) String(sanitize bool, parser *sqlparser.Parser) string {
 	if p == nil {
 		return ""
 	}
@@ -135,7 +135,7 @@ func (p *Properties) String(sanitize bool) string {
 		sb := strings.Builder{}
 		for _, query := range p.Queries {
 			if sanitize {
-				query, _ = sqlparser.RedactSQLQuery(query)
+				query, _ = parser.RedactSQLQuery(query)
 			}
 			sb.WriteString(query)
 			sb.WriteString(";")

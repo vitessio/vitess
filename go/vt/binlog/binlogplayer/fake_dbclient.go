@@ -80,3 +80,7 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	}
 	return nil, fmt.Errorf("unexpected: %v", query)
 }
+
+func (dc *fakeDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	return make([]*sqltypes.Result, 0), nil
+}

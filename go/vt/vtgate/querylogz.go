@@ -55,10 +55,9 @@ var (
 		</thead>
 	`)
 	querylogzFuncMap = template.FuncMap{
-		"stampMicro":    func(t time.Time) string { return t.Format(time.StampMicro) },
-		"cssWrappable":  logz.Wrappable,
-		"truncateQuery": sqlparser.TruncateForUI,
-		"unquote":       func(s string) string { return strings.Trim(s, "\"") },
+		"stampMicro":   func(t time.Time) string { return t.Format(time.StampMicro) },
+		"cssWrappable": logz.Wrappable,
+		"unquote":      func(s string) string { return strings.Trim(s, "\"") },
 	}
 	querylogzTmpl = template.Must(template.New("example").Funcs(querylogzFuncMap).Parse(`
 		<tr class="{{.ColorLevel}}">
@@ -74,7 +73,7 @@ var (
 			<td>{{.ExecuteTime.Seconds}}</td>
 			<td>{{.CommitTime.Seconds}}</td>
 			<td>{{.StmtType}}</td>
-			<td>{{.SQL | truncateQuery | unquote | cssWrappable}}</td>
+			<td>{{.SQL | .Parser.TruncateForUI | unquote | cssWrappable}}</td>
 			<td>{{.ShardQueries}}</td>
 			<td>{{.RowsAffected}}</td>
 			<td>{{.ErrorStr}}</td>
@@ -84,7 +83,7 @@ var (
 
 // querylogzHandler serves a human readable snapshot of the
 // current query log.
-func querylogzHandler(ch chan *logstats.LogStats, w http.ResponseWriter, r *http.Request) {
+func querylogzHandler(ch chan *logstats.LogStats, w http.ResponseWriter, r *http.Request, parser *sqlparser.Parser) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
@@ -115,7 +114,8 @@ func querylogzHandler(ch chan *logstats.LogStats, w http.ResponseWriter, r *http
 			tmplData := struct {
 				*logstats.LogStats
 				ColorLevel string
-			}{stats, level}
+				Parser     *sqlparser.Parser
+			}{stats, level, parser}
 			if err := querylogzTmpl.Execute(w, tmplData); err != nil {
 				log.Errorf("querylogz: couldn't execute template: %v", err)
 			}

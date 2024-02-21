@@ -85,7 +85,7 @@ func newPooledConn(ctx context.Context, pool *Pool, appParams dbconfigs.Connecto
 }
 
 // NewConn creates a new Conn without a pool.
-func NewConn(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, setting *smartconnpool.Setting) (*Conn, error) {
+func NewConn(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, setting *smartconnpool.Setting, env tabletenv.Env) (*Conn, error) {
 	c, err := dbconnpool.NewDBConnection(ctx, params)
 	if err != nil {
 		return nil, err
@@ -94,6 +94,7 @@ func NewConn(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpoo
 		conn:        c,
 		dbaPool:     dbaPool,
 		stats:       tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
+		env:         env,
 		killTimeout: defaultKillTimeout,
 	}
 	if setting == nil {
@@ -497,9 +498,9 @@ func (dbc *Conn) CurrentForLogging() string {
 	if dbc.env != nil && dbc.env.Config() != nil && !dbc.env.Config().SanitizeLogMessages {
 		queryToLog = dbc.Current()
 	} else {
-		queryToLog, _ = sqlparser.RedactSQLQuery(dbc.Current())
+		queryToLog, _ = dbc.env.Environment().Parser().RedactSQLQuery(dbc.Current())
 	}
-	return sqlparser.TruncateForLog(queryToLog)
+	return dbc.env.Environment().Parser().TruncateForLog(queryToLog)
 }
 
 func (dbc *Conn) applySameSetting(ctx context.Context) (err error) {

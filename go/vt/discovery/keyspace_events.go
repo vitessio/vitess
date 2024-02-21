@@ -529,6 +529,11 @@ func (kss *keyspaceState) isServing() bool {
 // In addition, the traffic switcher updates SrvVSchema when the DeniedTables attributes in a Shard record is
 // modified.
 func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool {
+	// the vschema can be nil if the server is currently shutting down
+	if vs == nil {
+		return true
+	}
+
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
 	kss.moveTablesState, _ = kss.getMoveTablesStatus(vs)

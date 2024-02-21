@@ -64,6 +64,9 @@ func (state servingState) String() string {
 
 // transitionRetryInterval is for tests.
 var transitionRetryInterval = 1 * time.Second
+var logInitTime sync.Once
+
+var ErrNoTarget = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
 
 // stateManager manages state transition for all the TabletServer
 // subcomponents.
@@ -96,6 +99,10 @@ type stateManager struct {
 	alsoAllow      []topodatapb.TabletType
 	reason         string
 	transitionErr  error
+	// requestsWaitCounter is the number of goroutines that are waiting for requests to be empty.
+	// If this value is greater than zero, then we have to ensure that we don't Add to the requests
+	// to avoid any panics in the wait.
+	requestsWaitCounter int
 
 	requests sync.WaitGroup
 
@@ -121,7 +128,7 @@ type stateManager struct {
 	throttler   lagThrottler
 	tableGC     tableGarbageCollector
 
-	// hcticks starts on initialiazation and runs forever.
+	// hcticks starts on initialization and runs forever.
 	hcticks *timer.Timer
 
 	// checkMySQLThrottler ensures that CheckMysql
@@ -194,11 +201,11 @@ func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
 	sm.target = target.CloneVT()
 	sm.transitioning = semaphore.NewWeighted(1)
 	sm.checkMySQLThrottler = semaphore.NewWeighted(1)
-	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
-	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
-	sm.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
-	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
-	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
+	sm.timebombDuration = env.Config().OltpReadPool.Timeout * 10
+	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.Interval)
+	sm.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThreshold.Nanoseconds())
+	sm.shutdownGracePeriod = env.Config().GracePeriods.Shutdown
+	sm.transitionGracePeriod = env.Config().GracePeriods.Transition
 }
 
 // SetServingType changes the state to the specified settings.
@@ -351,6 +358,20 @@ func (sm *stateManager) checkMySQL() {
 	}()
 }
 
+// addRequestsWaitCounter adds to the requestsWaitCounter while being protected by a mutex.
+func (sm *stateManager) addRequestsWaitCounter(val int) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.requestsWaitCounter += val
+}
+
+// waitForRequestsToBeEmpty waits for requests to be empty. It also increments and decrements the requestsWaitCounter as required.
+func (sm *stateManager) waitForRequestsToBeEmpty() {
+	sm.addRequestsWaitCounter(1)
+	sm.requests.Wait()
+	sm.addRequestsWaitCounter(-1)
+}
+
 func (sm *stateManager) setWantState(stateWanted servingState) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -389,7 +410,9 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 	}
 
 	shuttingDown := sm.wantState != StateServing
-	if shuttingDown && !allowOnShutdown {
+	// If requestsWaitCounter is not zero, then there are go-routines blocked on waiting for requests to be empty.
+	// We cannot allow adding to the requests to prevent any panics from happening.
+	if (shuttingDown && !allowOnShutdown) || sm.requestsWaitCounter > 0 {
 		// This specific error string needs to be returned for vtgate buffering to work.
 		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown)
 	}
@@ -432,7 +455,7 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 		}
 	} else {
 		if !tabletenv.IsLocalContext(ctx) {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
+			return ErrNoTarget
 		}
 	}
 	return nil
@@ -557,7 +580,7 @@ func (sm *stateManager) unserveCommon() {
 	log.Info("Finished Killing all OLAP queries. Started tracker close")
 	sm.tracker.Close()
 	log.Infof("Finished tracker close. Started wait for requests")
-	sm.requests.Wait()
+	sm.waitForRequestsToBeEmpty()
 	log.Infof("Finished wait for requests. Finished execution of unserveCommon")
 }
 
@@ -611,9 +634,9 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 
 // setState changes the state and logs the event.
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
-	defer func() {
+	defer logInitTime.Do(func() {
 		log.Infof("Tablet Init took %d ms", time.Since(servenv.GetInitStartTime()).Milliseconds())
-	}()
+	})
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if tabletType == topodatapb.TabletType_UNKNOWN {

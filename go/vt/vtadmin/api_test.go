@@ -32,6 +32,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/vtenv"
+
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
@@ -545,8 +547,6 @@ func TestFindSchema(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -555,7 +555,7 @@ func TestFindSchema(t *testing.T) {
 				clusters[i] = vtadmintestutil.BuildCluster(t, cfg)
 			}
 
-			api := NewAPI(clusters, Options{})
+			api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 			defer api.Close()
 
 			resp, err := api.FindSchema(ctx, tt.req)
@@ -765,7 +765,7 @@ func TestFindSchema(t *testing.T) {
 		},
 		)
 
-		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c1, c2}, Options{})
 		defer api.Close()
 
 		schema, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
@@ -860,12 +860,10 @@ func TestGetClusters(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(tt.clusters, Options{})
+			api := NewAPI(vtenv.NewTestEnv(), tt.clusters, Options{})
 
 			resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
 			assert.NoError(t, err)
@@ -943,7 +941,7 @@ func TestGetGates(t *testing.T) {
 		},
 	}
 
-	api := NewAPI([]*cluster.Cluster{cluster1, cluster2}, Options{})
+	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{cluster1, cluster2}, Options{})
 	ctx := context.Background()
 
 	resp, err := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
@@ -1050,8 +1048,6 @@ func TestGetKeyspace(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1065,7 +1061,7 @@ func TestGetKeyspace(t *testing.T) {
 				testutil.AddShards(ctx, t, ts, shards...)
 				topos[i] = ts
 				vtctlds[i] = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts)
+					return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 				})
 			}
 
@@ -1081,7 +1077,7 @@ func TestGetKeyspace(t *testing.T) {
 					})
 				}
 
-				api := NewAPI(clusters, Options{})
+				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 				ks, err := api.GetKeyspace(ctx, tt.req)
 				if tt.shouldErr {
 					assert.Error(t, err)
@@ -1282,8 +1278,6 @@ func TestGetKeyspaces(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1309,10 +1303,10 @@ func TestGetKeyspaces(t *testing.T) {
 
 			servers := []vtctlservicepb.VtctldServer{
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[0], nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts)
+					return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 				}),
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[1], nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts)
+					return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 				}),
 			}
 
@@ -1334,7 +1328,7 @@ func TestGetKeyspaces(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{})
+				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 				resp, err := api.GetKeyspaces(ctx, tt.req)
 				require.NoError(t, err)
 
@@ -1536,15 +1530,13 @@ func TestGetSchema(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts)
+				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
 			testutil.AddTablets(ctx, t, tt.ts, nil, vtadmintestutil.TopodataTabletsFromVTAdminTablets(tt.tablets)...)
@@ -1558,7 +1550,7 @@ func TestGetSchema(t *testing.T) {
 					VtctldClient: client,
 					Tablets:      tt.tablets,
 				})
-				api := NewAPI([]*cluster.Cluster{c}, Options{})
+				api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c}, Options{})
 				defer api.Close()
 
 				resp, err := api.GetSchema(ctx, tt.req)
@@ -1688,7 +1680,7 @@ func TestGetSchema(t *testing.T) {
 		},
 		)
 
-		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c1, c2}, Options{})
 		defer api.Close()
 
 		schema, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
@@ -2177,8 +2169,6 @@ func TestGetSchemas(t *testing.T) {
 		// Note that these test cases were written prior to the existence of
 		// WithTestServers, so they are all written with the assumption that
 		// there are exactly 2 clusters.
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			ctx, cancel := context.WithCancel(context.Background())
@@ -2198,10 +2188,10 @@ func TestGetSchemas(t *testing.T) {
 
 			vtctlds := []vtctlservicepb.VtctldServer{
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[0], &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts)
+					return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 				}),
 				testutil.NewVtctldServerWithTabletManagerClient(t, topos[1], &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-					return grpcvtctldserver.NewVtctldServer(ts)
+					return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 				}),
 			}
 
@@ -2242,7 +2232,7 @@ func TestGetSchemas(t *testing.T) {
 					})
 				}
 
-				api := NewAPI(clusters, Options{})
+				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 				defer api.Close()
 
 				resp, err := api.GetSchemas(ctx, tt.req)
@@ -2463,7 +2453,7 @@ func TestGetSchemas(t *testing.T) {
 		},
 		)
 
-		api := NewAPI([]*cluster.Cluster{c1, c2}, Options{})
+		api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c1, c2}, Options{})
 		defer api.Close()
 
 		resp, err := api.GetSchemas(context.Background(), &vtadminpb.GetSchemasRequest{
@@ -2624,8 +2614,6 @@ func TestGetSrvKeyspace(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2637,7 +2625,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts)
+				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -2656,7 +2644,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{})
+				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 				resp, err := api.GetSrvKeyspace(ctx, tt.req)
 
 				if tt.shouldErr {
@@ -2785,8 +2773,6 @@ func TestGetSrvKeyspaces(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			ctx, cancel := context.WithCancel(context.Background())
@@ -2801,7 +2787,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			}
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts)
+				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -2822,7 +2808,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{})
+				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 				resp, err := api.GetSrvKeyspaces(ctx, tt.req)
 
 				if tt.shouldErr {
@@ -2954,8 +2940,6 @@ func TestGetSrvVSchema(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			ctx, cancel := context.WithCancel(context.Background())
@@ -2966,7 +2950,7 @@ func TestGetSrvVSchema(t *testing.T) {
 			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts)
+				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -2985,7 +2969,7 @@ func TestGetSrvVSchema(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{})
+				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 				resp, err := api.GetSrvVSchema(ctx, tt.req)
 
 				if tt.shouldErr {
@@ -3248,8 +3232,6 @@ func TestGetSrvVSchemas(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			ctx, cancel := context.WithCancel(context.Background())
@@ -3260,7 +3242,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 			toposerver := memorytopo.NewServer(ctx, tt.cells...)
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts)
+				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -3279,7 +3261,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{})
+				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 				resp, err := api.GetSrvVSchemas(ctx, tt.req)
 
 				if tt.shouldErr {
@@ -3529,8 +3511,6 @@ func TestGetTablet(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3550,7 +3530,7 @@ func TestGetTablet(t *testing.T) {
 				})
 			}
 
-			api := NewAPI(clusters, Options{})
+			api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 			resp, err := api.GetTablet(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -3724,8 +3704,6 @@ func TestGetTablets(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3745,7 +3723,7 @@ func TestGetTablets(t *testing.T) {
 				})
 			}
 
-			api := NewAPI(clusters, Options{})
+			api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 			resp, err := api.GetTablets(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -3870,13 +3848,11 @@ func TestGetVSchema(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			clusters := []*cluster.Cluster{vtadmintestutil.BuildCluster(t, tt.clusterCfg)}
-			api := NewAPI(clusters, Options{})
+			api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 
 			resp, err := api.GetVSchema(ctx, tt.req)
 			if tt.shouldErr {
@@ -4196,8 +4172,6 @@ func TestGetVSchemas(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -4206,7 +4180,7 @@ func TestGetVSchemas(t *testing.T) {
 			}
 
 			clusters := vtadmintestutil.BuildClusters(t, tt.clusterCfgs...)
-			api := NewAPI(clusters, Options{})
+			api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 
 			resp, err := api.GetVSchemas(ctx, tt.req)
 			if tt.shouldErr {
@@ -4290,7 +4264,7 @@ func TestGetVtctlds(t *testing.T) {
 		},
 	}
 
-	api := NewAPI([]*cluster.Cluster{cluster1, cluster2}, Options{})
+	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{cluster1, cluster2}, Options{})
 	ctx := context.Background()
 
 	resp, err := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
@@ -4417,12 +4391,10 @@ func TestGetWorkflow(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(vtadmintestutil.BuildClusters(t, tt.cfgs...), Options{})
+			api := NewAPI(vtenv.NewTestEnv(), vtadmintestutil.BuildClusters(t, tt.cfgs...), Options{})
 
 			resp, err := api.GetWorkflow(ctx, tt.req)
 			if tt.shouldErr {
@@ -4856,12 +4828,10 @@ func TestGetWorkflows(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(vtadmintestutil.BuildClusters(t, tt.cfgs...), Options{})
+			api := NewAPI(vtenv.NewTestEnv(), vtadmintestutil.BuildClusters(t, tt.cfgs...), Options{})
 
 			resp, err := api.GetWorkflows(ctx, tt.req)
 			if tt.shouldErr {
@@ -5097,8 +5067,6 @@ func TestVTExplain(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -5112,7 +5080,7 @@ func TestVTExplain(t *testing.T) {
 			}
 
 			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return grpcvtctldserver.NewVtctldServer(ts)
+				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
@@ -5151,7 +5119,7 @@ func TestVTExplain(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(clusters, Options{})
+				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
 				resp, err := api.VTExplain(ctx, tt.req)
 
 				if tt.expectedError != nil {
@@ -5348,12 +5316,10 @@ func TestServeHTTP(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(tt.clusters, Options{EnableDynamicClusters: tt.enableDynamicClusters})
+			api := NewAPI(vtenv.NewTestEnv(), tt.clusters, Options{EnableDynamicClusters: tt.enableDynamicClusters})
 
 			// Copy the Cookie over to a new Request
 			req := httptest.NewRequest(http.MethodGet, "/api/clusters", nil)

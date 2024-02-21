@@ -1966,7 +1966,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where not :__sq_has_values and id not in ::__sq1",
+            "Query": "select id from `user` where not :__sq_has_values or id not in ::__sq1",
             "Table": "`user`"
           }
         ]
@@ -2503,7 +2503,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select id from `user` where not :__sq_has_values and id not in ::__sq1 and :__sq_has_values1 and id in ::__vals",
+                "Query": "select id from `user` where (not :__sq_has_values or id not in ::__sq1) and :__sq_has_values1 and id in ::__vals",
                 "Table": "`user`",
                 "Values": [
                   "::__sq2"
@@ -2950,7 +2950,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and not :__sq_has_values and id not in ::__sq1",
+            "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and (not :__sq_has_values or id not in ::__sq1)",
             "Table": "`user`",
             "Values": [
               "5"
@@ -4027,6 +4027,30 @@
     }
   },
   {
+    "comment": "Order by aliases are expanded",
+    "query": "select a+2 as a from user order by a",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select a+2 as a from user order by a",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a + 2 as a, weight_string(a + 2) from `user` where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select a + 2 as a, weight_string(a + 2) from `user` order by a + 2 asc",
+        "ResultColumns": 1,
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "HAVING predicates that use table columns are safe to rewrite if we can move them to the WHERE clause",
     "query": "select user.col + 2 as a from user having a = 42",
     "plan": {
@@ -4110,7 +4134,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id = 5 and `name` = 'foo' or id = 12 and `name` = 'bar'",
+        "Query": "select id from `user` where id in ::__vals and (id = 5 or `name` = 'bar') and (`name` = 'foo' or id = 12) and `name` in ('foo', 'bar')",
         "Table": "`user`",
         "Values": [
           "(5, 12)"
@@ -4400,6 +4424,165 @@
         "user.music",
         "user.user",
         "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "list args: single column vindex",
+    "query": "select 1 from user where (id, col) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user where (id, col) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where (id, col) in ::vals",
+        "Table": "`user`",
+        "Values": [
+          "vals:0"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "list args: single column vindex on non-zero offset",
+    "query": "select 1 from user where (col, id) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user where (col, id) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where (col, id) in ::vals",
+        "Table": "`user`",
+        "Values": [
+          "vals:1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex",
+    "query": "select 1 from multicol_tbl where (cola, colb) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (cola, colb) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where (cola, colb) in ::vals",
+        "Table": "multicol_tbl",
+        "Values": [
+          "vals:0",
+          "vals:1"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex - subshard",
+    "query": "select 1 from multicol_tbl where (cola) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (cola) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where cola in ::__vals0",
+        "Table": "multicol_tbl",
+        "Values": [
+          "::vals"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex - more columns",
+    "query": "select 1 from multicol_tbl where (cola, colx, colb) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (cola, colx, colb) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where (cola, colx, colb) in ::vals",
+        "Table": "multicol_tbl",
+        "Values": [
+          "vals:0",
+          "vals:2"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
+      ]
+    }
+  },
+  {
+    "comment": "list args: multi column vindex - columns rearranged",
+    "query": "select 1 from multicol_tbl where (colb, colx, cola) in ::vals",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from multicol_tbl where (colb, colx, cola) in ::vals",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "MultiEqual",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
+        "Query": "select 1 from multicol_tbl where (colb, colx, cola) in ::vals",
+        "Table": "multicol_tbl",
+        "Values": [
+          "vals:2",
+          "vals:0"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl"
       ]
     }
   }

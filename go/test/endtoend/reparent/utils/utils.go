@@ -258,6 +258,21 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	return connParams
 }
 
+// RunSQLs is used to run SQL commands directly on the MySQL instance of a vttablet. All commands are
+// run in a single connection.
+func RunSQLs(ctx context.Context, t *testing.T, sqls []string, tablet *cluster.Vttablet) (results []*sqltypes.Result) {
+	tabletParams := getMysqlConnParam(tablet)
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	for _, sql := range sqls {
+		result := execute(t, conn, sql)
+		results = append(results, result)
+	}
+	return results
+}
+
 // RunSQL is used to run a SQL command directly on the MySQL instance of a vttablet
 func RunSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttablet) *sqltypes.Result {
 	tabletParams := getMysqlConnParam(tablet)
@@ -695,7 +710,7 @@ func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
 
 // CheckReplicationStatus checks that the replication for sql and io threads is setup as expected
 func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sqlThreadRunning bool, ioThreadRunning bool) {
-	res := RunSQL(ctx, t, "show slave status;", tablet)
+	res := RunSQL(ctx, t, "show slave status", tablet)
 	if ioThreadRunning {
 		require.Equal(t, "Yes", res.Rows[0][10].ToString())
 	} else {

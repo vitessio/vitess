@@ -42,13 +42,13 @@ type VindexValues struct {
 
 // Update represents the instructions to perform an update.
 type Update struct {
+	// Update does not take inputs
+	noInputs
+
 	*DML
 
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
 	ChangedVindexValues map[string]*VindexValues
-
-	// Update does not take inputs
-	noInputs
 }
 
 // TryExecute performs a non-streaming exec.
@@ -204,6 +204,7 @@ func (upd *Update) description() PrimitiveDescription {
 		"OwnedVindexQuery":     upd.OwnedVindexQuery,
 		"MultiShardAutocommit": upd.MultiShardAutocommit,
 		"QueryTimeout":         upd.QueryTimeout,
+		"NoAutoCommit":         upd.PreventAutoCommit,
 	}
 
 	addFieldsIfNotEmpty(upd.DML, other)

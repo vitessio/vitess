@@ -62,13 +62,13 @@ func (call *builtinMD5) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.Binary, nil)
 	}
 
 	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	c.asm.Fn_MD5(col)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(str.Flag)}, nil
 }
 
 type builtinSHA1 struct {
@@ -105,12 +105,12 @@ func (call *builtinSHA1) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.Binary, nil)
 	}
 	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	c.asm.Fn_SHA1(col)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(str.Flag)}, nil
 }
 
 type builtinSHA2 struct {
@@ -174,7 +174,7 @@ func (call *builtinSHA2) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(2, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(2, sqltypes.Binary, nil)
 	}
 
 	switch bits.Type {
@@ -189,7 +189,7 @@ func (call *builtinSHA2) compile(c *compiler) (ctype, error) {
 	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	c.asm.Fn_SHA2(col)
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(str.Flag)}, nil
 }
 
 type builtinRandomBytes struct {
@@ -244,5 +244,5 @@ func (call *builtinRandomBytes) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_RandomBytes()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarBinary, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.VarBinary, Col: collationBinary, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }

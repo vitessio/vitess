@@ -18,14 +18,12 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type rewriter struct {
 	semTable     *semantics.SemTable
 	reservedVars *sqlparser.ReservedVars
-	inSubquery   int
 	err          error
 }
 
@@ -34,16 +32,8 @@ func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.Reserved
 		semTable:     semTable,
 		reservedVars: reservedVars,
 	}
-	sqlparser.Rewrite(statement, r.rewriteDown, r.rewriteUp)
+	sqlparser.Rewrite(statement, r.rewriteDown, nil)
 	return nil
-}
-
-func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
-	_, ok := cursor.Node().(*sqlparser.Subquery)
-	if ok {
-		r.inSubquery--
-	}
-	return true
 }
 
 func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
@@ -51,9 +41,7 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	case *sqlparser.Select:
 		rewriteHavingClause(node)
 	case *sqlparser.AliasedTableExpr:
-		// rewrite names of the routed tables for the subquery
-		// We only need to do this for non-derived tables and if they are in a subquery
-		if _, isDerived := node.Expr.(*sqlparser.DerivedTable); isDerived || r.inSubquery == 0 {
+		if _, isDerived := node.Expr.(*sqlparser.DerivedTable); isDerived {
 			break
 		}
 		// find the tableSet and tableInfo that this table points to
@@ -82,10 +70,9 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 			node.As = tableName.Name
 		}
 		// replace the table name with the original table
+		tableName.Qualifier = sqlparser.IdentifierCS{}
 		tableName.Name = vindexTable.Name
 		node.Expr = tableName
-	case *sqlparser.Subquery:
-		r.inSubquery++
 	}
 	return true
 }
@@ -95,15 +82,6 @@ func rewriteHavingClause(node *sqlparser.Select) {
 		return
 	}
 
-	selectExprMap := map[string]sqlparser.Expr{}
-	for _, selectExpr := range node.SelectExprs {
-		aliasedExpr, isAliased := selectExpr.(*sqlparser.AliasedExpr)
-		if !isAliased || aliasedExpr.As.IsEmpty() {
-			continue
-		}
-		selectExprMap[aliasedExpr.As.Lowered()] = aliasedExpr.Expr
-	}
-
 	// for each expression in the having clause, we check if it contains aggregation.
 	// if it does, we keep the expression in the having clause ; and if it does not
 	// and the expression is in the select list, we replace the expression by the one
@@ -111,40 +89,10 @@ func rewriteHavingClause(node *sqlparser.Select) {
 	exprs := sqlparser.SplitAndExpression(nil, node.Having.Expr)
 	node.Having = nil
 	for _, expr := range exprs {
-		hasAggr := sqlparser.ContainsAggregation(expr)
-		if !hasAggr {
-			sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
-				visitColName(cursor.Node(), selectExprMap, func(original sqlparser.Expr) {
-					if sqlparser.ContainsAggregation(original) {
-						hasAggr = true
-					}
-				})
-				return true
-			}, nil)
-		}
-		if hasAggr {
+		if sqlparser.ContainsAggregation(expr) {
 			node.AddHaving(expr)
 		} else {
-			sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
-				visitColName(cursor.Node(), selectExprMap, func(original sqlparser.Expr) {
-					cursor.Replace(original)
-				})
-				return true
-			}, nil)
 			node.AddWhere(expr)
 		}
-	}
-}
-func visitColName(cursor sqlparser.SQLNode, selectExprMap map[string]sqlparser.Expr, f func(original sqlparser.Expr)) {
-	switch x := cursor.(type) {
-	case *sqlparser.ColName:
-		if !x.Qualifier.IsEmpty() {
-			return
-		}
-		originalExpr, isInMap := selectExprMap[x.Name.Lowered()]
-		if isInMap {
-			f(originalExpr)
-		}
-		return
 	}
 }

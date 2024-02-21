@@ -19,6 +19,7 @@ package planbuilder
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
@@ -41,9 +42,16 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	err = rewriteRoutedTables(updStmt, vschema)
+	err = queryRewrite(ctx.SemTable, reservedVars, updStmt)
 	if err != nil {
 		return nil, err
+	}
+
+	// If there are non-literal foreign key updates, we have to run the query with foreign key checks off.
+	if ctx.SemTable.HasNonLiteralForeignKeyUpdate(updStmt.Exprs) {
+		// Since we are running the query with foreign key checks off, we have to verify all the foreign keys validity on vtgate.
+		ctx.VerifyAllFKs = true
+		updStmt.SetComments(updStmt.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, "OFF"))
 	}
 
 	// Remove all the foreign keys that don't require any handling.
@@ -61,11 +69,6 @@ func gen4UpdateStmtPlanner(
 
 	if ctx.SemTable.NotUnshardedErr != nil {
 		return nil, ctx.SemTable.NotUnshardedErr
-	}
-
-	err = queryRewrite(ctx.SemTable, reservedVars, updStmt)
-	if err != nil {
-		return nil, err
 	}
 
 	op, err := operators.PlanQuery(ctx, updStmt)

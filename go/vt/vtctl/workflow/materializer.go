@@ -29,9 +29,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -62,6 +64,8 @@ type materializer struct {
 	isPartial             bool
 	primaryVindexesDiffer bool
 	workflowType          binlogdatapb.VReplicationWorkflowType
+
+	env *vtenv.Environment
 }
 
 func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowSubType, error) {
@@ -196,7 +200,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 			}
 
 			// Validate non-empty query.
-			stmt, err := sqlparser.Parse(ts.SourceExpression)
+			stmt, err := mz.env.Parser().Parse(ts.SourceExpression)
 			if err != nil {
 				return "", err
 			}
@@ -295,7 +299,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			}
 
 			// Validate non-empty query.
-			stmt, err := sqlparser.Parse(ts.SourceExpression)
+			stmt, err := mz.env.Parser().Parse(ts.SourceExpression)
 			if err != nil {
 				return nil, err
 			}
@@ -405,7 +409,7 @@ func (mz *materializer) deploySchema() error {
 			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropForeignKeys {
 				if ts.SourceExpression != "" {
 					// Check for table if non-empty SourceExpression.
-					sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
+					sourceTableName, err := mz.env.Parser().TableFromStatement(ts.SourceExpression)
 					if err != nil {
 						return err
 					}
@@ -421,7 +425,7 @@ func (mz *materializer) deploySchema() error {
 				}
 
 				if createDDL == createDDLAsCopyDropConstraint {
-					strippedDDL, err := stripTableConstraints(ddl)
+					strippedDDL, err := stripTableConstraints(ddl, mz.env.Parser())
 					if err != nil {
 						return err
 					}
@@ -430,7 +434,7 @@ func (mz *materializer) deploySchema() error {
 				}
 
 				if createDDL == createDDLAsCopyDropForeignKeys {
-					strippedDDL, err := stripTableForeignKeys(ddl)
+					strippedDDL, err := stripTableForeignKeys(ddl, mz.env.Parser())
 					if err != nil {
 						return err
 					}
@@ -444,6 +448,22 @@ func (mz *materializer) deploySchema() error {
 		}
 
 		if len(applyDDLs) > 0 {
+			if mz.ms.AtomicCopy {
+				// AtomicCopy suggests we may be interested in Foreign Key support. As such, we want to
+				// normalize the source schema: ensure the order of table definitions is compatible with
+				// the constraints graph. We want to first create the parents, then the children.
+				// We use schemadiff to normalize the schema.
+				// For now, and because this is could have wider implications, we ignore any errors in
+				// reading the source schema.
+				env := schemadiff.NewEnv(mz.env, mz.env.CollationEnv().DefaultConnectionCharset())
+				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
+				if err != nil {
+					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
+				} else {
+					applyDDLs = schema.ToQueries()
+					log.Infof("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs))
+				}
+			}
 			sql := strings.Join(applyDDLs, ";\n")
 
 			_, err = mz.tmc.ApplySchema(mz.ctx, targetTablet.Tablet, &tmutils.SchemaChange{
@@ -468,7 +488,7 @@ func (mz *materializer) buildMaterializer() error {
 	if err != nil {
 		return err
 	}
-	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace)
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace, mz.env.Parser())
 	if err != nil {
 		return err
 	}
@@ -580,22 +600,6 @@ func (mz *materializer) startStreams(ctx context.Context) error {
 		}
 		return nil
 	})
-}
-
-func Materialize(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, ms *vtctldatapb.MaterializeSettings) error {
-	mz := &materializer{
-		ctx:      ctx,
-		ts:       ts,
-		sourceTs: ts,
-		tmc:      tmc,
-		ms:       ms,
-	}
-
-	err := mz.createMaterializerStreams()
-	if err != nil {
-		return err
-	}
-	return mz.startStreams(ctx)
 }
 
 func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {

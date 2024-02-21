@@ -41,7 +41,7 @@ func NewVerifier(sequence ExpectationSequence) *Verifier {
 }
 
 // AcceptQuery verifies that the provided query is valid according to the
-// internal ExpectationSequence and the internal History of preceeding queries.
+// internal ExpectationSequence and the internal History of preceding queries.
 // Returns a *Result indicating whether the query was accepted and, if not,
 // diagnostic details indicating why not.
 func (v *Verifier) AcceptQuery(query string) *Result {
@@ -159,7 +159,7 @@ func (v *Verifier) checkQueryAgainstExpectation(query string, expectation Sequen
 	// Query passed expectation.
 	result.Accepted = true
 	result.Matched = true
-	result.Message = "matched expectated query and expected order"
+	result.Message = "matched expected query and expected order"
 
 	return true
 }

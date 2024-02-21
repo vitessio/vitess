@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -50,9 +51,83 @@ const (
 	reshardingJournalQuery
 )
 
+// A comment directive that you can include in your VReplication write
+// statements if you want to bypass the safety checks that ensure you are
+// being selective. The full comment directive looks like this:
+// delete /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ from _vt.vreplication
+const AllowUnsafeWriteCommentDirective = "ALLOW_UNSAFE_VREPLICATION_WRITE"
+
+// Check that the given WHERE clause is using at least one of the specified
+// columns with an equality or in operator to ensure that it is being
+// properly selective and not unintentionally going to potentially affect
+// multiple workflows.
+// The engine's exec function -- used by the VReplicationExec RPC -- should
+// provide guardrails for data changing statements and if the user wants get
+// around them they can e.g. use the ExecuteFetchAsDba RPC.
+// If you as a developer truly do want to affect multiple workflows, you can
+// add a comment directive using the AllowUnsafeWriteCommentDirective constant.
+var isSelective = func(where *sqlparser.Where, columns ...*sqlparser.ColName) bool {
+	if where == nil {
+		return false
+	}
+	if len(columns) == 0 {
+		return true
+	}
+	selective := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ComparisonExpr:
+			column, ok := node.Left.(*sqlparser.ColName)
+			if !ok {
+				return true, nil
+			}
+			wantedColumn := false
+			for i := range columns {
+				if columns[i].Equal(column) {
+					wantedColumn = true
+					break
+				}
+			}
+			// If we found a desired column, check that it is being used with an
+			// equality operator OR an in clause, logically being equal to any
+			// of N things.
+			if wantedColumn &&
+				(node.Operator == sqlparser.EqualOp || node.Operator == sqlparser.InOp) {
+				selective = true  // This is a safe statement
+				return false, nil // We can stop walking
+			}
+		default:
+		}
+		return true, nil
+	}, where)
+	return selective
+}
+
+// tableSelectiveColumns is a map that can be used to declare
+// what selective columns should be used (one or more) in queries
+// against a table.
+var tableSelectiveColumns = map[string][]*sqlparser.ColName{
+	vreplicationTableName: {
+		{Name: sqlparser.NewIdentifierCI("id")},
+		{Name: sqlparser.NewIdentifierCI("workflow")},
+	},
+}
+
+// columnsAsCSV returns a comma-separated list of column names.
+func columnsAsCSV(columns []*sqlparser.ColName) string {
+	if len(columns) == 0 {
+		return ""
+	}
+	colsForError := make([]string, len(columns))
+	for i := range columns {
+		colsForError[i] = columns[i].Name.String()
+	}
+	return strings.Join(colsForError, ", ")
+}
+
 // buildControllerPlan parses the input query and returns an appropriate plan.
-func buildControllerPlan(query string) (*controllerPlan, error) {
-	stmt, err := sqlparser.Parse(query)
+func buildControllerPlan(query string, parser *sqlparser.Parser) (*controllerPlan, error) {
+	stmt, err := parser.Parse(query)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +238,12 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 			opcode: reshardingJournalQuery,
 		}, nil
 	case vreplicationTableName:
-		// no-op
+		if upd.Comments == nil || upd.Comments.Directives() == nil || !upd.Comments.Directives().IsSet(AllowUnsafeWriteCommentDirective) {
+			if safe := isSelective(upd.Where, tableSelectiveColumns[vreplicationTableName]...); !safe {
+				return nil, fmt.Errorf("unsafe WHERE clause in update without the /*vt+ %s */ comment directive: %s; should be using = or in with at least one of the following columns: %s",
+					AllowUnsafeWriteCommentDirective, sqlparser.String(upd.Where), columnsAsCSV(tableSelectiveColumns[vreplicationTableName]))
+			}
+		}
 	default:
 		return nil, fmt.Errorf("invalid table name: %s", tableName.Name.String())
 	}
@@ -220,7 +300,12 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 			opcode: reshardingJournalQuery,
 		}, nil
 	case vreplicationTableName:
-		// no-op
+		if del.Comments == nil || del.Comments.Directives() == nil || !del.Comments.Directives().IsSet(AllowUnsafeWriteCommentDirective) {
+			if safe := isSelective(del.Where, tableSelectiveColumns[vreplicationTableName]...); !safe {
+				return nil, fmt.Errorf("unsafe WHERE clause in delete without the /*vt+ %s */ comment directive: %s; should be using = or in with at least one of the following columns: %s",
+					AllowUnsafeWriteCommentDirective, sqlparser.String(del.Where), columnsAsCSV(tableSelectiveColumns[vreplicationTableName]))
+			}
+		}
 	default:
 		return nil, fmt.Errorf("invalid table name: %s", tableName.Name.String())
 	}

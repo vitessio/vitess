@@ -723,10 +723,10 @@ func (cached *ColumnType) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
 	// field Options *vitess.io/vitess/go/vt/sqlparser.ColumnTypeOptions
 	size += cached.Options.CachedSize(true)
-	// field Length *vitess.io/vitess/go/vt/sqlparser.Literal
-	size += cached.Length.CachedSize(true)
-	// field Scale *vitess.io/vitess/go/vt/sqlparser.Literal
-	size += cached.Scale.CachedSize(true)
+	// field Length *int
+	size += hack.RuntimeAllocSize(int64(8))
+	// field Scale *int
+	size += hack.RuntimeAllocSize(int64(8))
 	// field Charset vitess.io/vitess/go/vt/sqlparser.ColumnCharset
 	size += cached.Charset.CachedSize(false)
 	// field EnumValues []string
@@ -905,10 +905,10 @@ func (cached *ConvertType) CachedSize(alloc bool) int64 {
 	}
 	// field Type string
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
-	// field Length *vitess.io/vitess/go/vt/sqlparser.Literal
-	size += cached.Length.CachedSize(true)
-	// field Scale *vitess.io/vitess/go/vt/sqlparser.Literal
-	size += cached.Scale.CachedSize(true)
+	// field Length *int
+	size += hack.RuntimeAllocSize(int64(8))
+	// field Scale *int
+	size += hack.RuntimeAllocSize(int64(8))
 	// field Charset vitess.io/vitess/go/vt/sqlparser.ColumnCharset
 	size += cached.Charset.CachedSize(false)
 	return size
@@ -1106,20 +1106,20 @@ func (cached *Delete) CachedSize(alloc bool) int64 {
 	size += cached.With.CachedSize(true)
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
-	// field Targets vitess.io/vitess/go/vt/sqlparser.TableNames
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Targets)) * int64(32))
-		for _, elem := range cached.Targets {
-			size += elem.CachedSize(false)
-		}
-	}
-	// field TableExprs vitess.io/vitess/go/vt/sqlparser.TableExprs
+	// field TableExprs []vitess.io/vitess/go/vt/sqlparser.TableExpr
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.TableExprs)) * int64(16))
 		for _, elem := range cached.TableExprs {
 			if cc, ok := elem.(cachedObject); ok {
 				size += cc.CachedSize(true)
 			}
+		}
+	}
+	// field Targets vitess.io/vitess/go/vt/sqlparser.TableNames
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Targets)) * int64(32))
+		for _, elem := range cached.Targets {
+			size += elem.CachedSize(false)
 		}
 	}
 	// field Partitions vitess.io/vitess/go/vt/sqlparser.Partitions
@@ -1731,8 +1731,8 @@ func (cached *IndexColumn) CachedSize(alloc bool) int64 {
 	}
 	// field Column vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Column.CachedSize(false)
-	// field Length *vitess.io/vitess/go/vt/sqlparser.Literal
-	size += cached.Length.CachedSize(true)
+	// field Length *int
+	size += hack.RuntimeAllocSize(int64(8))
 	// field Expression vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expression.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -3064,10 +3064,22 @@ func (cached *ParsedQuery) CachedSize(alloc bool) int64 {
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
-	// field bindLocations []vitess.io/vitess/go/vt/sqlparser.bindLocation
+	// field bindLocations []vitess.io/vitess/go/vt/sqlparser.BindLocation
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.bindLocations)) * int64(16))
 	}
+	return size
+}
+func (cached *Parser) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field version string
+	size += hack.RuntimeAllocSize(int64(len(cached.version)))
 	return size
 }
 func (cached *PartitionDefinition) CachedSize(alloc bool) int64 {
@@ -4226,7 +4238,7 @@ func (cached *Update) CachedSize(alloc bool) int64 {
 	size += cached.With.CachedSize(true)
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
-	// field TableExprs vitess.io/vitess/go/vt/sqlparser.TableExprs
+	// field TableExprs []vitess.io/vitess/go/vt/sqlparser.TableExpr
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.TableExprs)) * int64(16))
 		for _, elem := range cached.TableExprs {

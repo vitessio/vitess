@@ -1,3 +1,5 @@
+//go:build !windows
+
 /*
 Copyright 2019 The Vitess Authors.
 
@@ -18,8 +20,8 @@ limitations under the License.
 package sysloglogger
 
 import (
-	"bytes"
 	"log/syslog"
+	"strings"
 
 	"github.com/spf13/pflag"
 
@@ -76,8 +78,10 @@ func run() {
 	}
 
 	formatParams := map[string][]string{"full": {}}
+
+	var b strings.Builder
 	for stats := range ch {
-		var b bytes.Buffer
+		b.Reset()
 		if err := stats.Logf(&b, formatParams); err != nil {
 			log.Errorf("Error formatting logStats: %v", err)
 			continue

@@ -104,9 +104,9 @@ func (o opBitShr) numeric(num, shift uint64) uint64 { return num >> shift }
 
 func (o opBitShr) binary(num []byte, shift uint64) []byte {
 	var (
-		bits   = int(shift % 8)
-		bytes  = int(shift / 8)
-		length = len(num)
+		bits   = int64(shift % 8)
+		bytes  = int64(shift / 8)
+		length = int64(len(num))
 		out    = make([]byte, length)
 	)
 
@@ -127,13 +127,13 @@ func (o opBitShl) numeric(num, shift uint64) uint64 { return num << shift }
 
 func (o opBitShl) binary(num []byte, shift uint64) []byte {
 	var (
-		bits   = int(shift % 8)
-		bytes  = int(shift / 8)
-		length = len(num)
+		bits   = int64(shift % 8)
+		bytes  = int64(shift / 8)
+		length = int64(len(num))
 		out    = make([]byte, length)
 	)
 
-	for i := 0; i < length; i++ {
+	for i := int64(0); i < length; i++ {
 		pos := i + bytes + 1
 		switch {
 		case pos < length:
@@ -270,7 +270,7 @@ func (expr *BitwiseExpr) compileBinary(c *compiler, asm_ins_bb, asm_ins_uu func(
 
 	asm_ins_uu()
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Uint64, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
@@ -299,8 +299,8 @@ func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
 		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
 	}
 
-	_ = c.compileToBitwiseUint64(lt, 2)
-	_ = c.compileToUint64(rt, 1)
+	lt = c.compileToBitwiseUint64(lt, 2)
+	rt = c.compileToUint64(rt, 1)
 
 	if i < 0 {
 		c.asm.BitShiftLeft_uu()
@@ -309,7 +309,7 @@ func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Uint64, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationNumeric}, nil
 }
 
 func (expr *BitwiseExpr) compile(c *compiler) (ctype, error) {

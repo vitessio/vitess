@@ -128,6 +128,8 @@ type SandboxConn struct {
 	NotServing bool
 
 	getSchemaResult []map[string]string
+
+	parser *sqlparser.Parser
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -139,6 +141,7 @@ func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 		MustFailCodes:   make(map[vtrpcpb.Code]int),
 		MustFailExecute: make(map[sqlparser.StatementType]int),
 		txIDToRID:       make(map[int64]int64),
+		parser:          sqlparser.NewTestParser(),
 	}
 }
 
@@ -225,7 +228,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 		return nil, err
 	}
 
-	stmt, _ := sqlparser.Parse(query) // knowingly ignoring the error
+	stmt, _ := sbc.parser.Parse(query) // knowingly ignoring the error
 	if sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] > 0 {
 		sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] = sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] - 1
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed query: %v", query)
@@ -251,7 +254,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		sbc.sExecMu.Unlock()
 		return err
 	}
-	parse, _ := sqlparser.Parse(query)
+	parse, _ := sbc.parser.Parse(query)
 
 	if sbc.results == nil {
 		nextRs := sbc.getNextResult(parse)
@@ -391,7 +394,7 @@ func (sbc *SandboxConn) ConcludeTransaction(ctx context.Context, target *querypb
 	return sbc.getError()
 }
 
-// ReadTransaction returns the metadata for the sepcified dtid.
+// ReadTransaction returns the metadata for the specified dtid.
 func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	sbc.ReadTransactionCount.Add(1)
 	if err := sbc.getError(); err != nil {

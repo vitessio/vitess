@@ -17,13 +17,14 @@ limitations under the License.
 package operators
 
 import (
+	"strconv"
+
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type Limit struct {
-	Source ops.Operator
+	Source Operator
 	AST    *sqlparser.Limit
 
 	// Pushed marks whether the limit has been pushed down to the inputs but still need to keep the operator around.
@@ -32,22 +33,23 @@ type Limit struct {
 	Pushed bool
 }
 
-func (l *Limit) Clone(inputs []ops.Operator) ops.Operator {
+func (l *Limit) Clone(inputs []Operator) Operator {
 	return &Limit{
 		Source: inputs[0],
 		AST:    sqlparser.CloneRefOfLimit(l.AST),
+		Pushed: l.Pushed,
 	}
 }
 
-func (l *Limit) Inputs() []ops.Operator {
-	return []ops.Operator{l.Source}
+func (l *Limit) Inputs() []Operator {
+	return []Operator{l.Source}
 }
 
-func (l *Limit) SetInputs(operators []ops.Operator) {
+func (l *Limit) SetInputs(operators []Operator) {
 	l.Source = operators[0]
 }
 
-func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	l.Source = l.Source.AddPredicate(ctx, expr)
 	return l
 }
@@ -68,10 +70,10 @@ func (l *Limit) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Selec
 	return l.Source.GetSelectExprs(ctx)
 }
 
-func (l *Limit) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy {
+func (l *Limit) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return l.Source.GetOrdering(ctx)
 }
 
 func (l *Limit) ShortDescription() string {
-	return sqlparser.String(l.AST)
+	return sqlparser.String(l.AST) + " Pushed:" + strconv.FormatBool(l.Pushed)
 }

@@ -153,7 +153,7 @@ func TestScatterErrsAsWarns(t *testing.T) {
 			assertContainsOneOf(t, mode.conn, showQ, expectedWarnings...)
 
 			// invalid_field should throw error and not warning
-			_, err = mode.conn.ExecuteFetch("SELECT /*vt+ PLANNER=Gen4 SCATTER_ERRORS_AS_WARNINGS */ invalid_field from t1;", 1, false)
+			_, err = mode.conn.ExecuteFetch("SELECT /*vt+ PLANNER=Gen4 SCATTER_ERRORS_AS_WARNINGS */ invalid_field from t1", 1, false)
 			require.Error(t, err)
 			serr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 			require.Equal(t, sqlerror.ERBadFieldError, serr.Number(), serr.Error())

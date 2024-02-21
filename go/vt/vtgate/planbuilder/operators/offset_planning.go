@@ -21,36 +21,42 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // planOffsets will walk the tree top down, adding offset information to columns in the tree for use in further optimization,
-func planOffsets(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+func planOffsets(ctx *plancontext.PlanningContext, root Operator) Operator {
 	type offsettable interface {
-		planOffsets(ctx *plancontext.PlanningContext)
+		Operator
+		planOffsets(ctx *plancontext.PlanningContext) Operator
 	}
 
-	visitor := func(in ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
-		var err error
+	visitor := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		switch op := in.(type) {
 		case *Horizon:
-			return nil, nil, vterrors.VT13001(fmt.Sprintf("should not see %T here", in))
+			panic(vterrors.VT13001(fmt.Sprintf("should not see %T here", in)))
 		case offsettable:
-			op.planOffsets(ctx)
+			newOp := op.planOffsets(ctx)
+
+			if newOp == nil {
+				newOp = op
+			}
+
+			if DebugOperatorTree {
+				fmt.Println("Planned offsets for:")
+				fmt.Println(ToTree(newOp))
+			}
+			return newOp, nil
 		}
-		if err != nil {
-			return nil, nil, err
-		}
-		return in, rewrite.SameTree, nil
+		return in, NoRewrite
 	}
 
-	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
+	return TopDown(root, TableID, visitor, stopAtRoute)
 }
 
-func fetchByOffset(e sqlparser.SQLNode) bool {
+// mustFetchFromInput returns true for expressions that have to be fetched from the input and cannot be evaluated
+func mustFetchFromInput(e sqlparser.SQLNode) bool {
 	switch e.(type) {
 	case *sqlparser.ColName, sqlparser.AggrFunc:
 		return true
@@ -60,17 +66,16 @@ func fetchByOffset(e sqlparser.SQLNode) bool {
 }
 
 // useOffsets rewrites an expression to use values from the input
-func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Operator) sqlparser.Expr {
+func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) sqlparser.Expr {
 	var exprOffset *sqlparser.Offset
 
 	in := op.Inputs()[0]
 	found := func(e sqlparser.Expr, offset int) { exprOffset = sqlparser.NewOffset(offset, e) }
 
-	notFound := func(e sqlparser.Expr) error {
+	notFound := func(e sqlparser.Expr) {
 		_, addToGroupBy := e.(*sqlparser.ColName)
 		offset := in.AddColumn(ctx, true, addToGroupBy, aeWrap(e))
 		exprOffset = sqlparser.NewOffset(offset, e)
-		return nil
 	}
 
 	visitor := getOffsetRewritingVisitor(ctx, in.FindCol, found, notFound)
@@ -90,25 +95,24 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 
 // addColumnsToInput adds columns needed by an operator to its input.
 // This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
-func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+func addColumnsToInput(ctx *plancontext.PlanningContext, root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		filter, ok := in.(*Filter)
 		if !ok {
-			return in, rewrite.SameTree, nil
+			return in, NoRewrite
 		}
 
 		proj, areOnTopOfProj := filter.Source.(selectExpressions)
 		if !areOnTopOfProj {
 			// not much we can do here
-			return in, rewrite.SameTree, nil
+			return in, NoRewrite
 		}
 		addedColumns := false
 		found := func(expr sqlparser.Expr, i int) {}
-		notFound := func(e sqlparser.Expr) error {
+		notFound := func(e sqlparser.Expr) {
 			_, addToGroupBy := e.(*sqlparser.ColName)
 			proj.addColumnWithoutPushing(ctx, aeWrap(e), addToGroupBy)
 			addedColumns = true
-			return nil
 		}
 		visitor := getOffsetRewritingVisitor(ctx, proj.FindCol, found, notFound)
 
@@ -116,22 +120,22 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 			_ = sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopySemanticInfo)
 		}
 		if addedColumns {
-			return in, rewrite.NewTree("added columns because filter needs it", in), nil
+			return in, Rewrote("added columns because filter needs it")
 		}
 
-		return in, rewrite.SameTree, nil
+		return in, NoRewrite
 	}
 
-	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
+	return TopDown(root, TableID, visitor, stopAtRoute)
 }
 
 // addColumnsToInput adds columns needed by an operator to its input.
 // This happens only when the filter expression can be retrieved as an offset from the underlying mysql.
-func pullDistinctFromUNION(_ *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
-	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+func pullDistinctFromUNION(_ *plancontext.PlanningContext, root Operator) Operator {
+	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		union, ok := in.(*Union)
 		if !ok || !union.distinct {
-			return in, rewrite.SameTree, nil
+			return in, NoRewrite
 		}
 
 		union.distinct = false
@@ -140,10 +144,10 @@ func pullDistinctFromUNION(_ *plancontext.PlanningContext, root ops.Operator) (o
 			Required: true,
 			Source:   union,
 		}
-		return distinct, rewrite.NewTree("pulled out DISTINCT from union", union), nil
+		return distinct, Rewrote("pulled out DISTINCT from union")
 	}
 
-	return rewrite.TopDown(root, TableID, visitor, stopAtRoute)
+	return TopDown(root, TableID, visitor, stopAtRoute)
 }
 
 func getOffsetRewritingVisitor(
@@ -153,13 +157,9 @@ func getOffsetRewritingVisitor(
 	// this function will be called when an expression has been found on the input
 	found func(sqlparser.Expr, int),
 	// if we have an expression that mush be fetched, this method will be called
-	notFound func(sqlparser.Expr) error,
+	notFound func(sqlparser.Expr),
 ) func(node, parent sqlparser.SQLNode) bool {
-	var err error
 	return func(node, parent sqlparser.SQLNode) bool {
-		if err != nil {
-			return false
-		}
 		e, ok := node.(sqlparser.Expr)
 		if !ok {
 			return true
@@ -170,8 +170,8 @@ func getOffsetRewritingVisitor(
 			return false
 		}
 
-		if fetchByOffset(e) {
-			err = notFound(e)
+		if mustFetchFromInput(e) {
+			notFound(e)
 			return false
 		}
 

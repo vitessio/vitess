@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/test/endtoend/filelock"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -420,7 +421,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 		}
 
 		// Make first tablet as primary
-		if err = cluster.VtctlclientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
+		if err = cluster.VtctldClientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			log.Errorf("error running InitializeShard on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
 			return
 		}
@@ -440,7 +441,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 
 	// Apply Schema SQL
 	if keyspace.SchemaSQL != "" {
-		if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
+		if err = cluster.VtctldClientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
 			log.Errorf("error applying schema: %v, %v", keyspace.SchemaSQL, err)
 			return
 		}
@@ -448,7 +449,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 
 	// Apply VSchema
 	if keyspace.VSchema != "" {
-		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
+		if err = cluster.VtctldClientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
 			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
 			return
 		}
@@ -580,7 +581,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		}
 
 		// Make first tablet as primary
-		if err = cluster.VtctlclientProcess.InitShardPrimary(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
+		if err = cluster.VtctldClientProcess.InitShardPrimary(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			log.Errorf("error running ISM on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
 			return
 		}
@@ -600,7 +601,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 
 	// Apply Schema SQL
 	if keyspace.SchemaSQL != "" {
-		if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
+		if err = cluster.VtctldClientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
 			log.Errorf("error applying schema: %v, %v", keyspace.SchemaSQL, err)
 			return
 		}
@@ -608,7 +609,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 
 	// Apply VSchema
 	if keyspace.VSchema != "" {
-		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
+		if err = cluster.VtctldClientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
 			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
 			return
 		}
@@ -764,19 +765,18 @@ func (cluster *LocalProcessCluster) populateVersionInfo() error {
 	return err
 }
 
+var versionRegex = regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+
 func GetMajorVersion(binaryName string) (int, error) {
 	version, err := exec.Command(binaryName, "--version").Output()
 	if err != nil {
 		return 0, err
 	}
-	versionRegex := regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 	v := versionRegex.FindStringSubmatch(string(version))
 	if len(v) != 4 {
 		return 0, fmt.Errorf("could not parse server version from: %s", version)
 	}
-	if err != nil {
-		return 0, fmt.Errorf("could not parse server version from: %s", version)
-	}
+
 	return strconv.Atoi(v[1])
 }
 
@@ -1091,7 +1091,7 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 				log.Errorf("Error in conversion to integer: %v", err)
 				return
 			}
-			err = syscall.Kill(pid, syscall.SIGKILL)
+			err = syscallutil.Kill(pid, syscall.SIGKILL)
 			if err != nil {
 				log.Errorf("Error in killing process: %v", err)
 			}

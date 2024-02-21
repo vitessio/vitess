@@ -23,12 +23,11 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type Union struct {
-	Sources []ops.Operator
+	Sources []Operator
 
 	// These are the select expressions coming from each source
 	Selects  []sqlparser.SelectExprs
@@ -38,7 +37,7 @@ type Union struct {
 	unionColumnsAsAlisedExprs []*sqlparser.AliasedExpr
 }
 
-func newUnion(srcs []ops.Operator, sourceSelects []sqlparser.SelectExprs, columns sqlparser.SelectExprs, distinct bool) *Union {
+func newUnion(srcs []Operator, sourceSelects []sqlparser.SelectExprs, columns sqlparser.SelectExprs, distinct bool) *Union {
 	if columns == nil {
 		panic("rt")
 	}
@@ -51,24 +50,24 @@ func newUnion(srcs []ops.Operator, sourceSelects []sqlparser.SelectExprs, column
 }
 
 // Clone implements the Operator interface
-func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
+func (u *Union) Clone(inputs []Operator) Operator {
 	newOp := *u
 	newOp.Sources = inputs
 	newOp.Selects = slices.Clone(u.Selects)
 	return &newOp
 }
 
-func (u *Union) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+func (u *Union) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
 // Inputs implements the Operator interface
-func (u *Union) Inputs() []ops.Operator {
+func (u *Union) Inputs() []Operator {
 	return u.Sources
 }
 
 // SetInputs implements the Operator interface
-func (u *Union) SetInputs(ops []ops.Operator) {
+func (u *Union) SetInputs(ops []Operator) {
 	u.Sources = ops
 }
 
@@ -93,12 +92,9 @@ Notice how `X.col = 42` has been translated to `foo = 42` and `id = 42` on respe
 The first SELECT of the union dictates the column names, and the second is whatever expression
 can be found on the same offset. The names of the RHS are discarded.
 */
-func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) ops.Operator {
+func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	offsets := make(map[string]int)
-	sel, err := u.GetSelectFor(0)
-	if err != nil {
-		panic(err)
-	}
+	sel := u.GetSelectFor(0)
 	for i, selectExpr := range sel.SelectExprs {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -107,15 +103,9 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		offsets[ae.ColumnName()] = i
 	}
 
-	needsFilter, exprPerSource, err := u.predicatePerSource(expr, offsets)
-	if err != nil {
-		panic(err)
-	}
+	needsFilter, exprPerSource := u.predicatePerSource(expr, offsets)
 	if needsFilter {
-		return &Filter{
-			Source:     u,
-			Predicates: []sqlparser.Expr{expr},
-		}
+		return newFilter(u, expr)
 	}
 
 	for i, src := range u.Sources {
@@ -125,11 +115,10 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	return u
 }
 
-func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) (bool, []sqlparser.Expr, error) {
+func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) (bool, []sqlparser.Expr) {
 	needsFilter := false
 	exprPerSource := make([]sqlparser.Expr, len(u.Sources))
 	for i := range u.Sources {
-		var err error
 		predicate := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 			col, ok := cursor.Node().(*sqlparser.ColName)
 			if !ok {
@@ -143,39 +132,29 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 				return
 			}
 
-			var sel *sqlparser.Select
-			sel, err = u.GetSelectFor(i)
-			if err != nil {
-				cursor.StopTreeWalk()
-				return
-			}
-
+			sel := u.GetSelectFor(i)
 			ae, ok := sel.SelectExprs[idx].(*sqlparser.AliasedExpr)
 			if !ok {
-				err = vterrors.VT09015()
-				cursor.StopTreeWalk()
-				return
+				panic(vterrors.VT09015())
 			}
 			cursor.Replace(ae.Expr)
 		}, nil).(sqlparser.Expr)
-		if err != nil || needsFilter {
-			return needsFilter, nil, err
-		}
+
 		exprPerSource[i] = predicate
 	}
-	return needsFilter, exprPerSource, nil
+	return needsFilter, exprPerSource
 }
 
-func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
+func (u *Union) GetSelectFor(source int) *sqlparser.Select {
 	src := u.Sources[source]
 	for {
 		switch op := src.(type) {
 		case *Horizon:
-			return sqlparser.GetFirstSelect(op.Query), nil
+			return sqlparser.GetFirstSelect(op.Query)
 		case *Route:
 			src = op.Source
 		default:
-			return nil, vterrors.VT13001("expected all sources of the UNION to be horizons")
+			panic(vterrors.VT13001("expected all sources of the UNION to be horizons"))
 		}
 	}
 }
@@ -209,24 +188,19 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 			panic(vterrors.VT13001(fmt.Sprintf("could not find the argument to the weight_string function: %s", sqlparser.String(wsArg))))
 		}
 
-		outputOffset, err := u.addWeightStringToOffset(ctx, argIdx, gb)
-		if err != nil {
-			panic(err)
-		}
-
-		return outputOffset
+		return u.addWeightStringToOffset(ctx, argIdx, gb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("only weight_string function is expected - got %s", sqlparser.String(expr))))
 	}
 }
 
-func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int, addToGroupBy bool) (outputOffset int, err error) {
+func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int, addToGroupBy bool) (outputOffset int) {
 	for i, src := range u.Sources {
 		exprs := u.Selects[i]
 		selectExpr := exprs[argIdx]
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return 0, vterrors.VT09015()
+			panic(vterrors.VT09015())
 		}
 		thisOffset := src.AddColumn(ctx, false, addToGroupBy, aeWrap(weightStringFor(ae.Expr)))
 
@@ -235,7 +209,7 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 			outputOffset = thisOffset
 		} else {
 			if thisOffset != outputOffset {
-				return 0, vterrors.VT12001("weight_string offsets did not line up for UNION")
+				panic(vterrors.VT12001("weight_string offsets did not line up for UNION"))
 			}
 		}
 	}

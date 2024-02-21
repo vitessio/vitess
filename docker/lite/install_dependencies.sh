@@ -146,7 +146,7 @@ esac
 # Get GPG keys for extra apt repositories.
 # repo.mysql.com
 add_apt_key 8C718D3B5072E1F5
-add_apt_key 467B942D3A79BD29
+add_apt_key A8D3785C
 
 # All flavors include Percona XtraBackup (from repo.percona.com).
 add_apt_key 9334A25F8507EFA5
