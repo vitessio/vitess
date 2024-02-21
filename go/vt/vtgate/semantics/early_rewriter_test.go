@@ -399,14 +399,14 @@ func TestOrderByLiteral(t *testing.T) {
 	}, {
 		sql:    "select id from t1 order by 2",
 		expErr: "Unknown column '2' in 'order clause'",
-		// }, {
-		// 	sql:     "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 1",
-		// 	expSQL:  "select a.id, b.id from `user` as a, user_extra as b union select 1, 2 from dual order by id asc",
-		// 	expDeps: TS0,
-		// }, {
-		// 	sql:     "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2",
-		// 	expSQL:  "select a.id, b.id from `user` as a, user_extra as b union select 1, 2 from dual order by id asc",
-		// 	expDeps: TS1,
+	}, {
+		sql:     "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 1",
+		expSQL:  "select a.id, b.id from `user` as a, user_extra as b union select 1, 2 from dual order by id asc",
+		expDeps: TS0,
+	}, {
+		sql:     "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2",
+		expSQL:  "select a.id, b.id from `user` as a, user_extra as b union select 1, 2 from dual order by id asc",
+		expDeps: TS1,
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {

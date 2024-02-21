@@ -290,7 +290,7 @@ func (r *earlyRewriter) replaceLiteralsInOrderBy(e sqlparser.Expr, iter iterator
 		return false, nil
 	}
 
-	newExpr, err := r.rewriteOrderByExpr(lit)
+	newExpr, recheck, err := r.rewriteOrderByExpr(lit)
 	if err != nil {
 		return false, err
 	}
@@ -319,7 +319,9 @@ func (r *earlyRewriter) replaceLiteralsInOrderBy(e sqlparser.Expr, iter iterator
 	if err != nil {
 		return false, err
 	}
-	err = r.reAnalyze(newExpr)
+	if recheck {
+		err = r.reAnalyze(newExpr)
+	}
 	if err != nil {
 		return false, err
 	}
@@ -659,43 +661,56 @@ type exprContainer struct {
 	ambiguous bool
 }
 
-func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
+func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (expr sqlparser.Expr, needReAnalysis bool, err error) {
 	scope, found := r.scoper.specialExprScopes[node]
 	if !found {
-		return node, nil
+		return node, false, nil
 	}
 	num, err := strconv.Atoi(node.Val)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
 	}
 
 	stmt, isSel := scope.stmt.(*sqlparser.Select)
 	if !isSel {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", scope.stmt)
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", scope.stmt)
 	}
 
 	if num < 1 || num > len(stmt.SelectExprs) {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
+		return nil, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
 	}
 
 	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before
 	for i := 0; i < num; i++ {
 		if _, ok := stmt.SelectExprs[i].(*sqlparser.AliasedExpr); !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.SelectExprs[i]))
+			return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.SelectExprs[i]))
 		}
 	}
 
-	aliasedExpr, ok := stmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+	colOffset := num - 1
+	aliasedExpr, ok := stmt.SelectExprs[colOffset].(*sqlparser.AliasedExpr)
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 	}
 
 	if scope.isUnion {
 		colName := sqlparser.NewColName(aliasedExpr.ColumnName())
-		return colName, nil
+		vtabl, ok := scope.tables[0].(*vTableInfo)
+		if !ok {
+			panic("BUG: not expected")
+		}
+
+		// since column names can be ambiguous here, we want to do the binding by offset and not by column name
+		allColExprs := vtabl.cols[colOffset]
+		direct, recursive, typ := r.binder.org.depsForExpr(allColExprs)
+		r.binder.direct[colName] = direct
+		r.binder.recursive[colName] = recursive
+		r.binder.typer.m[colName] = typ
+
+		return colName, false, nil
 	}
 
-	return realCloneOfColNames(aliasedExpr.Expr, false), nil
+	return realCloneOfColNames(aliasedExpr.Expr, false), true, nil
 }
 
 func (r *earlyRewriter) rewriteGroupByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
