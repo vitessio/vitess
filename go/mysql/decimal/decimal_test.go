@@ -943,7 +943,7 @@ func TestDecimal_Abs2(t *testing.T) {
 	b := New(1234, -4)
 
 	c := b.Abs()
-	assert.NotEqual(t, 0, c.Cmp(a))
+	assert.NotZero(t, c.Cmp(a))
 
 }
 
@@ -997,7 +997,7 @@ func TestDecimal_IsInteger(t *testing.T) {
 }
 
 func TestDecimal_Sign(t *testing.T) {
-	assert.Equal(t, 0, Zero.Sign())
+	assert.Zero(t, Zero.Sign())
 
 	one := New(1, 0)
 	assert.Equal(t, 1, one.Sign())
