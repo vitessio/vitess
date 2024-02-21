@@ -30,11 +30,11 @@ func TestInitialState(t *testing.T) {
 	cache := NewLRUCache[*CacheValue](5)
 	l, sz, c, e, h, m := cache.Len(), cache.UsedCapacity(), cache.MaxCapacity(), cache.Evictions(), cache.Hits(), cache.Misses()
 	assert.Equal(t, 0, l)
-	assert.Equal(t, int64(0), sz)
-	assert.Equal(t, int64(5), c)
-	assert.Equal(t, int64(0), e)
-	assert.Equal(t, int64(0), h)
-	assert.Equal(t, int64(0), m)
+	assert.EqualValues(t, 0, sz)
+	assert.EqualValues(t, 5, c)
+	assert.EqualValues(t, 0, e)
+	assert.EqualValues(t, 0, h)
+	assert.EqualValues(t, 0, m)
 }
 
 func TestSetInsertsValue(t *testing.T) {
