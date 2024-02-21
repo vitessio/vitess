@@ -74,6 +74,10 @@ func (node *CommentOnly) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.astPrintf(node, "%v", node.With)
+	}
+
 	if requiresParen(node.Left) {
 		buf.astPrintf(node, "(%v)", node.Left)
 	} else {

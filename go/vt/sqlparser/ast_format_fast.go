@@ -86,6 +86,10 @@ func (node *CommentOnly) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *Union) FormatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.FormatFast(buf)
+	}
+
 	if requiresParen(node.Left) {
 		buf.WriteByte('(')
 		node.Left.FormatFast(buf)
