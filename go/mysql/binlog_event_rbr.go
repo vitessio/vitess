@@ -111,13 +111,13 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 	}
 
 	// A bit array that says if each column can be NULL.
-	result.CanBeNull, _ = newBitmap(data, pos, int(columnCount))
-
-	//log.Errorf("DEBUG: Remaining optional metadata bytes for %s: %v", result.Name, data[pos:])
+	result.CanBeNull, read = newBitmap(data, pos, int(columnCount))
+	pos = read
 
 	// Read any text based column collation values provided in the optional metadata.
+	//log.Errorf("DEBUG: Remaining optional metadata bytes for %s: %v", result.Name, data[pos:])
 	var err error
-	if result.ColumnCollationIDs, err = readColumnCollationIDs(data, pos); err != nil {
+	if result.ColumnCollationIDs, err = readColumnCollationIDs(data, pos, int(columnCount)); err != nil {
 		return nil, err
 	}
 
@@ -225,16 +225,11 @@ func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
 // and the table definition.
 // We only care about the collation IDs of the character based columns and
 // this info is provided in all binlog_row_metadata formats.
-func readColumnCollationIDs(data []byte, pos int) ([]collations.ID, error) {
-	// Heurestic allocation of the slice's backing array.
-	collationIDs := make([]collations.ID, 0, len(data[pos:])-3)
+func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error) {
+	collationIDs := make([]collations.ID, 0, count)
 	for pos < len(data) {
 		fieldType := uint64(data[pos])
 		pos++
-
-		if fieldType == 254 { // I don't know WTFudge this is yet... but the payload then seems invalid
-			return nil, nil
-		}
 
 		if fieldType == 0 { // Null byte separator
 			continue

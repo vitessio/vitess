@@ -775,7 +775,15 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 			coll = tm.ColumnCollationIDs[charFieldIdx]
 			charFieldIdx++
 		} else { // Use the server defined default for the column's type
-			coll = collations.CollationForType(t, vs.se.Environment().CollationEnv().DefaultConnectionCharset())
+			if t == sqltypes.TypeJSON {
+				// JSON is a blob at this layer and we should NOT use utf8mb4.
+				// The collation in MySQL for a JSON column is NULL, meaning there
+				// is not one (same as for int) and we should use binary.
+				// I'm not sure why CollationForType treats it differently...
+				coll = collations.CollationBinaryID
+			} else {
+				coll = collations.CollationForType(t, vs.se.Environment().CollationEnv().DefaultConnectionCharset())
+			}
 		}
 		fields = append(fields, &querypb.Field{
 			Name:    fmt.Sprintf("@%d", i+1),
@@ -801,7 +809,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		return fields, nil
 	}
 
-	// check if the schema returned by schema.Engine matches with row.
+	// Check if the schema returned by schema.Engine matches with row.
 	for i := range tm.Types {
 		if !sqltypes.AreTypesEquivalent(fields[i].Type, st.Fields[i].Type) {
 			return fields, nil
@@ -814,12 +822,18 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		return nil, err
 	}
 	// This uses the historian which queries the columns in the table and uses the
-	// generated fields. This means that the fields are using collations for the
-	// column types based on the *connection collation* and not the actual
-	// *column collation*.
-	// So we copy the collation information from the actual TableMap here.
+	// generated fields. This means that the fields for text types are using
+	// collations for the column types based on the *connection collation* and not
+	// the actual *column collation*.
+	// So we copy the column collation information from the actual TableMap here, when
+	// we expect it to have been extracted from the binlog metadata (as it's a text
+	// type). Otherwise we trust that the schema based fields are correct and should
+	// not be overridden. This trust also includes when the schema based field is
+	// binary whereas the TableMap fields is text.
 	for i := range fieldsCopy {
-		fieldsCopy[i].Charset = fields[i].Charset
+		if sqltypes.IsText(fields[i].Type) {
+			fieldsCopy[i].Charset = fields[i].Charset
+		}
 	}
 	return fieldsCopy, nil
 }
