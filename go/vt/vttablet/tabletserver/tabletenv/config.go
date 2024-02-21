@@ -142,9 +142,6 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&currentConfig.TxPool.Timeout, "queryserver-config-txpool-timeout", defaultConfig.TxPool.Timeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	fs.DurationVar(&currentConfig.OltpReadPool.IdleTimeout, "queryserver-config-idle-timeout", defaultConfig.OltpReadPool.IdleTimeout, "query server idle timeout, vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
 	fs.DurationVar(&currentConfig.OltpReadPool.MaxLifetime, "queryserver-config-pool-conn-max-lifetime", defaultConfig.OltpReadPool.MaxLifetime, "query server connection max lifetime, vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.")
-	fs.IntVar(&currentConfig.OltpReadPool.MaxWaiters, "queryserver-config-query-pool-waiter-cap", defaultConfig.OltpReadPool.MaxWaiters, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
-	fs.IntVar(&currentConfig.OlapReadPool.MaxWaiters, "queryserver-config-stream-pool-waiter-cap", defaultConfig.OlapReadPool.MaxWaiters, "query server stream pool waiter limit, this is the maximum number of streaming queries that can be queued waiting to get a connection")
-	fs.IntVar(&currentConfig.TxPool.MaxWaiters, "queryserver-config-txpool-waiter-cap", defaultConfig.TxPool.MaxWaiters, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
 	// tableacl related configurations.
 	fs.BoolVar(&currentConfig.StrictTableACL, "queryserver-config-strict-table-acl", defaultConfig.StrictTableACL, "only allow queries that pass table acl checks")
 	fs.BoolVar(&currentConfig.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", defaultConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
@@ -440,7 +437,6 @@ type ConnPoolConfig struct {
 	IdleTimeout        time.Duration `json:"idleTimeoutSeconds,omitempty"`
 	MaxLifetime        time.Duration `json:"maxLifetimeSeconds,omitempty"`
 	PrefillParallelism int           `json:"prefillParallelism,omitempty"`
-	MaxWaiters         int           `json:"maxWaiters,omitempty"`
 }
 
 func (cfg *ConnPoolConfig) MarshalJSON() ([]byte, error) {
@@ -477,7 +473,6 @@ func (cfg *ConnPoolConfig) UnmarshalJSON(data []byte) (err error) {
 		IdleTimeout        string `json:"idleTimeoutSeconds,omitempty"`
 		MaxLifetime        string `json:"maxLifetimeSeconds,omitempty"`
 		PrefillParallelism int    `json:"prefillParallelism,omitempty"`
-		MaxWaiters         int    `json:"maxWaiters,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &tmp); err != nil {
@@ -507,7 +502,6 @@ func (cfg *ConnPoolConfig) UnmarshalJSON(data []byte) (err error) {
 
 	cfg.Size = tmp.Size
 	cfg.PrefillParallelism = tmp.PrefillParallelism
-	cfg.MaxWaiters = tmp.MaxWaiters
 
 	return nil
 }
@@ -945,7 +939,6 @@ var defaultConfig = TabletConfig{
 	OltpReadPool: ConnPoolConfig{
 		Size:        16,
 		IdleTimeout: 30 * time.Minute,
-		MaxWaiters:  5000,
 	},
 	OlapReadPool: ConnPoolConfig{
 		Size:        200,
@@ -955,7 +948,6 @@ var defaultConfig = TabletConfig{
 		Size:        20,
 		Timeout:     time.Second,
 		IdleTimeout: 30 * time.Minute,
-		MaxWaiters:  5000,
 	},
 	Olap: OlapConfig{
 		TxTimeout: 30 * time.Second,
