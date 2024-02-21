@@ -303,9 +303,10 @@ func TestDBKillWithContext(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, params)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -330,9 +331,10 @@ func TestDBKillWithContextDoneContext(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, params)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -589,9 +591,10 @@ func TestDBExecOnceKillTimeout(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
+	dbConn, err := newPooledConn(context.Background(), connPool, params)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
