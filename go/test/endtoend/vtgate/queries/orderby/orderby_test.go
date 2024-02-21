@@ -114,8 +114,8 @@ func TestOrderByComplex(t *testing.T) {
 	}
 
 	for _, query := range queries {
-		t.Run(query, func(t *testing.T) {
-			mcmp.ExecAllowAndCompareError(query)
+		mcmp.Run(query, func(mcmp *utils.MySQLCompare) {
+			_, _ = mcmp.ExecAllowAndCompareError(query)
 		})
 	}
 }
