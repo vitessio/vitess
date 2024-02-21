@@ -40,6 +40,8 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+const defaultKillTimeout = 5 * time.Second
+
 // Conn is a db connection for tabletserver.
 // It performs automatic reconnects as needed.
 // Its Execute function has a timeout that can kill
@@ -57,6 +59,8 @@ type Conn struct {
 	// err will be set if a query is killed through a Kill.
 	errmu sync.Mutex
 	err   error
+
+	killTimeout time.Duration
 }
 
 // NewConnection creates a new DBConn. It triggers a CheckMySQL if creation fails.
@@ -71,10 +75,11 @@ func newPooledConn(ctx context.Context, pool *Pool, appParams dbconfigs.Connecto
 		return nil, err
 	}
 	db := &Conn{
-		conn:    c,
-		env:     pool.env,
-		stats:   pool.env.Stats(),
-		dbaPool: pool.dbaPool,
+		conn:        c,
+		env:         pool.env,
+		stats:       pool.env.Stats(),
+		dbaPool:     pool.dbaPool,
+		killTimeout: defaultKillTimeout,
 	}
 	return db, nil
 }
@@ -86,9 +91,10 @@ func NewConn(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpoo
 		return nil, err
 	}
 	dbconn := &Conn{
-		conn:    c,
-		dbaPool: dbaPool,
-		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
+		conn:        c,
+		dbaPool:     dbaPool,
+		stats:       tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
+		killTimeout: defaultKillTimeout,
 	}
 	if setting == nil {
 		return dbconn, nil
@@ -175,7 +181,7 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 
 	select {
 	case <-ctx.Done():
-		killCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		killCtx, cancel := context.WithTimeout(context.Background(), dbc.killTimeout)
 		defer cancel()
 
 		_ = dbc.KillWithContext(killCtx, ctx.Err().Error(), time.Since(now))
@@ -274,7 +280,7 @@ func (dbc *Conn) streamOnce(ctx context.Context, query string, callback func(*sq
 
 	select {
 	case <-ctx.Done():
-		killCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		killCtx, cancel := context.WithTimeout(context.Background(), dbc.killTimeout)
 		defer cancel()
 
 		_ = dbc.KillWithContext(killCtx, ctx.Err().Error(), time.Since(now))

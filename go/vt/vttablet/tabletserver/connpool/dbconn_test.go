@@ -33,6 +33,8 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func compareTimingCounts(t *testing.T, op string, delta int64, before, after map[string]int64) {
@@ -291,6 +293,57 @@ func TestDBConnKill(t *testing.T) {
 	}
 }
 
+func TestDBKillWithContext(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	require.NoError(t, err)
+
+	query := fmt.Sprintf("kill %d", dbConn.ID())
+	db.AddQuery(query, &sqltypes.Result{})
+	db.SetBeforeFunc(query, func() {
+		// should take longer than our context deadline below.
+		time.Sleep(200 * time.Millisecond)
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// KillWithContext should return context.DeadlineExceeded
+	err = dbConn.KillWithContext(ctx, "test kill", 0)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestDBKillWithContextDoneContext(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	require.NoError(t, err)
+
+	query := fmt.Sprintf("kill %d", dbConn.ID())
+	db.AddRejectedQuery(query, errors.New("rejected"))
+
+	contextErr := errors.New("context error")
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(contextErr) // cancel the context immediately
+
+	// KillWithContext should return the cancellation cause
+	err = dbConn.KillWithContext(ctx, "test kill", 0)
+	require.ErrorIs(t, err, contextErr)
+}
+
 // TestDBConnClose tests that an Exec returns immediately if a connection
 // is asynchronously killed (and closed) in the middle of an execution.
 func TestDBConnClose(t *testing.T) {
@@ -518,4 +571,49 @@ func TestDBConnReApplySetting(t *testing.T) {
 	require.NotEqual(t, oldConnID, dbConn.conn.ID())
 
 	db.VerifyAllExecutedOrFail()
+}
+
+func TestDBExecOnceKillTimeout(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	dbConn, err := newPooledConn(context.Background(), connPool, db.ConnParams())
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	require.NoError(t, err)
+
+	// A very long running query that will be killed.
+	expectedQuery := "select 1"
+	var timestampQuery time.Time
+	db.AddQuery(expectedQuery, &sqltypes.Result{})
+	db.SetBeforeFunc(expectedQuery, func() {
+		timestampQuery = time.Now()
+		// should take longer than our context deadline below.
+		time.Sleep(1000 * time.Millisecond)
+	})
+
+	// We expect a kill-query to be fired, too.
+	// It should also run into a timeout.
+	var timestampKill time.Time
+	dbConn.killTimeout = 100 * time.Millisecond
+	db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(string) {
+		timestampKill = time.Now()
+		// should take longer than the configured kill timeout above.
+		time.Sleep(200 * time.Millisecond)
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	result, err := dbConn.ExecOnce(ctx, "select 1", 1, false)
+	timestampDone := time.Now()
+
+	require.Error(t, err)
+	require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
+	require.Nil(t, result)
+	require.WithinDuration(t, timestampQuery, timestampKill, 150*time.Millisecond)
+	require.WithinDuration(t, timestampKill, timestampDone, 150*time.Millisecond)
 }

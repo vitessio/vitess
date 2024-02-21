@@ -376,11 +376,11 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	}
 	key := strings.ToLower(query)
 	db.mu.Lock()
-	defer db.mu.Unlock()
 	db.queryCalled[key]++
 	db.querylog = append(db.querylog, key)
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose.Load() {
+		defer db.mu.Unlock()
 		c.Close()
 
 		// log error
@@ -394,6 +394,8 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// The driver may send this at connection time, and we don't want it to
 	// interfere.
 	if key == "set names utf8" || strings.HasPrefix(key, "set collation_connection = ") {
+		defer db.mu.Unlock()
+
 		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
 			log.Errorf("callback failed : %v", err)
@@ -403,12 +405,14 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 	// check if we should reject it.
 	if err, ok := db.rejectedData[key]; ok {
+		db.mu.Unlock()
 		return err
 	}
 
 	// Check explicit queries from AddQuery().
 	result, ok := db.data[key]
 	if ok {
+		db.mu.Unlock()
 		if f := result.BeforeFunc; f != nil {
 			f()
 		}
@@ -419,6 +423,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	for _, pat := range db.patternData {
 		if pat.expr.MatchString(query) {
 			userCallback, ok := db.queryPatternUserCallback[pat.expr]
+			db.mu.Unlock()
 			if ok {
 				userCallback(query)
 			}
@@ -428,6 +433,8 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 			return callback(pat.result)
 		}
 	}
+
+	defer db.mu.Unlock()
 
 	if db.neverFail.Load() {
 		return callback(&sqltypes.Result{})
