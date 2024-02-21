@@ -253,7 +253,7 @@ func (it *orderByIterator) replace(e sqlparser.Expr) (err error) {
 		return vterrors.VT13001("went past the last item")
 	}
 	it.node[it.idx].Expr = e
-	return it.r.reAnalyze(e)
+	return nil
 }
 
 type exprIterator struct {
@@ -284,13 +284,55 @@ type iterator interface {
 	replace(e sqlparser.Expr) error
 }
 
-func (r *earlyRewriter) replaceLiteralsInOrderByGroupBy(e sqlparser.Expr, iter iterator) (bool, error) {
+func (r *earlyRewriter) replaceLiteralsInOrderBy(e sqlparser.Expr, iter iterator) (bool, error) {
 	lit := getIntLiteral(e)
 	if lit == nil {
 		return false, nil
 	}
 
 	newExpr, err := r.rewriteOrderByExpr(lit)
+	if err != nil {
+		return false, err
+	}
+
+	if getIntLiteral(newExpr) == nil {
+		coll, ok := e.(*sqlparser.CollateExpr)
+		if ok {
+			coll.Expr = newExpr
+			newExpr = coll
+		}
+	} else {
+		// the expression is still a literal int. that means that we don't really need to sort by it.
+		// we'll just replace the number with a string instead, just like mysql would do in this situation
+		// mysql> explain select 1 as foo from user group by 1;
+		// <snip>
+		// 	mysql> show warnings;
+		// 	+-------+------+-----------------------------------------------------------------+
+		// 	| Level | Code | Message                                                         |
+		// 	+-------+------+-----------------------------------------------------------------+
+		// 	| Note  | 1003 | /* select#1 */ select 1 AS `foo` from `test`.`user` group by '' |
+		// 	+-------+------+-----------------------------------------------------------------+
+		newExpr = sqlparser.NewStrLiteral("")
+	}
+
+	err = iter.replace(newExpr)
+	if err != nil {
+		return false, err
+	}
+	err = r.reAnalyze(newExpr)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *earlyRewriter) replaceLiteralsInGroupBy(e sqlparser.Expr, iter iterator) (bool, error) {
+	lit := getIntLiteral(e)
+	if lit == nil {
+		return false, nil
+	}
+
+	newExpr, err := r.rewriteGroupByExpr(lit)
 	if err != nil {
 		return false, err
 	}
@@ -348,19 +390,24 @@ func (r *earlyRewriter) handleOrderBy(parent sqlparser.SQLNode, iter iterator) e
 
 	sel := sqlparser.GetFirstSelect(stmt)
 	for e := iter.next(); e != nil; e = iter.next() {
-		lit, err := r.replaceLiteralsInOrderByGroupBy(e, iter)
+		lit, err := r.replaceLiteralsInOrderBy(e, iter)
 		if err != nil {
 			return err
 		}
 		if lit {
 			continue
 		}
+
 		expr, err := r.rewriteAliasesInOrderBy(e, sel)
 		if err != nil {
 			return err
 		}
-		err = iter.replace(expr)
-		if err != nil {
+
+		if err = iter.replace(expr); err != nil {
+			return err
+		}
+
+		if err = r.reAnalyze(expr); err != nil {
 			return err
 		}
 	}
@@ -377,7 +424,7 @@ func (r *earlyRewriter) handleGroupBy(parent sqlparser.SQLNode, iter iterator) e
 
 	sel := sqlparser.GetFirstSelect(stmt)
 	for e := iter.next(); e != nil; e = iter.next() {
-		lit, err := r.replaceLiteralsInOrderByGroupBy(e, iter)
+		lit, err := r.replaceLiteralsInGroupBy(e, iter)
 		if err != nil {
 			return err
 		}
@@ -644,13 +691,47 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 	}
 
 	if scope.isUnion {
-		col, isCol := aliasedExpr.Expr.(*sqlparser.ColName)
+		colName := sqlparser.NewColName(aliasedExpr.ColumnName())
+		return colName, nil
+	}
 
-		if aliasedExpr.As.IsEmpty() && isCol {
-			return sqlparser.NewColName(col.Name.String()), nil
+	return realCloneOfColNames(aliasedExpr.Expr, false), nil
+}
+
+func (r *earlyRewriter) rewriteGroupByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
+	scope, found := r.scoper.specialExprScopes[node]
+	if !found {
+		return node, nil
+	}
+	num, err := strconv.Atoi(node.Val)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
+	}
+
+	stmt, isSel := scope.stmt.(*sqlparser.Select)
+	if !isSel {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", scope.stmt)
+	}
+
+	if num < 1 || num > len(stmt.SelectExprs) {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
+	}
+
+	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before
+	for i := 0; i < num; i++ {
+		if _, ok := stmt.SelectExprs[i].(*sqlparser.AliasedExpr); !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.SelectExprs[i]))
 		}
+	}
 
-		return sqlparser.NewColName(aliasedExpr.ColumnName()), nil
+	aliasedExpr, ok := stmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
+	}
+
+	if scope.isUnion {
+		colName := sqlparser.NewColName(aliasedExpr.ColumnName())
+		return colName, nil
 	}
 
 	return realCloneOfColNames(aliasedExpr.Expr, false), nil

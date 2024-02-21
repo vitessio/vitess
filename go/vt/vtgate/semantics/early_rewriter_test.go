@@ -326,9 +326,6 @@ func TestGroupByLiteral(t *testing.T) {
 		sql:    "select id from t1 group by 2",
 		expErr: "Unknown column '2' in 'group clause'",
 	}, {
-		sql:    "select id from t1 order by 2",
-		expErr: "Unknown column '2' in 'order clause'",
-	}, {
 		sql:    "select *, id from t1 group by 2",
 		expErr: "cannot use column offsets in group clause when using `*`",
 	}}
@@ -399,6 +396,9 @@ func TestOrderByLiteral(t *testing.T) {
 		sql:     "select id from `user` union select 1 from dual order by 1",
 		expSQL:  "select id from `user` union select 1 from dual order by id asc",
 		expDeps: TS0,
+	}, {
+		sql:    "select id from t1 order by 2",
+		expErr: "Unknown column '2' in 'order clause'",
 		// }, {
 		// 	sql:     "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 1",
 		// 	expSQL:  "select a.id, b.id from `user` as a, user_extra as b union select 1, 2 from dual order by id asc",
