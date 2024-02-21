@@ -25,7 +25,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/prometheus/common/version"
 
@@ -425,20 +428,35 @@ func TestMissingTables(t *testing.T) {
 	runCases(t, filter, testcases, startPos, nil)
 }
 
-// todo: migrate to new framework
+func getRowEvent(ts *TestSpec, fe *TestFieldEvent, query string) string {
+	stmt, err := sqlparser.NewTestParser().Parse(query)
+	var bv map[string]string
+	var table string
+	switch stmt.(type) {
+	case *sqlparser.Insert:
+		table, bv = ts.getBindVarsForInsert(stmt)
+	default:
+		panic("unhandled statement type for query " + query)
+	}
+	require.NoError(ts.t, err)
+	return ts.getRowEvent(table, bv, fe, stmt, 0)
+}
+
 func TestVStreamCopySimpleFlow(t *testing.T) {
-	execStatements(t, []string{
-		"create table t1(id11 int, id12 int, primary key(id11))",
-		"create table t2(id21 int, id22 int, primary key(id21))",
-	})
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id11 int, id12 int, primary key(id11))",
+			"create table t2(id21 int, id22 int, primary key(id21))",
+		},
+	}
+	ts.Init()
+	defer ts.Close()
+
 	log.Infof("Pos before bulk insert: %s", primaryPosition(t))
-	insertLotsOfData(t, 10)
+	insertSomeRows(t, 10)
 	log.Infof("Pos after bulk insert: %s", primaryPosition(t))
-	defer execStatements(t, []string{
-		"drop table t1",
-		"drop table t2",
-	})
-	engine.se.Reload(context.Background())
+
 	ctx := context.Background()
 	qr, err := env.Mysqld.FetchSuperQuery(ctx, "SELECT count(*) as cnt from t1, t2 where t1.id11 = t2.id21")
 	if err != nil {
@@ -459,9 +477,23 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	var tablePKs []*binlogdatapb.TableLastPK
 	tablePKs = append(tablePKs, getTablePK("t1", 1))
 	tablePKs = append(tablePKs, getTablePK("t2", 2))
+	t1FieldEvent := &TestFieldEvent{
+		table: "t1",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id11", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "id12", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+		},
+	}
+	t2FieldEvent := &TestFieldEvent{
+		table: "t2",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id21", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "id22", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+		},
+	}
 
-	t1FieldEvent := []string{"begin", "type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}"}
-	t2FieldEvent := []string{"begin", "type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 column_type:\"int(11)\"}}"}
 	t1Events := []string{}
 	t2Events := []string{}
 	for i := 1; i <= 10; i++ {
@@ -475,21 +507,23 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 
 	insertEvents1 := []string{
 		"begin",
-		"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
-		"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:3 lengths:4 values:\"1011010\"}}}",
+		t1FieldEvent.String(),
+		getRowEvent(ts, t1FieldEvent, "insert into t1 values (101, 1010)"),
 		"gtid",
-		"commit"}
+		"commit",
+	}
 	insertEvents2 := []string{
 		"begin",
-		"type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 column_type:\"int(11)\"}}",
-		"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:3 lengths:4 values:\"2022020\"}}}",
+		t2FieldEvent.String(),
+		getRowEvent(ts, t2FieldEvent, "insert into t2 values (202, 2020)"),
 		"gtid",
-		"commit"}
+		"commit",
+	}
 
 	testcases := []testcase{
 		{
 			input:  []string{},
-			output: [][]string{t1FieldEvent, {"gtid"}, t1Events, {"begin", "lastpk", "commit"}, t2FieldEvent, t2Events, {"begin", "lastpk", "commit"}, {"copy_completed"}},
+			output: [][]string{{"begin", t1FieldEvent.String()}, {"gtid"}, t1Events, {"begin", "lastpk", "commit"}, {"begin", t2FieldEvent.String()}, t2Events, {"begin", "lastpk", "commit"}, {"copy_completed"}},
 		},
 
 		{
@@ -510,19 +544,44 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	log.Infof("Pos at end of test: %s", primaryPosition(t))
 }
 
+func getLastPK(table, colName string, colType query.Type, colValue []sqltypes.Value, collationId, flags uint32) string {
+	lastPK := getQRFromLastPK([]*query.Field{{Name: colName,
+		Type: colType, Charset: collationId,
+		Flags: flags}},
+		colValue)
+	ev := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_LASTPK,
+		LastPKEvent: &binlogdatapb.LastPKEvent{
+			TableLastPK: &binlogdatapb.TableLastPK{TableName: table, Lastpk: lastPK},
+		},
+	}
+	return ev.String()
+}
+
+func getLastPKCompleted(table string) string {
+	ev := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_LASTPK,
+		LastPKEvent: &binlogdatapb.LastPKEvent{
+			Completed:   true,
+			TableLastPK: &binlogdatapb.TableLastPK{TableName: table},
+		},
+	}
+	return ev.String()
+}
+
 // todo: migrate to new framework
 func TestVStreamCopyWithDifferentFilters(t *testing.T) {
-	execStatements(t, []string{
-		"create table t1(id1 int, id2 int, id3 int, primary key(id1)) ENGINE=InnoDB CHARSET=utf8mb4",
-		"create table t2a(id1 int, id2 int, primary key(id1)) ENGINE=InnoDB CHARSET=utf8mb4",
-		"create table t2b(id1 varchar(20), id2 int, primary key(id1)) ENGINE=InnoDB CHARSET=utf8mb4",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-		"drop table t2a",
-		"drop table t2b",
-	})
-	engine.se.Reload(context.Background())
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, id3 int, primary key(id1)) charset=utf8mb4",
+			"create table t2a(id1 int, id2 int, primary key(id1)) charset=utf8mb4",
+			"create table t2b(id1 varchar(20), id2 int, primary key(id1)) charset=utf8mb4",
+		},
+	}
+	ts.Init()
+	defer ts.Close()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	filter := &binlogdatapb.Filter{
@@ -534,6 +593,15 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		}},
 	}
 
+	t1FieldEvent := &TestFieldEvent{
+		table: "t1",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+		},
+	}
+
 	execStatements(t, []string{
 		"insert into t1(id1, id2, id3) values (1, 2, 3)",
 		"insert into t2a(id1, id2) values (1, 4)",
@@ -542,32 +610,32 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	})
 
 	var expectedEvents = []string{
-		"type:BEGIN",
-		"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id1\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id1\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id2\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63 column_type:\"int(11)\"}}",
-		"type:GTID",
-		"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:1 values:\"12\"}}}",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\" lastpk:{fields:{name:\"id1\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\"1\"}}}}",
-		"type:COMMIT",
-		"type:BEGIN",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\"} completed:true}",
-		"type:COMMIT",
-		"type:BEGIN",
-		"type:FIELD field_event:{table_name:\"t2a\" fields:{name:\"id1\" type:INT32 table:\"t2a\" org_table:\"t2a\" database:\"vttest\" org_name:\"id1\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id2\" type:INT32 table:\"t2a\" org_table:\"t2a\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63 column_type:\"int(11)\"}}",
-		"type:ROW row_event:{table_name:\"t2a\" row_changes:{after:{lengths:1 lengths:1 values:\"14\"}}}",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2a\" lastpk:{fields:{name:\"id1\" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:\"1\"}}}}",
-		"type:COMMIT",
-		"type:BEGIN",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2a\"} completed:true}",
-		"type:COMMIT",
-		"type:BEGIN",
-		fmt.Sprintf("type:FIELD field_event:{table_name:\"t2b\" fields:{name:\"id1\" type:VARCHAR table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id1\" column_length:80 charset:%d column_type:\"varchar(20)\"} fields:{name:\"id2\" type:INT32 table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63 column_type:\"int(11)\"}}", testenv.DefaultCollationID),
-		"type:ROW row_event:{table_name:\"t2b\" row_changes:{after:{lengths:1 lengths:1 values:\"a5\"}}}",
-		"type:ROW row_event:{table_name:\"t2b\" row_changes:{after:{lengths:1 lengths:1 values:\"b6\"}}}",
-		fmt.Sprintf("type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\" lastpk:{fields:{name:\"id1\" type:VARCHAR charset:%d flags:20483} rows:{lengths:1 values:\"b\"}}}}", testenv.DefaultCollationID),
-		"type:COMMIT",
-		"type:BEGIN",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\"} completed:true}",
-		"type:COMMIT",
+		"begin",
+		t1FieldEvent.String(),
+		"gtid",
+		getRowEvent(ts, t1FieldEvent, "insert into t1 values (1, 2)"),
+		getLastPK("t1", "id1", sqltypes.Int32, []sqltypes.Value{sqltypes.NewInt32(1)}, collations.CollationBinaryID, uint32(53251)),
+		"commit",
+		"begin",
+		getLastPKCompleted("t1"),
+		"commit",
+		"begin",
+		ts.fieldEvents["t2a"].String(),
+		getRowEvent(ts, ts.fieldEvents["t2a"], "insert into t2a values (1, 4)"),
+		getLastPK("t2a", "id1", sqltypes.Int32, []sqltypes.Value{sqltypes.NewInt32(1)}, collations.CollationBinaryID, uint32(53251)),
+		"commit",
+		"begin",
+		getLastPKCompleted("t2a"),
+		"commit",
+		"begin",
+		ts.fieldEvents["t2b"].String(),
+		getRowEvent(ts, ts.fieldEvents["t2b"], "insert into t2b values ('a', 5)"),
+		getRowEvent(ts, ts.fieldEvents["t2b"], "insert into t2b values ('b', 6)"),
+		getLastPK("t2b", "id1", sqltypes.VarChar, []sqltypes.Value{sqltypes.NewVarChar("b")}, uint32(testenv.DefaultCollationID), uint32(20483)),
+		"commit",
+		"begin",
+		getLastPKCompleted("t2b"),
+		"commit",
 	}
 
 	var allEvents []*binlogdatapb.VEvent
@@ -604,11 +672,16 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 						ev.RowEvent.Keyspace = ""
 						ev.RowEvent.Shard = ""
 					}
+					ev.Keyspace = ""
+					ev.Shard = ""
 					got := ev.String()
 					want := expectedEvents[i]
-
-					want = env.RemoveAnyDeprecatedDisplayWidths(want)
-
+					switch want {
+					case "begin", "commit", "gtid":
+						want = fmt.Sprintf("type:%s", strings.ToUpper(want))
+					default:
+						want = env.RemoveAnyDeprecatedDisplayWidths(want)
+					}
 					if !strings.HasPrefix(got, want) {
 						errGoroutine = fmt.Errorf("event %d did not match, want %s, got %s", i, want, got)
 						return errGoroutine

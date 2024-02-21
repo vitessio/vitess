@@ -419,6 +419,7 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 				}
 			}
 			tc.colType = fmt.Sprintf("%s(%d)", tc.dataTypeLowered, l)
+			log.Infof(">>>>>>>> collation id is %d", tc.collationID)
 		case "blob":
 			tc.len = lengthBlob
 			tc.collationID = collations.CollationBinaryID
