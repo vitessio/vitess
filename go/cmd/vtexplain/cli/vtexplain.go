@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtexplain"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -83,6 +84,7 @@ If no keyspace name is present, VTExplain will return the following error:
 			"```\nvtexplain -- -shards 128 --vschema-file vschema.json --schema-file schema.sql --replication-mode \"ROW\" --output-mode text --sql \"INSERT INTO users (user_id, name) VALUES(1, 'john')\"\n```\n",
 		Args:    cobra.NoArgs,
 		PreRunE: servenv.CobraPreRunE,
+		Version: servenv.AppVersion.String(),
 		RunE:    run,
 	}
 )
@@ -182,7 +184,9 @@ func parseAndRun() error {
 	if err != nil {
 		return err
 	}
-	vte, err := vtexplain.Init(context.Background(), env, vschema, schema, ksShardMap, opts)
+	ctx := context.Background()
+	ts := memorytopo.NewServer(ctx, vtexplain.Cell)
+	vte, err := vtexplain.Init(ctx, env, ts, vschema, schema, ksShardMap, opts)
 	if err != nil {
 		return err
 	}

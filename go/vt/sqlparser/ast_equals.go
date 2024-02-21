@@ -2112,8 +2112,8 @@ func (cmp *Comparator) RefOfColumnType(a, b *ColumnType) bool {
 		a.Unsigned == b.Unsigned &&
 		a.Zerofill == b.Zerofill &&
 		cmp.RefOfColumnTypeOptions(a.Options, b.Options) &&
-		cmp.RefOfLiteral(a.Length, b.Length) &&
-		cmp.RefOfLiteral(a.Scale, b.Scale) &&
+		cmp.RefOfInt(a.Length, b.Length) &&
+		cmp.RefOfInt(a.Scale, b.Scale) &&
 		cmp.ColumnCharset(a.Charset, b.Charset) &&
 		cmp.SliceOfString(a.EnumValues, b.EnumValues)
 }
@@ -2213,8 +2213,8 @@ func (cmp *Comparator) RefOfConvertType(a, b *ConvertType) bool {
 		return false
 	}
 	return a.Type == b.Type &&
-		cmp.RefOfLiteral(a.Length, b.Length) &&
-		cmp.RefOfLiteral(a.Scale, b.Scale) &&
+		cmp.RefOfInt(a.Length, b.Length) &&
+		cmp.RefOfInt(a.Scale, b.Scale) &&
 		cmp.ColumnCharset(a.Charset, b.Charset)
 }
 
@@ -7173,6 +7173,17 @@ func (cmp *Comparator) RefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		cmp.RefOfLiteral(a.SRID, b.SRID)
 }
 
+// RefOfInt does deep equals between the two objects.
+func (cmp *Comparator) RefOfInt(a, b *int) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
 // ColumnCharset does deep equals between the two objects.
 func (cmp *Comparator) ColumnCharset(a, b ColumnCharset) bool {
 	return a.Name == b.Name &&
@@ -7384,17 +7395,6 @@ func (cmp *Comparator) Comments(a, b Comments) bool {
 	return true
 }
 
-// RefOfInt does deep equals between the two objects.
-func (cmp *Comparator) RefOfInt(a, b *int) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
-}
-
 // SliceOfRefOfPartitionDefinition does deep equals between the two objects.
 func (cmp *Comparator) SliceOfRefOfPartitionDefinition(a, b []*PartitionDefinition) bool {
 	if len(a) != len(b) {
@@ -7551,7 +7551,7 @@ func (cmp *Comparator) RefOfIndexColumn(a, b *IndexColumn) bool {
 		return false
 	}
 	return cmp.IdentifierCI(a.Column, b.Column) &&
-		cmp.RefOfLiteral(a.Length, b.Length) &&
+		cmp.RefOfInt(a.Length, b.Length) &&
 		cmp.Expr(a.Expression, b.Expression) &&
 		a.Direction == b.Direction
 }

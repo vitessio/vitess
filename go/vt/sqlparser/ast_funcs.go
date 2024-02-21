@@ -69,7 +69,7 @@ type IndexColumn struct {
 	// Only one of Column or Expression can be specified
 	// Length is an optional field which is only applicable when Column is used
 	Column     IdentifierCI
-	Length     *Literal
+	Length     *int
 	Expression Expr
 	Direction  OrderDirection
 }
@@ -77,8 +77,8 @@ type IndexColumn struct {
 // LengthScaleOption is used for types that have an optional length
 // and scale
 type LengthScaleOption struct {
-	Length *Literal
-	Scale  *Literal
+	Length *int
+	Scale  *int
 }
 
 // IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING, WITH PARSER
@@ -2573,7 +2573,7 @@ func (ct *ColumnType) Invisible() bool {
 	return ct.Options.Invisible != nil && *ct.Options.Invisible
 }
 
-func (node *Delete) isSingleAliasExpr() bool {
+func (node *Delete) IsSingleAliasExpr() bool {
 	if len(node.Targets) > 1 {
 		return false
 	}

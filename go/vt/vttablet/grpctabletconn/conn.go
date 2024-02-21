@@ -473,6 +473,10 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 
 // BeginStreamExecute starts a transaction and runs an Execute.
 func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.TransactionState, err error) {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -650,6 +654,9 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*qu
 
 // VStream starts a VReplication stream.
 func (conn *gRPCQueryClient) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	stream, err := func() (queryservicepb.Query_VStreamClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -695,6 +702,9 @@ func (conn *gRPCQueryClient) VStream(ctx context.Context, request *binlogdatapb.
 
 // VStreamRows streams rows of a query from the specified starting point.
 func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	stream, err := func() (queryservicepb.Query_VStreamRowsClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -737,6 +747,9 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdat
 
 // VStreamTables streams rows of a query from the specified starting point.
 func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	stream, err := func() (queryservicepb.Query_VStreamTablesClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -777,6 +790,9 @@ func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogd
 
 // VStreamResults streams rows of a query from the specified starting point.
 func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	stream, err := func() (queryservicepb.Query_VStreamResultsClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -856,6 +872,9 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 
 // ReserveBeginStreamExecute implements the queryservice interface
 func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.ReservedTransactionState, err error) {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -967,6 +986,9 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 
 // ReserveStreamExecute implements the queryservice interface
 func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.ReservedState, err error) {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -1060,6 +1082,9 @@ func (conn *gRPCQueryClient) Release(ctx context.Context, target *querypb.Target
 
 // GetSchema implements the queryservice interface
 func (conn *gRPCQueryClient) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {

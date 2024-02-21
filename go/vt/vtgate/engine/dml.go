@@ -36,6 +36,8 @@ import (
 
 // DML contains the common elements between Update and Delete plans
 type DML struct {
+	txNeeded
+
 	// Query specifies the query to be executed.
 	Query string
 
@@ -65,8 +67,6 @@ type DML struct {
 
 	// RoutingParameters parameters required for query routing.
 	*RoutingParameters
-
-	txNeeded
 }
 
 // NewDML returns and empty initialized DML struct.

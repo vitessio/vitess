@@ -19,11 +19,11 @@ package schema
 import (
 	"context"
 	"maps"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -315,9 +315,9 @@ func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 	cols := make([]vindexes.Column, 0, len(tblSpec.Columns))
 	for _, column := range tblSpec.Columns {
 		colCollation := getColumnCollation(tblCollation, column)
-		size := getColumnNumber(column.Type.Length)
-		scale := getColumnNumber(column.Type.Scale)
-		nullable := getColumnNullable(column.Type.Options.Null)
+		size := ptr.Unwrap(column.Type.Length, 0)
+		scale := ptr.Unwrap(column.Type.Scale, 0)
+		nullable := ptr.Unwrap(column.Type.Options.Null, true)
 		cols = append(cols,
 			vindexes.Column{
 				Name:          column.Name,
@@ -325,34 +325,13 @@ func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 				CollationName: colCollation,
 				Default:       column.Type.Options.Default,
 				Invisible:     column.Type.Invisible(),
-				Size:          size,
-				Scale:         scale,
+				Size:          int32(size),
+				Scale:         int32(scale),
 				Nullable:      nullable,
 				Values:        column.Type.EnumValues,
 			})
 	}
 	return cols
-}
-
-func getColumnNullable(null *bool) bool {
-	if null == nil {
-		return true
-	}
-	return *null
-}
-
-func getColumnNumber(lit *sqlparser.Literal) int32 {
-	if lit == nil {
-		return 0
-	}
-	if lit.Type != sqlparser.IntVal {
-		return 0
-	}
-	val, err := strconv.ParseInt(lit.Val, 10, 32)
-	if err != nil {
-		return 0
-	}
-	return int32(val)
 }
 
 func getForeignKeys(tblSpec *sqlparser.TableSpec) []*sqlparser.ForeignKeyDefinition {

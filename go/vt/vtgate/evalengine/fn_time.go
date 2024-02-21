@@ -320,7 +320,7 @@ func (call *builtinDateFormat) compile(c *compiler) (ctype, error) {
 	switch format.Type {
 	case sqltypes.VarChar, sqltypes.VarBinary:
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
@@ -406,13 +406,13 @@ func (call *builtinConvertTz) compile(c *compiler) (ctype, error) {
 	switch {
 	case from.isTextual():
 	default:
-		c.asm.Convert_xb(2, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(2, sqltypes.VarBinary, nil)
 	}
 
 	switch {
 	case to.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	switch n.Type {
@@ -725,7 +725,7 @@ func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
 	switch format.Type {
 	case sqltypes.VarChar, sqltypes.VarBinary:
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	col := typedCoercionCollation(sqltypes.VarChar, c.collation)

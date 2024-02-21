@@ -257,7 +257,7 @@ func (node *Delete) FormatFast(buf *TrackedBuffer) {
 	if node.Ignore {
 		buf.WriteString("ignore ")
 	}
-	if node.Targets != nil && !node.isSingleAliasExpr() {
+	if node.Targets != nil && !node.IsSingleAliasExpr() {
 		node.Targets.FormatFast(buf)
 		buf.WriteByte(' ')
 	}
@@ -907,14 +907,14 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 
 	if ct.Length != nil && ct.Scale != nil {
 		buf.WriteByte('(')
-		ct.Length.FormatFast(buf)
+		buf.WriteString(fmt.Sprintf("%d", *ct.Length))
 		buf.WriteByte(',')
-		ct.Scale.FormatFast(buf)
+		buf.WriteString(fmt.Sprintf("%d", *ct.Scale))
 		buf.WriteByte(')')
 
 	} else if ct.Length != nil {
 		buf.WriteByte('(')
-		ct.Length.FormatFast(buf)
+		buf.WriteString(fmt.Sprintf("%d", *ct.Length))
 		buf.WriteByte(')')
 	}
 
@@ -1111,7 +1111,7 @@ func (idx *IndexDefinition) FormatFast(buf *TrackedBuffer) {
 			col.Column.FormatFast(buf)
 			if col.Length != nil {
 				buf.WriteByte('(')
-				col.Length.FormatFast(buf)
+				buf.WriteString(fmt.Sprintf("%d", *col.Length))
 				buf.WriteByte(')')
 			}
 		}
@@ -2486,10 +2486,10 @@ func (node *ConvertType) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Type)
 	if node.Length != nil {
 		buf.WriteByte('(')
-		node.Length.FormatFast(buf)
+		buf.WriteString(fmt.Sprintf("%d", *node.Length))
 		if node.Scale != nil {
 			buf.WriteString(", ")
-			node.Scale.FormatFast(buf)
+			buf.WriteString(fmt.Sprintf("%d", *node.Scale))
 		}
 		buf.WriteByte(')')
 	}
