@@ -71,6 +71,26 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
+func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.JoinTableExpr:
+		return r.handleJoinTableExprUp(node)
+	case *sqlparser.AliasedTableExpr:
+		// this rewriting is done in the `up` phase, because we need the vindex hints to have been
+		// processed while collecting the tables.
+		return removeVindexHints(node)
+	case sqlparser.OrderBy:
+		r.clause = "order clause"
+		iter := &orderByIterator{
+			node: node,
+			idx:  -1,
+			r:    r,
+		}
+		return r.handleOrderBy(cursor.Parent(), iter)
+	}
+	return nil
+}
+
 func handleDelete(del *sqlparser.Delete) error {
 	// When we do not have any target, it is a single table delete.
 	// In a single table delete, the table references is always a single aliased table expression.
@@ -136,26 +156,6 @@ func rewriteNotExpr(cursor *sqlparser.Cursor, node *sqlparser.NotExpr) {
 	}
 	cmp.Operator = sqlparser.Inverse(cmp.Operator)
 	cursor.Replace(cmp)
-}
-
-func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.JoinTableExpr:
-		return r.handleJoinTableExprUp(node)
-	case *sqlparser.AliasedTableExpr:
-		// this rewriting is done in the `up` phase, because we need the vindex hints to have been
-		// processed while collecting the tables.
-		return removeVindexHints(node)
-	case sqlparser.OrderBy:
-		r.clause = "order clause"
-		iter := &orderByIterator{
-			node: node,
-			idx:  -1,
-			r:    r,
-		}
-		return r.handleOrderBy(cursor.Parent(), iter)
-	}
-	return nil
 }
 
 func (r *earlyRewriter) handleJoinTableExprUp(join *sqlparser.JoinTableExpr) error {
