@@ -227,7 +227,7 @@ func TestDispatchUpdate(t *testing.T) {
 
 	ev := &testUpdateEvent{}
 	DispatchUpdate(ev, "hello")
-	assert.True(t, triggered)
+	assert.True(t, triggered, "listener failed to trigger on DispatchUpdate()")
 
 	want := "hello"
 	if got := ev.update.(string); got != want {

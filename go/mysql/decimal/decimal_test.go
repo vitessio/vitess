@@ -782,11 +782,10 @@ func TestDecimal_QuoRem2(t *testing.T) {
 		d2 := tc.d2
 		prec := tc.prec
 		q, r := d.QuoRem(d2, prec)
-		assert.
-			// rule 1: d = d2*q +r
-			True(t, d.Equal(d2.mul(q).Add(r)))
-		assert.True(t, // rule 2: q is integral multiple of 10^(-prec)
-			q.Equal(q.Truncate(prec)))
+		// rule 1: d = d2*q +r
+		assert.True(t, d.Equal(d2.mul(q).Add(r)))
+		// rule 2: q is integral multiple of 10^(-prec)
+		assert.True(t, q.Equal(q.Truncate(prec)))
 
 		// rule 3: abs(r)<abs(d) * 10^(-prec)
 		if r.Abs().Cmp(d2.Abs().mul(New(1, -prec))) >= 0 {
