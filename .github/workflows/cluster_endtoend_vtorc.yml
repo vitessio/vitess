@@ -19,6 +19,14 @@ jobs:
     runs-on: gh-hosted-runners-4cores-1
 
     steps:
+    - name: Check Memory
+      run: |
+        totalMem=$(free -g | awk 'NR==2 {print $2}')
+        echo "total memory $totalMem GB"
+        if [[ "$totalMem" -lt 15 ]]; then 
+          echo "Less memory than required"
+          exit 1
+        fi
     - name: Skip CI
       run: |
         if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
