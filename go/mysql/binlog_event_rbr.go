@@ -20,10 +20,29 @@ import (
 	"encoding/binary"
 
 	"vitess.io/vitess/go/mysql/binlog"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+)
+
+// These are the TABLE_MAP_EVENT's optional metadata field types from: libbinlogevents/include/rows_event.h
+// See: https://dev.mysql.com/doc/dev/mysql-server/8.0.34/structbinary__log_1_1Table__map__event_1_1Optional__metadata__fields.html
+const (
+	TableMapSignedness uint64 = iota + 1
+	TableMapDefaultCharset
+	TableMapColumnCharset
+	TableMapColumnName
+	TableMapSetStrValue
+	TableMapEnumStrValue
+	TableMapGeometryType
+	TableMapSimplePrimaryKey
+	TableMapPrimaryKeyWithPrefix
+	TableMapEnumAndSetDefaultCharset
+	TableMapEnumAndSetColumnCharset
+	TableMapColumnVisibility
 )
 
 // TableMap implements BinlogEvent.TableMap().
@@ -43,6 +62,7 @@ import (
 //	cc        column-def, one byte per column
 //	<var>     column-meta-def (var-len encoded string)
 //	n         NULL-bitmask, length: (cc + 7) / 8
+//	n         Optional Metadata
 func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 
@@ -93,6 +113,16 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 
 	// A bit array that says if each column can be NULL.
 	result.CanBeNull, _ = newBitmap(data, pos, int(columnCount))
+
+	//log.Errorf("DEBUG: Remining bytes for %s: %v", result.Name, data[pos:])
+
+	// Read any CHAR based column collation overrides in the optional metadata.
+	var err error
+	if result.ColumnCollationIDs, err = readColumnCollationIDs(data, pos); err != nil {
+		return nil, err
+	}
+
+	log.Errorf("DEBUG: table %s; ColumnCollationIDs: %+v", result.Name, result.ColumnCollationIDs)
 
 	return result, nil
 }
@@ -187,6 +217,48 @@ func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
 		// Unknown type. This is used in tests only, so panic.
 		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "metadataRead: unhandled data type: %v", typ))
 	}
+}
+
+// readColumnCollationIDs reads from the optional metadata that exists.
+// See: https://github.com/mysql/mysql-server/blob/8.0/libbinlogevents/include/rows_event.h
+// What's included depends on the server configuration:
+// https://dev.mysql.com/doc/refman/8.0/en/replication-options-binary-log.html#sysvar_binlog_row_metadata
+// and the table definition.
+// We only care about the collation IDs of the character based columns and
+// this info is provided in all binlog_row_metadata formats.
+func readColumnCollationIDs(data []byte, pos int) ([]uint64, error) {
+	collationIDs := make([]uint64, 0)
+	for pos < len(data) {
+		fieldType := uint64(data[pos])
+		pos++
+
+		if fieldType == 0 { // Null byte separator
+			continue
+		}
+
+		fieldLen, read, ok := readLenEncInt(data, pos)
+		if !ok {
+			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "error reading optional metadata field length")
+		}
+		pos = read
+
+		fieldVal := data[pos : pos+int(fieldLen)]
+		pos += int(fieldLen)
+
+		//log.Errorf("DEBUG: Optional Metadata Field Type: %v, Length: %v, Value: %v", fieldType, fieldLen, fieldVal)
+		if fieldType == TableMapDefaultCharset || fieldType == TableMapColumnCharset { // It's one or the other
+			//log.Errorf("DEBUG: Number of charset bytes : %d", fieldLen)
+			for i := uint64(0); i < fieldLen; i++ {
+				v := uint64(fieldVal[i])
+				if v == 0 || v == 252 { // Ignore Null or unimplemented, respectively
+					continue
+				}
+				//log.Errorf("DEBUG: charset idx %d: %v", i, v)
+				collationIDs = append(collationIDs, v)
+			}
+		}
+	}
+	return collationIDs, nil
 }
 
 // Rows implements BinlogEvent.TableMap().

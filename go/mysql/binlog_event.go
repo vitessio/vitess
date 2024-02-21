@@ -216,6 +216,13 @@ type TableMap struct {
 	// - If the metadata is one byte, only the lower 8 bits are used.
 	// - If the metadata is two bytes, all 16 bits are used.
 	Metadata []uint16
+
+	// ColumnCollationIDs contains information about the inherited
+	// or implied column default collation and any explicit per-column
+	// override for character based columns ONLY. This means that the
+	// array position needs to be mapped to the ordered list of
+	// character based columns in the table.
+	ColumnCollationIDs []uint64
 }
 
 // Rows contains data from a {WRITE,UPDATE,DELETE}_ROWS_EVENT.
