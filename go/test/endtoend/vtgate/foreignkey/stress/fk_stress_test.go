@@ -597,7 +597,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 							artifacts := textutil.SplitDelimitedList(row.AsString("artifacts", ""))
 							for _, artifact := range artifacts {
 								t.Run(artifact, func(t *testing.T) {
-									err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, "drop table if exists "+artifact)
+									err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, "drop table if exists "+artifact)
 									require.NoError(t, err)
 								})
 							}
@@ -781,7 +781,7 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 
 	t.Run("dropping tables", func(t *testing.T) {
 		for _, tableName := range reverseTableNames {
-			err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, "drop table if exists "+tableName)
+			err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, "drop table if exists "+tableName)
 			require.NoError(t, err)
 		}
 	})
@@ -808,7 +808,7 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 			}
 			b.WriteString(";")
 		}
-		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, b.String())
+		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, b.String())
 		require.NoError(t, err)
 	})
 	if tcase.preStatement != "" {
@@ -862,7 +862,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
+		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)

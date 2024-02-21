@@ -106,7 +106,7 @@ func TestAPIEndpoints(t *testing.T) {
 
 	t.Run("Replication Analysis API", func(t *testing.T) {
 		// use vtctlclient to stop replication
-		_, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
+		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 		require.NoError(t, err)
 
 		// We know VTOrc won't fix this since we disabled global recoveries!

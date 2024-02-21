@@ -83,7 +83,7 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	require.NoError(t, err)
 
 	// Notify the new vttablet primary about the reparent.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newPrimary.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented", newPrimary.Alias)
 	require.NoError(t, err)
 }
 
@@ -92,9 +92,9 @@ func failoverPlannedReparenting(t *testing.T, clusterInstance *cluster.LocalProc
 	reads.ExpectQueries(10)
 	writes.ExpectQueries(10)
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard",
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("PlannedReparentShard",
 		fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-		"--new_primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
+		"--new-primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
 	require.NoError(t, err)
 }
 

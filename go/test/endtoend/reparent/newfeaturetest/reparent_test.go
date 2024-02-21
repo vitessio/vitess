@@ -40,7 +40,7 @@ func TestRecoverWithMultipleVttabletFailures(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// make tablets[1] a rdonly tablet.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
 	require.NoError(t, err)
 
 	// Confirm that replication is still working as intended
@@ -139,10 +139,10 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInstance, primary)
 
 	// Change replica's type to rdonly
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "rdonly")
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "rdonly")
 	require.NoError(t, err)
 
 	// Change tablets type from rdonly back to replica
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "replica")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replica.Alias, "replica")
 	require.NoError(t, err)
 }
