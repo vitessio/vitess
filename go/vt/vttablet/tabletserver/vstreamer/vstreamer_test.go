@@ -156,7 +156,7 @@ func TestCellValuePadding(t *testing.T) {
 		ddls: []string{
 			"create table t1(id int, val binary(4), primary key(val))",
 			"create table t2(id int, val char(4), primary key(val))",
-			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))"},
+			"create table t3(id int, txt text, val char(4) collate utf8mb4_bin, val2 varchar(64) collate utf8mb4_general_ci, val3 varchar(255) collate utf8mb4_ja_0900_as_cs, primary key(val))"},
 	}
 	defer ts.Close()
 	require.NoError(t, ts.Init())
@@ -172,10 +172,10 @@ func TestCellValuePadding(t *testing.T) {
 		{"update t2 set id = 11 where val = 'aaa'", []TestRowEvent{
 			{spec: &TestRowEventSpec{table: "t2", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"11", "aaa"}}}}},
 		}},
-		{"insert into t3 values (1, 'aaa')", nil},
-		{"insert into t3 values (2, 'bb')", nil},
+		{"insert into t3 values (1, 'aaa', 'aaa', 'aaa', 'aaa')", nil},
+		{"insert into t3 values (2, 'bb', 'bb', 'bb', 'bb')", nil},
 		{"update t3 set id = 11 where val = 'aaa'", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t3", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"11", "aaa"}}}}},
+			{spec: &TestRowEventSpec{table: "t3", changes: []TestRowChange{{before: []string{"1", "aaa", "aaa", "aaa", "aaa"}, after: []string{"11", "aaa", "aaa", "aaa", "aaa"}}}}},
 		}},
 		{"commit", nil},
 	}}
@@ -2097,7 +2097,6 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 }
 
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	wg, ch := startStream(ctx, t, filter, position, tablePK)

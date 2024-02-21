@@ -73,7 +73,6 @@ type TestColumn struct {
 	len                     int64
 	dataTypeLowered         string
 	skip                    bool
-	collationName           string
 }
 
 // TestFieldEvent has all the attributes of a table required for creating a field event.
@@ -377,6 +376,7 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			tc.collationID = testenv.DefaultCollationID
 		} else {
 			tc.collationID = collations.MySQL8().LookupByName(collationName)
+			log.Errorf("DEBUG: SchemaDiff provided collation for %s.%s: %s:%d", tfe.table, tc.name, collationName, tc.collationID)
 		}
 		collation := colldata.Lookup(tc.collationID)
 		switch tc.dataTypeLowered {
@@ -395,7 +395,6 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 				if tc.dataTypeLowered == "char" && collation.IsBinary() {
 					tc.dataType = "BINARY"
 				}
-				tc.collationID = testenv.DefaultCollationID
 			}
 			tc.colType = fmt.Sprintf("%s(%d)", tc.dataTypeLowered, l)
 		case "blob":
@@ -405,7 +404,6 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 		case "text":
 			tc.len = lengthText
 			tc.colType = "text"
-			tc.collationID = testenv.DefaultCollationID
 		case "set":
 			tc.len = lengthSet
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))

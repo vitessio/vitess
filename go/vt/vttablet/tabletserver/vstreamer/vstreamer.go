@@ -733,7 +733,6 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 	if err != nil {
 		return nil, err
 	}
-
 	table := &Table{
 		Name:   tm.Name,
 		Fields: cols,
@@ -763,12 +762,21 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 
 func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, error) {
 	var fields []*querypb.Field
+	var charFieldIdx int
 	for i, typ := range tm.Types {
 		t, err := sqltypes.MySQLToType(typ, 0)
 		if err != nil {
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
-		coll := collations.CollationForType(t, vs.se.Environment().CollationEnv().DefaultConnectionCharset())
+		// Use the the collation inherited or the one specified specifically
+		// for the column if one was provided in the event's metadata.
+		var coll collations.ID
+		if sqltypes.IsText(t) && len(tm.ColumnCollationIDs) > charFieldIdx {
+			coll = tm.ColumnCollationIDs[charFieldIdx]
+			charFieldIdx++
+		} else { // Use the server defined default for the column's type
+			coll = collations.CollationForType(t, vs.se.Environment().CollationEnv().DefaultConnectionCharset())
+		}
 		fields = append(fields, &querypb.Field{
 			Name:    fmt.Sprintf("@%d", i+1),
 			Type:    t,
@@ -804,6 +812,14 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	fieldsCopy, err := getFields(vs.ctx, vs.cp, tm.Name, tm.Database, st.Fields[:len(tm.Types)])
 	if err != nil {
 		return nil, err
+	}
+	// This uses the historian which queries the columns in the table and uses the
+	// generated fields. This means that the fields are using collations for the
+	// column types based on the *connection collation* and not the actual
+	// *column collation*.
+	// So we copy the collation information from the actual TableMap here.
+	for i := range fieldsCopy {
+		fieldsCopy[i].Charset = fields[i].Charset
 	}
 	return fieldsCopy, nil
 }
