@@ -64,7 +64,6 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
 // channel for polling.
 func OpenTabletDiscovery() <-chan time.Time {
-	// TODO(sougou): If there's a shutdown signal, we have to close the topo.
 	ts = topo.Open()
 	tmc = tmclient.NewTabletManagerClient()
 	// Clear existing cache and perform a new refresh.

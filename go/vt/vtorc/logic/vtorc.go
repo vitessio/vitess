@@ -129,6 +129,7 @@ func closeVTOrc() {
 	_ = inst.AuditOperation("shutdown", "", "Triggered via SIGTERM")
 	// wait for the locks to be released
 	waitForLocksRelease()
+	ts.Close()
 	log.Infof("VTOrc closed")
 }
 
