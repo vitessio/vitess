@@ -388,6 +388,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())
 	defer vc.vr.stats.CopyLoopCount.Add(1)
 
+	if err := vc.vr.setState(binlogdatapb.VReplicationWorkflowState_Copying, ""); err != nil {
+		return err
+	}
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
 	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
