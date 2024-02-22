@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-	"time"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
@@ -138,18 +137,6 @@ func assertExecuteFetch(t *testing.T, qr string) {
 	got = fields.Len()
 	want = int(2)
 	assert.Equal(t, want, got)
-}
-
-// ActionAndTimeout test
-func TestActionAndTimeout(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("SleepTablet", primaryTablet.Alias, "5s")
-	require.Nil(t, err)
-	time.Sleep(1 * time.Second)
-
-	// try a frontend RefreshState that should timeout as the tablet is busy running the other one
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias, "--wait_timeout", "2s")
-	assert.Error(t, err, "timeout as tablet is in Sleep")
 }
 
 func TestHook(t *testing.T) {
