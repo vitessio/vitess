@@ -504,7 +504,6 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	log.Infof("Pos at end of test: %s", primaryPosition(t))
 }
 
-// todo: migrate to new framework
 func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	ts := &TestSpec{
 		t: t,
@@ -809,7 +808,7 @@ func TestSavepointWithFilter(t *testing.T) {
 	ts.Run()
 }
 
-// todo: migrate to new framework
+// todo: migrate to new test framework
 func TestStatements(t *testing.T) {
 	execStatements(t, []string{
 		"create table stream1(id int, val varbinary(128), primary key(id))",
@@ -903,21 +902,20 @@ func TestStatements(t *testing.T) {
 	runCases(t, nil, testcases, "current", nil)
 }
 
-// todo: migrate to new framework
 // TestOther tests "other" and "priv" statements. These statements can
 // produce very different events depending on the version of mysql or
 // mariadb. So, we just show that vreplication transmits "OTHER" events
 // if the binlog is affected by the statement.
 func TestOther(t *testing.T) {
-	execStatements(t, []string{
-		"create table stream1(id int, val varbinary(128), primary key(id))",
-		"create table stream2(id int, val varbinary(128), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table stream1",
-		"drop table stream2",
-	})
-	engine.se.Reload(context.Background())
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table stream1(id int, val varbinary(128), primary key(id))",
+			"create table stream2(id int, val varbinary(128), primary key(id))",
+		},
+	}
+	ts.Init()
+	defer ts.Close()
 
 	testcases := []string{
 		"repair table stream2",
