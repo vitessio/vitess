@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -220,9 +221,9 @@ type TableMap struct {
 
 	// ColumnCollationIDs contains information about the inherited
 	// or implied column default collation and any explicit per-column
-	// override for character based columns ONLY. This means that the
+	// override for text based columns ONLY. This means that the
 	// array position needs to be mapped to the ordered list of
-	// character based columns in the table.
+	// text based columns in the table.
 	ColumnCollationIDs []collations.ID
 }
 

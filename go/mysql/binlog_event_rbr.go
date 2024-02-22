@@ -30,7 +30,7 @@ import (
 // These are the TABLE_MAP_EVENT's optional metadata field types from: libbinlogevents/include/rows_event.h
 // See: https://dev.mysql.com/doc/dev/mysql-server/8.0.34/structbinary__log_1_1Table__map__event_1_1Optional__metadata__fields.html
 const (
-	TableMapSignedness uint64 = iota + 1
+	TableMapSignedness uint8 = iota + 1
 	TableMapDefaultCharset
 	TableMapColumnCharset
 	TableMapColumnName
@@ -120,7 +120,6 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 	if result.ColumnCollationIDs, err = readColumnCollationIDs(data, pos, int(columnCount)); err != nil {
 		return nil, err
 	}
-
 	//log.Errorf("DEBUG: table %s; ColumnCollationIDs: %+v", result.Name, result.ColumnCollationIDs)
 
 	return result, nil
@@ -221,14 +220,14 @@ func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
 // readColumnCollationIDs reads from the optional metadata that exists.
 // See: https://github.com/mysql/mysql-server/blob/8.0/libbinlogevents/include/rows_event.h
 // What's included depends on the server configuration:
-// https://dev.mysql.com/doc/refman/8.0/en/replication-options-binary-log.html#sysvar_binlog_row_metadata
+// https://dev.mysql.com/doc/refman/en/replication-options-binary-log.html#sysvar_binlog_row_metadata
 // and the table definition.
-// We only care about the collation IDs of the character based columns and
+// We only care about the collation IDs of the text based columns and
 // this info is provided in all binlog_row_metadata formats.
 func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error) {
 	collationIDs := make([]collations.ID, 0, count)
 	for pos < len(data) {
-		fieldType := uint64(data[pos])
+		fieldType := uint8(data[pos])
 		pos++
 
 		if fieldType == 0 { // Null byte separator

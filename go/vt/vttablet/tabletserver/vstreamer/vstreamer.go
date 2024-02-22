@@ -831,7 +831,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	// not be overridden. This trust also includes when the schema based field is
 	// binary whereas the TableMap fields is text.
 	for i := range fieldsCopy {
-		if sqltypes.IsText(fields[i].Type) {
+		if sqltypes.IsText(fields[i].Type) && fields[i].Charset != 0 {
 			fieldsCopy[i].Charset = fields[i].Charset
 		}
 	}
