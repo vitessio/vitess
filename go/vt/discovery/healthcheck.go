@@ -774,6 +774,7 @@ func FilterTargetsByKeyspaces(keyspaces []string, targets []*query.Target) []*qu
 func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.Target, requireServing bool) error {
 	targets = FilterTargetsByKeyspaces(KeyspacesToWatch, targets)
 
+	var tabletHealths []*TabletHealth
 	for {
 		// We nil targets as we find them.
 		allPresent := true
@@ -782,7 +783,6 @@ func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.
 				continue
 			}
 
-			var tabletHealths []*TabletHealth
 			if requireServing {
 				tabletHealths = hc.GetHealthyTabletStats(target)
 			} else {
