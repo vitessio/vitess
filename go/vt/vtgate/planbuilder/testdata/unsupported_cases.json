@@ -180,11 +180,6 @@
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
-    "comment": "rewrite of 'order by 2' that becomes 'order by id', leading to ambiguous binding.",
-    "query": "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2",
-    "plan": "Column 'id' in field list is ambiguous"
-  },
-  {
     "comment": "unsupported with clause in delete statement",
     "query": "with x as (select * from user) delete from x",
     "plan": "VT12001: unsupported: WITH expression in DELETE statement"
