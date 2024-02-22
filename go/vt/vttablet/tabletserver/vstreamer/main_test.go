@@ -194,7 +194,7 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 			switch want {
 			case "begin":
 				if evs[i].Type != binlogdatapb.VEventType_BEGIN {
-					t.Fatalf("%v (%d): event: %v, want gtid or begin", input, i, evs[i])
+					t.Fatalf("%v (%d): event: %v, want begin", input, i, evs[i])
 				}
 			case "gtid":
 				if evs[i].Type != binlogdatapb.VEventType_GTID {
