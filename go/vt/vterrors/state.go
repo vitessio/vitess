@@ -47,6 +47,7 @@ const (
 	WrongValueCountOnRow
 	WrongValue
 	WrongArguments
+	InvalidGroupFuncUse
 
 	// failed precondition
 	NoDB

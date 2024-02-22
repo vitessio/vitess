@@ -51,6 +51,7 @@ type (
 	AmbiguousColumnError           struct{ Column string }
 	SubqueryColumnCountError       struct{ Expected int }
 	ColumnsMissingInSchemaError    struct{}
+	InvalidUseOfGroupFunction      struct{}
 
 	UnsupportedMultiTablesInUpdateError struct {
 		ExprCount int
@@ -260,4 +261,17 @@ func (e *ColumnsMissingInSchemaError) Error() string {
 
 func (e *ColumnsMissingInSchemaError) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_INVALID_ARGUMENT
+}
+
+// InvalidUserOfGroupFunction
+func (InvalidUseOfGroupFunction) Error() string {
+	return "Invalid use of group function"
+}
+
+func (InvalidUseOfGroupFunction) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
+}
+
+func (InvalidUseOfGroupFunction) ErrorState() vterrors.State {
+	return vterrors.InvalidGroupFuncUse
 }
