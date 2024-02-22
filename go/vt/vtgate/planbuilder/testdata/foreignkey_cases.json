@@ -1255,7 +1255,7 @@
         "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
-          0
+          "0:[0]"
         ],
         "Inputs": [
           {
@@ -3131,7 +3131,7 @@
         "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
-          0
+          "0:[0]"
         ],
         "Inputs": [
           {
@@ -3141,8 +3141,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select u_tbl6.id from u_tbl6 as u, u_tbl5 as m where 1 != 1",
-            "Query": "select u_tbl6.id from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update",
+            "FieldQuery": "select u.id from u_tbl6 as u, u_tbl5 as m where 1 != 1",
+            "Query": "select u.id from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update",
             "Table": "u_tbl5, u_tbl6"
           },
           {
@@ -3157,7 +3157,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl6.col6 from u_tbl6 as u where 1 != 1",
-                "Query": "select u_tbl6.col6 from u_tbl6 as u where u_tbl6.id in ::dml_vals for update",
+                "Query": "select u_tbl6.col6 from u_tbl6 as u where u.id in ::dml_vals for update",
                 "Table": "u_tbl6"
               },
               {
@@ -3185,7 +3185,7 @@
                   "Sharded": false
                 },
                 "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl6 as u where u_tbl6.id in ::dml_vals",
+                "Query": "delete from u_tbl6 as u where u.id in ::dml_vals",
                 "Table": "u_tbl6"
               }
             ]
@@ -3209,7 +3209,7 @@
         "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
-          0
+          "0:[0]"
         ],
         "Inputs": [
           {
@@ -3286,7 +3286,7 @@
         "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
-          0
+          "0:[0]"
         ],
         "Inputs": [
           {
@@ -3399,7 +3399,7 @@
         "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
-          0
+          "0:[0]"
         ],
         "Inputs": [
           {
@@ -3740,7 +3740,7 @@
         "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
-          0
+          "0:[0]"
         ],
         "Inputs": [
           {

@@ -34,7 +34,7 @@ func TestDeleteWithInputSingleOffset(t *testing.T) {
 
 	del := &DMLWithInput{
 		Input: input,
-		DML: &Delete{
+		DMLs: []Primitive{&Delete{
 			DML: &DML{
 				RoutingParameters: &RoutingParameters{
 					Opcode: Scatter,
@@ -45,8 +45,8 @@ func TestDeleteWithInputSingleOffset(t *testing.T) {
 				},
 				Query: "dummy_delete",
 			},
-		},
-		OutputCols: []int{0},
+		}},
+		OutputCols: [][]int{{0}},
 	}
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -78,7 +78,7 @@ func TestDeleteWithInputMultiOffset(t *testing.T) {
 
 	del := &DMLWithInput{
 		Input: input,
-		DML: &Delete{
+		DMLs: []Primitive{&Delete{
 			DML: &DML{
 				RoutingParameters: &RoutingParameters{
 					Opcode: Scatter,
@@ -89,8 +89,8 @@ func TestDeleteWithInputMultiOffset(t *testing.T) {
 				},
 				Query: "dummy_delete",
 			},
-		},
-		OutputCols: []int{1, 0},
+		}},
+		OutputCols: [][]int{{1, 0}},
 	}
 
 	vc := newDMLTestVCursor("-20", "20-")

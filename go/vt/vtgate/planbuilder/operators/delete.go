@@ -92,6 +92,9 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 }
 
 func deleteWithInputPlanningRequired(childFks []vindexes.ChildFKInfo, deleteStmt *sqlparser.Delete) bool {
+	if len(deleteStmt.Targets) > 1 {
+		return true
+	}
 	// If there are no foreign keys, we don't need to use delete with input.
 	if len(childFks) == 0 {
 		return false
@@ -107,7 +110,7 @@ func deleteWithInputPlanningRequired(childFks []vindexes.ChildFKInfo, deleteStmt
 	return !deleteStmt.IsSingleAliasExpr()
 }
 
-func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.Delete) Operator {
+func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.Delete) (op Operator) {
 	delClone := ctx.SemTable.Clone(del).(*sqlparser.Delete)
 	del.Limit = nil
 	del.OrderBy = nil
@@ -120,15 +123,21 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 		Lock:    sqlparser.ForUpdateLock,
 	}
 
-	op, cols := createDeleteOpWithTarget(ctx, del.Targets[0])
-	for _, col := range cols {
-		selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(col))
+	var delOps []Operator
+	var colsList [][]*sqlparser.ColName
+	for _, target := range del.Targets {
+		op, cols := createDeleteOpWithTarget(ctx, target)
+		for _, col := range cols {
+			selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(col))
+		}
+		delOps = append(delOps, op)
+		colsList = append(colsList, cols)
 	}
 
 	op = &DMLWithInput{
-		DML:    op,
+		DML:    delOps,
 		Source: createOperatorFromSelect(ctx, selectStmt),
-		cols:   cols,
+		cols:   colsList,
 	}
 
 	if del.Comments != nil {
@@ -147,11 +156,13 @@ func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target sqlparser
 		panic(vterrors.VT13001(err.Error()))
 	}
 	vTbl := ti.GetVindexTable()
-
+	if len(vTbl.PrimaryKey) == 0 {
+		panic(vterrors.VT09015())
+	}
 	var leftComp sqlparser.ValTuple
 	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
 	for _, col := range vTbl.PrimaryKey {
-		colName := sqlparser.NewColNameWithQualifier(col.String(), vTbl.GetTableName())
+		colName := sqlparser.NewColNameWithQualifier(col.String(), target)
 		cols = append(cols, colName)
 		leftComp = append(leftComp, colName)
 		ctx.SemTable.Recursive[colName] = ts
