@@ -407,6 +407,10 @@ func TestOrderByLiteral(t *testing.T) {
 		sql:     "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2",
 		expSQL:  "select a.id, b.id from `user` as a, user_extra as b union select 1, 2 from dual order by id asc",
 		expDeps: TS1,
+	}, {
+		sql:     "select user.id as foo from user union select col from user_extra order by 1",
+		expSQL:  "select `user`.id as foo from `user` union select col from user_extra order by foo asc",
+		expDeps: MergeTableSets(TS0, TS1),
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
@@ -526,7 +530,11 @@ func TestOrderByColumnName(t *testing.T) {
 	}, {
 		sql:    "select id, count(distinct foo) k from t1 group by id order by k",
 		expSQL: "select id, count(distinct foo) as k from t1 group by id order by count(distinct foo) asc",
-	}}
+	}, {
+		sql:    "select user.id as foo from user union select col from user_extra order by foo",
+		expSQL: "select `user`.id as foo from `user` union select col from user_extra order by foo asc",
+	},
+	}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)

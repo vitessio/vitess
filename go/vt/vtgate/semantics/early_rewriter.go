@@ -553,8 +553,8 @@ func (r *earlyRewriter) rewriteAliasesInHavingAndGroupBy(node sqlparser.Expr, se
 func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlparser.Select) (expr sqlparser.Expr, err error) {
 	currentScope := r.scoper.currentScope()
 	if currentScope.isUnion {
-		// for now, punt on these queries and let the old code handle it
-		return r.rewriteAliasesInHavingAndGroupBy(node, sel)
+		// It is not safe to rewrite order by clauses in unions.
+		return node, nil
 	}
 
 	aliases := r.getAliasMap(sel)
