@@ -26,11 +26,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/common/version"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/proto/query"
-
-	"github.com/prometheus/common/version"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
@@ -356,13 +355,18 @@ func TestVersion(t *testing.T) {
 }
 
 func TestMissingTables(t *testing.T) {
-	engine.se.Reload(context.Background())
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id11 int, id12 int, primary key(id11))",
+		},
+	}
+	ts.Init()
+	defer ts.Close()
 	execStatements(t, []string{
-		"create table t1(id11 int, id12 int, primary key(id11))",
 		"create table shortlived(id31 int, id32 int, primary key(id31))",
 	})
 	defer execStatements(t, []string{
-		"drop table t1",
 		"drop table _shortlived",
 	})
 	startPos := primaryPosition(t)
@@ -377,23 +381,9 @@ func TestMissingTables(t *testing.T) {
 			Filter: "select * from t1",
 		}},
 	}
-	ts := &TestSpec{t: t}
-	ts.Init()
-	fe := &TestFieldEvent{
-		table: "t1",
-		db:    "vttest",
-		cols: []*TestColumn{
-			{name: "id11", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
-			{name: "id12", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
-		},
-	}
-	bv := make(map[string]string)
-	bv["id11"] = "101"
-	bv["id12"] = "1010"
+	fe := ts.fieldEvents["t1"]
 	insert := "insert into t1 values (101, 1010)"
-	stmt, err := sqlparser.NewTestParser().Parse(insert)
-	require.NoError(t, err)
-	rowEvent := ts.getRowEvent("t1", bv, fe, stmt, 0)
+	rowEvent := getRowEvent(ts, fe, insert)
 	testcases := []testcase{
 		{
 			input:  []string{},
@@ -401,45 +391,15 @@ func TestMissingTables(t *testing.T) {
 		},
 
 		{
-			input: []string{
-				insert,
-			},
+			input: []string{insert},
 			output: [][]string{
-				{
-					"begin",
-					"gtid",
-					"commit",
-				},
-				{
-					"gtid",
-					"type:OTHER",
-				},
-				{
-					"begin",
-					fe.String(),
-					rowEvent,
-					// "type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:3 lengths:4 values:\"1011010\"}}}",
-					"gtid",
-					"commit",
-				},
+				{"begin", "gtid", "commit"},
+				{"gtid", "type:OTHER"},
+				{"begin", fe.String(), rowEvent, "gtid", "commit"},
 			},
 		},
 	}
 	runCases(t, filter, testcases, startPos, nil)
-}
-
-func getRowEvent(ts *TestSpec, fe *TestFieldEvent, query string) string {
-	stmt, err := sqlparser.NewTestParser().Parse(query)
-	var bv map[string]string
-	var table string
-	switch stmt.(type) {
-	case *sqlparser.Insert:
-		table, bv = ts.getBindVarsForInsert(stmt)
-	default:
-		panic("unhandled statement type for query " + query)
-	}
-	require.NoError(ts.t, err)
-	return ts.getRowEvent(table, bv, fe, stmt, 0)
 }
 
 func TestVStreamCopySimpleFlow(t *testing.T) {
@@ -542,31 +502,6 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 
 	runCases(t, filter, testcases, "vscopy", tablePKs)
 	log.Infof("Pos at end of test: %s", primaryPosition(t))
-}
-
-func getLastPK(table, colName string, colType query.Type, colValue []sqltypes.Value, collationId, flags uint32) string {
-	lastPK := getQRFromLastPK([]*query.Field{{Name: colName,
-		Type: colType, Charset: collationId,
-		Flags: flags}},
-		colValue)
-	ev := &binlogdatapb.VEvent{
-		Type: binlogdatapb.VEventType_LASTPK,
-		LastPKEvent: &binlogdatapb.LastPKEvent{
-			TableLastPK: &binlogdatapb.TableLastPK{TableName: table, Lastpk: lastPK},
-		},
-	}
-	return ev.String()
-}
-
-func getLastPKCompleted(table string) string {
-	ev := &binlogdatapb.VEvent{
-		Type: binlogdatapb.VEventType_LASTPK,
-		LastPKEvent: &binlogdatapb.LastPKEvent{
-			Completed:   true,
-			TableLastPK: &binlogdatapb.TableLastPK{TableName: table},
-		},
-	}
-	return ev.String()
 }
 
 // todo: migrate to new framework

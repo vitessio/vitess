@@ -43,11 +43,13 @@ import (
 	"testing"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -106,13 +108,13 @@ type TestRowEventSpec struct {
 
 // Generates a string representation for a custom row event.
 func (s *TestRowEventSpec) String() string {
-	ev := &binlogdata.RowEvent{
+	ev := &binlogdatapb.RowEvent{
 		TableName: s.table,
 	}
-	var rowChanges []*binlogdata.RowChange
+	var rowChanges []*binlogdatapb.RowChange
 	if s.changes != nil && len(s.changes) > 0 {
 		for _, c := range s.changes {
-			rowChange := binlogdata.RowChange{}
+			rowChange := binlogdatapb.RowChange{}
 			if c.before != nil && len(c.before) > 0 {
 				rowChange.Before = &query.Row{}
 				for _, val := range c.before {
@@ -131,8 +133,8 @@ func (s *TestRowEventSpec) String() string {
 		}
 		ev.RowChanges = rowChanges
 	}
-	vEvent := &binlogdata.VEvent{
-		Type:     binlogdata.VEventType_ROW,
+	vEvent := &binlogdatapb.VEvent{
+		Type:     binlogdatapb.VEventType_ROW,
 		RowEvent: ev,
 	}
 	return vEvent.String()
@@ -150,7 +152,7 @@ type TestRowEvent struct {
 // TestSpecOptions has any non-standard test-specific options which can modify the event generation behaviour.
 type TestSpecOptions struct {
 	noblob            bool
-	filter            *binlogdata.Filter
+	filter            *binlogdatapb.Filter
 	customFieldEvents bool
 }
 
@@ -477,9 +479,9 @@ func (ts *TestSpec) getMetadataMap(table string, col *TestColumn, value string) 
 }
 
 func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFieldEvent, stmt sqlparser.Statement, flags uint32) string {
-	ev := &binlogdata.RowEvent{
+	ev := &binlogdatapb.RowEvent{
 		TableName: table,
-		RowChanges: []*binlogdata.RowChange{
+		RowChanges: []*binlogdatapb.RowChange{
 			{
 				Before: nil,
 				After:  nil,
@@ -507,16 +509,16 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 		row.Lengths = append(row.Lengths, l)
 	}
 	ev.RowChanges = ts.getRowChanges(table, stmt, &row)
-	vEvent := &binlogdata.VEvent{
-		Type:     binlogdata.VEventType_ROW,
+	vEvent := &binlogdatapb.VEvent{
+		Type:     binlogdatapb.VEventType_ROW,
 		RowEvent: ev,
 	}
 	return vEvent.String()
 }
 
-func (ts *TestSpec) getRowChanges(table string, stmt sqlparser.Statement, row *query.Row) []*binlogdata.RowChange {
-	var rowChanges []*binlogdata.RowChange
-	var rowChange binlogdata.RowChange
+func (ts *TestSpec) getRowChanges(table string, stmt sqlparser.Statement, row *query.Row) []*binlogdatapb.RowChange {
+	var rowChanges []*binlogdatapb.RowChange
+	var rowChange binlogdatapb.RowChange
 	switch stmt.(type) {
 	case *sqlparser.Insert:
 		rowChange.After = row
@@ -532,8 +534,8 @@ func (ts *TestSpec) getRowChanges(table string, stmt sqlparser.Statement, row *q
 	return rowChanges
 }
 
-func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *binlogdata.RowChange {
-	var rowChange binlogdata.RowChange
+func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *binlogdatapb.RowChange {
+	var rowChange binlogdatapb.RowChange
 	var bitmap byte
 	var before, after query.Row
 
@@ -581,7 +583,7 @@ func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *bi
 	rowChange.Before = &before
 	rowChange.After = &after
 	if hasSkip {
-		rowChange.DataColumns = &binlogdata.RowChange_Bitmap{
+		rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 			Count: int64(len(currentState.Lengths)),
 			Cols:  []byte{bitmap},
 		}
@@ -611,4 +613,42 @@ func (ts *TestSpec) getBefore(table string) *query.Row {
 		currentValueIndex += l
 	}
 	return &row
+}
+
+func getRowEvent(ts *TestSpec, fe *TestFieldEvent, query string) string {
+	stmt, err := sqlparser.NewTestParser().Parse(query)
+	var bv map[string]string
+	var table string
+	switch stmt.(type) {
+	case *sqlparser.Insert:
+		table, bv = ts.getBindVarsForInsert(stmt)
+	default:
+		panic("unhandled statement type for query " + query)
+	}
+	require.NoError(ts.t, err)
+	return ts.getRowEvent(table, bv, fe, stmt, 0)
+}
+
+func getLastPK(table, colName string, colType query.Type, colValue []sqltypes.Value, collationId, flags uint32) string {
+	lastPK := getQRFromLastPK([]*query.Field{{Name: colName,
+		Type: colType, Charset: collationId,
+		Flags: flags}}, colValue)
+	ev := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_LASTPK,
+		LastPKEvent: &binlogdatapb.LastPKEvent{
+			TableLastPK: &binlogdatapb.TableLastPK{TableName: table, Lastpk: lastPK},
+		},
+	}
+	return ev.String()
+}
+
+func getLastPKCompleted(table string) string {
+	ev := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_LASTPK,
+		LastPKEvent: &binlogdatapb.LastPKEvent{
+			Completed:   true,
+			TableLastPK: &binlogdatapb.TableLastPK{TableName: table},
+		},
+	}
+	return ev.String()
 }
