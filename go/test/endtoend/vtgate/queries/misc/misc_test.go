@@ -276,7 +276,7 @@ func TestAnalyze(t *testing.T) {
 	defer closer()
 
 	for _, workload := range []string{"olap", "oltp"} {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
 			utils.Exec(t, mcmp.VtConn, "analyze table t1")
 			utils.Exec(t, mcmp.VtConn, "analyze table uks.unsharded")
@@ -309,7 +309,7 @@ func TestTransactionModeVar(t *testing.T) {
 	}}
 
 	for _, tcase := range tcases {
-		t.Run(tcase.setStmt, func(t *testing.T) {
+		mcmp.Run(tcase.setStmt, func(mcmp *utils.MySQLCompare) {
 			if tcase.setStmt != "" {
 				utils.Exec(t, mcmp.VtConn, tcase.setStmt)
 			}
