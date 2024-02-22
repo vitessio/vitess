@@ -1257,11 +1257,10 @@ func TestSelectFilter(t *testing.T) {
 	runCases(t, filter, testcases, "", nil)
 }
 
-// TODO(mlord): get this working again
 func TestDDLAddColumn(t *testing.T) {
-	//if testing.Short() {
-	t.Skip()
-	//}
+	if testing.Short() {
+		t.Skip()
+	}
 
 	execStatements(t, []string{
 		"create table ddl_test1(id int, val1 varbinary(128), primary key(id))",
@@ -1530,7 +1529,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 		// information returned by binlog for val column == varchar (rather than varbinary).
 		output: [][]string{{
 			`begin`,
-			`type:FIELD field_event:{table_name:"vitess_test" fields:{name:"@1" type:INT32 charset:63} fields:{name:"@2" type:VARCHAR charset:255}}`,
+			`type:FIELD field_event:{table_name:"vitess_test" fields:{name:"@1" type:INT32 charset:63} fields:{name:"@2" type:VARCHAR charset:63}}`,
 			`type:ROW row_event:{table_name:"vitess_test" row_changes:{after:{lengths:1 lengths:3 values:"1abc"}}}`,
 			`gtid`,
 			`commit`,
@@ -1539,7 +1538,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 			`type:DDL statement:"rename table vitess_test to vitess_test_new"`,
 		}, {
 			`begin`,
-			`type:FIELD field_event:{table_name:"vitess_test_new" fields:{name:"id" type:INT32 table:"vitess_test_new" org_table:"vitess_test_new" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"vitess_test_new" org_table:"vitess_test_new" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
+			`type:FIELD field_event:{table_name:"vitess_test_new" fields:{name:"id" type:INT32 table:"vitess_test_new" org_table:"vitess_test_new" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int"} fields:{name:"val" type:VARBINARY table:"vitess_test_new" org_table:"vitess_test_new" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
 			`type:ROW row_event:{table_name:"vitess_test_new" row_changes:{after:{lengths:1 lengths:3 values:"2abc"}}}`,
 			`gtid`,
 			`commit`,

@@ -817,35 +817,31 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	}
 
 	// Columns should be truncated to match those in tm.
-	fieldsCopy, err := getFields(vs.ctx, vs.cp, tm.Name, tm.Database, st.Fields[:len(tm.Types)])
+	// This uses the historian which queries the columns in the table and uses the
+	// generated fields metadata. This means that the fields for text types are
+	// initially using collations for the column types based on the *connection
+	// collation* and not the actual *column collation*.
+	// But because we now get the correct collation for the actual column from
+	// mysqld in getExtColsInfo we know this is the correct one for the vstream
+	// target and we use that rather than any that were in the binlog events,
+	// which were for the source and which can be using a different collation
+	// than the target.
+	fieldsCopy, err := getFields(vs.ctx, vs.cp, vs.se, tm.Name, tm.Database, st.Fields[:len(tm.Types)])
 	if err != nil {
 		return nil, err
 	}
-	// This uses the historian which queries the columns in the table and uses the
-	// generated fields. This means that the fields for text types are using
-	// collations for the column types based on the *connection collation* and not
-	// the actual *column collation*.
-	// So we copy the column collation information from the actual TableMap here, when
-	// we expect it to have been extracted from the binlog metadata (as it's a text
-	// type). Otherwise we trust that the schema based fields are correct and should
-	// not be overridden. This trust also includes when the schema based field is
-	// binary whereas the TableMap fields is text.
-	for i := range fieldsCopy {
-		if sqltypes.IsText(fields[i].Type) && fields[i].Charset != 0 {
-			fieldsCopy[i].Charset = fields[i].Charset
-		}
-	}
+
 	return fieldsCopy, nil
 }
 
-func getExtColInfos(ctx context.Context, cp dbconfigs.Connector, table, database string) (map[string]*extColInfo, error) {
+func getExtColInfos(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, table, database string) (map[string]*extColInfo, error) {
 	extColInfos := make(map[string]*extColInfo)
 	conn, err := cp.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	queryTemplate := "select column_name, column_type from information_schema.columns where table_schema=%s and table_name=%s;"
+	queryTemplate := "select column_name, column_type, collation_name from information_schema.columns where table_schema=%s and table_name=%s;"
 	query := fmt.Sprintf(queryTemplate, encodeString(database), encodeString(table))
 	qr, err := conn.ExecuteFetch(query, 10000, false)
 	if err != nil {
@@ -855,25 +851,34 @@ func getExtColInfos(ctx context.Context, cp dbconfigs.Connector, table, database
 		extColInfo := &extColInfo{
 			columnType: row[1].ToString(),
 		}
+		collationName := row[2].ToString()
+		var coll collations.ID
+		if row[2].IsNull() || collationName == "" {
+			coll = collations.CollationBinaryID
+		} else {
+			coll = se.Environment().CollationEnv().LookupByName(collationName)
+		}
+		extColInfo.collationID = coll
 		extColInfos[row[0].ToString()] = extColInfo
 	}
 	return extColInfos, nil
 }
 
-func getFields(ctx context.Context, cp dbconfigs.Connector, table, database string, fields []*querypb.Field) ([]*querypb.Field, error) {
+func getFields(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, table, database string, fields []*querypb.Field) ([]*querypb.Field, error) {
 	// Make a deep copy of the schema.Engine fields as they are pointers and
 	// will be modified by adding ColumnType below
 	fieldsCopy := make([]*querypb.Field, len(fields))
 	for i, field := range fields {
 		fieldsCopy[i] = field.CloneVT()
 	}
-	extColInfos, err := getExtColInfos(ctx, cp, table, database)
+	extColInfos, err := getExtColInfos(ctx, cp, se, table, database)
 	if err != nil {
 		return nil, err
 	}
 	for _, field := range fieldsCopy {
 		if colInfo, ok := extColInfos[field.Name]; ok {
 			field.ColumnType = colInfo.columnType
+			field.Charset = uint32(colInfo.collationID)
 		}
 	}
 	return fieldsCopy, nil
@@ -882,7 +887,8 @@ func getFields(ctx context.Context, cp dbconfigs.Connector, table, database stri
 // additional column attributes from information_schema.columns. Currently only column_type is used, but
 // we expect to add more in the future
 type extColInfo struct {
-	columnType string
+	columnType  string
+	collationID collations.ID
 }
 
 func encodeString(in string) string {
