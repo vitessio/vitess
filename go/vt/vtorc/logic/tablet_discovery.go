@@ -71,7 +71,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
 		log.Error(err)
 	}
-	// We refresh all information from the topo once before we start the ticks to do it on an timer.
+	// We refresh all information from the topo once before we start the ticks to do it on a timer.
 	populateAllInformation()
 	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
@@ -79,7 +79,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 // populateAllInformation initializes all the information for VTOrc to function.
 func populateAllInformation() {
 	refreshAllInformation()
-	// We have completed one discovery cycle in the entirety of it. We should update the process health.
+	// We have completed one full discovery cycle. We should update the process health.
 	process.FirstDiscoveryCycleComplete.Store(true)
 }
 
