@@ -27,3 +27,12 @@ create table t4_id2_idx
 ) Engine = InnoDB
   DEFAULT charset = utf8mb4
   COLLATE = utf8mb4_general_ci;
+
+create table user
+(
+    id    bigint primary key,
+    col   bigint,
+    email varchar(20)
+) Engine = InnoDB
+  DEFAULT charset = utf8mb4
+  COLLATE = utf8mb4_general_ci;

@@ -83,3 +83,73 @@ func TestOrderBy(t *testing.T) {
 		mcmp.AssertMatches("select /*vt+ PLANNER=Gen4 */ id1, id2 from t4 order by reverse(id2) desc", `[[INT64(5) VARCHAR("test")] [INT64(8) VARCHAR("F")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(2) VARCHAR("Abc")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(1) VARCHAR("a")]]`)
 	}
 }
+
+func TestOrderByComplex(t *testing.T) {
+	// tests written to try to trick the ORDER BY engine and planner
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into user(id, col, email) values(1,1,'a'), (2,2,'Abc'), (3,3,'b'), (4,4,'c'), (5,2,'test'), (6,1,'test'), (7,2,'a'), (8,3,'b'), (9,4,'c3'), (10,2,'d')")
+
+	queries := []string{
+		"select email, max(col) from user group by email order by col",
+		"select email, max(col) from user group by email order by col + 1",
+		"select email, max(col) from user group by email order by max(col)",
+		"select email, max(col) from user group by email order by max(col) + 1",
+		"select email, max(col) from user group by email order by min(col)",
+		"select email, max(col) as col from user group by email order by col",
+		"select email, max(col) as col from user group by email order by max(col)",
+		"select email, max(col) as col from user group by email order by col + 1",
+		"select email, max(col) as col from user group by email order by email + col",
+		"select email, max(col) as col from user group by email order by email + max(col)",
+		"select email, max(col) as col from user group by email order by email, col",
+		"select email, max(col) as xyz from user group by email order by email, xyz",
+		"select email, max(col) as xyz from user group by email order by email, max(xyz)",
+		"select email, max(col) as xyz from user group by email order by email, abs(xyz)",
+		"select email, max(col) as xyz from user group by email order by email, max(col)",
+		"select email, max(col) as xyz from user group by email order by email, abs(col)",
+		"select email, max(col) as xyz from user group by email order by xyz + email",
+		"select email, max(col) as xyz from user group by email order by abs(xyz) + email",
+		"select email, max(col) as xyz from user group by email order by abs(xyz)",
+		"select email, max(col) as xyz from user group by email order by abs(col)",
+		"select email, max(col) as max_col from user group by email order by max_col desc, length(email)",
+		"select email, max(col) as max_col, min(col) as min_col from user group by email order by max_col - min_col",
+		"select email, max(col) as col1, count(*) as col2 from user group by email order by col2 * col1",
+		"select email, sum(col) as sum_col from user group by email having sum_col > 10 order by sum_col / count(email)",
+		"select email, max(col) as max_col, char_length(email) as len_email from user group by email order by len_email, max_col desc",
+		"select email, max(col) as col_alias from user group by email order by case when col_alias > 100 then 0 else 1 end, col_alias",
+		"select email, count(*) as cnt, max(col) as max_col from user group by email order by cnt desc, max_col + cnt",
+		"select email, max(col) as max_col from user group by email order by if(max_col > 50, max_col, -max_col) desc",
+		"select email, max(col) as col, sum(col) as sum_col from user group by email order by col * sum_col desc",
+		"select email, max(col) as col, (select min(col) from user as u2 where u2.email = user.email) as min_col from user group by email order by col - min_col",
+		"select email, max(col) as max_col, (max(col) % 10) as mod_col from user group by email order by mod_col, max_col",
+		"select email, max(col) as 'value', count(email) as 'number' from user group by email order by 'number', 'value'",
+		"select email, max(col) as col, concat('email: ', email, ' col: ', max(col)) as complex_alias from user group by email order by complex_alias desc",
+		"select email, max(col) as max_col from user group by email union select email, min(col) as min_col from user group by email order by email",
+		"select email, max(col) as col from user where col > 50 group by email order by col desc",
+		"select email, max(col) as col from user group by email order by length(email), col",
+		"select email, max(col) as max_col, substring(email, 1, 3) as sub_email from user group by email order by sub_email, max_col desc",
+		"select email, max(col) as max_col from user group by email order by reverse(email), max_col",
+		"select email, max(col) as max_col from user group by email having max_col > avg(max_col) order by max_col desc",
+		"select email, count(*) as count, max(col) as max_col from user group by email order by count * max_col desc",
+		"select email, max(col) as col_alias from user group by email order by col_alias limit 10",
+		"select email, max(col) as col from user group by email order by col desc, email",
+		"select concat(email, ' ', max(col)) as combined from user group by email order by combined desc",
+		"select email, max(col) as max_col from user group by email order by ascii(email), max_col",
+		"select email, char_length(email) as email_length, max(col) as max_col from user group by email order by email_length desc, max_col",
+		"select email, max(col) as col from user group by email having col between 10 and 100 order by col",
+		"select email, max(col) as max_col, min(col) as min_col from user group by email order by max_col + min_col desc",
+		"select email, max(col) as 'max', count(*) as 'count' from user group by email order by 'max' desc, 'count'",
+		"select email, max(col) as max_col from (select email, col from user where col > 20) as filtered group by email order by max_col",
+		"select a.email, a.max_col from (select email, max(col) as max_col from user group by email) as a order by a.max_col desc",
+		"select email, max(col) as max_col from user where email like 'a%' group by email order by max_col, email",
+	}
+
+	for _, query := range queries {
+		mcmp.Run(query, func(mcmp *utils.MySQLCompare) {
+			_, _ = mcmp.ExecAllowAndCompareError(query)
+		})
+	}
+}

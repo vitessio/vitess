@@ -94,7 +94,7 @@ func TestEqualFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
 			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 = 1", `[[INT64(5)]]`)
@@ -179,7 +179,7 @@ func TestNotEqualFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a != 5", `[]`)
@@ -203,7 +203,7 @@ func TestLessFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a < 10", `[[INT64(5)]]`)
 			mcmp.AssertMatches("select count(*) as a from aggr_test having 1 < a", `[[INT64(5)]]`)
@@ -226,7 +226,7 @@ func TestLessEqualFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a <= 10", `[[INT64(5)]]`)
@@ -250,7 +250,7 @@ func TestGreaterFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a > 1", `[[INT64(5)]]`)
@@ -274,7 +274,7 @@ func TestGreaterEqualFilterOnScatter(t *testing.T) {
 
 	workloads := []string{"oltp", "olap"}
 	for _, workload := range workloads {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 
 			mcmp.AssertMatches("select count(*) as a from aggr_test having a >= 1", `[[INT64(5)]]`)
@@ -309,7 +309,7 @@ func TestAggOnTopOfLimit(t *testing.T) {
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',6), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4), (6,'b',null), (7,null,2), (8,null,null)")
 
 	for _, workload := range []string{"oltp", "olap"} {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
 			mcmp.AssertMatches(" select count(*) from (select id, val1 from aggr_test where val2 < 4 limit 2) as x", "[[INT64(2)]]")
 			mcmp.AssertMatches(" select count(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2)]]")
@@ -342,7 +342,7 @@ func TestEmptyTableAggr(t *testing.T) {
 	defer closer()
 
 	for _, workload := range []string{"oltp", "olap"} {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
 			mcmp.AssertMatches(" select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
@@ -354,7 +354,7 @@ func TestEmptyTableAggr(t *testing.T) {
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'b1','bar',200)")
 
 	for _, workload := range []string{"oltp", "olap"} {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
 			mcmp.AssertMatches(" select count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")

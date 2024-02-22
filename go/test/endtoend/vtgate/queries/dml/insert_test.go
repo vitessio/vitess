@@ -38,7 +38,7 @@ func TestSimpleInsertSelect(t *testing.T) {
 	mcmp.Exec("insert into u_tbl(id, num) values (1,2),(3,4)")
 
 	for i, mode := range []string{"oltp", "olap"} {
-		t.Run(mode, func(t *testing.T) {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
 
 			qr := mcmp.Exec(fmt.Sprintf("insert into s_tbl(id, num) select id*%d, num*%d from s_tbl where id < 10", 10+i, 20+i))
@@ -65,7 +65,7 @@ func TestFailureInsertSelect(t *testing.T) {
 	mcmp.Exec("insert into u_tbl(id, num) values (1,2),(3,4)")
 
 	for _, mode := range []string{"oltp", "olap"} {
-		t.Run(mode, func(t *testing.T) {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
 
 			// primary key same
@@ -386,7 +386,7 @@ func TestInsertSelectUnshardedUsingSharded(t *testing.T) {
 	mcmp.Exec("insert into s_tbl(id, num) values (1,2),(3,4)")
 
 	for _, mode := range []string{"oltp", "olap"} {
-		t.Run(mode, func(t *testing.T) {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
 			qr := mcmp.Exec("insert into u_tbl(id, num) select id, num from s_tbl where s_tbl.id in (1,3)")
 			assert.EqualValues(t, 2, qr.RowsAffected)

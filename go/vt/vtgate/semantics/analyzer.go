@@ -69,6 +69,8 @@ func (a *analyzer) lateInit() {
 		scoper:          a.scoper,
 		binder:          a.binder,
 		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
+		aliasMapCache:   map[*sqlparser.Select]map[string]exprContainer{},
+		reAnalyze:       a.lateAnalyze,
 	}
 }
 
@@ -211,10 +213,6 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if err := a.scoper.up(cursor); err != nil {
-		a.setError(err)
-		return false
-	}
 	if err := a.tables.up(cursor); err != nil {
 		a.setError(err)
 		return false
@@ -233,6 +231,11 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	if err := a.rewriter.up(cursor); err != nil {
 		a.setError(err)
 		return true
+	}
+
+	if err := a.scoper.up(cursor); err != nil {
+		a.setError(err)
+		return false
 	}
 
 	a.leaveProjection(cursor)
@@ -325,6 +328,10 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 	a.lateInit()
 
+	return a.lateAnalyze(statement)
+}
+
+func (a *analyzer) lateAnalyze(statement sqlparser.SQLNode) error {
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
 }
