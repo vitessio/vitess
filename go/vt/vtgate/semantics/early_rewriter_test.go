@@ -320,10 +320,10 @@ func TestGroupByLiteral(t *testing.T) {
 		expDeps: TS0,
 	}, {
 		sql:    "select id from t1 group by 2",
-		expErr: "Unknown column '2' in 'group clause'",
+		expErr: "Unknown column '2' in 'group statement'",
 	}, {
 		sql:    "select *, id from t1 group by 2",
-		expErr: "cannot use column offsets in group clause when using `*`",
+		expErr: "cannot use column offsets in group statement when using `*`",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
