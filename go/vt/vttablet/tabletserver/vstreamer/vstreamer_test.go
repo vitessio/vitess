@@ -32,6 +32,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -75,8 +76,10 @@ func (tfe *TestFieldEvent) String() string {
 	return s
 }
 
-// TestPlayerNoBlob sets up a new environment with mysql running with binlog_row_image as noblob. It confirms that
-// the VEvents created are correct: that they don't contain the missing columns and that the DataColumns bitmap is sent
+// TestPlayerNoBlob sets up a new environment with mysql running with
+// binlog_row_image as noblob. It confirms that the VEvents created are
+// correct: that they don't contain the missing columns and that the
+// DataColumns bitmap is sent.
 func TestNoBlob(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -156,7 +159,8 @@ func TestCellValuePadding(t *testing.T) {
 		ddls: []string{
 			"create table t1(id int, val binary(4), primary key(val))",
 			"create table t2(id int, val char(4), primary key(val))",
-			"create table t3(id int, txt text, val char(4) collate utf8mb4_bin, val2 varchar(64) collate utf8mb4_general_ci, val3 varchar(255) collate utf8mb4_ja_0900_as_cs, primary key(val))"},
+			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))",
+		},
 	}
 	defer ts.Close()
 	require.NoError(t, ts.Init())
@@ -172,10 +176,37 @@ func TestCellValuePadding(t *testing.T) {
 		{"update t2 set id = 11 where val = 'aaa'", []TestRowEvent{
 			{spec: &TestRowEventSpec{table: "t2", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"11", "aaa"}}}}},
 		}},
-		{"insert into t3 values (1, 'aaa', 'aaa', 'aaa', 'aaa')", nil},
-		{"insert into t3 values (2, 'bb', 'bb', 'bb', 'bb')", nil},
+		{"insert into t3 values (1, 'aaa')", nil},
+		{"insert into t3 values (2, 'bb')", nil},
 		{"update t3 set id = 11 where val = 'aaa'", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t3", changes: []TestRowChange{{before: []string{"1", "aaa", "aaa", "aaa", "aaa"}, after: []string{"11", "aaa", "aaa", "aaa", "aaa"}}}}},
+			{spec: &TestRowEventSpec{table: "t3", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"11", "aaa"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	ts.Run()
+}
+
+// TestColumnCollationHandling confirms that we handle column collations
+// properly in vstreams now that we parse the values in binlog_row_metadata.
+func TestColumnCollationHandling(t *testing.T) {
+	extraCollation := "utf8mb4_ja_0900_as_cs"           // Test 2 byte collation ID handling
+	if strings.HasPrefix(testenv.MySQLVersion, "5.7") { // 5.7 does not support 2 byte collation IDs
+		extraCollation = "utf8mb4_croatian_ci"
+	}
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			fmt.Sprintf("create table t1(id int, txt text, val char(4) collate utf8mb4_bin, id2 int, val2 varchar(64) collate utf8mb4_general_ci, valvb varbinary(128), val3 varchar(255) collate %s, primary key(val))", extraCollation),
+		},
+	}
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 'aaa', 'aaa', 1, 'aaa', 'aaa', 'aaa')", nil},
+		{"insert into t1 values (2, 'bb', 'bb', 1, 'bb', 'bb', 'bb')", nil},
+		{"update t1 set id = 11 where val = 'aaa'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa", "aaa", "1", "aaa", "aaa", "aaa"}, after: []string{"11", "aaa", "aaa", "1", "aaa", "aaa", "aaa"}}}}},
 		}},
 		{"commit", nil},
 	}}
@@ -507,9 +538,9 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		t.Skip()
 	}
 	execStatements(t, []string{
-		"create table t1(id1 int, id2 int, id3 int, primary key(id1))",
-		"create table t2a(id1 int, id2 int, primary key(id1))",
-		"create table t2b(id1 varchar(20), id2 int, primary key(id1))",
+		"create table t1(id1 int, id2 int, id3 int, primary key(id1)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table t2a(id1 int, id2 int, primary key(id1)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table t2b(id1 varchar(20), id2 int, primary key(id1)) ENGINE=InnoDB CHARSET=utf8mb4",
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -554,10 +585,10 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2a\"} completed:true}",
 		"type:COMMIT",
 		"type:BEGIN",
-		"type:FIELD field_event:{table_name:\"t2b\" fields:{name:\"id1\" type:VARCHAR table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id1\" column_length:80 charset:255 column_type:\"varchar(20)\"} fields:{name:\"id2\" type:INT32 table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63 column_type:\"int(11)\"}}",
+		fmt.Sprintf("type:FIELD field_event:{table_name:\"t2b\" fields:{name:\"id1\" type:VARCHAR table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id1\" column_length:80 charset:%d column_type:\"varchar(20)\"} fields:{name:\"id2\" type:INT32 table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63 column_type:\"int(11)\"}}", testenv.DefaultCollationID),
 		"type:ROW row_event:{table_name:\"t2b\" row_changes:{after:{lengths:1 lengths:1 values:\"a5\"}}}",
 		"type:ROW row_event:{table_name:\"t2b\" row_changes:{after:{lengths:1 lengths:1 values:\"b6\"}}}",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\" lastpk:{fields:{name:\"id1\" type:VARCHAR charset:255 flags:20483} rows:{lengths:1 values:\"b\"}}}}",
+		fmt.Sprintf("type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\" lastpk:{fields:{name:\"id1\" type:VARCHAR charset:%d flags:20483} rows:{lengths:1 values:\"b\"}}}}", testenv.DefaultCollationID),
 		"type:COMMIT",
 		"type:BEGIN",
 		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\"} completed:true}",
@@ -1497,9 +1528,19 @@ func TestBuffering(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
+// TestBestEffortNameInFieldEvent tests that we make a valid best effort
+// attempt to deduce the type and collation in the event of table renames.
+// In both cases the varbinary becomes a varchar. We get the correct
+// collation information, however, in the binlog_row_metadata in 8.0 but
+// not in 5.7. So in 5.7 our best effort uses varchar with its default
+// collation for text fields.
 func TestBestEffortNameInFieldEvent(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
+	}
+	bestEffortCollation := collations.ID(collations.CollationBinaryID)
+	if strings.HasPrefix(testenv.MySQLVersion, "5.7") {
+		bestEffortCollation = testenv.DefaultCollationID
 	}
 	filter := &binlogdatapb.Filter{
 		FieldEventMode: binlogdatapb.Filter_BEST_EFFORT,
@@ -1509,7 +1550,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 	}
 	// Modeled after vttablet endtoend compatibility tests.
 	execStatements(t, []string{
-		"create table vitess_test(id int, val varbinary(128), primary key(id))",
+		"create table vitess_test(id int, val varbinary(128), primary key(id)) ENGINE=InnoDB CHARSET=utf8mb4",
 	})
 	position := primaryPosition(t)
 	execStatements(t, []string{
@@ -1529,7 +1570,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 		// information returned by binlog for val column == varchar (rather than varbinary).
 		output: [][]string{{
 			`begin`,
-			`type:FIELD field_event:{table_name:"vitess_test" fields:{name:"@1" type:INT32 charset:63} fields:{name:"@2" type:VARCHAR charset:63}}`,
+			fmt.Sprintf(`type:FIELD field_event:{table_name:"vitess_test" fields:{name:"@1" type:INT32 charset:63} fields:{name:"@2" type:VARCHAR charset:%d}}`, bestEffortCollation),
 			`type:ROW row_event:{table_name:"vitess_test" row_changes:{after:{lengths:1 lengths:3 values:"1abc"}}}`,
 			`gtid`,
 			`commit`,
@@ -1538,7 +1579,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 			`type:DDL statement:"rename table vitess_test to vitess_test_new"`,
 		}, {
 			`begin`,
-			`type:FIELD field_event:{table_name:"vitess_test_new" fields:{name:"id" type:INT32 table:"vitess_test_new" org_table:"vitess_test_new" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int"} fields:{name:"val" type:VARBINARY table:"vitess_test_new" org_table:"vitess_test_new" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
+			`type:FIELD field_event:{table_name:"vitess_test_new" fields:{name:"id" type:INT32 table:"vitess_test_new" org_table:"vitess_test_new" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"vitess_test_new" org_table:"vitess_test_new" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
 			`type:ROW row_event:{table_name:"vitess_test_new" row_changes:{after:{lengths:1 lengths:3 values:"2abc"}}}`,
 			`gtid`,
 			`commit`,
@@ -1613,12 +1654,12 @@ func TestTypes(t *testing.T) {
 
 	// Modeled after vttablet endtoend compatibility tests.
 	execStatements(t, []string{
-		"create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))",
-		"create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id))",
-		"create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb))",
-		"create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id))",
-		"create table vitess_null(id int, val varbinary(128), primary key(id))",
-		"create table vitess_decimal(id int, dec1 decimal(12,4), dec2 decimal(13,4), primary key(id))",
+		"create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table vitess_null(id int, val varbinary(128), primary key(id)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table vitess_decimal(id int, dec1 decimal(12,4), dec2 decimal(13,4), primary key(id)) ENGINE=InnoDB CHARSET=utf8mb4",
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
@@ -1671,7 +1712,7 @@ func TestTypes(t *testing.T) {
 		},
 		output: [][]string{{
 			`begin`,
-			`type:FIELD field_event:{table_name:"vitess_strings" fields:{name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:64 charset:255 column_type:"char(16)"} fields:{name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:64 charset:255 column_type:"varchar(16)"} fields:{name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 column_type:"binary(4)"} fields:{name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 column_type:"tinyblob"} fields:{name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 column_type:"blob"} fields:{name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:1020 charset:255 column_type:"tinytext"} fields:{name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:262140 charset:255 column_type:"text"} fields:{name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:4 charset:255 column_type:"enum('a','b')"} fields:{name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:12 charset:255 column_type:"set('a','b')"}}`,
+			fmt.Sprintf(`type:FIELD field_event:{table_name:"vitess_strings" fields:{name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:64 charset:%d column_type:"char(16)"} fields:{name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:64 charset:%d column_type:"varchar(16)"} fields:{name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 column_type:"binary(4)"} fields:{name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 column_type:"tinyblob"} fields:{name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 column_type:"blob"} fields:{name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:1020 charset:%d column_type:"tinytext"} fields:{name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:262140 charset:%d column_type:"text"} fields:{name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:4 charset:%d column_type:"enum('a','b')"} fields:{name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:12 charset:%d column_type:"set('a','b')"}}`, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID),
 			`type:ROW row_event:{table_name:"vitess_strings" row_changes:{after:{lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
 				`values:"abcd\x00\x00\x00efgh13"}}}`,
 			`gtid`,

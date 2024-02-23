@@ -184,6 +184,15 @@ func (ts *TestSpec) Init() error {
 	if ts.options == nil {
 		ts.options = &TestSpecOptions{}
 	}
+	// Add the unicode character set to each table definition.
+	// The collation used will then be the default for that character set
+	// in the given MySQL version used in the test:
+	// - 5.7: utf8mb4_general_ci
+	// - 8.0: utf8mb4_0900_ai_ci
+	tableOptions := "ENGINE=InnoDB CHARSET=utf8mb4"
+	for i := range ts.ddls {
+		ts.ddls[i] = fmt.Sprintf("%s %s", ts.ddls[i], tableOptions)
+	}
 	ts.schema, err = schemadiff.NewSchemaFromQueries(schemadiff.NewTestEnv(), ts.ddls)
 	if err != nil {
 		return err
@@ -375,15 +384,15 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			// in the testenv.
 			tc.collationID = testenv.DefaultCollationID
 		} else {
-			tc.collationID = collations.MySQL8().LookupByName(collationName)
-			log.Errorf("DEBUG: SchemaDiff provided collation for %s.%s: %s:%d", tfe.table, tc.name, collationName, tc.collationID)
+			tc.collationID = testenv.CollationEnv.LookupByName(collationName)
+			//log.Errorf("DEBUG: SchemaDiff provided collation for %s.%s: %s:%d", tfe.table, tc.name, collationName, tc.collationID)
 		}
 		collation := colldata.Lookup(tc.collationID)
 		switch tc.dataTypeLowered {
 		case "int32":
 			tc.len = lengthInt
 			tc.collationID = collations.CollationBinaryID
-			tc.colType = "int"
+			tc.colType = "int(11)"
 		case "varchar", "varbinary", "char", "binary":
 			l := *col.Type.Length
 			switch tc.dataTypeLowered {
@@ -408,12 +417,10 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			tc.len = lengthSet
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
-			tc.collationID = testenv.DefaultCollationID
 		case "enum":
 			tc.len = int64(len(col.Type.EnumValues) + 1)
 			tc.colType = fmt.Sprintf("%s(%s)", tc.dataTypeLowered, strings.Join(col.Type.EnumValues, ","))
 			ts.metadata[getMetadataKey(table.Name(), tc.name)] = col.Type.EnumValues
-			tc.collationID = testenv.DefaultCollationID
 		default:
 			log.Infof(fmt.Sprintf("unknown sqlTypeString %s", tc.dataTypeLowered))
 		}
