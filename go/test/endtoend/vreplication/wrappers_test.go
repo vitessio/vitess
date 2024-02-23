@@ -74,9 +74,9 @@ type moveTablesWorkflow struct {
 	tables         string
 	atomicCopy     bool
 	sourceShards   string
-	createFlags    []string // currently only used by vtctld
 
 	lastOutput    string
+	createFlags   []string // currently only used by vtctld
 	completeFlags []string
 	switchFlags   []string
 }
@@ -270,7 +270,11 @@ type reshardWorkflow struct {
 	targetShards   string
 	skipSchemaCopy bool
 
-	lastOutput string
+	lastOutput    string
+	createFlags   []string // currently only used by vtctld
+	completeFlags []string
+	cancelFlags   []string
+	switchFlags   []string
 }
 
 type iReshard interface {
@@ -395,11 +399,14 @@ func (v VtctldReshard) Create() {
 	if v.skipSchemaCopy {
 		args = append(args, "--skip-schema-copy="+strconv.FormatBool(v.skipSchemaCopy))
 	}
+	args = append(args, v.createFlags...)
 	v.exec(args...)
 }
 
 func (v VtctldReshard) SwitchReadsAndWrites() {
-	v.exec("SwitchTraffic")
+	args := []string{"SwitchTraffic"}
+	args = append(args, v.switchFlags...)
+	v.exec(args...)
 }
 
 func (v VtctldReshard) ReverseReadsAndWrites() {
@@ -422,11 +429,15 @@ func (v VtctldReshard) SwitchWrites() {
 }
 
 func (v VtctldReshard) Cancel() {
-	v.exec("Cancel")
+	args := []string{"Cancel"}
+	args = append(args, v.cancelFlags...)
+	v.exec(args...)
 }
 
 func (v VtctldReshard) Complete() {
-	v.exec("Complete")
+	args := []string{"Complete"}
+	args = append(args, v.completeFlags...)
+	v.exec(args...)
 }
 
 func (v VtctldReshard) GetLastOutput() string {

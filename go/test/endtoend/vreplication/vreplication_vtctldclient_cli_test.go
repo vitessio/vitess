@@ -54,21 +54,71 @@ func TestVtctldclientCLI(t *testing.T) {
 	require.NotNil(t, zone2)
 	defer vc.TearDown()
 
-	sourceKeyspace := "product"
-	targetKeyspace := "customer"
+	sourceKeyspaceName := "product"
+	targetKeyspaceName := "customer"
 	var mt iMoveTables
 	workflowName := "wf1"
 	targetTabs := setupMinimalCustomerKeyspace(t)
 
 	t.Run("MoveTablesCreateFlags1", func(t *testing.T) {
-		testMoveTablesFlags1(t, &mt, sourceKeyspace, targetKeyspace, workflowName, targetTabs)
+		testMoveTablesFlags1(t, &mt, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
 	})
 	t.Run("MoveTablesCreateFlags2", func(t *testing.T) {
-		testMoveTablesFlags2(t, &mt, sourceKeyspace, targetKeyspace, workflowName, targetTabs)
+		testMoveTablesFlags2(t, &mt, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
 	})
 	t.Run("MoveTablesCompleteFlags", func(t *testing.T) {
-		testMoveTablesFlags3(t, sourceKeyspace, targetKeyspace, targetTabs)
+		testMoveTablesFlags3(t, sourceKeyspaceName, targetKeyspaceName, targetTabs)
 	})
+	targetKeyspace := vc.Cells["zone1"].Keyspaces[targetKeyspaceName]
+	cells := []*Cell{vc.Cells["zone1"]}
+	require.NoError(t, vc.AddShards(t, cells, targetKeyspace, "-40,40-80", 1, 0, 400, nil))
+	reshardWorkflowName := "reshardWf"
+	targetTab1 = targetKeyspace.Shards["-40"].Tablets["zone1-400"].Vttablet
+	targetTab2 = targetKeyspace.Shards["40-80"].Tablets["zone1-500"].Vttablet
+	tablets := make(map[string]*cluster.VttabletProcess)
+	tablets["-40"] = targetTab1
+	tablets["40-80"] = targetTab2
+	doReshard2(t, targetKeyspaceName, reshardWorkflowName, "-80", "-40,40-80", tablets)
+}
+
+func doReshard2(t *testing.T, keyspace, workflowName, sourceShards, targetShards string, targetTabs map[string]*cluster.VttabletProcess) {
+	createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
+		"--no-routing-rules", "--on-ddl", "STOP", "--exclude-tables", "customer2",
+		"--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
+		"--all-cells",
+	}
+	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
+	switchFlags := []string{}
+	cancelFlags := []string{"--keep-routing-rules", "--keep-data"}
+	rs := newReshard(vc, &reshardWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   workflowName,
+			targetKeyspace: keyspace,
+		},
+		sourceShards:   sourceShards,
+		targetShards:   targetShards,
+		skipSchemaCopy: true,
+		createFlags:    createFlags,
+		completeFlags:  completeFlags,
+		switchFlags:    switchFlags,
+		cancelFlags:    cancelFlags,
+	}, workflowFlavorVtctl)
+	rs.Create()
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	for _, targetTab := range targetTabs {
+		catchup(t, targetTab, workflowName, "Reshard")
+	}
+	vdiff(t, keyspace, workflowName, "zone1", false, true, nil)
+	rs.SwitchReadsAndWrites()
+	waitForLowLag(t, keyspace, workflowName+"_reverse")
+	vdiff(t, keyspace, workflowName+"_reverse", "zone1", true, false, nil)
+
+	rs.ReverseReadsAndWrites()
+	waitForLowLag(t, keyspace, workflowName)
+	vdiff(t, keyspace, workflowName, "zone1", false, true, nil)
+	rs.SwitchReadsAndWrites()
+	rs.Complete()
 }
 
 // Tests several create flags and some complete flags and validates that some of them are set correctly for the workflow.
@@ -81,32 +131,40 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	}
 	completeFlags := []string{"--keep-routing-rules", "--keep-data"}
 	switchFlags := []string{}
+	// Test one set of MoveTable flags.
 	*mt = createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, tables, createFlags, completeFlags, switchFlags)
 	(*mt).Show()
-	moveTablesOutput := (*mt).GetLastOutput()
-	// Test one set of MoveTable flags.
+	moveTablesResponse := getMoveTablesResponse(mt, targetKeyspace, workflowName)
+	workflowResponse := getWorkflow(targetKeyspace, workflowName)
 
-	workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", "customer", "show", "--workflow", "wf1")
-	require.NoError(t, err)
-	var moveTablesResponse vtctldatapb.GetWorkflowsResponse
-	err = protojson.Unmarshal([]byte(moveTablesOutput), &moveTablesResponse)
-	require.NoError(t, err)
-
-	var workflowResponse vtctldatapb.GetWorkflowsResponse
-	err = protojson.Unmarshal([]byte(workflowOutput), &workflowResponse)
-	require.NoError(t, err)
-
-	moveTablesResponse.Workflows[0].MaxVReplicationTransactionLag = 0
-	moveTablesResponse.Workflows[0].MaxVReplicationLag = 0
-	workflowResponse.Workflows[0].MaxVReplicationTransactionLag = 0
-	workflowResponse.Workflows[0].MaxVReplicationLag = 0
 	// also validates that MoveTables Show and Workflow Show return the same output.
-	require.EqualValues(t, moveTablesResponse.CloneVT(), workflowResponse.CloneVT())
+	require.EqualValues(t, moveTablesResponse.CloneVT(), workflowResponse)
 
 	// Validate that the flags are set correctly in the database.
 	validateWorkflow1(t, workflowResponse.Workflows)
 	// Since we used --no-routing-rules, there should be no routing rules.
 	confirmNoRoutingRules(t)
+}
+
+func getMoveTablesResponse(mt *iMoveTables, targetKeyspace string, workflowName string) *vtctldatapb.GetWorkflowsResponse {
+	moveTablesOutput := (*mt).GetLastOutput()
+	var moveTablesResponse vtctldatapb.GetWorkflowsResponse
+	err := protojson.Unmarshal([]byte(moveTablesOutput), &moveTablesResponse)
+	require.NoError(vc.t, err)
+	moveTablesResponse.Workflows[0].MaxVReplicationTransactionLag = 0
+	moveTablesResponse.Workflows[0].MaxVReplicationLag = 0
+	return moveTablesResponse.CloneVT()
+}
+
+func getWorkflow(targetKeyspace, workflow string) *vtctldatapb.GetWorkflowsResponse {
+	workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKeyspace, "show", "--workflow", workflow)
+	require.NoError(vc.t, err)
+	var workflowResponse vtctldatapb.GetWorkflowsResponse
+	err = protojson.Unmarshal([]byte(workflowOutput), &workflowResponse)
+	require.NoError(vc.t, err)
+	workflowResponse.Workflows[0].MaxVReplicationTransactionLag = 0
+	workflowResponse.Workflows[0].MaxVReplicationLag = 0
+	return workflowResponse.CloneVT()
 }
 
 // Validates some of the flags created from the previous test.
