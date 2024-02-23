@@ -230,10 +230,6 @@ func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error
 		fieldType := uint8(data[pos])
 		pos++
 
-		if fieldType == 0 { // Null byte separator
-			continue
-		}
-
 		fieldLen, read, ok := readLenEncInt(data, pos)
 		if !ok || read+int(fieldLen) > len(data) {
 			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "error reading optional metadata field length")
