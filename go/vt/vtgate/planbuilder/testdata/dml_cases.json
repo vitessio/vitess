@@ -6535,5 +6535,137 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "multi target delete with composite primary key having single column vindex",
+    "query": "delete u, ue from user u join user_extra ue on u.id = ue.user_id",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u, ue from user u join user_extra ue on u.id = ue.user_id",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]",
+          "1:[1 2]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id, ue.id, ue.user_id from `user` as u, user_extra as ue where 1 != 1",
+            "Query": "select u.id, ue.id, ue.user_id from `user` as u, user_extra as ue where u.id = ue.user_id for update",
+            "Table": "`user`, user_extra"
+          },
+          {
+            "OperatorType": "Delete",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.id in ::dml_vals for update",
+            "Query": "delete from `user` as u where u.id in ::dml_vals",
+            "Table": "user",
+            "Values": [
+              "::dml_vals"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Delete",
+            "Variant": "MultiEqual",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from user_extra as ue where (ue.id, ue.user_id) in ::dml_vals",
+            "Table": "user_extra",
+            "Values": [
+              "dml_vals:1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "multi target delete with composite primary key with lookup vindex as sharding column",
+    "query": "delete o, ev from `order` o join order_event ev where o.oid = ev.oid and ev.ename = 'a'",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete o, ev from `order` o join order_event ev where o.oid = ev.oid and ev.ename = 'a'",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0 1]",
+          "1:[2 3]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "ordering",
+              "Sharded": true
+            },
+            "FieldQuery": "select o.oid, o.region_id, ev.oid, ev.ename from `order` as o, order_event as ev where 1 != 1",
+            "Query": "select o.oid, o.region_id, ev.oid, ev.ename from `order` as o, order_event as ev where ev.ename = 'a' and o.oid = ev.oid for update",
+            "Table": "`order`, order_event"
+          },
+          {
+            "OperatorType": "Delete",
+            "Variant": "MultiEqual",
+            "Keyspace": {
+              "Name": "ordering",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from order_event as ev where (ev.oid, ev.ename) in ::dml_vals",
+            "Table": "order_event",
+            "Values": [
+              "dml_vals:0"
+            ],
+            "Vindex": "oid_vdx"
+          },
+          {
+            "OperatorType": "Delete",
+            "Variant": "MultiEqual",
+            "Keyspace": {
+              "Name": "ordering",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "KsidLength": 1,
+            "KsidVindex": "xxhash",
+            "OwnedVindexQuery": "select region_id, oid from `order` as o where (o.oid, o.region_id) in ::dml_vals for update",
+            "Query": "delete from `order` as o where (o.oid, o.region_id) in ::dml_vals",
+            "Table": "order",
+            "Values": [
+              "dml_vals:1"
+            ],
+            "Vindex": "xxhash"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "ordering.order",
+        "ordering.order_event"
+      ]
+    }
   }
 ]

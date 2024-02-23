@@ -293,3 +293,40 @@ func TestDeleteWithSubquery(t *testing.T) {
 	utils.AssertMatches(t, mcmp.VtConn, `select region_id, oid, cust_no from order_tbl order by oid`,
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)]]`)
 }
+
+// TestMultiTargetDelete executed multi-target delete queries
+func TestMultiTargetDelete(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// initial rows
+	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
+	mcmp.Exec("insert into oevent_tbl(oid, ename) values (1,'a'), (2,'b'), (3,'a'), (2,'c')")
+
+	// check rows
+	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
+		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
+	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
+		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(2) VARCHAR("c")] [INT64(3) VARCHAR("a")]]`)
+
+	// multi table delete
+	qr := mcmp.Exec(`delete o, ev from order_tbl o join oevent_tbl ev where o.oid = ev.oid and ev.ename = 'a'`)
+	assert.EqualValues(t, 4, qr.RowsAffected)
+
+	// check rows
+	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
+		`[[INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(4) INT64(55)]]`)
+	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
+		`[[INT64(2) VARCHAR("b")] [INT64(2) VARCHAR("c")]]`)
+
+	qr = mcmp.Exec(`delete o, ev from order_tbl o join oevent_tbl ev where o.cust_no = ev.oid`)
+	assert.EqualValues(t, 3, qr.RowsAffected)
+
+	// check rows
+	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
+		`[[INT64(2) INT64(4) INT64(55)]]`)
+	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
+		`[]`)
+}

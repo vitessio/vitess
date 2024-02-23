@@ -17,6 +17,9 @@ limitations under the License.
 package operators
 
 import (
+	"sort"
+
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -30,6 +33,13 @@ type Delete struct {
 
 	noColumns
 	noPredicates
+}
+
+// delOp stores intermediary value for Delete Operator with the vindexes.Table for ordering.
+type delOp struct {
+	op   Operator
+	vTbl *vindexes.Table
+	cols []*sqlparser.ColName
 }
 
 // Clone implements the Operator interface
@@ -123,19 +133,40 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 		Lock:    sqlparser.ForUpdateLock,
 	}
 
-	var delOps []Operator
-	var colsList [][]*sqlparser.ColName
+	var delOps []delOp
 	for _, target := range del.Targets {
-		op, cols := createDeleteOpWithTarget(ctx, target)
-		for _, col := range cols {
-			selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(col))
-		}
+		op := createDeleteOpWithTarget(ctx, target)
 		delOps = append(delOps, op)
-		colsList = append(colsList, cols)
 	}
 
+	// sort the operator based on sharding vindex type.
+	// Unsharded < Lookup Vindex < Any
+	sort.Slice(delOps, func(i, j int) bool {
+		a, b := delOps[i], delOps[j]
+		// Get the first Vindex of a and b, if available
+		aVdx, bVdx := getFirstVindex(a.vTbl), getFirstVindex(b.vTbl)
+
+		// Sort nil Vindexes to the start
+		if aVdx == nil || bVdx == nil {
+			return aVdx != nil // true if bVdx is nil and aVdx is not nil
+		}
+
+		// Among non-nil Vindexes, those that need VCursor come first
+		return aVdx.NeedsVCursor() && !bVdx.NeedsVCursor()
+	})
+
+	// now map the operator and column list.
+	var colsList [][]*sqlparser.ColName
+	dmls := slice.Map(delOps, func(from delOp) Operator {
+		colsList = append(colsList, from.cols)
+		for _, col := range from.cols {
+			selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(col))
+		}
+		return from.op
+	})
+
 	op = &DMLWithInput{
-		DML:    delOps,
+		DML:    dmls,
 		Source: createOperatorFromSelect(ctx, selectStmt),
 		cols:   colsList,
 	}
@@ -149,16 +180,26 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 	return op
 }
 
-func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target sqlparser.TableName) (Operator, []*sqlparser.ColName) {
+// getFirstVindex returns the first Vindex, if available
+func getFirstVindex(vTbl *vindexes.Table) vindexes.Vindex {
+	if len(vTbl.ColumnVindexes) > 0 {
+		return vTbl.ColumnVindexes[0].Vindex
+	}
+	return nil
+}
+
+func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target sqlparser.TableName) delOp {
 	ts := ctx.SemTable.Targets[target.Name]
 	ti, err := ctx.SemTable.TableInfoFor(ts)
 	if err != nil {
 		panic(vterrors.VT13001(err.Error()))
 	}
+
 	vTbl := ti.GetVindexTable()
 	if len(vTbl.PrimaryKey) == 0 {
 		panic(vterrors.VT09015())
 	}
+
 	var leftComp sqlparser.ValTuple
 	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
 	for _, col := range vTbl.PrimaryKey {
@@ -179,7 +220,11 @@ func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target sqlparser
 		Targets:    sqlparser.TableNames{target},
 		Where:      sqlparser.NewWhere(sqlparser.WhereClause, compExpr),
 	}
-	return createOperatorFromDelete(ctx, del), cols
+	return delOp{
+		createOperatorFromDelete(ctx, del),
+		vTbl,
+		cols,
+	}
 }
 
 func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) (Operator, *vindexes.Table) {
