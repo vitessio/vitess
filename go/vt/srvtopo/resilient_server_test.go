@@ -621,7 +621,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	// Check that we only checked the topo service 1 or 2 times during the
 	// period where we got the cached error.
 	cachedReqs, ok := counts.Counts()[cachedCategory]
-	if !ok || (cachedReqs) > 2 {
+	if !ok || cachedReqs > 2 {
 		t.Errorf("expected <= 2 cached requests got %v", cachedReqs)
 	}
 
