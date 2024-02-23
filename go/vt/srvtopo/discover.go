@@ -29,10 +29,24 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// shouldFindKeyspace returns true if a keyspace should be fetched.
+// true is also returned if no keyspaces are defined.
+func shouldFindKeyspace(keyspaces []string, ksName string) bool {
+	if len(keyspaces) == 0 {
+		return true
+	}
+	for _, keyspace := range keyspaces {
+		if ksName == keyspace {
+			return true
+		}
+	}
+	return false
+}
+
 // FindAllTargets goes through all serving shards in the topology
 // for the provided tablet types. It returns one Target object per
 // keyspace / shard / matching TabletType.
-func FindAllTargets(ctx context.Context, ts Server, cell string, tabletTypes []topodatapb.TabletType) ([]*querypb.Target, error) {
+func FindAllTargets(ctx context.Context, ts Server, cell string, keyspaces []string, tabletTypes []topodatapb.TabletType) ([]*querypb.Target, error) {
 	ksNames, err := ts.GetSrvKeyspaceNames(ctx, cell, true)
 	if err != nil {
 		return nil, err
@@ -43,6 +57,9 @@ func FindAllTargets(ctx context.Context, ts Server, cell string, tabletTypes []t
 	var mu sync.Mutex
 	var errRecorder concurrency.AllErrorRecorder
 	for _, ksName := range ksNames {
+		if !shouldFindKeyspace(keyspaces, ksName) {
+			continue
+		}
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()

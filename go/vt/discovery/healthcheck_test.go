@@ -686,13 +686,6 @@ func TestWaitForAllServingTablets(t *testing.T) {
 			TabletType: tablet.Type,
 		},
 	}
-
-	KeyspacesToWatch = []string{tablet.Keyspace}
-
-	err = hc.WaitForAllServingTablets(ctx, targets)
-	assert.Nil(t, err, "error should be nil. Keyspace with no tablets is filtered")
-
-	KeyspacesToWatch = []string{}
 }
 
 // TestRemoveTablet tests the behavior when a tablet goes away.

@@ -64,7 +64,7 @@ func TestFindAllTargets(t *testing.T) {
 	rs := NewResilientServer(ctx, ts, counts)
 
 	// No keyspace / shards.
-	ks, err := FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
+	ks, err := FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -89,7 +89,23 @@ func TestFindAllTargets(t *testing.T) {
 	}
 
 	// Get it.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
+	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(ks, []*querypb.Target{
+		{
+			Cell:       "cell1",
+			Keyspace:   "test_keyspace",
+			Shard:      "test_shard0",
+			TabletType: topodatapb.TabletType_PRIMARY,
+		},
+	}) {
+		t.Errorf("got wrong value: %v", ks)
+	}
+
+	// Get any keyspace.
+	ks, err = FindAllTargets(ctx, rs, "cell1", []string{}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -129,7 +145,7 @@ func TestFindAllTargets(t *testing.T) {
 	}
 
 	// Get it for all types.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
+	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace", "test_keyspace2"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -157,8 +173,30 @@ func TestFindAllTargets(t *testing.T) {
 		t.Errorf("got wrong value: %v", ks)
 	}
 
-	// Only get the REPLICA targets.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+	// Only get 1 keyspaces only for all types.
+	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace2"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(ks, []*querypb.Target{
+		{
+			Cell:       "cell1",
+			Keyspace:   "test_keyspace2",
+			Shard:      "test_shard1",
+			TabletType: topodatapb.TabletType_PRIMARY,
+		},
+		{
+			Cell:       "cell1",
+			Keyspace:   "test_keyspace2",
+			Shard:      "test_shard2",
+			TabletType: topodatapb.TabletType_REPLICA,
+		},
+	}) {
+		t.Errorf("got wrong value: %v", ks)
+	}
+
+	// Only get the REPLICA targets for any keyspace.
+	ks, err = FindAllTargets(ctx, rs, "cell1", []string{}, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
