@@ -47,6 +47,7 @@ type (
 		joinUsing map[string]TableSet
 		stmtScope bool
 		ctes      map[string]*sqlparser.CommonTableExpr
+		inGroupBy bool
 	}
 )
 
@@ -97,10 +98,12 @@ func (s *scoper) addColumnInfoForGroupBy(cursor *sqlparser.Cursor, node sqlparse
 	if err != nil {
 		return err
 	}
+	currentScope := s.currentScope()
+	currentScope.inGroupBy = true
 	for _, expr := range node {
 		lit := keepIntLiteral(expr)
 		if lit != nil {
-			s.specialExprScopes[lit] = s.currentScope()
+			s.specialExprScopes[lit] = currentScope
 		}
 	}
 	return nil
@@ -231,6 +234,16 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 		}
 	}
 	return nil
+}
+
+func (s *scoper) foobar() {
+	id := EmptyTableSet()
+	for _, tableInfo := range s.currentScope().tables {
+		set := tableInfo.getTableSet(s.org)
+		id = id.Merge(set)
+	}
+	s.statementIDs[s.currentScope().stmt] = id
+	s.popScope()
 }
 
 func ValidAsMapKey(s sqlparser.SQLNode) bool {

@@ -44,8 +44,6 @@ type earlyRewriter struct {
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
-	case *sqlparser.Where:
-		return r.handleWhereClause(node, cursor.Parent())
 	case sqlparser.SelectExprs:
 		return r.handleSelectExprs(cursor, node)
 	case *sqlparser.JoinTableExpr:
@@ -56,13 +54,6 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		rewriteAndExpr(r.env, cursor, node)
 	case *sqlparser.NotExpr:
 		rewriteNotExpr(cursor, node)
-	case sqlparser.GroupBy:
-		r.clause = "group clause"
-		iter := &exprIterator{
-			node: node,
-			idx:  -1,
-		}
-		return r.handleGroupBy(cursor.Parent(), iter)
 	case *sqlparser.ComparisonExpr:
 		return handleComparisonExpr(cursor, node)
 	case *sqlparser.With:
@@ -83,6 +74,13 @@ func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
 		// this rewriting is done in the `up` phase, because we need the vindex hints to have been
 		// processed while collecting the tables.
 		return removeVindexHints(node)
+	case sqlparser.GroupBy:
+		r.clause = "group clause"
+		iter := &exprIterator{
+			node: node,
+			idx:  -1,
+		}
+		return r.handleGroupBy(cursor.Parent(), iter)
 	case sqlparser.OrderBy:
 		r.clause = "order clause"
 		iter := &orderByIterator{
@@ -91,6 +89,12 @@ func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
 			r:    r,
 		}
 		return r.handleOrderBy(cursor.Parent(), iter)
+	case *sqlparser.Where:
+		if node.Type != sqlparser.HavingClause {
+			return nil
+		}
+
+		return r.handleHavingClause(node, cursor.Parent())
 	}
 	return nil
 }
@@ -196,22 +200,21 @@ func removeVindexHints(node *sqlparser.AliasedTableExpr) error {
 	return nil
 }
 
-// handleWhereClause processes WHERE clauses, specifically the HAVING clause.
-func (r *earlyRewriter) handleWhereClause(node *sqlparser.Where, parent sqlparser.SQLNode) error {
+// handleHavingClause processes the HAVING clause
+func (r *earlyRewriter) handleHavingClause(node *sqlparser.Where, parent sqlparser.SQLNode) error {
 	sel, ok := parent.(*sqlparser.Select)
 	if !ok {
 		return nil
 	}
-	if node.Type != sqlparser.HavingClause {
-		return nil
-	}
-	expr, err := r.rewriteAliasesInHavingAndGroupBy(node.Expr, sel)
+	expr, err := r.rewriteAliasesInOrderBy(node.Expr, sel)
 	if err != nil {
 		return err
 	}
-
+	if expr == node.Expr {
+		return nil
+	}
 	node.Expr = expr
-	return nil
+	return r.reAnalyze(expr)
 }
 
 // handleSelectExprs expands * in SELECT expressions.
@@ -290,7 +293,7 @@ func (r *earlyRewriter) replaceLiteralsInOrderBy(e sqlparser.Expr, iter iterator
 		return false, nil
 	}
 
-	newExpr, recheck, err := r.rewriteOrderByExpr(lit)
+	newExpr, recheck, err := r.rewriteOrderByLiteral(lit)
 	if err != nil {
 		return false, err
 	}
@@ -328,15 +331,15 @@ func (r *earlyRewriter) replaceLiteralsInOrderBy(e sqlparser.Expr, iter iterator
 	return true, nil
 }
 
-func (r *earlyRewriter) replaceLiteralsInGroupBy(e sqlparser.Expr, iter iterator) (bool, error) {
+func (r *earlyRewriter) replaceLiteralsInGroupBy(e sqlparser.Expr) (sqlparser.Expr, error) {
 	lit := getIntLiteral(e)
 	if lit == nil {
-		return false, nil
+		return nil, nil
 	}
 
 	newExpr, err := r.rewriteGroupByExpr(lit)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	if getIntLiteral(newExpr) == nil {
@@ -359,8 +362,7 @@ func (r *earlyRewriter) replaceLiteralsInGroupBy(e sqlparser.Expr, iter iterator
 		newExpr = sqlparser.NewStrLiteral("")
 	}
 
-	err = iter.replace(newExpr)
-	return true, err
+	return newExpr, nil
 }
 
 func getIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
@@ -426,19 +428,23 @@ func (r *earlyRewriter) handleGroupBy(parent sqlparser.SQLNode, iter iterator) e
 
 	sel := sqlparser.GetFirstSelect(stmt)
 	for e := iter.next(); e != nil; e = iter.next() {
-		lit, err := r.replaceLiteralsInGroupBy(e, iter)
+		expr, err := r.replaceLiteralsInGroupBy(e)
 		if err != nil {
 			return err
 		}
-		if lit {
-			continue
-		}
-		expr, err := r.rewriteAliasesInHavingAndGroupBy(e, sel)
-		if err != nil {
-			return err
+		if expr == nil {
+			expr, err = r.rewriteAliasesInHavingAndGroupBy(e, sel)
+			if err != nil {
+				return err
+			}
+
 		}
 		err = iter.replace(expr)
 		if err != nil {
+			return err
+		}
+
+		if err = r.reAnalyze(expr); err != nil {
 			return err
 		}
 	}
@@ -458,29 +464,8 @@ func (r *earlyRewriter) rewriteAliasesInHavingAndGroupBy(node sqlparser.Expr, se
 		ambiguous bool
 	}
 
-	aliases := map[string]ExprContainer{}
-	for _, e := range sel.SelectExprs {
-		ae, ok := e.(*sqlparser.AliasedExpr)
-		if !ok {
-			continue
-		}
-
-		var alias string
-
-		item := ExprContainer{expr: ae.Expr}
-		if ae.As.NotEmpty() {
-			alias = ae.As.Lowered()
-		} else if col, ok := ae.Expr.(*sqlparser.ColName); ok {
-			alias = col.Name.Lowered()
-		}
-
-		if old, alreadyExists := aliases[alias]; alreadyExists && !sqlparser.Equals.Expr(old.expr, item.expr) {
-			item.ambiguous = true
-		}
-
-		aliases[alias] = item
-	}
-
+	currentScope := r.scoper.currentScope()
+	aliases := r.getAliasMap(sel)
 	insideAggr := false
 	downF := func(node, _ sqlparser.SQLNode) bool {
 		switch node.(type) {
@@ -498,7 +483,7 @@ func (r *earlyRewriter) rewriteAliasesInHavingAndGroupBy(node sqlparser.Expr, se
 		case sqlparser.AggrFunc:
 			insideAggr = false
 		case *sqlparser.ColName:
-			if !col.Qualifier.IsEmpty() {
+			if col.Qualifier.NonEmpty() {
 				// we are only interested in columns not qualified by table names
 				break
 			}
@@ -508,32 +493,18 @@ func (r *earlyRewriter) rewriteAliasesInHavingAndGroupBy(node sqlparser.Expr, se
 				break
 			}
 
-			if item.ambiguous {
-				err = &AmbiguousColumnError{Column: sqlparser.String(col)}
-				cursor.StopTreeWalk()
-				return
+			if r.isColumnOnTable(col, currentScope) {
+				break
 			}
 
-			if insideAggr && sqlparser.ContainsAggregation(item.expr) {
-				// I'm not sure about this, but my experiments point to this being the behaviour mysql has
-				// mysql> select min(name) as name from user order by min(name);
-				// 1 row in set (0.00 sec)
-				//
-				// mysql> select id % 2, min(name) as name from user group by id % 2 order by min(name);
-				// 2 rows in set (0.00 sec)
-				//
-				// mysql> select id % 2, 'foobar' as name from user group by id % 2 order by min(name);
-				// 2 rows in set (0.00 sec)
-				//
-				// mysql> select id % 2 from user group by id % 2 order by min(min(name));
-				// ERROR 1111 (HY000): Invalid use of group function
-				//
-				// mysql> select id % 2, min(name) as k from user group by id % 2 order by min(k);
-				// ERROR 1111 (HY000): Invalid use of group function
-				//
-				// mysql> select id % 2, -id as name from user group by id % 2, -id order by min(name);
-				// 6 rows in set (0.01 sec)
-				break
+			if item.ambiguous {
+				err = &AmbiguousColumnError{Column: sqlparser.String(col)}
+			} else if insideAggr && sqlparser.ContainsAggregation(item.expr) {
+				err = &InvalidUseOfGroupFunction{}
+			}
+			if err != nil {
+				cursor.StopTreeWalk()
+				return
 			}
 
 			cursor.Replace(sqlparser.CloneExpr(item.expr))
@@ -583,7 +554,7 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlpar
 			return
 		}
 
-		if !col.Qualifier.IsEmpty() {
+		if col.Qualifier.NonEmpty() {
 			// we are only interested in columns not qualified by table names
 			return
 		}
@@ -603,7 +574,7 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlpar
 		if item.ambiguous {
 			err = &AmbiguousColumnError{Column: sqlparser.String(col)}
 		} else if insideAggr && sqlparser.ContainsAggregation(item.expr) {
-			err = &InvalidUserOfGroupFunction{}
+			err = &InvalidUseOfGroupFunction{}
 		}
 		if err != nil {
 			cursor.StopTreeWalk()
@@ -661,7 +632,7 @@ type exprContainer struct {
 	ambiguous bool
 }
 
-func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (expr sqlparser.Expr, needReAnalysis bool, err error) {
+func (r *earlyRewriter) rewriteOrderByLiteral(node *sqlparser.Literal) (expr sqlparser.Expr, needReAnalysis bool, err error) {
 	scope, found := r.scoper.specialExprScopes[node]
 	if !found {
 		return node, false, nil

@@ -710,7 +710,9 @@ func TestGroupByBinding(t *testing.T) {
 		TS0,
 	}, {
 		"select 1 as c from tabl group by c",
-		NoTables,
+		// because we don't have authoritative information about `tabl`,
+		// we assume that it has a column named `c`
+		TS0,
 	}, {
 		"select t1.id from t1, t2 group by id",
 		TS0,
@@ -722,7 +724,10 @@ func TestGroupByBinding(t *testing.T) {
 		TS1,
 	}, {
 		"select a.id from t as a, t1 group by id",
-		TS0,
+		// since we have authoritative info on t1, we know that it does have an `id` column,
+		// and we are missing column info for `t`, we just assume this is coming from t1.
+		// we really need schema tracking here
+		TS1,
 	}, {
 		"select a.id from t, t1 as a group by id",
 		TS1,

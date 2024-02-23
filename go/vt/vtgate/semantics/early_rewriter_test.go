@@ -304,6 +304,84 @@ func TestRewriteJoinUsingColumns(t *testing.T) {
 
 }
 
+func TestGroupByColumnName(t *testing.T) {
+	schemaInfo := &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t1": {
+				Name: sqlparser.NewIdentifierCS("t1"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewIdentifierCI("id"),
+					Type: sqltypes.Int32,
+				}, {
+					Name: sqlparser.NewIdentifierCI("col1"),
+					Type: sqltypes.Int32,
+				}},
+				ColumnListAuthoritative: true,
+			},
+			"t2": {
+				Name: sqlparser.NewIdentifierCS("t2"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewIdentifierCI("id"),
+					Type: sqltypes.Int32,
+				}, {
+					Name: sqlparser.NewIdentifierCI("col2"),
+					Type: sqltypes.Int32,
+				}},
+				ColumnListAuthoritative: true,
+			},
+		},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql     string
+		expSQL  string
+		expDeps TableSet
+		expErr  string
+	}{{
+		sql:     "select t3.col from t3 group by kj",
+		expSQL:  "select t3.col from t3 group by kj",
+		expDeps: TS0,
+	}, {
+		sql:     "select t2.col2 as xyz from t2 group by xyz",
+		expSQL:  "select t2.col2 as xyz from t2 group by t2.col2",
+		expDeps: TS0,
+	}, {
+		sql:    "select id from t1 group by unknown",
+		expErr: "Unknown column 'unknown' in 'group statement'",
+	}, {
+		sql:    "select t1.c as x, sum(t2.id) as x from t1 join t2 group by x",
+		expErr: "VT03005: cannot group on 'x'",
+	}, {
+		sql:     "select t1.col1, sum(t2.id) as col1 from t1 join t2 group by col1",
+		expSQL:  "select t1.col1, sum(t2.id) as col1 from t1 join t2 group by col1",
+		expDeps: TS0,
+	}, {
+		sql:     "select t2.col2 as id, sum(t2.id) as x from t1 join t2 group by id",
+		expSQL:  "select t2.col2 as id, sum(t2.id) as x from t1 join t2 group by t2.col2",
+		expDeps: TS1,
+	}, {
+		sql:    "select sum(t2.col2) as id, sum(t2.id) as x from t1 join t2 group by id",
+		expErr: "VT03005: cannot group on 'id'",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
+			require.NoError(t, err)
+			selectStatement := ast.(*sqlparser.Select)
+			st, err := AnalyzeStrict(selectStatement, cDB, schemaInfo)
+			if tcase.expErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
+				gb := selectStatement.GroupBy
+				deps := st.RecursiveDeps(gb[0])
+				assert.Equal(t, tcase.expDeps, deps)
+			} else {
+				require.EqualError(t, err, tcase.expErr)
+			}
+		})
+	}
+}
+
 func TestGroupByLiteral(t *testing.T) {
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{},
@@ -432,23 +510,36 @@ func TestOrderByLiteral(t *testing.T) {
 }
 
 func TestHavingColumnName(t *testing.T) {
-	schemaInfo := &FakeSI{
-		Tables: map[string]*vindexes.Table{},
-	}
+	schemaInfo := getSchemaWithKnownColumns()
 	cDB := "db"
 	tcases := []struct {
-		sql    string
-		expSQL string
-		expErr string
+		sql     string
+		expSQL  string
+		expDeps TableSet
+		expErr  string
 	}{{
-		sql:    "select id, sum(foo) as sumOfFoo from t1 having sumOfFoo > 1",
-		expSQL: "select id, sum(foo) as sumOfFoo from t1 having sum(foo) > 1",
+		sql:     "select id, sum(foo) as sumOfFoo from t1 having sumOfFoo > 1",
+		expSQL:  "select id, sum(foo) as sumOfFoo from t1 having sum(foo) > 1",
+		expDeps: TS0,
+	}, {
+		sql:     "select id, sum(foo) as sumOfFoo from t1 having sumOfFoo > 1",
+		expSQL:  "select id, sum(foo) as sumOfFoo from t1 having sum(foo) > 1",
+		expDeps: TS0,
 	}, {
 		sql:    "select id, sum(foo) as foo from t1 having sum(foo) > 1",
 		expSQL: "select id, sum(foo) as foo from t1 having sum(foo) > 1",
 	}, {
 		sql:    "select foo + 2 as foo from t1 having foo = 42",
 		expSQL: "select foo + 2 as foo from t1 having foo + 2 = 42",
+	}, {
+		sql:    "select count(*), ename from emp group by ename having comm > 1000",
+		expErr: "unknown column",
+	}, {
+		sql:    "select sal, ename from emp having empno > 1000",
+		expErr: "sdf",
+	}, {
+		sql:    "select sal, count(*) sal from emp having sal > 1000",
+		expSQL: "select sal, count(*) sal from emp having sal > 1000",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
@@ -466,7 +557,7 @@ func TestHavingColumnName(t *testing.T) {
 	}
 }
 
-func TestOrderByColumnName(t *testing.T) {
+func getSchemaWithKnownColumns() *FakeSI {
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{
 			"t1": {
@@ -486,6 +577,11 @@ func TestOrderByColumnName(t *testing.T) {
 			},
 		},
 	}
+	return schemaInfo
+}
+
+func TestOrderByColumnName(t *testing.T) {
+	schemaInfo := getSchemaWithKnownColumns()
 	cDB := "db"
 	tcases := []struct {
 		sql    string

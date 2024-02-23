@@ -231,6 +231,10 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 	var thisDeps dependencies
 	first := true
 	var tableName *sqlparser.TableName
+
+	if !current.stmtScope && current.inGroupBy {
+		return b.resolveColInGroupBy(colName, current, allowMulti, singleTableFallBack)
+	}
 	for current != nil {
 		var err error
 		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
@@ -249,7 +253,11 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		} else if err != nil {
 			return dependency{}, err
 		}
-		if current.parent == nil && len(current.tables) == 1 && first && colName.Qualifier.IsEmpty() && singleTableFallBack {
+		if current.parent == nil &&
+			len(current.tables) == 1 &&
+			first &&
+			colName.Qualifier.IsEmpty() &&
+			singleTableFallBack {
 			// if this is the top scope, and we still haven't been able to find a match, we know we are about to fail
 			// we can check this last scope and see if there is a single table. if there is just one table in the scope
 			// we assume that the column is meant to come from this table.
@@ -265,6 +273,58 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		current = current.parent
 	}
 	return dependency{}, ShardedError{ColumnNotFoundError{Column: colName, Table: tableName}}
+}
+
+// resolveColInGroupBy handles the special rules we have when binding on the GROUP BY column
+func (b *binder) resolveColInGroupBy(
+	colName *sqlparser.ColName,
+	current *scope,
+	allowMulti bool,
+	singleTableFallBack bool,
+) (dependency, error) {
+	if current.parent == nil {
+		return dependency{}, vterrors.VT13001("did not expect this to be the last scope")
+	}
+	// if we are in GROUP BY, we have to search the FROM clause before we search the SELECT expressions
+	deps, firstErr := b.resolveColumn(colName, current.parent, allowMulti, false)
+	if firstErr == nil {
+		return deps, nil
+	}
+
+	// either we didn't find the column on a table, or it was ambiguous.
+	// in either case, next step is to search the SELECT expressions
+	if colName.Qualifier.NonEmpty() {
+		// if the col name has a qualifier, none of the SELECT expressions are going to match
+		return dependency{}, nil
+	}
+	vtbl, ok := current.tables[0].(*vTableInfo)
+	if !ok {
+		return dependency{}, vterrors.VT13001("expected the table info to be a *vTableInfo")
+	}
+
+	dependencies, err := vtbl.dependenciesInGroupBy(colName.Name.String(), b.org)
+	if err != nil {
+		return dependency{}, err
+	}
+	if dependencies.empty() {
+		if isColumnNotFound(firstErr) {
+			return dependency{}, &ColumnNotFoundInGroupByError{Column: colName.Name.String()}
+		}
+		return deps, firstErr
+	}
+	return dependencies.get()
+}
+
+func isColumnNotFound(err error) bool {
+	_, ok := err.(ColumnNotFoundError)
+	if ok {
+		return true
+	}
+	sherr, ok := err.(ShardedError)
+	if ok {
+		return isColumnNotFound(sherr.Inner)
+	}
+	return false
 }
 
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {

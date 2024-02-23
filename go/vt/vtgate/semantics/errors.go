@@ -52,7 +52,8 @@ type (
 	SubqueryColumnCountError       struct{ Expected int }
 	ColumnsMissingInSchemaError    struct{}
 	CantUseMultipleVindexHints     struct{ Table string }
-	InvalidUserOfGroupFunction     struct{}
+	InvalidUseOfGroupFunction      struct{}
+	CantGroupOn                    struct{ Column string }
 
 	NoSuchVindexFound struct {
 		Table      string
@@ -70,6 +71,9 @@ type (
 	ColumnNotFoundError struct {
 		Column *sqlparser.ColName
 		Table  *sqlparser.TableName
+	}
+	ColumnNotFoundInGroupByError struct {
+		Column string
 	}
 )
 
@@ -289,15 +293,41 @@ func (c *NoSuchVindexFound) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_FAILED_PRECONDITION
 }
 
-// InvalidUserOfGroupFunction
-func (*InvalidUserOfGroupFunction) Error() string {
+// InvalidUseOfGroupFunction
+func (*InvalidUseOfGroupFunction) Error() string {
 	return "Invalid use of group function"
 }
 
-func (*InvalidUserOfGroupFunction) ErrorCode() vtrpcpb.Code {
+func (*InvalidUseOfGroupFunction) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_INVALID_ARGUMENT
 }
 
-func (*InvalidUserOfGroupFunction) ErrorState() vterrors.State {
+func (*InvalidUseOfGroupFunction) ErrorState() vterrors.State {
 	return vterrors.InvalidGroupFuncUse
+}
+
+// CantGroupOn
+func (e *CantGroupOn) Error() string {
+	return vterrors.VT03005(e.Column).Error()
+}
+
+func (*CantGroupOn) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
+}
+
+func (e *CantGroupOn) ErrorState() vterrors.State {
+	return vterrors.VT03005(e.Column).State
+}
+
+// ColumnNotFoundInGroupByError
+func (e *ColumnNotFoundInGroupByError) Error() string {
+	return fmt.Sprintf("Unknown column '%s' in 'group statement'", e.Column)
+}
+
+func (*ColumnNotFoundInGroupByError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
+}
+
+func (e *ColumnNotFoundInGroupByError) ErrorState() vterrors.State {
+	return vterrors.BadFieldError
 }
