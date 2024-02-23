@@ -675,9 +675,14 @@
     }
   },
   {
-    "comment": "scatter aggregate group by aggregate function",
+    "comment": "scatter aggregate group by aggregate function - since we don't have authoratative columns for user, we can't be sure that the user isn't referring a column named b",
     "query": "select count(*) b from user group by b",
     "plan": "VT03005: cannot group on 'count(*)'"
+  },
+  {
+    "comment": "scatter aggregate group by aggregate function with column information",
+    "query": "select count(*) b from authoritative group by b",
+    "plan": "VT03005: cannot group on 'b'"
   },
   {
     "comment": "scatter aggregate multiple group by (columns)",
@@ -893,7 +898,7 @@
             },
             "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by a, b, c, weight_string(a), weight_string(b), weight_string(c)",
             "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, b, c, weight_string(a), weight_string(b), weight_string(c) order by a asc, b asc, c asc",
+            "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, b, c, weight_string(a), weight_string(b), weight_string(c) order by `user`.a asc, `user`.b asc, `user`.c asc",
             "Table": "`user`"
           }
         ]
@@ -925,7 +930,7 @@
             },
             "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by d, b, a, c, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
             "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by d, b, a, c, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by d asc, b asc, a asc, c asc",
+            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by d, b, a, c, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by `user`.d asc, `user`.b asc, `user`.a asc, `user`.c asc",
             "Table": "`user`"
           }
         ]
@@ -957,7 +962,7 @@
             },
             "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by d, b, a, c, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
             "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by d, b, a, c, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by d asc, b asc, a asc, c asc",
+            "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by d, b, a, c, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by `user`.d asc, `user`.b asc, `user`.a asc, `user`.c asc",
             "Table": "`user`"
           }
         ]
@@ -989,7 +994,7 @@
             },
             "FieldQuery": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` where 1 != 1 group by a, c, b, weight_string(a), weight_string(c), weight_string(b)",
             "OrderBy": "(0|4) DESC, (2|5) DESC, (1|6) ASC",
-            "Query": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` group by a, c, b, weight_string(a), weight_string(c), weight_string(b) order by a desc, c desc, b asc",
+            "Query": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` group by a, c, b, weight_string(a), weight_string(c), weight_string(b) order by a desc, c desc, `user`.b asc",
             "Table": "`user`"
           }
         ]
@@ -1042,32 +1047,6 @@
     }
   },
   {
-    "comment": "Group by with collate operator",
-    "query": "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col1 as a from `user` where 1 != 1 group by `user`.col1 collate utf8_general_ci",
-        "Query": "select `user`.col1 as a from `user` where `user`.id = 5 group by `user`.col1 collate utf8_general_ci",
-        "Table": "`user`",
-        "Values": [
-          "5"
-        ],
-        "Vindex": "user_index"
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
-  },
-  {
     "comment": "routing rules for aggregates",
     "query": "select id, count(*) from route2 group by id",
     "plan": {
@@ -1103,7 +1082,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from ref where 1 != 1",
-        "Query": "select col from ref order by col asc",
+        "Query": "select col from ref order by ref.col asc",
         "Table": "ref"
       },
       "TablesUsed": [
@@ -1584,10 +1563,10 @@
   },
   {
     "comment": "weight_string addition to group by",
-    "query": "select lower(textcol1) as v, count(*) from user group by v",
+    "query": "select lower(col1) as v, count(*) from authoritative group by v",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select lower(textcol1) as v, count(*) from user group by v",
+      "Original": "select lower(col1) as v, count(*) from authoritative group by v",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
@@ -1602,24 +1581,24 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` where 1 != 1 group by lower(textcol1), weight_string(lower(textcol1))",
+            "FieldQuery": "select lower(col1) as v, count(*), weight_string(lower(col1)) from authoritative where 1 != 1 group by lower(col1), weight_string(lower(col1))",
             "OrderBy": "(0|2) ASC",
-            "Query": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` group by lower(textcol1), weight_string(lower(textcol1)) order by lower(textcol1) asc",
-            "Table": "`user`"
+            "Query": "select lower(col1) as v, count(*), weight_string(lower(col1)) from authoritative group by lower(col1), weight_string(lower(col1)) order by lower(col1) asc",
+            "Table": "authoritative"
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
   {
     "comment": "weight_string addition to group by when also there in order by",
-    "query": "select char_length(texcol1) as a, count(*) from user group by a order by a",
+    "query": "select char_length(col1) as a, count(*) from authoritative group by a order by a",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select char_length(texcol1) as a, count(*) from user group by a order by a",
+      "Original": "select char_length(col1) as a, count(*) from authoritative group by a order by a",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
@@ -1634,15 +1613,15 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` where 1 != 1 group by char_length(texcol1), weight_string(char_length(texcol1))",
+            "FieldQuery": "select char_length(col1) as a, count(*), weight_string(char_length(col1)) from authoritative where 1 != 1 group by char_length(col1), weight_string(char_length(col1))",
             "OrderBy": "(0|2) ASC",
-            "Query": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` group by char_length(texcol1), weight_string(char_length(texcol1)) order by char_length(texcol1) asc",
-            "Table": "`user`"
+            "Query": "select char_length(col1) as a, count(*), weight_string(char_length(col1)) from authoritative group by char_length(col1), weight_string(char_length(col1)) order by char_length(authoritative.col1) asc",
+            "Table": "authoritative"
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
@@ -1699,7 +1678,7 @@
             },
             "FieldQuery": "select col, id, weight_string(id) from `user` where 1 != 1",
             "OrderBy": "(1|2) ASC",
-            "Query": "select col, id, weight_string(id) from `user` order by id asc",
+            "Query": "select col, id, weight_string(id) from `user` order by `user`.id asc",
             "ResultColumns": 2,
             "Table": "`user`"
           },
@@ -2009,19 +1988,20 @@
   },
   {
     "comment": "Less Equal filter on scatter with grouping",
-    "query": "select col, count(*) a from user group by col having a <= 10",
+    "query": "select col1, count(*) a from user group by col1 having a <= 10",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select col, count(*) a from user group by col having a <= 10",
+      "Original": "select col1, count(*) a from user group by col1 having a <= 10",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) <= 10",
+        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum_count_star(1) AS a",
-            "GroupBy": "0",
+            "GroupBy": "(0|2)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2030,9 +2010,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select col, count(*) as a from `user` where 1 != 1 group by col",
-                "OrderBy": "0 ASC",
-                "Query": "select col, count(*) as a from `user` group by col order by col asc",
+                "FieldQuery": "select col1, count(*) as a, weight_string(col1) from `user` where 1 != 1 group by col1, weight_string(col1)",
+                "OrderBy": "(0|2) ASC",
+                "Query": "select col1, count(*) as a, weight_string(col1) from `user` group by col1, weight_string(col1) order by col1 asc",
                 "Table": "`user`"
               }
             ]
@@ -2046,10 +2026,10 @@
   },
   {
     "comment": "We should be able to find grouping keys on ordered aggregates",
-    "query": "select count(*) as a, val1 from user group by val1 having a = 1.00",
+    "query": "select count(*) as a, col2 from user group by col2 having a = 1.00",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) as a, val1 from user group by val1 having a = 1.00",
+      "Original": "select count(*) as a, col2 from user group by col2 having a = 1.00",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) = 1.00",
@@ -2068,9 +2048,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) as a, val1, weight_string(val1) from `user` where 1 != 1 group by val1, weight_string(val1)",
+                "FieldQuery": "select count(*) as a, col2, weight_string(col2) from `user` where 1 != 1 group by col2, weight_string(col2)",
                 "OrderBy": "(1|2) ASC",
-                "Query": "select count(*) as a, val1, weight_string(val1) from `user` group by val1, weight_string(val1) order by val1 asc",
+                "Query": "select count(*) as a, col2, weight_string(col2) from `user` group by col2, weight_string(col2) order by col2 asc",
                 "Table": "`user`"
               }
             ]
@@ -2620,10 +2600,10 @@
   },
   {
     "comment": "group by column alias",
-    "query": "select ascii(val1) as a, count(*) from user group by a",
+    "query": "select ascii(col2) as a, count(*) from user group by a",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select ascii(val1) as a, count(*) from user group by a",
+      "Original": "select ascii(col2) as a, count(*) from user group by a",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
@@ -2638,9 +2618,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` where 1 != 1 group by ascii(val1), weight_string(ascii(val1))",
+            "FieldQuery": "select ascii(col2) as a, count(*), weight_string(ascii(col2)) from `user` where 1 != 1 group by ascii(col2), weight_string(ascii(col2))",
             "OrderBy": "(0|2) ASC",
-            "Query": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` group by ascii(val1), weight_string(ascii(val1)) order by ascii(val1) asc",
+            "Query": "select ascii(col2) as a, count(*), weight_string(ascii(col2)) from `user` group by ascii(col2), weight_string(ascii(col2)) order by ascii(col2) asc",
             "Table": "`user`"
           }
         ]
@@ -2984,7 +2964,7 @@
       "Original": "select foo, sum(foo) as fooSum, sum(bar) as barSum from user group by foo having fooSum+sum(bar) = 42",
       "Instructions": {
         "OperatorType": "Filter",
-        "Predicate": "sum(foo) + sum(bar) = 42",
+        "Predicate": "sum(`user`.foo) + sum(bar) = 42",
         "ResultColumns": 3,
         "Inputs": [
           {
@@ -3328,10 +3308,10 @@
   },
   {
     "comment": "group by and ',' joins",
-    "query": "select user.id from user, user_extra group by id",
+    "query": "select user.id from user, user_extra group by user.id",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select user.id from user, user_extra group by id",
+      "Original": "select user.id from user, user_extra group by user.id",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
@@ -3555,7 +3535,7 @@
                     },
                     "FieldQuery": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
                     "OrderBy": "(1|3) ASC",
-                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by val1 asc limit :__upper_limit",
+                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by `user`.val1 asc limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -6938,5 +6918,45 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "col is a column on user, but the HAVING is referring to an alias",
+    "query": "select sum(x) col from user where x > 0 having col = 2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select sum(x) col from user where x > 0 having col = 2",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "sum(`user`.x) = 2",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS col",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(x) as col from `user` where 1 != 1",
+                "Query": "select sum(x) as col from `user` where x > 0",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "baz in the HAVING clause can't be accessed because of the GROUP BY",
+    "query": "select foo, count(bar) as x from user group by foo having baz > avg(baz) order by x",
+    "plan": "Unknown column 'baz' in 'having clause'"
   }
 ]
