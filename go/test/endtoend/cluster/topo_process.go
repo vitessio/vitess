@@ -304,6 +304,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoot string, keepdata bool, topoFlavor string) error {
 	if topo.Server != nil {
 		topo.Server.Close()
+		topo.Server = nil
 	}
 
 	if topo.Client != nil {
