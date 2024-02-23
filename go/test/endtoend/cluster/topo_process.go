@@ -64,11 +64,13 @@ type TopoProcess struct {
 
 // Setup starts a new topo service
 func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) (err error) {
+	root := "/" + topo.Name
 	switch topoFlavor {
 	case "zk2":
 		err = topo.SetupZookeeper(cluster)
 	case "consul":
 		err = topo.SetupConsul(cluster)
+		root = strings.TrimPrefix(root, "/")
 	default:
 		// Override any inherited ETCDCTL_API env value to
 		// ensure that we use the v3 API and storage.
@@ -80,7 +82,7 @@ func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) 
 		return err
 	}
 
-	topo.Server, err = vtopo.OpenServer(topoFlavor, net.JoinHostPort(topo.Host, fmt.Sprintf("%d", topo.Port)), "/vitess/global")
+	topo.Server, err = vtopo.OpenServer(topoFlavor, net.JoinHostPort(topo.Host, fmt.Sprintf("%d", topo.Port)), root)
 	return err
 }
 
