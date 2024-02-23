@@ -43,17 +43,17 @@ import (
 	"testing"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 const (
@@ -146,12 +146,14 @@ type TestRowEvent struct {
 	event   string
 	spec    *TestRowEventSpec
 	flags   int
-	restart bool
+	restart bool // if set to true, it will start a new group of output events
 }
 
 // TestSpecOptions has any non-standard test-specific options which can modify the event generation behaviour.
 type TestSpecOptions struct {
-	noblob            bool
+	noblob bool // if set to true, it will skip blob and text columns in the row event
+	// by default the filter will be a "select * from table", set this to specify a custom one
+	// if filter is set, customFieldEvents need to be specified as well
 	filter            *binlogdatapb.Filter
 	customFieldEvents bool
 }
@@ -189,6 +191,7 @@ func (ts *TestSpec) Init() error {
 	if ts.inited {
 		return nil
 	}
+	// setup SrvVschema watcher, if not already done
 	engine.watcherOnce.Do(engine.setWatch)
 	defer func() { ts.inited = true }()
 	if ts.options == nil {
@@ -366,6 +369,7 @@ func (ts *TestSpec) Run() {
 					if fe == nil {
 						require.FailNowf(ts.t, "field event for table %s not found", table)
 					}
+					// for the first row event, we send the field event as well, if a custom field event is not specified
 					if !ts.options.customFieldEvents && !ts.fieldEventsSent[table] {
 						output = append(output, fe.String())
 						ts.fieldEventsSent[table] = true
@@ -629,7 +633,7 @@ func getRowEvent(ts *TestSpec, fe *TestFieldEvent, query string) string {
 	return ts.getRowEvent(table, bv, fe, stmt, 0)
 }
 
-func getLastPK(table, colName string, colType query.Type, colValue []sqltypes.Value, collationId, flags uint32) string {
+func getLastPKEvent(table, colName string, colType query.Type, colValue []sqltypes.Value, collationId, flags uint32) string {
 	lastPK := getQRFromLastPK([]*query.Field{{Name: colName,
 		Type: colType, Charset: collationId,
 		Flags: flags}}, colValue)
@@ -642,7 +646,7 @@ func getLastPK(table, colName string, colType query.Type, colValue []sqltypes.Va
 	return ev.String()
 }
 
-func getLastPKCompleted(table string) string {
+func getCopyCompletedEvent(table string) string {
 	ev := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_LASTPK,
 		LastPKEvent: &binlogdatapb.LastPKEvent{
