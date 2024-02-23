@@ -768,22 +768,22 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		if err != nil {
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
-		// Use the the collation inherited or the one specified specifically
-		// for the column if one was provided in the event's metadata.
+		// Use the the collation inherited or the one specified explicitly for the
+		// column if one was provided in the event's optional metadata.
 		var coll collations.ID
-		if sqltypes.IsText(t) && len(tm.ColumnCollationIDs) > charFieldIdx {
+		switch {
+		case sqltypes.IsText(t) && len(tm.ColumnCollationIDs) > charFieldIdx:
 			coll = tm.ColumnCollationIDs[charFieldIdx]
 			charFieldIdx++
-		} else { // Use the server defined default for the column's type
-			if t == sqltypes.TypeJSON {
-				// JSON is a blob at this layer and we should NOT use utf8mb4.
-				// The collation in MySQL for a JSON column is NULL, meaning there
-				// is not one (same as for int) and we should use binary.
-				// I'm not sure why CollationForType treats it differently...
-				coll = collations.CollationBinaryID
-			} else {
-				coll = collations.CollationForType(t, vs.se.Environment().CollationEnv().DefaultConnectionCharset())
-			}
+		case t == sqltypes.TypeJSON:
+			// JSON is a blob at this (storage) layer -- vs the connection/query serving
+			// layer which CollationForType seems primarily concerned about and JSON at
+			// the response layer should be using utf-8 as that's the standard -- so we
+			// should NOT use utf8mb4 as the collation in MySQL for a JSON column is
+			// NULL, meaning there is not one (same as for int) and we should use binary.
+			coll = collations.CollationBinaryID
+		default: // Use the server defined default for the column's type
+			coll = collations.CollationForType(t, vs.se.Environment().CollationEnv().DefaultConnectionCharset())
 		}
 		fields = append(fields, &querypb.Field{
 			Name:    fmt.Sprintf("@%d", i+1),
@@ -884,8 +884,7 @@ func getFields(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, t
 	return fieldsCopy, nil
 }
 
-// additional column attributes from information_schema.columns. Currently only column_type is used, but
-// we expect to add more in the future
+// Additional column attributes to get from information_schema.columns.
 type extColInfo struct {
 	columnType  string
 	collationID collations.ID

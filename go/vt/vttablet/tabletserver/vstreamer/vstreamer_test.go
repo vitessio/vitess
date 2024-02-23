@@ -187,7 +187,8 @@ func TestCellValuePadding(t *testing.T) {
 }
 
 // TestColumnCollationHandling confirms that we handle column collations
-// properly in vstreams now that we parse the values in binlog_row_metadata.
+// properly in vstreams now that we parse any optional collation ID values
+// in binlog_row_metadata AND we query mysqld for the collation when possible.
 func TestColumnCollationHandling(t *testing.T) {
 	extraCollation := "utf8mb4_ja_0900_as_cs"           // Test 2 byte collation ID handling
 	if strings.HasPrefix(testenv.MySQLVersion, "5.7") { // 5.7 does not support 2 byte collation IDs

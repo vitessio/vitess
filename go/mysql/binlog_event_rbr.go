@@ -27,22 +27,27 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// These are the TABLE_MAP_EVENT's optional metadata field types from: libbinlogevents/include/rows_event.h
-// See: https://dev.mysql.com/doc/dev/mysql-server/8.0.34/structbinary__log_1_1Table__map__event_1_1Optional__metadata__fields.html
+// These are the TABLE_MAP_EVENT's optional metadata field types from
+// MySQL's libbinlogevents/include/rows_event.h.
+// See also: https://dev.mysql.com/doc/dev/mysql-server/8.0.34/structbinary__log_1_1Table__map__event_1_1Optional__metadata__fields.html
 const (
-	TableMapSignedness uint8 = iota + 1
-	TableMapDefaultCharset
-	TableMapColumnCharset
-	TableMapColumnName
-	TableMapSetStrValue
-	TableMapEnumStrValue
-	TableMapGeometryType
-	TableMapSimplePrimaryKey
-	TableMapPrimaryKeyWithPrefix
-	TableMapEnumAndSetDefaultCharset
-	TableMapEnumAndSetColumnCharset
-	TableMapColumnVisibility
+	tableMapSignedness uint8 = iota + 1
+	tableMapDefaultCharset
+	tableMapColumnCharset
+	tableMapColumnName
+	tableMapSetStrValue
+	tableMapEnumStrValue
+	tableMapGeometryType
+	tableMapSimplePrimaryKey
+	tableMapPrimaryKeyWithPrefix
+	tableMapEnumAndSetDefaultCharset
+	tableMapEnumAndSetColumnCharset
+	tableMapColumnVisibility
 )
+
+// This byte in the optional metadata indicates that we should
+// read the next 2 bytes as a collation ID.
+const readTwoByteCollationID = 252
 
 // TableMap implements BinlogEvent.TableMap().
 //
@@ -222,7 +227,7 @@ func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
 // What's included depends on the server configuration:
 // https://dev.mysql.com/doc/refman/en/replication-options-binary-log.html#sysvar_binlog_row_metadata
 // and the table definition.
-// We only care about the collation IDs of the text based columns and
+// We only care about any collation IDs in the optional metadata and
 // this info is provided in all binlog_row_metadata formats.
 func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error) {
 	collationIDs := make([]collations.ID, 0, count)
@@ -231,7 +236,7 @@ func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error
 		pos++
 
 		fieldLen, read, ok := readLenEncInt(data, pos)
-		if !ok || read+int(fieldLen) > len(data) {
+		if !ok {
 			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "error reading optional metadata field length")
 		}
 		pos = read
@@ -240,10 +245,10 @@ func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error
 		pos += int(fieldLen)
 
 		//log.Errorf("DEBUG: Optional Metadata Field Type: %v, Length: %v, Value: %v", fieldType, fieldLen, fieldVal)
-		if fieldType == TableMapDefaultCharset || fieldType == TableMapColumnCharset { // It's one or the other
+		if fieldType == tableMapDefaultCharset || fieldType == tableMapColumnCharset { // It's one or the other
 			for i := uint64(0); i < fieldLen; i++ {
 				v := uint16(fieldVal[i])
-				if v == 252 { // The ID is the subsequent 2 bytes
+				if v == readTwoByteCollationID { // The ID is the subsequent 2 bytes
 					v = binary.LittleEndian.Uint16(fieldVal[i+1 : i+3])
 					i += 2
 				}

@@ -215,7 +215,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
 	execStatements(t, []string{
-		"create table src(idc varchar(20), val int, primary key(idc)) character set utf8mb3", // Use utf8mb3 to get a consistent collation across MySQL versions
+		"create table src(idc varchar(20), val int, primary key(idc)) character set utf8mb3", // Use utf8mb3 to get a consistent default collation across MySQL versions
 		"insert into src values('a', 1), ('c', 2)",
 		fmt.Sprintf("create table %s.dst(idc varchar(20), val int, primary key(idc))", vrepldb),
 	})
