@@ -206,14 +206,14 @@ func (r *earlyRewriter) handleHavingClause(node *sqlparser.Where, parent sqlpars
 	if !ok {
 		return nil
 	}
-	expr, err := r.rewriteAliasesInOrderBy(node.Expr, sel)
+	expr, err := r.rewriteAliasesInOrderBy(node.Expr, sel, false)
 	if err != nil {
 		return err
 	}
-	if expr == node.Expr {
-		return nil
-	}
 	node.Expr = expr
+	// after rewriting, we might have exposed ColNames that come from the FROM,
+	// so we need to be able to go up the scope
+	r.scoper.currentScope().inHaving = false
 	return r.reAnalyze(expr)
 }
 
@@ -402,7 +402,7 @@ func (r *earlyRewriter) handleOrderBy(parent sqlparser.SQLNode, iter iterator) e
 			continue
 		}
 
-		expr, err := r.rewriteAliasesInOrderBy(e, sel)
+		expr, err := r.rewriteAliasesInOrderBy(e, sel, true)
 		if err != nil {
 			return err
 		}
@@ -433,7 +433,7 @@ func (r *earlyRewriter) handleGroupBy(parent sqlparser.SQLNode, iter iterator) e
 			return err
 		}
 		if expr == nil {
-			expr, err = r.rewriteAliasesInHavingAndGroupBy(e, sel)
+			expr, err = r.rewriteAliasesInGroupBy(e, sel)
 			if err != nil {
 				return err
 			}
@@ -458,7 +458,7 @@ func (r *earlyRewriter) handleGroupBy(parent sqlparser.SQLNode, iter iterator) e
 //     in SELECT points to that expression, not any table column.
 //   - However, if the aliased expression is an aggregation and the column identifier in
 //     the HAVING/ORDER BY clause is inside an aggregation function, the rule does not apply.
-func (r *earlyRewriter) rewriteAliasesInHavingAndGroupBy(node sqlparser.Expr, sel *sqlparser.Select) (expr sqlparser.Expr, err error) {
+func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlparser.Select) (expr sqlparser.Expr, err error) {
 	type ExprContainer struct {
 		expr      sqlparser.Expr
 		ambiguous bool
@@ -521,7 +521,11 @@ func (r *earlyRewriter) rewriteAliasesInHavingAndGroupBy(node sqlparser.Expr, se
 //     in SELECT points to that expression, not any table column.
 //   - However, if the aliased expression is an aggregation and the column identifier in
 //     the HAVING/ORDER BY clause is inside an aggregation function, the rule does not apply.
-func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlparser.Select) (expr sqlparser.Expr, err error) {
+func (r *earlyRewriter) rewriteAliasesInOrderBy(
+	node sqlparser.Expr,
+	sel *sqlparser.Select,
+	orderBy bool,
+) (expr sqlparser.Expr, err error) {
 	currentScope := r.scoper.currentScope()
 	if currentScope.isUnion {
 		// It is not safe to rewrite order by clauses in unions.
@@ -530,6 +534,7 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlpar
 
 	aliases := r.getAliasMap(sel)
 	insideAggr := false
+	comparator := equalsWithDeps(r.binder.org)
 	dontEnterSubquery := func(node, _ sqlparser.SQLNode) bool {
 		switch node.(type) {
 		case *sqlparser.Subquery:
@@ -538,8 +543,23 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlpar
 			insideAggr = true
 		}
 
-		_, isSubq := node.(*sqlparser.Subquery)
-		return !isSubq
+		expr, ok := node.(sqlparser.Expr)
+		if !ok {
+			return true
+		}
+
+		for _, selectExpr := range sel.SelectExprs {
+			ae, ok := selectExpr.(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			if comparator.Expr(ae.Expr, expr) {
+				// we have found part of the expression as one of the
+				return false
+			}
+		}
+
+		return true
 	}
 	output := sqlparser.CopyOnRewrite(node, dontEnterSubquery, func(cursor *sqlparser.CopyOnWriteCursor) {
 		var col *sqlparser.ColName
@@ -566,7 +586,7 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlpar
 		}
 
 		topLevel := col == node
-		if !topLevel && r.isColumnOnTable(col, currentScope) {
+		if !topLevel && r.isColumnOnTable(col, currentScope) && orderBy {
 			// we only want to replace columns that are not coming from the table
 			return
 		}

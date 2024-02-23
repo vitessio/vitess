@@ -228,13 +228,17 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 }
 
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti, singleTableFallBack bool) (dependency, error) {
+	if !current.stmtScope && current.inGroupBy {
+		return b.resolveColInGroupBy(colName, current, allowMulti, singleTableFallBack)
+	}
+	if !current.stmtScope && current.inHaving && !current.inHavingAggr {
+		return b.resolveColumnInHaving(colName, current, allowMulti)
+	}
+
 	var thisDeps dependencies
 	first := true
 	var tableName *sqlparser.TableName
 
-	if !current.stmtScope && current.inGroupBy {
-		return b.resolveColInGroupBy(colName, current, allowMulti, singleTableFallBack)
-	}
 	for current != nil {
 		var err error
 		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
@@ -273,6 +277,50 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		current = current.parent
 	}
 	return dependency{}, ShardedError{ColumnNotFoundError{Column: colName, Table: tableName}}
+}
+
+func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
+	thisDeps, err := b.resolveColumnInScope(current, colName, allowMulti)
+	if err != nil {
+		err = makeAmbiguousError(colName, err)
+		if thisDeps == nil {
+			return dependency{}, err
+		}
+	}
+	if thisDeps.empty() {
+		if err != nil {
+			return dependency{}, err
+		}
+	} else {
+		deps, thisErr := thisDeps.get()
+		if thisErr != nil {
+			err = makeAmbiguousError(colName, thisErr)
+		}
+		return deps, err
+	}
+
+	deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
+	if err != nil || deps.direct.IsEmpty() {
+		return dependency{}, ShardedError{ColumnNotFoundError{Column: colName}}
+	}
+
+	vtbl, ok := current.tables[0].(*vTableInfo)
+	if !ok {
+		return dependency{}, vterrors.VT13001("oops")
+	}
+
+	for _, selExp := range vtbl.cols {
+		col, ok := selExp.(*sqlparser.ColName)
+		if !ok {
+			continue
+		}
+
+		if equalsWithDeps(b.org).Expr(col, colName) {
+			// yay! we found the column
+			return deps, nil
+		}
+	}
+	return dependency{}, ShardedError{ColumnNotFoundError{Column: colName}}
 }
 
 // resolveColInGroupBy handles the special rules we have when binding on the GROUP BY column
@@ -365,4 +413,18 @@ func GetSubqueryAndOtherSide(node *sqlparser.ComparisonExpr) (*sqlparser.Subquer
 		exp = node.Left
 	}
 	return subq, exp
+}
+
+func equalsWithDeps(org originable) *sqlparser.Comparator {
+	return &sqlparser.Comparator{
+		RefOfColName_: func(a, b *sqlparser.ColName) bool {
+			_, aDeps, _ := org.depsForExpr(a)
+			_, bDeps, _ := org.depsForExpr(b)
+			if aDeps != bDeps && (aDeps.IsEmpty() || bDeps.IsEmpty()) {
+				// if we don't know, we don't know
+				return sqlparser.Equals.RefOfColName(a, b)
+			}
+			return a.Name.Equal(b.Name) && aDeps == bDeps
+		},
+	}
 }

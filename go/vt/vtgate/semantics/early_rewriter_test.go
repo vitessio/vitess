@@ -172,8 +172,8 @@ func TestExpandStar(t *testing.T) {
 		sql:    "select * from t1 join t5 using (b) having b = 12",
 		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 on t1.b = t5.b having t1.b = 12",
 	}, {
-		sql:    "select 1 from t1 join t5 using (b) having b = 12",
-		expSQL: "select 1 from t1 join t5 on t1.b = t5.b having t1.b = 12",
+		sql:    "select 1 from t1 join t5 using (b) where b = 12",
+		expSQL: "select 1 from t1 join t5 on t1.b = t5.b where t1.b = 12",
 	}, {
 		sql:    "select * from (select 12) as t",
 		expSQL: "select `12` from (select 12 from dual) as t",
@@ -362,6 +362,9 @@ func TestGroupByColumnName(t *testing.T) {
 	}, {
 		sql:    "select sum(t2.col2) as id, sum(t2.id) as x from t1 join t2 group by id",
 		expErr: "VT03005: cannot group on 'id'",
+	}, {
+		sql:    "select count(*) as x from t1 group by x",
+		expErr: "VT03005: cannot group on 'x'",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
@@ -526,27 +529,27 @@ func TestHavingColumnName(t *testing.T) {
 		expSQL:  "select id, sum(foo) as sumOfFoo from t1 having sum(foo) > 1",
 		expDeps: TS0,
 	}, {
-		sql:    "select id, sum(foo) as foo from t1 having sum(foo) > 1",
-		expSQL: "select id, sum(foo) as foo from t1 having sum(foo) > 1",
+		sql:    "select id, sum(t1.foo) as foo from t1 having sum(foo) > 1",
+		expSQL: "select id, sum(t1.foo) as foo from t1 having sum(foo) > 1",
 	}, {
 		sql:    "select foo + 2 as foo from t1 having foo = 42",
 		expSQL: "select foo + 2 as foo from t1 having foo + 2 = 42",
 	}, {
 		sql:    "select count(*), ename from emp group by ename having comm > 1000",
-		expErr: "unknown column",
+		expErr: "column 'comm' not found",
 	}, {
 		sql:    "select sal, ename from emp having empno > 1000",
-		expErr: "sdf",
+		expErr: "column 'empno' not found",
 	}, {
-		sql:    "select sal, count(*) sal from emp having sal > 1000",
-		expSQL: "select sal, count(*) sal from emp having sal > 1000",
+		sql:    "select sal, count(*) sal from emp group by sal having sal > 1000",
+		expErr: "Column 'sal' in field list is ambiguous", // MySQL allows this with a warning, but it makes no sense.
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement := ast.(sqlparser.SelectStatement)
-			_, err = Analyze(selectStatement, cDB, schemaInfo)
+			_, err = AnalyzeStrict(selectStatement, cDB, schemaInfo)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
