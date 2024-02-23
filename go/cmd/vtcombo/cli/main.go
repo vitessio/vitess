@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -84,6 +85,8 @@ In particular, it contains:
 	tabletTypesToWait []topodatapb.TabletType
 
 	env *vtenv.Environment
+
+	srvTopoCounts *stats.CountersWithSingleLabel
 )
 
 func init() {
@@ -131,6 +134,7 @@ func init() {
 	if err != nil {
 		log.Fatalf("unable to initialize env: %v", err)
 	}
+	srvTopoCounts = stats.NewCountersWithSingleLabel("ResilientSrvTopoServer", "Resilient srvtopo server operations", "type")
 }
 
 func startMysqld(uid uint32) (mysqld *mysqlctl.Mysqld, cnf *mysqlctl.Mycnf, err error) {
@@ -234,7 +238,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	// to be the "internal" protocol that InitTabletMap registers.
 	cmd.Flags().Set("tablet_manager_protocol", "internal")
 	cmd.Flags().Set("tablet_protocol", "internal")
-	uid, err := vtcombo.InitTabletMap(env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql)
+	uid, err := vtcombo.InitTabletMap(env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql, srvTopoCounts)
 	if err != nil {
 		// ensure we start mysql in the event we fail here
 		if startMysql {
@@ -260,7 +264,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		}
 
 		wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, nil)
-		newUID, err := vtcombo.CreateKs(ctx, env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, ks, true, uid, wr)
+		newUID, err := vtcombo.CreateKs(ctx, env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, ks, true, uid, wr, srvTopoCounts)
 		if err != nil {
 			return err
 		}
@@ -297,7 +301,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	// vtgate configuration and init
-	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, "ResilientSrvTopoServer")
+	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, srvTopoCounts)
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	if len(tabletTypesToWait) != 0 {
