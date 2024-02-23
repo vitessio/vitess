@@ -391,8 +391,7 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 	}
 
 	// if there are no routing rules defined, then movetables is not in progress, exit early
-	if (vs.RoutingRules != nil && len(vs.RoutingRules.Rules) == 0) &&
-		(vs.ShardRoutingRules != nil && len(vs.ShardRoutingRules.Rules) == 0) {
+	if len(vs.GetRoutingRules().GetRules()) == 0 && len(vs.GetShardRoutingRules().GetRules()) == 0 {
 		return mtState, nil
 	}
 
