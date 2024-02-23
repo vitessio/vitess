@@ -489,7 +489,7 @@ func (sm *stateManager) unservePrimary() error {
 func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) error {
 	// We are likely transitioning from primary. We have to honor
 	// the shutdown grace period.
-	cancel := sm.terminateAllQueries()
+	cancel := sm.terminateAllQueries(nil)
 	defer cancel()
 
 	sm.ddle.Close()
@@ -542,8 +542,11 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	// We create a wait group that tracks whether all the queries have been terminated or not.
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	log.Infof("Started execution of unserveCommon")
-	cancel := sm.terminateAllQueries()
+	cancel := sm.terminateAllQueries(&wg)
 	log.Infof("Finished execution of terminateAllQueries")
 	defer cancel()
 
@@ -562,16 +565,39 @@ func (sm *stateManager) unserveCommon() {
 	log.Info("Finished Killing all OLAP queries. Started tracker close")
 	sm.tracker.Close()
 	log.Infof("Finished tracker close. Started wait for requests")
-	sm.rw.WaitToBeEmpty()
-	log.Infof("Finished wait for requests. Finished execution of unserveCommon")
+	sm.handleShutdownGracePeriod(&wg)
+	log.Infof("Finished handling grace period. Finished execution of unserveCommon")
 }
 
-func (sm *stateManager) terminateAllQueries() (cancel func()) {
+// handleShutdownGracePeriod checks if we have shutdwonGracePeriod specified.
+// If its not, then we have to wait for all the requests to be empty.
+// Otherwise, we only wait for all the queries against MySQL to be terminated.
+func (sm *stateManager) handleShutdownGracePeriod(wg *sync.WaitGroup) {
+	// If there is no shutdown grace period specified, then we should wait for all the requests to be empty.
+	if sm.shutdownGracePeriod == 0 {
+		sm.rw.WaitToBeEmpty()
+	} else {
+		// We quickly check if the requests are empty or not.
+		// If they are, then we don't need to wait for the shutdown to complete.
+		count := sm.rw.GetOutstandingRequestsCount()
+		if count == 0 {
+			return
+		}
+		// Otherwise, we should wait for all olap queries to be killed.
+		// We don't need to wait for requests to be empty since we have ensured all the queries against MySQL have been killed.
+		wg.Wait()
+	}
+}
+
+func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) {
 	if sm.shutdownGracePeriod == 0 {
 		return func() {}
 	}
 	ctx, cancel := context.WithCancel(context.TODO())
 	go func() {
+		if wg != nil {
+			defer wg.Done()
+		}
 		if err := timer.SleepContext(ctx, sm.shutdownGracePeriod); err != nil {
 			return
 		}

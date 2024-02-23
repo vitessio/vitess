@@ -74,3 +74,10 @@ func (r *requestsWaiter) GetWaiterCount() int {
 	defer r.mu.Unlock()
 	return r.waitCounter
 }
+
+// GetOutstandingRequestsCount gets the number of requests outstanding.
+func (r *requestsWaiter) GetOutstandingRequestsCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.counter
+}

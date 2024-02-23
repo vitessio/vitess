@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
 
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
-		clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval", "1s"}
+		clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval", "1s", "--shutdown_grace_period", "3s"}
 		defer clusterInstance.Teardown()
 
 		// Start topo server
