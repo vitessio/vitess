@@ -6623,8 +6623,8 @@
               "Name": "ordering",
               "Sharded": true
             },
-            "FieldQuery": "select o.oid, o.region_id, ev.oid, ev.ename from `order` as o, order_event as ev where 1 != 1",
-            "Query": "select o.oid, o.region_id, ev.oid, ev.ename from `order` as o, order_event as ev where ev.ename = 'a' and o.oid = ev.oid for update",
+            "FieldQuery": "select ev.oid, ev.ename, o.oid, o.region_id from `order` as o, order_event as ev where 1 != 1",
+            "Query": "select ev.oid, ev.ename, o.oid, o.region_id from `order` as o, order_event as ev where ev.ename = 'a' and o.oid = ev.oid for update",
             "Table": "`order`, order_event"
           },
           {
