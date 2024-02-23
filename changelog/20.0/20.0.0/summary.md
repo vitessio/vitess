@@ -10,6 +10,7 @@
     - [Delete with Subquery Support](#delete-subquery)
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
+    - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
@@ -61,6 +62,10 @@ The `--pprof-http` flag, which was introduced in v19 with a default of `true`, h
 This makes HTTP `pprof` endpoints now an *opt-in* feature, rather than opt-out.
 To continue enabling these endpoints, explicitly set `--pprof-http` when starting up Vitess components.
 
+#### <a id="shutdown-grace-period-default"/> `shutdown_grace_period` Default Change
+
+The `--shutdown_grace_period` flag, which was introduced in v2 with a default of `0 seconds`, has now been changed to default to `3 seconds`.
+This makes reparenting in Vitess resilient to client errors, and prevents PlannedReparentShard from timing out.
 
 ## <a id="minor-changes"/>Minor Changes
 
