@@ -210,6 +210,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 		ddle:        tsv.onlineDDLExecutor,
 		throttler:   tsv.lagThrottler,
 		tableGC:     tsv.tableGC,
+		rw:          newRequestsWaiter(),
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })

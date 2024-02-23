@@ -99,12 +99,8 @@ type stateManager struct {
 	alsoAllow      []topodatapb.TabletType
 	reason         string
 	transitionErr  error
-	// requestsWaitCounter is the number of goroutines that are waiting for requests to be empty.
-	// If this value is greater than zero, then we have to ensure that we don't Add to the requests
-	// to avoid any panics in the wait.
-	requestsWaitCounter int
 
-	requests sync.WaitGroup
+	rw *requestsWaiter
 
 	// QueryList does not have an Open or Close.
 	statelessql *QueryList
@@ -358,20 +354,6 @@ func (sm *stateManager) checkMySQL() {
 	}()
 }
 
-// addRequestsWaitCounter adds to the requestsWaitCounter while being protected by a mutex.
-func (sm *stateManager) addRequestsWaitCounter(val int) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	sm.requestsWaitCounter += val
-}
-
-// waitForRequestsToBeEmpty waits for requests to be empty. It also increments and decrements the requestsWaitCounter as required.
-func (sm *stateManager) waitForRequestsToBeEmpty() {
-	sm.addRequestsWaitCounter(1)
-	sm.requests.Wait()
-	sm.addRequestsWaitCounter(-1)
-}
-
 func (sm *stateManager) setWantState(stateWanted servingState) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -410,9 +392,9 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 	}
 
 	shuttingDown := sm.wantState != StateServing
-	// If requestsWaitCounter is not zero, then there are go-routines blocked on waiting for requests to be empty.
+	// If wait counter for the requests is not zero, then there are go-routines blocked on waiting for requests to be empty.
 	// We cannot allow adding to the requests to prevent any panics from happening.
-	if (shuttingDown && !allowOnShutdown) || sm.requestsWaitCounter > 0 {
+	if (shuttingDown && !allowOnShutdown) || sm.rw.GetWaiterCount() > 0 {
 		// This specific error string needs to be returned for vtgate buffering to work.
 		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown)
 	}
@@ -421,13 +403,13 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 	if err != nil {
 		return err
 	}
-	sm.requests.Add(1)
+	sm.rw.Add(1)
 	return nil
 }
 
 // EndRequest unregisters the current request (a waitgroup) as done.
 func (sm *stateManager) EndRequest() {
-	sm.requests.Done()
+	sm.rw.Done()
 }
 
 // VerifyTarget allows requests to be executed even in non-serving state.
@@ -580,7 +562,7 @@ func (sm *stateManager) unserveCommon() {
 	log.Info("Finished Killing all OLAP queries. Started tracker close")
 	sm.tracker.Close()
 	log.Infof("Finished tracker close. Started wait for requests")
-	sm.waitForRequestsToBeEmpty()
+	sm.rw.WaitToBeEmpty()
 	log.Infof("Finished wait for requests. Finished execution of unserveCommon")
 }
 
