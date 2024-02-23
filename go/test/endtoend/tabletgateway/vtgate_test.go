@@ -273,6 +273,7 @@ func TestStreamingRPCStuck(t *testing.T) {
 		res, err := stream.Recv()
 		require.NoError(t, err)
 		if res != nil && len(res.Rows) > 0 {
+			// breaking here stops reading from the stream.
 			break
 		}
 	}
