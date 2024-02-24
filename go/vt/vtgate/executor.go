@@ -61,6 +61,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 	"vitess.io/vitess/go/vt/vthash"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (
@@ -937,7 +938,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			replIOThreadHealth := ""
 			replSQLThreadHealth := ""
 			replLastError := ""
-			replLag := int64(-1)
+			replLag := "-1" // A string to support NULL as a value
 			sql := "show slave status"
 			results, err := e.txConn.tabletGateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
@@ -948,8 +949,16 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				replIOThreadHealth = row["Slave_IO_Running"].ToString()
 				replSQLThreadHealth = row["Slave_SQL_Running"].ToString()
 				replLastError = row["Last_Error"].ToString()
-				if ts.Stats != nil {
-					replLag = int64(ts.Stats.ReplicationLagSeconds)
+				if tabletenv.NewCurrentConfig().ReplicationTracker.Mode == tabletenv.Disable { // Use the value from mysqld
+					if row["Seconds_Behind_Master"].IsNull() {
+						replLag = "NULL" // Uppercase to match mysqld's output in SHOW REPLICA STATUS
+					} else {
+						replLag = row["Seconds_Behind_Master"].ToString()
+					}
+				} else { // Use the value we get from the replication tracker
+					if ts.Stats != nil {
+						replLag = fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds)
+					}
 				}
 			}
 			replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
@@ -962,7 +971,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				ts.Tablet.Hostname,
 				fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
 				replicationHealth,
-				fmt.Sprintf("%d", replLag),
+				replLag,
 				throttlerStatus,
 			))
 		}
@@ -1481,7 +1490,7 @@ func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
 	client := http.Client{
 		Timeout: 100 * time.Millisecond,
 	}
-	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check?app=vtgate", tabletHostPort))
+	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check-self", tabletHostPort))
 	if err != nil {
 		return "", err
 	}
