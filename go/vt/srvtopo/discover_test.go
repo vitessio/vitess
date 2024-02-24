@@ -173,7 +173,7 @@ func TestFindAllTargets(t *testing.T) {
 		t.Errorf("got wrong value: %v", ks)
 	}
 
-	// Only get 1 keyspaces only for all types.
+	// Only get 1 keyspace for all types.
 	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace2"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
