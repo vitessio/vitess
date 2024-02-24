@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/assert"
@@ -70,12 +69,18 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	numRows := len(qr.Rows)
 	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
 
-	// Stop VTOrc so that it doesn't immediately repair/restart replication.
+	// Stop any VTOrc(s) so that it doesn't immediately repair/restart replication.
 	for _, vtorcProcess := range clusterInstance.VTOrcProcesses {
-		if err := vtorcProcess.TearDown(); err != nil {
-			log.Errorf("Error in vtorc teardown: %v", err)
-		}
+		err := vtorcProcess.TearDown()
+		require.NoError(t, err)
 	}
+	// Restart them afterward as the cluster is re-used.
+	defer func() {
+		for _, vtorcProcess := range clusterInstance.VTOrcProcesses {
+			err := vtorcProcess.Setup()
+			require.NoError(t, err)
+		}
+	}()
 	// Stop replication on the non-primary tablets.
 	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "stop slave")
 	require.NoError(t, err)
@@ -86,7 +91,7 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	require.NoError(t, err)
 	expectNumRows = 2
 	numRows = len(qr.Rows)
-	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status, expected %d, got %d", expectNumRows, numRows))
 	rawLag := res.Named().Rows[0]["ReplicationLag"] // Let's just look at the first row
 	lagInt, _ := rawLag.ToInt64()                   // Don't check the error as the value could be "NULL"
 	assert.True(t, rawLag.IsNull() || lagInt > 0, "replication lag should be NULL or greater than 0 but was: %s", rawLag.ToString())
@@ -112,6 +117,11 @@ func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
 	rdOnlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
 	err = clusterInstance.VtctlclientChangeTabletType(rdOnlyTablet, topodata.TabletType_SPARE)
 	require.NoError(t, err)
+	// Change it back to RDONLY afterward as the cluster is re-used.
+	defer func() {
+		err = clusterInstance.VtctlclientChangeTabletType(rdOnlyTablet, topodata.TabletType_RDONLY)
+		require.NoError(t, err)
+	}()
 
 	// Only returns rows for REPLICA and RDONLY tablets -- so should be 1 of them since we updated 1 to spare
 	qr = utils.Exec(t, conn, "show vitess_replication_status like '%'")
