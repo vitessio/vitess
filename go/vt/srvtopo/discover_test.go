@@ -210,4 +210,13 @@ func TestFindAllTargets(t *testing.T) {
 	}) {
 		t.Errorf("got wrong value: %v", ks)
 	}
+
+	// Get non-existent keyspace.
+	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"doesnt-exist"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(ks) != 0 {
+		t.Errorf("got non-0 length value: %v", ks)
+	}
 }
