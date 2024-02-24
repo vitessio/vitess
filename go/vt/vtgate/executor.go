@@ -951,7 +951,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				replLastError = row["Last_Error"].ToString()
 				if tabletenv.NewCurrentConfig().ReplicationTracker.Mode == tabletenv.Disable { // Use the value from mysqld
 					if row["Seconds_Behind_Master"].IsNull() {
-						replLag = "NULL" // Uppercase to match mysqld's output in SHOW REPLICA STATUS
+						replLag = strings.ToUpper(sqltypes.NullStr) // Uppercase to match mysqld's output in SHOW REPLICA STATUS
 					} else {
 						replLag = row["Seconds_Behind_Master"].ToString()
 					}

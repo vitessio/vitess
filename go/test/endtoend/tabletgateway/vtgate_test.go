@@ -81,7 +81,7 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 			require.NoError(t, err)
 		}
 	}()
-	// Stop replication on the non-primary tablets.
+	// Stop replication on the non-PRIMARY tablets.
 	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "stop slave")
 	require.NoError(t, err)
 	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Rdonly().Alias, "stop slave")
