@@ -86,6 +86,13 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	require.NoError(t, err)
 	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Rdonly().Alias, "stop slave")
 	require.NoError(t, err)
+	// Restart replication as the cluster is re-used.
+	defer func() {
+		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Replica().Alias, "start slave")
+		require.NoError(t, err)
+		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Rdonly().Alias, "start slave")
+		require.NoError(t, err)
+	}()
 	time.Sleep(2 * time.Second) // Build up some replication lag
 	res, err := conn.ExecuteFetch("show vitess_replication_status", 2, false)
 	require.NoError(t, err)
