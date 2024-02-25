@@ -762,19 +762,20 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 
 func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, error) {
 	var fields []*querypb.Field
-	var charFieldIdx int
+	var txtFieldIdx int
 	for i, typ := range tm.Types {
 		t, err := sqltypes.MySQLToType(typ, 0)
 		if err != nil {
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
 		// Use the the collation inherited or the one specified explicitly for the
-		// column if one was provided in the event's optional metadata.
+		// column if one was provided in the event's optional metadata (MySQL only
+		// provides this for text based columns).
 		var coll collations.ID
 		switch {
-		case sqltypes.IsText(t) && len(tm.ColumnCollationIDs) > charFieldIdx:
-			coll = tm.ColumnCollationIDs[charFieldIdx]
-			charFieldIdx++
+		case sqltypes.IsText(t) && len(tm.ColumnCollationIDs) > txtFieldIdx:
+			coll = tm.ColumnCollationIDs[txtFieldIdx]
+			txtFieldIdx++
 		case t == sqltypes.TypeJSON:
 			// JSON is a blob at this (storage) layer -- vs the connection/query serving
 			// layer which CollationForType seems primarily concerned about and JSON at

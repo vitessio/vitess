@@ -120,12 +120,11 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 	pos = read
 
 	// Read any text based column collation values provided in the optional metadata.
-	//log.Errorf("DEBUG: Remaining optional metadata bytes for %s: %v", result.Name, data[pos:])
+	// The binlog_row_metadata only contains this info for text based columns.
 	var err error
 	if result.ColumnCollationIDs, err = readColumnCollationIDs(data, pos, int(columnCount)); err != nil {
 		return nil, err
 	}
-	//log.Errorf("DEBUG: table %s; ColumnCollationIDs: %+v", result.Name, result.ColumnCollationIDs)
 
 	return result, nil
 }
@@ -228,7 +227,8 @@ func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
 // https://dev.mysql.com/doc/refman/en/replication-options-binary-log.html#sysvar_binlog_row_metadata
 // and the table definition.
 // We only care about any collation IDs in the optional metadata and
-// this info is provided in all binlog_row_metadata formats.
+// this info is provided in all binlog_row_metadata formats. Note that
+// this info is only provided for text based columns.
 func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error) {
 	collationIDs := make([]collations.ID, 0, count)
 	for pos < len(data) {
@@ -244,7 +244,6 @@ func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error
 		fieldVal := data[pos : pos+int(fieldLen)]
 		pos += int(fieldLen)
 
-		//log.Errorf("DEBUG: Optional Metadata Field Type: %v, Length: %v, Value: %v", fieldType, fieldLen, fieldVal)
 		if fieldType == tableMapDefaultCharset || fieldType == tableMapColumnCharset { // It's one or the other
 			for i := uint64(0); i < fieldLen; i++ {
 				v := uint16(fieldVal[i])
@@ -253,7 +252,6 @@ func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error
 					i += 2
 				}
 				collationIDs = append(collationIDs, collations.ID(v))
-				//log.Errorf("DEBUG: charset idx %d: %v", i, v)
 			}
 		}
 	}

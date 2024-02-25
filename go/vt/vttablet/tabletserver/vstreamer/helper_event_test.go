@@ -385,7 +385,6 @@ func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFiel
 			tc.collationID = testenv.DefaultCollationID
 		} else {
 			tc.collationID = testenv.CollationEnv.LookupByName(collationName)
-			//log.Errorf("DEBUG: SchemaDiff provided collation for %s.%s: %s:%d", tfe.table, tc.name, collationName, tc.collationID)
 		}
 		collation := colldata.Lookup(tc.collationID)
 		switch tc.dataTypeLowered {

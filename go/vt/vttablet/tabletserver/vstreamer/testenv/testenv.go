@@ -43,9 +43,7 @@ import (
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
-const (
-	DBName = "vttest"
-)
+const DBName = "vttest"
 
 var (
 	// These are exported to coordinate on version specific
