@@ -108,6 +108,14 @@ const (
 	AlterTableAlgorithmStrategyCopy
 )
 
+<<<<<<< HEAD
+=======
+const (
+	EnumReorderStrategyAllow int = iota
+	EnumReorderStrategyReject
+)
+
+>>>>>>> 47e137539b (VReplication/OnlineDDL: reordering enum values (#15103))
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering         bool

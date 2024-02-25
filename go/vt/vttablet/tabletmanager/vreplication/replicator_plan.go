@@ -332,8 +332,13 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 	if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
 		// The fact that this field has a EnumValuesMap entry, means we must
 		// use the enum's text value as opposed to the enum's numerical value.
-		// Once known use case is with Online DDL, when a column is converted from
-		// ENUM to a VARCHAR/TEXT.
+		// This may be needed in Online DDL, when the enum column could be modified:
+		// - Either from ENUM to a text type (VARCHAR/TEXT)
+		// - Or from ENUM to another ENUM with different value ordering,
+		//   e.g. from `('red', 'green', 'blue')` to `('red', 'blue')`.
+		// By applying the textual value of an enum we eliminate the ordering concern.
+		// In non-Online DDL this shouldn't be a concern because the schema is static,
+		// and so passing the enum's numerical value is sufficient.
 		enumValue, enumValueOK := enumValues[val.ToString()]
 		if !enumValueOK {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Invalid enum value: %v for field %s", val, field.Name)
