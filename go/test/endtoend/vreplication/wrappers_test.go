@@ -383,8 +383,9 @@ func (v VtctldReshard) Flavor() string {
 func (v VtctldReshard) exec(args ...string) {
 	args2 := []string{"Reshard", "--workflow=" + v.workflowName, "--target-keyspace=" + v.targetKeyspace}
 	args2 = append(args2, args...)
-	if err := vc.VtctldClient.ExecuteCommand(args2...); err != nil {
-		v.vc.t.Fatalf("failed to create Reshard workflow: %v", err)
+	var err error
+	if v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...); err != nil {
+		v.vc.t.Fatalf("failed to create Reshard workflow: %v: %s", err, v.lastOutput)
 	}
 }
 
@@ -414,8 +415,7 @@ func (v VtctldReshard) ReverseReadsAndWrites() {
 }
 
 func (v VtctldReshard) Show() {
-	//TODO implement me
-	panic("implement me")
+	v.exec("Show")
 }
 
 func (v VtctldReshard) SwitchReads() {
