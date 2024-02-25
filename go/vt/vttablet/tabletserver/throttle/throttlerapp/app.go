@@ -62,8 +62,6 @@ const (
 	BinlogWatcherName Name = "binlog-watcher"
 	MessagerName      Name = "messager"
 	SchemaTrackerName Name = "schema-tracker"
-
-	VTGateName = "vtgate"
 )
 
 var (

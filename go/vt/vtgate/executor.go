@@ -61,7 +61,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 	"vitess.io/vitess/go/vt/vthash"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 var (
@@ -960,7 +959,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				// can, is because the polling method allows us to get the
 				// estimated lag value when replication is not running (based
 				// on how long we've seen that it's not been running).
-				if ts.Stats != nil && ts.Stats.ReplicationLagSeconds > 0 { // Use the value we get from the replication tracker
+				if ts.Stats != nil && ts.Stats.ReplicationLagSeconds > 0 { // Use the value we get from the ReplicationTracker
 					replLag = fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds)
 				} else { // Use the value from mysqld
 					if row["Seconds_Behind_Master"].IsNull() {
@@ -1496,13 +1495,13 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 }
 
 // getTabletThrottlerStatus uses HTTP to get the throttler status
-// from a tablet. It uses HTTP because the CheckThrottler RPC is
-// a tmclient RPC and you cannot use tmclient outside of a tablet.
+// on a tablet. It uses HTTP because the CheckThrottler RPC is a
+// tmclient RPC and you cannot use tmclient outside of a tablet.
 func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
 	client := http.Client{
 		Timeout: 100 * time.Millisecond,
 	}
-	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check?app=%s", tabletHostPort, throttlerapp.VitessName))
+	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check-self", tabletHostPort))
 	if err != nil {
 		return "", err
 	}
