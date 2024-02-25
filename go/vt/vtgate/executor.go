@@ -61,7 +61,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 	"vitess.io/vitess/go/vt/vthash"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -950,15 +949,24 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				replIOThreadHealth = row["Slave_IO_Running"].ToString()
 				replSQLThreadHealth = row["Slave_SQL_Running"].ToString()
 				replLastError = row["Last_Error"].ToString()
-				if tabletenv.NewCurrentConfig().ReplicationTracker.Mode == tabletenv.Disable { // Use the value from mysqld
+				// We cannot check the tablet's tabletenv config from here so
+				// we only use the tablet's stat -- which is managed by the
+				// ReplicationTracker -- if we can tell that it's enabled,
+				// meaning that it has a non-zero value. If it's actually
+				// enabled AND zero (rather than the zeroval), then mysqld
+				// should also return 0 so in this case the value is correct
+				// and equivalent either way. The only reason that we would
+				// want to use the ReplicationTracker based value, when we
+				// can, is because the polling method allows us to get the
+				// estimated lag value when replication is not running (based
+				// on how long we've seen that it's not been running).
+				if ts.Stats != nil && ts.Stats.ReplicationLagSeconds > 0 { // Use the value we get from the replication tracker
+					replLag = fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds)
+				} else { // Use the value from mysqld
 					if row["Seconds_Behind_Master"].IsNull() {
 						replLag = strings.ToUpper(sqltypes.NullStr) // Uppercase to match mysqld's output in SHOW REPLICA STATUS
 					} else {
 						replLag = row["Seconds_Behind_Master"].ToString()
-					}
-				} else { // Use the value we get from the replication tracker
-					if ts.Stats != nil {
-						replLag = fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds)
 					}
 				}
 			}
