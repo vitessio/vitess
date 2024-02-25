@@ -65,19 +65,22 @@ func TestVtctldclientCLI(t *testing.T) {
 	t.Run("MoveTablesCreateFlags2", func(t *testing.T) {
 		testMoveTablesFlags2(t, &mt, sourceKeyspaceName, targetKeyspaceName, workflowName, targetTabs)
 	})
-	t.Run("MoveTablesCompleteFlags", func(t *testing.T) {
+	t.Run("MoveTablesCompleteFlags3", func(t *testing.T) {
 		testMoveTablesFlags3(t, sourceKeyspaceName, targetKeyspaceName, targetTabs)
 	})
-	targetKeyspace := vc.Cells["zone1"].Keyspaces[targetKeyspaceName]
-	cells := []*Cell{vc.Cells["zone1"]}
-	require.NoError(t, vc.AddShards(t, cells, targetKeyspace, "-40,40-80", 1, 0, 400, nil))
-	reshardWorkflowName := "reshardWf"
-	targetTab1 = targetKeyspace.Shards["-40"].Tablets["zone1-400"].Vttablet
-	targetTab2 = targetKeyspace.Shards["40-80"].Tablets["zone1-500"].Vttablet
-	tablets := make(map[string]*cluster.VttabletProcess)
-	tablets["-40"] = targetTab1
-	tablets["40-80"] = targetTab2
-	splitShard(t, targetKeyspaceName, reshardWorkflowName, "-80", "-40,40-80", tablets)
+	t.Run("Reshard", func(t *testing.T) {
+		cell := vc.Cells["zone1"]
+		targetKeyspace := cell.Keyspaces[targetKeyspaceName]
+		sourceShard := "-80"
+		newShards := "-40,40-80"
+		require.NoError(t, vc.AddShards(t, []*Cell{cell}, targetKeyspace, newShards, 1, 0, 400, nil))
+		reshardWorkflowName := "reshard"
+		tablets := map[string]*cluster.VttabletProcess{
+			"-40":   targetKeyspace.Shards["-40"].Tablets["zone1-400"].Vttablet,
+			"40-80": targetKeyspace.Shards["40-80"].Tablets["zone1-500"].Vttablet,
+		}
+		splitShard(t, targetKeyspaceName, reshardWorkflowName, sourceShard, newShards, tablets)
+	})
 }
 
 // Tests several create flags and some complete flags and validates that some of them are set correctly for the workflow.
@@ -113,17 +116,6 @@ func getMoveTablesShowResponse(mt *iMoveTables) *vtctldatapb.GetWorkflowsRespons
 	moveTablesResponse.Workflows[0].MaxVReplicationTransactionLag = 0
 	moveTablesResponse.Workflows[0].MaxVReplicationLag = 0
 	return moveTablesResponse.CloneVT()
-}
-
-func getReshardShowResponse(rs *iReshard) *vtctldatapb.GetWorkflowsResponse {
-	(*rs).Show()
-	reshardOutput := (*rs).GetLastOutput()
-	var reshardResponse vtctldatapb.GetWorkflowsResponse
-	err := protojson.Unmarshal([]byte(reshardOutput), &reshardResponse)
-	require.NoError(vc.t, err)
-	reshardResponse.Workflows[0].MaxVReplicationTransactionLag = 0
-	reshardResponse.Workflows[0].MaxVReplicationLag = 0
-	return reshardResponse.CloneVT()
 }
 
 // Validates some of the flags created from the previous test.
@@ -208,22 +200,17 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 		"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
 		"--all-cells", "--format=json",
 	}
-	completeFlags := []string{}
-	switchFlags := []string{}
-	cancelFlags := []string{}
 	rs := newReshard(vc, &reshardWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
 			workflowName:   workflowName,
 			targetKeyspace: keyspace,
 		},
-		sourceShards:  sourceShards,
-		targetShards:  targetShards,
-		createFlags:   createFlags,
-		completeFlags: completeFlags,
-		switchFlags:   switchFlags,
-		cancelFlags:   cancelFlags,
+		sourceShards: sourceShards,
+		targetShards: targetShards,
+		createFlags:  createFlags,
 	}, workflowFlavorVtctld)
+
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflowName)
 	rs.Create()
 	validateReshardResponse(rs)
@@ -262,6 +249,17 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	rs.Complete()
 }
 
+func getReshardShowResponse(rs *iReshard) *vtctldatapb.GetWorkflowsResponse {
+	(*rs).Show()
+	reshardOutput := (*rs).GetLastOutput()
+	var reshardResponse vtctldatapb.GetWorkflowsResponse
+	err := protojson.Unmarshal([]byte(reshardOutput), &reshardResponse)
+	require.NoError(vc.t, err)
+	reshardResponse.Workflows[0].MaxVReplicationTransactionLag = 0
+	reshardResponse.Workflows[0].MaxVReplicationLag = 0
+	return reshardResponse.CloneVT()
+}
+
 func validateReshardResponse(rs iReshard) {
 	resp := getReshardResponse(rs)
 	require.NotNil(vc.t, resp)
@@ -278,7 +276,7 @@ func validateReshardResponse(rs iReshard) {
 func validateReshardWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow) {
 	require.Equal(t, 1, len(workflows))
 	wf := workflows[0]
-	require.Equal(t, "reshardWf", wf.Name)
+	require.Equal(t, "reshard", wf.Name)
 	require.Equal(t, binlogdatapb.VReplicationWorkflowType_Reshard.String(), wf.WorkflowType)
 	require.Equal(t, "None", wf.WorkflowSubType)
 	require.Equal(t, "customer", wf.Target.Keyspace)

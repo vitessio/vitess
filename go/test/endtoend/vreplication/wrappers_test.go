@@ -75,8 +75,9 @@ type moveTablesWorkflow struct {
 	atomicCopy     bool
 	sourceShards   string
 
+	// currently only used by vtctld
 	lastOutput    string
-	createFlags   []string // currently only used by vtctld
+	createFlags   []string
 	completeFlags []string
 	switchFlags   []string
 }
@@ -270,8 +271,9 @@ type reshardWorkflow struct {
 	targetShards   string
 	skipSchemaCopy bool
 
+	// currently only used by vtctld
 	lastOutput    string
-	createFlags   []string // currently only used by vtctld
+	createFlags   []string
 	completeFlags []string
 	cancelFlags   []string
 	switchFlags   []string
