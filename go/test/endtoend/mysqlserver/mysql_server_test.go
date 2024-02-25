@@ -116,7 +116,7 @@ func TestTimeout(t *testing.T) {
 	require.Nilf(t, err, "unable to connect mysql: %v", err)
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch("SELECT SLEEP(5);", 1, false)
+	_, err = conn.ExecuteFetch("SELECT SLEEP(5)", 1, false)
 	require.NotNilf(t, err, "quiry timeout error expected")
 	mysqlErr, ok := err.(*sqlerror.SQLError)
 	require.Truef(t, ok, "invalid error type")
@@ -132,7 +132,7 @@ func TestInvalidField(t *testing.T) {
 	require.Nilf(t, err, "unable to connect mysql: %v", err)
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch("SELECT invalid_field from vt_insert_test;", 1, false)
+	_, err = conn.ExecuteFetch("SELECT invalid_field from vt_insert_test", 1, false)
 	require.NotNil(t, err, "invalid field error expected")
 	mysqlErr, ok := err.(*sqlerror.SQLError)
 	require.Truef(t, ok, "invalid error type")
@@ -153,7 +153,7 @@ func TestWarnings(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, qr.Rows, "number of rows")
 
-	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
+	qr, err = conn.ExecuteFetch("SHOW WARNINGS", 1, false)
 	require.NoError(t, err, "SHOW WARNINGS")
 	assert.EqualValues(t, 1, len(qr.Rows), "number of rows")
 	assert.Contains(t, qr.Rows[0][0].String(), "VARCHAR(\"Warning\")", qr.Rows)
@@ -164,7 +164,7 @@ func TestWarnings(t *testing.T) {
 	_, err = conn.ExecuteFetch("SELECT 1 from vt_insert_test limit 1", 1, false)
 	require.NoError(t, err)
 
-	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
+	qr, err = conn.ExecuteFetch("SHOW WARNINGS", 1, false)
 	require.NoError(t, err)
 	assert.Empty(t, qr.Rows)
 
@@ -175,7 +175,7 @@ func TestWarnings(t *testing.T) {
 	_, err = conn.ExecuteFetch("SELECT 1 from vt_insert_test limit 1", 1, false)
 	require.NoError(t, err)
 
-	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
+	qr, err = conn.ExecuteFetch("SHOW WARNINGS", 1, false)
 	require.NoError(t, err)
 	assert.Empty(t, qr.Rows)
 }

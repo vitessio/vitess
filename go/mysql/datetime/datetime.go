@@ -245,7 +245,14 @@ func (d Date) Hash(h *vthash.Hasher) {
 }
 
 func (d Date) Weekday() time.Weekday {
-	return d.ToStdTime(time.Local).Weekday()
+	// Go considers 0000-01-01 day as Saturday, while
+	// MySQL considers it to be Sunday, now 0000-02-29 exists in
+	// Go but not in MySQL so it balances out after that
+	wd := d.ToStdTime(time.Local).Weekday()
+	if d.Year() == 0 && d.Month() <= 2 {
+		wd = (wd + 1) % 7
+	}
+	return wd
 }
 
 func (d Date) Yearday() int {
@@ -368,9 +375,12 @@ func (d Date) YearWeek(mode int) int {
 	case 1, 3:
 		year, week := d.ISOWeek()
 		return year*100 + week
-	case 4, 5, 6, 7:
-		// TODO
-		return 0
+	case 4, 6:
+		year, week := d.Sunday4DayWeek()
+		return year*100 + week
+	case 5, 7:
+		year, week := d.MondayWeek()
+		return year*100 + week
 	default:
 		return d.YearWeek(DefaultWeekMode)
 	}
@@ -446,6 +456,10 @@ func (t Time) toDuration() time.Duration {
 		return -dur
 	}
 	return dur
+}
+
+func (t Time) ToSeconds() int64 {
+	return int64(t.ToDuration().Seconds())
 }
 
 func (d Date) ToStdTime(loc *time.Location) (out time.Time) {

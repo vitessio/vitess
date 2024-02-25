@@ -36,7 +36,10 @@ func RemovedForeignKeyNames(
 		return nil, nil
 	}
 	env := schemadiff.NewEnv(venv, venv.CollationEnv().DefaultConnectionCharset())
-	diffHints := schemadiff.DiffHints{ConstraintNamesStrategy: schemadiff.ConstraintNamesIgnoreAll}
+	diffHints := schemadiff.DiffHints{
+		ConstraintNamesStrategy: schemadiff.ConstraintNamesIgnoreAll,
+		EnumReorderStrategy:     schemadiff.EnumReorderStrategyAllow,
+	}
 	diff, err := schemadiff.DiffCreateTablesQueries(env, originalCreateTable, vreplCreateTable, &diffHints)
 	if err != nil {
 		return nil, err

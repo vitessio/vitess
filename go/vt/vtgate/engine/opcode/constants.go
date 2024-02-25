@@ -19,8 +19,10 @@ package opcode
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // PulloutOpcode is a number representing the opcode
@@ -138,7 +140,7 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // Type returns the opcode return sql type, and a bool telling is we are sure about this type or not
-func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
+func (code AggregateOpcode) SQLType(typ querypb.Type) querypb.Type {
 	switch code {
 	case AggregateUnassigned:
 		return sqltypes.Null
@@ -167,6 +169,28 @@ func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
 	default:
 		panic(code.String()) // we have a unit test checking we never reach here
 	}
+}
+
+func (code AggregateOpcode) Nullable() bool {
+	switch code {
+	case AggregateCount, AggregateCountStar:
+		return false
+	default:
+		return true
+	}
+}
+
+func (code AggregateOpcode) ResolveType(t evalengine.Type, env *collations.Environment) evalengine.Type {
+	sqltype := code.SQLType(t.Type())
+	collation := collations.CollationForType(sqltype, env.DefaultConnectionCharset())
+	nullable := code.Nullable()
+	size := t.Size()
+
+	scale := t.Scale()
+	if code == AggregateAvg {
+		scale += 4
+	}
+	return evalengine.NewTypeEx(sqltype, collation, nullable, size, scale)
 }
 
 func (code AggregateOpcode) NeedsComparableValues() bool {

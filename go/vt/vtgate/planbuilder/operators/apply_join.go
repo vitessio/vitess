@@ -37,9 +37,6 @@ type (
 		// LeftJoin will be true in the case of an outer join
 		LeftJoin bool
 
-		// Before offset planning
-		Predicate sqlparser.Expr
-
 		// JoinColumns keeps track of what AST expression is represented in the Columns array
 		JoinColumns *applyJoinColumns
 
@@ -85,16 +82,17 @@ type (
 	}
 )
 
-func NewApplyJoin(lhs, rhs Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
-	return &ApplyJoin{
+func NewApplyJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, predicate sqlparser.Expr, leftOuterJoin bool) *ApplyJoin {
+	aj := &ApplyJoin{
 		LHS:            lhs,
 		RHS:            rhs,
 		Vars:           map[string]int{},
-		Predicate:      predicate,
 		LeftJoin:       leftOuterJoin,
 		JoinColumns:    &applyJoinColumns{},
 		JoinPredicates: &applyJoinColumns{},
 	}
+	aj.AddJoinPredicate(ctx, predicate)
+	return aj
 }
 
 // Clone implements the Operator interface
@@ -106,13 +104,12 @@ func (aj *ApplyJoin) Clone(inputs []Operator) Operator {
 	kopy.JoinColumns = aj.JoinColumns.clone()
 	kopy.JoinPredicates = aj.JoinPredicates.clone()
 	kopy.Vars = maps.Clone(aj.Vars)
-	kopy.Predicate = sqlparser.CloneExpr(aj.Predicate)
 	kopy.ExtraLHSVars = slices.Clone(aj.ExtraLHSVars)
 	return &kopy
 }
 
 func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	return AddPredicate(ctx, aj, expr, false, newFilter)
+	return AddPredicate(ctx, aj, expr, false, newFilterSinglePredicate)
 }
 
 // Inputs implements the Operator interface
@@ -150,8 +147,9 @@ func (aj *ApplyJoin) IsInner() bool {
 }
 
 func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
-	aj.Predicate = ctx.SemTable.AndExpressions(expr, aj.Predicate)
-
+	if expr == nil {
+		return
+	}
 	col := breakExpressionInLHSandRHSForApplyJoin(ctx, expr, TableID(aj.LHS))
 	aj.JoinPredicates.add(col)
 	rhs := aj.RHS.AddPredicate(ctx, col.RHSExpr)
@@ -266,11 +264,14 @@ func (aj *ApplyJoin) addOffset(offset int) {
 }
 
 func (aj *ApplyJoin) ShortDescription() string {
-	pred := sqlparser.String(aj.Predicate)
-	columns := slice.Map(aj.JoinColumns.columns, func(from applyJoinColumn) string {
-		return sqlparser.String(from.Original)
-	})
-	firstPart := fmt.Sprintf("on %s columns: %s", pred, strings.Join(columns, ", "))
+	fn := func(cols *applyJoinColumns) string {
+		out := slice.Map(cols.columns, func(jc applyJoinColumn) string {
+			return jc.String()
+		})
+		return strings.Join(out, ", ")
+	}
+
+	firstPart := fmt.Sprintf("on %s columns: %s", fn(aj.JoinPredicates), fn(aj.JoinColumns))
 	if len(aj.ExtraLHSVars) == 0 {
 		return firstPart
 	}
@@ -359,6 +360,14 @@ func (a *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed s
 	}
 	needed = append(needed, slice.Map(a.ExtraLHSVars, f)...)
 	return ctx.SemTable.Uniquify(needed)
+}
+
+func (jc applyJoinColumn) String() string {
+	rhs := sqlparser.String(jc.RHSExpr)
+	lhs := slice.Map(jc.LHSExprs, func(e BindVarExpr) string {
+		return sqlparser.String(e.Expr)
+	})
+	return fmt.Sprintf("[%s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original))
 }
 
 func (jc applyJoinColumn) IsPureLeft() bool {

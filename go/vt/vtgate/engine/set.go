@@ -45,10 +45,10 @@ import (
 type (
 	// Set contains the instructions to perform set.
 	Set struct {
+		noTxNeeded
+
 		Ops   []SetOp
 		Input Primitive
-
-		noTxNeeded
 	}
 
 	// SetOp is an interface that different type of set operations implements.

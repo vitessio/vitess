@@ -32,9 +32,9 @@ func TestDeleteWithInputSingleOffset(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2", "3"),
 	}}
 
-	del := &DeleteWithInput{
+	del := &DMLWithInput{
 		Input: input,
-		Delete: &Delete{
+		DML: &Delete{
 			DML: &DML{
 				RoutingParameters: &RoutingParameters{
 					Opcode: Scatter,
@@ -55,8 +55,8 @@ func TestDeleteWithInputSingleOffset(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ` +
-			`ks.-20: dummy_delete {dm_vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"3"}} ` +
-			`ks.20-: dummy_delete {dm_vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"3"}} true false`,
+			`ks.-20: dummy_delete {dml_vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"3"}} ` +
+			`ks.20-: dummy_delete {dml_vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"3"}} true false`,
 	})
 
 	vc.Rewind()
@@ -66,8 +66,8 @@ func TestDeleteWithInputSingleOffset(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ` +
-			`ks.-20: dummy_delete {dm_vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"3"}} ` +
-			`ks.20-: dummy_delete {dm_vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"3"}} true false`,
+			`ks.-20: dummy_delete {dml_vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"3"}} ` +
+			`ks.20-: dummy_delete {dml_vals: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"3"}} true false`,
 	})
 }
 
@@ -76,9 +76,9 @@ func TestDeleteWithInputMultiOffset(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col", "int64|varchar"), "1|a", "2|b", "3|c"),
 	}}
 
-	del := &DeleteWithInput{
+	del := &DMLWithInput{
 		Input: input,
-		Delete: &Delete{
+		DML: &Delete{
 			DML: &DML{
 				RoutingParameters: &RoutingParameters{
 					Opcode: Scatter,
@@ -99,8 +99,8 @@ func TestDeleteWithInputMultiOffset(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ` +
-			`ks.-20: dummy_delete {dm_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"} values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"} values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} ` +
-			`ks.20-: dummy_delete {dm_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"} values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"} values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} true false`,
+			`ks.-20: dummy_delete {dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"} values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"} values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} ` +
+			`ks.20-: dummy_delete {dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"} values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"} values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} true false`,
 	})
 
 	vc.Rewind()
@@ -110,7 +110,7 @@ func TestDeleteWithInputMultiOffset(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ` +
-			`ks.-20: dummy_delete {dm_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"} values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"} values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} ` +
-			`ks.20-: dummy_delete {dm_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"} values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"} values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} true false`,
+			`ks.-20: dummy_delete {dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"} values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"} values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} ` +
+			`ks.20-: dummy_delete {dml_vals: type:TUPLE values:{type:TUPLE value:"\x950\x01a\x89\x02\x011"} values:{type:TUPLE value:"\x950\x01b\x89\x02\x012"} values:{type:TUPLE value:"\x950\x01c\x89\x02\x013"}} true false`,
 	})
 }

@@ -343,32 +343,6 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 	return result.(sqlparser.Expr)
 }
 
-func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (Operator, *ApplyResult) {
-	ap, err := p.GetAliasedProjections()
-	if err != nil {
-		return p, NoRewrite
-	}
-
-	outer := TableID(src.Outer)
-	for _, pe := range ap {
-		_, isOffset := pe.Info.(*Offset)
-		if isOffset {
-			continue
-		}
-
-		if !ctx.SemTable.RecursiveDeps(pe.EvalExpr).IsSolvedBy(outer) {
-			return p, NoRewrite
-		}
-
-		if se, ok := pe.Info.(SubQueryExpression); ok {
-			pe.EvalExpr = rewriteColNameToArgument(ctx, pe.EvalExpr, se, src.Inner...)
-		}
-	}
-	// all projections can be pushed to the outer
-	src.Outer, p.Source = p, src.Outer
-	return src, Rewrote("push projection into outer side of subquery container")
-}
-
 func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Expr, se SubQueryExpression, subqueries ...*SubQuery) sqlparser.Expr {
 	rewriteIt := func(s string) sqlparser.SQLNode {
 		for _, sq1 := range se {
@@ -484,7 +458,7 @@ func tryMergeSubqueriesRecursively(
 		finalResult = finalResult.Merge(res)
 	}
 
-	op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.Original}}
+	op.Source = newFilter(outer.Source, subQuery.Original)
 	return op, finalResult.Merge(Rewrote("merge outer of two subqueries"))
 }
 
@@ -503,7 +477,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		return outer, NoRewrite
 	}
 	if !subQuery.IsProjection {
-		op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.Original}}
+		op.Source = newFilter(outer.Source, subQuery.Original)
 	}
 	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery.originalSubquery)
 	return op, Rewrote("merged subquery with outer")
@@ -608,10 +582,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	if isSharded {
 		src = s.outer.Source
 		if !s.subq.IsProjection {
-			src = &Filter{
-				Source:     s.outer.Source,
-				Predicates: []sqlparser.Expr{s.original},
-			}
+			src = newFilter(s.outer.Source, s.original)
 		}
 	} else {
 		src = s.rewriteASTExpression(ctx, inner)
@@ -681,10 +652,7 @@ func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningCont
 				cursor.Replace(subq)
 			}
 		}, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
-		src = &Filter{
-			Source:     s.outer.Source,
-			Predicates: []sqlparser.Expr{sQuery},
-		}
+		src = newFilter(s.outer.Source, sQuery)
 	}
 	return src
 }

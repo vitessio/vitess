@@ -38,14 +38,6 @@ func TestGetDirs(t *testing.T) {
 			currentDir: dir{
 				Path: "./",
 			},
-			expectedErr: "",
-		},
-		{
-			name: "Temp dir",
-			currentDir: dir{
-				Path: "/tmp",
-			},
-			expectedErr: "open /tmp/snap-private-tmp: permission denied",
 		},
 	}
 

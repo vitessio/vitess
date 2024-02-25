@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,12 +39,9 @@ func TestStringList(t *testing.T) {
 			t.Errorf("v.Set(%v): %v", in, err)
 			continue
 		}
-		if strings.Join(p, ".") != out {
-			t.Errorf("want %#v, got %#v", strings.Split(out, "."), p)
-		}
-		if p.String() != in {
-			t.Errorf("v.String(): want %#v, got %#v", in, p.String())
-		}
+		assert.Equal(t, out, strings.Join(p, "."))
+		assert.Equal(t, in, p.String())
+
 	}
 }
 

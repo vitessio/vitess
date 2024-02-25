@@ -170,6 +170,14 @@ func TestUpdateWithFK(t *testing.T) {
 	// Verify the result in u_t2 and u_t3 as well.
 	utils.AssertMatches(t, conn, `select * from u_t2 order by id`, `[[INT64(19) INT64(1234)] [INT64(342) NULL]]`)
 	utils.AssertMatches(t, conn, `select * from u_t3 order by id`, `[[INT64(1) INT64(12)] [INT64(32) INT64(13)]]`)
+
+	// Update with a subquery inside, such that the update is on a foreign key related column.
+	qr = utils.Exec(t, conn, `update u_t2 set col2 = (select col1 from u_t1 where id = 100) where id = 342`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	// Verify the result in u_t1, u_t2 and u_t3.
+	utils.AssertMatches(t, conn, `select * from u_t1 order by id`, `[[INT64(1) INT64(13)] [INT64(10) INT64(12)] [INT64(100) INT64(13)] [INT64(1000) INT64(1234)]]`)
+	utils.AssertMatches(t, conn, `select * from u_t2 order by id`, `[[INT64(19) INT64(1234)] [INT64(342) INT64(13)]]`)
+	utils.AssertMatches(t, conn, `select * from u_t3 order by id`, `[[INT64(1) INT64(12)] [INT64(32) INT64(13)]]`)
 }
 
 // TestVstreamForFKBinLog tests that dml queries with fks are written with child row first approach in the binary logs.
@@ -687,6 +695,36 @@ func TestFkScenarios(t *testing.T) {
 				"select * from fk_t17 order by id",
 				"select * from fk_t19 order by id",
 			},
+		}, {
+			name: "Delete with limit success",
+			dataQueries: []string{
+				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t17(id, col) values (1, 7)",
+				"insert into fk_t19(id, col) values (1, 7)",
+			},
+			dmlQuery: "delete from fk_t15 order by id limit 1",
+			assertionQueries: []string{
+				"select * from fk_t15 order by id",
+				"select * from fk_t16 order by id",
+				"select * from fk_t17 order by id",
+				"select * from fk_t19 order by id",
+			},
+		}, {
+			name: "Delete with limit 0 success",
+			dataQueries: []string{
+				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t17(id, col) values (1, 7)",
+				"insert into fk_t19(id, col) values (1, 7)",
+			},
+			dmlQuery: "delete from fk_t15 order by id limit 0",
+			assertionQueries: []string{
+				"select * from fk_t15 order by id",
+				"select * from fk_t16 order by id",
+				"select * from fk_t17 order by id",
+				"select * from fk_t19 order by id",
+			},
 		},
 	}
 
@@ -927,6 +965,16 @@ func TestFkQueries(t *testing.T) {
 				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t16 (id, col) values (3, '5'), (4, '-5')",
 				"update fk_t16 set col = col * (col - (col)) where id = 3",
 				"update fk_t16 set col = col * (col - (col)) where id = 4",
+			},
+		},
+		{
+			name: "Multi table delete that uses two tables related by foreign keys",
+			queries: []string{
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t10 (id, col) values (1, '5'), (2, NULL), (3, NULL), (4, '4'), (6, '1'), (7, '2')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t11 (id, col) values (4, '1'), (5, '3'), (7, '22'), (8, '5'), (9, NULL), (10, '3')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t12 (id, col) values (2, NULL), (3, NULL), (4, '1'), (6, '6'), (8, NULL), (10, '1')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t13 (id, col) values (2, '1'), (5, '5'), (7, '5')",
+				"delete fk_t11 from fk_t11 join fk_t12 using (id) where fk_t11.id = 4",
 			},
 		},
 	}

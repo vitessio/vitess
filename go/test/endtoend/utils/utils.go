@@ -154,6 +154,15 @@ func Exec(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
 	return qr
 }
 
+// ExecMulti executes the given (potential multi) queries using the given connection.
+// The test fails if any of the queries produces an error
+func ExecMulti(t testing.TB, conn *mysql.Conn, query string) error {
+	t.Helper()
+	err := conn.ExecuteFetchMultiDrain(query)
+	require.NoError(t, err, "for query: "+query)
+	return err
+}
+
 // ExecCompareMySQL executes the given query against both Vitess and MySQL and compares
 // the two result set. If there is a mismatch, the difference will be printed and the
 // test will fail. If the query produces an error in either Vitess or MySQL, the test

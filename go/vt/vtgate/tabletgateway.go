@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -52,6 +53,8 @@ var (
 	initialTabletTimeout = 30 * time.Second
 	// retryCount is the number of times a query will be retried on error
 	retryCount = 2
+
+	logCollations = logutil.NewThrottledLogger("CollationInconsistent", 1*time.Minute)
 )
 
 func init() {
@@ -435,7 +438,7 @@ func (gw *TabletGateway) updateDefaultConnCollation(tablet *topodatapb.Tablet) {
 		return
 	}
 	if gw.defaultConnCollation.Load() != tablet.DefaultConnCollation {
-		log.Warning("this Vitess cluster has tablets with different default connection collations")
+		logCollations.Warningf("this Vitess cluster has tablets with different default connection collations")
 	}
 }
 

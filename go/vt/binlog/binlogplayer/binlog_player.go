@@ -34,14 +34,13 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -106,6 +105,8 @@ type Stats struct {
 
 	PartialQueryCount     *stats.CountersWithMultiLabels
 	PartialQueryCacheSize *stats.CountersWithMultiLabels
+
+	ThrottledCounts *stats.CountersWithMultiLabels // By throttler and component
 }
 
 // RecordHeartbeat updates the time the last heartbeat from vstreamer was seen
@@ -175,6 +176,7 @@ func NewStats() *Stats {
 	bps.TableCopyTimings = stats.NewTimings("", "", "Table")
 	bps.PartialQueryCacheSize = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	bps.PartialQueryCount = stats.NewCountersWithMultiLabels("", "", []string{"type"})
+	bps.ThrottledCounts = stats.NewCountersWithMultiLabels("", "", []string{"throttler", "component"})
 	return bps
 }
 
@@ -370,13 +372,14 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 			if backoff == throttler.NotThrottled {
 				break
 			}
+			blp.blplStats.ThrottledCounts.Add([]string{"trx", "binlogplayer"}, 1)
 			// We don't bother checking for context cancellation here because the
 			// sleep will block only up to 1 second. (Usually, backoff is 1s / rate
 			// e.g. a rate of 1000 TPS results into a backoff of 1 ms.)
 			time.Sleep(backoff)
 		}
 
-		// get the response
+		// Get the response.
 		response, err := stream.Recv()
 		// Check context before checking error, because canceled
 		// contexts could be wrapped as regular errors.
@@ -606,6 +609,7 @@ func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 // the _vt.vreplication table.
 func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64, dbName string,
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool) string {
+	protoutil.SortBinlogSourceTables(source)
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) "+
 		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v)",
@@ -616,6 +620,7 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 // CreateVReplicationState returns a statement to create a stopped vreplication.
 func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position string, state binlogdatapb.VReplicationWorkflowState, dbName string,
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType) string {
+	protoutil.SortBinlogSourceTables(source)
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) "+
 		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d)",

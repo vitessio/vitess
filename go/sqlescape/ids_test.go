@@ -31,6 +31,9 @@ func TestEscapeID(t *testing.T) {
 		in:  "a`a",
 		out: "`a``a`",
 	}, {
+		in:  "a a",
+		out: "`a a`",
+	}, {
 		in:  "`fo`o`",
 		out: "```fo``o```",
 	}, {

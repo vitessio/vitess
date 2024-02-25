@@ -26,6 +26,12 @@
         ]
       },
       {
+        "from_table": "second_user.bar",
+        "to_tables": [
+          "user.music"
+        ]
+      },
+      {
         "from_table": "primary_redirect@primary",
         "to_tables": [
           "user.user"
@@ -219,7 +225,8 @@
             },
             {
               "name": "textcol2",
-              "type": "VARCHAR"
+              "type": "VARCHAR",
+              "collation_name": "big5_bin"
             }
           ]
         },
@@ -507,8 +514,7 @@
       "sharded": true,
       "vindexes": {
         "hash_dup": {
-          "type": "hash_test",
-          "owner": "user"
+          "type": "hash_test"
         }
       },
       "tables": {

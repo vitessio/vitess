@@ -144,19 +144,5 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 		return vterrors.VT12001("multi-table DELETE statement with multi-target")
 	}
 
-	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node.(type) {
-		case *sqlparser.Subquery, *sqlparser.DerivedTable:
-			// We have a subquery, so we must fail the planning.
-			// If this subquery and the table expression were all belonging to the same unsharded keyspace,
-			// we would have already created a plan for them before doing these checks.
-			return false, vterrors.VT12001("subqueries in DML")
-		}
-		return true, nil
-	}, del)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }

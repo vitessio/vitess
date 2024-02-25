@@ -20,31 +20,6 @@
     "plan": "VT12001: unsupported: subqueries in GROUP BY"
   },
   {
-    "comment": "subqueries in delete",
-    "query": "delete from user where col = (select id from unsharded)",
-    "plan": "VT12001: unsupported: subqueries in DML"
-  },
-  {
-    "comment": "sharded subqueries in unsharded delete",
-    "query": "delete from unsharded where col = (select id from user)",
-    "plan": "VT12001: unsupported: subqueries in DML"
-  },
-  {
-    "comment": "sharded subquery in unsharded subquery in unsharded delete",
-    "query": "delete from unsharded where col = (select id from unsharded where id = (select id from user))",
-    "plan": "VT12001: unsupported: subqueries in DML"
-  },
-  {
-    "comment": "sharded join unsharded subqueries in unsharded delete",
-    "query": "delete from unsharded where col = (select id from unsharded join user on unsharded.id = user.id)",
-    "plan": "VT12001: unsupported: subqueries in DML"
-  },
-  {
-    "comment": "scatter update with limit clause",
-    "query": "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1",
-    "plan": "VT12001: unsupported: multi shard UPDATE with LIMIT"
-  },
-  {
     "comment": "update changes primary vindex column",
     "query": "update user set id = 1 where id = 1",
     "plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: user_index"
@@ -67,22 +42,7 @@
   {
     "comment": "update by primary keyspace id, changing one vindex column, limit without order clause",
     "query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 limit 10",
-    "plan": "VT12001: unsupported: you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: email_user_map"
-  },
-  {
-    "comment": "update with derived table",
-    "query": "update (select id from user) as u set id = 4",
-    "plan": "The target table u of the UPDATE is not updatable"
-  },
-  {
-    "comment": "join in update tables",
-    "query": "update user join user_extra on user.id = user_extra.id set user.name = 'foo'",
-    "plan": "VT12001: unsupported: unaliased multiple tables in update"
-  },
-  {
-    "comment": "multiple tables in update",
-    "query": "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id",
-    "plan": "VT12001: unsupported: multiple (2) tables in update"
+    "plan": "VT12001: unsupported: Vindex update should have ORDER BY clause when using LIMIT"
   },
   {
     "comment": "unsharded insert, col list does not match values",
@@ -218,11 +178,6 @@
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# changed to project all the columns from the derived tables.",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select col, id, user_id from user_extra where user_id = 5) uu where uu.user_id = uu.id))",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
-  },
-  {
-    "comment": "rewrite of 'order by 2' that becomes 'order by id', leading to ambiguous binding.",
-    "query": "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2",
-    "plan": "Column 'id' in field list is ambiguous"
   },
   {
     "comment": "unsupported with clause in delete statement",
@@ -413,5 +368,10 @@
     "comment": "count and sum distinct on different columns",
     "query": "SELECT COUNT(DISTINCT col), SUM(DISTINCT id) FROM user",
     "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct id)"
+  },
+  {
+    "comment": "update with multi table reference with multi target update",
+    "query": "update ignore user u, music m set u.foo = 21, m.bar = 'abc' where u.col = m.col",
+    "plan": "VT12001: unsupported: multi-table UPDATE statement with multi-target column update"
   }
 ]

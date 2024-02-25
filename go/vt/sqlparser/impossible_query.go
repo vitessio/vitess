@@ -27,6 +27,9 @@ package sqlparser
 func FormatImpossibleQuery(buf *TrackedBuffer, node SQLNode) {
 	switch node := node.(type) {
 	case *Select:
+		if node.With != nil {
+			node.With.Format(buf)
+		}
 		buf.Myprintf("select %v from ", node.SelectExprs)
 		var prefix string
 		for _, n := range node.From {

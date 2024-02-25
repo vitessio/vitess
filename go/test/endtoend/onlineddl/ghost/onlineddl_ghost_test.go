@@ -370,7 +370,7 @@ func testWithInitialSchema(t *testing.T) {
 	for i := 0; i < totalTableCount; i++ {
 		tableName := fmt.Sprintf("vt_onlineddl_test_%02d", i)
 		sqlQuery = fmt.Sprintf(createTable, tableName)
-		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
+		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)
 
 		for _, insert := range insertStatements {
@@ -395,7 +395,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, CallerID: callerID})
+		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy, CallerID: callerID})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)

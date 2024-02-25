@@ -74,7 +74,7 @@ func deleteCell(t *testing.T) {
 	deleteTablet(t, shard2Rdonly)
 
 	// Delete cell2 info from topo
-	res, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteCellInfo", "--", "--force", cell2)
+	res, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DeleteCellInfo", "--force", cell2)
 	t.Log(res)
 	require.NoError(t, err)
 
@@ -111,7 +111,7 @@ func deleteTablet(t *testing.T, tablet *cluster.Vttablet) {
 	}(tablet)
 	wg.Wait()
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets", tablet.Alias)
 	require.NoError(t, err)
 }
 

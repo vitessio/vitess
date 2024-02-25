@@ -30,12 +30,12 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 const appendEntry = -1
@@ -127,7 +127,7 @@ type DB struct {
 	lastErrorMu sync.Mutex
 	lastError   error
 
-	parser *sqlparser.Parser
+	env *vtenv.Environment
 }
 
 // QueryHandler is the interface used by the DB to simulate executed queries
@@ -181,7 +181,7 @@ func New(t testing.TB) *DB {
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
 		patternData:              make(map[string]exprResult),
 		lastErrorMu:              sync.Mutex{},
-		parser:                   sqlparser.NewTestParser(),
+		env:                      vtenv.NewTestEnv(),
 	}
 
 	db.Handler = db
@@ -189,7 +189,7 @@ func New(t testing.TB) *DB {
 	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0, 0, fmt.Sprintf("%s-Vitess", config.DefaultMySQLVersion), 0)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false, false, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -845,6 +845,6 @@ func (db *DB) GetQueryPatternResult(key string) (func(string), ExpectedResult, b
 	return nil, ExpectedResult{nil, nil}, false, nil
 }
 
-func (db *DB) SQLParser() *sqlparser.Parser {
-	return db.parser
+func (db *DB) Env() *vtenv.Environment {
+	return db.env
 }

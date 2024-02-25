@@ -301,3 +301,8 @@ func (env *Environment) LookupByCharset(name string) *colldefaults {
 func (env *Environment) LookupCharsetName(coll ID) string {
 	return env.byCharsetName[coll]
 }
+
+func (env *Environment) IsSupported(coll ID) bool {
+	_, supported := env.byID[coll]
+	return supported
+}
