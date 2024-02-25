@@ -1058,7 +1058,7 @@ func (s *Schema) ValidateViewReferences() error {
 					Column:    e.Column,
 					Ambiguous: true,
 				}
-			case *semantics.ColumnNotFoundError:
+			case semantics.ColumnNotFoundError:
 				return &InvalidColumnReferencedInViewError{
 					View:   view.Name(),
 					Column: e.Column.Name.String(),

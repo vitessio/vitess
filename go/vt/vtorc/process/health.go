@@ -108,7 +108,9 @@ func RegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 func HealthTest() (health *HealthStatus, err error) {
 	cacheKey := util.ProcessToken.Hash
 	if healthStatus, found := lastHealthCheckCache.Get(cacheKey); found {
-		return healthStatus.(*HealthStatus), nil
+		health = healthStatus.(*HealthStatus)
+		health.DiscoveredOnce = FirstDiscoveryCycleComplete.Load()
+		return
 	}
 
 	health = &HealthStatus{Healthy: false, Hostname: ThisHostname, Token: util.ProcessToken.Hash}

@@ -28,6 +28,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
 
@@ -68,7 +69,8 @@ func initTest(ctx context.Context, ts *topo.Server, mode string, opts *Options, 
 	}
 
 	opts.ExecutionMode = mode
-	vte, err := Init(ctx, vtenv.NewTestEnv(), ts, string(vSchema), string(schema), shardmap, opts)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	vte, err := Init(ctx, vtenv.NewTestEnv(), ts, string(vSchema), string(schema), shardmap, opts, srvTopoCounts)
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 	return vte
 }
@@ -349,7 +351,8 @@ func TestInit(t *testing.T) {
 }`
 	schema := "create table table_missing_primary_vindex (id int primary key)"
 	ts := memorytopo.NewServer(ctx, Cell)
-	_, err := Init(ctx, vtenv.NewTestEnv(), ts, vschema, schema, "", defaultTestOpts())
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	_, err := Init(ctx, vtenv.NewTestEnv(), ts, vschema, schema, "", defaultTestOpts(), srvTopoCounts)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing primary col vindex")
 }
