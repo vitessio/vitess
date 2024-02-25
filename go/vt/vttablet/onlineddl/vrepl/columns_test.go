@@ -133,3 +133,248 @@ func TestGetSharedColumns(t *testing.T) {
 		})
 	}
 }
+
+func TestGetExpandedColumnNames(t *testing.T) {
+	var (
+		columnsA = &ColumnList{
+			columns: []Column{
+				{
+					Name:       "c1",
+					IsNullable: true,
+				},
+				{
+					Name:       "c2",
+					IsNullable: true,
+				},
+				{
+					Name:       "c3",
+					IsNullable: false,
+				},
+			},
+			Ordinals: ColumnsMap{},
+		}
+		columnsB = &ColumnList{
+			columns: []Column{
+				{
+					Name:       "c1",
+					IsNullable: true,
+				},
+				{
+					Name:       "c2",
+					IsNullable: false,
+				},
+				{
+					Name:       "c3",
+					IsNullable: true,
+				},
+			},
+			Ordinals: ColumnsMap{},
+		}
+	)
+	tcases := []struct {
+		name      string
+		sourceCol Column
+		targetCol Column
+		expanded  bool
+	}{
+		{
+			"both nullable",
+			Column{
+				IsNullable: true,
+			},
+			Column{
+				IsNullable: true,
+			},
+			false,
+		},
+		{
+			"nullable to non nullable",
+			Column{
+				IsNullable: true,
+			},
+			Column{
+				IsNullable: false,
+			},
+			false,
+		},
+		{
+			"non nullable to nullable",
+			Column{
+				IsNullable: false,
+			},
+			Column{
+				IsNullable: true,
+			},
+			true,
+		},
+		{
+			"signed to unsigned",
+			Column{
+				Type:             IntegerColumnType,
+				NumericPrecision: 4,
+				IsUnsigned:       false,
+			},
+			Column{
+				Type:             IntegerColumnType,
+				NumericPrecision: 4,
+				IsUnsigned:       true,
+			},
+			true,
+		},
+		{
+			"unsigned to signed",
+			Column{
+				Type:             IntegerColumnType,
+				NumericPrecision: 4,
+				IsUnsigned:       true,
+			},
+			Column{
+				Type:             IntegerColumnType,
+				NumericPrecision: 4,
+				IsUnsigned:       false,
+			},
+			true,
+		},
+		{
+			"signed to smaller unsigned",
+			Column{
+				Type:             IntegerColumnType,
+				NumericPrecision: 8,
+				IsUnsigned:       false,
+			},
+			Column{
+				Type:             IntegerColumnType,
+				NumericPrecision: 4,
+				IsUnsigned:       true,
+			},
+			false,
+		},
+		{
+			"same char length",
+			Column{
+				CharacterMaximumLength: 20,
+			},
+			Column{
+				CharacterMaximumLength: 20,
+			},
+			false,
+		},
+		{
+			"reduced char length",
+			Column{
+				CharacterMaximumLength: 20,
+			},
+			Column{
+				CharacterMaximumLength: 19,
+			},
+			false,
+		},
+		{
+			"increased char length",
+			Column{
+				CharacterMaximumLength: 20,
+			},
+			Column{
+				CharacterMaximumLength: 21,
+			},
+			true,
+		},
+		{
+			"expand temporal",
+			Column{
+				DataType: "time",
+			},
+			Column{
+				DataType: "timestamp",
+			},
+			true,
+		},
+		{
+			"expand temporal",
+			Column{
+				DataType: "date",
+			},
+			Column{
+				DataType: "timestamp",
+			},
+			true,
+		},
+		{
+			"expand temporal",
+			Column{
+				DataType: "date",
+			},
+			Column{
+				DataType: "datetime",
+			},
+			true,
+		},
+		{
+			"non expand temporal",
+			Column{
+				DataType: "datetime",
+			},
+			Column{
+				DataType: "timestamp",
+			},
+			false,
+		},
+		{
+			"expand temporal",
+			Column{
+				DataType: "timestamp",
+			},
+			Column{
+				DataType: "datetime",
+			},
+			true,
+		},
+		{
+			"expand enum",
+			Column{
+				Type:       EnumColumnType,
+				EnumValues: "'a', 'b'",
+			},
+			Column{
+				Type:       EnumColumnType,
+				EnumValues: "'a', 'x'",
+			},
+			true,
+		},
+		{
+			"expand enum",
+			Column{
+				Type:       EnumColumnType,
+				EnumValues: "'a', 'b'",
+			},
+			Column{
+				Type:       EnumColumnType,
+				EnumValues: "'a', 'b', 'c'",
+			},
+			true,
+		},
+		{
+			"reduce enum",
+			Column{
+				Type:       EnumColumnType,
+				EnumValues: "'a', 'b', 'c'",
+			},
+			Column{
+				Type:       EnumColumnType,
+				EnumValues: "'a', 'b'",
+			},
+			false,
+		},
+	}
+
+	expectedExpandedColumnNames := []string{"c3"}
+	expandedColumnNames, _ := GetExpandedColumnNames(columnsA, columnsB)
+	assert.Equal(t, expectedExpandedColumnNames, expandedColumnNames)
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			expanded, _ := isExpandedColumn(&tcase.sourceCol, &tcase.targetCol)
+			assert.Equal(t, tcase.expanded, expanded)
+		})
+	}
+}
