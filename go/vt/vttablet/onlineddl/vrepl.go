@@ -434,11 +434,26 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	for i := range v.sourceSharedColumns.Columns() {
 		sourceColumn := v.sourceSharedColumns.Columns()[i]
 		mappedColumn := v.targetSharedColumns.Columns()[i]
-		if sourceColumn.Type == vrepl.EnumColumnType && mappedColumn.Type != vrepl.EnumColumnType && mappedColumn.Charset != "" {
-			// A column is converted from ENUM type to textual type
-			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
-			v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
+		if sourceColumn.Type == vrepl.EnumColumnType {
+			switch {
+			// Either this is an ENUM column that stays an ENUM, or it is converted to a textual type.
+			// We take note of the enum values, and make it available in vreplication's Filter.Rule.ConvertEnumToText.
+			// This, in turn, will be used by vplayer (in TablePlan) like so:
+			// - In the binary log, enum values are integers.
+			// - Upon seeing this map, PlanBuilder will convert said int to the enum's logical string value.
+			// - And will apply the value as a string (`StringBindVariable`) in the query.
+			// What this allows is for enum values to have different ordering in the before/after table schema,
+			// so that for example you could modify an enum column:
+			// - from `('red', 'green', 'blue')` to `('red', 'blue')`
+			// - from `('red', 'green', 'blue')` to `('blue', 'red', 'green')`
+			case mappedColumn.Type == vrepl.EnumColumnType:
+				v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
+			case mappedColumn.Charset != "":
+				v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
+				v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
+			}
 		}
+
 		if sourceColumn.IsIntegralType() && mappedColumn.Type == vrepl.EnumColumnType {
 			v.intToEnumMap[sourceColumn.Name] = true
 		}
