@@ -2627,7 +2627,14 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	if newShowCreateTable == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected: cannot find table or view even as it was just created: %v", onlineDDL.Table)
 	}
+<<<<<<< HEAD
 	hints := &schemadiff.DiffHints{AutoIncrementStrategy: schemadiff.AutoIncrementApplyHigher}
+=======
+	senv := schemadiff.NewEnv(e.env.Environment(), e.env.Environment().CollationEnv().DefaultConnectionCharset())
+	hints := &schemadiff.DiffHints{
+		AutoIncrementStrategy: schemadiff.AutoIncrementApplyHigher,
+	}
+>>>>>>> 47e137539b (VReplication/OnlineDDL: reordering enum values (#15103))
 	switch ddlStmt.(type) {
 	case *sqlparser.CreateTable:
 		diff, err = schemadiff.DiffCreateTablesQueries(existingShowCreateTable, newShowCreateTable, hints)
