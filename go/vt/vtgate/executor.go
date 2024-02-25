@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -29,6 +28,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
@@ -40,11 +40,6 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -62,6 +57,15 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 	"vitess.io/vitess/go/vt/vthash"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -910,6 +914,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 	rows := [][]sqltypes.Value{}
 
 	status := e.scatterConn.GetHealthCheckCacheStatus()
+	tmc := tmclient.NewTabletManagerClient()
 
 	for _, s := range status {
 		for _, ts := range s.TabletsStats {
@@ -928,9 +933,16 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			}
 
 			tabletHostPort := ts.GetTabletHostPort()
-			throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
+
+			res, err := tmc.CheckThrottler(ctx, ts.Tablet, &tabletmanagerdatapb.CheckThrottlerRequest{
+				AppName: throttlerapp.VTGateName,
+			})
 			if err != nil {
-				log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
+				log.Warningf("Could not get check the tablet throttler on %s: %v", topoproto.TabletAliasString(ts.Tablet.Alias), err)
+			}
+			throttlerStatus, err := protojson.Marshal(res)
+			if err != nil {
+				log.Warningf("Invalid tablet throttler response from %s: %v", topoproto.TabletAliasString(ts.Tablet.Alias), err)
 			}
 
 			replSourceHost := ""
@@ -972,7 +984,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
 				replicationHealth,
 				replLag,
-				throttlerStatus,
+				string(throttlerStatus),
 			))
 		}
 	}
@@ -1484,42 +1496,6 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 	}
 
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
-}
-
-func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
-	client := http.Client{
-		Timeout: 100 * time.Millisecond,
-	}
-	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check-self", tabletHostPort))
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	var elements struct {
-		StatusCode int
-		Value      float64
-		Threshold  float64
-		Message    string
-	}
-	err = json.Unmarshal(body, &elements)
-	if err != nil {
-		return "", err
-	}
-
-	httpStatusStr := http.StatusText(elements.StatusCode)
-
-	load := float64(0)
-	if elements.Threshold > 0 {
-		load = float64((elements.Value / elements.Threshold) * 100)
-	}
-
-	status := fmt.Sprintf("{\"state\":\"%s\",\"load\":%.2f,\"message\":\"%s\"}", httpStatusStr, load, elements.Message)
-	return status, nil
 }
 
 // ReleaseLock implements the IExecutor interface
