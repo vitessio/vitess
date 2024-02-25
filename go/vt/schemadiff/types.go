@@ -29,6 +29,32 @@ const (
 	InstantDDLCapabilityPossible
 )
 
+type TextualAnnotationType int
+
+const (
+	UnchangedTextualAnnotationType TextualAnnotationType = iota
+	AddedTextualAnnotationType
+	RemovedTextualAnnotationType
+)
+
+type TextualAnnotationHint int
+
+const (
+	PlusMinusSpaceTextualAnnotationHint TextualAnnotationHint = iota
+	PlusMinusEqualTextualAnnotationHint
+	PlusMinusTextualAnnotationHint
+	SchemadiffSuffixTextualAnnotationHint
+)
+
+type TextualAnnotations struct {
+	removed []string
+	added   []string
+}
+
+func NewTextualAnnotations() *TextualAnnotations {
+	return &TextualAnnotations{}
+}
+
 // Entity stands for a database object we can diff:
 // - A table
 // - A view
@@ -66,6 +92,8 @@ type EntityDiff interface {
 	SetSubsequentDiff(EntityDiff)
 	// InstantDDLCapability returns the ability of this diff to run with ALGORITHM=INSTANT
 	InstantDDLCapability() InstantDDLCapability
+
+	// TextualAnnotation() (from string, to string)
 }
 
 const (
