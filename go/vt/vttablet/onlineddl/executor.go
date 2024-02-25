@@ -2798,7 +2798,6 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	senv := schemadiff.NewEnv(e.env.Environment(), e.env.Environment().CollationEnv().DefaultConnectionCharset())
 	hints := &schemadiff.DiffHints{
 		AutoIncrementStrategy: schemadiff.AutoIncrementApplyHigher,
-		EnumReorderStrategy:   schemadiff.EnumReorderStrategyAllow,
 	}
 	switch ddlStmt.(type) {
 	case *sqlparser.CreateTable:

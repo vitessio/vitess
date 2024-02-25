@@ -120,8 +120,8 @@ const (
 )
 
 const (
-	EnumReorderStrategyReject int = iota
-	EnumReorderStrategyAllow
+	EnumReorderStrategyAllow int = iota
+	EnumReorderStrategyReject
 )
 
 // DiffHints is an assortment of rules for diffing entities
