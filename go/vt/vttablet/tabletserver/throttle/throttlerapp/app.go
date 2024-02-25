@@ -41,7 +41,7 @@ func (n Name) Concatenate(other Name) Name {
 }
 
 const (
-	// DefaultName is the app name used by vitess when app doesn't indicate its name.
+	// DefaultName is the app name used by vitess when app doesn't indicate its name
 	DefaultName Name = "default"
 	VitessName  Name = "vitess"
 
@@ -62,8 +62,6 @@ const (
 	BinlogWatcherName Name = "binlog-watcher"
 	MessagerName      Name = "messager"
 	SchemaTrackerName Name = "schema-tracker"
-
-	VTGateName = "vtgate"
 )
 
 var (
