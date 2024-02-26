@@ -112,7 +112,7 @@ func (ld *memoryTopoLockDescriptor) Unlock(ctx context.Context) error {
 }
 
 func (c *Conn) unlock(ctx context.Context, dirPath string) error {
-	if c.closed {
+	if c.closed.Load() {
 		return ErrConnectionClosed
 	}
 

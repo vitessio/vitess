@@ -25,7 +25,7 @@ import (
 
 // Watch is part of the topo.Conn interface.
 func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
-	if c.closed {
+	if c.closed.Load() {
 		return nil, nil, ErrConnectionClosed
 	}
 
@@ -75,7 +75,7 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 
 // WatchRecursive is part of the topo.Conn interface.
 func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
-	if c.closed {
+	if c.closed.Load() {
 		return nil, nil, ErrConnectionClosed
 	}
 
