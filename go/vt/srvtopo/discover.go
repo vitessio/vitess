@@ -29,9 +29,9 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// FindAllTargets goes through all serving shards in the topology for the provided
-// keyspaces and tablet types. If keyspaces are provided all keyspaces in the topo
-// are used. It returns one Target object per keyspace/shard/matching TabletType.
+// FindAllTargets goes through all serving shards in the topology for the provided keyspaces
+// and tablet types. If no keyspaces are provided, all available keyspaces in the topo are
+// fetched. It returns one Target object per keyspace/shard/matching TabletType.
 func FindAllTargets(ctx context.Context, ts Server, cell string, keyspaces []string, tabletTypes []topodatapb.TabletType) ([]*querypb.Target, error) {
 	var err error
 	if len(keyspaces) == 0 {
