@@ -30,7 +30,7 @@ import (
 )
 
 // FindAllTargets goes through all serving shards in the topology for the provided keyspaces
-// and tablet types. If no keyspaces are provided, all available keyspaces in the topo are
+// and tablet types. If no keyspaces are provided all available keyspaces in the topo are
 // fetched. It returns one Target object per keyspace/shard/matching TabletType.
 func FindAllTargets(ctx context.Context, ts Server, cell string, keyspaces []string, tabletTypes []topodatapb.TabletType) ([]*querypb.Target, error) {
 	var err error
