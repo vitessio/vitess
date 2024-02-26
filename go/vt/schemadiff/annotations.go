@@ -28,13 +28,13 @@ const (
 	RemovedTextualAnnotationType
 )
 
-type TextualAnnotatedLine struct {
-	line string
+type AnnotatedText struct {
+	text string
 	typ  TextualAnnotationType
 }
 
 type TextualAnnotations struct {
-	lines      []*TextualAnnotatedLine
+	texts      []*AnnotatedText
 	hasChanges bool
 }
 
@@ -43,66 +43,65 @@ func NewTextualAnnotations() *TextualAnnotations {
 }
 
 func (a *TextualAnnotations) Len() int {
-	return len(a.lines)
+	return len(a.texts)
 }
 
-func (a *TextualAnnotations) mark(line string, typ TextualAnnotationType) {
-	a.lines = append(a.lines, &TextualAnnotatedLine{line: line, typ: typ})
+func (a *TextualAnnotations) mark(text string, typ TextualAnnotationType) {
+	a.texts = append(a.texts, &AnnotatedText{text: text, typ: typ})
 	if typ != UnchangedTextualAnnotationType {
 		a.hasChanges = true
 	}
 }
 
-func (a *TextualAnnotations) MarkAdded(line string) {
-	a.mark(line, AddedTextualAnnotationType)
+func (a *TextualAnnotations) MarkAdded(text string) {
+	a.mark(text, AddedTextualAnnotationType)
 }
 
-func (a *TextualAnnotations) MarkRemoved(line string) {
-	a.mark(line, RemovedTextualAnnotationType)
+func (a *TextualAnnotations) MarkRemoved(text string) {
+	a.mark(text, RemovedTextualAnnotationType)
 }
 
-func (a *TextualAnnotations) MarkUnchanged(line string) {
-	a.mark(line, UnchangedTextualAnnotationType)
+func (a *TextualAnnotations) MarkUnchanged(text string) {
+	a.mark(text, UnchangedTextualAnnotationType)
 }
 
-func (a *TextualAnnotations) ByType(typ TextualAnnotationType) (r []*TextualAnnotatedLine) {
-	for _, line := range a.lines {
-		if line.typ == typ {
-			r = append(r, line)
+func (a *TextualAnnotations) ByType(typ TextualAnnotationType) (r []*AnnotatedText) {
+	for _, text := range a.texts {
+		if text.typ == typ {
+			r = append(r, text)
 		}
 	}
 	return r
 }
 
-func (a *TextualAnnotations) Added() (r []*TextualAnnotatedLine) {
+func (a *TextualAnnotations) Added() (r []*AnnotatedText) {
 	return a.ByType(AddedTextualAnnotationType)
 }
 
-func (a *TextualAnnotations) Removed() (r []*TextualAnnotatedLine) {
+func (a *TextualAnnotations) Removed() (r []*AnnotatedText) {
 	return a.ByType(RemovedTextualAnnotationType)
 }
 
 func (a *TextualAnnotations) Export(format TextualAnnotationFormat) string {
-	textLines := make([]string, 0, len(a.lines))
-	for _, annotatedLine := range a.lines {
-		switch annotatedLine.typ {
+	textLines := make([]string, 0, len(a.texts))
+	for _, annotatedText := range a.texts {
+		switch annotatedText.typ {
 		case AddedTextualAnnotationType:
-			annotatedLine.line = "+" + annotatedLine.line
+			annotatedText.text = "+" + annotatedText.text
 		case RemovedTextualAnnotationType:
-			annotatedLine.line = "-" + annotatedLine.line
+			annotatedText.text = "-" + annotatedText.text
 		default:
-			// line unchanged
+			// text unchanged
 			switch format {
 			case PlusMinusSpaceTextualAnnotationFormat:
 				if a.hasChanges {
-					annotatedLine.line = " " + annotatedLine.line
+					// If there is absolutely no change, we don't add a space anywhere
+					annotatedText.text = " " + annotatedText.text
 				}
-			case PlusMinusEqualTextualAnnotationFormat:
-				annotatedLine.line = "=" + annotatedLine.line
 			case PlusMinusTextualAnnotationFormat:
 			}
 		}
-		textLines = append(textLines, annotatedLine.line)
+		textLines = append(textLines, annotatedText.text)
 	}
 	return strings.Join(textLines, "\n")
 }
@@ -111,9 +110,7 @@ type TextualAnnotationFormat int
 
 const (
 	PlusMinusSpaceTextualAnnotationFormat TextualAnnotationFormat = iota
-	PlusMinusEqualTextualAnnotationFormat
 	PlusMinusTextualAnnotationFormat
-	SchemadiffSuffixTextualAnnotationFormat
 )
 
 func annotatedStatement(stmt string, annotationType TextualAnnotationType, annotations *TextualAnnotations) *TextualAnnotations {
@@ -121,7 +118,8 @@ func annotatedStatement(stmt string, annotationType TextualAnnotationType, annot
 	result := NewTextualAnnotations()
 	annotationLines := map[string]bool{}
 	for _, annotation := range annotations.ByType(annotationType) {
-		lines := strings.Split(annotation.line, "\n")
+		// An annotated text could be multiline. Partition specs are such.
+		lines := strings.Split(annotation.text, "\n")
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
 			if line != "" {
@@ -170,23 +168,23 @@ func unifiedAnnotated(from *TextualAnnotations, to *TextualAnnotations) *Textual
 	for fromIndex < from.Len() || toIndex < to.Len() {
 		matchingLine := ""
 		if fromIndex < from.Len() {
-			fromLine := from.lines[fromIndex]
+			fromLine := from.texts[fromIndex]
 			if fromLine.typ == RemovedTextualAnnotationType {
-				unified.MarkRemoved(fromLine.line)
+				unified.MarkRemoved(fromLine.text)
 				fromIndex++
 				continue
 			}
-			matchingLine = fromLine.line
+			matchingLine = fromLine.text
 		}
 		if toIndex < to.Len() {
-			toLine := to.lines[toIndex]
+			toLine := to.texts[toIndex]
 			if toLine.typ == AddedTextualAnnotationType {
-				unified.MarkAdded(toLine.line)
+				unified.MarkAdded(toLine.text)
 				toIndex++
 				continue
 			}
 			if matchingLine == "" {
-				matchingLine = toLine.line
+				matchingLine = toLine.text
 			}
 		}
 		unified.MarkUnchanged(matchingLine)

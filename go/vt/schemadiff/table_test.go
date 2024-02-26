@@ -47,6 +47,7 @@ func TestCreateTableDiff(t *testing.T) {
 		charset     int
 		algorithm   int
 		enumreorder int
+		textdiffs   []string
 	}{
 		{
 			name: "identical",
@@ -71,6 +72,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t (Id int not null, primary key(id))",
 			diff:  "alter table t modify column Id int not null",
 			cdiff: "ALTER TABLE `t` MODIFY COLUMN `Id` int NOT NULL",
+			textdiffs: []string{
+				"-	`id` int NOT NULL,",
+				"+	`Id` int NOT NULL,",
+			},
 		},
 		{
 			name: "identical, name change",
@@ -108,6 +113,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, `i` int not null default 0)",
 			diff:  "alter table t1 add column i int not null default 0",
 			cdiff: "ALTER TABLE `t1` ADD COLUMN `i` int NOT NULL DEFAULT 0",
+			textdiffs: []string{
+				"+	`i` int NOT NULL DEFAULT 0,",
+			},
 		},
 		{
 			name:     "dropped column",
@@ -117,6 +125,9 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff:    "ALTER TABLE `t1` DROP COLUMN `i`",
 			fromName: "t1",
 			toName:   "t2",
+			textdiffs: []string{
+				"-	`i` int NOT NULL DEFAULT 0,",
+			},
 		},
 		{
 			name:  "modified column",
@@ -124,6 +135,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, `i` bigint unsigned default null)",
 			diff:  "alter table t1 modify column i bigint unsigned",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `i` bigint unsigned",
+			textdiffs: []string{
+				"-	`i` int NOT NULL DEFAULT 0,",
+				"+	`i` bigint unsigned,",
+			},
 		},
 		{
 			name:  "added column, dropped column, modified column",
@@ -131,6 +146,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, ts timestamp null, `i` bigint unsigned default null)",
 			diff:  "alter table t1 drop column c, modify column i bigint unsigned, add column ts timestamp null after id",
 			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `i` bigint unsigned, ADD COLUMN `ts` timestamp NULL AFTER `id`",
+			textdiffs: []string{
+				"-	`c` char(3) DEFAULT '',",
+				"-	`i` int NOT NULL DEFAULT 0,",
+				"+	`i` bigint unsigned,",
+				"+	`ts` timestamp NULL,",
+			},
 		},
 		// columns, rename
 		{
@@ -139,6 +160,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, i2 int not null, c char(3) default '')",
 			diff:  "alter table t1 drop column i1, add column i2 int not null after id",
 			cdiff: "ALTER TABLE `t1` DROP COLUMN `i1`, ADD COLUMN `i2` int NOT NULL AFTER `id`",
+			textdiffs: []string{
+				"-	`i1` int NOT NULL,",
+				"+	`i2` int NOT NULL,",
+			},
 		},
 		{
 			name:      "rename mid column. statement",
@@ -147,6 +172,10 @@ func TestCreateTableDiff(t *testing.T) {
 			colrename: ColumnRenameHeuristicStatement,
 			diff:      "alter table t1 rename column i1 to i2",
 			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`",
+			textdiffs: []string{
+				"-	`i1` int NOT NULL,",
+				"+	`i2` int NOT NULL,",
+			},
 		},
 		{
 			name:      "rename last column. statement",
@@ -155,6 +184,10 @@ func TestCreateTableDiff(t *testing.T) {
 			colrename: ColumnRenameHeuristicStatement,
 			diff:      "alter table t1 rename column i1 to i2",
 			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`",
+			textdiffs: []string{
+				"-	`i1` int NOT NULL,",
+				"+	`i2` int NOT NULL,",
+			},
 		},
 		{
 			name:      "rename two columns. statement",
@@ -163,6 +196,12 @@ func TestCreateTableDiff(t *testing.T) {
 			colrename: ColumnRenameHeuristicStatement,
 			diff:      "alter table t1 rename column i1 to i2, rename column v1 to v2",
 			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`, RENAME COLUMN `v1` TO `v2`",
+			textdiffs: []string{
+				"-	`i1` int NOT NULL,",
+				"-	`v1` varchar(32),",
+				"+	`i2` int NOT NULL,",
+				"+	`v2` varchar(32),",
+			},
 		},
 		{
 			name:      "rename mid column and add an index. statement",
@@ -171,6 +210,11 @@ func TestCreateTableDiff(t *testing.T) {
 			colrename: ColumnRenameHeuristicStatement,
 			diff:      "alter table t1 rename column i1 to i2, add key i2_idx (i2)",
 			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`, ADD KEY `i2_idx` (`i2`)",
+			textdiffs: []string{
+				"-	`i1` int NOT NULL,",
+				"+	`i2` int NOT NULL,",
+				"+	KEY `i2_idx` (`i2`)",
+			},
 		},
 		{
 			// in a future iteration, this will generate a RENAME for both column, like in the previous test. Until then, we do not RENAME two successive columns
@@ -180,6 +224,12 @@ func TestCreateTableDiff(t *testing.T) {
 			colrename: ColumnRenameHeuristicStatement,
 			diff:      "alter table t1 drop column i1, drop column v1, add column i2 int not null, add column v2 varchar(32)",
 			cdiff:     "ALTER TABLE `t1` DROP COLUMN `i1`, DROP COLUMN `v1`, ADD COLUMN `i2` int NOT NULL, ADD COLUMN `v2` varchar(32)",
+			textdiffs: []string{
+				"-	`i1` int NOT NULL,",
+				"-	`v1` varchar(32),",
+				"+	`i2` int NOT NULL,",
+				"+	`v2` varchar(32),",
+			},
 		},
 		// columns, reordering
 		{
@@ -188,6 +238,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, a int, c int, b int, d int)",
 			diff:  "alter table t1 modify column c int after a",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int AFTER `a`",
+			textdiffs: []string{
+				"+	`c` int,",
+				"-	`c` int,",
+			},
 		},
 		{
 			name:  "reorder column, far jump",
@@ -195,6 +249,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (a int, b int, c int, d int, id int primary key)",
 			diff:  "alter table t1 modify column id int after d",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `id` int AFTER `d`",
+			textdiffs: []string{
+				"-	`id` int,",
+				"+	`id` int,",
+			},
 		},
 		{
 			name:  "reorder column, far jump with case sentivity",
@@ -202,6 +260,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (a int, B int, c int, d int, id int primary key)",
 			diff:  "alter table t1 modify column B int, modify column id int after d",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `B` int, MODIFY COLUMN `id` int AFTER `d`",
+			textdiffs: []string{
+				"-	`id` int,",
+				"+	`id` int,",
+				"-	`b` int,",
+				"+	`B` int,",
+			},
 		},
 		{
 			name:  "reorder column, far jump, another reorder",
@@ -209,6 +273,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (a int, c int, b int, d int, id int primary key)",
 			diff:  "alter table t1 modify column c int after a, modify column id int after d",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int AFTER `a`, MODIFY COLUMN `id` int AFTER `d`",
+			textdiffs: []string{
+				"-	`id` int,",
+				"+	`id` int,",
+				"-	`c` int,",
+				"+	`c` int,",
+			},
 		},
 		{
 			name:  "reorder column, far jump, another reorder 2",
@@ -216,6 +286,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (c int, a int, b int, d int, id int primary key)",
 			diff:  "alter table t1 modify column c int first, modify column id int after d",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int FIRST, MODIFY COLUMN `id` int AFTER `d`",
+			textdiffs: []string{
+				"-	`id` int,",
+				"+	`id` int,",
+				"-	`c` int,",
+				"+	`c` int,",
+			},
 		},
 		{
 			name:  "reorder column, far jump, another reorder 3",
@@ -223,6 +299,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (a int, c int, b int, d int, id int primary key, e int, f int)",
 			diff:  "alter table t1 modify column c int after a, modify column id int after d",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int AFTER `a`, MODIFY COLUMN `id` int AFTER `d`",
+			textdiffs: []string{
+				"-	`id` int,",
+				"+	`id` int,",
+				"-	`c` int,",
+				"+	`c` int,",
+			},
 		},
 		{
 			name:  "reorder column, far jump, another reorder, removed columns",
@@ -230,6 +312,14 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (a int, c int, f int, e int, id int primary key, g int)",
 			diff:  "alter table t1 drop column b, drop column d, modify column f int after c, modify column id int after e",
 			cdiff: "ALTER TABLE `t1` DROP COLUMN `b`, DROP COLUMN `d`, MODIFY COLUMN `f` int AFTER `c`, MODIFY COLUMN `id` int AFTER `e`",
+			textdiffs: []string{
+				"-	`b` int,",
+				"-	`d` int,",
+				"-	`id` int,",
+				"+	`id` int,",
+				"-	`f` int,",
+				"+	`f` int,",
+			},
 		},
 		{
 			name:  "two reorders",
@@ -237,6 +327,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, b int, a int, c int, e int, d int, f int)",
 			diff:  "alter table t1 modify column b int after id, modify column e int after c",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `b` int AFTER `id`, MODIFY COLUMN `e` int AFTER `c`",
+			textdiffs: []string{
+				"-	`b` int,",
+				"+	`b` int,",
+				"-	`e` int,",
+				"+	`e` int,",
+			},
 		},
 		{
 			name:  "two reorders, added and removed columns",
@@ -244,6 +340,18 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (g int, id int primary key, h int, b int, a int, i int, e int, d int, j int, f int, k int)",
 			diff:  "alter table t1 drop column c, modify column b int after id, modify column e int after a, add column g int first, add column h int after id, add column i int after a, add column j int after d, add column k int",
 			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `b` int AFTER `id`, MODIFY COLUMN `e` int AFTER `a`, ADD COLUMN `g` int FIRST, ADD COLUMN `h` int AFTER `id`, ADD COLUMN `i` int AFTER `a`, ADD COLUMN `j` int AFTER `d`, ADD COLUMN `k` int",
+			textdiffs: []string{
+				"-	`c` int,",
+				"-	`b` int,",
+				"+	`b` int,",
+				"-	`e` int,",
+				"+	`e` int,",
+				"+	`g` int,",
+				"+	`h` int,",
+				"+	`i` int,",
+				"+	`j` int,",
+				"+	`k` int,",
+			},
 		},
 		{
 			name:  "reorder column and change data type",
@@ -251,6 +359,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, a int, c bigint, b int, d int)",
 			diff:  "alter table t1 modify column c bigint after a",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` bigint AFTER `a`",
+			textdiffs: []string{
+				"-	`c` int,",
+				"+	`c` bigint,",
+			},
 		},
 		{
 			name:  "reorder column, first",
@@ -258,6 +370,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (c int, id int primary key, a int, b int, d int)",
 			diff:  "alter table t1 modify column c int first",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int FIRST",
+			textdiffs: []string{
+				"-	`c` int,",
+				"+	`c` int,",
+			},
 		},
 		{
 			name:  "add multiple columns",
@@ -265,6 +381,11 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, a int, b int, c int, d int)",
 			diff:  "alter table t1 add column b int, add column c int, add column d int",
 			cdiff: "ALTER TABLE `t1` ADD COLUMN `b` int, ADD COLUMN `c` int, ADD COLUMN `d` int",
+			textdiffs: []string{
+				"+	`b` int,",
+				"+	`c` int,",
+				"+	`d` int,",
+			},
 		},
 		{
 			name:  "added column in middle",
@@ -272,6 +393,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, a int, b int, x int, c int, d int)",
 			diff:  "alter table t1 add column x int after b",
 			cdiff: "ALTER TABLE `t1` ADD COLUMN `x` int AFTER `b`",
+			textdiffs: []string{
+				"+	`x` int,",
+			},
 		},
 		{
 			name:  "added multiple column in middle",
@@ -279,6 +403,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (w int, x int, id int primary key, y int, a int, z int)",
 			diff:  "alter table t1 add column w int first, add column x int after w, add column y int after id, add column z int",
 			cdiff: "ALTER TABLE `t1` ADD COLUMN `w` int FIRST, ADD COLUMN `x` int AFTER `w`, ADD COLUMN `y` int AFTER `id`, ADD COLUMN `z` int",
+			textdiffs: []string{
+				"+	`w` int,",
+				"+	`x` int,",
+				"+	`y` int,",
+				"+	`z` int,",
+			},
 		},
 		{
 			name:  "added column first, reorder column",
@@ -286,6 +416,11 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (x int, a int, id int primary key)",
 			diff:  "alter table t1 modify column a int first, add column x int first",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `a` int FIRST, ADD COLUMN `x` int FIRST",
+			textdiffs: []string{
+				"-	`a` int,",
+				"+	`a` int,",
+				"+	`x` int,",
+			},
 		},
 		{
 			name:  "added column in middle, add column on end, reorder column",
@@ -293,6 +428,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, a int, b int, x int, d int, c int, y int)",
 			diff:  "alter table t1 modify column d int after b, add column x int after b, add column y int",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `d` int AFTER `b`, ADD COLUMN `x` int AFTER `b`, ADD COLUMN `y` int",
+			textdiffs: []string{
+				"-	`d` int,",
+				"+	`d` int,",
+				"+	`x` int,",
+				"+	`y` int,",
+			},
 		},
 		{
 			name:  "added column in middle, add column on end, reorder column 2",
@@ -300,6 +441,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, a int, c int, x int, b int, d int, y int)",
 			diff:  "alter table t1 modify column c int after a, add column x int after c, add column y int",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int AFTER `a`, ADD COLUMN `x` int AFTER `c`, ADD COLUMN `y` int",
+			textdiffs: []string{
+				"-	`c` int,",
+				"+	`c` int,",
+				"+	`x` int,",
+				"+	`y` int,",
+			},
 		},
 		// enum
 		{
@@ -308,6 +455,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, e enum('a', 'b', 'c', 'd'))",
 			diff:  "alter table t1 modify column e enum('a', 'b', 'c', 'd')",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` enum('a', 'b', 'c', 'd')",
+			textdiffs: []string{
+				"-	`e` enum('a', 'b', 'c'),",
+				"+	`e` enum('a', 'b', 'c', 'd'),",
+			},
 		},
 		{
 			name:  "truncate enum",
@@ -315,6 +466,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, e enum('a', 'b'))",
 			diff:  "alter table t1 modify column e enum('a', 'b')",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` enum('a', 'b')",
+			textdiffs: []string{
+				"-	`e` enum('a', 'b', 'c'),",
+				"+	`e` enum('a', 'b'),",
+			},
 		},
 		{
 			name:  "rename enum value",
@@ -322,6 +477,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, e enum('a', 'b', 'd'))",
 			diff:  "alter table t1 modify column e enum('a', 'b', 'd')",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` enum('a', 'b', 'd')",
+			textdiffs: []string{
+				"-	`e` enum('a', 'b', 'c'),",
+				"+	`e` enum('a', 'b', 'd'),",
+			},
 		},
 		{
 			name:        "reorder enum, fail",
@@ -337,6 +496,10 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:        "alter table t1 modify column e enum('b', 'a', 'c')",
 			cdiff:       "ALTER TABLE `t1` MODIFY COLUMN `e` enum('b', 'a', 'c')",
 			enumreorder: EnumReorderStrategyAllow,
+			textdiffs: []string{
+				"-	`e` enum('a', 'b', 'c'),",
+				"+	`e` enum('b', 'a', 'c'),",
+			},
 		},
 		{
 			name:  "expand set",
@@ -344,6 +507,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, e set('a', 'b', 'c', 'd'))",
 			diff:  "alter table t1 modify column e set('a', 'b', 'c', 'd')",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` set('a', 'b', 'c', 'd')",
+			textdiffs: []string{
+				"-	`e` set('a', 'b', 'c'),",
+				"+	`e` set('a', 'b', 'c', 'd'),",
+			},
 		},
 		{
 			name:  "truncate set",
@@ -351,6 +518,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, e set('a', 'b'))",
 			diff:  "alter table t1 modify column e set('a', 'b')",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` set('a', 'b')",
+			textdiffs: []string{
+				"-	`e` set('a', 'b', 'c'),",
+				"+	`e` set('a', 'b'),",
+			},
 		},
 		{
 			name:  "rename set value",
@@ -358,6 +529,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, e set('a', 'b', 'd'))",
 			diff:  "alter table t1 modify column e set('a', 'b', 'd')",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` set('a', 'b', 'd')",
+			textdiffs: []string{
+				"-	`e` set('a', 'b', 'c'),",
+				"+	`e` set('a', 'b', 'd'),",
+			},
 		},
 		{
 			name:        "reorder set, fail",
@@ -373,6 +548,10 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:        "alter table t1 modify column e set('b', 'a', 'c')",
 			cdiff:       "ALTER TABLE `t1` MODIFY COLUMN `e` set('b', 'a', 'c')",
 			enumreorder: EnumReorderStrategyAllow,
+			textdiffs: []string{
+				"-	`e` set('a', 'b', 'c'),",
+				"+	`e` set('b', 'a', 'c'),",
+			},
 		},
 
 		// keys
@@ -382,6 +561,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, `i` int, key `i_idx` (i))",
 			diff:  "alter table t1 add key i_idx (i)",
 			cdiff: "ALTER TABLE `t1` ADD KEY `i_idx` (`i`)",
+			textdiffs: []string{
+				"+	KEY `i_idx` (`i`)",
+			},
 		},
 		{
 			name:  "added key without name",
@@ -389,6 +571,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, `i` int, key (i))",
 			diff:  "alter table t1 add key i (i)",
 			cdiff: "ALTER TABLE `t1` ADD KEY `i` (`i`)",
+			textdiffs: []string{
+				"+	KEY `i` (`i`)",
+			},
 		},
 		{
 			name:  "added key without name, conflicting name",
@@ -396,6 +581,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, `i` int, key i(i), key (i))",
 			diff:  "alter table t1 add key i_2 (i)",
 			cdiff: "ALTER TABLE `t1` ADD KEY `i_2` (`i`)",
+			textdiffs: []string{
+				"+	KEY `i_2` (`i`)",
+			},
 		},
 		{
 			name:  "added key without name, conflicting name 2",
@@ -403,6 +591,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, `i` int, key i(i), key i_2(i), key (i))",
 			diff:  "alter table t1 add key i_3 (i)",
 			cdiff: "ALTER TABLE `t1` ADD KEY `i_3` (`i`)",
+			textdiffs: []string{
+				"+	KEY `i_3` (`i`)",
+			},
 		},
 		{
 			name:  "added column and key",
@@ -410,6 +601,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, `i` int, key `i_idx` (i))",
 			diff:  "alter table t1 add column i int, add key i_idx (i)",
 			cdiff: "ALTER TABLE `t1` ADD COLUMN `i` int, ADD KEY `i_idx` (`i`)",
+			textdiffs: []string{
+				"+	`i` int",
+				"+	KEY `i_idx` (`i`)",
+			},
 		},
 		{
 			name:  "modify column primary key",
@@ -417,6 +612,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key)",
 			diff:  "alter table t1 add primary key (id)",
 			cdiff: "ALTER TABLE `t1` ADD PRIMARY KEY (`id`)",
+			textdiffs: []string{
+				"+	PRIMARY KEY (`id`)",
+			},
 		},
 		{
 			name:  "added primary key",
@@ -424,6 +622,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int, primary key(id))",
 			diff:  "alter table t1 add primary key (id)",
 			cdiff: "ALTER TABLE `t1` ADD PRIMARY KEY (`id`)",
+			textdiffs: []string{
+				"+	PRIMARY KEY (`id`)",
+			},
 		},
 		{
 			name:  "dropped primary key",
@@ -431,6 +632,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int)",
 			diff:  "alter table t1 drop primary key",
 			cdiff: "ALTER TABLE `t1` DROP PRIMARY KEY",
+			textdiffs: []string{
+				"-	PRIMARY KEY (`id`)",
+			},
 		},
 		{
 			name:  "dropped key",
@@ -438,6 +642,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (`id` int primary key, i int)",
 			diff:  "alter table t1 drop key i_idx",
 			cdiff: "ALTER TABLE `t1` DROP KEY `i_idx`",
+			textdiffs: []string{
+				"-	KEY `i_idx` (`i`)",
+			},
 		},
 		{
 			name:  "dropped key 2",
@@ -445,6 +652,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (`id` int, i int, primary key (id))",
 			diff:  "alter table t1 drop key i_idx",
 			cdiff: "ALTER TABLE `t1` DROP KEY `i_idx`",
+			textdiffs: []string{
+				"-	KEY `i_idx` (`i`)",
+			},
 		},
 		{
 			name:  "modified key",
@@ -452,6 +662,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (`id` int primary key, i int, key i_idx(i, id))",
 			diff:  "alter table t1 drop key i_idx, add key i_idx (i, id)",
 			cdiff: "ALTER TABLE `t1` DROP KEY `i_idx`, ADD KEY `i_idx` (`i`, `id`)",
+			textdiffs: []string{
+				"-	KEY `i_idx` (`i`)",
+				"+	KEY `i_idx` (`i`, `id`)",
+			},
 		},
 		{
 			name:  "modified primary key",
@@ -459,6 +673,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (`id` int, i int, primary key(id, i),key i_idx(`i`))",
 			diff:  "alter table t1 drop primary key, add primary key (id, i)",
 			cdiff: "ALTER TABLE `t1` DROP PRIMARY KEY, ADD PRIMARY KEY (`id`, `i`)",
+			textdiffs: []string{
+				"-	PRIMARY KEY (`id`)",
+				"+	PRIMARY KEY (`id`, `i`)",
+			},
 		},
 		{
 			name: "alternative primary key definition, no diff",
@@ -473,6 +691,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (the_id int primary key, info int not null);",
 			diff:  "alter table t1 drop primary key, drop column id, add column the_id int first, add primary key (the_id)",
 			cdiff: "ALTER TABLE `t1` DROP PRIMARY KEY, DROP COLUMN `id`, ADD COLUMN `the_id` int FIRST, ADD PRIMARY KEY (`the_id`)",
+			textdiffs: []string{
+				"-	PRIMARY KEY (`id`)",
+				"-	`id` int,",
+				"+	`the_id` int,",
+				"+	PRIMARY KEY (`the_id`)",
+			},
 		},
 		{
 			name: "reordered key, no diff",
@@ -1476,26 +1700,37 @@ func TestCreateTableDiff(t *testing.T) {
 					{
 						eFromStatementString := eFrom.Create().CanonicalStatementString()
 						for _, annotation := range alterEntityDiff.annotations.Removed() {
-							require.NotEmpty(t, annotation.line)
-							assert.Contains(t, eFromStatementString, annotation.line)
+							require.NotEmpty(t, annotation.text)
+							assert.Contains(t, eFromStatementString, annotation.text)
 						}
 						if len(alterEntityDiff.annotations.Removed()) == 0 {
+							assert.Empty(t, annotatedFrom.Removed())
 							assert.Equal(t, eFromStatementString, annotatedFromString)
 						} else {
+							assert.NotEmpty(t, annotatedFrom.Removed())
 							assert.NotEqual(t, eFromStatementString, annotatedFromString)
 						}
 					}
 					{
 						eToStatementString := eTo.Create().CanonicalStatementString()
 						for _, annotation := range alterEntityDiff.annotations.Added() {
-							require.NotEmpty(t, annotation.line)
-							assert.Contains(t, eToStatementString, annotation.line)
+							require.NotEmpty(t, annotation.text)
+							assert.Contains(t, eToStatementString, annotation.text)
 						}
 						if len(alterEntityDiff.annotations.Added()) == 0 {
+							assert.Empty(t, annotatedTo.Added())
 							assert.Equal(t, eToStatementString, annotatedToString)
 						} else {
+							assert.NotEmpty(t, annotatedTo.Added())
 							assert.NotEqual(t, eToStatementString, annotatedToString)
 						}
+					}
+					if len(ts.textdiffs) > 0 {
+						// For this test, we should validate the given diffs
+						for _, textdiff := range ts.textdiffs {
+							assert.Containsf(t, annotatedUnifiedString, textdiff, annotatedUnifiedString)
+						}
+						assert.Equal(t, len(annotatedUnified.Removed())+len(annotatedUnified.Added()), len(ts.textdiffs))
 					}
 					fmt.Println("============== ")
 					fmt.Println(">>>>>>", alter.CanonicalStatementString())
