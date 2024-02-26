@@ -724,6 +724,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (`id` int primary key, i int, key i2_idx (`i`, id), key i_idx3(id), key i_idx ( i ) )",
 			diff:  "alter table t1 add key i_idx3 (id)",
 			cdiff: "ALTER TABLE `t1` ADD KEY `i_idx3` (`id`)",
+			textdiffs: []string{
+				"+	KEY `i_idx3` (`id`)",
+			},
 		},
 		{
 			name:  "key made visible",
@@ -731,6 +734,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (`id` int primary key, i int, key i_idx(i))",
 			diff:  "alter table t1 alter index i_idx visible",
 			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` VISIBLE",
+			textdiffs: []string{
+				"-	KEY `i_idx` (`i`) INVISIBLE",
+				"+	KEY `i_idx` (`i`)",
+			},
 		},
 		{
 			name:  "key made invisible",
@@ -738,6 +745,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (`id` int primary key, i int, key i_idx(i) invisible)",
 			diff:  "alter table t1 alter index i_idx invisible",
 			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
+			textdiffs: []string{
+				"-	KEY `i_idx` (`i`)",
+				"+	KEY `i_idx` (`i`) INVISIBLE",
+			},
 		},
 		{
 			name:  "key made invisible with different case",
@@ -745,6 +756,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (`id` int primary key, i int, key i_idx(i) INVISIBLE)",
 			diff:  "alter table t1 alter index i_idx invisible",
 			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
+			textdiffs: []string{
+				"-	KEY `i_idx` (`i`)",
+				"+	KEY `i_idx` (`i`) INVISIBLE",
+			},
 		},
 		// FULLTEXT keys
 		{
@@ -753,6 +768,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name))",
 			diff:  "alter table t1 add fulltext key name_ft (`name`)",
 			cdiff: "ALTER TABLE `t1` ADD FULLTEXT KEY `name_ft` (`name`)",
+			textdiffs: []string{
+				"+	FULLTEXT KEY `name_ft` (`name`)",
+			},
 		},
 		{
 			name:  "add one fulltext key with explicit parser",
@@ -760,6 +778,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
 			diff:  "alter table t1 add fulltext key name_ft (`name`) with parser ngram",
 			cdiff: "ALTER TABLE `t1` ADD FULLTEXT KEY `name_ft` (`name`) WITH PARSER ngram",
+			textdiffs: []string{
+				"+	FULLTEXT KEY `name_ft` (`name`) WITH PARSER ngram",
+			},
 		},
 		{
 			name:  "add one fulltext key and one normal key",
@@ -767,6 +788,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key, name tinytext not null, key name_idx(name(32)), fulltext key name_ft(name))",
 			diff:  "alter table t1 add key name_idx (`name`(32)), add fulltext key name_ft (`name`)",
 			cdiff: "ALTER TABLE `t1` ADD KEY `name_idx` (`name`(32)), ADD FULLTEXT KEY `name_ft` (`name`)",
+			textdiffs: []string{
+				"+	KEY `name_idx` (`name`(32)),",
+				"+	FULLTEXT KEY `name_ft` (`name`)",
+			},
 		},
 		{
 			name:   "add two fulltext keys, distinct statements",
@@ -774,6 +799,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:     "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null, fulltext key name1_ft(name1), fulltext key name2_ft(name2))",
 			diffs:  []string{"alter table t1 add fulltext key name1_ft (name1)", "alter table t1 add fulltext key name2_ft (name2)"},
 			cdiffs: []string{"ALTER TABLE `t1` ADD FULLTEXT KEY `name1_ft` (`name1`)", "ALTER TABLE `t1` ADD FULLTEXT KEY `name2_ft` (`name2`)"},
+			textdiffs: []string{
+				"+	FULLTEXT KEY `name1_ft` (`name1`)",
+				"+	FULLTEXT KEY `name2_ft` (`name2`)",
+			},
 		},
 		{
 			name:     "add two fulltext keys, unify statements",
@@ -782,6 +811,10 @@ func TestCreateTableDiff(t *testing.T) {
 			fulltext: FullTextKeyUnifyStatements,
 			diff:     "alter table t1 add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
 			cdiff:    "ALTER TABLE `t1` ADD FULLTEXT KEY `name1_ft` (`name1`), ADD FULLTEXT KEY `name2_ft` (`name2`)",
+			textdiffs: []string{
+				"+	FULLTEXT KEY `name1_ft` (`name1`)",
+				"+	FULLTEXT KEY `name2_ft` (`name2`)",
+			},
 		},
 		{
 			name: "no fulltext diff",
@@ -824,6 +857,10 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 drop check check1, add constraint chk_abc123 check (i < 5)",
 			cdiff:      "ALTER TABLE `t1` DROP CHECK `check1`, ADD CONSTRAINT `chk_abc123` CHECK (`i` < 5)",
 			constraint: ConstraintNamesStrict,
+			textdiffs: []string{
+				"-	CONSTRAINT `check1` CHECK (`i` < 5)",
+				"+	CONSTRAINT `chk_abc123` CHECK (`i` < 5)",
+			},
 		},
 		{
 			name:       "check constraints, different name, ignore vitess, non vitess names",
@@ -832,6 +869,10 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 drop check check1, add constraint chk_abc123 check (i < 5)",
 			cdiff:      "ALTER TABLE `t1` DROP CHECK `check1`, ADD CONSTRAINT `chk_abc123` CHECK (`i` < 5)",
 			constraint: ConstraintNamesIgnoreVitess,
+			textdiffs: []string{
+				"-	CONSTRAINT `check1` CHECK (`i` < 5)",
+				"+	CONSTRAINT `chk_abc123` CHECK (`i` < 5)",
+			},
 		},
 		{
 			name:       "check constraints, different name, ignore vitess, vitess names, no match",
@@ -840,6 +881,10 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 drop check check1, add constraint check2_7fp024p4rxvr858tsaggvf9dw check (i < 5)",
 			cdiff:      "ALTER TABLE `t1` DROP CHECK `check1`, ADD CONSTRAINT `check2_7fp024p4rxvr858tsaggvf9dw` CHECK (`i` < 5)",
 			constraint: ConstraintNamesIgnoreVitess,
+			textdiffs: []string{
+				"-	CONSTRAINT `check1` CHECK (`i` < 5)",
+				"+	CONSTRAINT `check2_7fp024p4rxvr858tsaggvf9dw` CHECK (`i` < 5)",
+			},
 		},
 		{
 			name:       "check constraints, different name, ignore vitess, vitess names match",
@@ -897,6 +942,9 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 add constraint check3 check (i != 3)",
 			cdiff:      "ALTER TABLE `t1` ADD CONSTRAINT `check3` CHECK (`i` != 3)",
 			constraint: ConstraintNamesIgnoreAll,
+			textdiffs: []string{
+				"+	CONSTRAINT `check3` CHECK (`i` != 3)",
+			},
 		},
 		{
 			name:       "check constraints, remove",
@@ -905,6 +953,9 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 drop check check3",
 			cdiff:      "ALTER TABLE `t1` DROP CHECK `check3`",
 			constraint: ConstraintNamesIgnoreAll,
+			textdiffs: []string{
+				"-	CONSTRAINT `check3` CHECK (`i` != 3)",
+			},
 		},
 		{
 			name:       "check constraints, remove duplicate",
@@ -913,6 +964,9 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 drop check check3",
 			cdiff:      "ALTER TABLE `t1` DROP CHECK `check3`",
 			constraint: ConstraintNamesIgnoreAll,
+			textdiffs: []string{
+				"-	CONSTRAINT `check3` CHECK (`i` > 2)",
+			},
 		},
 		{
 			name:       "check constraints, remove, ignore vitess, no match",
@@ -921,6 +975,13 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 drop check chk_123abc, drop check check3, drop check chk_789def, add constraint check1 check (i < 5), add constraint check2 check (i > 2)",
 			cdiff:      "ALTER TABLE `t1` DROP CHECK `chk_123abc`, DROP CHECK `check3`, DROP CHECK `chk_789def`, ADD CONSTRAINT `check1` CHECK (`i` < 5), ADD CONSTRAINT `check2` CHECK (`i` > 2)",
 			constraint: ConstraintNamesIgnoreVitess,
+			textdiffs: []string{
+				"-	CONSTRAINT `chk_123abc` CHECK (`i` > 2)",
+				"-	CONSTRAINT `check3` CHECK (`i` != 3)",
+				"-	CONSTRAINT `chk_789def` CHECK (`i` < 5)",
+				"+	CONSTRAINT `check1` CHECK (`i` < 5)",
+				"+	CONSTRAINT `check2` CHECK (`i` > 2)",
+			},
 		},
 		{
 			name:       "check constraints, remove, ignore vitess, match",
@@ -929,6 +990,9 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 drop check check3",
 			cdiff:      "ALTER TABLE `t1` DROP CHECK `check3`",
 			constraint: ConstraintNamesIgnoreVitess,
+			textdiffs: []string{
+				"-	CONSTRAINT `check3` CHECK (`i` != 3)",
+			},
 		},
 		{
 			name:       "check constraints, remove, strict",
@@ -937,6 +1001,13 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 drop check chk_123abc, drop check check3, drop check chk_789def, add constraint check1 check (i < 5), add constraint check2 check (i > 2)",
 			cdiff:      "ALTER TABLE `t1` DROP CHECK `chk_123abc`, DROP CHECK `check3`, DROP CHECK `chk_789def`, ADD CONSTRAINT `check1` CHECK (`i` < 5), ADD CONSTRAINT `check2` CHECK (`i` > 2)",
 			constraint: ConstraintNamesStrict,
+			textdiffs: []string{
+				"-	CONSTRAINT `chk_123abc` CHECK (`i` > 2)",
+				"-	CONSTRAINT `check3` CHECK (`i` != 3)",
+				"-	CONSTRAINT `chk_789def` CHECK (`i` < 5)",
+				"+	CONSTRAINT `check1` CHECK (`i` < 5)",
+				"+	CONSTRAINT `check2` CHECK (`i` > 2)",
+			},
 		},
 		// foreign keys
 		{
@@ -945,6 +1016,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, i int, key i_idex (i))",
 			diff:  "alter table t1 drop foreign key f",
 			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f`",
+			textdiffs: []string{
+				"-	CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			},
 		},
 		{
 			name:  "add foreign key",
@@ -952,6 +1026,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f foreign key (i) references parent(id))",
 			diff:  "alter table t1 add constraint f foreign key (i) references parent (id)",
 			cdiff: "ALTER TABLE `t1` ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			textdiffs: []string{
+				"+	CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			},
 		},
 		{
 			name:  "add foreign key and index",
@@ -959,6 +1036,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f foreign key (i) references parent(id))",
 			diff:  "alter table t1 add key ix (i), add constraint f foreign key (i) references parent (id)",
 			cdiff: "ALTER TABLE `t1` ADD KEY `ix` (`i`), ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			textdiffs: []string{
+				"+	KEY `ix` (`i`)",
+				"+	CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			},
 		},
 		{
 			name: "identical foreign key",
@@ -971,6 +1052,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f2 foreign key (i) references parent(id) on delete cascade)",
 			diff:  "alter table t1 drop foreign key f1, add constraint f2 foreign key (i) references parent (id) on delete cascade",
 			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f1`, ADD CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE CASCADE",
+			textdiffs: []string{
+				"-	CONSTRAINT `f1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+				"+	CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			},
 		},
 		{
 			name:       "similar foreign key under different name, ignore names",
@@ -984,6 +1069,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id))",
 			diff:  "alter table t1 drop foreign key f2",
 			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f2`",
+			textdiffs: []string{
+				"-	CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			},
 		},
 		{
 			name:       "two identical foreign keys, dropping one, ignore vitess names",
@@ -992,6 +1080,9 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 drop foreign key f2",
 			cdiff:      "ALTER TABLE `t1` DROP FOREIGN KEY `f2`",
 			constraint: ConstraintNamesIgnoreVitess,
+			textdiffs: []string{
+				"-	CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			},
 		},
 		{
 			name:       "two identical foreign keys, dropping one, ignore all names",
@@ -1000,6 +1091,9 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 drop foreign key f2",
 			cdiff:      "ALTER TABLE `t1` DROP FOREIGN KEY `f2`",
 			constraint: ConstraintNamesIgnoreAll,
+			textdiffs: []string{
+				"-	CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			},
 		},
 		{
 			name:       "add two identical foreign key constraints, ignore all names",
@@ -1008,6 +1102,10 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:       "alter table t1 add constraint f1 foreign key (i) references parent (id), add constraint f2 foreign key (i) references parent (id)",
 			cdiff:      "ALTER TABLE `t1` ADD CONSTRAINT `f1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`), ADD CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
 			constraint: ConstraintNamesIgnoreAll,
+			textdiffs: []string{
+				"+	CONSTRAINT `f1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+				"+	CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			},
 		},
 		{
 			name: "implicit foreign key indexes",
@@ -1030,6 +1128,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f foreign key (i) references parent(id) on delete set null)",
 			diff:  "alter table t1 drop foreign key f, add constraint f foreign key (i) references parent (id) on delete set null",
 			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f`, ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE SET NULL",
+			textdiffs: []string{
+				"-	CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE CASCADE",
+				"+	CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE SET NULL",
+			},
 		},
 		{
 			name:  "drop and add foreign key",
@@ -1037,6 +1139,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f2 foreign key (i) references parent(id) on delete set null)",
 			diff:  "alter table t1 drop foreign key f, add constraint f2 foreign key (i) references parent (id) on delete set null",
 			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f`, ADD CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE SET NULL",
+			textdiffs: []string{
+				"-	CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE CASCADE",
+				"+	CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE SET NULL",
+			},
 		},
 		{
 			name: "ignore different foreign key order",
@@ -1050,6 +1156,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, i int, key f(i))",
 			diff:  "alter table t1 drop foreign key f",
 			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f`",
+			textdiffs: []string{
+				"-	CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE CASCADE",
+			},
 		},
 		// partitions
 		{
@@ -1641,6 +1750,7 @@ func TestCreateTableDiff(t *testing.T) {
 					t.Logf("c: %v", sqlparser.CanonicalString(c.CreateTable))
 					t.Logf("other: %v", sqlparser.CanonicalString(other.CreateTable))
 				}
+				assert.Empty(t, ts.textdiffs)
 				return
 			}
 
@@ -1726,6 +1836,11 @@ func TestCreateTableDiff(t *testing.T) {
 						}
 					}
 					if len(ts.textdiffs) > 0 {
+						uniqueDiffs := make(map[string]bool)
+						for _, textdiff := range ts.textdiffs {
+							uniqueDiffs[textdiff] = true
+						}
+						assert.Equal(t, len(uniqueDiffs), len(ts.textdiffs))
 						// For this test, we should validate the given diffs
 						for _, textdiff := range ts.textdiffs {
 							assert.Containsf(t, annotatedUnifiedString, textdiff, annotatedUnifiedString)
