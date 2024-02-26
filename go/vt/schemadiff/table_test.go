@@ -2009,13 +2009,13 @@ func TestCreateTableDiff(t *testing.T) {
 							assert.NotEqual(t, eToStatementString, annotatedToString)
 						}
 					}
-					if len(ts.textdiffs) > 0 {
+					if len(ts.textdiffs) > 0 { // Still incomplete.
+						// For this test, we should validate the given diffs
 						uniqueDiffs := make(map[string]bool)
 						for _, textdiff := range ts.textdiffs {
 							uniqueDiffs[textdiff] = true
 						}
-						assert.Equal(t, len(uniqueDiffs), len(ts.textdiffs))
-						// For this test, we should validate the given diffs
+						require.Equal(t, len(uniqueDiffs), len(ts.textdiffs)) // integrity of test
 						for _, textdiff := range ts.textdiffs {
 							assert.Containsf(t, annotatedUnifiedString, textdiff, annotatedUnifiedString)
 						}
