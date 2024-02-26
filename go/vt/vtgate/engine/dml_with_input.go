@@ -26,39 +26,39 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-var _ Primitive = (*DeleteWithInput)(nil)
+var _ Primitive = (*DMLWithInput)(nil)
 
-const DmVals = "dm_vals"
+const DmlVals = "dml_vals"
 
-// DeleteWithInput represents the instructions to perform a delete operation based on the input result.
-type DeleteWithInput struct {
+// DMLWithInput represents the instructions to perform a DML operation based on the input result.
+type DMLWithInput struct {
 	txNeeded
 
-	Delete Primitive
-	Input  Primitive
+	DML   Primitive
+	Input Primitive
 
 	OutputCols []int
 }
 
-func (del *DeleteWithInput) RouteType() string {
-	return "DeleteWithInput"
+func (dml *DMLWithInput) RouteType() string {
+	return "DMLWithInput"
 }
 
-func (del *DeleteWithInput) GetKeyspaceName() string {
-	return del.Input.GetKeyspaceName()
+func (dml *DMLWithInput) GetKeyspaceName() string {
+	return dml.Input.GetKeyspaceName()
 }
 
-func (del *DeleteWithInput) GetTableName() string {
-	return del.Input.GetTableName()
+func (dml *DMLWithInput) GetTableName() string {
+	return dml.Input.GetTableName()
 }
 
-func (del *DeleteWithInput) Inputs() ([]Primitive, []map[string]any) {
-	return []Primitive{del.Input, del.Delete}, nil
+func (dml *DMLWithInput) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{dml.Input, dml.DML}, nil
 }
 
 // TryExecute performs a non-streaming exec.
-func (del *DeleteWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
-	inputRes, err := vcursor.ExecutePrimitive(ctx, del.Input, bindVars, false)
+func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	inputRes, err := vcursor.ExecutePrimitive(ctx, dml.Input, bindVars, false)
 	if err != nil {
 		return nil, err
 	}
@@ -67,14 +67,14 @@ func (del *DeleteWithInput) TryExecute(ctx context.Context, vcursor VCursor, bin
 	}
 
 	var bv *querypb.BindVariable
-	if len(del.OutputCols) == 1 {
-		bv = getBVSingle(inputRes, del.OutputCols[0])
+	if len(dml.OutputCols) == 1 {
+		bv = getBVSingle(inputRes, dml.OutputCols[0])
 	} else {
-		bv = getBVMulti(inputRes, del.OutputCols)
+		bv = getBVMulti(inputRes, dml.OutputCols)
 	}
 
-	bindVars[DmVals] = bv
-	return vcursor.ExecutePrimitive(ctx, del.Delete, bindVars, false)
+	bindVars[DmlVals] = bv
+	return vcursor.ExecutePrimitive(ctx, dml.DML, bindVars, false)
 }
 
 func getBVSingle(res *sqltypes.Result, offset int) *querypb.BindVariable {
@@ -99,8 +99,8 @@ func getBVMulti(res *sqltypes.Result, offsets []int) *querypb.BindVariable {
 }
 
 // TryStreamExecute performs a streaming exec.
-func (del *DeleteWithInput) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := del.TryExecute(ctx, vcursor, bindVars, wantfields)
+func (dml *DMLWithInput) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := dml.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -108,16 +108,16 @@ func (del *DeleteWithInput) TryStreamExecute(ctx context.Context, vcursor VCurso
 }
 
 // GetFields fetches the field info.
-func (del *DeleteWithInput) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT13001("unreachable code for MULTI DELETE")
+func (dml *DMLWithInput) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return nil, vterrors.VT13001("unreachable code for DMLs")
 }
 
-func (del *DeleteWithInput) description() PrimitiveDescription {
+func (dml *DMLWithInput) description() PrimitiveDescription {
 	other := map[string]any{
-		"Offset": del.OutputCols,
+		"Offset": dml.OutputCols,
 	}
 	return PrimitiveDescription{
-		OperatorType:     "DeleteWithInput",
+		OperatorType:     "DMLWithInput",
 		TargetTabletType: topodatapb.TabletType_PRIMARY,
 		Other:            other,
 	}

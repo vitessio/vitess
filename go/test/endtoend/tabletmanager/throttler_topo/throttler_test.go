@@ -370,7 +370,7 @@ func TestLag(t *testing.T) {
 	defer clusterInstance.EnableVTOrcRecoveries(t)
 
 	t.Run("stopping replication", func(t *testing.T) {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
+		err := clusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
 		assert.NoError(t, err)
 	})
 	t.Run("accumulating lag, expecting throttler push back", func(t *testing.T) {
@@ -415,7 +415,7 @@ func TestLag(t *testing.T) {
 	})
 
 	t.Run("starting replication", func(t *testing.T) {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", replicaTablet.Alias)
+		err := clusterInstance.VtctldClientProcess.ExecuteCommand("StartReplication", replicaTablet.Alias)
 		assert.NoError(t, err)
 	})
 	t.Run("expecting replication to catch up and throttler check to return OK", func(t *testing.T) {
@@ -439,7 +439,7 @@ func TestLag(t *testing.T) {
 func TestNoReplicas(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	t.Run("changing replica to RDONLY", func(t *testing.T) {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
+		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
 		assert.NoError(t, err)
 
 		// This makes no REPLICA servers available. We expect something like:
@@ -447,7 +447,7 @@ func TestNoReplicas(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("restoring to REPLICA", func(t *testing.T) {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
+		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
 		assert.NoError(t, err)
 
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)

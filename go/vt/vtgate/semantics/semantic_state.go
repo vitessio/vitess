@@ -78,7 +78,7 @@ type (
 	// QuerySignature is used to identify shortcuts in the planning process
 	QuerySignature struct {
 		Aggregation bool
-		Delete      bool
+		DML         bool
 		Distinct    bool
 		HashJoin    bool
 		SubQueries  bool
@@ -306,7 +306,7 @@ func (st *SemTable) ErrIfFkDependentColumnUpdated(updateExprs sqlparser.UpdateEx
 	for _, updateExpr := range updateExprs {
 		deps := st.RecursiveDeps(updateExpr.Name)
 		if deps.NumberOfTables() != 1 {
-			panic("expected to have single table dependency")
+			return vterrors.VT13001("expected to have single table dependency")
 		}
 		// Get all the child and parent foreign keys for the given table that the update expression belongs to.
 		childFks := st.childForeignKeysInvolved[deps]
@@ -730,6 +730,10 @@ func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 
 // SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
 func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*vindexes.Table) {
+	return singleUnshardedKeyspace(st.Tables)
+}
+
+func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tables []*vindexes.Table) {
 	validKS := func(this *vindexes.Keyspace) bool {
 		if this == nil || this.Sharded {
 			return false
@@ -744,7 +748,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*
 		return true
 	}
 
-	for _, table := range st.Tables {
+	for _, table := range tableInfos {
 		if _, isDT := table.(*DerivedTable); isDT {
 			continue
 		}
@@ -922,4 +926,14 @@ func (st *SemTable) Clone(n sqlparser.SQLNode) sqlparser.SQLNode {
 		}
 		cursor.Replace(sqlparser.CloneExpr(expr))
 	}, st.CopySemanticInfo)
+}
+
+func (st *SemTable) UpdateChildFKExpr(origUpdExpr *sqlparser.UpdateExpr, newExpr sqlparser.Expr) {
+	for _, exprs := range st.childFkToUpdExprs {
+		for idx, updateExpr := range exprs {
+			if updateExpr == origUpdExpr {
+				exprs[idx].Expr = newExpr
+			}
+		}
+	}
 }

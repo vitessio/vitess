@@ -5012,7 +5012,7 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u join ref_with_source as r on u.col = r.col for update",
+        "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u, ref_with_source as r where u.col = r.col for update",
         "Query": "delete u from `user` as u, ref_with_source as r where u.col = r.col",
         "Table": "user"
       },
@@ -5038,7 +5038,7 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u join music as m on u.id = m.user_id for update",
+        "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u, music as m where u.id = m.user_id for update",
         "Query": "delete u from `user` as u, music as m where u.id = m.user_id",
         "Table": "user"
       },
@@ -5055,7 +5055,7 @@
       "QueryType": "DELETE",
       "Original": "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'",
       "Instructions": {
-        "OperatorType": "DeleteWithInput",
+        "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
           0
@@ -5108,11 +5108,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select `user`.Id, `user`.`Name`, `user`.Costly from `user` where `user`.id in ::dm_vals for update",
-            "Query": "delete from `user` where `user`.id in ::dm_vals",
+            "OwnedVindexQuery": "select `user`.Id, `user`.`Name`, `user`.Costly from `user` where `user`.id in ::dml_vals for update",
+            "Query": "delete from `user` where `user`.id in ::dml_vals",
             "Table": "user",
             "Values": [
-              "::dm_vals"
+              "::dml_vals"
             ],
             "Vindex": "user_index"
           }
@@ -5131,7 +5131,7 @@
       "QueryType": "DELETE",
       "Original": "delete u from user u join music m on u.col = m.col",
       "Instructions": {
-        "OperatorType": "DeleteWithInput",
+        "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
           0
@@ -5180,11 +5180,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dm_vals for update",
-            "Query": "delete from `user` as u where u.id in ::dm_vals",
+            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dml_vals for update",
+            "Query": "delete from `user` as u where u.id in ::dml_vals",
             "Table": "user",
             "Values": [
-              "::dm_vals"
+              "::dml_vals"
             ],
             "Vindex": "user_index"
           }
@@ -5203,7 +5203,7 @@
       "QueryType": "DELETE",
       "Original": "delete u from music m join user u where u.col = m.col and m.foo = 42",
       "Instructions": {
-        "OperatorType": "DeleteWithInput",
+        "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
           0
@@ -5252,11 +5252,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dm_vals for update",
-            "Query": "delete from `user` as u where u.id in ::dm_vals",
+            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dml_vals for update",
+            "Query": "delete from `user` as u where u.id in ::dml_vals",
             "Table": "user",
             "Values": [
-              "::dm_vals"
+              "::dml_vals"
             ],
             "Vindex": "user_index"
           }
@@ -5284,7 +5284,7 @@
         "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
-        "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u join music as m where u.id = m.user_id and m.foo = 42 for update",
+        "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u, music as m where m.foo = 42 and u.id = m.user_id for update",
         "Query": "delete u from `user` as u, music as m where m.foo = 42 and u.id = m.user_id",
         "Table": "user"
       },
@@ -5301,7 +5301,7 @@
       "QueryType": "DELETE",
       "Original": "delete u from user u join music m on u.col = m.col join user_extra ue on m.user_id = ue.user_id where ue.foo = 20 and u.col = 30 and m.bar = 40",
       "Instructions": {
-        "OperatorType": "DeleteWithInput",
+        "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
           0
@@ -5350,11 +5350,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dm_vals for update",
-            "Query": "delete from `user` as u where u.id in ::dm_vals",
+            "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dml_vals for update",
+            "Query": "delete from `user` as u where u.id in ::dml_vals",
             "Table": "user",
             "Values": [
-              "::dm_vals"
+              "::dml_vals"
             ],
             "Vindex": "user_index"
           }
@@ -5374,7 +5374,7 @@
       "QueryType": "DELETE",
       "Original": "delete m from user u join music m on u.col = m.col join user_extra ue on m.user_id = ue.user_id where ue.foo = 20 and u.col = 30 and m.bar = 40",
       "Instructions": {
-        "OperatorType": "DeleteWithInput",
+        "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
           0
@@ -5423,11 +5423,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select m.user_id, m.id from music as m where m.id in ::dm_vals for update",
-            "Query": "delete from music as m where m.id in ::dm_vals",
+            "OwnedVindexQuery": "select m.user_id, m.id from music as m where m.id in ::dml_vals for update",
+            "Query": "delete from music as m where m.id in ::dml_vals",
             "Table": "music",
             "Values": [
-              "::dm_vals"
+              "::dml_vals"
             ],
             "Vindex": "music_user_map"
           }
@@ -5447,7 +5447,7 @@
       "QueryType": "DELETE",
       "Original": "delete from user limit 10",
       "Instructions": {
-        "OperatorType": "DeleteWithInput",
+        "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
           0
@@ -5480,11 +5480,11 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dm_vals limit 10 for update",
-            "Query": "delete from `user` where `user`.id in ::dm_vals",
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dml_vals for update",
+            "Query": "delete from `user` where `user`.id in ::dml_vals",
             "Table": "user",
             "Values": [
-              "::dm_vals"
+              "::dml_vals"
             ],
             "Vindex": "user_index"
           }
@@ -5502,7 +5502,7 @@
       "QueryType": "DELETE",
       "Original": "delete from user order by name, col limit 5",
       "Instructions": {
-        "OperatorType": "DeleteWithInput",
+        "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
           0
@@ -5536,17 +5536,655 @@
             "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
-            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dm_vals order by `name` asc, col asc limit 5 for update",
-            "Query": "delete from `user` where `user`.id in ::dm_vals",
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dml_vals for update",
+            "Query": "delete from `user` where `user`.id in ::dml_vals",
             "Table": "user",
             "Values": [
-              "::dm_vals"
+              "::dml_vals"
             ],
             "Vindex": "user_index"
           }
         ]
       },
       "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update with limit clause",
+    "query": "update user set val = 1 where (name = 'foo' or id = 1) limit 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where (name = 'foo' or id = 1) limit 1",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id from `user` where 1 != 1",
+                "Query": "select `user`.id from `user` where `name` = 'foo' or id = 1 limit :__upper_limit lock in share mode",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update `user` set val = 1 where `user`.id in ::dml_vals",
+            "Table": "user",
+            "Values": [
+              "::dml_vals"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update a vindex column with limit",
+    "query": "update user set name = 'abc' where id > 10 limit 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set name = 'abc' where id > 10 limit 1",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id from `user` where 1 != 1",
+                "Query": "select `user`.id from `user` where id > 10 limit :__upper_limit lock in share mode",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "ChangedVindexValues": [
+              "name_user_map:3"
+            ],
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = 'abc' from `user` where `user`.id in ::dml_vals for update",
+            "Query": "update `user` set `name` = 'abc' where `user`.id in ::dml_vals",
+            "Table": "user",
+            "Values": [
+              "::dml_vals"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update with multi table join with single target",
+    "query": "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "ue_id": 0
+            },
+            "TableName": "user_extra_`user`",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select ue.id from user_extra as ue where 1 != 1",
+                "Query": "select ue.id from user_extra as ue lock in share mode",
+                "Table": "user_extra"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.id from `user` as u where 1 != 1",
+                "Query": "select u.id from `user` as u where u.id = :ue_id lock in share mode",
+                "Table": "`user`",
+                "Values": [
+                  ":ue_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "ChangedVindexValues": [
+              "name_user_map:3"
+            ],
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select Id, `Name`, Costly, u.`name` = 'foo' from `user` as u where u.id in ::dml_vals for update",
+            "Query": "update `user` as u set u.`name` = 'foo' where u.id in ::dml_vals",
+            "Table": "user",
+            "Values": [
+              "::dml_vals"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update with multi table join with single target modifying lookup vindex",
+    "query": "update user join user_extra on user.id = user_extra.id set user.name = 'foo'",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user join user_extra on user.id = user_extra.id set user.name = 'foo'",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "user_extra_id": 0
+            },
+            "TableName": "user_extra_`user`",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+                "Query": "select user_extra.id from user_extra lock in share mode",
+                "Table": "user_extra"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id from `user` where 1 != 1",
+                "Query": "select `user`.id from `user` where `user`.id = :user_extra_id lock in share mode",
+                "Table": "`user`",
+                "Values": [
+                  ":user_extra_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "ChangedVindexValues": [
+              "name_user_map:3"
+            ],
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select Id, `Name`, Costly, `user`.`name` = 'foo' from `user` where `user`.id in ::dml_vals for update",
+            "Query": "update `user` set `user`.`name` = 'foo' where `user`.id in ::dml_vals",
+            "Table": "user",
+            "Values": [
+              "::dml_vals"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "update with multi table reference with multi target update on a derived table",
+    "query": "update ignore (select foo, col, bar from user) u, music m set u.foo = 21, u.bar = 'abc' where u.col = m.col",
+    "plan": "VT03031: the target table (select foo, col, bar from `user`) as u of the UPDATE is not updatable"
+  },
+  {
+    "comment": "update with derived table",
+    "query": "update (select id from user) as u set id = 4",
+    "plan": "VT03031: the target table (select id from `user`) as u of the UPDATE is not updatable"
+  },
+  {
+    "comment": "Delete with routed table on music",
+    "query": "delete from second_user.bar",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from second_user.bar",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "OwnedVindexQuery": "select user_id, id from music as bar for update",
+        "Query": "delete from music as bar",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "Update with routed table on music",
+    "query": "update second_user.bar set col = 23",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update second_user.bar set col = 23",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update music as bar set col = 23",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "Insert with routed table on music",
+    "query": "insert into second_user.bar(id) values (2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into second_user.bar(id) values (2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "insert into music(id, user_id) values (:_id_0, :_user_id_0)",
+        "TableName": "music",
+        "VindexValues": {
+          "music_user_map": "2",
+          "user_index": "null"
+        }
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery in sharded delete",
+    "query": "delete from user where id = (select id from music where user_id = 1)",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user where id = (select id from music where user_id = 1)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from music where 1 != 1",
+            "Query": "select id from music where user_id = 1",
+            "Table": "music",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Delete",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = :__sq1 for update",
+            "Query": "delete from `user` where id = :__sq1",
+            "Table": "user",
+            "Values": [
+              ":__sq1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "unsharded subquery in sharded delete",
+    "query": "delete from user where col = (select id from unsharded)",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user where col = (select id from unsharded)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select id from unsharded where 1 != 1",
+            "Query": "select id from unsharded",
+            "Table": "unsharded"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Delete",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetTabletType": "PRIMARY",
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where col = :__sq1 for update",
+            "Query": "delete from `user` where col = :__sq1",
+            "Table": "user"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery in unsharded delete",
+    "query": "delete from unsharded where col = (select id from user)",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from unsharded where col = (select id from user)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`",
+            "Table": "`user`"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Delete",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from unsharded where col = :__sq1",
+            "Table": "unsharded"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded subquery in unsharded subquery in unsharded delete",
+    "query": "delete from unsharded where col = (select id from unsharded where id = (select id from user))",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from unsharded where col = (select id from unsharded where id = (select id from user))",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq2"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from `user` where 1 != 1",
+                "Query": "select id from `user`",
+                "Table": "`user`"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id from unsharded where 1 != 1",
+                "Query": "select id from unsharded where id = :__sq2",
+                "Table": "unsharded"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Delete",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from unsharded where col = :__sq1",
+            "Table": "unsharded"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded join unsharded subquery in unsharded delete",
+    "query": "delete from unsharded where col = (select id from unsharded join user on unsharded.id = user.id)",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from unsharded where col = (select id from unsharded join user on unsharded.id = user.id)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "unsharded_id": 0
+            },
+            "TableName": "unsharded_`user`",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+                "Query": "select unsharded.id from unsharded",
+                "Table": "unsharded"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from `user` where 1 != 1",
+                "Query": "select id from `user` where `user`.id = :unsharded_id",
+                "Table": "`user`",
+                "Values": [
+                  ":unsharded_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Delete",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from unsharded where col = :__sq1",
+            "Table": "unsharded"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
         "user.user"
       ]
     }

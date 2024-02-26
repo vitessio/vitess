@@ -615,6 +615,22 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `time('1111:66:56')`,
 			result:     `NULL`,
 		},
+		{
+			expression: `locate('Å', 'a')`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `locate('a', 'Å')`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `locate("", "😊😂🤢", 3)`,
+			result:     `INT64(3)`,
+		},
+		{
+			expression: `REPLACE('www.mysql.com', '', 'Ww')`,
+			result:     `VARCHAR("www.mysql.com")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

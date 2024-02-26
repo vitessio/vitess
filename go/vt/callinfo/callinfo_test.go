@@ -55,7 +55,6 @@ func TestNewContext(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.expectedContext, NewContext(tt.ctx, tt.ci))
 		})
@@ -84,7 +83,6 @@ func TestFromContext(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			ci, ok := FromContext(tt.ctx)
 			require.Equal(t, tt.expectedCi, ci)
@@ -112,7 +110,6 @@ func TestHTMLFromContext(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.expectedHTML, HTMLFromContext(tt.ctx))
 		})

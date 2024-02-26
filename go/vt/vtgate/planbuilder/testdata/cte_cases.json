@@ -1369,8 +1369,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select u.* from (select * from unsharded where 1 != 1) as u where 1 != 1",
-        "Query": "select u.* from (select * from unsharded) as u",
+        "FieldQuery": "with u as (select * from unsharded where 1 != 1) select u.* from u where 1 != 1",
+        "Query": "with u as (select * from unsharded) select u.* from u",
         "Table": "unsharded"
       },
       "TablesUsed": [
@@ -1709,8 +1709,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select col from (select col from unsharded join unsharded_b where 1 != 1) as u join unsharded_a as ua where 1 != 1",
-        "Query": "select col from (select col from unsharded join unsharded_b) as u join unsharded_a as ua limit 1",
+        "FieldQuery": "with u as (select col from unsharded join unsharded_b where 1 != 1) select col from u join unsharded_a as ua where 1 != 1",
+        "Query": "with u as (select col from unsharded join unsharded_b) select col from u join unsharded_a as ua limit 1",
         "Table": "unsharded, unsharded_a, unsharded_b"
       },
       "TablesUsed": [
@@ -1838,6 +1838,132 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "recursive WITH against an unsharded database",
+    "query": "WITH RECURSIVE cte (n) AS ( SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5 ) SELECT cte.n FROM unsharded join cte on unsharded.id = cte.n ",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE cte (n) AS ( SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5 ) SELECT cte.n FROM unsharded join cte on unsharded.id = cte.n ",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "with recursive cte(n) as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select cte.n from unsharded join cte on unsharded.id = cte.n where 1 != 1",
+        "Query": "with recursive cte(n) as (select 1 from dual union all select n + 1 from cte where n < 5) select cte.n from unsharded join cte on unsharded.id = cte.n",
+        "Table": "dual, unsharded"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "WITH two common expressions against an unsharded datbase and a SELECT UNION against those expressions",
+    "query": "WITH `count_a` AS (SELECT COUNT(`id`) AS `num` FROM `unsharded_a`), `count_b` AS (SELECT COUNT(`id`) AS `num` FROM `unsharded_b`) SELECT 'count_a' AS `tab`, `num` FROM `count_a` UNION SELECT 'count_b' AS `tab`, `num` FROM `count_b`",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH `count_a` AS (SELECT COUNT(`id`) AS `num` FROM `unsharded_a`), `count_b` AS (SELECT COUNT(`id`) AS `num` FROM `unsharded_b`) SELECT 'count_a' AS `tab`, `num` FROM `count_a` UNION SELECT 'count_b' AS `tab`, `num` FROM `count_b`",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 'count_a' as tab, num from count_a where 1 != 1 union select 'count_b' as tab, num from count_b where 1 != 1",
+        "Query": "with count_a as (select count(id) as num from unsharded_a) , count_b as (select count(id) as num from unsharded_b) select 'count_a' as tab, num from count_a union select 'count_b' as tab, num from count_b",
+        "Table": "unsharded_a, unsharded_b"
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "main.unsharded_b"
+      ]
+    }
+  },
+  {
+    "comment": "WITH two common expressions against a sharded datbase and a SELECT UNION against those expressions",
+    "query": "WITH `count_a` AS (SELECT COUNT(`user_id`) AS `num` FROM `user_metadata`), `count_b` AS (SELECT COUNT(`user_id`) AS `num` FROM `user_extra`) SELECT 'count_a' AS `tab`, `num` FROM `count_a` UNION SELECT 'count_b' AS `tab`, `num` FROM `count_b`",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH `count_a` AS (SELECT COUNT(`user_id`) AS `num` FROM `user_metadata`), `count_b` AS (SELECT COUNT(`user_id`) AS `num` FROM `user_extra`) SELECT 'count_a' AS `tab`, `num` FROM `count_a` UNION SELECT 'count_b' AS `tab`, `num` FROM `count_b`",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0: utf8mb4_0900_ai_ci",
+          "1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "'count_a' as tab",
+                  ":0 as num"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "sum_count(0) AS num",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(user_id) as num from user_metadata where 1 != 1",
+                        "Query": "select count(user_id) as num from user_metadata",
+                        "Table": "user_metadata"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "'count_b' as tab",
+                  ":0 as num"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "sum_count(0) AS num",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(user_id) as num from user_extra where 1 != 1",
+                        "Query": "select count(user_id) as num from user_extra",
+                        "Table": "user_extra"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user_extra",
+        "user.user_metadata"
       ]
     }
   }

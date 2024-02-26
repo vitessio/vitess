@@ -1040,6 +1040,7 @@ func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...any) {
 			Code:    uint32(sqlerror.ERNotSupportedYet),
 			Message: fmt.Sprintf(format, params...),
 		})
+		warnings.Add("WarnUnshardedOnly", 1)
 	}
 }
 

@@ -335,6 +335,17 @@ func TestParseUint64(t *testing.T) {
 			expected: 1,
 		},
 		{
+			input:    "-",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "-"`,
+		},
+		{
+			input: "-1",
+			base:  10,
+			err:   `cannot parse uint64 from "-1"`,
+		},
+		{
 			input:    "10",
 			base:     2,
 			expected: 2,
@@ -467,6 +478,61 @@ func TestParseUint64(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.input, func(t *testing.T) {
 			val, err := ParseUint64(tc.input, tc.base)
+			if tc.err == "" {
+				require.NoError(t, err)
+				require.Equal(t, tc.expected, val)
+			} else {
+				require.Equal(t, tc.expected, val)
+				require.EqualError(t, err, tc.err)
+			}
+		})
+	}
+}
+
+func TestParseUint64WithNeg(t *testing.T) {
+	testcases := []struct {
+		input    string
+		base     int
+		expected uint64
+		err      string
+	}{
+		{
+			input:    "-",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "-"`,
+		},
+		{
+			input:    "-1",
+			base:     10,
+			expected: 18446744073709551615,
+		},
+		{
+			input:    "-9223372036854775808",
+			base:     10,
+			expected: 9223372036854775808,
+		},
+		{
+			input:    "-9223372036854775809",
+			base:     10,
+			expected: 9223372036854775807,
+		},
+		{
+			input:    "-18446744073709551616",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "-18446744073709551616": overflow`,
+		},
+		{
+			input:    "-31415926535897932384",
+			base:     10,
+			expected: 0,
+			err:      `cannot parse uint64 from "-31415926535897932384": overflow`,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.input, func(t *testing.T) {
+			val, err := ParseUint64WithNeg(tc.input, tc.base)
 			if tc.err == "" {
 				require.NoError(t, err)
 				require.Equal(t, tc.expected, val)

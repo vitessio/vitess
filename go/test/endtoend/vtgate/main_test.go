@@ -79,12 +79,12 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = clusterInstance.VtctlclientProcess.ApplyRoutingRules(routingRules)
+		err = clusterInstance.VtctldClientProcess.ApplyRoutingRules(routingRules)
 		if err != nil {
 			return 1
 		}
 
-		_, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("RebuildVSchemaGraph")
+		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("RebuildVSchemaGraph")
 		if err != nil {
 			return 1
 		}

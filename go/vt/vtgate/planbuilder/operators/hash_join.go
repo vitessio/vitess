@@ -106,7 +106,7 @@ func (hj *HashJoin) SetInputs(operators []Operator) {
 }
 
 func (hj *HashJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	return AddPredicate(ctx, hj, expr, false, newFilter)
+	return AddPredicate(ctx, hj, expr, false, newFilterSinglePredicate)
 }
 
 func (hj *HashJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
