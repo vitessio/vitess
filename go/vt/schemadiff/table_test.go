@@ -1767,6 +1767,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) engine=myisam, character set=utf8",
 			diff:  "alter table t1 engine MyISAM",
 			cdiff: "ALTER TABLE `t1` ENGINE MyISAM",
+			textdiffs: []string{
+				"+) ENGINE MyISAM",
+			},
 		},
 		{
 			name:  "normalized ENGINE MEMORY value",
