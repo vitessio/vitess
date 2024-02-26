@@ -17,7 +17,6 @@ limitations under the License.
 package schemadiff
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -2022,13 +2021,6 @@ func TestCreateTableDiff(t *testing.T) {
 						}
 						assert.Equalf(t, len(annotatedUnified.Removed())+len(annotatedUnified.Added()), len(ts.textdiffs), annotatedUnifiedString)
 					}
-					fmt.Println("============== ")
-					fmt.Println(">>>>>>", alter.CanonicalStatementString())
-					fmt.Println(annotatedFromString)
-					fmt.Println(annotatedToString)
-					fmt.Println("-------------- unified")
-					fmt.Println(annotatedUnifiedString)
-					fmt.Println("-------------- / ")
 				}
 			}
 			{
