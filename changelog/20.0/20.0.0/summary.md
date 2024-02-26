@@ -64,7 +64,7 @@ To continue enabling these endpoints, explicitly set `--pprof-http` when startin
 
 #### <a id="healthcheck-dial-concurrency-flag"/>New `--healthcheck-dial-concurrency` flag
 
-To prevent hitting Go runtime panics on deployments watching a large number of tablets, the maximum number of healthcheck connections that can open concurrently is limited based on the new flag `--healthcheck-dial-concurrency`. This flag applies to `vtcombo`, `vtctld` and `vtgate` only. The flag defaults to `1024` and a value less than [the default max thread limit of `10000`](https://pkg.go.dev/runtime/debug#SetMaxThreads) is recommended.
+The new `--healthcheck-dial-concurrency` flag defines the maximum number of healthcheck connections that can open concurrently. This limit is to avoid hitting Go runtime panics on deployments watching enough tablets [to hit the runtime's maximum thread limit of `10000`](https://pkg.go.dev/runtime/debug#SetMaxThreads) due to blocking network syscalls. This flag applies to `vtcombo`, `vtctld` and `vtgate` only and a value less than the runtime max thread limit _(`10000`)_ is recommended.
 
 ## <a id="minor-changes"/>Minor Changes
 
