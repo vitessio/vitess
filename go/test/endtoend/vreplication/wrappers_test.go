@@ -74,9 +74,10 @@ type moveTablesWorkflow struct {
 	tables         string
 	atomicCopy     bool
 	sourceShards   string
-	createFlags    []string // currently only used by vtctld
 
+	// currently only used by vtctld
 	lastOutput    string
+	createFlags   []string
 	completeFlags []string
 	switchFlags   []string
 }
@@ -270,7 +271,12 @@ type reshardWorkflow struct {
 	targetShards   string
 	skipSchemaCopy bool
 
-	lastOutput string
+	// currently only used by vtctld
+	lastOutput    string
+	createFlags   []string
+	completeFlags []string
+	cancelFlags   []string
+	switchFlags   []string
 }
 
 type iReshard interface {
@@ -379,8 +385,9 @@ func (v VtctldReshard) Flavor() string {
 func (v VtctldReshard) exec(args ...string) {
 	args2 := []string{"Reshard", "--workflow=" + v.workflowName, "--target-keyspace=" + v.targetKeyspace}
 	args2 = append(args2, args...)
-	if err := vc.VtctldClient.ExecuteCommand(args2...); err != nil {
-		v.vc.t.Fatalf("failed to create Reshard workflow: %v", err)
+	var err error
+	if v.lastOutput, err = vc.VtctldClient.ExecuteCommandWithOutput(args2...); err != nil {
+		v.vc.t.Fatalf("failed to create Reshard workflow: %v: %s", err, v.lastOutput)
 	}
 }
 
@@ -395,11 +402,14 @@ func (v VtctldReshard) Create() {
 	if v.skipSchemaCopy {
 		args = append(args, "--skip-schema-copy="+strconv.FormatBool(v.skipSchemaCopy))
 	}
+	args = append(args, v.createFlags...)
 	v.exec(args...)
 }
 
 func (v VtctldReshard) SwitchReadsAndWrites() {
-	v.exec("SwitchTraffic")
+	args := []string{"SwitchTraffic"}
+	args = append(args, v.switchFlags...)
+	v.exec(args...)
 }
 
 func (v VtctldReshard) ReverseReadsAndWrites() {
@@ -407,8 +417,7 @@ func (v VtctldReshard) ReverseReadsAndWrites() {
 }
 
 func (v VtctldReshard) Show() {
-	//TODO implement me
-	panic("implement me")
+	v.exec("Show")
 }
 
 func (v VtctldReshard) SwitchReads() {
@@ -422,11 +431,15 @@ func (v VtctldReshard) SwitchWrites() {
 }
 
 func (v VtctldReshard) Cancel() {
-	v.exec("Cancel")
+	args := []string{"Cancel"}
+	args = append(args, v.cancelFlags...)
+	v.exec(args...)
 }
 
 func (v VtctldReshard) Complete() {
-	v.exec("Complete")
+	args := []string{"Complete"}
+	args = append(args, v.completeFlags...)
+	v.exec(args...)
 }
 
 func (v VtctldReshard) GetLastOutput() string {
