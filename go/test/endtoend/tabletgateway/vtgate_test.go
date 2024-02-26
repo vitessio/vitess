@@ -28,15 +28,14 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/proto/topodata"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	vtorcutils "vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestVtgateHealthCheck(t *testing.T) {
@@ -69,16 +68,14 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	numRows := len(qr.Rows)
 	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
 
-	// Stop any VTOrc(s) so that it doesn't immediately repair/restart replication.
+	// Disable VTOrc(s) recoveries so that it doesn't immediately repair/restart replication.
 	for _, vtorcProcess := range clusterInstance.VTOrcProcesses {
-		err := vtorcProcess.TearDown()
-		require.NoError(t, err)
+		vtorcutils.DisableGlobalRecoveries(t, vtorcProcess)
 	}
-	// Restart them afterward as the cluster is re-used.
+	// Re-enable recoveries afterward as the cluster is re-used.
 	defer func() {
 		for _, vtorcProcess := range clusterInstance.VTOrcProcesses {
-			err := vtorcProcess.Setup()
-			require.NoError(t, err)
+			vtorcutils.EnableGlobalRecoveries(t, vtorcProcess)
 		}
 	}()
 	// Stop replication on the non-PRIMARY tablets.
