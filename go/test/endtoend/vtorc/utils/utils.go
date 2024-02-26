@@ -1121,3 +1121,19 @@ func PrintVTOrcLogsOnFailure(t *testing.T, clusterInstance *cluster.LocalProcess
 		log.Errorf("%s", string(content))
 	}
 }
+
+// EnableGlobalRecoveries enables global recoveries for the given VTOrc.
+func EnableGlobalRecoveries(t *testing.T, vtorc *cluster.VTOrcProcess) {
+	status, resp, err := MakeAPICall(t, vtorc, "/api/enable-global-recoveries")
+	require.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "Global recoveries enabled\n", resp)
+}
+
+// DisableGlobalRecoveries disables global recoveries for the given VTOrc.
+func DisableGlobalRecoveries(t *testing.T, vtorc *cluster.VTOrcProcess) {
+	status, resp, err := MakeAPICall(t, vtorc, "/api/disable-global-recoveries")
+	require.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Equal(t, "Global recoveries disabled\n", resp)
+}
