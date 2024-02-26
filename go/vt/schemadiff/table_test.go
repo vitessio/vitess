@@ -1978,9 +1978,9 @@ func TestCreateTableDiff(t *testing.T) {
 					alterEntityDiff, ok := alter.(*AlterTableEntityDiff)
 					require.True(t, ok)
 					annotatedFrom, annotatedTo, annotatedUnified := alterEntityDiff.Annotated()
-					annotatedFromString := annotatedFrom.Export(PlusMinusSpaceTextualAnnotationFormat)
-					annotatedToString := annotatedTo.Export(PlusMinusSpaceTextualAnnotationFormat)
-					annotatedUnifiedString := annotatedUnified.Export(PlusMinusSpaceTextualAnnotationFormat)
+					annotatedFromString := annotatedFrom.Export()
+					annotatedToString := annotatedTo.Export()
+					annotatedUnifiedString := annotatedUnified.Export()
 					{
 						eFromStatementString := eFrom.Create().CanonicalStatementString()
 						for _, annotation := range alterEntityDiff.annotations.Removed() {

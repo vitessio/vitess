@@ -82,7 +82,7 @@ func (a *TextualAnnotations) Removed() (r []*AnnotatedText) {
 	return a.ByType(RemovedTextualAnnotationType)
 }
 
-func (a *TextualAnnotations) Export(format TextualAnnotationFormat) string {
+func (a *TextualAnnotations) Export() string {
 	textLines := make([]string, 0, len(a.texts))
 	for _, annotatedText := range a.texts {
 		switch annotatedText.typ {
@@ -92,26 +92,15 @@ func (a *TextualAnnotations) Export(format TextualAnnotationFormat) string {
 			annotatedText.text = "-" + annotatedText.text
 		default:
 			// text unchanged
-			switch format {
-			case PlusMinusSpaceTextualAnnotationFormat:
-				if a.hasChanges {
-					// If there is absolutely no change, we don't add a space anywhere
-					annotatedText.text = " " + annotatedText.text
-				}
-			case PlusMinusTextualAnnotationFormat:
+			if a.hasChanges {
+				// If there is absolutely no change, we don't add a space anywhere
+				annotatedText.text = " " + annotatedText.text
 			}
 		}
 		textLines = append(textLines, annotatedText.text)
 	}
 	return strings.Join(textLines, "\n")
 }
-
-type TextualAnnotationFormat int
-
-const (
-	PlusMinusSpaceTextualAnnotationFormat TextualAnnotationFormat = iota
-	PlusMinusTextualAnnotationFormat
-)
 
 func annotatedStatement(stmt string, annotationType TextualAnnotationType, annotations *TextualAnnotations) *TextualAnnotations {
 	stmtLines := strings.Split(stmt, "\n")
