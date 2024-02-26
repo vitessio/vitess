@@ -868,7 +868,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			tabletHostPort := ts.GetTabletHostPort()
 			throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
 			if err != nil {
-				log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
+				log.Warningf("Could not get throttler status from %s: %v", topoproto.TabletAliasString(ts.Tablet.Alias), err)
 			}
 
 			replSourceHost := ""
@@ -876,7 +876,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			replIOThreadHealth := ""
 			replSQLThreadHealth := ""
 			replLastError := ""
-			replLag := int64(-1)
+			replLag := "-1" // A string to support NULL as a value
 			sql := "show slave status"
 			results, err := e.txConn.tabletGateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
@@ -887,8 +887,25 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				replIOThreadHealth = row["Slave_IO_Running"].ToString()
 				replSQLThreadHealth = row["Slave_SQL_Running"].ToString()
 				replLastError = row["Last_Error"].ToString()
-				if ts.Stats != nil {
-					replLag = int64(ts.Stats.ReplicationLagSeconds)
+				// We cannot check the tablet's tabletenv config from here so
+				// we only use the tablet's stat -- which is managed by the
+				// ReplicationTracker -- if we can tell that it's enabled,
+				// meaning that it has a non-zero value. If it's actually
+				// enabled AND zero (rather than the zeroval), then mysqld
+				// should also return 0 so in this case the value is correct
+				// and equivalent either way. The only reason that we would
+				// want to use the ReplicationTracker based value, when we
+				// can, is because the polling method allows us to get the
+				// estimated lag value when replication is not running (based
+				// on how long we've seen that it's not been running).
+				if ts.Stats != nil && ts.Stats.ReplicationLagSeconds > 0 { // Use the value we get from the ReplicationTracker
+					replLag = fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds)
+				} else { // Use the value from mysqld
+					if row["Seconds_Behind_Master"].IsNull() {
+						replLag = strings.ToUpper(sqltypes.NullStr) // Uppercase to match mysqld's output in SHOW REPLICA STATUS
+					} else {
+						replLag = row["Seconds_Behind_Master"].ToString()
+					}
 				}
 			}
 			replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
@@ -901,7 +918,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				ts.Tablet.Hostname,
 				fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
 				replicationHealth,
-				fmt.Sprintf("%d", replLag),
+				replLag,
 				throttlerStatus,
 			))
 		}
@@ -1401,11 +1418,14 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
 }
 
+// getTabletThrottlerStatus uses HTTP to get the throttler status
+// on a tablet. It uses HTTP because the CheckThrottler RPC is a
+// tmclient RPC and you cannot use tmclient outside of a tablet.
 func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
 	client := http.Client{
 		Timeout: 100 * time.Millisecond,
 	}
-	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check?app=vtgate", tabletHostPort))
+	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check-self", tabletHostPort))
 	if err != nil {
 		return "", err
 	}

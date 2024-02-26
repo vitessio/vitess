@@ -47,18 +47,33 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
+<<<<<<< HEAD
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
+=======
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate/buffer"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+>>>>>>> 24b0579d22 (SHOW VITESS_REPLICATION_STATUS: Only use replication tracker when it's enabled (#15348))
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+<<<<<<< HEAD
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+=======
+>>>>>>> 24b0579d22 (SHOW VITESS_REPLICATION_STATUS: Only use replication tracker when it's enabled (#15348))
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
