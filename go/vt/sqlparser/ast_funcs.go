@@ -429,6 +429,7 @@ func (node TableName) IsEmpty() bool {
 	// If Name is empty, Qualifier is also empty.
 	return node.Name.IsEmpty()
 }
+func (node TableName) NonEmpty() bool { return !node.Name.IsEmpty() }
 
 // NewWhere creates a WHERE or HAVING clause out
 // of a Expr. If the expression is nil, it returns nil.

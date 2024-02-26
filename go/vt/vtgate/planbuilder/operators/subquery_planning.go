@@ -343,32 +343,6 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 	return result.(sqlparser.Expr)
 }
 
-func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (Operator, *ApplyResult) {
-	ap, err := p.GetAliasedProjections()
-	if err != nil {
-		return p, NoRewrite
-	}
-
-	outer := TableID(src.Outer)
-	for _, pe := range ap {
-		_, isOffset := pe.Info.(*Offset)
-		if isOffset {
-			continue
-		}
-
-		if !ctx.SemTable.RecursiveDeps(pe.EvalExpr).IsSolvedBy(outer) {
-			return p, NoRewrite
-		}
-
-		if se, ok := pe.Info.(SubQueryExpression); ok {
-			pe.EvalExpr = rewriteColNameToArgument(ctx, pe.EvalExpr, se, src.Inner...)
-		}
-	}
-	// all projections can be pushed to the outer
-	src.Outer, p.Source = p, src.Outer
-	return src, Rewrote("push projection into outer side of subquery container")
-}
-
 func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Expr, se SubQueryExpression, subqueries ...*SubQuery) sqlparser.Expr {
 	rewriteIt := func(s string) sqlparser.SQLNode {
 		for _, sq1 := range se {

@@ -51,7 +51,8 @@ func breakExpressionInLHSandRHSForApplyJoin(
 		cursor.Replace(arg)
 	}, nil).(sqlparser.Expr)
 
-	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
+	ctx.AddJoinPredicates(expr, rewrittenExpr)
 	col.RHSExpr = rewrittenExpr
+	col.Original = expr
 	return
 }
