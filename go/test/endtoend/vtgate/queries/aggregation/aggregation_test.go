@@ -719,23 +719,27 @@ func TestHavingQueries(t *testing.T) {
 	}
 
 	queries := []string{
+		// The following queries are not allowed by MySQL but Vitess allows them
+		// SELECT ename FROM emp GROUP BY ename HAVING sal > 5000
+		// SELECT val1, COUNT(val2) FROM aggr_test_dates GROUP BY val1 HAVING val2 > 5
+		// SELECT k, a FROM t10 GROUP BY k HAVING b > 2
+		// SELECT loc FROM dept GROUP BY loc HAVING COUNT(deptno) AND dname = 'Sales'
+		// SELECT AVG(val2) AS average_val2 FROM aggr_test HAVING val1 = 'Test'
+
 		// these first queries are all failing in different ways. let's check that Vitess also fails
-		"SELECT ename FROM emp GROUP BY ename HAVING sal > 5000",
+
 		"SELECT deptno, AVG(sal) AS average_salary HAVING average_salary > 5000 FROM emp",
 		"SELECT job, COUNT(empno) AS num_employees FROM emp HAVING num_employees > 2",
 		"SELECT dname, SUM(sal) FROM dept JOIN emp ON dept.deptno = emp.deptno HAVING AVG(sal) > 6000",
 		"SELECT COUNT(*) AS count FROM emp WHERE count > 5",
 		"SELECT `name`, AVG(`value`) FROM t1 GROUP BY `name` HAVING `name`",
-		"SELECT val1, COUNT(val2) FROM aggr_test_dates GROUP BY val1 HAVING val2 > 5",
-		"SELECT k, a FROM t10 GROUP BY k HAVING b > 2",
 		"SELECT empno, MAX(sal) FROM emp HAVING COUNT(*) > 3",
-		"SELECT loc FROM dept GROUP BY loc HAVING COUNT(deptno) AND dname = 'Sales'",
 		"SELECT id, SUM(bet_amount) AS total_bets FROM bet_logs HAVING total_bets > 1000",
 		"SELECT merchant_game_id FROM bet_logs GROUP BY merchant_game_id HAVING SUM(bet_amount)",
 		"SELECT shardKey, COUNT(id) FROM t2 HAVING shardKey > 100",
-		"SELECT AVG(val2) AS average_val2 FROM aggr_test HAVING val1 = 'Test'",
 		"SELECT deptno FROM emp GROUP BY deptno HAVING MAX(hiredate) > '2020-01-01'",
 
+		// These queries should not fail
 		"SELECT deptno, COUNT(*) AS num_employees FROM emp GROUP BY deptno HAVING num_employees > 5",
 		"SELECT ename, SUM(sal) FROM emp GROUP BY ename HAVING SUM(sal) > 10000",
 		"SELECT dname, AVG(sal) AS average_salary FROM emp JOIN dept ON emp.deptno = dept.deptno GROUP BY dname HAVING average_salary > 5000",
@@ -760,7 +764,7 @@ func TestHavingQueries(t *testing.T) {
 
 	for _, query := range queries {
 		mcmp.Run(query, func(mcmp *utils.MySQLCompare) {
-			mcmp.Exec(query)
+			mcmp.ExecAllowAndCompareError(query)
 		})
 	}
 }
