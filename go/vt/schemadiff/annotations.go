@@ -20,6 +20,7 @@ import (
 	"strings"
 )
 
+// TextualAnnotationType is an enum for the type of annotation that can be applied to a line of text.
 type TextualAnnotationType int
 
 const (
@@ -28,14 +29,17 @@ const (
 	RemovedTextualAnnotationType
 )
 
+// AnnotatedText is a some text and its annotation type. The text is usually single-line, but it
+// can be multi-line, as in the case of partition specs.
 type AnnotatedText struct {
 	text string
 	typ  TextualAnnotationType
 }
 
+// TextualAnnotations is a sequence of annotated texts. It is the annotated representation of a statement.
 type TextualAnnotations struct {
-	texts      []*AnnotatedText
-	hasChanges bool
+	texts         []*AnnotatedText
+	hasAnyChanges bool
 }
 
 func NewTextualAnnotations() *TextualAnnotations {
@@ -49,7 +53,7 @@ func (a *TextualAnnotations) Len() int {
 func (a *TextualAnnotations) mark(text string, typ TextualAnnotationType) {
 	a.texts = append(a.texts, &AnnotatedText{text: text, typ: typ})
 	if typ != UnchangedTextualAnnotationType {
-		a.hasChanges = true
+		a.hasAnyChanges = true
 	}
 }
 
@@ -65,6 +69,7 @@ func (a *TextualAnnotations) MarkUnchanged(text string) {
 	a.mark(text, UnchangedTextualAnnotationType)
 }
 
+// ByType returns the subset of annotations by given type.
 func (a *TextualAnnotations) ByType(typ TextualAnnotationType) (r []*AnnotatedText) {
 	for _, text := range a.texts {
 		if text.typ == typ {
@@ -82,6 +87,7 @@ func (a *TextualAnnotations) Removed() (r []*AnnotatedText) {
 	return a.ByType(RemovedTextualAnnotationType)
 }
 
+// Export beautifies the annotated text and returns it as a string.
 func (a *TextualAnnotations) Export() string {
 	textLines := make([]string, 0, len(a.texts))
 	for _, annotatedText := range a.texts {
@@ -92,7 +98,7 @@ func (a *TextualAnnotations) Export() string {
 			annotatedText.text = "-" + annotatedText.text
 		default:
 			// text unchanged
-			if a.hasChanges {
+			if a.hasAnyChanges {
 				// If there is absolutely no change, we don't add a space anywhere
 				annotatedText.text = " " + annotatedText.text
 			}
@@ -102,10 +108,14 @@ func (a *TextualAnnotations) Export() string {
 	return strings.Join(textLines, "\n")
 }
 
+// annotatedStatement returns a new TextualAnnotations object that annotates the given statement with the given annotations.
+// The given annotations were created by the diffing algorithm, and represent the CanonicalString of some node.
+// However, the given statement is just some text, and we need to find the annotations (some of which may be multi-line)
+// inside our text, and return a per-line annotation.
 func annotatedStatement(stmt string, annotationType TextualAnnotationType, annotations *TextualAnnotations) *TextualAnnotations {
 	stmtLines := strings.Split(stmt, "\n")
 	result := NewTextualAnnotations()
-	annotationLines := map[string]bool{}
+	annotationLines := map[string]bool{} // single-line breakdown of all annotations
 	for _, annotation := range annotations.ByType(annotationType) {
 		// An annotated text could be multiline. Partition specs are such.
 		lines := strings.Split(annotation.text, "\n")
@@ -115,6 +125,20 @@ func annotatedStatement(stmt string, annotationType TextualAnnotationType, annot
 				annotationLines[line] = true
 			}
 		}
+	}
+	annotationLinesMutations := map[string](map[string]bool){}
+	// Mutations are expected ways to find an annotation inside a `CREATE TABLE` statement.
+	for annotationLine := range annotationLines {
+		possibleMutations := map[string]bool{
+			annotationLine:              true,
+			") " + annotationLine:       true, // e.g. ") ENGINE=InnoDB"
+			") " + annotationLine + ",": true, // e.g. ") ENGINE=InnoDB,[\n	 ROW_FORMAT=COMPRESSED]"
+			"(" + annotationLine + ")":  true, // e.g. "(PARTITION p0 VALUES LESS THAN (10))
+			"(" + annotationLine + ",":  true, // e.g. "(PARTITION p0 VALUES LESS THAN (10),
+			annotationLine + ",":        true, // e.g. "i int unsigned,"
+			annotationLine + ")":        true, // e.g. "PARTITION p9 VALUES LESS THAN (90))"
+		}
+		annotationLinesMutations[annotationLine] = possibleMutations
 	}
 	for i := range stmtLines {
 		lineAnnotated := false
@@ -126,20 +150,14 @@ func annotatedStatement(stmt string, annotationType TextualAnnotationType, annot
 			if lineAnnotated {
 				break
 			}
-			possibleMutations := map[string]bool{
-				annotationLine:              true,
-				") " + annotationLine:       true,
-				") " + annotationLine + ",": true,
-				"(" + annotationLine:        true,
-				"(" + annotationLine + ",":  true,
-				annotationLine + ",":        true,
-				annotationLine + ")":        true,
-			}
+			possibleMutations := annotationLinesMutations[annotationLine]
 			if possibleMutations[trimmedLine] {
 				// Annotate this line!
 				result.mark(stmtLines[i], annotationType)
 				lineAnnotated = true
-				delete(annotationLines, annotationLine) // no need to iterate it in the future
+				// No need to match this annotation again
+				delete(annotationLines, annotationLine)
+				delete(possibleMutations, annotationLine)
 			}
 		}
 		if !lineAnnotated {
@@ -149,9 +167,9 @@ func annotatedStatement(stmt string, annotationType TextualAnnotationType, annot
 	return result
 }
 
+// unifiedAnnotated takes two annotations of from, to statements and returns a unified annotation.
 func unifiedAnnotated(from *TextualAnnotations, to *TextualAnnotations) *TextualAnnotations {
 	unified := NewTextualAnnotations()
-
 	fromIndex := 0
 	toIndex := 0
 	for fromIndex < from.Len() || toIndex < to.Len() {
