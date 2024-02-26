@@ -28,57 +28,62 @@ var (
 func annotatedStatement(stmt string, annotationType TextualAnnotationType, annotationHint TextualAnnotationHint, annotations []string) string {
 	anyLineAnnotated := false
 	stmtLines := strings.Split(stmt, "\n")
+	annotationLines := map[string]bool{}
+	for _, annotation := range annotations {
+		annotation = strings.TrimSpace(annotation)
+		lines := strings.Split(annotation, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			annotationLines[line] = true
+		}
+	}
 	for i := range stmtLines {
 		lineAnnotated := false
 		trimmedLine := stmtLines[i]
 		trimmedLine = strings.TrimSpace(trimmedLine)
-		trimmedLine = strings.TrimRight(trimmedLine, ",")
-		trimmedLine = strings.TrimLeft(trimmedLine, "(")
-		trimmedLine = strings.TrimLeft(trimmedLine, ") ")
-		trimmedLine = strings.TrimSpace(trimmedLine)
+		// trimmedLine = strings.TrimRight(trimmedLine, ",")
+		// trimmedLine = strings.TrimLeft(trimmedLine, "(")
+		// trimmedLine = strings.TrimLeft(trimmedLine, ") ")
+		// trimmedLine = strings.TrimSpace(trimmedLine)
 		if trimmedLine == "" {
 			continue
 		}
-		for _, annotation := range annotations {
-			annotation = strings.TrimSpace(annotation)
-			annotationLines := strings.Split(annotation, "\n")
-			for _, annTrimmedLine := range annotationLines {
-				if lineAnnotated {
-					break
-				}
-
-				annTrimmedLine = strings.TrimSpace(annTrimmedLine)
-				possibleMutations := map[string]bool{
-					trimmedLine:             true,
-					") " + trimmedLine:      true,
-					"(" + trimmedLine:       true,
-					"(" + trimmedLine + ",": true,
-					trimmedLine + ",":       true,
-					trimmedLine + ")":       true,
-				}
-				if possibleMutations[annTrimmedLine] {
-					// Annotate this line!
-					switch annotationHint {
-					case PlusMinusSpaceTextualAnnotationHint,
-						PlusMinusEqualTextualAnnotationHint,
-						PlusMinusTextualAnnotationHint:
-						switch annotationType {
-						case AddedTextualAnnotationType:
-							stmtLines[i] = "+" + stmtLines[i]
-						case RemovedTextualAnnotationType:
-							stmtLines[i] = "-" + stmtLines[i]
-						}
-					case SchemadiffSuffixTextualAnnotationHint:
-						switch annotationType {
-						case AddedTextualAnnotationType:
-							stmtLines[i] = stmtLines[i] + annotationAddedHint
-						case RemovedTextualAnnotationType:
-							stmtLines[i] = stmtLines[i] + annotationRemovedHint
-						}
+		for annotationLine := range annotationLines {
+			if lineAnnotated {
+				break
+			}
+			possibleMutations := map[string]bool{
+				annotationLine:              true,
+				") " + annotationLine:       true,
+				") " + annotationLine + ",": true,
+				"(" + annotationLine:        true,
+				"(" + annotationLine + ",":  true,
+				annotationLine + ",":        true,
+				annotationLine + ")":        true,
+			}
+			if possibleMutations[trimmedLine] {
+				// Annotate this line!
+				switch annotationHint {
+				case PlusMinusSpaceTextualAnnotationHint,
+					PlusMinusEqualTextualAnnotationHint,
+					PlusMinusTextualAnnotationHint:
+					switch annotationType {
+					case AddedTextualAnnotationType:
+						stmtLines[i] = "+" + stmtLines[i]
+					case RemovedTextualAnnotationType:
+						stmtLines[i] = "-" + stmtLines[i]
 					}
-					lineAnnotated = true
-					anyLineAnnotated = true
+				case SchemadiffSuffixTextualAnnotationHint:
+					switch annotationType {
+					case AddedTextualAnnotationType:
+						stmtLines[i] = stmtLines[i] + annotationAddedHint
+					case RemovedTextualAnnotationType:
+						stmtLines[i] = stmtLines[i] + annotationRemovedHint
+					}
 				}
+				lineAnnotated = true
+				anyLineAnnotated = true
+				delete(annotationLines, annotationLine) // no need to iterate it in the future
 			}
 		}
 		if !lineAnnotated {
