@@ -1488,6 +1488,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 					// Special case: MySQL does not support multiple ADD FULLTEXT KEY statements in a single ALTER
 					superfluousFulltextKeys = append(superfluousFulltextKeys, addKey)
 					addedAsSuperfluousStatement = true
+					annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 				}
 				addedFulltextKeys++
 			}
