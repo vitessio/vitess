@@ -4,29 +4,29 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
-    - **[Dropping Support for MySQL 5.7](#drop-support-mysql57)**
-    - **[Deprecations and Deletions](#deprecations-and-deletions)**
-        - [VTTablet Flags](#vttablet-flags)
-        - [Docker Image vitess/lite](#deprecation-vitess-lite-mysqld)
-        - [Explain Statement Format](#explain-stmt-format)
-    - **[Breaking Changes](#breaking-changes)**
-        - [ExecuteFetchAsDBA rejects multi-statement SQL](#execute-fetch-as-dba-reject-multi)
-    - **[New Stats](#new-stats)**
-        - [Stream Consolidations](#stream-consolidations)
-        - [Build Version in `/debug/vars`](#build-version-in-debug-vars)
-    - **[Planned Reparent Shard](#planned-reparent-shard)**
-        - [`--tolerable-replication-lag` Sub-flag](#tolerable-repl-lag)
-    - **[Query Compatibility](#query-compatibility)**
-        - [Multi Table Delete Support](#multi-table-delete)
-        - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
-        - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
-        - [Explain Statement](#explain-statement)
-        - [Partial Multi-shard Commit Warnings](#partial-multi-shard-commit-warnings)
-        - [New Lock Syntax](#lock-syntax)
-        - [Support for AVG()](#avg-support)
-        - [Support for non-recursive CTEs](#cte-support)
-    - **[Vttestserver](#vttestserver)**
-        - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
+  - **[Dropping Support for MySQL 5.7](#drop-support-mysql57)**
+  - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [VTTablet Flags](#vttablet-flags)
+    - [Docker Image vitess/lite](#deprecation-vitess-lite-mysqld)
+    - [Explain Statement Format](#explain-stmt-format)
+  - **[Breaking Changes](#breaking-changes)**
+     - [ExecuteFetchAsDBA rejects multi-statement SQL](#execute-fetch-as-dba-reject-multi)
+  - **[New Stats](#new-stats)**
+    - [Stream Consolidations](#stream-consolidations)
+    - [Build Version in `/debug/vars`](#build-version-in-debug-vars)
+  - **[Planned Reparent Shard](#planned-reparent-shard)**
+    - [`--tolerable-replication-lag` Sub-flag](#tolerable-repl-lag)
+  - **[Query Compatibility](#query-compatibility)**
+    - [Multi Table Delete Support](#multi-table-delete)
+    - [`SHOW VSCHEMA KEYSPACES` Query](#show-vschema-keyspaces)
+    - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
+    - [Explain Statement](#explain-statement)
+    - [Partial Multi-shard Commit Warnings](#partial-multi-shard-commit-warnings)
+    - [New Lock Syntax](#lock-syntax)
+    - [Support for AVG()](#avg-support)
+    - [Support for non-recursive CTEs](#cte-support)
+  - **[Vttestserver](#vttestserver)**
+    - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
 - **[Minor Changes](#minor-changes)**
     - **[Apply VSchema](#apply-vschema)**
         - [`--strict` sub-flag and `strict` gRPC field](#strict-flag-and-field)
@@ -48,7 +48,7 @@ Vitess will however, continue to support importing from MySQL 5.7 into Vitess ev
 #### <a id="vttablet-flags"/>VTTablet Flags
 
 - The following flags — which were deprecated in Vitess 7.0 — have been removed:
-  `--vreplication_healthcheck_topology_refresh`, `--vreplication_healthcheck_retry_delay`, and `--vreplication_healthcheck_timeout`.
+`--vreplication_healthcheck_topology_refresh`, `--vreplication_healthcheck_retry_delay`, and `--vreplication_healthcheck_timeout`.
 - The `--vreplication_tablet_type` flag is now deprecated and ignored.
 
 #### <a id="deprecation-vitess-lite-mysqld"/>Docker Image vitess/lite
@@ -158,7 +158,7 @@ mysql> show vschema keyspaces;
 
 #### <a id="fk-checks-vitess-aware"/>`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable
 
-When VTGate receives a query to change the `FOREIGN_KEY_CHECKS` value for a session, instead of sending the value down to MySQL, VTGate now keeps track of the value and changes the queries by adding `SET_VAR(FOREIGN_KEY_CHECKS=On/Off)` style query optimizer hints wherever required.
+When VTGate receives a query to change the `FOREIGN_KEY_CHECKS` value for a session, instead of sending the value down to MySQL, VTGate now keeps track of the value and changes the queries by adding `SET_VAR(FOREIGN_KEY_CHECKS=On/Off)` style query optimizer hints wherever required. 
 
 #### <a id="explain-statement"/>Explain Statement
 
@@ -203,7 +203,7 @@ Vtgate can now evaluate `AVG` on sharded keyspaces, by using a combination of `S
 
 ### <a id="cte-support"/>Support for non-recursive CTEs
 
-Common table expressions that are not recursive can now be used.
+Common table expressions that are not recursive can now be used. 
 
 ```sql
 with userCount as (
@@ -220,10 +220,10 @@ from ref join userCount on ref.user_id = userCount.id
 
 A new sub-flag `--strict` has been added to the command `ApplyVSchema` `vtctl` command that produces an error if unknown params are found in any Vindexes. An equivalent `strict` field has been added to the `ApplyVSchema` gRPC `vtctld` command.
 
-
+------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/19.0/19.0.0/changelog.md).
 
-The release includes 412 merged Pull Requests.
+The release includes 453 merged Pull Requests.
 
 Thanks to all our contributors: @ChaitanyaD48, @EshaanAgg, @FirePing32, @GuptaManan100, @Its-Maniaco, @Maniktherana, @Manni-99, @MrFabio, @VaibhavMalik4187, @ajm188, @aparajon, @app/dependabot, @app/github-actions, @app/vitess-bot, @aquarapid, @arthurschreiber, @austenLacy, @beingnoble03, @brendar, @davidpiegza, @dbussink, @deepthi, @derekperkins, @ejortegau, @frouioui, @gerayking, @glokta1, @harshit-gangal, @iheanyi, @jwangace, @lixin963, @mattlord, @mattrobenolt, @maxenglander, @mcrauwel, @mdlayher, @olyazavr, @pbibra, @pnacht, @rajivharlalka, @ravicodelabs, @rbranson, @rohit-nayak-ps, @samanthadrago, @shlomi-noach, @skullface, @systay, @testwill, @tycol7, @vmg, @wangweicugw, @williammartin, @wlx5575
 
