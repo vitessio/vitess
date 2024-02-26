@@ -1177,6 +1177,11 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key, a int) partition by hash (ID) partitions 4",
 			diff:  "alter table t1 add column a int \npartition by hash (ID) partitions 4",
 			cdiff: "ALTER TABLE `t1` ADD COLUMN `a` int \nPARTITION BY HASH (`ID`) PARTITIONS 4",
+			textdiffs: []string{
+				"+	`a` int",
+				"-PARTITION BY HASH (`id`) PARTITIONS 4",
+				"+PARTITION BY HASH (`ID`) PARTITIONS 4",
+			},
 		},
 		{
 			name:  "remove partitioning",
@@ -1184,6 +1189,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key, a int)",
 			diff:  "alter table t1 add column a int remove partitioning",
 			cdiff: "ALTER TABLE `t1` ADD COLUMN `a` int REMOVE PARTITIONING",
+			textdiffs: []string{
+				"+	`a` int",
+				"-PARTITION BY HASH (`id`) PARTITIONS 4",
+			},
 		},
 		{
 			name:  "remove partitioning 2",
@@ -1191,6 +1200,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key)",
 			diff:  "alter table t1 remove partitioning",
 			cdiff: "ALTER TABLE `t1` REMOVE PARTITIONING",
+			textdiffs: []string{
+				"-PARTITION BY HASH (`id`) PARTITIONS 4",
+			},
 		},
 		{
 			name:  "change partitioning hash",
@@ -1198,6 +1210,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) partition by hash (id) partitions 5",
 			diff:  "alter table t1 \npartition by hash (id) partitions 5",
 			cdiff: "ALTER TABLE `t1` \nPARTITION BY HASH (`id`) PARTITIONS 5",
+			textdiffs: []string{
+				"-PARTITION BY HASH (`id`) PARTITIONS 4",
+				"+PARTITION BY HASH (`id`) PARTITIONS 5",
+			},
 		},
 		{
 			name:  "change partitioning key",
@@ -1205,6 +1221,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) partition by hash (id) partitions 5",
 			diff:  "alter table t1 \npartition by hash (id) partitions 5",
 			cdiff: "ALTER TABLE `t1` \nPARTITION BY HASH (`id`) PARTITIONS 5",
+			textdiffs: []string{
+				"-PARTITION BY KEY (`id`) PARTITIONS 2",
+				"+PARTITION BY HASH (`id`) PARTITIONS 5",
+			},
 		},
 		{
 			name:  "change partitioning list",
@@ -1212,6 +1232,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) partition by list (id) (partition p1 values in(11,21), partition p2 values in (12,22))",
 			diff:  "alter table t1 \npartition by list (id)\n(partition p1 values in (11, 21),\n partition p2 values in (12, 22))",
 			cdiff: "ALTER TABLE `t1` \nPARTITION BY LIST (`id`)\n(PARTITION `p1` VALUES IN (11, 21),\n PARTITION `p2` VALUES IN (12, 22))",
+			textdiffs: []string{
+				"-PARTITION BY KEY (`id`) PARTITIONS 2",
+				"+PARTITION BY LIST (`id`)",
+				"+(PARTITION `p1` VALUES IN (11, 21),",
+				"+ PARTITION `p2` VALUES IN (12, 22))",
+			},
 		},
 		{
 			name:  "change partitioning range: rotate",
@@ -1219,6 +1245,16 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
 			diff:  "alter table t1 \npartition by range (id)\n(partition p2 values less than (20),\n partition p3 values less than (30),\n partition p4 values less than (40))",
 			cdiff: "ALTER TABLE `t1` \nPARTITION BY RANGE (`id`)\n(PARTITION `p2` VALUES LESS THAN (20),\n PARTITION `p3` VALUES LESS THAN (30),\n PARTITION `p4` VALUES LESS THAN (40))",
+			textdiffs: []string{
+				"-PARTITION BY RANGE (`id`)",
+				"-(PARTITION `p1` VALUES LESS THAN (10),",
+				"- PARTITION `p2` VALUES LESS THAN (20),",
+				"- PARTITION `p3` VALUES LESS THAN (30))",
+				"+PARTITION BY RANGE (`id`)",
+				"+(PARTITION `p2` VALUES LESS THAN (20),",
+				"+ PARTITION `p3` VALUES LESS THAN (30),",
+				"+ PARTITION `p4` VALUES LESS THAN (40))",
+			},
 		},
 		{
 			name:     "change partitioning range: ignore rotate",
@@ -1233,6 +1269,9 @@ func TestCreateTableDiff(t *testing.T) {
 			rotation: RangeRotationDistinctStatements,
 			diff:     "alter table t1 drop partition p1",
 			cdiff:    "ALTER TABLE `t1` DROP PARTITION `p1`",
+			textdiffs: []string{
+				"-(PARTITION `p1` VALUES LESS THAN (10),",
+			},
 		},
 		{
 			name:     "change partitioning range: statements, add",
@@ -1241,6 +1280,9 @@ func TestCreateTableDiff(t *testing.T) {
 			rotation: RangeRotationDistinctStatements,
 			diff:     "alter table t1 add partition (partition p3 values less than (30))",
 			cdiff:    "ALTER TABLE `t1` ADD PARTITION (PARTITION `p3` VALUES LESS THAN (30))",
+			textdiffs: []string{
+				"+ PARTITION `p3` VALUES LESS THAN (30)",
+			},
 		},
 		{
 			name:     "change partitioning range: statements, multiple drops",
@@ -1249,6 +1291,10 @@ func TestCreateTableDiff(t *testing.T) {
 			rotation: RangeRotationDistinctStatements,
 			diffs:    []string{"alter table t1 drop partition p1", "alter table t1 drop partition p2"},
 			cdiffs:   []string{"ALTER TABLE `t1` DROP PARTITION `p1`", "ALTER TABLE `t1` DROP PARTITION `p2`"},
+			textdiffs: []string{
+				"-(PARTITION `p1` VALUES LESS THAN (10),",
+				"- PARTITION `p2` VALUES LESS THAN (20),",
+			},
 		},
 		{
 			name:     "change partitioning range: statements, multiple adds",
@@ -1848,7 +1894,7 @@ func TestCreateTableDiff(t *testing.T) {
 						for _, textdiff := range ts.textdiffs {
 							assert.Containsf(t, annotatedUnifiedString, textdiff, annotatedUnifiedString)
 						}
-						assert.Equal(t, len(annotatedUnified.Removed())+len(annotatedUnified.Added()), len(ts.textdiffs))
+						assert.Equalf(t, len(annotatedUnified.Removed())+len(annotatedUnified.Added()), len(ts.textdiffs), annotatedUnifiedString)
 					}
 					fmt.Println("============== ")
 					fmt.Println(">>>>>>", alter.CanonicalStatementString())
