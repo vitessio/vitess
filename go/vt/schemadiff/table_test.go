@@ -1167,6 +1167,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key, a int) partition by hash (id) partitions 4",
 			diff:  "alter table t1 add column a int",
 			cdiff: "ALTER TABLE `t1` ADD COLUMN `a` int",
+			textdiffs: []string{
+				"+	`a` int",
+			},
 		},
 		{
 			name:  "partitioning, column case",
