@@ -153,6 +153,10 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	defer cancel()
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t, ctx)
+	// This is required because the test is verifying that we rollback transactions on changing serving type,
+	// but that only happens immediately if the shut down grace period is not specified.
+	tsv.te.shutdownGracePeriod = 0
+	tsv.sm.shutdownGracePeriod = 0
 	defer tsv.StopService()
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
@@ -180,7 +184,7 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	select {
 	case <-ch:
 		t.Fatal("ch should not fire")
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(100 * time.Millisecond):
 	}
 	require.EqualValues(t, 1, tsv.te.txPool.scp.active.Size(), "tsv.te.txPool.scp.active.Size()")
 
