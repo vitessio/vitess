@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -1464,6 +1465,45 @@ func TestCreateTableDiff(t *testing.T) {
 						eTo.Create().CanonicalStatementString(),
 						applied.Create().CanonicalStatementString(),
 					)
+				}
+				{ // Validate annotations
+					alterEntityDiff, ok := alter.(*AlterTableEntityDiff)
+					require.True(t, ok)
+					annotatedFrom, annotatedTo, annotatedUnified := alterEntityDiff.Annotated()
+					annotatedFromString := annotatedFrom.Export(PlusMinusSpaceTextualAnnotationFormat)
+					annotatedToString := annotatedTo.Export(PlusMinusSpaceTextualAnnotationFormat)
+					annotatedUnifiedString := annotatedUnified.Export(PlusMinusSpaceTextualAnnotationFormat)
+					{
+						eFromStatementString := eFrom.Create().CanonicalStatementString()
+						for _, annotation := range alterEntityDiff.annotations.Removed() {
+							require.NotEmpty(t, annotation.line)
+							assert.Contains(t, eFromStatementString, annotation.line)
+						}
+						if len(alterEntityDiff.annotations.Removed()) == 0 {
+							assert.Equal(t, eFromStatementString, annotatedFromString)
+						} else {
+							assert.NotEqual(t, eFromStatementString, annotatedFromString)
+						}
+					}
+					{
+						eToStatementString := eTo.Create().CanonicalStatementString()
+						for _, annotation := range alterEntityDiff.annotations.Added() {
+							require.NotEmpty(t, annotation.line)
+							assert.Contains(t, eToStatementString, annotation.line)
+						}
+						if len(alterEntityDiff.annotations.Added()) == 0 {
+							assert.Equal(t, eToStatementString, annotatedToString)
+						} else {
+							assert.NotEqual(t, eToStatementString, annotatedToString)
+						}
+					}
+					fmt.Println("============== ")
+					fmt.Println(">>>>>>", alter.CanonicalStatementString())
+					fmt.Println(annotatedFromString)
+					fmt.Println(annotatedToString)
+					fmt.Println("-------------- unified")
+					fmt.Println(annotatedUnifiedString)
+					fmt.Println("-------------- / ")
 				}
 			}
 			{

@@ -60,12 +60,11 @@ func (d *AlterTableEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
 }
 
-func (d *AlterTableEntityDiff) Annotated() (from string, to string, unified string) {
-	annotationHint := SchemadiffSuffixTextualAnnotationHint
+func (d *AlterTableEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
 	fromStatementString := d.from.Create().CanonicalStatementString()
-	from = annotatedStatement(fromStatementString, RemovedTextualAnnotationType, annotationHint, d.annotations.removed)
+	from = annotatedStatement(fromStatementString, RemovedTextualAnnotationType, d.annotations)
 	toStatementString := d.to.Create().CanonicalStatementString()
-	to = annotatedStatement(toStatementString, AddedTextualAnnotationType, annotationHint, d.annotations.added)
+	to = annotatedStatement(toStatementString, AddedTextualAnnotationType, d.annotations)
 	return from, to, unifiedAnnotated(from, to)
 }
 
@@ -1083,15 +1082,15 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 			if tableOption != nil {
 				tableOption.Name = t1Option.Name
 				alterTableOptions = append(alterTableOptions, tableOption)
-				annotations.removed = append(annotations.removed, sqlparser.CanonicalString(sqlparser.TableOptions{t1Option}))
+				annotations.MarkRemoved(sqlparser.CanonicalString(sqlparser.TableOptions{t1Option}))
 			}
 		}
 	}
 	// changed options
 	modifyTableOption := func(option1, option2 *sqlparser.TableOption) {
 		alterTableOptions = append(alterTableOptions, option2)
-		annotations.removed = append(annotations.removed, sqlparser.CanonicalString(sqlparser.TableOptions{option1}))
-		annotations.added = append(annotations.added, sqlparser.CanonicalString(sqlparser.TableOptions{option2}))
+		annotations.MarkRemoved(sqlparser.CanonicalString(sqlparser.TableOptions{option1}))
+		annotations.MarkAdded(sqlparser.CanonicalString(sqlparser.TableOptions{option2}))
 	}
 	for _, t2Option := range t2Options {
 		if t1Option, ok := t1OptionsMap[t2Option.Name]; ok {
@@ -1142,7 +1141,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 	}
 	addTableOption := func(option *sqlparser.TableOption) {
 		alterTableOptions = append(alterTableOptions, option)
-		annotations.added = append(annotations.added, sqlparser.CanonicalString(sqlparser.TableOptions{option}))
+		annotations.MarkAdded(sqlparser.CanonicalString(sqlparser.TableOptions{option}))
 	}
 	// added options
 	for _, t2Option := range t2Options {
@@ -1234,7 +1233,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 			Names:  []sqlparser.IdentifierCI{p.Name},
 		}
 		partitionSpecs = append(partitionSpecs, partitionSpec)
-		annotations.removed = append(annotations.removed, sqlparser.CanonicalString(p))
+		annotations.MarkRemoved(sqlparser.CanonicalString(p))
 	}
 	for _, p := range addedPartitions2 {
 		partitionSpec := &sqlparser.PartitionSpec{
@@ -1242,7 +1241,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 			Definitions: []*sqlparser.PartitionDefinition{p},
 		}
 		partitionSpecs = append(partitionSpecs, partitionSpec)
-		annotations.added = append(annotations.added, sqlparser.CanonicalString(p))
+		annotations.MarkAdded(sqlparser.CanonicalString(p))
 	}
 	return true, partitionSpecs, nil
 }
@@ -1259,7 +1258,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 	case t1Partitions == nil:
 		// add partitioning
 		alterTable.PartitionOption = t2Partitions
-		annotations.added = append(annotations.added, sqlparser.CanonicalString(t2Partitions))
+		annotations.MarkAdded(sqlparser.CanonicalString(t2Partitions))
 	case t2Partitions == nil:
 		// remove partitioning
 		partitionSpec := &sqlparser.PartitionSpec{
@@ -1267,7 +1266,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			IsAll:  true,
 		}
 		alterTable.PartitionSpec = partitionSpec
-		annotations.removed = append(annotations.removed, sqlparser.CanonicalString(t1Partitions))
+		annotations.MarkRemoved(sqlparser.CanonicalString(t1Partitions))
 	case sqlparser.Equals.RefOfPartitionOption(t1Partitions, t2Partitions):
 		// identical partitioning
 		return nil, nil
@@ -1298,8 +1297,8 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			}
 		}
 		alterTable.PartitionOption = t2Partitions
-		annotations.removed = append(annotations.removed, sqlparser.CanonicalString(t1Partitions))
-		annotations.added = append(annotations.added, sqlparser.CanonicalString(t2Partitions))
+		annotations.MarkRemoved(sqlparser.CanonicalString(t1Partitions))
+		annotations.MarkAdded(sqlparser.CanonicalString(t2Partitions))
 	}
 	return nil, nil
 }
@@ -1358,7 +1357,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 			// constraint exists in t1 but not in t2, hence it is dropped
 			dropConstraint := dropConstraintStatement(t1Constraint)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
-			annotations.removed = append(annotations.removed, sqlparser.CanonicalString(t1Constraint))
+			annotations.MarkRemoved(sqlparser.CanonicalString(t1Constraint))
 		} else {
 			t2ConstraintsCountMap[constraintName]--
 		}
@@ -1385,8 +1384,8 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 						Enforced: check2Details.Enforced,
 					}
 					alterTable.AlterOptions = append(alterTable.AlterOptions, alterConstraint)
-					annotations.removed = append(annotations.removed, sqlparser.CanonicalString(t1Constraint))
-					annotations.added = append(annotations.added, sqlparser.CanonicalString(t2Constraint))
+					annotations.MarkRemoved(sqlparser.CanonicalString(t1Constraint))
+					annotations.MarkAdded(sqlparser.CanonicalString(t2Constraint))
 					continue
 				}
 
@@ -1397,8 +1396,8 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 				}
 				alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
 				alterTable.AlterOptions = append(alterTable.AlterOptions, addConstraint)
-				annotations.removed = append(annotations.removed, sqlparser.CanonicalString(t1Constraint))
-				annotations.added = append(annotations.added, sqlparser.CanonicalString(t2Constraint))
+				annotations.MarkRemoved(sqlparser.CanonicalString(t1Constraint))
+				annotations.MarkAdded(sqlparser.CanonicalString(t2Constraint))
 			}
 		} else {
 			// constraint exists in t2 but not in t1, hence it is added
@@ -1406,7 +1405,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 				ConstraintDefinition: t2Constraint,
 			}
 			alterTable.AlterOptions = append(alterTable.AlterOptions, addConstraint)
-			annotations.added = append(annotations.added, sqlparser.CanonicalString(t2Constraint))
+			annotations.MarkAdded(sqlparser.CanonicalString(t2Constraint))
 		}
 	}
 }
@@ -1444,7 +1443,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 			// column exists in t1 but not in t2, hence it is dropped
 			dropKey := dropKeyStatement(t1Key.Info)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropKey)
-			annotations.removed = append(annotations.removed, sqlparser.CanonicalString(t1Key))
+			annotations.MarkRemoved(sqlparser.CanonicalString(t1Key))
 		}
 	}
 
@@ -1463,8 +1462,8 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 						Name:      t2Key.Info.Name,
 						Invisible: newVisibility,
 					})
-					annotations.removed = append(annotations.removed, sqlparser.CanonicalString(t1Key))
-					annotations.added = append(annotations.added, sqlparser.CanonicalString(t2Key))
+					annotations.MarkRemoved(sqlparser.CanonicalString(t1Key))
+					annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 					continue
 				}
 
@@ -1475,8 +1474,8 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 				}
 				alterTable.AlterOptions = append(alterTable.AlterOptions, dropKey)
 				alterTable.AlterOptions = append(alterTable.AlterOptions, addKey)
-				annotations.removed = append(annotations.removed, sqlparser.CanonicalString(t1Key))
-				annotations.added = append(annotations.added, sqlparser.CanonicalString(t2Key))
+				annotations.MarkRemoved(sqlparser.CanonicalString(t1Key))
+				annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 			}
 		} else {
 			// key exists in t2 but not in t1, hence it is added
@@ -1494,7 +1493,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 			}
 			if !addedAsSuperfluousStatement {
 				alterTable.AlterOptions = append(alterTable.AlterOptions, addKey)
-				annotations.added = append(annotations.added, sqlparser.CanonicalString(t2Key))
+				annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 			}
 		}
 	}
@@ -1614,7 +1613,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 				Name: getColName(&t1Col.Name),
 			}
 			dropColumns = append(dropColumns, dropColumn)
-			annotations.removed = append(annotations.removed, sqlparser.CanonicalString(t1Col))
+			annotations.MarkRemoved(sqlparser.CanonicalString(t1Col))
 		}
 	}
 
@@ -1670,8 +1669,8 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		if modifyColumnDiff != nil {
 			// column definition or ordering has changed
 			modifyColumns = append(modifyColumns, modifyColumnDiff.modifyColumn)
-			annotations.removed = append(annotations.removed, sqlparser.CanonicalString(t1Col.col))
-			annotations.added = append(annotations.added, sqlparser.CanonicalString(t2Col))
+			annotations.MarkRemoved(sqlparser.CanonicalString(t1Col.col))
+			annotations.MarkAdded(sqlparser.CanonicalString(t2Col))
 		}
 	}
 	// Evaluate added columns
@@ -1697,7 +1696,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			}
 			expectAppendIndex++
 			addColumns = append(addColumns, addColumn)
-			annotations.added = append(annotations.added, sqlparser.CanonicalString(t2Col))
+			annotations.MarkAdded(sqlparser.CanonicalString(t2Col))
 		}
 	}
 	dropColumns, addColumns, renameColumns := heuristicallyDetectColumnRenames(dropColumns, addColumns, t1ColumnsMap, t2ColumnsMap, hints)
