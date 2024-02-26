@@ -42,8 +42,9 @@ func (n Name) Concatenate(other Name) Name {
 
 const (
 	// DefaultName is the app name used by vitess when app doesn't indicate its name
-	DefaultName Name = "default"
-	VitessName  Name = "vitess"
+	DefaultName             Name = "default"
+	VitessName              Name = "vitess"
+	ThrottlerStimulatorName Name = "throttler-stimulator"
 
 	TableGCName   Name = "tablegc"
 	OnlineDDLName Name = "online-ddl"

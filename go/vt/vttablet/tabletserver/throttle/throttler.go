@@ -578,6 +578,31 @@ func (throttler *Throttler) requestHeartbeats() {
 	go stats.GetOrNewCounter("ThrottlerHeartbeatRequests", "heartbeat requests").Add(1)
 }
 
+// stimulatePrimaryThrottler sends a check request to the primary tablet in the shard, to stimulate
+// it to request for heartbeats.
+func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmClient tmclient.TabletManagerClient) error {
+	tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
+	if err != nil {
+		return err
+	}
+	for _, tabletAlias := range tabletAliases {
+		tablet, err := throttler.ts.GetTablet(ctx, tabletAlias)
+		if err != nil {
+			return err
+		}
+		if tablet.Type != topodatapb.TabletType_PRIMARY {
+			continue
+		}
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{AppName: throttlerapp.ThrottlerStimulatorName.String()}
+		_, err = tmClient.CheckThrottler(ctx, tablet.Tablet, req)
+		if err != nil {
+			log.Errorf("stimulatePrimaryThrottler: %+v", err)
+		}
+		return err
+	}
+	return nil
+}
+
 func (throttler *Throttler) generateSelfMySQLThrottleMetricFunc(ctx context.Context, probe *mysql.Probe) func() *mysql.MySQLThrottleMetric {
 	f := func() *mysql.MySQLThrottleMetric {
 		return throttler.readSelfThrottleMetric(ctx, probe)
@@ -664,10 +689,12 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	mysqlAggregateTicker := addTicker(throttler.mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
 	recentCheckTicker := addTicker(time.Second)
+	primaryStimulatorRateLimiter := timer.NewRateLimiter(time.Minute)
 
 	wg.Add(1)
 	go func() {
 		defer func() {
+			primaryStimulatorRateLimiter.Stop()
 			throttler.aggregatedMetrics.Flush()
 			throttler.recentApps.Flush()
 			throttler.nonLowPriorityAppRequestsThrottled.Flush()
@@ -727,6 +754,18 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 					if !throttler.isDormant() {
 						throttler.collectMySQLMetrics(ctx, tmClient)
 					}
+					//
+					if throttler.recentCheckValue.Load() >= throttler.recentCheckTickerValue.Load() {
+						if !throttler.isLeader.Load() {
+							// This is a replica, and has just recently been checked.
+							// We want to proactively "stimulate" the primary throttler to renew the heartbeat lease.
+							primaryStimulatorRateLimiter.Do(
+								func() error {
+									return throttler.stimulatePrimaryThrottler(ctx, tmClient)
+								})
+						}
+					}
+
 				}
 			case <-mysqlDormantCollectTicker.C:
 				if throttler.IsOpen() {
@@ -1174,7 +1213,16 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		// continuous and do not generate a substantial load.
 		return okMetricCheckResult
 	}
-	if !flags.SkipRequestHeartbeats && !throttlerapp.VitessName.Equals(appName) {
+	shouldRequestHeartbeats := !flags.SkipRequestHeartbeats
+	if throttlerapp.VitessName.Equals(appName) {
+		// Override: "vitess" app never requests heartbeats.
+		shouldRequestHeartbeats = false
+	}
+	if throttlerapp.ThrottlerStimulatorName.Equals(appName) {
+		// Ovreride: throttler-stimulator app always requests heartbeats.
+		shouldRequestHeartbeats = true
+	}
+	if shouldRequestHeartbeats {
 		throttler.requestHeartbeats()
 		// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
 		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
