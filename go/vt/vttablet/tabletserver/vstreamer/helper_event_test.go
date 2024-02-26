@@ -186,10 +186,10 @@ func (ts *TestSpec) setCurrentState(table string, row *query.Row) {
 }
 
 // Init() initializes the test. It creates the tables and sets up the internal state.
-func (ts *TestSpec) Init() error {
+func (ts *TestSpec) Init() {
 	var err error
 	if ts.inited {
-		return nil
+		return
 	}
 	// setup SrvVschema watcher, if not already done
 	engine.watcherOnce.Do(engine.setWatch)
@@ -207,9 +207,7 @@ func (ts *TestSpec) Init() error {
 		ts.ddls[i] = fmt.Sprintf("%s %s", ts.ddls[i], tableOptions)
 	}
 	ts.schema, err = schemadiff.NewSchemaFromQueries(schemadiff.NewTestEnv(), ts.ddls)
-	if err != nil {
-		return err
-	}
+	require.NoError(ts.t, err)
 	ts.fieldEvents = make(map[string]*TestFieldEvent)
 	ts.fieldEventsSent = make(map[string]bool)
 	ts.state = make(map[string]*query.Row)
@@ -242,7 +240,6 @@ func (ts *TestSpec) Init() error {
 		ts.pkColumns[t.Name()] = pkColumns
 	}
 	engine.se.Reload(context.Background())
-	return nil
 }
 
 // Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
@@ -306,7 +303,7 @@ func (ts *TestSpec) getBindVarsForUpdate(stmt sqlparser.Statement) (string, map[
 func (ts *TestSpec) Run() {
 	require.NoError(ts.t, engine.se.Reload(context.Background()))
 	if !ts.inited {
-		require.NoError(ts.t, ts.Init())
+		ts.Init()
 	}
 	var testcases []testcase
 	for _, t := range ts.tests {
@@ -362,7 +359,12 @@ func (ts *TestSpec) Run() {
 					del := stmt.(*sqlparser.Delete)
 					table = del.TableExprs[0].(*sqlparser.AliasedTableExpr).As.String()
 				default:
-					require.FailNowf(ts.t, "unsupported statement type", "stmt: %s", stmt)
+					_, ok := stmt.(sqlparser.DDLStatement)
+					if !ok {
+						require.FailNowf(ts.t, "unsupported statement type", "stmt: %s", stmt)
+					}
+					output = append(output, "gtid")
+					output = append(output, ts.getDDLEvent(tq.query))
 				}
 				if isRowEvent {
 					fe := ts.fieldEvents[table]
@@ -383,6 +385,28 @@ func (ts *TestSpec) Run() {
 		testcases = append(testcases, tc)
 	}
 	runCases(ts.t, ts.options.filter, testcases, "current", nil)
+}
+
+func (ts *TestSpec) getDDLEvent(query string) string {
+	ddlEvent := &binlogdatapb.VEvent{
+		Type:      binlogdatapb.VEventType_DDL,
+		Statement: query,
+	}
+	return ddlEvent.String()
+}
+
+func (ts *TestSpec) reloadSchema() {
+	engine.se.Reload(context.Background())
+	var ddls []string
+	for _, table := range ts.tables {
+		showCreateTableDDL := fmt.Sprintf("show create table %s", table)
+		qr, err := env.Mysqld.FetchSuperQuery(context.Background(), showCreateTableDDL)
+		require.NoError(ts.t, err)
+		ddls = append(ddls, qr.Rows[0][1].ToString())
+	}
+	var err error
+	ts.schema, err = schemadiff.NewSchemaFromQueries(schemadiff.NewTestEnv(), ddls)
+	require.NoError(ts.t, err)
 }
 
 func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFieldEvent {
@@ -617,6 +641,12 @@ func (ts *TestSpec) getBefore(table string) *query.Row {
 		currentValueIndex += l
 	}
 	return &row
+}
+
+func (ts *TestSpec) Reset() {
+	for table := range ts.fieldEvents {
+		ts.fieldEventsSent[table] = false
+	}
 }
 
 func getRowEvent(ts *TestSpec, fe *TestFieldEvent, query string) string {

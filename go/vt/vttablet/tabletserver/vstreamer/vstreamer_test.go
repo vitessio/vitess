@@ -118,7 +118,7 @@ func TestNoBlob(t *testing.T) {
 		},
 	}
 	defer ts.Close()
-	require.NoError(t, ts.Init())
+	ts.Init()
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 'blob1', 'aaa')", nil},
@@ -145,7 +145,7 @@ func TestSetAndEnum(t *testing.T) {
 		},
 	}
 	defer ts.Close()
-	require.NoError(t, ts.Init())
+	ts.Init()
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", nil},
@@ -166,7 +166,7 @@ func TestCellValuePadding(t *testing.T) {
 			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))"},
 	}
 	defer ts.Close()
-	require.NoError(t, ts.Init())
+	ts.Init()
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 'aaa\000')", nil},
@@ -269,7 +269,7 @@ func TestSetForeignKeyCheck(t *testing.T) {
 		},
 	}
 	defer ts.Close()
-	require.NoError(t, ts.Init())
+	ts.Init()
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 'aaa')", []TestRowEvent{{flags: 1}}},
@@ -293,7 +293,7 @@ func TestStmtComment(t *testing.T) {
 	}
 	defer ts.Close()
 
-	require.NoError(t, ts.Init())
+	ts.Init()
 
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
@@ -650,7 +650,7 @@ func TestFilteredVarBinary(t *testing.T) {
 		},
 	}
 	defer ts.Close()
-	require.NoError(t, ts.Init())
+	ts.Init()
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 'kepler')", noEvents},
@@ -695,7 +695,7 @@ func TestFilteredInt(t *testing.T) {
 		},
 	}
 	defer ts.Close()
-	require.NoError(t, ts.Init())
+	ts.Init()
 	ts.fieldEvents["t1"].cols[1].skip = true
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
@@ -733,7 +733,7 @@ func TestSavepoint(t *testing.T) {
 		},
 	}
 	defer ts.Close()
-	require.NoError(t, ts.Init())
+	ts.Init()
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into stream1 values (1, 'aaa')", nil},
@@ -768,7 +768,7 @@ func TestSavepointWithFilter(t *testing.T) {
 		},
 	}
 	defer ts.Close()
-	require.NoError(t, ts.Init())
+	ts.Init()
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into stream1 values (1, 'aaa')", noEvents},
@@ -808,88 +808,69 @@ func TestSavepointWithFilter(t *testing.T) {
 	ts.Run()
 }
 
-// todo: migrate to new test framework
 func TestStatements(t *testing.T) {
-	execStatements(t, []string{
-		"create table stream1(id int, val varbinary(128), primary key(id))",
-		"create table stream2(id int, val varbinary(128), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table stream1",
-		"drop table stream2",
-	})
-	engine.se.Reload(context.Background())
-
-	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into stream1 values (1, 'aaa')",
-			"update stream1 set val='bbb' where id = 1",
-			"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table stream1(id int, val varbinary(128), primary key(id))",
+			"create table stream2(id int, val varbinary(128), primary key(id))",
 		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"stream1" fields:{name:"id" type:INT32 table:"stream1" org_table:"stream1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"stream1" org_table:"stream1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"stream1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"stream1" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:3 values:"1bbb"}}}`,
-			`gtid`,
-			`commit`,
-		}},
-	}, {
-		// Normal DDL.
-		input: "alter table stream1 change column val val varbinary(128)",
-		output: [][]string{{
-			`gtid`,
-			`type:DDL statement:"alter table stream1 change column val val varbinary(128)"`,
-		}},
-	}, {
-		// DDL padded with comments.
-		input: " /* prefix */ alter table stream1 change column val val varbinary(256) /* suffix */ ",
-		output: [][]string{{
-			`gtid`,
-			`type:DDL statement:"/* prefix */ alter table stream1 change column val val varbinary(256) /* suffix */"`,
-		}},
-	}, {
-		// Multiple tables, and multiple rows changed per statement.
-		input: []string{
-			"begin",
-			"insert into stream1 values (2, 'bbb')",
-			"insert into stream2 values (1, 'aaa')",
-			"update stream1 set val='ccc'",
-			"delete from stream1",
-			"commit",
+	}
+	defer ts.Close()
+	ts.Init()
+	fe := &TestFieldEvent{
+		table: "stream1",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(256)", len: 256, collationID: 63},
 		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"stream1" fields:{name:"id" type:INT32 table:"stream1" org_table:"stream1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"stream1" org_table:"stream1" database:"vttest" org_name:"val" column_length:256 charset:63 column_type:"varbinary(256)"}}`,
-			`type:ROW row_event:{table_name:"stream1" row_changes:{after:{lengths:1 lengths:3 values:"2bbb"}}}`,
-			`type:FIELD field_event:{table_name:"stream2" fields:{name:"id" type:INT32 table:"stream2" org_table:"stream2" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"stream2" org_table:"stream2" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"stream2" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"stream1" ` +
-				`row_changes:{before:{lengths:1 lengths:3 values:"1bbb"} after:{lengths:1 lengths:3 values:"1ccc"}} ` +
-				`row_changes:{before:{lengths:1 lengths:3 values:"2bbb"} after:{lengths:1 lengths:3 values:"2ccc"}}}`,
-			`type:ROW row_event:{table_name:"stream1" ` +
-				`row_changes:{before:{lengths:1 lengths:3 values:"1ccc"}} ` +
-				`row_changes:{before:{lengths:1 lengths:3 values:"2ccc"}}}`,
-			`gtid`,
-			`commit`,
+	}
+	ddlAlterWithPrefixAndSuffix := "/* prefix */ alter table stream1 change column val val varbinary(256) /* suffix */"
+	ddlTruncate := "truncate table stream2"
+	ddlReverseAlter := "/* prefix */ alter table stream1 change column val val varbinary(128) /* suffix */"
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into stream1 values (1, 'aaa')", nil},
+		{"update stream1 set val='bbb' where id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "stream1", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"1", "bbb"}}}}},
+		}},
+		{"commit", nil},
+	}, { // Normal DDL.
+		{"alter table stream1 change column val val varbinary(128)", nil},
+	}, { // DDL padded with comments.
+		{ddlAlterWithPrefixAndSuffix, []TestRowEvent{
+			{event: "gtid"},
+			{event: ts.getDDLEvent(ddlAlterWithPrefixAndSuffix)},
+		}},
+	}, { // Multiple tables, and multiple rows changed per statement.
+		{"begin", nil},
+		{"insert into stream1 values (2, 'bbb')", []TestRowEvent{
+			{event: fe.String()},
+			{spec: &TestRowEventSpec{table: "stream1", changes: []TestRowChange{{after: []string{"2", "bbb"}}}}},
+		}},
+		{"insert into stream2 values (1, 'aaa')", nil},
+		{"update stream1 set val='ccc'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "stream1", changes: []TestRowChange{{before: []string{"1", "bbb"}, after: []string{"1", "ccc"}}, {before: []string{"2", "bbb"}, after: []string{"2", "ccc"}}}}},
+		}},
+		{"delete from stream1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "stream1", changes: []TestRowChange{{before: []string{"1", "ccc"}}, {before: []string{"2", "ccc"}}}}},
+		}},
+		{"commit", nil},
+	}, {
+		{ddlTruncate, []TestRowEvent{
+			{event: "gtid"},
+			{event: ts.getDDLEvent(ddlTruncate)},
 		}},
 	}, {
-		// truncate is a DDL
-		input: "truncate table stream2",
-		output: [][]string{{
-			`gtid`,
-			`type:DDL statement:"truncate table stream2"`,
-		}},
-	}, {
-		// Reverse alter table, else FilePos tests fail
-		input: " /* prefix */ alter table stream1 change column val val varbinary(128) /* suffix */ ",
-		output: [][]string{{
-			`gtid`,
-			`type:DDL statement:"/* prefix */ alter table stream1 change column val val varbinary(128) /* suffix */"`,
+		{ddlReverseAlter, []TestRowEvent{
+			{event: "gtid"},
+			{event: ts.getDDLEvent(ddlReverseAlter)},
 		}},
 	}}
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
+
+	ts.Reset()
 	// Test FilePos flavor
 	savedEngine := engine
 	defer func() { engine = savedEngine }()
@@ -897,9 +878,8 @@ func TestStatements(t *testing.T) {
 		in.Flavor = "FilePos"
 		return in
 	})
-
 	defer engine.Close()
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
 }
 
 // TestOther tests "other" and "priv" statements. These statements can
@@ -987,7 +967,7 @@ func TestRegexp(t *testing.T) {
 	}
 	defer ts.Close()
 
-	require.NoError(t, ts.Init())
+	ts.Init()
 
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
@@ -1206,7 +1186,7 @@ func TestREMultiColumnVindex(t *testing.T) {
 func TestSelectFilter(t *testing.T) {
 	fe := &TestFieldEvent{
 		table: "t1",
-		db:    "vttest",
+		db:    testenv.DBName,
 		cols: []*TestColumn{
 			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 			{name: "val", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
@@ -1228,7 +1208,7 @@ func TestSelectFilter(t *testing.T) {
 	}
 	defer ts.Close()
 
-	require.NoError(t, ts.Init())
+	ts.Init()
 
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
@@ -1929,7 +1909,7 @@ func TestNoFutureGTID(t *testing.T) {
 func TestFilteredMultipleWhere(t *testing.T) {
 	fe := &TestFieldEvent{
 		table: "t1",
-		db:    "vttest",
+		db:    testenv.DBName,
 		cols: []*TestColumn{
 			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 			{name: "val", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
@@ -1953,7 +1933,7 @@ func TestFilteredMultipleWhere(t *testing.T) {
 	_ = fe
 	defer ts.Close() // Ensure clean-up
 
-	require.NoError(t, ts.Init())
+	ts.Init()
 
 	setVSchema(t, shardedVSchema)
 	defer env.SetVSchema("{}")
@@ -1989,11 +1969,11 @@ func TestGeneratedColumns(t *testing.T) {
 	}
 	defer ts.Close()
 
-	require.NoError(t, ts.Init())
+	ts.Init()
 
 	fe := &TestFieldEvent{
 		table: "t1",
-		db:    "vttest",
+		db:    testenv.DBName,
 		cols: []*TestColumn{
 			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, collationID: 63},
@@ -2034,11 +2014,11 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 	}
 	defer ts.Close()
 
-	require.NoError(t, ts.Init())
+	ts.Init()
 
 	fe := &TestFieldEvent{
 		table: "t1",
-		db:    "vttest",
+		db:    testenv.DBName,
 		cols: []*TestColumn{
 			{name: "my_row_id", dataType: "UINT64", colType: "bigint unsigned", len: 20, collationID: 63},
 			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, collationID: 63},
