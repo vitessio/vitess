@@ -43,8 +43,8 @@ func InitializeTMC() tmclient.TabletManagerClient {
 	return tmc
 }
 
-// FullStatus gets the full status of the MySQL running in vttablet.
-func FullStatus(tabletAlias string) (*replicationdatapb.FullStatus, error) {
+// fullStatus gets the full status of the MySQL running in vttablet.
+func fullStatus(tabletAlias string) (*replicationdatapb.FullStatus, error) {
 	tablet, err := ReadTablet(tabletAlias)
 	if err != nil {
 		return nil, err
