@@ -1499,6 +1499,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) row_format=compressed",
 			diff:  "alter table t1 row_format COMPRESSED",
 			cdiff: "ALTER TABLE `t1` ROW_FORMAT COMPRESSED",
+			textdiffs: []string{
+				"+) ROW_FORMAT COMPRESSED",
+			},
 		},
 		{
 			name:  "add table option 2",
@@ -1506,6 +1509,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) character set=utf8, row_format=compressed",
 			diff:  "alter table t1 row_format COMPRESSED",
 			cdiff: "ALTER TABLE `t1` ROW_FORMAT COMPRESSED",
+			textdiffs: []string{
+				"+  ROW_FORMAT COMPRESSED",
+			},
 		},
 		{
 			name:  "add table option 3",
@@ -1513,6 +1519,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) row_format=compressed, character set=utf8",
 			diff:  "alter table t1 row_format COMPRESSED",
 			cdiff: "ALTER TABLE `t1` ROW_FORMAT COMPRESSED",
+			textdiffs: []string{
+				"+) ROW_FORMAT COMPRESSED",
+			},
 		},
 		{
 			name:  "add table option 3",
@@ -1520,6 +1529,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) row_format=compressed, character set=utf8, checksum=1",
 			diff:  "alter table t1 row_format COMPRESSED checksum 1",
 			cdiff: "ALTER TABLE `t1` ROW_FORMAT COMPRESSED CHECKSUM 1",
+			textdiffs: []string{
+				"+) ROW_FORMAT COMPRESSED",
+				"+  CHECKSUM 1",
+			},
 		},
 		{
 			name:  "modify table option 1",
@@ -1527,6 +1540,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) character set=utf8mb4",
 			diff:  "alter table t1 charset utf8mb4",
 			cdiff: "ALTER TABLE `t1` CHARSET utf8mb4",
+			textdiffs: []string{
+				"-) CHARSET utf8mb3",
+				"+) CHARSET utf8mb4",
+			},
 		},
 		{
 			name:  "modify table option 2",
@@ -1534,6 +1551,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) character set=utf8mb4",
 			diff:  "alter table t1 charset utf8mb4",
 			cdiff: "ALTER TABLE `t1` CHARSET utf8mb4",
+			textdiffs: []string{
+				"-) CHARSET utf8mb3",
+				"+) CHARSET utf8mb4",
+			},
 		},
 		{
 			name:  "modify table option 3",
@@ -1541,6 +1562,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) charset=utf8mb4",
 			diff:  "alter table t1 charset utf8mb4",
 			cdiff: "ALTER TABLE `t1` CHARSET utf8mb4",
+			textdiffs: []string{
+				"-) CHARSET utf8mb3",
+				"+) CHARSET utf8mb4",
+			},
 		},
 		{
 			name:  "modify table option 4",
@@ -1548,6 +1573,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) row_format=compressed, character set=utf8mb4, checksum=1",
 			diff:  "alter table t1 charset utf8mb4 row_format COMPRESSED checksum 1",
 			cdiff: "ALTER TABLE `t1` CHARSET utf8mb4 ROW_FORMAT COMPRESSED CHECKSUM 1",
+			textdiffs: []string{
+				"-) CHARSET utf8mb3",
+				"+) ROW_FORMAT COMPRESSED,",
+				"+  CHARSET utf8mb4,",
+				"+  CHECKSUM 1",
+			},
 		},
 		{
 			name:  "remove table option 1",
@@ -1726,6 +1757,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) engine=innodb, character set=utf8",
 			diff:  "alter table t1 engine InnoDB",
 			cdiff: "ALTER TABLE `t1` ENGINE InnoDB",
+			textdiffs: []string{
+				"+) ENGINE InnoDB",
+			},
 		},
 		{
 			name:  "normalized ENGINE MyISAM value",
@@ -1768,6 +1802,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key)",
 			diff:  "alter table t1 comment ''",
 			cdiff: "ALTER TABLE `t1` COMMENT ''",
+			textdiffs: []string{
+				"-) COMMENT 'foo'",
+			},
 		},
 		// expressions
 		{
