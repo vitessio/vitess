@@ -20,12 +20,12 @@ package testenv
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"regexp"
 	"strings"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -79,9 +79,8 @@ func Init(ctx context.Context) (*Env, error) {
 	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName); err != nil {
 		panic(err)
 	}
-	// Add a random suffix to metric name to avoid panic. Another option would have been to generate a random string.
-	suffix := rand.Int()
-	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, "TestTopo"+fmt.Sprint(suffix))
+	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, counts)
 
 	cfg := vttest.Config{
 		Topology: &vttestpb.VTTestTopology{

@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -76,7 +77,8 @@ create table t2 (
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, Cell)
-	vte, err := Init(ctx, vtenv.NewTestEnv(), ts, testVSchema, testSchema, "", opts)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	vte, err := Init(ctx, vtenv.NewTestEnv(), ts, testVSchema, testSchema, "", opts, srvTopoCounts)
 	require.NoError(t, err)
 	defer vte.Stop()
 
@@ -141,14 +143,14 @@ create table test_partitioned (
 
 	tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts(), env.CollationEnv())
 	vte.setGlobalTabletEnv(tabletEnv)
-
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tablet := vte.newTablet(ctx, env, defaultTestOpts(), &topodatapb.Tablet{
 		Keyspace: "ks_sharded",
 		Shard:    "-80",
 		Alias: &topodatapb.TabletAlias{
 			Cell: Cell,
 		},
-	}, ts)
+	}, ts, srvTopoCounts)
 
 	time.Sleep(10 * time.Millisecond)
 	se := tablet.tsv.SchemaEngine()
