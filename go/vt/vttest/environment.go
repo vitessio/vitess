@@ -99,6 +99,7 @@ type LocalTestEnv struct {
 	BasePort        int
 	TmpPath         string
 	DefaultMyCnf    []string
+	InitDBFile      string
 	Env             []string
 	EnableToxiproxy bool
 }
@@ -133,7 +134,7 @@ func (env *LocalTestEnv) BinaryPath(binary string) string {
 func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLManager, error) {
 	mysqlctl := &Mysqlctl{
 		Binary:    env.BinaryPath("mysqlctl"),
-		InitFile:  path.Join(os.Getenv("VTROOT"), "config/init_db.sql"),
+		InitFile:  env.InitDBFile,
 		Directory: env.TmpPath,
 		Port:      env.PortForProtocol("mysql", ""),
 		MyCnf:     append(env.DefaultMyCnf, mycnf...),
@@ -281,6 +282,7 @@ func NewLocalTestEnvWithDirectory(basePort int, directory string) (*LocalTestEnv
 		BasePort:     basePort,
 		TmpPath:      directory,
 		DefaultMyCnf: mycnf,
+		InitDBFile:   path.Join(os.Getenv("VTROOT"), "config/init_db.sql"),
 		Env: []string{
 			fmt.Sprintf("VTDATAROOT=%s", directory),
 			"VTTEST=endtoend",
