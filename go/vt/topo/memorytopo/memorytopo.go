@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -134,13 +135,13 @@ type Conn struct {
 	factory    *Factory
 	cell       string
 	serverAddr string
-	closed     bool
+	closed     atomic.Bool
 }
 
 // dial returns immediately, unless the Conn points to the sentinel
 // UnreachableServerAddr, in which case it will block until the context expires.
 func (c *Conn) dial(ctx context.Context) error {
-	if c.closed {
+	if c.closed.Load() {
 		return ErrConnectionClosed
 	}
 	if c.serverAddr == UnreachableServerAddr {
@@ -153,7 +154,7 @@ func (c *Conn) dial(ctx context.Context) error {
 // Close is part of the topo.Conn interface.
 func (c *Conn) Close() {
 	c.factory.callstats.Add([]string{"Close"}, 1)
-	c.closed = true
+	c.closed.Store(true)
 }
 
 type watch struct {
