@@ -66,11 +66,11 @@ func TestFindAllTargets(t *testing.T) {
 
 	// No keyspace / shards.
 	ks, err := FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Len(t, ks, 0)
 
 	// Add one.
-	assert.Nilf(t, ts.UpdateSrvKeyspace(ctx, "cell1", "test_keyspace", &topodatapb.SrvKeyspace{
+	assert.NoError(t, ts.UpdateSrvKeyspace(ctx, "cell1", "test_keyspace", &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
 				ServedType: topodatapb.TabletType_PRIMARY,
@@ -81,11 +81,11 @@ func TestFindAllTargets(t *testing.T) {
 				},
 			},
 		},
-	}), "can't add srvKeyspace: %v", err)
+	}))
 
 	// Get it.
 	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []*querypb.Target{
 		{
 			Cell:       "cell1",
@@ -97,7 +97,7 @@ func TestFindAllTargets(t *testing.T) {
 
 	// Get any keyspace.
 	ks, err = FindAllTargets(ctx, rs, "cell1", []string{}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []*querypb.Target{
 		{
 			Cell:       "cell1",
@@ -108,7 +108,7 @@ func TestFindAllTargets(t *testing.T) {
 	}, ks)
 
 	// Add another one.
-	assert.Nil(t, ts.UpdateSrvKeyspace(ctx, "cell1", "test_keyspace2", &topodatapb.SrvKeyspace{
+	assert.NoError(t, ts.UpdateSrvKeyspace(ctx, "cell1", "test_keyspace2", &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
 				ServedType: topodatapb.TabletType_PRIMARY,
@@ -131,7 +131,7 @@ func TestFindAllTargets(t *testing.T) {
 
 	// Get it for any keyspace, all types.
 	ks, err = FindAllTargets(ctx, rs, "cell1", []string{}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	sort.Sort(TargetArray(ks))
 	assert.Equal(t, []*querypb.Target{
 		{
@@ -156,7 +156,7 @@ func TestFindAllTargets(t *testing.T) {
 
 	// Only get 1 keyspace for all types.
 	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace2"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []*querypb.Target{
 		{
 			Cell:       "cell1",
@@ -174,7 +174,7 @@ func TestFindAllTargets(t *testing.T) {
 
 	// Only get the REPLICA targets for any keyspace.
 	ks, err = FindAllTargets(ctx, rs, "cell1", []string{}, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []*querypb.Target{
 		{
 			Cell:       "cell1",
@@ -186,6 +186,6 @@ func TestFindAllTargets(t *testing.T) {
 
 	// Get non-existent keyspace.
 	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"doesnt-exist"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Len(t, ks, 0)
 }
