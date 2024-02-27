@@ -1674,7 +1674,7 @@ func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitSelectExprs(in.Exprs, f); err != nil {
+	if err := VisitExprs(in.Exprs, f); err != nil {
 		return err
 	}
 	return nil
