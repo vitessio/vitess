@@ -28,7 +28,7 @@ import (
 func (c *Conn) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
 	c.factory.callstats.Add([]string{"NewLeaderParticipation"}, 1)
 
-	if c.closed {
+	if c.closed.Load() {
 		return nil, ErrConnectionClosed
 	}
 
@@ -74,7 +74,7 @@ type cLeaderParticipation struct {
 
 // WaitForLeadership is part of the topo.LeaderParticipation interface.
 func (mp *cLeaderParticipation) WaitForLeadership() (context.Context, error) {
-	if mp.c.closed {
+	if mp.c.closed.Load() {
 		return nil, ErrConnectionClosed
 	}
 
@@ -122,7 +122,7 @@ func (mp *cLeaderParticipation) Stop() {
 
 // GetCurrentLeaderID is part of the topo.LeaderParticipation interface
 func (mp *cLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string, error) {
-	if mp.c.closed {
+	if mp.c.closed.Load() {
 		return "", ErrConnectionClosed
 	}
 
@@ -141,7 +141,7 @@ func (mp *cLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string,
 
 // WaitForNewLeader is part of the topo.LeaderParticipation interface
 func (mp *cLeaderParticipation) WaitForNewLeader(ctx context.Context) (<-chan string, error) {
-	if mp.c.closed {
+	if mp.c.closed.Load() {
 		return nil, ErrConnectionClosed
 	}
 
