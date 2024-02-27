@@ -103,6 +103,9 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 
 func deleteWithInputPlanningRequired(childFks []vindexes.ChildFKInfo, deleteStmt *sqlparser.Delete) bool {
 	if len(deleteStmt.Targets) > 1 {
+		if len(childFks) > 0 {
+			panic(vterrors.VT12001("multi table delete with foreign keys"))
+		}
 		return true
 	}
 	// If there are no foreign keys, we don't need to use delete with input.
@@ -141,6 +144,9 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 
 	// sort the operator based on sharding vindex type.
 	// Unsharded < Lookup Vindex < Any
+	// This is needed to ensure all the rows are deleted from unowned sharding tables first.
+	// Otherwise, those table rows will be missed from getting deleted as
+	// the owned table row won't have matching values.
 	sort.Slice(delOps, func(i, j int) bool {
 		a, b := delOps[i], delOps[j]
 		// Get the first Vindex of a and b, if available
