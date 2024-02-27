@@ -222,13 +222,13 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 					}
 					mappedCols = append(mappedCols, colName)
 				}
-				subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
+				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
 				for _, mappedCol := range mappedCols {
-					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
+					subExprs = append(subExprs, mappedCol)
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
+				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
+				subExprs = append(subExprs, sqlparser.NewStrLiteral("{{.keyrange}}"))
 				inKeyRange := &sqlparser.FuncExpr{
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,
@@ -321,13 +321,13 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 					}
 					mappedCols = append(mappedCols, colName)
 				}
-				subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
+				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
 				for _, mappedCol := range mappedCols {
-					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
+					subExprs = append(subExprs, mappedCol)
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange))})
+				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
+				subExprs = append(subExprs, sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange)))
 				inKeyRange := &sqlparser.FuncExpr{
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,

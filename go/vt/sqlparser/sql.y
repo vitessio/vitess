@@ -469,7 +469,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
-%type <selectExprs> select_expression_list select_expression_list_opt
+%type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <strs> select_options select_options_opt flush_option_list
 %type <str> select_option algorithm_view security_view security_view_opt
@@ -4793,15 +4793,6 @@ deallocate_statement:
     $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name: $4}
   }
 
-select_expression_list_opt:
-  {
-    $$ = nil
-  }
-| select_expression_list
-  {
-    $$ = $1
-  }
-
 select_options_opt:
   {
     $$ = nil
@@ -5860,11 +5851,11 @@ expression_list:
   introduce side effects due to being a simple identifier
 */
 function_call_generic:
-  sql_id openb select_expression_list_opt closeb
+  sql_id openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
-| table_id '.' reserved_sql_id openb select_expression_list_opt closeb
+| table_id '.' reserved_sql_id openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
   }
@@ -5874,11 +5865,11 @@ function_call_generic:
   as a result
 */
 function_call_keyword:
-  LEFT openb select_expression_list closeb
+  LEFT openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: $3}
   }
-| RIGHT openb select_expression_list closeb
+| RIGHT openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: $3}
   }
@@ -7020,23 +7011,23 @@ func_datetime_precision:
   the names are non-reserved, they need a dedicated rule so as not to conflict
 */
 function_call_conflict:
-  IF openb select_expression_list closeb
+  IF openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: $3}
   }
-| DATABASE openb select_expression_list_opt closeb
+| DATABASE openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: $3}
   }
-| SCHEMA openb select_expression_list_opt closeb
+| SCHEMA openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: $3}
   }
-| MOD openb select_expression_list closeb
+| MOD openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: $3}
   }
-| REPLACE openb select_expression_list closeb
+| REPLACE openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3}
   }
