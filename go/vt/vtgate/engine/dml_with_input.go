@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -34,10 +35,10 @@ const DmlVals = "dml_vals"
 type DMLWithInput struct {
 	txNeeded
 
-	DML   Primitive
 	Input Primitive
 
-	OutputCols []int
+	DMLs       []Primitive
+	OutputCols [][]int
 }
 
 func (dml *DMLWithInput) RouteType() string {
@@ -53,7 +54,7 @@ func (dml *DMLWithInput) GetTableName() string {
 }
 
 func (dml *DMLWithInput) Inputs() ([]Primitive, []map[string]any) {
-	return []Primitive{dml.Input, dml.DML}, nil
+	return append([]Primitive{dml.Input}, dml.DMLs...), nil
 }
 
 // TryExecute performs a non-streaming exec.
@@ -66,15 +67,27 @@ func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 		return &sqltypes.Result{}, nil
 	}
 
-	var bv *querypb.BindVariable
-	if len(dml.OutputCols) == 1 {
-		bv = getBVSingle(inputRes, dml.OutputCols[0])
-	} else {
-		bv = getBVMulti(inputRes, dml.OutputCols)
-	}
+	var res *sqltypes.Result
+	for idx, prim := range dml.DMLs {
+		var bv *querypb.BindVariable
+		if len(dml.OutputCols[idx]) == 1 {
+			bv = getBVSingle(inputRes, dml.OutputCols[idx][0])
+		} else {
+			bv = getBVMulti(inputRes, dml.OutputCols[idx])
+		}
 
-	bindVars[DmlVals] = bv
-	return vcursor.ExecutePrimitive(ctx, dml.DML, bindVars, false)
+		bindVars[DmlVals] = bv
+		qr, err := vcursor.ExecutePrimitive(ctx, prim, bindVars, false)
+		if err != nil {
+			return nil, err
+		}
+		if res == nil {
+			res = qr
+		} else {
+			res.RowsAffected += qr.RowsAffected
+		}
+	}
+	return res, nil
 }
 
 func getBVSingle(res *sqltypes.Result, offset int) *querypb.BindVariable {
@@ -113,8 +126,12 @@ func (dml *DMLWithInput) GetFields(context.Context, VCursor, map[string]*querypb
 }
 
 func (dml *DMLWithInput) description() PrimitiveDescription {
+	var offsets []string
+	for idx, offset := range dml.OutputCols {
+		offsets = append(offsets, fmt.Sprintf("%d:%v", idx, offset))
+	}
 	other := map[string]any{
-		"Offset": dml.OutputCols,
+		"Offset": offsets,
 	}
 	return PrimitiveDescription{
 		OperatorType:     "DMLWithInput",
