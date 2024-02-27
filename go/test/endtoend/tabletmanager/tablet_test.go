@@ -47,7 +47,7 @@ func TestEnsureDB(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make it the primary.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
 	require.EqualError(t, err, "exit status 1")
 
 	// It is still NOT_SERVING because the db is read-only.
@@ -56,8 +56,8 @@ func TestEnsureDB(t *testing.T) {
 	assert.Contains(t, status, "read-only")
 
 	// Switch to read-write and verify that we go serving.
-	// Note: for TabletExternallyReparented, we expect SetReadWrite to be called by the user
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", tablet.Alias)
+	// Note: for TabletExternallyReparented, we expect SetWritable to be called by the user
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", tablet.Alias, "true")
 	require.NoError(t, err)
 	err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)

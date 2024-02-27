@@ -52,6 +52,7 @@ type (
 	SubqueryColumnCountError       struct{ Expected int }
 	ColumnsMissingInSchemaError    struct{}
 	CantUseMultipleVindexHints     struct{ Table string }
+	InvalidUserOfGroupFunction     struct{}
 
 	NoSuchVindexFound struct {
 		Table      string
@@ -213,18 +214,18 @@ func (e *BuggyError) Error() string {
 func (e *BuggyError) bug() {}
 
 // ColumnNotFoundError
-func (e *ColumnNotFoundError) Error() string {
+func (e ColumnNotFoundError) Error() string {
 	if e.Table == nil {
 		return eprintf(e, "column '%s' not found", sqlparser.String(e.Column))
 	}
 	return eprintf(e, "column '%s' not found in table '%s'", sqlparser.String(e.Column), sqlparser.String(e.Table))
 }
 
-func (e *ColumnNotFoundError) ErrorCode() vtrpcpb.Code {
+func (e ColumnNotFoundError) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_INVALID_ARGUMENT
 }
 
-func (e *ColumnNotFoundError) ErrorState() vterrors.State {
+func (e ColumnNotFoundError) ErrorState() vterrors.State {
 	return vterrors.BadFieldError
 }
 
@@ -241,6 +242,7 @@ func (e *AmbiguousColumnError) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_INVALID_ARGUMENT
 }
 
+// UnsupportedConstruct
 func (e *UnsupportedConstruct) unsupported() {}
 
 func (e *UnsupportedConstruct) ErrorCode() vtrpcpb.Code {
@@ -251,6 +253,7 @@ func (e *UnsupportedConstruct) Error() string {
 	return eprintf(e, e.errString)
 }
 
+// SubqueryColumnCountError
 func (e *SubqueryColumnCountError) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_INVALID_ARGUMENT
 }
@@ -259,7 +262,7 @@ func (e *SubqueryColumnCountError) Error() string {
 	return fmt.Sprintf("Operand should contain %d column(s)", e.Expected)
 }
 
-// MissingInVSchemaError
+// ColumnsMissingInSchemaError
 func (e *ColumnsMissingInSchemaError) Error() string {
 	return "VT09015: schema tracking required"
 }
@@ -277,11 +280,24 @@ func (c *CantUseMultipleVindexHints) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_FAILED_PRECONDITION
 }
 
-// CantUseMultipleVindexHints
+// NoSuchVindexFound
 func (c *NoSuchVindexFound) Error() string {
 	return vterrors.VT09021(c.VindexName, c.Table).Error()
 }
 
 func (c *NoSuchVindexFound) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_FAILED_PRECONDITION
+}
+
+// InvalidUserOfGroupFunction
+func (*InvalidUserOfGroupFunction) Error() string {
+	return "Invalid use of group function"
+}
+
+func (*InvalidUserOfGroupFunction) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
+}
+
+func (*InvalidUserOfGroupFunction) ErrorState() vterrors.State {
+	return vterrors.InvalidGroupFuncUse
 }

@@ -21,17 +21,18 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
-	"strings"
 	"testing"
-
-	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/vt/key"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/key"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
@@ -41,7 +42,7 @@ var (
 	cell                  = "zone1"
 	cell2                 = "zone2"
 	hostname              = "localhost"
-	servedTypes           = map[topodata.TabletType]bool{topodata.TabletType_PRIMARY: true, topodata.TabletType_REPLICA: true, topodata.TabletType_RDONLY: true}
+	servedTypes           = map[topodatapb.TabletType]bool{topodatapb.TabletType_PRIMARY: true, topodatapb.TabletType_REPLICA: true, topodatapb.TabletType_RDONLY: true}
 	sqlSchema             = `create table vt_insert_test (
 								id bigint auto_increment,
 								msg varchar(64),
@@ -152,29 +153,31 @@ func TestDurabilityPolicyField(t *testing.T) {
 	out, err = vtctldClientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)
 
-	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace", "--", "--durability-policy=semi_sync", "ks_durability")
+	out, err = clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", "--durability-policy=semi_sync", "ks_durability")
 	require.NoError(t, err, out)
 	checkDurabilityPolicy(t, "semi_sync")
 
-	out, err = clusterForKSTest.VtctlProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
+	out, err = clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)
 }
 
 func checkDurabilityPolicy(t *testing.T, durabilityPolicy string) {
-	var keyspace topodata.Keyspace
-	out, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetKeyspace", "ks_durability")
-	require.NoError(t, err, out)
-	err = json.Unmarshal([]byte(out), &keyspace)
+	ks, err := clusterForKSTest.VtctldClientProcess.GetKeyspace("ks_durability")
 	require.NoError(t, err)
-	require.Equal(t, keyspace.DurabilityPolicy, durabilityPolicy)
+	require.Equal(t, ks.Keyspace.DurabilityPolicy, durabilityPolicy)
 }
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
+	data, err := clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
 	require.Nil(t, err)
-	assert.Contains(t, strings.Split(output, "\n"), keyspaceUnshardedName)
-	assert.Contains(t, strings.Split(output, "\n"), keyspaceShardedName)
+
+	var namesByCell = map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{}
+	err = json2.Unmarshal([]byte(data), &namesByCell)
+	require.NoError(t, err)
+
+	assert.Contains(t, namesByCell[cell].Names, keyspaceUnshardedName)
+	assert.Contains(t, namesByCell[cell].Names, keyspaceShardedName)
 }
 
 func TestGetSrvKeyspacePartitions(t *testing.T) {
@@ -210,7 +213,7 @@ func TestShardNames(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, keyspaceShardedName)
 	require.Nil(t, err)
-	var srvKeyspace topodata.SrvKeyspace
+	var srvKeyspace topodatapb.SrvKeyspace
 
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
 	require.Nil(t, err)
@@ -218,12 +221,7 @@ func TestShardNames(t *testing.T) {
 
 func TestGetKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspaceUnshardedName)
-	require.Nil(t, err)
-
-	var keyspace topodata.Keyspace
-
-	err = json.Unmarshal([]byte(output), &keyspace)
+	_, err := clusterForKSTest.VtctldClientProcess.GetKeyspace(keyspaceUnshardedName)
 	require.Nil(t, err)
 }
 
@@ -390,7 +388,7 @@ func TestKeyspaceToShardName(t *testing.T) {
 
 	// for each served type PRIMARY REPLICA RDONLY, the shard ref count should match
 	for _, partition := range srvKeyspace.Partitions {
-		if partition.ServedType == topodata.TabletType_PRIMARY {
+		if partition.ServedType == topodatapb.TabletType_PRIMARY {
 			for _, shardRef := range partition.ShardReferences {
 				shardKIDs := shardKIdMap[shardRef.Name]
 				for _, kid := range shardKIDs {
@@ -405,7 +403,7 @@ func TestKeyspaceToShardName(t *testing.T) {
 	srvKeyspace = getSrvKeyspace(t, cell, keyspaceUnshardedName)
 
 	for _, partition := range srvKeyspace.Partitions {
-		if partition.ServedType == topodata.TabletType_PRIMARY {
+		if partition.ServedType == topodatapb.TabletType_PRIMARY {
 			for _, shardRef := range partition.ShardReferences {
 				assert.Equal(t, shardRef.Name, keyspaceUnshardedName)
 			}
@@ -420,10 +418,10 @@ func packKeyspaceID(keyspaceID uint64) []byte {
 	return (keybytes[:])
 }
 
-func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodata.SrvKeyspace {
+func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodatapb.SrvKeyspace {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
 	require.Nil(t, err)
-	var srvKeyspace topodata.SrvKeyspace
+	var srvKeyspace topodatapb.SrvKeyspace
 
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
 	require.Nil(t, err)

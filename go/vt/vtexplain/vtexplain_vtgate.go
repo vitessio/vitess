@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -47,14 +48,14 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
-func (vte *VTExplain) initVtgateExecutor(ctx context.Context, ts *topo.Server, vSchemaStr, ksShardMapStr string, opts *Options) error {
+func (vte *VTExplain) initVtgateExecutor(ctx context.Context, ts *topo.Server, vSchemaStr, ksShardMapStr string, opts *Options, srvTopoCounts *stats.CountersWithSingleLabel) error {
 	vte.explainTopo = &ExplainTopo{NumShards: opts.NumShards}
 	vte.explainTopo.TopoServer = ts
 	vte.healthCheck = discovery.NewFakeHealthCheck(nil)
 
 	resolver := vte.newFakeResolver(ctx, opts, vte.explainTopo, Cell)
 
-	err := vte.buildTopology(ctx, ts, opts, vSchemaStr, ksShardMapStr, opts.NumShards)
+	err := vte.buildTopology(ctx, ts, opts, vSchemaStr, ksShardMapStr, opts.NumShards, srvTopoCounts)
 	if err != nil {
 		return err
 	}
@@ -92,7 +93,7 @@ func (vte *VTExplain) newFakeResolver(ctx context.Context, opts *Options, serv s
 	return vtgate.NewResolver(srvResolver, serv, cell, sc)
 }
 
-func (vte *VTExplain) buildTopology(ctx context.Context, ts *topo.Server, opts *Options, vschemaStr string, ksShardMapStr string, numShardsPerKeyspace int) error {
+func (vte *VTExplain) buildTopology(ctx context.Context, ts *topo.Server, opts *Options, vschemaStr string, ksShardMapStr string, numShardsPerKeyspace int, srvTopoCounts *stats.CountersWithSingleLabel) error {
 	vte.explainTopo.Lock.Lock()
 	defer vte.explainTopo.Lock.Unlock()
 
@@ -170,7 +171,7 @@ func (vte *VTExplain) buildTopology(ctx context.Context, ts *topo.Server, opts *
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard.Name)
 
 			tablet := vte.healthCheck.AddFakeTablet(Cell, hostname, 1, ks, shard.Name, topodatapb.TabletType_PRIMARY, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
-				return vte.newTablet(ctx, vte.env, opts, t, ts)
+				return vte.newTablet(ctx, vte.env, opts, t, ts, srvTopoCounts)
 			})
 			vte.explainTopo.TabletConns[hostname] = tablet.(*explainTablet)
 			vte.explainTopo.KeyspaceShards[ks][shard.Name] = shard

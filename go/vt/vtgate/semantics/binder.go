@@ -57,7 +57,8 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 }
 
 func (b *binder) up(cursor *sqlparser.Cursor) error {
-	switch node := cursor.Node().(type) {
+	node := cursor.Node()
+	switch node := node.(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
 		b.setSubQueryDependencies(node, currScope)
@@ -65,7 +66,7 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		currScope := b.scoper.currentScope()
 		for _, ident := range node.Using {
 			name := sqlparser.NewColName(ident.String())
-			deps, err := b.resolveColumn(name, currScope, true)
+			deps, err := b.resolveColumn(name, currScope, true, true)
 			if err != nil {
 				return err
 			}
@@ -73,7 +74,7 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.ColName:
 		currentScope := b.scoper.currentScope()
-		deps, err := b.resolveColumn(node, currentScope, false)
+		deps, err := b.resolveColumn(node, currentScope, false, true)
 		if err != nil {
 			if deps.direct.IsEmpty() ||
 				!strings.HasSuffix(err.Error(), "is ambiguous") ||
@@ -185,7 +186,7 @@ func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColNam
 		return dependency{}, err
 	}
 	node.Qualifier = name
-	deps, err = b.resolveColumn(node, currentScope, false)
+	deps, err = b.resolveColumn(node, currentScope, false, true)
 	if err != nil {
 		return dependency{}, err
 	}
@@ -226,7 +227,7 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 	b.direct[subq] = subqDirectDeps.KeepOnly(tablesToKeep)
 }
 
-func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
+func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti, singleTableFallBack bool) (dependency, error) {
 	var thisDeps dependencies
 	first := true
 	var tableName *sqlparser.TableName
@@ -248,7 +249,7 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		} else if err != nil {
 			return dependency{}, err
 		}
-		if current.parent == nil && len(current.tables) == 1 && first && colName.Qualifier.IsEmpty() {
+		if current.parent == nil && len(current.tables) == 1 && first && colName.Qualifier.IsEmpty() && singleTableFallBack {
 			// if this is the top scope, and we still haven't been able to find a match, we know we are about to fail
 			// we can check this last scope and see if there is a single table. if there is just one table in the scope
 			// we assume that the column is meant to come from this table.
@@ -263,7 +264,7 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		first = false
 		current = current.parent
 	}
-	return dependency{}, ShardedError{&ColumnNotFoundError{Column: colName, Table: tableName}}
+	return dependency{}, ShardedError{ColumnNotFoundError{Column: colName, Table: tableName}}
 }
 
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {
