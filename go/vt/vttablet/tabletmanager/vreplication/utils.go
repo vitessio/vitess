@@ -98,6 +98,24 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 		query = fmt.Sprintf("update %s.vreplication_log set count = count + 1 where id = %d", sidecar.GetIdentifier(), id)
 	} else {
 		buf := sqlparser.NewTrackedBuffer(nil)
+		// The message column is a TEXT field and thus has a max length of 64KiB (2^16-1) so we truncate that if needed.
+		// See: https://dev.mysql.com/doc/refman/en/string-type-syntax.html and
+		// https://dev.mysql.com/doc/refman/en/storage-requirements.html#data-types-storage-reqs-strings
+		// We perform the truncation in the middle of the message as the end of the message is likely to be the most
+		// important part as it often explains WHY we e.g. failed to execute an INSERT in the workflow.
+		maxMessageLen := 65535
+		truncationStr := fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
+		if len(message) > maxMessageLen {
+			mid := (len(message) / 2) - len(truncationStr)
+			for mid > (maxMessageLen / 2) {
+				mid = mid / 2
+			}
+			tail := (len(message) - (mid + len(truncationStr))) + 1
+			log.Errorf("BEFORE:: Message length: %d, mid: %d, sub: %d", len(message), mid, tail)
+			message = fmt.Sprintf("%s%s%s", message[:mid], truncationStr, message[tail:])
+			log.Errorf("AFTER:: Message length: %d, mid: %d, sub: %d", len(message), mid, tail)
+			log.Flush()
+		}
 		buf.Myprintf("insert into %s.vreplication_log(vrepl_id, type, state, message) values(%s, %s, %s, %s)",
 			sidecar.GetIdentifier(), strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))
 		query = buf.ParsedQuery().Query
@@ -108,7 +126,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 	return nil
 }
 
-// insertLogWithParams is called when a stream is created. The attributes of the stream are stored as a json string
+// insertLogWithParams is called when a stream is created. The attributes of the stream are stored as a json string.
 func insertLogWithParams(dbClient *vdbClient, action string, vreplID int32, params map[string]string) error {
 	var message string
 	if params != nil {
@@ -121,7 +139,7 @@ func insertLogWithParams(dbClient *vdbClient, action string, vreplID int32, para
 	return nil
 }
 
-// isUnrecoverableError returns true if vreplication cannot recover from the given error and should completely terminate
+// isUnrecoverableError returns true if vreplication cannot recover from the given error and should completely terminate.
 func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false

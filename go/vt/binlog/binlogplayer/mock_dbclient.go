@@ -244,3 +244,10 @@ func (dc *MockDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 	}
 	return results, nil
 }
+
+// RemoveInvariant can be used to customize the behavior of the mock client.
+func (dc *MockDBClient) RemoveInvariant(query string) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+	delete(dc.invariants, query)
+}
