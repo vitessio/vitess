@@ -61,25 +61,6 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	return false
 }
 
-func (tfe *TestFieldEvent) String() string {
-	s := fmt.Sprintf("type:FIELD field_event:{table_name:\"%s\"", tfe.table)
-	fld := ""
-	for _, col := range tfe.cols {
-		if col.skip {
-			continue
-		}
-		fld += fmt.Sprintf(" fields:{name:\"%s\" type:%s table:\"%s\" org_table:\"%s\" database:\"%s\" org_name:\"%s\" column_length:%d charset:%d",
-			col.name, col.dataType, tfe.table, tfe.table, tfe.db, col.name, col.len, col.collationID)
-		if col.colType != "" {
-			fld += fmt.Sprintf(" column_type:\"%s\"", col.colType)
-		}
-		fld += "}"
-	}
-	s += fld
-	s += "}"
-	return s
-}
-
 // TestPlayerNoBlob sets up a new environment with mysql running with
 // binlog_row_image as noblob. It confirms that the VEvents created are
 // correct: that they don't contain the missing columns and that the
@@ -204,7 +185,7 @@ func TestColumnCollationHandling(t *testing.T) {
 		},
 	}
 	defer ts.Close()
-	require.NoError(t, ts.Init())
+	ts.Init()
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 'aaa', 'aaa', 1, 'aaa', 'aaa', 'aaa')", nil},
@@ -982,58 +963,49 @@ func TestRegexp(t *testing.T) {
 
 // todo: migrate to new framework
 func TestREKeyRange(t *testing.T) {
-	ignoreKeyspaceShardInFieldAndRowEvents = false
-	defer func() {
-		ignoreKeyspaceShardInFieldAndRowEvents = true
-	}()
-
-	execStatements(t, []string{
-		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-
-	setVSchema(t, shardedVSchema)
-	defer env.SetVSchema("{}")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "/.*/",
 			Filter: "-80",
 		}},
 	}
-	wg, ch := startStream(ctx, t, filter, "", nil)
-	defer wg.Wait()
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			filter: filter,
+		},
+	}
+	ignoreKeyspaceShardInFieldAndRowEvents = false
+	defer func() {
+		ignoreKeyspaceShardInFieldAndRowEvents = true
+	}()
+	ts.Init()
+	defer ts.Close()
+
+	setVSchema(t, shardedVSchema)
+	defer env.SetVSchema("{}")
+
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
-	input := []string{
-		"begin",
-		"insert into t1 values (1, 4, 'aaa')",
-		"insert into t1 values (4, 1, 'bbb')",
-		// Stay in shard.
-		"update t1 set id1 = 2 where id1 = 1",
-		// Move from -80 to 80-.
-		"update t1 set id1 = 6 where id1 = 2",
-		// Move from 80- to -80.
-		"update t1 set id1 = 3 where id1 = 4",
-		"commit",
-	}
-	execStatements(t, input)
-	expectLog(ctx, t, input, ch, [][]string{{
-		`begin`,
-		`type:FIELD field_event:{table_name:"t1" fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} keyspace:"vttest" shard:"0"}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"14aaa"}} keyspace:"vttest" shard:"0"}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"14aaa"} after:{lengths:1 lengths:1 lengths:3 values:"24aaa"}} keyspace:"vttest" shard:"0"}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"24aaa"}} keyspace:"vttest" shard:"0"}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"31bbb"}} keyspace:"vttest" shard:"0"}`,
-		`gtid`,
-		`commit`,
-	}})
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 1, 'aaa')", nil},
+		{"insert into t1 values (4, 1, 'bbb')", noEvents},
+		{"update t1 set id1 = 2 where id1 = 1", []TestRowEvent{ // Stays in shard.
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "1", "aaa"}, after: []string{"2", "1", "aaa"}}}}},
+		}},
+		{"update t1 set id1 = 6 where id1 = 2", []TestRowEvent{ // Moves from -80 to 80-.
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "1", "aaa"}}}}},
+		}},
+		{"update t1 set id1 = 3 where id1 = 4", []TestRowEvent{ // Moves from 80- back to -80.
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"3", "1", "bbb"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	ts.Run()
 
 	// Switch the vschema to make id2 the primary vindex.
 	altVSchema := `{
@@ -1055,22 +1027,17 @@ func TestREKeyRange(t *testing.T) {
   }
 }`
 	setVSchema(t, altVSchema)
-
+	engine.se.Reload(context.Background())
+	ts.Reset()
 	// Only the first insert should be sent.
-	input = []string{
-		"begin",
-		"insert into t1 values (4, 1, 'aaa')",
-		"insert into t1 values (1, 4, 'aaa')",
-		"commit",
-	}
-	execStatements(t, input)
-	expectLog(ctx, t, input, ch, [][]string{{
-		`begin`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"41aaa"}} keyspace:"vttest" shard:"0"}`,
-		`gtid`,
-		`commit`,
-	}})
-	cancel()
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (4, 1, 'aaa')", nil},
+		{"insert into t1 values (1, 4, 'aaa')", noEvents},
+		{"commit", nil},
+	}}
+	ts.Init()
+	ts.Run()
 }
 
 // todo: migrate to new framework

@@ -88,6 +88,36 @@ type TestFieldEvent struct {
 	cols      []*TestColumn
 }
 
+func (tfe *TestFieldEvent) String() string {
+	var fe binlogdatapb.FieldEvent
+	fe.TableName = tfe.table
+	for _, col := range tfe.cols {
+		if col.skip {
+			continue
+		}
+		fe.Fields = append(fe.Fields, &query.Field{
+			Name:         col.name,
+			Type:         getQueryType(col.dataType),
+			Table:        tfe.table,
+			OrgTable:     tfe.table,
+			Database:     tfe.db,
+			OrgName:      col.name,
+			ColumnLength: uint32(col.len),
+			Charset:      uint32(col.collationID),
+			ColumnType:   col.colType,
+		})
+	}
+	if !ignoreKeyspaceShardInFieldAndRowEvents {
+		fe.Keyspace = testenv.DBName
+		fe.Shard = "0" // this is the default shard
+	}
+	ev := &binlogdatapb.VEvent{
+		Type:       binlogdatapb.VEventType_FIELD,
+		FieldEvent: &fe,
+	}
+	return ev.String()
+}
+
 // TestQuery represents a database query and the expected events it generates.
 type TestQuery struct {
 	query  string
@@ -102,8 +132,10 @@ type TestRowChange struct {
 
 // TestRowEventSpec is used for defining a custom row event.
 type TestRowEventSpec struct {
-	table   string
-	changes []TestRowChange
+	table    string
+	changes  []TestRowChange
+	keyspace string
+	shard    string
 }
 
 // Generates a string representation for a custom row event.
@@ -132,6 +164,16 @@ func (s *TestRowEventSpec) String() string {
 			rowChanges = append(rowChanges, &rowChange)
 		}
 		ev.RowChanges = rowChanges
+	}
+	if !ignoreKeyspaceShardInFieldAndRowEvents {
+		ev.Keyspace = testenv.DBName
+		ev.Shard = "0" // this is the default shard
+		if s.keyspace != "" {
+			ev.Keyspace = s.keyspace
+		}
+		if s.shard != "" {
+			ev.Shard = s.shard
+		}
 	}
 	vEvent := &binlogdatapb.VEvent{
 		Type:     binlogdatapb.VEventType_ROW,
@@ -517,6 +559,10 @@ func (ts *TestSpec) getRowEvent(table string, bv map[string]string, fe *TestFiel
 		},
 		Flags: flags,
 	}
+	if !ignoreKeyspaceShardInFieldAndRowEvents {
+		ev.Keyspace = testenv.DBName
+		ev.Shard = "0" // this is the default shard
+	}
 	var row query.Row
 	for i, col := range fe.cols {
 		if fe.cols[i].skip {
@@ -685,4 +731,35 @@ func getCopyCompletedEvent(table string) string {
 		},
 	}
 	return ev.String()
+}
+
+func getQueryType(strType string) query.Type {
+	switch strType {
+	case "INT32":
+		return query.Type_INT32
+	case "INT64":
+		return query.Type_INT64
+	case "UINT64":
+		return query.Type_UINT64
+	case "UINT32":
+		return query.Type_UINT32
+	case "VARBINARY":
+		return query.Type_VARBINARY
+	case "BINARY":
+		return query.Type_BINARY
+	case "VARCHAR":
+		return query.Type_VARCHAR
+	case "CHAR":
+		return query.Type_CHAR
+	case "TEXT":
+		return query.Type_TEXT
+	case "BLOB":
+		return query.Type_BLOB
+	case "ENUM":
+		return query.Type_ENUM
+	case "SET":
+		return query.Type_SET
+	default:
+		panic("unknown type " + strType)
+	}
 }
