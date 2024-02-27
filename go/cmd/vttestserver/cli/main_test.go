@@ -187,12 +187,12 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 }
 
 // TestCreateDbaTCPUser tests that the vt_dba_tcp user is created and can connect through TCP/IP connection
-// when --initialize_with_vt_dba_tcp is set to true.
+// when --initialize-with-vt-dba-tcp is set to true.
 func TestCreateDbaTCPUser(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
 
-	clusterInstance, err := startCluster("--initialize_with_vt_dba_tcp=true")
+	clusterInstance, err := startCluster("--initialize-with-vt-dba-tcp=true")
 	assert.NoError(t, err)
 	defer clusterInstance.TearDown()
 
