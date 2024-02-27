@@ -961,7 +961,6 @@ func TestRegexp(t *testing.T) {
 	ts.Run()
 }
 
-// todo: migrate to new framework
 func TestREKeyRange(t *testing.T) {
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1040,60 +1039,63 @@ func TestREKeyRange(t *testing.T) {
 	ts.Run()
 }
 
-// todo: migrate to new framework
 func TestInKeyRangeMultiColumn(t *testing.T) {
-	engine.se.Reload(context.Background())
-
-	execStatements(t, []string{
-		"create table t1(region int, id int, val varbinary(128), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-
-	setVSchema(t, multicolumnVSchema)
-	defer env.SetVSchema("{}")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "t1",
 			Filter: "select id, region, val, keyspace_id() from t1 where in_keyrange('-80')",
 		}},
 	}
-	wg, ch := startStream(ctx, t, filter, "", nil)
-	defer wg.Wait()
-
-	// 1, 2, 3 and 5 are in shard -80.
-	// 4 and 6 are in shard 80-.
-	input := []string{
-		"begin",
-		"insert into t1 values (1, 1, 'aaa')",
-		"insert into t1 values (128, 2, 'bbb')",
-		// Stay in shard.
-		"update t1 set region = 2 where id = 1",
-		// Move from -80 to 80-.
-		"update t1 set region = 128 where id = 1",
-		// Move from 80- to -80.
-		"update t1 set region = 1 where id = 2",
-		"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(region int, id int, val varbinary(128), primary key(id))",
+		},
+		options: &TestSpecOptions{
+			filter: filter,
+		},
 	}
-	execStatements(t, input)
-	expectLog(ctx, t, input, ch, [][]string{{
-		`begin`,
-		`type:FIELD field_event:{table_name:"t1" fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"region" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"region" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} fields:{name:"keyspace_id" type:VARBINARY charset:63}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 lengths:9 values:"11aaa\x01\x16k@\xb4J\xbaK\xd6"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 lengths:9 values:"11aaa\x01\x16k@\xb4J\xbaK\xd6"} ` +
-			`after:{lengths:1 lengths:1 lengths:3 lengths:9 values:"12aaa\x02\x16k@\xb4J\xbaK\xd6"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 lengths:9 values:"12aaa\x02\x16k@\xb4J\xbaK\xd6"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 lengths:9 values:"21bbb\x01\x06\xe7\xea\"Βp\x8f"}}}`,
-		`gtid`,
-		`commit`,
-	}})
-	cancel()
+	ts.Init()
+	defer ts.Close()
+
+	setVSchema(t, multicolumnVSchema)
+	defer env.SetVSchema("{}")
+
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "region", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
+			{name: "keyspace_id", dataType: "VARBINARY", colType: "varbinary(256)", len: 256, collationID: 63},
+		},
+	}
+
+	// 1 and 2 are in shard -80.
+	// 128 is in shard 80-.
+	keyspaceId1 := "\x01\x16k@\xb4J\xbaK\xd6"
+	keyspaceId2 := "\x02\x16k@\xb4J\xbaK\xd6"
+	keyspaceId3 := "\x01\x06\xe7\xea\"Βp\x8f"
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 1, 'aaa')", []TestRowEvent{
+			{event: fe.String()},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "1", "aaa", keyspaceId1}}}}},
+		}},
+		{"insert into t1 values (128, 2, 'bbb')", noEvents},
+		{"update t1 set region = 2 where id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "1", "aaa", keyspaceId1}, after: []string{"1", "2", "aaa", keyspaceId2}}}}},
+		}},
+		{"update t1 set region = 128 where id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "2", "aaa", keyspaceId2}}}}},
+		}},
+		{"update t1 set region = 1 where id = 2", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "1", "bbb", keyspaceId3}}}}},
+		}},
+		{"commit", nil},
+	}}
+	ts.Run()
 }
 
 // todo: migrate to new framework

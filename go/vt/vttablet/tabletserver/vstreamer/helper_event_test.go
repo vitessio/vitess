@@ -90,22 +90,33 @@ type TestFieldEvent struct {
 
 func (tfe *TestFieldEvent) String() string {
 	var fe binlogdatapb.FieldEvent
+	var field *query.Field
 	fe.TableName = tfe.table
 	for _, col := range tfe.cols {
 		if col.skip {
 			continue
 		}
-		fe.Fields = append(fe.Fields, &query.Field{
-			Name:         col.name,
-			Type:         getQueryType(col.dataType),
-			Table:        tfe.table,
-			OrgTable:     tfe.table,
-			Database:     tfe.db,
-			OrgName:      col.name,
-			ColumnLength: uint32(col.len),
-			Charset:      uint32(col.collationID),
-			ColumnType:   col.colType,
-		})
+		if col.name == "keyspace_id" {
+			field = &query.Field{
+				Name:    col.name,
+				Type:    getQueryType(col.dataType),
+				Charset: uint32(col.collationID),
+			}
+		} else {
+			field = &query.Field{
+				Name:         col.name,
+				Type:         getQueryType(col.dataType),
+				Table:        tfe.table,
+				OrgTable:     tfe.table,
+				Database:     tfe.db,
+				OrgName:      col.name,
+				ColumnLength: uint32(col.len),
+				Charset:      uint32(col.collationID),
+				ColumnType:   col.colType,
+			}
+		}
+		fe.Fields = append(fe.Fields, field)
+
 	}
 	if !ignoreKeyspaceShardInFieldAndRowEvents {
 		fe.Keyspace = testenv.DBName
