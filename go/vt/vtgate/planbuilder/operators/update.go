@@ -135,12 +135,6 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		panic(vterrors.VT12001("update with limit with foreign key constraints"))
 	}
 
-	// Now we check if any of the foreign key columns that are being udpated have dependencies on other updated columns.
-	// This is unsafe, and we currently don't support this in Vitess.
-	if err := ctx.SemTable.ErrIfFkDependentColumnUpdated(updStmt.Exprs); err != nil {
-		panic(err)
-	}
-
 	return buildFkOperator(ctx, op, updClone, parentFks, childFks, vTbl)
 }
 
@@ -166,6 +160,12 @@ func errIfUpdateNotSupported(ctx *plancontext.PlanningContext, stmt *sqlparser.U
 		if vTbl != tblInfo.GetVindexTable() {
 			panic(vterrors.VT12001("multi-table UPDATE statement with multi-target column update"))
 		}
+	}
+
+	// Now we check if any of the foreign key columns that are being udpated have dependencies on other updated columns.
+	// This is unsafe, and we currently don't support this in Vitess.
+	if err := ctx.SemTable.ErrIfFkDependentColumnUpdated(stmt.Exprs); err != nil {
+		panic(err)
 	}
 }
 
