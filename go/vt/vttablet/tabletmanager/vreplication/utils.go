@@ -107,11 +107,11 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 		maxMessageLen := 65535
 		truncationStr := fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
 		if len(message) > maxMessageLen {
-			mid := ((len(message) / 2) - len(truncationStr)) - 1
+			mid := (len(message) / 2) - len(truncationStr)
 			for mid > (maxMessageLen / 2) {
 				mid = mid / 2
 			}
-			tail := (len(message) - mid + len(truncationStr))
+			tail := (len(message) - (mid + len(truncationStr))) + 1
 			message = fmt.Sprintf("%s%s%s", message[:mid], truncationStr, message[tail:])
 		}
 		buf.Myprintf("insert into %s.vreplication_log(vrepl_id, type, state, message) values(%s, %s, %s, %s)",

@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -81,7 +80,6 @@ func TestInsertLogTruncation(t *testing.T) {
 		t.Run("insertLog", func(t *testing.T) {
 			var messageOut string
 			if tc.expectTruncation {
-				log.Errorf("BEFORE:: Message length: %d", len(tc.message))
 				mid := (len(tc.message) / 2) - len(truncationStr)
 				for mid > (maxMessageLen / 2) {
 					mid = mid / 2
