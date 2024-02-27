@@ -96,8 +96,7 @@ func TestInsertLogTruncation(t *testing.T) {
 			}
 			require.LessOrEqual(t, len(messageOut), 65535)
 			dbClient.ExpectRequest(fmt.Sprintf(insertStmtf, vrID, typ, state, encodeString(messageOut)), &sqltypes.Result{}, nil)
-			err := insertLog(vdbClient, typ, vrID, state, tc.message)
-			require.NoError(t, err)
+			insertLog(vdbClient, typ, vrID, state, tc.message)
 			dbClient.Wait()
 		})
 	}

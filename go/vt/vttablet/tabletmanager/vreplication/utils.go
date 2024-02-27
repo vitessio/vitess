@@ -82,16 +82,17 @@ func getLastLog(dbClient *vdbClient, vreplID int32) (id int64, typ, state, messa
 	return id, typ, state, message, nil
 }
 
-func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message string) error {
+func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message string) {
 	// getLastLog returns the last log for a stream. During insertion, if the type/state/message match we do not insert
 	// a new log but increment the count. This prevents spamming of the log table in case the same message is logged continuously.
 	id, _, lastLogState, lastLogMessage, err := getLastLog(dbClient, vreplID)
 	if err != nil {
-		return err
+		log.Errorf("Could not insert vreplication_log record because we failed to get the last log record: %v", err)
+		return
 	}
 	if typ == LogStateChange && state == lastLogState {
 		// handles case where current state is Running, controller restarts after an error and initializes the state Running
-		return nil
+		return
 	}
 	var query string
 	if id > 0 && message == lastLogMessage {
@@ -106,37 +107,30 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 		maxMessageLen := 65535
 		truncationStr := fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
 		if len(message) > maxMessageLen {
-			mid := (len(message) / 2) - len(truncationStr)
+			mid := ((len(message) / 2) - len(truncationStr)) - 1
 			for mid > (maxMessageLen / 2) {
 				mid = mid / 2
 			}
-			tail := (len(message) - (mid + len(truncationStr))) + 1
-			log.Errorf("BEFORE:: Message length: %d, mid: %d, sub: %d", len(message), mid, tail)
+			tail := (len(message) - mid + len(truncationStr))
 			message = fmt.Sprintf("%s%s%s", message[:mid], truncationStr, message[tail:])
-			log.Errorf("AFTER:: Message length: %d, mid: %d, sub: %d", len(message), mid, tail)
-			log.Flush()
 		}
 		buf.Myprintf("insert into %s.vreplication_log(vrepl_id, type, state, message) values(%s, %s, %s, %s)",
 			sidecar.GetIdentifier(), strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))
 		query = buf.ParsedQuery().Query
 	}
 	if _, err = dbClient.ExecuteFetch(query, 10000); err != nil {
-		return fmt.Errorf("could not insert into log table: %v: %v", query, err)
+		log.Errorf("Could not insert into vreplication_log table: %v: %v", query, err)
 	}
-	return nil
 }
 
 // insertLogWithParams is called when a stream is created. The attributes of the stream are stored as a json string.
-func insertLogWithParams(dbClient *vdbClient, action string, vreplID int32, params map[string]string) error {
+func insertLogWithParams(dbClient *vdbClient, action string, vreplID int32, params map[string]string) {
 	var message string
 	if params != nil {
 		obj, _ := json.Marshal(params)
 		message = string(obj)
 	}
-	if err := insertLog(dbClient, action, vreplID, params["state"], message); err != nil {
-		return err
-	}
-	return nil
+	insertLog(dbClient, action, vreplID, params["state"], message)
 }
 
 // isUnrecoverableError returns true if vreplication cannot recover from the given error and should completely terminate.
