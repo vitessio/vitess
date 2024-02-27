@@ -26,6 +26,11 @@ import (
 
 // NewLeaderParticipation is part of the topo.Server interface
 func (c *Conn) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
+<<<<<<< HEAD
+=======
+	c.factory.callstats.Add([]string{"NewLeaderParticipation"}, 1)
+
+>>>>>>> aba0d83c8a (CI: Address data races on memorytopo Conn.closed (#15365))
 	if c.closed.Load() {
 		return nil, ErrConnectionClosed
 	}

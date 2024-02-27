@@ -142,6 +142,10 @@ func (c *Conn) dial(ctx context.Context) error {
 
 // Close is part of the topo.Conn interface.
 func (c *Conn) Close() {
+<<<<<<< HEAD
+=======
+	c.factory.callstats.Add([]string{"Close"}, 1)
+>>>>>>> aba0d83c8a (CI: Address data races on memorytopo Conn.closed (#15365))
 	c.closed.Store(true)
 }
 
