@@ -1098,57 +1098,44 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 	ts.Run()
 }
 
-// todo: migrate to new framework
 func TestREMultiColumnVindex(t *testing.T) {
-	execStatements(t, []string{
-		"create table t1(region int, id int, val varbinary(128), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-
-	setVSchema(t, multicolumnVSchema)
-	defer env.SetVSchema("{}")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "/.*/",
 			Filter: "-80",
 		}},
 	}
-	wg, ch := startStream(ctx, t, filter, "", nil)
-	defer wg.Wait()
-
-	// 1, 2, 3 and 5 are in shard -80.
-	// 4 and 6 are in shard 80-.
-	input := []string{
-		"begin",
-		"insert into t1 values (1, 1, 'aaa')",
-		"insert into t1 values (128, 2, 'bbb')",
-		// Stay in shard.
-		"update t1 set region = 2 where id = 1",
-		// Move from -80 to 80-.
-		"update t1 set region = 128 where id = 1",
-		// Move from 80- to -80.
-		"update t1 set region = 1 where id = 2",
-		"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(region int, id int, val varbinary(128), primary key(id))",
+		},
+		options: &TestSpecOptions{
+			filter: filter,
+		},
 	}
-	execStatements(t, input)
-	expectLog(ctx, t, input, ch, [][]string{{
-		`begin`,
-		`type:FIELD field_event:{table_name:"t1" fields:{name:"region" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"region" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"11aaa"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"11aaa"} after:{lengths:1 lengths:1 lengths:3 values:"21aaa"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:1 lengths:3 values:"21aaa"}}}`,
-		`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:1 lengths:3 values:"12bbb"}}}`,
-		`gtid`,
-		`commit`,
-	}})
-	cancel()
+	ts.Init()
+	defer ts.Close()
+
+	setVSchema(t, multicolumnVSchema)
+	defer env.SetVSchema("{}")
+	// (region, id) is the primary vindex.
+	// (1,1), (1, 2)  are in shard -80.
+	// (128, 1) (128, 2) are in shard 80-.
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 1, 'aaa')", nil},
+		{"insert into t1 values (128, 2, 'bbb')", noEvents},
+		{"update t1 set region = 2 where id = 1", nil},
+		{"update t1 set region = 128 where id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "1", "aaa"}}}}},
+		}},
+		{"update t1 set region = 1 where id = 2", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "2", "bbb"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	ts.Run()
 }
 
 // TestSelectFilter tests a filter with an in_keyrange function, used in a sharded keyspace.
