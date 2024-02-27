@@ -25,7 +25,11 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+<<<<<<< HEAD
 	"time"
+=======
+	"sync/atomic"
+>>>>>>> aba0d83c8a (CI: Address data races on memorytopo Conn.closed (#15365))
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -124,14 +128,14 @@ type Conn struct {
 	factory    *Factory
 	cell       string
 	serverAddr string
-	closed     bool
+	closed     atomic.Bool
 }
 
 // dial returns immediately, unless the Conn points to the sentinel
 // UnreachableServerAddr, in which case it will block until the context expires
 // and return the context's error.
 func (c *Conn) dial(ctx context.Context) error {
-	if c.closed {
+	if c.closed.Load() {
 		return ErrConnectionClosed
 	}
 	if c.serverAddr == UnreachableServerAddr {
@@ -144,7 +148,12 @@ func (c *Conn) dial(ctx context.Context) error {
 
 // Close is part of the topo.Conn interface.
 func (c *Conn) Close() {
+<<<<<<< HEAD
 	c.closed = true
+=======
+	c.factory.callstats.Add([]string{"Close"}, 1)
+	c.closed.Store(true)
+>>>>>>> aba0d83c8a (CI: Address data races on memorytopo Conn.closed (#15365))
 }
 
 type watch struct {
