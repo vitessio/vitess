@@ -112,6 +112,15 @@ func (u *Update) ShortDescription() string {
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (op Operator) {
 	errIfUpdateNotSupported(ctx, updStmt)
+	parentFks := ctx.SemTable.GetParentForeignKeysList()
+	childFks := ctx.SemTable.GetChildForeignKeysList()
+
+	// We check if dml with input plan is required. DML with input planning is generally
+	// slower, because it does a selection and then creates a update statement wherein we have to
+	// list all the primary key values.
+	if updateWithInputPlanningRequired(childFks, parentFks, updStmt) {
+		return updateWithInputPlanningForFk(ctx, updStmt)
+	}
 
 	var updClone *sqlparser.Update
 	var vTbl *vindexes.Table
@@ -124,18 +133,70 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		Lock:     sqlparser.ShareModeLock,
 	}
 
-	parentFks := ctx.SemTable.GetParentForeignKeysList()
-	childFks := ctx.SemTable.GetChildForeignKeysList()
 	if len(childFks) == 0 && len(parentFks) == 0 {
 		return op
 	}
 
-	// If the delete statement has a limit, we don't support it yet.
-	if updStmt.Limit != nil {
-		panic(vterrors.VT12001("update with limit with foreign key constraints"))
+	return buildFkOperator(ctx, op, updClone, parentFks, childFks, vTbl)
+}
+
+func updateWithInputPlanningForFk(ctx *plancontext.PlanningContext, upd *sqlparser.Update) Operator {
+	updClone := ctx.SemTable.Clone(upd).(*sqlparser.Update)
+	upd.Limit = nil
+
+	selectStmt := &sqlparser.Select{
+		From:    updClone.TableExprs,
+		Where:   updClone.Where,
+		OrderBy: updClone.OrderBy,
+		Limit:   updClone.Limit,
+		Lock:    sqlparser.ForUpdateLock,
 	}
 
-	return buildFkOperator(ctx, op, updClone, parentFks, childFks, vTbl)
+	ate, isAliasTableExpr := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !isAliasTableExpr {
+		panic(vterrors.VT12001("update with limit with foreign key constraints using a complex table"))
+	}
+	ts := ctx.SemTable.TableSetFor(ate)
+	ti, err := ctx.SemTable.TableInfoFor(ts)
+	if err != nil {
+		panic(vterrors.VT13001(err.Error()))
+	}
+	vTbl := ti.GetVindexTable()
+
+	var leftComp sqlparser.ValTuple
+	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
+	for _, col := range vTbl.PrimaryKey {
+		colName := sqlparser.NewColNameWithQualifier(col.String(), vTbl.GetTableName())
+		selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(colName))
+		cols = append(cols, colName)
+		leftComp = append(leftComp, colName)
+		ctx.SemTable.Recursive[colName] = ts
+	}
+	// optimize for case when there is only single column on left hand side.
+	var lhs sqlparser.Expr = leftComp
+	if len(leftComp) == 1 {
+		lhs = leftComp[0]
+	}
+	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, lhs, sqlparser.ListArg(engine.DmlVals), nil)
+
+	upd.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
+	return &DMLWithInput{
+		DML:    createOperatorFromUpdate(ctx, upd),
+		Source: createOperatorFromSelect(ctx, selectStmt),
+		cols:   cols,
+	}
+}
+
+func updateWithInputPlanningRequired(childFks []vindexes.ChildFKInfo, parentFks []vindexes.ParentFKInfo, updateStmt *sqlparser.Update) bool {
+	// If there are no foreign keys, we don't need to use delete with input.
+	if len(childFks) == 0 && len(parentFks) == 0 {
+		return false
+	}
+	// Limit requires dml with input.
+	if updateStmt.Limit != nil {
+		return true
+	}
+	return false
 }
 
 func errIfUpdateNotSupported(ctx *plancontext.PlanningContext, stmt *sqlparser.Update) {
