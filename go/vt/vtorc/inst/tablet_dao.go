@@ -35,29 +35,20 @@ import (
 
 // ErrTabletAliasNil is a fixed error message.
 var ErrTabletAliasNil = errors.New("tablet alias is nil")
+var tmc tmclient.TabletManagerClient
 
-// ResetReplicationParameters resets the replication parameters on the given tablet.
-func ResetReplicationParameters(tabletAlias string) error {
-	tablet, err := ReadTablet(tabletAlias)
-	if err != nil {
-		return err
-	}
-	tmc := tmclient.NewTabletManagerClient()
-	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-	defer tmcCancel()
-	if err := tmc.ResetReplicationParameters(tmcCtx, tablet); err != nil {
-		return err
-	}
-	return nil
+// InitializeTMC initializes the tablet manager client to use for all VTOrc RPC calls.
+func InitializeTMC() tmclient.TabletManagerClient {
+	tmc = tmclient.NewTabletManagerClient()
+	return tmc
 }
 
-// FullStatus gets the full status of the MySQL running in vttablet.
-func FullStatus(tabletAlias string) (*replicationdatapb.FullStatus, error) {
+// fullStatus gets the full status of the MySQL running in vttablet.
+func fullStatus(tabletAlias string) (*replicationdatapb.FullStatus, error) {
 	tablet, err := ReadTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	tmc := tmclient.NewTabletManagerClient()
 	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tmcCancel()
 	return tmc.FullStatus(tmcCtx, tablet)

@@ -178,7 +178,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 
 	var waitGroup sync.WaitGroup
 	var tablet *topodatapb.Tablet
-	var fullStatus *replicationdatapb.FullStatus
+	var fs *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
 	instance := NewInstance()
 	instanceFound := false
@@ -208,7 +208,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		goto Cleanup
 	}
 
-	fullStatus, err = FullStatus(tabletAlias)
+	fs, err = fullStatus(tabletAlias)
 	if err != nil {
 		goto Cleanup
 	}
@@ -218,48 +218,48 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	instance.Port = int(tablet.MysqlPort)
 	{
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
-		instance.ServerID = uint(fullStatus.ServerId)
-		instance.Version = fullStatus.Version
-		instance.ReadOnly = fullStatus.ReadOnly
-		instance.LogBinEnabled = fullStatus.LogBinEnabled
-		instance.BinlogFormat = fullStatus.BinlogFormat
-		instance.LogReplicationUpdatesEnabled = fullStatus.LogReplicaUpdates
-		instance.VersionComment = fullStatus.VersionComment
+		instance.ServerID = uint(fs.ServerId)
+		instance.Version = fs.Version
+		instance.ReadOnly = fs.ReadOnly
+		instance.LogBinEnabled = fs.LogBinEnabled
+		instance.BinlogFormat = fs.BinlogFormat
+		instance.LogReplicationUpdatesEnabled = fs.LogReplicaUpdates
+		instance.VersionComment = fs.VersionComment
 
-		if instance.LogBinEnabled && fullStatus.PrimaryStatus != nil {
-			binlogPos, err := getBinlogCoordinatesFromPositionString(fullStatus.PrimaryStatus.FilePosition)
+		if instance.LogBinEnabled && fs.PrimaryStatus != nil {
+			binlogPos, err := getBinlogCoordinatesFromPositionString(fs.PrimaryStatus.FilePosition)
 			instance.SelfBinlogCoordinates = binlogPos
 			errorChan <- err
 		}
 
-		instance.SemiSyncPrimaryEnabled = fullStatus.SemiSyncPrimaryEnabled
-		instance.SemiSyncReplicaEnabled = fullStatus.SemiSyncReplicaEnabled
-		instance.SemiSyncPrimaryWaitForReplicaCount = uint(fullStatus.SemiSyncWaitForReplicaCount)
-		instance.SemiSyncPrimaryTimeout = fullStatus.SemiSyncPrimaryTimeout
+		instance.SemiSyncPrimaryEnabled = fs.SemiSyncPrimaryEnabled
+		instance.SemiSyncReplicaEnabled = fs.SemiSyncReplicaEnabled
+		instance.SemiSyncPrimaryWaitForReplicaCount = uint(fs.SemiSyncWaitForReplicaCount)
+		instance.SemiSyncPrimaryTimeout = fs.SemiSyncPrimaryTimeout
 
-		instance.SemiSyncPrimaryClients = uint(fullStatus.SemiSyncPrimaryClients)
-		instance.SemiSyncPrimaryStatus = fullStatus.SemiSyncPrimaryStatus
-		instance.SemiSyncReplicaStatus = fullStatus.SemiSyncReplicaStatus
+		instance.SemiSyncPrimaryClients = uint(fs.SemiSyncPrimaryClients)
+		instance.SemiSyncPrimaryStatus = fs.SemiSyncPrimaryStatus
+		instance.SemiSyncReplicaStatus = fs.SemiSyncReplicaStatus
 
 		if instance.IsOracleMySQL() || instance.IsPercona() {
 			// Stuff only supported on Oracle / Percona MySQL
 			// ...
 			// @@gtid_mode only available in Oracle / Percona MySQL >= 5.6
-			instance.GTIDMode = fullStatus.GtidMode
-			instance.ServerUUID = fullStatus.ServerUuid
-			if fullStatus.PrimaryStatus != nil {
-				GtidExecutedPos, err := replication.DecodePosition(fullStatus.PrimaryStatus.Position)
+			instance.GTIDMode = fs.GtidMode
+			instance.ServerUUID = fs.ServerUuid
+			if fs.PrimaryStatus != nil {
+				GtidExecutedPos, err := replication.DecodePosition(fs.PrimaryStatus.Position)
 				errorChan <- err
 				if err == nil && GtidExecutedPos.GTIDSet != nil {
 					instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
 				}
 			}
-			GtidPurgedPos, err := replication.DecodePosition(fullStatus.GtidPurged)
+			GtidPurgedPos, err := replication.DecodePosition(fs.GtidPurged)
 			errorChan <- err
 			if err == nil && GtidPurgedPos.GTIDSet != nil {
 				instance.GtidPurged = GtidPurgedPos.GTIDSet.String()
 			}
-			instance.BinlogRowImage = fullStatus.BinlogRowImage
+			instance.BinlogRowImage = fs.BinlogRowImage
 
 			if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
 				instance.SupportsOracleGTID = true
@@ -269,45 +269,45 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 
 	instance.ReplicationIOThreadState = ReplicationThreadStateNoThread
 	instance.ReplicationSQLThreadState = ReplicationThreadStateNoThread
-	if fullStatus.ReplicationStatus != nil {
-		instance.HasReplicationCredentials = fullStatus.ReplicationStatus.SourceUser != ""
+	if fs.ReplicationStatus != nil {
+		instance.HasReplicationCredentials = fs.ReplicationStatus.SourceUser != ""
 
-		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fullStatus.ReplicationStatus.IoState))
-		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fullStatus.ReplicationStatus.SqlState))
+		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fs.ReplicationStatus.IoState))
+		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(replication.ReplicationState(fs.ReplicationStatus.SqlState))
 		instance.ReplicationIOThreadRuning = instance.ReplicationIOThreadState.IsRunning()
 		instance.ReplicationSQLThreadRuning = instance.ReplicationSQLThreadState.IsRunning()
 
-		binlogPos, err := getBinlogCoordinatesFromPositionString(fullStatus.ReplicationStatus.RelayLogSourceBinlogEquivalentPosition)
+		binlogPos, err := getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.RelayLogSourceBinlogEquivalentPosition)
 		instance.ReadBinlogCoordinates = binlogPos
 		errorChan <- err
 
-		binlogPos, err = getBinlogCoordinatesFromPositionString(fullStatus.ReplicationStatus.FilePosition)
+		binlogPos, err = getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.FilePosition)
 		instance.ExecBinlogCoordinates = binlogPos
 		errorChan <- err
 		instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
 
-		binlogPos, err = getBinlogCoordinatesFromPositionString(fullStatus.ReplicationStatus.RelayLogFilePosition)
+		binlogPos, err = getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.RelayLogFilePosition)
 		instance.RelaylogCoordinates = binlogPos
 		instance.RelaylogCoordinates.Type = RelayLog
 		errorChan <- err
 
-		instance.LastSQLError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fullStatus.ReplicationStatus.LastSqlError), "")
-		instance.LastIOError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fullStatus.ReplicationStatus.LastIoError), "")
+		instance.LastSQLError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fs.ReplicationStatus.LastSqlError), "")
+		instance.LastIOError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fs.ReplicationStatus.LastIoError), "")
 
-		instance.SQLDelay = fullStatus.ReplicationStatus.SqlDelay
-		instance.UsingOracleGTID = fullStatus.ReplicationStatus.AutoPosition
-		instance.UsingMariaDBGTID = fullStatus.ReplicationStatus.UsingGtid
-		instance.SourceUUID = fullStatus.ReplicationStatus.SourceUuid
-		instance.HasReplicationFilters = fullStatus.ReplicationStatus.HasReplicationFilters
+		instance.SQLDelay = fs.ReplicationStatus.SqlDelay
+		instance.UsingOracleGTID = fs.ReplicationStatus.AutoPosition
+		instance.UsingMariaDBGTID = fs.ReplicationStatus.UsingGtid
+		instance.SourceUUID = fs.ReplicationStatus.SourceUuid
+		instance.HasReplicationFilters = fs.ReplicationStatus.HasReplicationFilters
 
-		instance.SourceHost = fullStatus.ReplicationStatus.SourceHost
-		instance.SourcePort = int(fullStatus.ReplicationStatus.SourcePort)
+		instance.SourceHost = fs.ReplicationStatus.SourceHost
+		instance.SourcePort = int(fs.ReplicationStatus.SourcePort)
 
-		if fullStatus.ReplicationStatus.ReplicationLagUnknown {
+		if fs.ReplicationStatus.ReplicationLagUnknown {
 			instance.SecondsBehindPrimary.Valid = false
 		} else {
 			instance.SecondsBehindPrimary.Valid = true
-			instance.SecondsBehindPrimary.Int64 = int64(fullStatus.ReplicationStatus.ReplicationLagSeconds)
+			instance.SecondsBehindPrimary.Int64 = int64(fs.ReplicationStatus.ReplicationLagSeconds)
 		}
 		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
 			log.Warningf("Alias: %+v, instance.SecondsBehindPrimary < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64)
@@ -316,7 +316,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		// And until told otherwise:
 		instance.ReplicationLagSeconds = instance.SecondsBehindPrimary
 
-		instance.AllowTLS = fullStatus.ReplicationStatus.SslAllowed
+		instance.AllowTLS = fs.ReplicationStatus.SslAllowed
 	}
 
 	instanceFound = true
