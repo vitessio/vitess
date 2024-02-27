@@ -25,11 +25,8 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
-<<<<<<< HEAD
-	"time"
-=======
 	"sync/atomic"
->>>>>>> aba0d83c8a (CI: Address data races on memorytopo Conn.closed (#15365))
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -148,12 +145,7 @@ func (c *Conn) dial(ctx context.Context) error {
 
 // Close is part of the topo.Conn interface.
 func (c *Conn) Close() {
-<<<<<<< HEAD
-	c.closed = true
-=======
-	c.factory.callstats.Add([]string{"Close"}, 1)
 	c.closed.Store(true)
->>>>>>> aba0d83c8a (CI: Address data races on memorytopo Conn.closed (#15365))
 }
 
 type watch struct {
