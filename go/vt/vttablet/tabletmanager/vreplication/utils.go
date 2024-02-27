@@ -33,6 +33,11 @@ import (
 
 const (
 	vreplicationLogTableName = "vreplication_log"
+	// This comes from the fact that the message column in the vreplication_log table is of type TEXT.
+	// See: go/vt/sidecardb/schema/vreplication/vreplication_log.sql
+	// https://dev.mysql.com/doc/refman/en/string-type-syntax.html and
+	// https://dev.mysql.com/doc/refman/en/storage-requirements.html#data-types-storage-reqs-strings
+	maxVReplicationLogMessageLen = 65535
 )
 
 const (
@@ -99,16 +104,12 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 		query = fmt.Sprintf("update %s.vreplication_log set count = count + 1 where id = %d", sidecar.GetIdentifier(), id)
 	} else {
 		buf := sqlparser.NewTrackedBuffer(nil)
-		// The message column is a TEXT field and thus has a max length of 64KiB (2^16-1) so we truncate that if needed.
-		// See: https://dev.mysql.com/doc/refman/en/string-type-syntax.html and
-		// https://dev.mysql.com/doc/refman/en/storage-requirements.html#data-types-storage-reqs-strings
-		// We perform the truncation in the middle of the message as the end of the message is likely to be the most
-		// important part as it often explains WHY we e.g. failed to execute an INSERT in the workflow.
-		maxMessageLen := 65535
+		// We perform the truncation, if needed, in the middle of the message as the end of the message is likely to
+		// be the most important part as it often explains WHY we e.g. failed to execute an INSERT in the workflow.
 		truncationStr := fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
-		if len(message) > maxMessageLen {
+		if len(message) > maxVReplicationLogMessageLen {
 			mid := (len(message) / 2) - len(truncationStr)
-			for mid > (maxMessageLen / 2) {
+			for mid > (maxVReplicationLogMessageLen / 2) {
 				mid = mid / 2
 			}
 			tail := (len(message) - (mid + len(truncationStr))) + 1

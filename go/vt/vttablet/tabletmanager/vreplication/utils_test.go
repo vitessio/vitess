@@ -41,7 +41,6 @@ func TestInsertLogTruncation(t *testing.T) {
 	vrID := int32(1)
 	typ := "Testing"
 	state := binlogdatapb.VReplicationWorkflowState_Error.String()
-	maxMessageLen := 65535
 	truncationStr := fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
 
 	insertStmtf := "insert into _vt.vreplication_log(vrepl_id, type, state, message) values(%d, '%s', '%s', %s)"
@@ -61,10 +60,10 @@ func TestInsertLogTruncation(t *testing.T) {
 			message: "Simple message that doesn't need to be truncated " + strings.Repeat("b", 64000) + " cuz it's not quite too long",
 		},
 		{
-			message: "Message that is just barely short enough " + strings.Repeat("c", maxMessageLen-(len("Message that is just barely short enough ")+len(" so it doesn't get truncated"))) + " so it doesn't get truncated",
+			message: "Message that is just barely short enough " + strings.Repeat("c", maxVReplicationLogMessageLen-(len("Message that is just barely short enough ")+len(" so it doesn't get truncated"))) + " so it doesn't get truncated",
 		},
 		{
-			message:          "Message that is just barely too long " + strings.Repeat("d", maxMessageLen-(len("Message that is just barely too long ")+len(" so it gets truncated"))+1) + " so it gets truncated",
+			message:          "Message that is just barely too long " + strings.Repeat("d", maxVReplicationLogMessageLen-(len("Message that is just barely too long ")+len(" so it gets truncated"))+1) + " so it gets truncated",
 			expectTruncation: true,
 		},
 		{
@@ -81,7 +80,7 @@ func TestInsertLogTruncation(t *testing.T) {
 			var messageOut string
 			if tc.expectTruncation {
 				mid := (len(tc.message) / 2) - len(truncationStr)
-				for mid > (maxMessageLen / 2) {
+				for mid > (maxVReplicationLogMessageLen / 2) {
 					mid = mid / 2
 				}
 				tail := (len(tc.message) - (mid + len(truncationStr))) + 1
@@ -92,7 +91,7 @@ func TestInsertLogTruncation(t *testing.T) {
 			} else {
 				messageOut = tc.message
 			}
-			require.LessOrEqual(t, len(messageOut), 65535)
+			require.LessOrEqual(t, len(messageOut), maxVReplicationLogMessageLen)
 			dbClient.ExpectRequest(fmt.Sprintf(insertStmtf, vrID, typ, state, encodeString(messageOut)), &sqltypes.Result{}, nil)
 			insertLog(vdbClient, typ, vrID, state, tc.message)
 			dbClient.Wait()
