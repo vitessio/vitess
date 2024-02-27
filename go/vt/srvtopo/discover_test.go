@@ -86,7 +86,7 @@ func TestFindAllTargets(t *testing.T) {
 	// Get it.
 	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 	assert.NoError(t, err)
-	assert.Equal(t, []*querypb.Target{
+	assert.EqualValues(t, []*querypb.Target{
 		{
 			Cell:       "cell1",
 			Keyspace:   "test_keyspace",
@@ -96,9 +96,9 @@ func TestFindAllTargets(t *testing.T) {
 	}, ks)
 
 	// Get any keyspace.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []string{}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
+	ks, err = FindAllTargets(ctx, rs, "cell1", nil, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 	assert.NoError(t, err)
-	assert.Equal(t, []*querypb.Target{
+	assert.EqualValues(t, []*querypb.Target{
 		{
 			Cell:       "cell1",
 			Keyspace:   "test_keyspace",
@@ -130,10 +130,10 @@ func TestFindAllTargets(t *testing.T) {
 	}))
 
 	// Get it for any keyspace, all types.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []string{}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
+	ks, err = FindAllTargets(ctx, rs, "cell1", nil, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
 	assert.NoError(t, err)
 	sort.Sort(TargetArray(ks))
-	assert.Equal(t, []*querypb.Target{
+	assert.EqualValues(t, []*querypb.Target{
 		{
 			Cell:       "cell1",
 			Keyspace:   "test_keyspace",
@@ -157,7 +157,7 @@ func TestFindAllTargets(t *testing.T) {
 	// Only get 1 keyspace for all types.
 	ks, err = FindAllTargets(ctx, rs, "cell1", []string{"test_keyspace2"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
 	assert.NoError(t, err)
-	assert.Equal(t, []*querypb.Target{
+	assert.EqualValues(t, []*querypb.Target{
 		{
 			Cell:       "cell1",
 			Keyspace:   "test_keyspace2",
