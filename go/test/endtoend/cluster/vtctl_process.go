@@ -111,6 +111,16 @@ func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
 	return tmpProcess.Run()
 }
 
+// TopoGlobalRoot returns the global root for the given topo flavor.
+func TopoGlobalRoot(flavor string) string {
+	switch flavor {
+	case "consul":
+		return "global"
+	default:
+		return "/vitess/global"
+	}
+}
+
 // VtctlProcessInstance returns a VtctlProcess handle for vtctl process
 // configured with the given Config.
 // The process must be manually started by calling setup()
@@ -118,7 +128,6 @@ func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
 
 	// Default values for etcd2 topo server.
 	topoImplementation := "etcd2"
-	topoGlobalRoot := "/vitess/global"
 	topoRootPath := "/"
 
 	// Checking and resetting the parameters for required topo server.
@@ -127,7 +136,6 @@ func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
 		topoImplementation = "zk2"
 	case "consul":
 		topoImplementation = "consul"
-		topoGlobalRoot = "global"
 		// For consul we do not need "/" in the path
 		topoRootPath = ""
 	}
@@ -142,7 +150,7 @@ func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
 		Binary:             "vtctl",
 		TopoImplementation: topoImplementation,
 		TopoGlobalAddress:  fmt.Sprintf("%s:%d", hostname, topoPort),
-		TopoGlobalRoot:     topoGlobalRoot,
+		TopoGlobalRoot:     TopoGlobalRoot(*topoFlavor),
 		TopoServerAddress:  fmt.Sprintf("%s:%d", hostname, topoPort),
 		TopoRootPath:       topoRootPath,
 		VtctlMajorVersion:  version,
