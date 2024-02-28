@@ -87,13 +87,17 @@ func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWi
 		return nil, err
 	}
 
-	del, err := transformToLogicalPlan(ctx, op.DML)
-	if err != nil {
-		return nil, err
+	var dmls []logicalPlan
+	for _, dml := range op.DML {
+		del, err := transformToLogicalPlan(ctx, dml)
+		if err != nil {
+			return nil, err
+		}
+		dmls = append(dmls, del)
 	}
 	return &dmlWithInput{
 		input:      input,
-		dml:        del,
+		dmls:       dmls,
 		outputCols: op.Offsets,
 	}, nil
 }

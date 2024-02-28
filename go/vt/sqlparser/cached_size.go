@@ -1432,7 +1432,7 @@ func (cached *FuncExpr) CachedSize(alloc bool) int64 {
 	size += cached.Qualifier.CachedSize(false)
 	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Name.CachedSize(false)
-	// field Exprs vitess.io/vitess/go/vt/sqlparser.SelectExprs
+	// field Exprs vitess.io/vitess/go/vt/sqlparser.Exprs
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Exprs)) * int64(16))
 		for _, elem := range cached.Exprs {

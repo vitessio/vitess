@@ -72,11 +72,6 @@ func (se SetExpr) String() string {
 	return fmt.Sprintf("%s = %s", sqlparser.String(se.Name), sqlparser.String(se.Expr.EvalExpr))
 }
 
-// Introduces implements the PhysicalOperator interface
-func (u *Update) introducesTableID() semantics.TableSet {
-	return u.Target.ID
-}
-
 // Clone implements the Operator interface
 func (u *Update) Clone(inputs []Operator) Operator {
 	upd := *u
@@ -95,19 +90,7 @@ func (u *Update) TablesUsed() []string {
 }
 
 func (u *Update) ShortDescription() string {
-	ovq := ""
-	if u.OwnedVindexQuery != nil {
-		var cols, orderby, limit string
-		cols = fmt.Sprintf("COLUMNS: [%s]", sqlparser.String(u.OwnedVindexQuery.SelectExprs))
-		if len(u.OwnedVindexQuery.OrderBy) > 0 {
-			orderby = fmt.Sprintf(" ORDERBY: [%s]", sqlparser.String(u.OwnedVindexQuery.OrderBy))
-		}
-		if u.OwnedVindexQuery.Limit != nil {
-			limit = fmt.Sprintf(" LIMIT: [%s]", sqlparser.String(u.OwnedVindexQuery.Limit))
-		}
-		ovq = fmt.Sprintf(" vindexQuery(%s%s%s)", cols, orderby, limit)
-	}
-	return fmt.Sprintf("%s.%s%s", u.Target.VTable.Keyspace.Name, u.Target.VTable.Name.String(), ovq)
+	return shortDesc(u.Target, u.OwnedVindexQuery)
 }
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (op Operator) {

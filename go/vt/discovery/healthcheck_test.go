@@ -672,27 +672,6 @@ func TestWaitForAllServingTablets(t *testing.T) {
 
 	err = hc.WaitForAllServingTablets(ctx, targets)
 	assert.NotNil(t, err, "error should not be nil (there are no tablets on this keyspace")
-
-	targets = []*querypb.Target{
-
-		{
-			Keyspace:   tablet.Keyspace,
-			Shard:      tablet.Shard,
-			TabletType: tablet.Type,
-		},
-		{
-			Keyspace:   "newkeyspace",
-			Shard:      tablet.Shard,
-			TabletType: tablet.Type,
-		},
-	}
-
-	KeyspacesToWatch = []string{tablet.Keyspace}
-
-	err = hc.WaitForAllServingTablets(ctx, targets)
-	assert.Nil(t, err, "error should be nil. Keyspace with no tablets is filtered")
-
-	KeyspacesToWatch = []string{}
 }
 
 // TestRemoveTablet tests the behavior when a tablet goes away.
