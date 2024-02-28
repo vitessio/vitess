@@ -3,6 +3,8 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
+  - **[Breaking changes](#breaking-changes)**
+    - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
   - **[Query Compatibility](#query-compatibility)**
     - [Vindex Hints](#vindex-hints)
     - [Update with Limit Support](#update-limit)
@@ -15,6 +17,15 @@
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
 
 ## <a id="major-changes"/>Major Changes
+
+### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="shutdown-grace-period-default"/>`shutdown_grace_period` Default Change
+
+The `--shutdown_grace_period` flag, which was introduced in v2 with a default of `0 seconds`, has now been changed to default to `3 seconds`.
+This makes reparenting in Vitess resilient to client errors, and prevents PlannedReparentShard from timing out.
+
+In order to preserve the old behaviour, the users can set the flag back to `0 seconds` causing open transactions to never be shutdown, but in that case, they run the risk of PlannedReparentShard calls timing out.
 
 ### <a id="query-compatibility"/>Query Compatibility
 
@@ -60,7 +71,6 @@ Example: `delete from t1 where id in (select col from t2 where foo = 32 and bar 
 The `--pprof-http` flag, which was introduced in v19 with a default of `true`, has now been changed to default to `false`.
 This makes HTTP `pprof` endpoints now an *opt-in* feature, rather than opt-out.
 To continue enabling these endpoints, explicitly set `--pprof-http` when starting up Vitess components.
-
 
 ## <a id="minor-changes"/>Minor Changes
 

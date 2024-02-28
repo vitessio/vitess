@@ -60,6 +60,9 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: schemaSQL,
 		}
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
+			"--shutdown_grace_period=0s",
+		)
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
 		if err != nil {
 			return 1

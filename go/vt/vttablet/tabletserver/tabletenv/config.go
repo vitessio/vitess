@@ -975,6 +975,9 @@ var defaultConfig = TabletConfig{
 		Mode:              Disable,
 		HeartbeatInterval: 250 * time.Millisecond,
 	},
+	GracePeriods: GracePeriodsConfig{
+		Shutdown: 3 * time.Second,
+	},
 	HotRowProtection: HotRowProtectionConfig{
 		Mode: Disable,
 		// Default value is the same as TxPool.Size.
