@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -66,6 +67,10 @@ var (
 	BlplTransaction = "Transaction"
 	// BlplBatchTransaction is the key for the stats map.
 	BlplBatchTransaction = "BatchTransaction"
+
+	// Truncate values in the middle to preserve the end of the message which
+	// typically contains the error text.
+	TruncationLocation = textutil.TruncationLocationMiddle
 )
 
 var TruncationIndicator = fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)

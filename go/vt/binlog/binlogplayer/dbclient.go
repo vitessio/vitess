@@ -130,7 +130,7 @@ func LogError(msg string, err error) {
 
 // LimitString truncates string to specified size
 func LimitString(s string, limit int) string {
-	ts, err := textutil.TruncateText(s, limit, textutil.TruncationLocationMiddle, "...")
+	ts, err := textutil.TruncateText(s, limit, TruncationLocation, TruncationIndicator)
 	if err != nil { // Fallback to simple truncation
 		if len(s) <= limit {
 			return s
