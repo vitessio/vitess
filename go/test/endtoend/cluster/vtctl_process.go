@@ -111,16 +111,6 @@ func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
 	return tmpProcess.Run()
 }
 
-// TopoGlobalRoot returns the global root for the given topo flavor.
-func TopoGlobalRoot(flavor string) string {
-	switch flavor {
-	case "consul":
-		return "global"
-	default:
-		return "/vitess/global"
-	}
-}
-
 // VtctlProcessInstance returns a VtctlProcess handle for vtctl process
 // configured with the given Config.
 // The process must be manually started by calling setup()

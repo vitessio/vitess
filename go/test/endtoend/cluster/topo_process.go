@@ -455,3 +455,13 @@ func TopoProcessInstance(port int, peerPort int, hostname string, flavor string,
 	topo.PeerURL = fmt.Sprintf("http://%s:%d", hostname, peerPort)
 	return topo
 }
+
+// TopoGlobalRoot returns the global root for the given topo flavor.
+func TopoGlobalRoot(flavor string) string {
+	switch flavor {
+	case "consul":
+		return "global"
+	default:
+		return "/vitess/global"
+	}
+}
