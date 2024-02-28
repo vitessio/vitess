@@ -123,7 +123,8 @@ func TestDefaultConfig(t *testing.T) {
 	want := `consolidator: enable
 consolidatorStreamQuerySize: 2097152
 consolidatorStreamTotalSize: 134217728
-gracePeriods: {}
+gracePeriods:
+  shutdownSeconds: 3s
 healthcheck:
   degradedThresholdSeconds: 30s
   intervalSeconds: 20s
