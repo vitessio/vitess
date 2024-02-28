@@ -279,48 +279,46 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 	return dependency{}, ShardedError{ColumnNotFoundError{Column: colName, Table: tableName}}
 }
 
+func isColumnNotFound(err error) bool {
+	switch err := err.(type) {
+	case ColumnNotFoundError:
+		return true
+	case ShardedError:
+		return isColumnNotFound(err.Inner)
+	default:
+		return false
+	}
+}
+
 func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
+	if current.inHavingAggr {
+		deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
+		if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
+			return deps, err
+		}
+	}
+
 	thisDeps, err := b.resolveColumnInScope(current, colName, allowMulti)
 	if err != nil {
-		err = makeAmbiguousError(colName, err)
-		if thisDeps == nil {
-			return dependency{}, err
-		}
+		return dependency{}, makeAmbiguousError(colName, err)
 	}
+
 	if thisDeps.empty() {
-		if err != nil {
-			return dependency{}, err
-		}
-	} else {
-		deps, thisErr := thisDeps.get()
-		if thisErr != nil {
-			err = makeAmbiguousError(colName, thisErr)
-		}
-		return deps, err
-	}
-
-	deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
-	if err != nil || deps.direct.IsEmpty() {
-		return dependency{}, ShardedError{ColumnNotFoundError{Column: colName}}
-	}
-
-	vtbl, ok := current.tables[0].(*vTableInfo)
-	if !ok {
-		return dependency{}, vterrors.VT13001("oops")
-	}
-
-	for _, selExp := range vtbl.cols {
-		col, ok := selExp.(*sqlparser.ColName)
-		if !ok {
-			continue
+		if !current.inHavingAggr {
+			deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
+			if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
+				return deps, err
+			}
 		}
 
-		if equalsWithDeps(b.org).Expr(col, colName) {
-			// yay! we found the column
-			return deps, nil
-		}
+		return dependency{}, &ColumnNotFoundClauseError{Column: colName.Name.String(), Clause: "having clause"}
 	}
-	return dependency{}, ShardedError{ColumnNotFoundError{Column: colName}}
+
+	deps, err := thisDeps.get()
+	if err != nil {
+		err = makeAmbiguousError(colName, err)
+	}
+	return deps, err
 }
 
 // resolveColInGroupBy handles the special rules we have when binding on the GROUP BY column
@@ -356,23 +354,11 @@ func (b *binder) resolveColInGroupBy(
 	}
 	if dependencies.empty() {
 		if isColumnNotFound(firstErr) {
-			return dependency{}, &ColumnNotFoundInGroupByError{Column: colName.Name.String()}
+			return dependency{}, &ColumnNotFoundClauseError{Column: colName.Name.String(), Clause: "group statement"}
 		}
 		return deps, firstErr
 	}
 	return dependencies.get()
-}
-
-func isColumnNotFound(err error) bool {
-	_, ok := err.(ColumnNotFoundError)
-	if ok {
-		return true
-	}
-	sherr, ok := err.(ShardedError)
-	if ok {
-		return isColumnNotFound(sherr.Inner)
-	}
-	return false
 }
 
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {

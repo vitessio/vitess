@@ -72,8 +72,9 @@ type (
 		Column *sqlparser.ColName
 		Table  *sqlparser.TableName
 	}
-	ColumnNotFoundInGroupByError struct {
+	ColumnNotFoundClauseError struct {
 		Column string
+		Clause string
 	}
 )
 
@@ -320,14 +321,14 @@ func (e *CantGroupOn) ErrorState() vterrors.State {
 }
 
 // ColumnNotFoundInGroupByError
-func (e *ColumnNotFoundInGroupByError) Error() string {
-	return fmt.Sprintf("Unknown column '%s' in 'group statement'", e.Column)
+func (e *ColumnNotFoundClauseError) Error() string {
+	return fmt.Sprintf("Unknown column '%s' in '%s'", e.Column, e.Clause)
 }
 
-func (*ColumnNotFoundInGroupByError) ErrorCode() vtrpcpb.Code {
+func (*ColumnNotFoundClauseError) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_INVALID_ARGUMENT
 }
 
-func (e *ColumnNotFoundInGroupByError) ErrorState() vterrors.State {
+func (e *ColumnNotFoundClauseError) ErrorState() vterrors.State {
 	return vterrors.BadFieldError
 }

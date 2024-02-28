@@ -35,6 +35,7 @@ type earlyRewriter struct {
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 	env             *vtenv.Environment
 	aliasMapCache   map[*sqlparser.Select]map[string]exprContainer
+	tables          *tableCollector
 
 	// reAnalyze is used when we are running in the late stage, after the other parts of semantic analysis
 	// have happened, and we are introducing or changing the AST. We invoke it so all parts of the query have been
@@ -206,14 +207,11 @@ func (r *earlyRewriter) handleHavingClause(node *sqlparser.Where, parent sqlpars
 	if !ok {
 		return nil
 	}
-	expr, err := r.rewriteAliasesInOrderBy(node.Expr, sel, false)
+	expr, err := r.rewriteAliasesInOrderByAndHaving(node.Expr, sel, false)
 	if err != nil {
 		return err
 	}
 	node.Expr = expr
-	// after rewriting, we might have exposed ColNames that come from the FROM,
-	// so we need to be able to go up the scope
-	r.scoper.currentScope().inHaving = false
 	return r.reAnalyze(expr)
 }
 
@@ -402,7 +400,7 @@ func (r *earlyRewriter) handleOrderBy(parent sqlparser.SQLNode, iter iterator) e
 			continue
 		}
 
-		expr, err := r.rewriteAliasesInOrderBy(e, sel, true)
+		expr, err := r.rewriteAliasesInOrderByAndHaving(e, sel, true)
 		if err != nil {
 			return err
 		}
@@ -515,13 +513,13 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 	return
 }
 
-// rewriteAliasesInOrderBy rewrites columns in the ORDER BY and HAVING clauses to use aliases
+// rewriteAliasesInOrderByAndHaving rewrites columns in the ORDER BY and HAVING clauses to use aliases
 // from the SELECT expressions when applicable, following MySQL scoping rules:
 //   - A column identifier without a table qualifier that matches an alias introduced
 //     in SELECT points to that expression, not any table column.
 //   - However, if the aliased expression is an aggregation and the column identifier in
 //     the HAVING/ORDER BY clause is inside an aggregation function, the rule does not apply.
-func (r *earlyRewriter) rewriteAliasesInOrderBy(
+func (r *earlyRewriter) rewriteAliasesInOrderByAndHaving(
 	node sqlparser.Expr,
 	sel *sqlparser.Select,
 	orderBy bool,
@@ -601,7 +599,24 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(
 			return
 		}
 
-		cursor.Replace(sqlparser.CloneExpr(item.expr))
+		newColName := sqlparser.CopyOnRewrite(item.expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+			col, ok := cursor.Node().(*sqlparser.ColName)
+			if !ok || col.Qualifier.NonEmpty() {
+				return
+			}
+			ts, found := r.binder.direct[col]
+			if !found {
+				panic("uh oh")
+			}
+			tbl := r.tables.Tables[ts.TableOffset()]
+			tblName, err := tbl.Name()
+			if err != nil {
+				panic(err)
+			}
+			cursor.Replace(sqlparser.NewColNameWithQualifier(col.Name.String(), tblName))
+		}, nil)
+
+		cursor.Replace(newColName)
 	}, nil)
 
 	expr = output.(sqlparser.Expr)

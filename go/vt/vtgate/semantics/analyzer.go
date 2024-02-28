@@ -76,6 +76,7 @@ func (a *analyzer) lateInit() {
 		env:             a.si.Environment(),
 		aliasMapCache:   map[*sqlparser.Select]map[string]exprContainer{},
 		reAnalyze:       a.reAnalyze,
+		tables:          a.tables,
 	}
 }
 

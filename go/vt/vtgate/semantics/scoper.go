@@ -250,16 +250,6 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func (s *scoper) foobar() {
-	id := EmptyTableSet()
-	for _, tableInfo := range s.currentScope().tables {
-		set := tableInfo.getTableSet(s.org)
-		id = id.Merge(set)
-	}
-	s.statementIDs[s.currentScope().stmt] = id
-	s.popScope()
-}
-
 func ValidAsMapKey(s sqlparser.SQLNode) bool {
 	return reflect.TypeOf(s).Comparable()
 }

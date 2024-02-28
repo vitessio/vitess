@@ -522,37 +522,51 @@ func TestHavingColumnName(t *testing.T) {
 		expErr  string
 	}{{
 		sql:     "select id, sum(foo) as sumOfFoo from t1 having sumOfFoo > 1",
-		expSQL:  "select id, sum(foo) as sumOfFoo from t1 having sum(foo) > 1",
+		expSQL:  "select id, sum(foo) as sumOfFoo from t1 having sum(t1.foo) > 1",
 		expDeps: TS0,
 	}, {
-		sql:     "select id, sum(foo) as sumOfFoo from t1 having sumOfFoo > 1",
-		expSQL:  "select id, sum(foo) as sumOfFoo from t1 having sum(foo) > 1",
+		sql:    "select id as X, sum(foo) as X from t1 having X > 1",
+		expErr: "Column 'X' in field list is ambiguous",
+	}, {
+		sql:     "select id, sum(t1.foo) as foo from t1 having sum(foo) > 1",
+		expSQL:  "select id, sum(t1.foo) as foo from t1 having sum(foo) > 1",
 		expDeps: TS0,
 	}, {
-		sql:    "select id, sum(t1.foo) as foo from t1 having sum(foo) > 1",
-		expSQL: "select id, sum(t1.foo) as foo from t1 having sum(foo) > 1",
+		sql:    "select id, sum(t1.foo) as XYZ from t1 having sum(XYZ) > 1",
+		expErr: "Invalid use of group function",
 	}, {
-		sql:    "select foo + 2 as foo from t1 having foo = 42",
-		expSQL: "select foo + 2 as foo from t1 having foo + 2 = 42",
+		sql:     "select foo + 2 as foo from t1 having foo = 42",
+		expSQL:  "select foo + 2 as foo from t1 having t1.foo + 2 = 42",
+		expDeps: TS0,
 	}, {
 		sql:    "select count(*), ename from emp group by ename having comm > 1000",
-		expErr: "column 'comm' not found",
+		expErr: "Unknown column 'comm' in 'having clause'",
 	}, {
-		sql:    "select sal, ename from emp having empno > 1000",
-		expErr: "column 'empno' not found",
+		sql:     "select sal, ename from emp having empno > 1000",
+		expSQL:  "select sal, ename from emp having empno > 1000",
+		expDeps: TS0,
 	}, {
-		sql:    "select sal, count(*) sal from emp group by sal having sal > 1000",
-		expErr: "Column 'sal' in field list is ambiguous", // MySQL allows this with a warning, but it makes no sense.
+		sql:    "select foo, count(*) foo from t1 group by foo having foo > 1000",
+		expErr: "Column 'foo' in field list is ambiguous", // MySQL allows this with a warning, but it makes no sense.
+	}, {
+		sql:     "select foo, count(*) foo from t1, emp group by foo having sum(sal) > 1000",
+		expSQL:  "select foo, count(*) as foo from t1, emp group by foo having sum(sal) > 1000",
+		expDeps: TS1,
+	}, {
+		sql:     "select foo as X, sal as foo from t1, emp having sum(X) > 1000",
+		expSQL:  "select foo as X, sal as foo from t1, emp having sum(t1.foo) > 1000",
+		expDeps: TS0,
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
-			selectStatement := ast.(sqlparser.SelectStatement)
-			_, err = AnalyzeStrict(selectStatement, cDB, schemaInfo)
+			selectStatement := ast.(*sqlparser.Select)
+			semTbl, err := AnalyzeStrict(selectStatement, cDB, schemaInfo)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
+				assert.Equal(t, tcase.expDeps, semTbl.RecursiveDeps(selectStatement.Having.Expr))
 			} else {
 				require.EqualError(t, err, tcase.expErr)
 			}
@@ -578,6 +592,21 @@ func getSchemaWithKnownColumns() *FakeSI {
 				}},
 				ColumnListAuthoritative: true,
 			},
+			"emp": {
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Name:     sqlparser.NewIdentifierCS("emp"),
+				Columns: []vindexes.Column{{
+					Name: sqlparser.NewIdentifierCI("empno"),
+					Type: sqltypes.Int64,
+				}, {
+					Name: sqlparser.NewIdentifierCI("ename"),
+					Type: sqltypes.VarChar,
+				}, {
+					Name: sqlparser.NewIdentifierCI("sal"),
+					Type: sqltypes.Int64,
+				}},
+				ColumnListAuthoritative: true,
+			},
 		},
 	}
 	return schemaInfo
@@ -590,59 +619,77 @@ func TestOrderByColumnName(t *testing.T) {
 		sql    string
 		expSQL string
 		expErr string
+		deps   TableSet
 	}{{
 		sql:    "select id, sum(foo) as sumOfFoo from t1 order by sumOfFoo",
-		expSQL: "select id, sum(foo) as sumOfFoo from t1 order by sum(foo) asc",
+		expSQL: "select id, sum(foo) as sumOfFoo from t1 order by sum(t1.foo) asc",
+		deps:   TS0,
 	}, {
 		sql:    "select id, sum(foo) as sumOfFoo from t1 order by sumOfFoo + 1",
-		expSQL: "select id, sum(foo) as sumOfFoo from t1 order by sum(foo) + 1 asc",
+		expSQL: "select id, sum(foo) as sumOfFoo from t1 order by sum(t1.foo) + 1 asc",
+		deps:   TS0,
 	}, {
 		sql:    "select id, sum(foo) as sumOfFoo from t1 order by abs(sumOfFoo)",
-		expSQL: "select id, sum(foo) as sumOfFoo from t1 order by abs(sum(foo)) asc",
+		expSQL: "select id, sum(foo) as sumOfFoo from t1 order by abs(sum(t1.foo)) asc",
+		deps:   TS0,
 	}, {
 		sql:    "select id, sum(foo) as sumOfFoo from t1 order by max(sumOfFoo)",
 		expErr: "Invalid use of group function",
 	}, {
 		sql:    "select id, sum(foo) as foo from t1 order by foo + 1",
 		expSQL: "select id, sum(foo) as foo from t1 order by foo + 1 asc",
+		deps:   TS0,
 	}, {
 		sql:    "select id, sum(foo) as foo from t1 order by foo",
-		expSQL: "select id, sum(foo) as foo from t1 order by sum(foo) asc",
+		expSQL: "select id, sum(foo) as foo from t1 order by sum(t1.foo) asc",
+		deps:   TS0,
 	}, {
 		sql:    "select id, lower(min(foo)) as foo from t1 order by min(foo)",
 		expSQL: "select id, lower(min(foo)) as foo from t1 order by min(foo) asc",
+		deps:   TS0,
 	}, {
 		sql:    "select id, lower(min(foo)) as foo from t1 order by foo",
-		expSQL: "select id, lower(min(foo)) as foo from t1 order by lower(min(foo)) asc",
+		expSQL: "select id, lower(min(foo)) as foo from t1 order by lower(min(t1.foo)) asc",
+		deps:   TS0,
 	}, {
 		sql:    "select id, lower(min(foo)) as foo from t1 order by abs(foo)",
 		expSQL: "select id, lower(min(foo)) as foo from t1 order by abs(foo) asc",
+		deps:   TS0,
 	}, {
 		sql:    "select id, t1.bar as foo from t1 group by id order by min(foo)",
 		expSQL: "select id, t1.bar as foo from t1 group by id order by min(foo) asc",
+		deps:   TS0,
 	}, {
 		sql:    "select id, bar as id, count(*) from t1 order by id",
 		expErr: "Column 'id' in field list is ambiguous",
 	}, {
 		sql:    "select id, id, count(*) from t1 order by id",
-		expSQL: "select id, id, count(*) from t1 order by id asc",
+		expSQL: "select id, id, count(*) from t1 order by t1.id asc",
+		deps:   TS0,
 	}, {
 		sql:    "select id, count(distinct foo) k from t1 group by id order by k",
-		expSQL: "select id, count(distinct foo) as k from t1 group by id order by count(distinct foo) asc",
+		expSQL: "select id, count(distinct foo) as k from t1 group by id order by count(distinct t1.foo) asc",
+		deps:   TS0,
 	}, {
 		sql:    "select user.id as foo from user union select col from user_extra order by foo",
 		expSQL: "select `user`.id as foo from `user` union select col from user_extra order by foo asc",
-	},
-	}
+		deps:   MergeTableSets(TS0, TS1),
+	}, {
+		sql:    "select foo as X, sal as foo from t1, emp order by sum(X)",
+		expSQL: "select foo as X, sal as foo from t1, emp order by sum(t1.foo) asc",
+		deps:   TS0,
+	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement := ast.(sqlparser.SelectStatement)
-			_, err = Analyze(selectStatement, cDB, schemaInfo)
+			semTable, err := AnalyzeStrict(selectStatement, cDB, schemaInfo)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
+				orderByExpr := selectStatement.GetOrderBy()[0].Expr
+				assert.Equal(t, tcase.deps, semTable.RecursiveDeps(orderByExpr))
 			} else {
 				require.EqualError(t, err, tcase.expErr)
 			}
