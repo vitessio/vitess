@@ -33,12 +33,7 @@ type requestsWaiter struct {
 
 // newRequestsWaiter creates a new requestsWaiter.
 func newRequestsWaiter() *requestsWaiter {
-	return &requestsWaiter{
-		mu:          sync.Mutex{},
-		wg:          sync.WaitGroup{},
-		waitCounter: 0,
-		counter:     0,
-	}
+	return &requestsWaiter{}
 }
 
 // Add adds to the requestsWaiter.
