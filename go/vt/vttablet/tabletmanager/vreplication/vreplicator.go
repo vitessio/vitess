@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -450,8 +451,11 @@ func (vr *vreplicator) readSettings(ctx context.Context, dbClient *vdbClient) (s
 	return settings, numTablesToCopy, nil
 }
 
-func (vr *vreplicator) setMessage(message string) error {
-	message = binlogplayer.MessageTruncate(message)
+func (vr *vreplicator) setMessage(message string) (err error) {
+	message, err = textutil.TruncateText(message, maxVReplicationMessageLen, textutil.TruncationLocationMiddle, vreplicationLogTruncationStr)
+	if err != nil {
+		return err
+	}
 	vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 		Time:    time.Now(),
 		Message: message,

@@ -35,10 +35,9 @@ import (
 const (
 	vreplicationLogTableName = "vreplication_log"
 	// This comes from the fact that the message column in the vreplication_log table is of type TEXT.
-	// See: go/vt/sidecardb/schema/vreplication/vreplication_log.sql
-	// https://dev.mysql.com/doc/refman/en/string-type-syntax.html and
-	// https://dev.mysql.com/doc/refman/en/storage-requirements.html#data-types-storage-reqs-strings
 	maxVReplicationLogMessageLen = 65535
+	// This comes from the fact that the message column in the vreplication table is varbinary(1000).
+	maxVReplicationMessageLen = 1000
 )
 
 // vrepliationLogTruncationStr is the string that is used to indicate that a message has been
