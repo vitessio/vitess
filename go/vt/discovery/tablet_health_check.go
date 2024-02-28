@@ -41,6 +41,9 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// withDialerContextOnce ensures grpc.WithDialContext() is added once to the options.
+var withDialerContextOnce sync.Once
+
 // tabletHealthCheck maintains the health status of a tablet. A map of this
 // structure is maintained in HealthCheck.
 type tabletHealthCheck struct {
@@ -161,8 +164,10 @@ func healthCheckDialerFactory(hc *HealthCheckImpl) func(ctx context.Context, add
 
 func (thc *tabletHealthCheck) connectionLocked(hc *HealthCheckImpl) queryservice.QueryService {
 	if thc.Conn == nil {
-		grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-			return append(opts, grpc.WithContextDialer(healthCheckDialerFactory(hc))), nil
+		withDialerContextOnce.Do(func() {
+			grpcclient.RegisterGRPCDialOptions(func(opts []grpc.DialOption) ([]grpc.DialOption, error) {
+				return append(opts, grpc.WithContextDialer(healthCheckDialerFactory(hc))), nil
+			})
 		})
 		conn, err := tabletconn.GetDialer()(thc.Tablet, grpcclient.FailFast(true))
 		if err != nil {
