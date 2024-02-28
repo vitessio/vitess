@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -602,20 +603,20 @@ func TestDBExecOnceKillTimeout(t *testing.T) {
 
 	// A very long running query that will be killed.
 	expectedQuery := "select 1"
-	var timestampQuery time.Time
+	var timestampQuery atomic.Int64
 	db.AddQuery(expectedQuery, &sqltypes.Result{})
 	db.SetBeforeFunc(expectedQuery, func() {
-		timestampQuery = time.Now()
+		timestampQuery.Store(time.Now().UnixMicro())
 		// should take longer than our context deadline below.
 		time.Sleep(1000 * time.Millisecond)
 	})
 
 	// We expect a kill-query to be fired, too.
 	// It should also run into a timeout.
-	var timestampKill time.Time
+	var timestampKill atomic.Int64
 	dbConn.killTimeout = 100 * time.Millisecond
 	db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(string) {
-		timestampKill = time.Now()
+		timestampKill.Store(time.Now().UnixMicro())
 		// should take longer than the configured kill timeout above.
 		time.Sleep(200 * time.Millisecond)
 	})
@@ -624,11 +625,13 @@ func TestDBExecOnceKillTimeout(t *testing.T) {
 	defer cancel()
 
 	result, err := dbConn.ExecOnce(ctx, "select 1", 1, false)
-	timestampDone := time.Now()
+	timeDone := time.Now()
 
 	require.Error(t, err)
 	require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
 	require.Nil(t, result)
-	require.WithinDuration(t, timestampQuery, timestampKill, 150*time.Millisecond)
-	require.WithinDuration(t, timestampKill, timestampDone, 150*time.Millisecond)
+	timeQuery := time.UnixMicro(timestampQuery.Load())
+	timeKill := time.UnixMicro(timestampKill.Load())
+	require.WithinDuration(t, timeQuery, timeKill, 150*time.Millisecond)
+	require.WithinDuration(t, timeKill, timeDone, 150*time.Millisecond)
 }
