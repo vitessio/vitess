@@ -159,7 +159,7 @@ func TruncateText(text string, maxLen int, location TruncationLocation, truncati
 		suffix := int(ol - int(prefix+len(truncationIndicator)) + 1)
 		return fmt.Sprintf("%s%s%s", text[:prefix], truncationIndicator, text[suffix:]), nil
 	case TruncationLocationEnd:
-		return text[:maxLen-len(truncationIndicator)] + truncationIndicator, nil
+		return text[:maxLen-(len(truncationIndicator)+1)] + truncationIndicator, nil
 	default:
 		return "", fmt.Errorf("invalid truncation location: %d", location)
 	}

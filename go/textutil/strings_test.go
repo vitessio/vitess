@@ -253,7 +253,7 @@ func TestTruncateText(t *testing.T) {
 			truncationIndicator: defaultTruncationIndicator,
 			maxLen:              defaultMaxLen,
 			location:            TruncationLocationEnd,
-			want:                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...",
+			want:                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...",
 		},
 		{
 			name:                "too small",
