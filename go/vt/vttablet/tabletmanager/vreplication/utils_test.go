@@ -32,7 +32,7 @@ import (
 func TestInsertLogTruncation(t *testing.T) {
 	dbClient := binlogplayer.NewMockDBClient(t)
 	defer dbClient.Close()
-	dbClient.RemoveInvariant("insert into _vt.vreplication_log")
+	dbClient.RemoveInvariant("insert into _vt.vreplication_log") // Otherwise the insert will be ignored
 	stats := binlogplayer.NewStats()
 	defer stats.Stop()
 	vdbClient := newVDBClient(dbClient, stats)
@@ -83,9 +83,10 @@ func TestInsertLogTruncation(t *testing.T) {
 				}
 				tail := (len(tc.message) - (mid + len(vrepliationLogTruncationStr))) + 1
 				messageOut = fmt.Sprintf("%s%s%s", tc.message[:mid], vrepliationLogTruncationStr, tc.message[tail:])
-				require.True(t, strings.HasPrefix(messageOut, tc.message[:10]))                 // Confirm we still have the same beginning
-				require.True(t, strings.HasSuffix(messageOut, tc.message[len(tc.message)-10:])) // Confirm we still have the same end
-				require.True(t, strings.Contains(messageOut, vrepliationLogTruncationStr))      // Confirm we have the truncation text
+				require.True(t, strings.HasPrefix(messageOut, tc.message[:1024]))                 // Confirm we still have the same beginning
+				require.True(t, strings.HasSuffix(messageOut, tc.message[len(tc.message)-1024:])) // Confirm we still have the same end
+				require.True(t, strings.Contains(messageOut, vrepliationLogTruncationStr))        // Confirm we have the truncation text
+				t.Logf("Original message length: %d, truncated message length: %d", len(tc.message), len(messageOut))
 			} else {
 				messageOut = tc.message
 			}
