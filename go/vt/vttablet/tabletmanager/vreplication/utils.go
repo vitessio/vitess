@@ -39,8 +39,6 @@ const (
 	truncationLocation = textutil.TruncationLocationMiddle
 	// This comes from the fact that the message column in the vreplication_log table is of type TEXT.
 	maxVReplicationLogMessageLen = 65535
-	// This comes from the fact that the message column in the vreplication table is varbinary(1000).
-	maxVReplicationMessageLen = 1000
 )
 
 // vrepliationLogTruncationStr is the string that is used to indicate that a message has been
