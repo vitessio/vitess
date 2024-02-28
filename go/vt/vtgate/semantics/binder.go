@@ -297,24 +297,64 @@ func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scop
 		return dependency{}, makeAmbiguousError(colName, err)
 	}
 
-	if thisDeps.empty() {
-		sel := current.stmt.(*sqlparser.Select) // we can be sure of this, since HAVING doesn't exist on UNION
-		if !current.inHavingAggr && len(sel.GroupBy) == 0 {
-			// if we are not inside an aggregation, and there is no GROUP BY, we consider the FROM clause before failing
-			deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
-			if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
-				return deps, err
-			}
+	if !thisDeps.empty() {
+		// we found something! let's return it
+		deps, err := thisDeps.get()
+		if err != nil {
+			err = makeAmbiguousError(colName, err)
+		}
+		return deps, err
+	}
+
+	notFoundErr := &ColumnNotFoundClauseError{Column: colName.Name.String(), Clause: "having clause"}
+	if current.inHavingAggr {
+		// if we are inside an aggregation, we've already looked everywhere. now it's time to give up
+		return dependency{}, notFoundErr
+	}
+
+	// Now we'll search the FROM clause, but with a twist. If we find it in the FROM clause, the column must also
+	// exist as a standalone expression in the SELECT list
+	deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
+	if deps.direct.IsEmpty() {
+		return dependency{}, notFoundErr
+	}
+
+	sel := current.stmt.(*sqlparser.Select) // we can be sure of this, since HAVING doesn't exist on UNION
+	if selDeps := b.searchInSelectExpressions(colName, deps, sel); selDeps.direct.NotEmpty() {
+		return selDeps, nil
+	}
+
+	if !current.inHavingAggr && len(sel.GroupBy) == 0 {
+		// if we are not inside an aggregation, and there is no GROUP BY, we consider the FROM clause before failing
+		if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
+			return deps, err
+		}
+	}
+
+	return dependency{}, notFoundErr
+}
+
+// searchInSelectExpressions searches for the ColName among the SELECT expressions
+// It used dependency information to match the columns
+func (b *binder) searchInSelectExpressions(colName *sqlparser.ColName, deps dependency, stmt *sqlparser.Select) dependency {
+	for _, selectExpr := range stmt.SelectExprs {
+		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+		selectCol, ok := ae.Expr.(*sqlparser.ColName)
+		if !ok || !selectCol.Name.Equal(colName.Name) {
+			continue
 		}
 
-		return dependency{}, &ColumnNotFoundClauseError{Column: colName.Name.String(), Clause: "having clause"}
+		_, direct, _ := b.org.depsForExpr(selectCol)
+		if deps.direct == direct {
+			// we have found the ColName in the SELECT expressions, so it's safe to use here
+			direct, recursive, typ := b.org.depsForExpr(ae.Expr)
+			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
+		}
 	}
-
-	deps, err := thisDeps.get()
-	if err != nil {
-		err = makeAmbiguousError(colName, err)
-	}
-	return deps, err
+	return dependency{}
 }
 
 // resolveColInGroupBy handles the special rules we have when binding on the GROUP BY column
