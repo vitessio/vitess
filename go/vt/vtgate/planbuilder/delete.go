@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -68,8 +67,10 @@ func gen4DeleteStmtPlanner(
 		}
 	}
 
-	if err := checkIfDeleteSupported(deleteStmt, ctx.SemTable); err != nil {
-		return nil, err
+	// error out here if delete query cannot bypass the planner and
+	// planner cannot plan such query due to different reason like missing full information, etc.
+	if ctx.SemTable.NotUnshardedErr != nil {
+		return nil, ctx.SemTable.NotUnshardedErr
 	}
 
 	op, err := operators.PlanQuery(ctx, deleteStmt)
@@ -131,18 +132,4 @@ func deleteUnshardedShortcut(stmt *sqlparser.Delete, ks *vindexes.Keyspace, tabl
 		edml.TableNames = append(edml.TableNames, tbl.Name.String())
 	}
 	return &primitiveWrapper{prim: &engine.Delete{DML: edml}}
-}
-
-// checkIfDeleteSupported checks if the delete query is supported or we must return an error.
-func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable) error {
-	if semTable.NotUnshardedErr != nil {
-		return semTable.NotUnshardedErr
-	}
-
-	// Delete is only supported for single Target.
-	if len(del.Targets) > 1 {
-		return vterrors.VT12001("multi-table DELETE statement with multi-target")
-	}
-
-	return nil
 }

@@ -758,30 +758,8 @@ func (hc *HealthCheckImpl) WaitForAllServingTablets(ctx context.Context, targets
 	return hc.waitForTablets(ctx, targets, true)
 }
 
-// FilterTargetsByKeyspaces only returns the targets that are part of the provided keyspaces
-func FilterTargetsByKeyspaces(keyspaces []string, targets []*query.Target) []*query.Target {
-	filteredTargets := make([]*query.Target, 0)
-
-	// Keep them all if there are no keyspaces to watch
-	if len(KeyspacesToWatch) == 0 {
-		return append(filteredTargets, targets...)
-	}
-
-	// Let's remove from the target shards that are not in the keyspaceToWatch list.
-	for _, target := range targets {
-		for _, keyspaceToWatch := range keyspaces {
-			if target.Keyspace == keyspaceToWatch {
-				filteredTargets = append(filteredTargets, target)
-			}
-		}
-	}
-	return filteredTargets
-}
-
 // waitForTablets is the internal method that polls for tablets.
 func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.Target, requireServing bool) error {
-	targets = FilterTargetsByKeyspaces(KeyspacesToWatch, targets)
-
 	for {
 		// We nil targets as we find them.
 		allPresent := true
