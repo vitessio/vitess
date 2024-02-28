@@ -334,7 +334,7 @@ func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scop
 	return dependency{}, notFoundErr
 }
 
-// searchInSelectExpressions searches for the ColName among the SELECT expressions
+// searchInSelectExpressions searches for the ColName among the SELECT and GROUP BY expressions
 // It used dependency information to match the columns
 func (b *binder) searchInSelectExpressions(colName *sqlparser.ColName, deps dependency, stmt *sqlparser.Select) dependency {
 	for _, selectExpr := range stmt.SelectExprs {
@@ -351,6 +351,20 @@ func (b *binder) searchInSelectExpressions(colName *sqlparser.ColName, deps depe
 		if deps.direct == direct {
 			// we have found the ColName in the SELECT expressions, so it's safe to use here
 			direct, recursive, typ := b.org.depsForExpr(ae.Expr)
+			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
+		}
+	}
+
+	for _, gb := range stmt.GroupBy {
+		selectCol, ok := gb.(*sqlparser.ColName)
+		if !ok || !selectCol.Name.Equal(colName.Name) {
+			continue
+		}
+
+		_, direct, _ := b.org.depsForExpr(selectCol)
+		if deps.direct == direct {
+			// we have found the ColName in the GROUP BY expressions, so it's safe to use here
+			direct, recursive, typ := b.org.depsForExpr(gb)
 			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
 		}
 	}

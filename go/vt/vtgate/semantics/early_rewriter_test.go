@@ -582,6 +582,10 @@ func TestHavingColumnName(t *testing.T) {
 		sql:     "select t1.foo as alias, count(bar) as x from t1 group by foo having foo+54 = 56",
 		expSQL:  "select t1.foo as alias, count(bar) as x from t1 group by foo having foo + 54 = 56",
 		expDeps: TS0,
+	}, {
+		sql:     "select 1 from t1 group by foo having foo = 1 and count(*) > 1",
+		expSQL:  "select 1 from t1 group by foo having foo = 1 and count(*) > 1",
+		expDeps: TS0,
 	}}
 
 	for _, tcase := range tcases {
