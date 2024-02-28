@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/query"
 )
 
 type typeAggregation struct {
@@ -49,27 +50,33 @@ type typeAggregation struct {
 	nullable bool
 }
 
-func AggregateEvalTypes(types []Type, env *collations.Environment) (Type, error) {
-	var typeAgg typeAggregation
-	var collAgg collationAggregation
-	var size, scale int32
-	for _, typ := range types {
-		typeAgg.addNullable(typ.typ, typ.nullable)
-		if err := collAgg.add(typedCoercionCollation(typ.typ, typ.collation), env); err != nil {
-			return Type{}, err
-		}
-		size = max(typ.size, size)
-		scale = max(typ.scale, scale)
-	}
-	return NewTypeEx(typeAgg.result(), collAgg.result().Collation, typeAgg.nullable, size, scale), nil
+type TypeAggregator struct {
+	types       typeAggregation
+	collations  collationAggregation
+	size, scale int32
 }
 
-func AggregateTypes(types []sqltypes.Type) sqltypes.Type {
-	var typeAgg typeAggregation
-	for _, typ := range types {
-		typeAgg.addNullable(typ, false)
+func (ta *TypeAggregator) Add(typ Type, env *collations.Environment) error {
+	ta.types.addNullable(typ.typ, typ.nullable)
+	if err := ta.collations.add(typedCoercionCollation(typ.typ, typ.collation), env); err != nil {
+		return err
 	}
-	return typeAgg.result()
+	ta.size = max(typ.size, ta.size)
+	ta.scale = max(typ.scale, ta.scale)
+	return nil
+}
+
+func (ta *TypeAggregator) AddField(f *query.Field, env *collations.Environment) error {
+	return ta.Add(NewTypeFromField(f), env)
+}
+
+func (ta *TypeAggregator) Type() Type {
+	return NewTypeEx(ta.types.result(), ta.collations.result().Collation, ta.types.nullable, ta.size, ta.scale)
+}
+
+func (ta *TypeAggregator) Field(name string) *query.Field {
+	typ := ta.Type()
+	return typ.ToField(name)
 }
 
 func (ta *typeAggregation) addEval(e eval) {

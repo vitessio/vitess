@@ -203,10 +203,17 @@ func createMergedUnion(
 		rt, foundR := ctx.SemTable.TypeForExpr(rae.Expr)
 		lt, foundL := ctx.SemTable.TypeForExpr(lae.Expr)
 		if foundR && foundL {
-			t, err := evalengine.AggregateEvalTypes([]evalengine.Type{rt, lt}, ctx.VSchema.Environment().CollationEnv())
-			if err == nil {
-				ctx.SemTable.ExprTypes[col] = t
+			collations := ctx.VSchema.Environment().CollationEnv()
+			var typer evalengine.TypeAggregator
+
+			if err := typer.Add(rt, collations); err != nil {
+				panic(err)
 			}
+			if err := typer.Add(lt, collations); err != nil {
+				panic(err)
+			}
+
+			ctx.SemTable.ExprTypes[col] = typer.Type()
 		}
 
 		ctx.SemTable.Recursive[col] = deps
