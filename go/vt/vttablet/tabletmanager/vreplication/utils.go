@@ -40,6 +40,10 @@ const (
 	maxVReplicationLogMessageLen = 65535
 )
 
+// vrepliationLogTruncationStr is the string that is used to indicate that a message has been
+// truncated, in the middle, before being inserted into the vreplication_log table.
+var vrepliationLogTruncationStr = fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
+
 const (
 	// Enum values for type column in the vreplication_log table.
 
@@ -106,14 +110,13 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 		buf := sqlparser.NewTrackedBuffer(nil)
 		// We perform the truncation, if needed, in the middle of the message as the end of the message is likely to
 		// be the most important part as it often explains WHY we e.g. failed to execute an INSERT in the workflow.
-		truncationStr := fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
 		if len(message) > maxVReplicationLogMessageLen {
-			mid := (len(message) / 2) - len(truncationStr)
+			mid := (len(message) / 2) - len(vrepliationLogTruncationStr)
 			for mid > (maxVReplicationLogMessageLen / 2) {
 				mid = mid / 2
 			}
-			tail := (len(message) - (mid + len(truncationStr))) + 1
-			message = fmt.Sprintf("%s%s%s", message[:mid], truncationStr, message[tail:])
+			tail := (len(message) - (mid + len(vrepliationLogTruncationStr))) + 1
+			message = fmt.Sprintf("%s%s%s", message[:mid], vrepliationLogTruncationStr, message[tail:])
 		}
 		buf.Myprintf("insert into %s.vreplication_log(vrepl_id, type, state, message) values(%s, %s, %s, %s)",
 			sidecar.GetIdentifier(), strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))

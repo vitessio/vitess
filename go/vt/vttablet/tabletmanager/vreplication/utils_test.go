@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -41,7 +40,6 @@ func TestInsertLogTruncation(t *testing.T) {
 	vrID := int32(1)
 	typ := "Testing"
 	state := binlogdatapb.VReplicationWorkflowState_Error.String()
-	truncationStr := fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
 
 	insertStmtf := "insert into _vt.vreplication_log(vrepl_id, type, state, message) values(%d, '%s', '%s', %s)"
 
@@ -79,15 +77,15 @@ func TestInsertLogTruncation(t *testing.T) {
 		t.Run("insertLog", func(t *testing.T) {
 			var messageOut string
 			if tc.expectTruncation {
-				mid := (len(tc.message) / 2) - len(truncationStr)
+				mid := (len(tc.message) / 2) - len(vrepliationLogTruncationStr)
 				for mid > (maxVReplicationLogMessageLen / 2) {
 					mid = mid / 2
 				}
-				tail := (len(tc.message) - (mid + len(truncationStr))) + 1
-				messageOut = fmt.Sprintf("%s%s%s", tc.message[:mid], truncationStr, tc.message[tail:])
+				tail := (len(tc.message) - (mid + len(vrepliationLogTruncationStr))) + 1
+				messageOut = fmt.Sprintf("%s%s%s", tc.message[:mid], vrepliationLogTruncationStr, tc.message[tail:])
 				require.True(t, strings.HasPrefix(messageOut, tc.message[:10]))                 // Confirm we still have the same beginning
 				require.True(t, strings.HasSuffix(messageOut, tc.message[len(tc.message)-10:])) // Confirm we still have the same end
-				require.True(t, strings.Contains(messageOut, truncationStr))                    // Confirm we have the truncation text
+				require.True(t, strings.Contains(messageOut, vrepliationLogTruncationStr))      // Confirm we have the truncation text
 			} else {
 				messageOut = tc.message
 			}
