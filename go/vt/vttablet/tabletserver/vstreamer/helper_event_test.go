@@ -209,6 +209,7 @@ type TestSpecOptions struct {
 	// if filter is set, customFieldEvents need to be specified as well
 	filter            *binlogdatapb.Filter
 	customFieldEvents bool
+	position          string
 }
 
 // TestSpec is defined one per unit test.
@@ -272,7 +273,7 @@ func (ts *TestSpec) Init() {
 		execStatement(ts.t, ts.ddls[i])
 		fe := ts.getFieldEvent(t)
 		ts.fieldEvents[t.Name()] = fe
-
+		log.Infof("field event for table %s: %v", t.Name(), fe)
 		var pkColumns []string
 		var hasPK bool
 		for _, index := range t.TableSpec.Indexes {
@@ -437,7 +438,11 @@ func (ts *TestSpec) Run() {
 		tc.output = append(tc.output, output)
 		testcases = append(testcases, tc)
 	}
-	runCases(ts.t, ts.options.filter, testcases, "current", nil)
+	startPos := "current"
+	if ts.options.position != "" {
+		startPos = ts.options.position
+	}
+	runCases(ts.t, ts.options.filter, testcases, startPos, nil)
 }
 
 func (ts *TestSpec) getDDLEvent(query string) string {
@@ -704,6 +709,10 @@ func (ts *TestSpec) Reset() {
 	for table := range ts.fieldEvents {
 		ts.fieldEventsSent[table] = false
 	}
+}
+
+func (ts *TestSpec) SetStartPosition(pos string) {
+	ts.options.position = pos
 }
 
 func getRowEvent(ts *TestSpec, fe *TestFieldEvent, query string) string {

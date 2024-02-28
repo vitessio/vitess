@@ -1178,39 +1178,7 @@ func TestSelectFilter(t *testing.T) {
 	ts.Run()
 }
 
-// todo: migrate to new framework
 func TestDDLAddColumn(t *testing.T) {
-	execStatements(t, []string{
-		"create table ddl_test1(id int, val1 varbinary(128), primary key(id))",
-		"create table ddl_test2(id int, val1 varbinary(128), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table ddl_test1",
-		"drop table ddl_test2",
-	})
-
-	// Record position before the next few statements.
-	pos := primaryPosition(t)
-	execStatements(t, []string{
-		"begin",
-		"insert into ddl_test1 values(1, 'aaa')",
-		"insert into ddl_test2 values(1, 'aaa')",
-		"commit",
-		// Adding columns is allowed.
-		"alter table ddl_test1 add column val2 varbinary(128)",
-		"alter table ddl_test2 add column val2 varbinary(128)",
-		"begin",
-		"insert into ddl_test1 values(2, 'bbb', 'ccc')",
-		"insert into ddl_test2 values(2, 'bbb', 'ccc')",
-		"commit",
-	})
-	engine.se.Reload(context.Background())
-	env.SchemaEngine.Reload(context.Background())
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Test RE as well as select-based filters.
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "ddl_test2",
@@ -1220,42 +1188,73 @@ func TestDDLAddColumn(t *testing.T) {
 		}},
 	}
 
-	ch := make(chan []*binlogdatapb.VEvent)
-	go func() {
-		defer close(ch)
-		if err := vstream(ctx, t, pos, nil, filter, ch); err != nil {
-			t.Error(err)
-		}
-	}()
-	expectLog(ctx, t, "ddls", ch, [][]string{{
-		// Current schema has 3 columns, but they'll be truncated to match the two columns in the event.
-		`begin`,
-		`type:FIELD field_event:{table_name:"ddl_test1" fields:{name:"id" type:INT32 table:"ddl_test1" org_table:"ddl_test1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val1" type:VARBINARY table:"ddl_test1" org_table:"ddl_test1" database:"vttest" org_name:"val1" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-		`type:ROW row_event:{table_name:"ddl_test1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-		`type:FIELD field_event:{table_name:"ddl_test2" fields:{name:"id" type:INT32 table:"ddl_test2" org_table:"ddl_test2" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val1" type:VARBINARY table:"ddl_test2" org_table:"ddl_test2" database:"vttest" org_name:"val1" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-		`type:ROW row_event:{table_name:"ddl_test2" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-		`gtid`,
-		`commit`,
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table ddl_test1(id int, val1 varbinary(128), primary key(id))",
+			"create table ddl_test2(id int, val1 varbinary(128), primary key(id))",
+		},
+		options: &TestSpecOptions{
+			// Test RE as well as select-based filters.
+			filter: filter,
+		},
+	}
+	defer ts.Close()
+	// Record position before the next few statements.
+	ts.Init()
+	pos := primaryPosition(t)
+	ts.SetStartPosition(pos)
+	alterTest1 := "alter table ddl_test1 add column val2 varbinary(128)"
+	alterTest2 := "alter table ddl_test2 add column val2 varbinary(128)"
+	fe1 := &TestFieldEvent{
+		table: "ddl_test1",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val1", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
+			{name: "val2", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
+		},
+	}
+	fe2 := &TestFieldEvent{
+		table: "ddl_test2",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val1", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
+			{name: "val2", dataType: "VARBINARY", colType: "varbinary(128)", len: 128, collationID: 63},
+		},
+	}
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into ddl_test1 values(1, 'aaa')", nil},
+		{"insert into ddl_test2 values(1, 'aaa')", nil},
+		{"commit", nil},
 	}, {
-		`gtid`,
-		`type:DDL statement:"alter table ddl_test1 add column val2 varbinary(128)"`,
+		// Adding columns is allowed.
+		{alterTest1, []TestRowEvent{
+			{event: "gtid"},
+			{event: ts.getDDLEvent(alterTest1)},
+		}},
 	}, {
-		`gtid`,
-		`type:DDL statement:"alter table ddl_test2 add column val2 varbinary(128)"`,
+		{alterTest2, []TestRowEvent{
+			{event: "gtid"},
+			{event: ts.getDDLEvent(alterTest2)},
+		}},
 	}, {
-		// The plan will be updated to now include the third column
-		// because the new table map will have three columns.
-		`begin`,
-		`type:FIELD field_event:{table_name:"ddl_test1" fields:{name:"id" type:INT32 table:"ddl_test1" org_table:"ddl_test1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val1" type:VARBINARY table:"ddl_test1" org_table:"ddl_test1" database:"vttest" org_name:"val1" column_length:128 charset:63 column_type:"varbinary(128)"} fields:{name:"val2" type:VARBINARY table:"ddl_test1" org_table:"ddl_test1" database:"vttest" org_name:"val2" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-		`type:ROW row_event:{table_name:"ddl_test1" row_changes:{after:{lengths:1 lengths:3 lengths:3 values:"2bbbccc"}}}`,
-		`type:FIELD field_event:{table_name:"ddl_test2" fields:{name:"id" type:INT32 table:"ddl_test2" org_table:"ddl_test2" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val1" type:VARBINARY table:"ddl_test2" org_table:"ddl_test2" database:"vttest" org_name:"val1" column_length:128 charset:63 column_type:"varbinary(128)"} fields:{name:"val2" type:VARBINARY table:"ddl_test2" org_table:"ddl_test2" database:"vttest" org_name:"val2" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-		`type:ROW row_event:{table_name:"ddl_test2" row_changes:{after:{lengths:1 lengths:3 lengths:3 values:"2bbbccc"}}}`,
-		`gtid`,
-		`commit`,
-	}})
+		{"begin", nil},
+		{"insert into ddl_test1 values(2, 'bbb', 'ccc')", []TestRowEvent{
+			{event: fe1.String()},
+			{spec: &TestRowEventSpec{table: "ddl_test1", changes: []TestRowChange{{after: []string{"2", "bbb", "ccc"}}}}},
+		}},
+		{"insert into ddl_test2 values(2, 'bbb', 'ccc')", []TestRowEvent{
+			{event: fe2.String()},
+			{spec: &TestRowEventSpec{table: "ddl_test2", changes: []TestRowChange{{after: []string{"2", "bbb", "ccc"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	ts.Run()
 }
 
-// todo: migrate to new framework
 func TestDDLDropColumn(t *testing.T) {
 	env.SchemaEngine.Reload(context.Background())
 	execStatement(t, "create table ddl_test2(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))")
@@ -1288,7 +1287,6 @@ func TestDDLDropColumn(t *testing.T) {
 	}
 }
 
-// todo: migrate to new framework
 func TestUnsentDDL(t *testing.T) {
 	execStatement(t, "create table unsent(id int, val varbinary(128), primary key(id))")
 
@@ -1311,100 +1309,71 @@ func TestUnsentDDL(t *testing.T) {
 	runCases(t, filter, testcases, "", nil)
 }
 
-// todo: migrate to new framework
 func TestBuffering(t *testing.T) {
 	reset := AdjustPacketSize(10)
 	defer reset()
 
-	execStatement(t, "create table packet_test(id int, val varbinary(128), primary key(id))")
-	defer execStatement(t, "drop table packet_test")
-	engine.se.Reload(context.Background())
-
-	testcases := []testcase{{
-		// All rows in one packet.
-		input: []string{
-			"begin",
-			"insert into packet_test values (1, '123')",
-			"insert into packet_test values (2, '456')",
-			"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table packet_test(id int, val varbinary(128), primary key(id))",
 		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"packet_test" fields:{name:"id" type:INT32 table:"packet_test" org_table:"packet_test" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"packet_test" org_table:"packet_test" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"packet_test" row_changes:{after:{lengths:1 lengths:3 values:"1123"}}}`,
-			`type:ROW row_event:{table_name:"packet_test" row_changes:{after:{lengths:1 lengths:3 values:"2456"}}}`,
-			`gtid`,
-			`commit`,
-		}},
+	}
+	defer ts.Close()
+	ts.Init()
+	ddl := "alter table packet_test change val val varchar(128)"
+	ts.tests = [][]*TestQuery{{
+		// All rows in one packet.
+		{"begin", nil},
+		{"insert into packet_test values (1, '123')", nil},
+		{"insert into packet_test values (2, '456')", nil},
+		{"commit", nil},
 	}, {
 		// A new row causes packet size to be exceeded.
 		// Also test deletes
-		input: []string{
-			"begin",
-			"insert into packet_test values (3, '123456')",
-			"insert into packet_test values (4, '789012')",
-			"delete from packet_test where id=3",
-			"delete from packet_test where id=4",
-			"commit",
-		},
-		output: [][]string{{
-			`begin`,
-			`type:ROW row_event:{table_name:"packet_test" row_changes:{after:{lengths:1 lengths:6 values:"3123456"}}}`,
-		}, {
-			`type:ROW row_event:{table_name:"packet_test" row_changes:{after:{lengths:1 lengths:6 values:"4789012"}}}`,
-		}, {
-			`type:ROW row_event:{table_name:"packet_test" row_changes:{before:{lengths:1 lengths:6 values:"3123456"}}}`,
-		}, {
-			`type:ROW row_event:{table_name:"packet_test" row_changes:{before:{lengths:1 lengths:6 values:"4789012"}}}`,
-			`gtid`,
-			`commit`,
+		{"begin", nil},
+		{"insert into packet_test values (3, '123456')", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "packet_test", changes: []TestRowChange{{after: []string{"3", "123456"}}}}},
 		}},
+		{"insert into packet_test values (4, '789012')", []TestRowEvent{
+			{restart: true, spec: &TestRowEventSpec{table: "packet_test", changes: []TestRowChange{{after: []string{"4", "789012"}}}}},
+		}},
+		{"delete from packet_test where id=3", []TestRowEvent{
+			{restart: true, spec: &TestRowEventSpec{table: "packet_test", changes: []TestRowChange{{before: []string{"3", "123456"}}}}},
+		}},
+		{"delete from packet_test where id=4", []TestRowEvent{
+			{restart: true, spec: &TestRowEventSpec{table: "packet_test", changes: []TestRowChange{{before: []string{"4", "789012"}}}}},
+		}},
+		{"commit", nil},
 	}, {
 		// A single row is itself bigger than the packet size.
-		input: []string{
-			"begin",
-			"insert into packet_test values (5, '123456')",
-			"insert into packet_test values (6, '12345678901')",
-			"insert into packet_test values (7, '23456')",
-			"commit",
-		},
-		output: [][]string{{
-			`begin`,
-			`type:ROW row_event:{table_name:"packet_test" row_changes:{after:{lengths:1 lengths:6 values:"5123456"}}}`,
-		}, {
-			`type:ROW row_event:{table_name:"packet_test" row_changes:{after:{lengths:1 lengths:11 values:"612345678901"}}}`,
-		}, {
-			`type:ROW row_event:{table_name:"packet_test" row_changes:{after:{lengths:1 lengths:5 values:"723456"}}}`,
-			`gtid`,
-			`commit`,
+		{"begin", nil},
+		{"insert into packet_test values (5, '123456')", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "packet_test", changes: []TestRowChange{{after: []string{"5", "123456"}}}}},
 		}},
+		{"insert into packet_test values (6, '12345678901')", []TestRowEvent{
+			{restart: true, spec: &TestRowEventSpec{table: "packet_test", changes: []TestRowChange{{after: []string{"6", "12345678901"}}}}},
+		}},
+		{"insert into packet_test values (7, '23456')", []TestRowEvent{
+			{restart: true, spec: &TestRowEventSpec{table: "packet_test", changes: []TestRowChange{{after: []string{"7", "23456"}}}}},
+		}},
+		{"commit", nil},
 	}, {
 		// An update packet is bigger because it has a before and after image.
-		input: []string{
-			"begin",
-			"insert into packet_test values (8, '123')",
-			"update packet_test set val='456' where id=8",
-			"commit",
-		},
-		output: [][]string{{
-			`begin`,
-			`type:ROW row_event:{table_name:"packet_test" row_changes:{after:{lengths:1 lengths:3 values:"8123"}}}`,
-		}, {
-			`type:ROW row_event:{table_name:"packet_test" row_changes:{before:{lengths:1 lengths:3 values:"8123"} after:{lengths:1 lengths:3 values:"8456"}}}`,
-			`gtid`,
-			`commit`,
+		{"begin", nil},
+		{"insert into packet_test values (8, '123')", nil},
+		{"update packet_test set val='456' where id=8", []TestRowEvent{
+			{restart: true, spec: &TestRowEventSpec{table: "packet_test", changes: []TestRowChange{{before: []string{"8", "123"}, after: []string{"8", "456"}}}}},
 		}},
+		{"commit", nil},
 	}, {
-		// DDL is in its own packet
-		input: []string{
-			"alter table packet_test change val val varchar(128)",
-		},
-		output: [][]string{{
-			`gtid`,
-			`type:DDL statement:"alter table packet_test change val val varchar(128)"`,
+		// DDL is in its own packet.
+		{ddl, []TestRowEvent{
+			{event: "gtid"},
+			{event: ts.getDDLEvent(ddl)},
 		}},
 	}}
-	runCases(t, nil, testcases, "", nil)
+	ts.Run()
 }
 
 // TestBestEffortNameInFieldEvent tests that we make a valid best effort
