@@ -81,11 +81,11 @@ func TestInsertLogTruncation(t *testing.T) {
 				err        error
 			)
 			if tc.expectTruncation {
-				messageOut, err = textutil.TruncateText(tc.message, maxVReplicationLogMessageLen, truncationLocation, vreplicationLogTruncationStr)
+				messageOut, err = textutil.TruncateText(tc.message, maxVReplicationLogMessageLen, truncationLocation, binlogplayer.TruncationIndicator)
 				require.NoError(t, err)
 				require.True(t, strings.HasPrefix(messageOut, tc.message[:1024]))                 // Confirm we still have the same beginning
 				require.True(t, strings.HasSuffix(messageOut, tc.message[len(tc.message)-1024:])) // Confirm we still have the same end
-				require.True(t, strings.Contains(messageOut, vreplicationLogTruncationStr))       // Confirm we have the truncation text
+				require.True(t, strings.Contains(messageOut, binlogplayer.TruncationIndicator))   // Confirm we have the truncation text
 				t.Logf("Original message length: %d, truncated message length: %d", len(tc.message), len(messageOut))
 			} else {
 				messageOut = tc.message

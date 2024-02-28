@@ -45,6 +45,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -66,6 +67,8 @@ var (
 	// BlplBatchTransaction is the key for the stats map.
 	BlplBatchTransaction = "BatchTransaction"
 )
+
+var TruncationIndicator = fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
 
 // Stats is the internal stats of a player. It is a different
 // structure that is passed in so stats can be collected over the life

@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -40,10 +41,6 @@ const (
 	// This comes from the fact that the message column in the vreplication_log table is of type TEXT.
 	maxVReplicationLogMessageLen = 65535
 )
-
-// vrepliationLogTruncationStr is the string that is used to indicate that a message has been
-// truncated before being inserted into one of the vreplication sidecar tables.
-var vreplicationLogTruncationStr = fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
 
 const (
 	// Enum values for type column in the vreplication_log table.
@@ -112,7 +109,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 		// We perform the truncation, if needed, in the middle of the message as the end of the message is likely to
 		// be the most important part as it often explains WHY we e.g. failed to execute an INSERT in the workflow.
 		if len(message) > maxVReplicationLogMessageLen {
-			message, err = textutil.TruncateText(message, maxVReplicationLogMessageLen, truncationLocation, vreplicationLogTruncationStr)
+			message, err = textutil.TruncateText(message, maxVReplicationLogMessageLen, truncationLocation, binlogplayer.TruncationIndicator)
 			if err != nil {
 				log.Errorf("Could not insert vreplication_log record because we failed to truncate the message: %v", err)
 				return
