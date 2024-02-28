@@ -3817,7 +3817,7 @@
         "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
-          0
+          "0:[0]"
         ],
         "Inputs": [
           {
@@ -3894,7 +3894,7 @@
         "OperatorType": "DMLWithInput",
         "TargetTabletType": "PRIMARY",
         "Offset": [
-          0
+          "0:[0]"
         ],
         "Inputs": [
           {

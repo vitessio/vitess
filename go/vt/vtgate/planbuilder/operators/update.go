@@ -164,9 +164,9 @@ func updateWithInputPlanningForFk(ctx *plancontext.PlanningContext, upd *sqlpars
 
 	upd.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
 	return &DMLWithInput{
-		DML:    createOperatorFromUpdate(ctx, upd),
+		DML:    []Operator{createOperatorFromUpdate(ctx, upd)},
 		Source: createOperatorFromSelect(ctx, selectStmt),
-		cols:   cols,
+		cols:   [][]*sqlparser.ColName{cols},
 	}
 }
 
