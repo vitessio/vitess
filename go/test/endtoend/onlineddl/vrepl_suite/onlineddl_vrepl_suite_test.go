@@ -59,7 +59,7 @@ var (
 )
 
 const (
-	testDataPath = "testdata"
+	testDataPath = "tmptestdata"
 )
 
 func TestMain(m *testing.M) {
