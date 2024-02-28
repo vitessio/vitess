@@ -142,24 +142,24 @@ func Title(s string) string {
 		s)
 }
 
-// TruncateText truncates the provided text to the specified length using the
-// provided indicator in place of the truncated text in the specified location
-// of the original.
-func TruncateText(text string, maxLen int, location TruncationLocation, truncationIndicator string) (string, error) {
+// TruncateText truncates the provided text, if needed, to the specified maximum
+// length using the provided truncation indicator in place of the truncated text
+// in the specified location of the original string.
+func TruncateText(text string, limit int, location TruncationLocation, indicator string) (string, error) {
 	ol := len(text)
-	if ol <= maxLen {
+	if ol <= limit {
 		return text, nil
 	}
-	if len(truncationIndicator)+2 >= maxLen {
+	if len(indicator)+2 >= limit {
 		return "", fmt.Errorf("the truncation indicator is too long for the provided text")
 	}
 	switch location {
 	case TruncationLocationMiddle:
-		prefix := int((float64(maxLen) * 0.5) - float64(len(truncationIndicator)))
-		suffix := int(ol - int(prefix+len(truncationIndicator)) + 1)
-		return fmt.Sprintf("%s%s%s", text[:prefix], truncationIndicator, text[suffix:]), nil
+		prefix := int((float64(limit) * 0.5) - float64(len(indicator)))
+		suffix := int(ol - int(prefix+len(indicator)) + 1)
+		return fmt.Sprintf("%s%s%s", text[:prefix], indicator, text[suffix:]), nil
 	case TruncationLocationEnd:
-		return text[:maxLen-(len(truncationIndicator)+1)] + truncationIndicator, nil
+		return text[:limit-(len(indicator)+1)] + indicator, nil
 	default:
 		return "", fmt.Errorf("invalid truncation location: %d", location)
 	}
