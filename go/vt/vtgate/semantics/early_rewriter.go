@@ -491,13 +491,17 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 				break
 			}
 
-			isColumnOnTable := r.isColumnOnTable(col, currentScope)
+			isColumnOnTable, sure := r.isColumnOnTable(col, currentScope)
 			if found && isColumnOnTable {
 				r.warning = fmt.Sprintf("Column '%s' in group statement is ambiguous", sqlparser.String(col))
 			}
 
-			if isColumnOnTable {
+			if isColumnOnTable && sure {
 				break
+			}
+
+			if !sure {
+				r.warning = "Missing table info, so not binding to anything on the FROM clause"
 			}
 
 			if item.ambiguous {
@@ -570,8 +574,8 @@ func (r *earlyRewriter) rewriteAliasesInOrderByAndHaving(
 			// if there is no matching alias, there is no rewriting needed
 			return
 		}
-		isColumnOnTable := r.isColumnOnTable(col, currentScope)
-		if found && isColumnOnTable {
+		isColumnOnTable, sure := r.isColumnOnTable(col, currentScope)
+		if found && isColumnOnTable && sure {
 			clause := "order by statement"
 			if !orderBy {
 				clause = "having clause"
@@ -580,9 +584,13 @@ func (r *earlyRewriter) rewriteAliasesInOrderByAndHaving(
 		}
 
 		topLevel := col == node
-		if isColumnOnTable && (!orderBy || (orderBy && !topLevel)) {
+		if isColumnOnTable && sure && (!orderBy || (orderBy && !topLevel)) {
 			// we only want to replace columns that are not coming from the table
 			return
+		}
+
+		if !sure {
+			r.warning = "Missing table info, so not binding to anything on the FROM clause"
 		}
 
 		if item.ambiguous {
@@ -595,22 +603,7 @@ func (r *earlyRewriter) rewriteAliasesInOrderByAndHaving(
 			return
 		}
 
-		newColName := sqlparser.CopyOnRewrite(item.expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-			col, ok := cursor.Node().(*sqlparser.ColName)
-			if !ok || col.Qualifier.NonEmpty() {
-				return
-			}
-			ts, found := r.binder.direct[col]
-			if !found {
-				panic("uh oh")
-			}
-			tbl := r.tables.Tables[ts.TableOffset()]
-			tblName, err := tbl.Name()
-			if err != nil {
-				panic(err)
-			}
-			cursor.Replace(sqlparser.NewColNameWithQualifier(col.Name.String(), tblName))
-		}, nil)
+		newColName := sqlparser.CopyOnRewrite(item.expr, nil, r.fillInQualifiers, nil)
 
 		cursor.Replace(newColName)
 	}, nil)
@@ -619,12 +612,33 @@ func (r *earlyRewriter) rewriteAliasesInOrderByAndHaving(
 	return
 }
 
-func (r *earlyRewriter) isColumnOnTable(col *sqlparser.ColName, currentScope *scope) bool {
+// fillInQualifiers adds qualifiers to any columns we have rewritten
+func (r *earlyRewriter) fillInQualifiers(cursor *sqlparser.CopyOnWriteCursor) {
+	col, ok := cursor.Node().(*sqlparser.ColName)
+	if !ok || col.Qualifier.NonEmpty() {
+		return
+	}
+	ts, found := r.binder.direct[col]
+	if !found {
+		panic("uh oh")
+	}
+	tbl := r.tables.Tables[ts.TableOffset()]
+	tblName, err := tbl.Name()
+	if err != nil {
+		panic(err)
+	}
+	cursor.Replace(sqlparser.NewColNameWithQualifier(col.Name.String(), tblName))
+}
+
+func (r *earlyRewriter) isColumnOnTable(col *sqlparser.ColName, currentScope *scope) (isColumn bool, isCertain bool) {
 	if !currentScope.stmtScope && currentScope.parent != nil {
 		currentScope = currentScope.parent
 	}
-	_, err := r.binder.resolveColumn(col, currentScope, false, false)
-	return err == nil
+	deps, err := r.binder.resolveColumn(col, currentScope, false, false)
+	if err != nil {
+		return false, true
+	}
+	return true, deps.certain
 }
 
 func (r *earlyRewriter) getAliasMap(sel *sqlparser.Select) (aliases map[string]exprContainer) {

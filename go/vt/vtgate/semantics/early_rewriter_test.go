@@ -565,7 +565,17 @@ func TestHavingColumnName(t *testing.T) {
 		sql:     "select foo as X, sal as foo from t1, emp having sum(X) > 1000",
 		expSQL:  "select foo as X, sal as foo from t1, emp having sum(t1.foo) > 1000",
 		expDeps: TS0,
+	}, {
+		sql:     "select count(*) a from someTable having a = 10",
+		expSQL:  "select count(*) as a from someTable having count(*) = 10",
+		expDeps: TS0,
+		warning: "Missing table info, so not binding to anything on the FROM clause",
+	}, {
+		sql:     "select count(*) from emp having ename = 10",
+		expSQL:  "select count(*) from emp having ename = 10",
+		expDeps: TS0,
 	}}
+
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)

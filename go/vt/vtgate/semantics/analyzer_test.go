@@ -710,9 +710,7 @@ func TestGroupByBinding(t *testing.T) {
 		TS0,
 	}, {
 		"select 1 as c from tabl group by c",
-		// because we don't have authoritative information about `tabl`,
-		// we assume that it has a column named `c`
-		TS0,
+		NoTables,
 	}, {
 		"select t1.id from t1, t2 group by id",
 		TS0,

@@ -243,19 +243,11 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		var err error
 		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
 		if err != nil {
-			err = makeAmbiguousError(colName, err)
-			if thisDeps == nil {
-				return dependency{}, err
-			}
+			return dependency{}, makeAmbiguousError(colName, err)
 		}
 		if !thisDeps.empty() {
-			deps, thisErr := thisDeps.get()
-			if thisErr != nil {
-				err = makeAmbiguousError(colName, thisErr)
-			}
-			return deps, err
-		} else if err != nil {
-			return dependency{}, err
+			deps, err := thisDeps.get()
+			return deps, makeAmbiguousError(colName, err)
 		}
 		if current.parent == nil &&
 			len(current.tables) == 1 &&
