@@ -26,28 +26,6 @@ import (
 // This file contains helper filter methods to process the unfiltered list of
 // tablets returned by HealthCheckImpl.GetTabletHealth*.
 
-func TabletHealthReferenceListToValue(thl []*TabletHealth) []TabletHealth {
-	newTh := []TabletHealth{}
-	for _, th := range thl {
-		newTh = append(newTh, *th)
-	}
-	return newTh
-}
-
-// RemoveUnhealthyTablets filters all unhealthy tablets out.
-// NOTE: Non-serving tablets are considered healthy.
-func RemoveUnhealthyTablets(tabletStatsList []TabletHealth) []TabletHealth {
-	result := make([]TabletHealth, 0, len(tabletStatsList))
-	for _, ts := range tabletStatsList {
-		// Note we do not check the 'Serving' flag here.
-		if ts.LastError != nil || ts.Stats != nil && (ts.Stats.HealthError != "" || IsReplicationLagHigh(&ts)) {
-			continue
-		}
-		result = append(result, ts)
-	}
-	return result
-}
-
 func ParseTabletTypesAndOrder(tabletTypesStr string) ([]topodatapb.TabletType, bool, error) {
 	inOrder := false
 	if strings.HasPrefix(tabletTypesStr, InOrderHint) {

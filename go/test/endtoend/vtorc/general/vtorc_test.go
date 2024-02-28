@@ -163,7 +163,7 @@ func TestVTOrcRepairs(t *testing.T) {
 
 	t.Run("StopReplication", func(t *testing.T) {
 		// use vtctlclient to stop replication
-		_, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
+		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 		require.NoError(t, err)
 
 		// check replication is setup correctly
@@ -300,7 +300,7 @@ func TestRepairAfterTER(t *testing.T) {
 	}
 
 	// TER to other tablet
-	_, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", newPrimary.Alias)
+	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", newPrimary.Alias)
 	require.NoError(t, err)
 
 	utils.CheckReplication(t, clusterInfo, newPrimary, []*cluster.Vttablet{curPrimary}, 15*time.Second)
@@ -404,11 +404,11 @@ func TestVTOrcWithPrs(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, shard0.Vttablets, 10*time.Second)
 
-	output, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard", "--",
-		"--keyspace_shard", fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
-		"--wait_replicas_timeout", "31s",
-		"--new_primary", replica.Alias)
+	output, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
+		"--wait-replicas-timeout", "31s",
+		"--new-primary", replica.Alias)
 	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
 
 	time.Sleep(40 * time.Second)

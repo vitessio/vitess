@@ -32,6 +32,7 @@ type (
 		merge(other dependencies, allowMulti bool) dependencies
 	}
 	dependency struct {
+		certain   bool
 		direct    TableSet
 		recursive TableSet
 		typ       evalengine.Type
@@ -52,6 +53,7 @@ var ambigousErr = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous")
 func createCertain(direct TableSet, recursive TableSet, qt evalengine.Type) *certain {
 	c := &certain{
 		dependency: dependency{
+			certain:   true,
 			direct:    direct,
 			recursive: recursive,
 		},
@@ -65,6 +67,7 @@ func createCertain(direct TableSet, recursive TableSet, qt evalengine.Type) *cer
 func createUncertain(direct TableSet, recursive TableSet) *uncertain {
 	return &uncertain{
 		dependency: dependency{
+			certain:   false,
 			direct:    direct,
 			recursive: recursive,
 		},
@@ -131,7 +134,7 @@ func (n *nothing) empty() bool {
 }
 
 func (n *nothing) get() (dependency, error) {
-	return dependency{}, nil
+	return dependency{certain: true}, nil
 }
 
 func (n *nothing) merge(d dependencies, _ bool) dependencies {

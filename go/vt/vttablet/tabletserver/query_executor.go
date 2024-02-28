@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -25,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
@@ -926,6 +926,9 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	}
 
 	qr, err := qre.execDBConn(conn.Conn, sql, true)
+	if errors.Is(err, mysql.ErrExecuteFetchMultipleResults) {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+	}
 	if err != nil {
 		return nil, rewriteOUTParamError(err)
 	}
@@ -1157,7 +1160,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 
 	// Add query detail object into QueryExecutor TableServer list w.r.t if it is a transactional or not. Previously we were adding it
 	// to olapql list regardless but that resulted in problems, where long-running stream queries which can be stateful (or transactional)
-	// weren't getting cleaned up during unserveCommon>handleShutdownGracePeriod in state_manager.go.
+	// weren't getting cleaned up during unserveCommon>terminateAllQueries in state_manager.go.
 	// This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
 	// once their grace period is over.
 	qd := NewQueryDetail(qre.logStats.Ctx, conn.Conn)

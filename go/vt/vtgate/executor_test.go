@@ -42,11 +42,6 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
@@ -55,6 +50,12 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
@@ -1216,7 +1217,7 @@ func TestExecutorDDL(t *testing.T) {
 		"drop table t2",
 		`create table test_partitioned (
 			id bigint,
-			date_create int,		
+			date_create int,
 			primary key(id)
 		) Engine=InnoDB	/*!50100 PARTITION BY RANGE (date_create)
 		  (PARTITION p2018_06_14 VALUES LESS THAN (1528959600) ENGINE = InnoDB,
@@ -2619,6 +2620,7 @@ func TestExecutorCallProc(t *testing.T) {
 func TestExecutorTempTable(t *testing.T) {
 	executor, _, _, sbcUnsharded, ctx := createExecutorEnv(t)
 
+	initialWarningsCount := warnings.Counts()["WarnUnshardedOnly"]
 	executor.warnShardedOnly = true
 	creatQuery := "create temporary table temp_t(id bigint primary key)"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
@@ -2626,6 +2628,7 @@ func TestExecutorTempTable(t *testing.T) {
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, sbcUnsharded.ExecCount.Load())
 	assert.NotEmpty(t, session.Warnings)
+	assert.Equal(t, initialWarningsCount+1, warnings.Counts()["WarnUnshardedOnly"], "warnings count")
 
 	before := executor.plans.Len()
 

@@ -122,10 +122,15 @@ const (
 	NaturalLeftJoinStr  = "natural left join"
 	NaturalRightJoinStr = "natural right join"
 
-	// Index hints.
-	UseStr    = "use "
+	// IgnoreStr string.
 	IgnoreStr = "ignore "
-	ForceStr  = "force "
+
+	// Index hints.
+	UseStr          = "use index"
+	IgnoreIndexStr  = "ignore index"
+	ForceStr        = "force index"
+	UseVindexStr    = "use vindex"
+	IgnoreVindexStr = "ignore vindex"
 
 	// Index hints For types.
 	JoinForStr    = "join"
@@ -760,6 +765,8 @@ const (
 	UseOp IndexHintType = iota
 	IgnoreOp
 	ForceOp
+	UseVindexOp
+	IgnoreVindexOp
 )
 
 // Constant for Enum Type - IndexHintForType

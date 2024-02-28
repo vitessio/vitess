@@ -109,7 +109,7 @@ func (aj *ApplyJoin) Clone(inputs []Operator) Operator {
 }
 
 func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	return AddPredicate(ctx, aj, expr, false, newFilter)
+	return AddPredicate(ctx, aj, expr, false, newFilterSinglePredicate)
 }
 
 // Inputs implements the Operator interface

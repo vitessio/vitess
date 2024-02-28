@@ -128,7 +128,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id desc limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -146,7 +146,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from music order by music.id desc limit :__upper_limit",
                     "Table": "music"
                   }
                 ]
@@ -258,7 +258,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) ASC",
-                    "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -276,7 +276,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from music order by music.id desc limit :__upper_limit",
                     "Table": "music"
                   }
                 ]
@@ -874,7 +874,7 @@
           "Sharded": false
         },
         "FieldQuery": "(select 1 from unsharded where 1 != 1 union select 1 from unsharded where 1 != 1 union all select 1 from unsharded where 1 != 1) union select 1 from unsharded where 1 != 1 union all select 1 from unsharded where 1 != 1",
-        "Query": "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by `1` asc) union select 1 from unsharded union all select 1 from unsharded order by `1` asc",
+        "Query": "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by 1 asc) union select 1 from unsharded union all select 1 from unsharded order by 1 asc",
         "Table": "unsharded"
       },
       "TablesUsed": [
@@ -962,7 +962,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) ASC",
-                    "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]
@@ -980,7 +980,7 @@
                     },
                     "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|1) DESC",
-                    "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
+                    "Query": "select id, weight_string(id) from `user` order by `user`.id desc limit :__upper_limit",
                     "Table": "`user`"
                   }
                 ]

@@ -580,9 +580,9 @@ func coalesceFunc(e sqlparser.Expr) sqlparser.Expr {
 	// `coalesce(e,1)` will return `e` if `e` is not `NULL`, otherwise it will return `1`
 	return &sqlparser.FuncExpr{
 		Name: sqlparser.NewIdentifierCI("coalesce"),
-		Exprs: sqlparser.SelectExprs{
-			aeWrap(e),
-			aeWrap(sqlparser.NewIntLiteral("1")),
+		Exprs: sqlparser.Exprs{
+			e,
+			sqlparser.NewIntLiteral("1"),
 		},
 	}
 }

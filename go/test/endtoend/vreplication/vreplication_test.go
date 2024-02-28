@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1155,7 +1156,7 @@ func materialize(t *testing.T, spec string, useVtctldClient bool) {
 
 func materializeProduct(t *testing.T, useVtctldClient bool) {
 	t.Run("materializeProduct", func(t *testing.T) {
-		// materializing from "product" keyspace to "customer" keyspace
+		// Materializing from "product" keyspace to "customer" keyspace.
 		workflow := "cproduct"
 		keyspace := "customer"
 		defaultCell := vc.Cells[vc.CellNames[0]]
@@ -1169,7 +1170,7 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "primary")
 		t.Run("throttle-app-product", func(t *testing.T) {
-			// Now, throttle the streamer on source tablets, insert some rows
+			// Now, throttle the source side component (vstreamer), and insert some rows.
 			for _, tab := range productTablets {
 				body, err := throttleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
@@ -1180,19 +1181,33 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)
 			}
 			insertMoreProductsForSourceThrottler(t)
-			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
-			// we expect the additional rows to **not appear** in the materialized view
+			// To be fair to the test, we give the target time to apply the new changes. We
+			// expect it to NOT get them in the first place, we expect the additional rows
+			// to **not appear** in the materialized view.
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
+				// Confirm that we updated the stats on the target tablets as expected.
+				jsVal, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCounts"})
+				require.NoError(t, err)
+				require.NotEqual(t, "{}", jsVal)
+				// The JSON value looks like this: {"cproduct.4.tablet.vstreamer": 2}
+				vstreamerThrottledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.tablet\.vstreamer`, workflow)).Int()
+				require.Greater(t, vstreamerThrottledCount, int64(0))
+				// We only need to do this stat check once.
+				val, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCountTotal"})
+				require.NoError(t, err)
+				throttledCount, err := strconv.ParseInt(val, 10, 64)
+				require.NoError(t, err)
+				require.GreaterOrEqual(t, throttledCount, vstreamerThrottledCount)
 			}
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
-			// unthrottle on source tablets, and expect the rows to show up
+			// Unthrottle the vstreamer component, and expect the rows to show up.
 			for _, tab := range productTablets {
 				body, err := unthrottleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
-				// give time for unthrottling to take effect and for target to fetch data
+				// Give time for unthrottling to take effect and for targets to fetch data.
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
 			}
 			for _, tab := range customerTablets {
@@ -1201,8 +1216,8 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 		})
 
 		t.Run("throttle-app-customer", func(t *testing.T) {
-			// Now, throttle vreplication (vcopier/vapplier) on target tablets, and
-			// insert some more rows.
+			// Now, throttle vreplication on the target side (vplayer), and insert some
+			// more rows.
 			for _, tab := range customerTablets {
 				body, err := throttleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
@@ -1217,6 +1232,13 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 			// rows to **not appear** in the materialized view.
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
+				// Confirm that we updated the stats on the target tablets as expected.
+				jsVal, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCounts"})
+				require.NoError(t, err)
+				require.NotEqual(t, "{}", jsVal)
+				// The JSON value now looks like this: {"cproduct.4.tablet.vstreamer": 2, "cproduct.4.tablet.vplayer": 4}
+				vplayerThrottledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.tablet\.vplayer`, workflow)).Int()
+				require.Greater(t, vplayerThrottledCount, int64(0))
 			}
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {

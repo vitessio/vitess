@@ -219,7 +219,7 @@ func insertRow(keyspace, table string, id int) {
 	if vtgateConn == nil {
 		return
 	}
-	vtgateConn.ExecuteFetch(fmt.Sprintf("use %s;", keyspace), 1000, false)
+	vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", keyspace), 1000, false)
 	vtgateConn.ExecuteFetch("begin", 1000, false)
 	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s (name) values ('%s%d')", table, table, id), 1000, false)
 	if err != nil {

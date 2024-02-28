@@ -967,6 +967,16 @@ func TestFkQueries(t *testing.T) {
 				"update fk_t16 set col = col * (col - (col)) where id = 4",
 			},
 		},
+		{
+			name: "Multi table delete that uses two tables related by foreign keys",
+			queries: []string{
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t10 (id, col) values (1, '5'), (2, NULL), (3, NULL), (4, '4'), (6, '1'), (7, '2')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t11 (id, col) values (4, '1'), (5, '3'), (7, '22'), (8, '5'), (9, NULL), (10, '3')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t12 (id, col) values (2, NULL), (3, NULL), (4, '1'), (6, '6'), (8, NULL), (10, '1')",
+				"insert /*+ SET_VAR(foreign_key_checks=0) */ into fk_t13 (id, col) values (2, '1'), (5, '5'), (7, '5')",
+				"delete fk_t11 from fk_t11 join fk_t12 using (id) where fk_t11.id = 4",
+			},
+		},
 	}
 
 	for _, testcase := range testcases {

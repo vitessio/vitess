@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,28 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package trace
 
 import (
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-type deleteWithInput struct {
-	input  logicalPlan
-	delete logicalPlan
+func TestNewJaegerTracerFromEnv(t *testing.T) {
+	tracingSvc, closer, err := newJagerTracerFromEnv("noop")
+	require.NoError(t, err)
+	require.NotEmpty(t, tracingSvc)
+	require.NotEmpty(t, closer)
 
-	outputCols []int
-}
-
-var _ logicalPlan = (*deleteWithInput)(nil)
-
-// Primitive implements the logicalPlan interface
-func (d *deleteWithInput) Primitive() engine.Primitive {
-	inp := d.input.Primitive()
-	del := d.delete.Primitive()
-	return &engine.DeleteWithInput{
-		Delete:     del,
-		Input:      inp,
-		OutputCols: d.outputCols,
-	}
+	tracingSvc, closer, err = newJagerTracerFromEnv("")
+	require.ErrorContains(t, err, "no service name provided")
+	require.Empty(t, tracingSvc)
+	require.Empty(t, closer)
 }

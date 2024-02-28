@@ -32,6 +32,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/sets"
@@ -39,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/dynamic"
@@ -2382,7 +2384,9 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, er.Error()
 	}
 
-	vte, err := vtexplain.Init(ctx, api.env, srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"})
+	ts := memorytopo.NewServer(ctx, vtexplain.Cell)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	vte, err := vtexplain.Init(ctx, api.env, ts, srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"}, srvTopoCounts)
 	if err != nil {
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}

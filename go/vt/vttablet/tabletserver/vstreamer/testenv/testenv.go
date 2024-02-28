@@ -20,13 +20,15 @@ package testenv
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"regexp"
 	"strings"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -40,6 +42,34 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
+
+const DBName = "vttest"
+
+var (
+	// These are exported to coordinate on version specific
+	// behavior between the testenv and its users.
+	CollationEnv       *collations.Environment
+	DefaultCollationID collations.ID
+	MySQLVersion       string
+)
+
+func init() {
+	vs, err := mysqlctl.GetVersionString()
+	if err != nil {
+		panic("could not get MySQL version: " + err.Error())
+	}
+	_, mv, err := mysqlctl.ParseVersionString(vs)
+	if err != nil {
+		panic("could not parse MySQL version: " + err.Error())
+	}
+	MySQLVersion = fmt.Sprintf("%d.%d.%d", mv.Major, mv.Minor, mv.Patch)
+	log.Infof("MySQL version: %s", MySQLVersion)
+	CollationEnv = collations.NewEnvironment(MySQLVersion)
+	// utf8mb4_general_ci is the default for MySQL 5.7 and
+	// utf8mb4_0900_ai_ci is the default for MySQL 8.0.
+	DefaultCollationID = CollationEnv.DefaultConnectionCharset()
+	log.Infof("Default collation ID: %d", DefaultCollationID)
+}
 
 // Env contains all the env vars for a test against a mysql instance.
 type Env struct {
@@ -65,7 +95,7 @@ type Env struct {
 // Init initializes an Env.
 func Init(ctx context.Context) (*Env, error) {
 	te := &Env{
-		KeyspaceName: "vttest",
+		KeyspaceName: DBName,
 		ShardName:    "0",
 		Cells:        []string{"cell1"},
 	}
@@ -77,9 +107,8 @@ func Init(ctx context.Context) (*Env, error) {
 	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName); err != nil {
 		panic(err)
 	}
-	// Add a random suffix to metric name to avoid panic. Another option would have been to generate a random string.
-	suffix := rand.Int()
-	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, "TestTopo"+fmt.Sprint(suffix))
+	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	te.SrvTopo = srvtopo.NewResilientServer(ctx, te.TopoServ, counts)
 
 	cfg := vttest.Config{
 		Topology: &vttestpb.VTTestTopology{
@@ -89,14 +118,14 @@ func Init(ctx context.Context) (*Env, error) {
 					Shards: []*vttestpb.Shard{
 						{
 							Name:           "0",
-							DbNameOverride: "vttest",
+							DbNameOverride: DBName,
 						},
 					},
 				},
 			},
 		},
 		OnlyMySQL:  true,
-		Charset:    "utf8mb4_general_ci",
+		Charset:    CollationEnv.LookupName(DefaultCollationID),
 		ExtraMyCnf: strings.Split(os.Getenv("EXTRA_MY_CNF"), ":"),
 	}
 	te.cluster = &vttest.LocalCluster{
@@ -109,7 +138,14 @@ func Init(ctx context.Context) (*Env, error) {
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
 	conf := tabletenv.NewDefaultConfig()
 	conf.DB = te.Dbcfgs
-	te.TabletEnv = tabletenv.NewEnv(vtenv.NewTestEnv(), conf, "VStreamerTest")
+	vtenvCfg := vtenv.Options{
+		MySQLServerVersion: MySQLVersion,
+	}
+	vtenv, err := vtenv.New(vtenvCfg)
+	if err != nil {
+		return nil, fmt.Errorf("could not initialize new vtenv: %v", err)
+	}
+	te.TabletEnv = tabletenv.NewEnv(vtenv, conf, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	pos, _ := te.Mysqld.PrimaryPosition()
 	if strings.HasPrefix(strings.ToLower(pos.GTIDSet.Flavor()), string(mysqlctl.FlavorMariaDB)) {
@@ -121,6 +157,9 @@ func Init(ctx context.Context) (*Env, error) {
 	dbVersionStr, err := te.Mysqld.GetVersionString(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("could not get server version: %w", err)
+	}
+	if !strings.Contains(dbVersionStr, MySQLVersion) {
+		return nil, fmt.Errorf("MySQL version mismatch between mysqlctl %s and mysqld %s", MySQLVersion, dbVersionStr)
 	}
 	_, version, err := mysqlctl.ParseVersionString(dbVersionStr)
 	if err != nil {

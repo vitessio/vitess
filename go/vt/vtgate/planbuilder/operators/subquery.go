@@ -269,10 +269,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		predicates = append(predicates, rhsPred)
 		sq.SubqueryValueName = sq.ArgName
 	}
-	return &Filter{
-		Source:     outer,
-		Predicates: predicates,
-	}
+	return newFilter(outer, predicates...)
 }
 
 func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {
