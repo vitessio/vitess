@@ -396,6 +396,7 @@ func NewVitessCluster(t *testing.T, opts *clusterOptions) *VitessCluster {
 
 	vc.setupVtctld()
 	vc.setupVtctl()
+	require.NoError(t, vc.Topo.OpenServer("etcd2", vc.Vtctl.TopoGlobalRoot))
 	vc.setupVtctlClient()
 	vc.setupVtctldClient()
 

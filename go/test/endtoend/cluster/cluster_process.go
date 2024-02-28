@@ -245,6 +245,11 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		cluster.VtctlProcess.LogDir = cluster.TmpDirectory
 	}
 
+	if err = cluster.TopoProcess.OpenServer(*topoFlavor, cluster.VtctlProcess.TopoGlobalRoot); err != nil {
+		log.Error(err.Error())
+		return
+	}
+
 	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
 		cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Infof("Starting vtctld server on port: %d", cluster.VtctldProcess.Port)
