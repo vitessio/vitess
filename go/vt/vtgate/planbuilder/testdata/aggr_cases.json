@@ -2094,6 +2094,71 @@
     }
   },
   {
+    "comment": "aggregation filtering by having on a route with no group by with non-unique vindex filter",
+    "query": "select 1 from user having count(id) = 10 and name = 'a'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from user having count(id) = 10 and name = 'a'",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "count(id) = 10",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "any_value(0) AS 1, sum_count(1) AS count(id)",
+            "Inputs": [
+              {
+                "OperatorType": "VindexLookup",
+                "Variant": "Equal",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "Values": [
+                  "'a'"
+                ],
+                "Vindex": "name_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Table": "name_user_vdx",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(id) from `user` where 1 != 1",
+                    "Query": "select 1, count(id) from `user` where `name` = 'a'",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Aggregates and joins",
     "query": "select count(*) from user join user_extra",
     "plan": {

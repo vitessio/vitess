@@ -1,5 +1,27 @@
 [
   {
+    "comment": "HAVING implicitly references table col",
+    "query": "select user.col1 from user having col2 = 2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.col1 from user having col2 = 2",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col1 from `user` where 1 != 1",
+        "Query": "select `user`.col1 from `user` where col2 = 2",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "ambiguous symbol reference",
     "query": "select user.col1, user_extra.col1 from user join user_extra having col1 = 2",
     "plan": "Column 'col1' in field list is ambiguous"
