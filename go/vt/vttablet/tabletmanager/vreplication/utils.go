@@ -103,8 +103,6 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 		query = fmt.Sprintf("update %s.vreplication_log set count = count + 1 where id = %d", sidecar.GetIdentifier(), id)
 	} else {
 		buf := sqlparser.NewTrackedBuffer(nil)
-		// We perform the truncation, if needed, in the middle of the message as the end of the message is likely to
-		// be the most important part as it often explains WHY we e.g. failed to execute an INSERT in the workflow.
 		if len(message) > maxVReplicationLogMessageLen {
 			message, err = textutil.TruncateText(message, maxVReplicationLogMessageLen, binlogplayer.TruncationLocation, binlogplayer.TruncationIndicator)
 			if err != nil {
