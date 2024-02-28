@@ -1000,7 +1000,7 @@
             },
             "FieldQuery": "select user_id, weight_string(user_id) from music where 1 != 1",
             "OrderBy": "(0|1) ASC",
-            "Query": "select user_id, weight_string(user_id) from music order by user_id asc limit :__upper_limit",
+            "Query": "select user_id, weight_string(user_id) from music order by music.user_id asc limit :__upper_limit",
             "ResultColumns": 1,
             "Table": "music"
           }
@@ -1806,7 +1806,7 @@
                 },
                 "FieldQuery": "select user_id, count(id), weight_string(user_id) from music where 1 != 1 group by user_id",
                 "OrderBy": "(0|2) ASC",
-                "Query": "select user_id, count(id), weight_string(user_id) from music group by user_id having count(user_id) = 1 order by user_id asc limit :__upper_limit",
+                "Query": "select user_id, count(id), weight_string(user_id) from music group by user_id having count(user_id) = 1 order by music.user_id asc limit :__upper_limit",
                 "ResultColumns": 2,
                 "Table": "music"
               }
@@ -2265,7 +2265,7 @@
                 },
                 "FieldQuery": "select col, `user`.id from `user` where 1 != 1",
                 "OrderBy": "0 ASC",
-                "Query": "select col, `user`.id from `user` order by col asc",
+                "Query": "select col, `user`.id from `user` order by `user`.col asc",
                 "Table": "`user`"
               },
               {
@@ -2691,7 +2691,7 @@
                 },
                 "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
                 "OrderBy": "(0|1) ASC",
-                "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                "Query": "select id, weight_string(id) from `user` order by `user`.id asc limit :__upper_limit",
                 "Table": "`user`"
               }
             ]
@@ -2704,8 +2704,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select :__sq1 as `(select id from ``user`` order by id asc limit 1)` from user_extra where 1 != 1",
-            "Query": "select :__sq1 as `(select id from ``user`` order by id asc limit 1)` from user_extra",
+            "FieldQuery": "select :__sq1 as `(select id from ``user`` order by ``user``.id asc limit 1)` from user_extra where 1 != 1",
+            "Query": "select :__sq1 as `(select id from ``user`` order by ``user``.id asc limit 1)` from user_extra",
             "Table": "user_extra"
           }
         ]
@@ -3181,7 +3181,7 @@
                     },
                     "FieldQuery": "select id, `name`, weight_string(id) from `user` where 1 != 1",
                     "OrderBy": "(0|2) ASC",
-                    "Query": "select id, `name`, weight_string(id) from `user` where `name` = 'aa' order by id asc limit :__upper_limit",
+                    "Query": "select id, `name`, weight_string(id) from `user` where `name` = 'aa' order by `user`.id asc limit :__upper_limit",
                     "ResultColumns": 2,
                     "Table": "`user`"
                   }
