@@ -66,21 +66,15 @@ type TopoProcess struct {
 func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) (err error) {
 	switch topoFlavor {
 	case "zk2":
-		err = topo.SetupZookeeper(cluster)
+		return topo.SetupZookeeper(cluster)
 	case "consul":
-		err = topo.SetupConsul(cluster)
+		return topo.SetupConsul(cluster)
 	default:
 		// Override any inherited ETCDCTL_API env value to
 		// ensure that we use the v3 API and storage.
 		os.Setenv("ETCDCTL_API", "3")
-		err = topo.SetupEtcd()
+		return topo.SetupEtcd()
 	}
-
-	if err != nil {
-		return err
-	}
-
-	return err
 }
 
 func (topo *TopoProcess) OpenServer(topoFlavor string, globalRoot string) (err error) {
