@@ -425,6 +425,18 @@ func TestInvalidSchema(t *testing.T) {
 			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
 		},
 		{
+			schema:    "create table t10(id int primary key, pid int null, key (pid)); create table t11 (id int primary key, pid int unsigned, key ix(pid), constraint f10 foreign key (pid) references t10(pid))",
+			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "pid", ReferencedTable: "t10", ReferencedColumn: "pid"},
+		},
+		{
+			// NULL vs NOT NULL should be fine
+			schema: "create table t10(id int primary key, pid int null, key (pid)); create table t11 (id int primary key, pid int not null, key ix(pid), constraint f10 foreign key (pid) references t10(pid))",
+		},
+		{
+			// NOT NULL vs NULL should be fine
+			schema: "create table t10(id int primary key, pid int not null, key (pid)); create table t11 (id int primary key, pid int null, key ix(pid), constraint f10 foreign key (pid) references t10(pid))",
+		},
+		{
 			// InnoDB allows different string length
 			schema: "create table t10(id varchar(50) primary key); create table t11 (id int primary key, i varchar(100), key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 		},
