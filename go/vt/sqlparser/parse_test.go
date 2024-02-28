@@ -691,6 +691,9 @@ var (
 		}, {
 			input: "select /* s.t */ 1 from s.t",
 		}, {
+			input:  "select /* s.keyword */ 1 from s.account",
+			output: "select /* s.keyword */ 1 from s.`account`",
+		}, {
 			input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
 		}, {
 			input: "select /* select in from */ 1 from (select 1 from t) as a",

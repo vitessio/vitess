@@ -8141,6 +8141,14 @@ reserved_table_id:
   {
     $$ = NewTableIdent(string($1))
   }
+| non_reserved_keyword2
+  {
+    $$ = NewTableIdent(string($1))
+  }
+| non_reserved_keyword3
+  {
+    $$ = NewTableIdent(string($1))
+  }
 
 infile_opt:
   { $$ = string("") }
