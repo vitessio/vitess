@@ -280,6 +280,7 @@ func TestTruncateText(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, tt.want, val)
+				require.LessOrEqual(t, len(val), tt.maxLen)
 			}
 		})
 	}

@@ -34,6 +34,9 @@ import (
 
 const (
 	vreplicationLogTableName = "vreplication_log"
+	// Truncate values in the middle to preserve the end of the message which typically contains the
+	// error text.
+	truncationLocation = textutil.TruncationLocationMiddle
 	// This comes from the fact that the message column in the vreplication_log table is of type TEXT.
 	maxVReplicationLogMessageLen = 65535
 	// This comes from the fact that the message column in the vreplication table is varbinary(1000).
@@ -41,7 +44,7 @@ const (
 )
 
 // vrepliationLogTruncationStr is the string that is used to indicate that a message has been
-// truncated, in the middle, before being inserted into the vreplication_log table.
+// truncated before being inserted into one of the vreplication sidecar tables.
 var vreplicationLogTruncationStr = fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
 
 const (
@@ -111,7 +114,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 		// We perform the truncation, if needed, in the middle of the message as the end of the message is likely to
 		// be the most important part as it often explains WHY we e.g. failed to execute an INSERT in the workflow.
 		if len(message) > maxVReplicationLogMessageLen {
-			message, err = textutil.TruncateText(message, maxVReplicationLogMessageLen, textutil.TruncationLocationMiddle, vreplicationLogTruncationStr)
+			message, err = textutil.TruncateText(message, maxVReplicationLogMessageLen, truncationLocation, vreplicationLogTruncationStr)
 			if err != nil {
 				log.Errorf("Could not insert vreplication_log record because we failed to truncate the message: %v", err)
 				return

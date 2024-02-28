@@ -142,13 +142,16 @@ func Title(s string) string {
 		s)
 }
 
+// TruncateText truncates the provided text to the specified length using the
+// provided indicator in place of the truncated text in the specified location
+// of the original.
 func TruncateText(text string, maxLen int, location TruncationLocation, truncationIndicator string) (string, error) {
-	if len(truncationIndicator)+2 >= maxLen {
-		return "", fmt.Errorf("the truncation indicator is too long for the provided text")
-	}
 	ol := len(text)
 	if ol <= maxLen {
 		return text, nil
+	}
+	if len(truncationIndicator)+2 >= maxLen {
+		return "", fmt.Errorf("the truncation indicator is too long for the provided text")
 	}
 	switch location {
 	case TruncationLocationMiddle:

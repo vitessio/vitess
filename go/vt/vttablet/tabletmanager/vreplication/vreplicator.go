@@ -452,7 +452,7 @@ func (vr *vreplicator) readSettings(ctx context.Context, dbClient *vdbClient) (s
 }
 
 func (vr *vreplicator) setMessage(message string) (err error) {
-	message, err = textutil.TruncateText(message, maxVReplicationMessageLen, textutil.TruncationLocationMiddle, vreplicationLogTruncationStr)
+	message, err = textutil.TruncateText(message, maxVReplicationMessageLen, truncationLocation, vreplicationLogTruncationStr)
 	if err != nil {
 		return err
 	}
