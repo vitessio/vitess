@@ -130,14 +130,14 @@ func LogError(msg string, err error) {
 
 // LimitString truncates string to specified size
 func LimitString(s string, limit int) string {
-	ls, err := textutil.TruncateText(s, limit, textutil.TruncationLocationMiddle, "...")
+	ts, err := textutil.TruncateText(s, limit, textutil.TruncationLocationMiddle, "...")
 	if err != nil { // Fallback to simple truncation
 		if len(s) <= limit {
 			return s
 		}
 		return s[:limit]
 	}
-	return ls
+	return ts
 }
 
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
