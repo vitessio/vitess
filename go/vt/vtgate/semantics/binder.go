@@ -400,17 +400,3 @@ func GetSubqueryAndOtherSide(node *sqlparser.ComparisonExpr) (*sqlparser.Subquer
 	}
 	return subq, exp
 }
-
-func equalsWithDeps(org originable) *sqlparser.Comparator {
-	return &sqlparser.Comparator{
-		RefOfColName_: func(a, b *sqlparser.ColName) bool {
-			_, aDeps, _ := org.depsForExpr(a)
-			_, bDeps, _ := org.depsForExpr(b)
-			if aDeps != bDeps && (aDeps.IsEmpty() || bDeps.IsEmpty()) {
-				// if we don't know, we don't know
-				return sqlparser.Equals.RefOfColName(a, b)
-			}
-			return a.Name.Equal(b.Name) && aDeps == bDeps
-		},
-	}
-}

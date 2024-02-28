@@ -337,6 +337,7 @@ func TestGroupByColumnName(t *testing.T) {
 		expSQL  string
 		expDeps TableSet
 		expErr  string
+		warning string
 	}{{
 		sql:     "select t3.col from t3 group by kj",
 		expSQL:  "select t3.col from t3 group by kj",
@@ -355,6 +356,7 @@ func TestGroupByColumnName(t *testing.T) {
 		sql:     "select t1.col1, sum(t2.id) as col1 from t1 join t2 group by col1",
 		expSQL:  "select t1.col1, sum(t2.id) as col1 from t1 join t2 group by col1",
 		expDeps: TS0,
+		warning: "Column 'col1' in group statement is ambiguous",
 	}, {
 		sql:     "select t2.col2 as id, sum(t2.id) as x from t1 join t2 group by id",
 		expSQL:  "select t2.col2 as id, sum(t2.id) as x from t1 join t2 group by t2.col2",
@@ -378,6 +380,7 @@ func TestGroupByColumnName(t *testing.T) {
 				gb := selectStatement.GroupBy
 				deps := st.RecursiveDeps(gb[0])
 				assert.Equal(t, tcase.expDeps, deps)
+				assert.Equal(t, tcase.warning, st.Warning)
 			} else {
 				require.EqualError(t, err, tcase.expErr)
 			}
@@ -520,6 +523,7 @@ func TestHavingColumnName(t *testing.T) {
 		expSQL  string
 		expDeps TableSet
 		expErr  string
+		warning string
 	}{{
 		sql:     "select id, sum(foo) as sumOfFoo from t1 having sumOfFoo > 1",
 		expSQL:  "select id, sum(foo) as sumOfFoo from t1 having sum(t1.foo) > 1",
@@ -531,13 +535,15 @@ func TestHavingColumnName(t *testing.T) {
 		sql:     "select id, sum(t1.foo) as foo from t1 having sum(foo) > 1",
 		expSQL:  "select id, sum(t1.foo) as foo from t1 having sum(foo) > 1",
 		expDeps: TS0,
+		warning: "Column 'foo' in having clause is ambiguous",
 	}, {
 		sql:    "select id, sum(t1.foo) as XYZ from t1 having sum(XYZ) > 1",
 		expErr: "Invalid use of group function",
 	}, {
 		sql:     "select foo + 2 as foo from t1 having foo = 42",
-		expSQL:  "select foo + 2 as foo from t1 having t1.foo + 2 = 42",
+		expSQL:  "select foo + 2 as foo from t1 having foo = 42",
 		expDeps: TS0,
+		warning: "Column 'foo' in having clause is ambiguous",
 	}, {
 		sql:    "select count(*), ename from emp group by ename having comm > 1000",
 		expErr: "Unknown column 'comm' in 'having clause'",
@@ -546,12 +552,15 @@ func TestHavingColumnName(t *testing.T) {
 		expSQL:  "select sal, ename from emp having empno > 1000",
 		expDeps: TS0,
 	}, {
-		sql:    "select foo, count(*) foo from t1 group by foo having foo > 1000",
-		expErr: "Column 'foo' in field list is ambiguous", // MySQL allows this with a warning, but it makes no sense.
+		sql:     "select foo, count(*) foo from t1 group by foo having foo > 1000",
+		expSQL:  "select foo, count(*) as foo from t1 group by foo having foo > 1000",
+		expDeps: TS0,
+		warning: "Column 'foo' in having clause is ambiguous",
 	}, {
 		sql:     "select foo, count(*) foo from t1, emp group by foo having sum(sal) > 1000",
 		expSQL:  "select foo, count(*) as foo from t1, emp group by foo having sum(sal) > 1000",
 		expDeps: TS1,
+		warning: "Column 'foo' in group statement is ambiguous",
 	}, {
 		sql:     "select foo as X, sal as foo from t1, emp having sum(X) > 1000",
 		expSQL:  "select foo as X, sal as foo from t1, emp having sum(t1.foo) > 1000",
@@ -567,6 +576,7 @@ func TestHavingColumnName(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 				assert.Equal(t, tcase.expDeps, semTbl.RecursiveDeps(selectStatement.Having.Expr))
+				assert.Equal(t, tcase.warning, semTbl.Warning)
 			} else {
 				require.EqualError(t, err, tcase.expErr)
 			}
@@ -616,10 +626,11 @@ func TestOrderByColumnName(t *testing.T) {
 	schemaInfo := getSchemaWithKnownColumns()
 	cDB := "db"
 	tcases := []struct {
-		sql    string
-		expSQL string
-		expErr string
-		deps   TableSet
+		sql     string
+		expSQL  string
+		expErr  string
+		warning string
+		deps    TableSet
 	}{{
 		sql:    "select id, sum(foo) as sumOfFoo from t1 order by sumOfFoo",
 		expSQL: "select id, sum(foo) as sumOfFoo from t1 order by sum(t1.foo) asc",
@@ -636,40 +647,48 @@ func TestOrderByColumnName(t *testing.T) {
 		sql:    "select id, sum(foo) as sumOfFoo from t1 order by max(sumOfFoo)",
 		expErr: "Invalid use of group function",
 	}, {
-		sql:    "select id, sum(foo) as foo from t1 order by foo + 1",
-		expSQL: "select id, sum(foo) as foo from t1 order by foo + 1 asc",
-		deps:   TS0,
+		sql:     "select id, sum(foo) as foo from t1 order by foo + 1",
+		expSQL:  "select id, sum(foo) as foo from t1 order by foo + 1 asc",
+		deps:    TS0,
+		warning: "Column 'foo' in order by statement is ambiguous",
 	}, {
-		sql:    "select id, sum(foo) as foo from t1 order by foo",
-		expSQL: "select id, sum(foo) as foo from t1 order by sum(t1.foo) asc",
-		deps:   TS0,
+		sql:     "select id, sum(foo) as foo from t1 order by foo",
+		expSQL:  "select id, sum(foo) as foo from t1 order by sum(t1.foo) asc",
+		deps:    TS0,
+		warning: "Column 'foo' in order by statement is ambiguous",
 	}, {
-		sql:    "select id, lower(min(foo)) as foo from t1 order by min(foo)",
-		expSQL: "select id, lower(min(foo)) as foo from t1 order by min(foo) asc",
-		deps:   TS0,
+		sql:     "select id, lower(min(foo)) as foo from t1 order by min(foo)",
+		expSQL:  "select id, lower(min(foo)) as foo from t1 order by min(foo) asc",
+		deps:    TS0,
+		warning: "Column 'foo' in order by statement is ambiguous",
 	}, {
-		sql:    "select id, lower(min(foo)) as foo from t1 order by foo",
-		expSQL: "select id, lower(min(foo)) as foo from t1 order by lower(min(t1.foo)) asc",
-		deps:   TS0,
+		sql:     "select id, lower(min(foo)) as foo from t1 order by foo",
+		expSQL:  "select id, lower(min(foo)) as foo from t1 order by lower(min(t1.foo)) asc",
+		deps:    TS0,
+		warning: "Column 'foo' in order by statement is ambiguous",
 	}, {
-		sql:    "select id, lower(min(foo)) as foo from t1 order by abs(foo)",
-		expSQL: "select id, lower(min(foo)) as foo from t1 order by abs(foo) asc",
-		deps:   TS0,
+		sql:     "select id, lower(min(foo)) as foo from t1 order by abs(foo)",
+		expSQL:  "select id, lower(min(foo)) as foo from t1 order by abs(foo) asc",
+		deps:    TS0,
+		warning: "Column 'foo' in order by statement is ambiguous",
 	}, {
-		sql:    "select id, t1.bar as foo from t1 group by id order by min(foo)",
-		expSQL: "select id, t1.bar as foo from t1 group by id order by min(foo) asc",
-		deps:   TS0,
+		sql:     "select id, t1.bar as foo from t1 group by id order by min(foo)",
+		expSQL:  "select id, t1.bar as foo from t1 group by id order by min(foo) asc",
+		deps:    TS0,
+		warning: "Column 'foo' in order by statement is ambiguous",
 	}, {
 		sql:    "select id, bar as id, count(*) from t1 order by id",
 		expErr: "Column 'id' in field list is ambiguous",
 	}, {
-		sql:    "select id, id, count(*) from t1 order by id",
-		expSQL: "select id, id, count(*) from t1 order by t1.id asc",
-		deps:   TS0,
+		sql:     "select id, id, count(*) from t1 order by id",
+		expSQL:  "select id, id, count(*) from t1 order by t1.id asc",
+		deps:    TS0,
+		warning: "Column 'id' in order by statement is ambiguous",
 	}, {
-		sql:    "select id, count(distinct foo) k from t1 group by id order by k",
-		expSQL: "select id, count(distinct foo) as k from t1 group by id order by count(distinct t1.foo) asc",
-		deps:   TS0,
+		sql:     "select id, count(distinct foo) k from t1 group by id order by k",
+		expSQL:  "select id, count(distinct foo) as k from t1 group by id order by count(distinct t1.foo) asc",
+		deps:    TS0,
+		warning: "Column 'id' in group statement is ambiguous",
 	}, {
 		sql:    "select user.id as foo from user union select col from user_extra order by foo",
 		expSQL: "select `user`.id as foo from `user` union select col from user_extra order by foo asc",
@@ -690,6 +709,7 @@ func TestOrderByColumnName(t *testing.T) {
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 				orderByExpr := selectStatement.GetOrderBy()[0].Expr
 				assert.Equal(t, tcase.deps, semTable.RecursiveDeps(orderByExpr))
+				assert.Equal(t, tcase.warning, semTable.Warning)
 			} else {
 				require.EqualError(t, err, tcase.expErr)
 			}

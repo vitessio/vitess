@@ -491,7 +491,12 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 				break
 			}
 
-			if r.isColumnOnTable(col, currentScope) {
+			isColumnOnTable := r.isColumnOnTable(col, currentScope)
+			if found && isColumnOnTable {
+				r.warning = fmt.Sprintf("Column '%s' in group statement is ambiguous", sqlparser.String(col))
+			}
+
+			if isColumnOnTable {
 				break
 			}
 
@@ -532,29 +537,12 @@ func (r *earlyRewriter) rewriteAliasesInOrderByAndHaving(
 
 	aliases := r.getAliasMap(sel)
 	insideAggr := false
-	comparator := equalsWithDeps(r.binder.org)
 	dontEnterSubquery := func(node, _ sqlparser.SQLNode) bool {
 		switch node.(type) {
 		case *sqlparser.Subquery:
 			return false
 		case sqlparser.AggrFunc:
 			insideAggr = true
-		}
-
-		expr, ok := node.(sqlparser.Expr)
-		if !ok {
-			return true
-		}
-
-		for _, selectExpr := range sel.SelectExprs {
-			ae, ok := selectExpr.(*sqlparser.AliasedExpr)
-			if !ok {
-				continue
-			}
-			if comparator.Expr(ae.Expr, expr) {
-				// we have found part of the expression as one of the
-				return false
-			}
 		}
 
 		return true
@@ -582,9 +570,17 @@ func (r *earlyRewriter) rewriteAliasesInOrderByAndHaving(
 			// if there is no matching alias, there is no rewriting needed
 			return
 		}
+		isColumnOnTable := r.isColumnOnTable(col, currentScope)
+		if found && isColumnOnTable {
+			clause := "order by statement"
+			if !orderBy {
+				clause = "having clause"
+			}
+			r.warning = fmt.Sprintf("Column '%s' in %s is ambiguous", sqlparser.String(col), clause)
+		}
 
 		topLevel := col == node
-		if !topLevel && r.isColumnOnTable(col, currentScope) && orderBy {
+		if isColumnOnTable && (!orderBy || (orderBy && !topLevel)) {
 			// we only want to replace columns that are not coming from the table
 			return
 		}

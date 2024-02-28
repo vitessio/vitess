@@ -1580,7 +1580,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1 group by id",
-        "Query": "select id from `user` group by id having count(`user`.id) = 10",
+        "Query": "select id from `user` group by id having count(id) = 10",
         "Table": "`user`"
       },
       "TablesUsed": [
@@ -1735,10 +1735,10 @@
   },
   {
     "comment": "Column and Literal equality filter on scatter aggregates",
-    "query": "select count(*) a from user having a = 10",
+    "query": "select count(*) a from authoritative having a = 10",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a = 10",
+      "Original": "select count(*) a from authoritative having a = 10",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) = 10",
@@ -1755,25 +1755,25 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "FieldQuery": "select count(*) as a from authoritative where 1 != 1",
+                "Query": "select count(*) as a from authoritative",
+                "Table": "authoritative"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
   {
     "comment": "Equality filtering with column and string literal on scatter aggregates",
-    "query": "select count(*) a from user having a = '1'",
+    "query": "select count(*) a from authoritative having a = '1'",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a = '1'",
+      "Original": "select count(*) a from authoritative having a = '1'",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) = '1'",
@@ -1790,25 +1790,25 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "FieldQuery": "select count(*) as a from authoritative where 1 != 1",
+                "Query": "select count(*) as a from authoritative",
+                "Table": "authoritative"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
   {
     "comment": "Column and Literal not equal filter on scatter aggregates",
-    "query": "select count(*) a from user having a != 10",
+    "query": "select count(*) a from authoritative having a != 10",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a != 10",
+      "Original": "select count(*) a from authoritative having a != 10",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) != 10",
@@ -1825,25 +1825,25 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "FieldQuery": "select count(*) as a from authoritative where 1 != 1",
+                "Query": "select count(*) as a from authoritative",
+                "Table": "authoritative"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
   {
     "comment": "Not equal filter with column and string literal on scatter aggregates",
-    "query": "select count(*) a from user having a != '1'",
+    "query": "select count(*) a from authoritative having a != '1'",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a != '1'",
+      "Original": "select count(*) a from authoritative having a != '1'",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) != '1'",
@@ -1860,25 +1860,25 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "FieldQuery": "select count(*) as a from authoritative where 1 != 1",
+                "Query": "select count(*) as a from authoritative",
+                "Table": "authoritative"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
   {
     "comment": "Greater than filter on scatter aggregates",
-    "query": "select count(*) a from user having a > 10",
+    "query": "select count(*) a from authoritative having a > 10",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a > 10",
+      "Original": "select count(*) a from authoritative having a > 10",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) > 10",
@@ -1895,25 +1895,25 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "FieldQuery": "select count(*) as a from authoritative where 1 != 1",
+                "Query": "select count(*) as a from authoritative",
+                "Table": "authoritative"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
   {
     "comment": "Greater Equal filter on scatter aggregates",
-    "query": "select count(*) a from user having a >= 10",
+    "query": "select count(*) a from authoritative having a >= 10",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a >= 10",
+      "Original": "select count(*) a from authoritative having a >= 10",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) >= 10",
@@ -1930,25 +1930,25 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "FieldQuery": "select count(*) as a from authoritative where 1 != 1",
+                "Query": "select count(*) as a from authoritative",
+                "Table": "authoritative"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
   {
     "comment": "Less than filter on scatter aggregates",
-    "query": "select count(*) a from user having a < 10",
+    "query": "select count(*) a from authoritative having a < 10",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a < 10",
+      "Original": "select count(*) a from authoritative having a < 10",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) < 10",
@@ -1965,25 +1965,25 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "FieldQuery": "select count(*) as a from authoritative where 1 != 1",
+                "Query": "select count(*) as a from authoritative",
+                "Table": "authoritative"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
   {
     "comment": "Less Equal filter on scatter aggregates",
-    "query": "select count(*) a from user having a <= 10",
+    "query": "select count(*) a from authoritative having a <= 10",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) a from user having a <= 10",
+      "Original": "select count(*) a from authoritative having a <= 10",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) <= 10",
@@ -2000,25 +2000,25 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-                "Query": "select count(*) as a from `user`",
-                "Table": "`user`"
+                "FieldQuery": "select count(*) as a from authoritative where 1 != 1",
+                "Query": "select count(*) as a from authoritative",
+                "Table": "authoritative"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
   {
     "comment": "Less Equal filter on scatter with grouping",
-    "query": "select col, count(*) a from user group by col having a <= 10",
+    "query": "select col1, count(*) a from authoritative group by col1 having a <= 10",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select col, count(*) a from user group by col having a <= 10",
+      "Original": "select col1, count(*) a from authoritative group by col1 having a <= 10",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) <= 10",
@@ -2027,7 +2027,7 @@
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum_count_star(1) AS a",
-            "GroupBy": "0",
+            "GroupBy": "0 COLLATE latin1_swedish_ci",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2036,26 +2036,26 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select col, count(*) as a from `user` where 1 != 1 group by col",
-                "OrderBy": "0 ASC",
-                "Query": "select col, count(*) as a from `user` group by col order by col asc",
-                "Table": "`user`"
+                "FieldQuery": "select col1, count(*) as a from authoritative where 1 != 1 group by col1",
+                "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
+                "Query": "select col1, count(*) as a from authoritative group by col1 order by col1 asc",
+                "Table": "authoritative"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
   {
     "comment": "We should be able to find grouping keys on ordered aggregates",
-    "query": "select count(*) as a, val1 from user group by val1 having a = 1.00",
+    "query": "select count(*) as a, col2 from authoritative group by col2 having a = 1.00",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select count(*) as a, val1 from user group by val1 having a = 1.00",
+      "Original": "select count(*) as a, col2 from authoritative group by col2 having a = 1.00",
       "Instructions": {
         "OperatorType": "Filter",
         "Predicate": "count(*) = 1.00",
@@ -2074,17 +2074,17 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) as a, val1, weight_string(val1) from `user` where 1 != 1 group by val1, weight_string(val1)",
+                "FieldQuery": "select count(*) as a, col2, weight_string(col2) from authoritative where 1 != 1 group by col2, weight_string(col2)",
                 "OrderBy": "(1|2) ASC",
-                "Query": "select count(*) as a, val1, weight_string(val1) from `user` group by val1, weight_string(val1) order by val1 asc",
-                "Table": "`user`"
+                "Query": "select count(*) as a, col2, weight_string(col2) from authoritative group by col2, weight_string(col2) order by col2 asc",
+                "Table": "authoritative"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.user"
+        "user.authoritative"
       ]
     }
   },
@@ -2925,14 +2925,14 @@
       "Original": "select foo, sum(foo) as fooSum, sum(bar) as barSum from user group by foo having fooSum+sum(bar) = 42",
       "Instructions": {
         "OperatorType": "Filter",
-        "Predicate": "sum(`user`.foo) + sum(bar) = 42",
+        "Predicate": "fooSum + sum(bar) = 42",
         "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "sum(1) AS fooSum, sum(2) AS barSum",
-            "GroupBy": "(0|3)",
+            "GroupBy": "(0|4), 3 COLLATE utf8mb4_0900_ai_ci",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2941,9 +2941,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select foo, sum(foo) as fooSum, sum(bar) as barSum, weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
-                "OrderBy": "(0|3) ASC",
-                "Query": "select foo, sum(foo) as fooSum, sum(bar) as barSum, weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
+                "FieldQuery": "select foo, sum(foo) as fooSum, sum(bar) as barSum, fooSum, weight_string(foo) from `user` where 1 != 1 group by foo, fooSum, weight_string(foo)",
+                "OrderBy": "(0|4) ASC, 3 ASC COLLATE utf8mb4_0900_ai_ci",
+                "Query": "select foo, sum(foo) as fooSum, sum(bar) as barSum, fooSum, weight_string(foo) from `user` group by foo, fooSum, weight_string(foo) order by foo asc, fooSum asc",
                 "Table": "`user`"
               }
             ]
