@@ -124,7 +124,7 @@ func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
 	require.NoError(t, err)
 	// Change it back to RDONLY afterward as the cluster is re-used.
 	defer func() {
-		err = clusterInstance.VtctlclientChangeTabletType(rdOnlyTablet, topodata.TabletType_RDONLY)
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdOnlyTablet.Alias, "rdonly")
 		require.NoError(t, err)
 	}()
 
