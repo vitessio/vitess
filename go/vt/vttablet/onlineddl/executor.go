@@ -1315,7 +1315,12 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 // validateAndEditAlterTableStatement inspects the AlterTable statement and:
 // - modifies any CONSTRAINT name according to given name mapping
 // - explode ADD FULLTEXT KEY into multiple statements
-func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlineDDL *schema.OnlineDDL, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (alters []*sqlparser.AlterTable, err error) {
+func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, capableOf capabilities.CapableOf, onlineDDL *schema.OnlineDDL, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (alters []*sqlparser.AlterTable, err error) {
+	capableOfInstantDDLXtrabackup, err := capableOf(capabilities.InstantDDLXtrabackupCapability)
+	if err != nil {
+		return nil, err
+	}
+
 	hashExists := map[string]bool{}
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -1347,8 +1352,10 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 		opt := alterTable.AlterOptions[i]
 		switch opt := opt.(type) {
 		case sqlparser.AlgorithmValue:
-			// we do not pass ALGORITHM. We choose our own ALGORITHM.
-			continue
+			if !capableOfInstantDDLXtrabackup {
+				// we do not pass ALGORITHM. We choose our own ALGORITHM.
+				continue
+			}
 		case *sqlparser.AddIndexDefinition:
 			if opt.IndexDefinition.Info.Type == sqlparser.IndexTypeFullText {
 				countAddFullTextStatements++
@@ -1357,7 +1364,10 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 					// in the same statement
 					extraAlterTable := &sqlparser.AlterTable{
 						Table:        alterTable.Table,
-						AlterOptions: []sqlparser.AlterOption{opt, copyAlgorithm},
+						AlterOptions: []sqlparser.AlterOption{opt},
+					}
+					if !capableOfInstantDDLXtrabackup {
+						extraAlterTable.AlterOptions = append(extraAlterTable.AlterOptions, copyAlgorithm)
 					}
 					alters = append(alters, extraAlterTable)
 					continue
@@ -1367,7 +1377,9 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 		redactedOptions = append(redactedOptions, opt)
 	}
 	alterTable.AlterOptions = redactedOptions
-	alterTable.AlterOptions = append(alterTable.AlterOptions, copyAlgorithm)
+	if !capableOfInstantDDLXtrabackup {
+		alterTable.AlterOptions = append(alterTable.AlterOptions, copyAlgorithm)
+	}
 	return alters, nil
 }
 
@@ -1461,7 +1473,9 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	// ALTER TABLE should apply to the vrepl table
 	alterTable.SetTable(alterTable.GetTable().Qualifier.CompliantName(), vreplTableName)
 	// Also, change any constraint names:
-	alters, err := e.validateAndEditAlterTableStatement(ctx, onlineDDL, alterTable, constraintMap)
+
+	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
+	alters, err := e.validateAndEditAlterTableStatement(ctx, capableOf, onlineDDL, alterTable, constraintMap)
 	if err != nil {
 		return v, err
 	}

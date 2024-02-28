@@ -28,11 +28,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+)
+
+var (
+	testMySQLVersion = "8.0.34"
 )
 
 func TestGetConstraintType(t *testing.T) {
@@ -261,6 +266,8 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			expect: []string{"alter table t drop foreign key ibfk_1_aaaaaaaaaaaaaa, algorithm = copy"},
 		},
 	}
+	capableOf := mysql.ServerVersionCapableOf(testMySQLVersion)
+
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
 			stmt, err := e.env.Environment().Parser().ParseStrictDDL(tc.alter)
@@ -273,7 +280,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 				m[k] = v
 			}
 			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "t", Options: "--unsafe-allow-foreign-keys"}
-			alters, err := e.validateAndEditAlterTableStatement(context.Background(), onlineDDL, alterTable, m)
+			alters, err := e.validateAndEditAlterTableStatement(context.Background(), capableOf, onlineDDL, alterTable, m)
 			assert.NoError(t, err)
 			var altersStrings []string
 			for _, alter := range alters {
