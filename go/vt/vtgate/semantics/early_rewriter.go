@@ -91,11 +91,10 @@ func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
 		}
 		return r.handleOrderBy(cursor.Parent(), iter)
 	case *sqlparser.Where:
-		if node.Type != sqlparser.HavingClause {
-			return nil
+		if node.Type == sqlparser.HavingClause {
+			return r.handleHavingClause(node, cursor.Parent())
 		}
 
-		return r.handleHavingClause(node, cursor.Parent())
 	}
 	return nil
 }

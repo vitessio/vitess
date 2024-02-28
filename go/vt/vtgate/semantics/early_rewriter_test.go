@@ -574,6 +574,10 @@ func TestHavingColumnName(t *testing.T) {
 		sql:     "select sum(sal) empno from emp where ename > 0 having empno = 2",
 		expSQL:  "select sum(sal) as empno from emp where ename > 0 having sum(emp.sal) = 2",
 		expDeps: TS0,
+	}, {
+		// test with missing schema info
+		sql:    "select foo, count(bar) as x from someTable group by foo having id > avg(baz)",
+		expErr: "Unknown column 'id' in 'having clause'",
 	}}
 
 	for _, tcase := range tcases {

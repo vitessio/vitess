@@ -284,19 +284,23 @@ func isColumnNotFound(err error) bool {
 
 func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
 	if current.inHavingAggr {
+		// when inside an aggregation, we'll search the FROM clause before the SELECT expressions
 		deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
 		if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
 			return deps, err
 		}
 	}
 
+	// Here we are searching among the SELECT expressions for a match
 	thisDeps, err := b.resolveColumnInScope(current, colName, allowMulti)
 	if err != nil {
 		return dependency{}, makeAmbiguousError(colName, err)
 	}
 
 	if thisDeps.empty() {
-		if !current.inHavingAggr {
+		sel := current.stmt.(*sqlparser.Select) // we can be sure of this, since HAVING doesn't exist on UNION
+		if !current.inHavingAggr && len(sel.GroupBy) == 0 {
+			// if we are not inside an aggregation, and there is no GROUP BY, we consider the FROM clause before failing
 			deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
 			if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
 				return deps, err

@@ -2535,10 +2535,10 @@
   },
   {
     "comment": "group by column alias",
-    "query": "select ascii(col2) as a, count(*) from authoritative group by a",
+    "query": "select ascii(col2) as a, count(*) from user group by a",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select ascii(col2) as a, count(*) from authoritative group by a",
+      "Original": "select ascii(col2) as a, count(*) from user group by a",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
@@ -2553,15 +2553,15 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select ascii(col2) as a, count(*), weight_string(ascii(col2)) from authoritative where 1 != 1 group by ascii(col2), weight_string(ascii(col2))",
+            "FieldQuery": "select ascii(col2) as a, count(*), weight_string(ascii(col2)) from `user` where 1 != 1 group by ascii(col2), weight_string(ascii(col2))",
             "OrderBy": "(0|2) ASC",
-            "Query": "select ascii(col2) as a, count(*), weight_string(ascii(col2)) from authoritative group by ascii(col2), weight_string(ascii(col2)) order by ascii(col2) asc",
-            "Table": "authoritative"
+            "Query": "select ascii(col2) as a, count(*), weight_string(ascii(col2)) from `user` group by ascii(col2), weight_string(ascii(col2)) order by ascii(col2) asc",
+            "Table": "`user`"
           }
         ]
       },
       "TablesUsed": [
-        "user.authoritative"
+        "user.user"
       ]
     }
   },
@@ -6888,5 +6888,10 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "baz in the HAVING clause can't be accessed because of the GROUP BY",
+    "query": "select foo, count(bar) as x from user group by foo having baz > avg(baz) order by x",
+    "plan": "Unknown column 'baz' in 'having clause'"
   }
 ]

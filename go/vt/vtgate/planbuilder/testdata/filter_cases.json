@@ -4149,71 +4149,7 @@
   {
     "comment": "Like clause evaluated on the vtgate",
     "query": "select a.textcol1 from user a join user b where a.textcol1 = b.textcol2 group by a.textcol1 having repeat(a.textcol1,sum(a.id)) like \"And%res\"",
-    "plan": {
-      "QueryType": "SELECT",
-      "Original": "select a.textcol1 from user a join user b where a.textcol1 = b.textcol2 group by a.textcol1 having repeat(a.textcol1,sum(a.id)) like \"And%res\"",
-      "Instructions": {
-        "OperatorType": "Filter",
-        "Predicate": "repeat(a.textcol1, sum(a.id)) like 'And%res'",
-        "ResultColumns": 1,
-        "Inputs": [
-          {
-            "OperatorType": "Aggregate",
-            "Variant": "Ordered",
-            "Aggregates": "sum(1) AS sum(a.id)",
-            "GroupBy": "0 COLLATE latin1_swedish_ci",
-            "Inputs": [
-              {
-                "OperatorType": "Projection",
-                "Expressions": [
-                  ":2 as textcol1",
-                  "sum(a.id) * count(*) as sum(a.id)"
-                ],
-                "Inputs": [
-                  {
-                    "OperatorType": "Join",
-                    "Variant": "Join",
-                    "JoinColumnIndexes": "L:0,R:0,L:1",
-                    "JoinVars": {
-                      "a_textcol1": 1
-                    },
-                    "TableName": "`user`_`user`",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select sum(a.id), a.textcol1 from `user` as a where 1 != 1 group by a.textcol1",
-                        "OrderBy": "1 ASC COLLATE latin1_swedish_ci",
-                        "Query": "select sum(a.id), a.textcol1 from `user` as a group by a.textcol1 order by a.textcol1 asc",
-                        "Table": "`user`"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(*) from `user` as b where 1 != 1 group by .0",
-                        "Query": "select count(*) from `user` as b where b.textcol2 = :a_textcol1 group by .0",
-                        "Table": "`user`"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
+    "plan": "Unknown column 'textcol1' in 'having clause'"
   },
   {
     "comment": "two predicates that mean the same thing",
