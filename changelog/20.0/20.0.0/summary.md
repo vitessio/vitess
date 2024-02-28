@@ -12,6 +12,7 @@
     - [Delete with Subquery Support](#delete-subquery)
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
+    - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
@@ -71,6 +72,10 @@ Example: `delete from t1 where id in (select col from t2 where foo = 32 and bar 
 The `--pprof-http` flag, which was introduced in v19 with a default of `true`, has now been changed to default to `false`.
 This makes HTTP `pprof` endpoints now an *opt-in* feature, rather than opt-out.
 To continue enabling these endpoints, explicitly set `--pprof-http` when starting up Vitess components.
+
+#### <a id="healthcheck-dial-concurrency-flag"/>New `--healthcheck-dial-concurrency` flag
+
+The new `--healthcheck-dial-concurrency` flag defines the maximum number of healthcheck connections that can open concurrently. This limit is to avoid hitting Go runtime panics on deployments watching enough tablets [to hit the runtime's maximum thread limit of `10000`](https://pkg.go.dev/runtime/debug#SetMaxThreads) due to blocking network syscalls. This flag applies to `vtcombo`, `vtctld` and `vtgate` only and a value less than the runtime max thread limit _(`10000`)_ is recommended.
 
 ## <a id="minor-changes"/>Minor Changes
 
