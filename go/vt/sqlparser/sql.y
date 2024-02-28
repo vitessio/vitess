@@ -7438,6 +7438,14 @@ convert_type:
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
+| DOUBLE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| FLOAT_TYPE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
 | JSON
   {
     $$ = &ConvertType{Type: string($1)}
@@ -7466,11 +7474,7 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1)}
   }
-| DOUBLE
-  {
-    $$ = &ConvertType{Type: string($1)}
-  }
-| FLOAT_TYPE
+| YEAR
   {
     $$ = &ConvertType{Type: string($1)}
   }

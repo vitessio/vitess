@@ -5608,64 +5608,97 @@ func TestConvert(t *testing.T) {
 	validSQL := []parseTest{
 		{
 			input: "select cast('abc' as date) from t",
-		}, {
-			input:                      "select cast('abc' as date) from t",
+		},
+		{
+			input: "select cast('abc' as year) from t",
+		},
+		{
+			input: "select cast('abc' as date) from t",
 			useSelectExpressionLiteral: true,
-		}, {
+		},
+		{
 			input: "select convert('abc', binary(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', binary) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char character set binary) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char(4) ascii) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char unicode) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', nchar(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', nchar) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', signed) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', signed integer) from t",
 			output: "select convert('abc', signed) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', signed) from t",
 			output: "select convert('abc', signed) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', unsigned) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', unsigned integer) from t",
 			output: "select convert('abc', unsigned) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', unsigned) from t",
 			output: "select convert('abc', unsigned) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', decimal(3, 4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', decimal(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', decimal) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', date) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', time(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', time) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', datetime(9)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', datetime) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', json) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc' using ascii) from t",
-		}}
+		},
+		{
+			input: "select convert('abc', year) from t",
+		},
+		}
 
 	for _, tcase := range validSQL {
 		runParseTestCase(t, tcase)
