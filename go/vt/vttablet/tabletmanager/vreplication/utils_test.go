@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -77,15 +78,11 @@ func TestInsertLogTruncation(t *testing.T) {
 		t.Run("insertLog", func(t *testing.T) {
 			var messageOut string
 			if tc.expectTruncation {
-				mid := (len(tc.message) / 2) - len(vrepliationLogTruncationStr)
-				for mid > (maxVReplicationLogMessageLen / 2) {
-					mid = mid / 2
-				}
-				tail := (len(tc.message) - (mid + len(vrepliationLogTruncationStr))) + 1
-				messageOut = fmt.Sprintf("%s%s%s", tc.message[:mid], vrepliationLogTruncationStr, tc.message[tail:])
+				messageOut, err := textutil.TruncateText(tc.message, maxVReplicationLogMessageLen, textutil.TruncationLocationMiddle, vreplicationLogTruncationStr)
+				require.NoError(t, err)
 				require.True(t, strings.HasPrefix(messageOut, tc.message[:1024]))                 // Confirm we still have the same beginning
 				require.True(t, strings.HasSuffix(messageOut, tc.message[len(tc.message)-1024:])) // Confirm we still have the same end
-				require.True(t, strings.Contains(messageOut, vrepliationLogTruncationStr))        // Confirm we have the truncation text
+				require.True(t, strings.Contains(messageOut, vreplicationLogTruncationStr))       // Confirm we have the truncation text
 				t.Logf("Original message length: %d, truncated message length: %d", len(tc.message), len(messageOut))
 			} else {
 				messageOut = tc.message
