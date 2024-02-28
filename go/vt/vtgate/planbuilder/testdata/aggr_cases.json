@@ -2861,7 +2861,7 @@
       "Original": "select foo, sum(foo), sum(bar) from user group by foo having sum(foo)+sum(bar) = 42",
       "Instructions": {
         "OperatorType": "Filter",
-        "Predicate": "sum(`user`.foo) + sum(bar) = 42",
+        "Predicate": "sum(foo) + sum(bar) = 42",
         "ResultColumns": 3,
         "Inputs": [
           {
@@ -6848,6 +6848,41 @@
         "Query": "select id, from_unixtime(min(col)) as col, min(col) from `user` group by id order by min(col) asc",
         "ResultColumns": 2,
         "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "col is a column on user, but the HAVING is referring to an alias",
+    "query": "select sum(x) col from user where x > 0 having col = 2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select sum(x) col from user where x > 0 having col = 2",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "sum(`user`.x) = 2",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS col",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(x) as col from `user` where 1 != 1",
+                "Query": "select sum(x) as col from `user` where x > 0",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
       },
       "TablesUsed": [
         "user.user"

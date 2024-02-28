@@ -541,9 +541,8 @@ func TestHavingColumnName(t *testing.T) {
 		expErr: "Invalid use of group function",
 	}, {
 		sql:     "select foo + 2 as foo from t1 having foo = 42",
-		expSQL:  "select foo + 2 as foo from t1 having foo = 42",
+		expSQL:  "select foo + 2 as foo from t1 having t1.foo + 2 = 42",
 		expDeps: TS0,
-		warning: "Column 'foo' in having clause is ambiguous",
 	}, {
 		sql:    "select count(*), ename from emp group by ename having comm > 1000",
 		expErr: "Unknown column 'comm' in 'having clause'",
@@ -552,10 +551,8 @@ func TestHavingColumnName(t *testing.T) {
 		expSQL:  "select sal, ename from emp having empno > 1000",
 		expDeps: TS0,
 	}, {
-		sql:     "select foo, count(*) foo from t1 group by foo having foo > 1000",
-		expSQL:  "select foo, count(*) as foo from t1 group by foo having foo > 1000",
-		expDeps: TS0,
-		warning: "Column 'foo' in having clause is ambiguous",
+		sql:    "select foo, count(*) foo from t1 group by foo having foo > 1000",
+		expErr: "Column 'foo' in field list is ambiguous",
 	}, {
 		sql:     "select foo, count(*) foo from t1, emp group by foo having sum(sal) > 1000",
 		expSQL:  "select foo, count(*) as foo from t1, emp group by foo having sum(sal) > 1000",
@@ -569,10 +566,13 @@ func TestHavingColumnName(t *testing.T) {
 		sql:     "select count(*) a from someTable having a = 10",
 		expSQL:  "select count(*) as a from someTable having count(*) = 10",
 		expDeps: TS0,
-		warning: "Missing table info, so not binding to anything on the FROM clause",
 	}, {
 		sql:     "select count(*) from emp having ename = 10",
 		expSQL:  "select count(*) from emp having ename = 10",
+		expDeps: TS0,
+	}, {
+		sql:     "select sum(sal) empno from emp where ename > 0 having empno = 2",
+		expSQL:  "select sum(sal) as empno from emp where ename > 0 having sum(emp.sal) = 2",
 		expDeps: TS0,
 	}}
 
@@ -586,7 +586,7 @@ func TestHavingColumnName(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 				assert.Equal(t, tcase.expDeps, semTbl.RecursiveDeps(selectStatement.Having.Expr))
-				assert.Equal(t, tcase.warning, semTbl.Warning)
+				assert.Equal(t, tcase.warning, semTbl.Warning, "warning")
 			} else {
 				require.EqualError(t, err, tcase.expErr)
 			}

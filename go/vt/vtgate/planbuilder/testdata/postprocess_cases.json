@@ -123,7 +123,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values and id in ::__vals",
+            "Query": "select id from `user` where :__sq_has_values and `user`.id in ::__vals",
             "Table": "`user`",
             "Values": [
               "::__sq1"

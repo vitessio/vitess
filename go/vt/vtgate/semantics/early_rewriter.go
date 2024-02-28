@@ -207,7 +207,7 @@ func (r *earlyRewriter) handleHavingClause(node *sqlparser.Where, parent sqlpars
 	if !ok {
 		return nil
 	}
-	expr, err := r.rewriteAliasesInOrderByAndHaving(node.Expr, sel, false)
+	expr, err := r.rewriteAliasesInHaving(node.Expr, sel)
 	if err != nil {
 		return err
 	}
@@ -400,7 +400,7 @@ func (r *earlyRewriter) handleOrderBy(parent sqlparser.SQLNode, iter iterator) e
 			continue
 		}
 
-		expr, err := r.rewriteAliasesInOrderByAndHaving(e, sel, true)
+		expr, err := r.rewriteAliasesInOrderBy(e, sel)
 		if err != nil {
 			return err
 		}
@@ -522,17 +522,7 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 	return
 }
 
-// rewriteAliasesInOrderByAndHaving rewrites columns in the ORDER BY and HAVING clauses to use aliases
-// from the SELECT expressions when applicable, following MySQL scoping rules:
-//   - A column identifier without a table qualifier that matches an alias introduced
-//     in SELECT points to that expression, not any table column.
-//   - However, if the aliased expression is an aggregation and the column identifier in
-//     the HAVING/ORDER BY clause is inside an aggregation function, the rule does not apply.
-func (r *earlyRewriter) rewriteAliasesInOrderByAndHaving(
-	node sqlparser.Expr,
-	sel *sqlparser.Select,
-	orderBy bool,
-) (expr sqlparser.Expr, err error) {
+func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlparser.Select) (expr sqlparser.Expr, err error) {
 	currentScope := r.scoper.currentScope()
 	if currentScope.isUnion {
 		// It is not safe to rewrite order by clauses in unions.
@@ -570,21 +560,99 @@ func (r *earlyRewriter) rewriteAliasesInOrderByAndHaving(
 		}
 
 		item, found := aliases[col.Name.Lowered()]
+		if insideAggr {
+			// inside aggregations, we want to first look for columns in the FROM clause
+			isColumnOnTable, sure := r.isColumnOnTable(col, currentScope)
+			if isColumnOnTable {
+				if found && sure {
+					r.warning = fmt.Sprintf("Column '%s' in having clause is ambiguous", sqlparser.String(col))
+				}
+				return
+			}
+		} else if !found {
+			// if outside aggregations, we don't care about FROM columns
+			// if there is no matching alias, there is no rewriting needed
+			return
+		}
+
+		// If we get here, it means we have found an alias and want to use it
+		if item.ambiguous {
+			err = &AmbiguousColumnError{Column: sqlparser.String(col)}
+		} else if insideAggr && sqlparser.ContainsAggregation(item.expr) {
+			err = &InvalidUseOfGroupFunction{}
+		}
+		if err != nil {
+			cursor.StopTreeWalk()
+			return
+		}
+
+		newColName := sqlparser.CopyOnRewrite(item.expr, nil, r.fillInQualifiers, nil)
+
+		cursor.Replace(newColName)
+	}, nil)
+
+	expr = output.(sqlparser.Expr)
+	return
+}
+
+// rewriteAliasesInOrderBy rewrites columns in the ORDER BY to use aliases
+// from the SELECT expressions when applicable, following MySQL scoping rules:
+//   - A column identifier without a table qualifier that matches an alias introduced
+//     in SELECT points to that expression, not any table column.
+//   - However, if the aliased expression is an aggregation and the column identifier in
+//     the HAVING/ORDER BY clause is inside an aggregation function, the rule does not apply.
+func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlparser.Select) (expr sqlparser.Expr, err error) {
+	currentScope := r.scoper.currentScope()
+	if currentScope.isUnion {
+		// It is not safe to rewrite order by clauses in unions.
+		return node, nil
+	}
+
+	aliases := r.getAliasMap(sel)
+	insideAggr := false
+	dontEnterSubquery := func(node, _ sqlparser.SQLNode) bool {
+		switch node.(type) {
+		case *sqlparser.Subquery:
+			return false
+		case sqlparser.AggrFunc:
+			insideAggr = true
+		}
+
+		return true
+	}
+	output := sqlparser.CopyOnRewrite(node, dontEnterSubquery, func(cursor *sqlparser.CopyOnWriteCursor) {
+		var col *sqlparser.ColName
+
+		switch node := cursor.Node().(type) {
+		case sqlparser.AggrFunc:
+			insideAggr = false
+			return
+		case *sqlparser.ColName:
+			col = node
+		default:
+			return
+		}
+
+		if col.Qualifier.NonEmpty() {
+			// we are only interested in columns not qualified by table names
+			return
+		}
+
+		var item exprContainer
+		var found bool
+
+		item, found = aliases[col.Name.Lowered()]
 		if !found {
 			// if there is no matching alias, there is no rewriting needed
 			return
 		}
 		isColumnOnTable, sure := r.isColumnOnTable(col, currentScope)
 		if found && isColumnOnTable && sure {
-			clause := "order by statement"
-			if !orderBy {
-				clause = "having clause"
-			}
-			r.warning = fmt.Sprintf("Column '%s' in %s is ambiguous", sqlparser.String(col), clause)
+			r.warning = fmt.Sprintf("Column '%s' in order by statement is ambiguous", sqlparser.String(col))
 		}
 
 		topLevel := col == node
-		if isColumnOnTable && sure && (!orderBy || (orderBy && !topLevel)) {
+		if isColumnOnTable && sure && !topLevel {
 			// we only want to replace columns that are not coming from the table
 			return
 		}
