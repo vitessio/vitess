@@ -40,7 +40,21 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"t9", "aggr_test", "t3", "t7_xxhash", "aggr_test_dates", "t7_xxhash_idx", "t1", "t2", "t10"}
+		tables := []string{
+			"t3",
+			"t3_id7_idx",
+			"t9",
+			"aggr_test",
+			"aggr_test_dates",
+			"t7_xxhash",
+			"t7_xxhash_idx",
+			"t1",
+			"t2",
+			"t10",
+			"emp",
+			"dept",
+			"bet_logs",
+		}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -670,6 +684,88 @@ func TestDistinctAggregation(t *testing.T) {
 				return
 			}
 			require.ErrorContains(t, err, tc.expectedErr)
+		})
+	}
+}
+
+func TestHavingQueries(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	inserts := []string{
+		`INSERT INTO emp (empno, ename, job, mgr, hiredate, sal, comm, deptno) VALUES
+	(1, 'John', 'Manager', NULL, '2022-01-01', 5000, 500, 1),
+	(2, 'Doe', 'Analyst', 1, '2023-01-01', 4500, NULL, 1),
+	(3, 'Jane', 'Clerk', 1, '2023-02-01', 3000, 200, 2),
+	(4, 'Mary', 'Analyst', 2, '2022-03-01', 4700, NULL, 1),
+	(5, 'Smith', 'Salesman', 3, '2023-01-15', 3200, 300, 3)`,
+		"INSERT INTO dept (deptno, dname, loc) VALUES (1, 'IT', 'New York'), (2, 'HR', 'London'), (3, 'Sales', 'San Francisco')",
+		"INSERT INTO t1 (t1_id, name, value, shardKey) VALUES (1, 'Name1', 'Value1', 100), (2, 'Name2', 'Value2', 100), (3, 'Name1', 'Value3', 200)",
+		"INSERT INTO aggr_test_dates (id, val1, val2) VALUES (1, '2023-01-01', '2023-01-02'), (2, '2023-02-01', '2023-02-02'), (3, '2023-03-01', '2023-03-02')",
+		"INSERT INTO t10 (k, a, b) VALUES (1, 10, 20), (2, 30, 40), (3, 50, 60)",
+		"INSERT INTO t3 (id5, id6, id7) VALUES (1, 10, 100), (2, 20, 200), (3, 30, 300)",
+		"INSERT INTO t9 (id1, id2, id3) VALUES (1, 'A1', 'B1'), (2, 'A2', 'B2'), (3, 'A1', 'B3')",
+		"INSERT INTO aggr_test (id, val1, val2) VALUES (1, 'Test1', 100), (2, 'Test2', 200), (3, 'Test1', 300), (4, 'Test3', 400)",
+		"INSERT INTO t2 (id, shardKey) VALUES (1, 100), (2, 200), (3, 300)",
+		`INSERT INTO bet_logs (id, merchant_game_id, bet_amount, game_id) VALUES
+	(1, 1, 100.0, 10),
+	(2, 1, 200.0, 11),
+	(3, 2, 300.0, 10),
+	(4, 3, 400.0, 12)`,
+	}
+
+	for _, insert := range inserts {
+		mcmp.Exec(insert)
+	}
+
+	queries := []string{
+		// The following queries are not allowed by MySQL but Vitess allows them
+		// SELECT ename FROM emp GROUP BY ename HAVING sal > 5000
+		// SELECT val1, COUNT(val2) FROM aggr_test_dates GROUP BY val1 HAVING val2 > 5
+		// SELECT k, a FROM t10 GROUP BY k HAVING b > 2
+		// SELECT loc FROM dept GROUP BY loc HAVING COUNT(deptno) AND dname = 'Sales'
+		// SELECT AVG(val2) AS average_val2 FROM aggr_test HAVING val1 = 'Test'
+
+		// these first queries are all failing in different ways. let's check that Vitess also fails
+
+		"SELECT deptno, AVG(sal) AS average_salary HAVING average_salary > 5000 FROM emp",
+		"SELECT job, COUNT(empno) AS num_employees FROM emp HAVING num_employees > 2",
+		"SELECT dname, SUM(sal) FROM dept JOIN emp ON dept.deptno = emp.deptno HAVING AVG(sal) > 6000",
+		"SELECT COUNT(*) AS count FROM emp WHERE count > 5",
+		"SELECT `name`, AVG(`value`) FROM t1 GROUP BY `name` HAVING `name`",
+		"SELECT empno, MAX(sal) FROM emp HAVING COUNT(*) > 3",
+		"SELECT id, SUM(bet_amount) AS total_bets FROM bet_logs HAVING total_bets > 1000",
+		"SELECT merchant_game_id FROM bet_logs GROUP BY merchant_game_id HAVING SUM(bet_amount)",
+		"SELECT shardKey, COUNT(id) FROM t2 HAVING shardKey > 100",
+		"SELECT deptno FROM emp GROUP BY deptno HAVING MAX(hiredate) > '2020-01-01'",
+
+		// These queries should not fail
+		"SELECT deptno, COUNT(*) AS num_employees FROM emp GROUP BY deptno HAVING num_employees > 5",
+		"SELECT ename, SUM(sal) FROM emp GROUP BY ename HAVING SUM(sal) > 10000",
+		"SELECT dname, AVG(sal) AS average_salary FROM emp JOIN dept ON emp.deptno = dept.deptno GROUP BY dname HAVING average_salary > 5000",
+		"SELECT dname, MAX(sal) AS max_salary FROM emp JOIN dept ON emp.deptno = dept.deptno GROUP BY dname HAVING max_salary < 10000",
+		"SELECT YEAR(hiredate) AS year, COUNT(*) FROM emp GROUP BY year HAVING COUNT(*) > 2",
+		"SELECT mgr, COUNT(empno) AS managed_employees FROM emp WHERE mgr IS NOT NULL GROUP BY mgr HAVING managed_employees >= 3",
+		"SELECT deptno, SUM(comm) AS total_comm FROM emp GROUP BY deptno HAVING total_comm > AVG(total_comm)",
+		"SELECT id2, COUNT(*) AS count FROM t9 GROUP BY id2 HAVING count > 1",
+		"SELECT val1, COUNT(*) FROM aggr_test GROUP BY val1 HAVING COUNT(*) > 1",
+		"SELECT DATE(val1) AS date, SUM(val2) FROM aggr_test_dates GROUP BY date HAVING SUM(val2) > 100",
+		"SELECT shardKey, AVG(`value`) FROM t1 WHERE `value` IS NOT NULL GROUP BY shardKey HAVING AVG(`value`) > 10",
+		"SELECT job, COUNT(*) AS job_count FROM emp GROUP BY job HAVING job_count > 3",
+		"SELECT b, AVG(a) AS avg_a FROM t10 GROUP BY b HAVING AVG(a) > 5",
+		"SELECT merchant_game_id, SUM(bet_amount) AS total_bets FROM bet_logs GROUP BY merchant_game_id HAVING total_bets > 1000",
+		"SELECT loc, COUNT(deptno) AS num_depts FROM dept GROUP BY loc HAVING num_depts > 1",
+		"SELECT `name`, COUNT(*) AS name_count FROM t1 GROUP BY `name` HAVING name_count > 2",
+		"SELECT COUNT(*) AS num_jobs FROM emp GROUP BY empno HAVING num_jobs > 1",
+		"SELECT id, COUNT(*) AS count FROM t2 GROUP BY id HAVING count > 1",
+		"SELECT val2, SUM(id) FROM aggr_test GROUP BY val2 HAVING SUM(id) > 10",
+		"SELECT game_id, COUNT(*) AS num_logs FROM bet_logs GROUP BY game_id HAVING num_logs > 5",
+	}
+
+	for _, query := range queries {
+		mcmp.Run(query, func(mcmp *utils.MySQLCompare) {
+			mcmp.ExecAllowAndCompareError(query)
 		})
 	}
 }
