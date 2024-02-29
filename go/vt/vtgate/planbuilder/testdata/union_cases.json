@@ -1490,40 +1490,62 @@
         "TableName": "`user`_music",
         "Inputs": [
           {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "(0:1)"
+            "OperatorType": "SimpleProjection",
+            "ColumnNames": [
+              "foo"
+            ],
+            "Columns": [
+              0
             ],
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select dt.foo, weight_string(dt.foo) from (select foo from `user` where 1 != 1 union select foo from `user` where 1 != 1) as dt where 1 != 1",
-                "Query": "select dt.foo, weight_string(dt.foo) from (select foo from `user` where bar = 12 union select foo from `user` where bar = 134) as dt",
-                "Table": "`user`"
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:1)"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select dt.foo, weight_string(dt.foo) from (select foo from `user` where 1 != 1 union select foo from `user` where 1 != 1) as dt where 1 != 1",
+                    "Query": "select dt.foo, weight_string(dt.foo) from (select foo from `user` where bar = 12 union select foo from `user` where bar = 134) as dt",
+                    "Table": "`user`"
+                  }
+                ]
               }
             ]
           },
           {
-            "OperatorType": "Distinct",
-            "Collations": [
-              "(0:1)"
+            "OperatorType": "SimpleProjection",
+            "ColumnNames": [
+              "bar"
+            ],
+            "Columns": [
+              0
             ],
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select dt.bar, weight_string(dt.bar) from (select bar from music where 1 != 1 union select bar from music where 1 != 1) as dt where 1 != 1",
-                "Query": "select dt.bar, weight_string(dt.bar) from (select bar from music where foo = 12 and bar = :t1_foo union select bar from music where foo = 1234 and bar = :t1_foo) as dt",
-                "Table": "music"
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:1)"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select dt.bar, weight_string(dt.bar) from (select bar from music where 1 != 1 union select bar from music where 1 != 1) as dt where 1 != 1",
+                    "Query": "select dt.bar, weight_string(dt.bar) from (select bar from music where foo = 12 and bar = :t1_foo union select bar from music where foo = 1234 and bar = :t1_foo) as dt",
+                    "Table": "music"
+                  }
+                ]
               }
             ]
           }
