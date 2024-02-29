@@ -853,6 +853,18 @@ message GetSchemaMigrationsResponse {
   repeated SchemaMigration migrations = 1;
 }
 
+message GetShardReplicationRequest {
+  string keyspace = 1;
+  string shard = 2;
+  // Cells is the list of cells to fetch data for. Omit to fetch data from all
+  // cells.
+  repeated string cells = 3;
+}
+
+message GetShardReplicationResponse {
+  map<string, topodata.ShardReplication> shard_replication_by_cell = 1;
+}
+
 message GetShardRequest {
   string keyspace = 1;
   string shard_name = 2;
