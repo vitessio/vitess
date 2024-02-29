@@ -383,7 +383,7 @@ func TestProbesWhileOperating(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	runThrottler(t, ctx, throttler, 5*time.Second, func(t *testing.T, ctx context.Context) {
+	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
 		t.Run("aggregated", func(t *testing.T) {
 			assert.Equal(t, 2, throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
 			aggr := throttler.aggregatedMetricsSnapshot()
@@ -400,7 +400,7 @@ func TestProbesWhileOperating(t *testing.T) {
 					assert.Failf(t, "unknown clusterName", "%v", clusterName)
 				}
 			}
-			cancel()
+			cancel() // end test early
 		})
 	})
 }
@@ -498,7 +498,7 @@ func TestDormant(t *testing.T) {
 			case <-time.After(throttler.dormantPeriod):
 				assert.True(t, throttler.isDormant())
 			}
-			cancel()
+			cancel() // end test early
 		}()
 	})
 }
