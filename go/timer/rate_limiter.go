@@ -72,8 +72,8 @@ func (r *RateLimiter) Do(f func() error) (err error) {
 	return err
 }
 
-// Mark is a convenience method to invoke Do() with no function.
-func (r *RateLimiter) Mark() {
+// DoEmpty is a convenience method to invoke Do() with no function.
+func (r *RateLimiter) DoEmpty() {
 	_ = r.Do(nil)
 }
 

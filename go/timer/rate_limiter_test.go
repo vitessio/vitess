@@ -87,6 +87,6 @@ func TestRateLimiterDiff(t *testing.T) {
 	assert.Equal(t, int64(1), r.Diff())
 	time.Sleep(d + time.Second)
 	assert.Greater(t, r.Diff(), int64(1))
-	r.Mark()
+	r.DoEmpty()
 	assert.LessOrEqual(t, r.Diff(), int64(1))
 }
