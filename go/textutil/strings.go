@@ -155,8 +155,8 @@ func TruncateText(text string, limit int, location TruncationLocation, indicator
 	}
 	switch location {
 	case TruncationLocationMiddle:
-		prefix := int((float64(limit) * 0.5) - float64(len(indicator)))
-		suffix := int(ol - int(prefix+len(indicator)) + 1)
+		prefix := (limit / 2) - len(indicator)
+		suffix := (ol - (prefix + len(indicator))) + 1
 		return fmt.Sprintf("%s%s%s", text[:prefix], indicator, text[suffix:]), nil
 	case TruncationLocationEnd:
 		return text[:limit-(len(indicator)+1)] + indicator, nil
