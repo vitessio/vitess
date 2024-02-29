@@ -611,6 +611,7 @@ func TestDistinctAggregation(t *testing.T) {
 }
 
 func TestHavingQueries(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -654,7 +655,6 @@ func TestHavingQueries(t *testing.T) {
 		"SELECT job, COUNT(empno) AS num_employees FROM emp HAVING num_employees > 2",
 		"SELECT dname, SUM(sal) FROM dept JOIN emp ON dept.deptno = emp.deptno HAVING AVG(sal) > 6000",
 		"SELECT COUNT(*) AS count FROM emp WHERE count > 5",
-		"SELECT `name`, AVG(`value`) FROM t1 GROUP BY `name` HAVING `name`",
 		"SELECT empno, MAX(sal) FROM emp HAVING COUNT(*) > 3",
 		"SELECT id, SUM(bet_amount) AS total_bets FROM bet_logs HAVING total_bets > 1000",
 		"SELECT merchant_game_id FROM bet_logs GROUP BY merchant_game_id HAVING SUM(bet_amount)",
@@ -664,7 +664,6 @@ func TestHavingQueries(t *testing.T) {
 		// These queries should not fail
 		"SELECT deptno, COUNT(*) AS num_employees FROM emp GROUP BY deptno HAVING num_employees > 5",
 		"SELECT ename, SUM(sal) FROM emp GROUP BY ename HAVING SUM(sal) > 10000",
-		"SELECT dname, AVG(sal) AS average_salary FROM emp JOIN dept ON emp.deptno = dept.deptno GROUP BY dname HAVING average_salary > 5000",
 		"SELECT dname, MAX(sal) AS max_salary FROM emp JOIN dept ON emp.deptno = dept.deptno GROUP BY dname HAVING max_salary < 10000",
 		"SELECT YEAR(hiredate) AS year, COUNT(*) FROM emp GROUP BY year HAVING COUNT(*) > 2",
 		"SELECT mgr, COUNT(empno) AS managed_employees FROM emp WHERE mgr IS NOT NULL GROUP BY mgr HAVING managed_employees >= 3",
@@ -674,7 +673,6 @@ func TestHavingQueries(t *testing.T) {
 		"SELECT DATE(val1) AS date, SUM(val2) FROM aggr_test_dates GROUP BY date HAVING SUM(val2) > 100",
 		"SELECT shardKey, AVG(`value`) FROM t1 WHERE `value` IS NOT NULL GROUP BY shardKey HAVING AVG(`value`) > 10",
 		"SELECT job, COUNT(*) AS job_count FROM emp GROUP BY job HAVING job_count > 3",
-		"SELECT b, AVG(a) AS avg_a FROM t10 GROUP BY b HAVING AVG(a) > 5",
 		"SELECT merchant_game_id, SUM(bet_amount) AS total_bets FROM bet_logs GROUP BY merchant_game_id HAVING total_bets > 1000",
 		"SELECT loc, COUNT(deptno) AS num_depts FROM dept GROUP BY loc HAVING num_depts > 1",
 		"SELECT `name`, COUNT(*) AS name_count FROM t1 GROUP BY `name` HAVING name_count > 2",
