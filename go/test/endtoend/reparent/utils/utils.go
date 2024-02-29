@@ -18,10 +18,12 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -606,13 +608,23 @@ func CheckReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttab
 
 // CheckReparentFromOutside checks that cluster was reparented from outside
 func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, downPrimary bool, baseTime int64) {
-	result, err := clusterInstance.VtctldClientProcess.GetShardReplication(KeyspaceName, ShardName, cell1)
-	require.Nil(t, err, "error should be Nil")
-	require.NotNil(t, result[cell1], "result should not be nil")
-	if !downPrimary {
-		assert.Len(t, result[cell1].Nodes, 3)
+	if clusterInstance.VtctlMajorVersion > 19 { // TODO: (ajm188) remove else clause after next release
+		result, err := clusterInstance.VtctldClientProcess.GetShardReplication(KeyspaceName, ShardName, cell1)
+		require.Nil(t, err, "error should be Nil")
+		require.NotNil(t, result[cell1], "result should not be nil")
+		if !downPrimary {
+			assert.Len(t, result[cell1].Nodes, 3)
+		} else {
+			assert.Len(t, result[cell1].Nodes, 2)
+		}
 	} else {
-		assert.Len(t, result[cell1].Nodes, 2)
+		result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, KeyspaceShard)
+		require.Nil(t, err, "error should be Nil")
+		if !downPrimary {
+			assertNodeCount(t, result, int(3))
+		} else {
+			assertNodeCount(t, result, int(2))
+		}
 	}
 
 	// make sure the primary status page says it's the primary
@@ -621,7 +633,7 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 
 	// make sure the primary health stream says it's the primary too
 	// (health check is disabled on these servers, force it first)
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
 	require.NoError(t, err)
 
 	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
@@ -630,6 +642,16 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 
 	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_PRIMARY)
 	assert.True(t, streamHealthResponse.PrimaryTermStartTimestamp >= baseTime)
+}
+
+func assertNodeCount(t *testing.T, result string, want int) {
+	resultMap := make(map[string]any)
+	err := json.Unmarshal([]byte(result), &resultMap)
+	require.NoError(t, err)
+
+	nodes := reflect.ValueOf(resultMap["nodes"])
+	got := nodes.Len()
+	assert.Equal(t, want, got)
 }
 
 // WaitForReplicationPosition waits for tablet B to catch up to the replication position of tablet A.
