@@ -38,7 +38,7 @@ type RateLimiter struct {
 // NewRateLimiter creates a new limiter with given duration. It is immediately ready to run tasks.
 func NewRateLimiter(d time.Duration) *RateLimiter {
 	r := &RateLimiter{}
-	r.tickerValue.Add(1) // start at 1, so that the first Do() call is not rate limited.
+	r.lastDoValue = math.MinInt32 // Far enough to make a difference, but not too far to overflow.
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	go func() {
