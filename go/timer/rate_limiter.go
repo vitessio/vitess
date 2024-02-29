@@ -28,7 +28,7 @@ import (
 // For example, we can create a RateLimiter of 1second. Then, we can ask it, over time, to run many
 // tasks. It will only ever run a single task in any 1 second time frame. The rest are ignored.
 type RateLimiter struct {
-	tickerValue int64
+	tickerValue atomic.Int64
 	lastDoValue int64
 
 	mu     sync.Mutex
@@ -37,7 +37,8 @@ type RateLimiter struct {
 
 // NewRateLimiter creates a new limiter with given duration. It is immediately ready to run tasks.
 func NewRateLimiter(d time.Duration) *RateLimiter {
-	r := &RateLimiter{tickerValue: 1}
+	r := &RateLimiter{}
+	r.tickerValue.Add(1) // start at 1, so that the first Do() call is not rate limited.
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	go func() {
@@ -48,7 +49,7 @@ func NewRateLimiter(d time.Duration) *RateLimiter {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				atomic.StoreInt64(&r.tickerValue, r.tickerValue+1)
+				r.tickerValue.Add(1)
 			}
 		}
 	}()
@@ -61,13 +62,13 @@ func (r *RateLimiter) Do(f func() error) (err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.lastDoValue >= atomic.LoadInt64(&r.tickerValue) {
+	if r.lastDoValue >= r.tickerValue.Load() {
 		return nil // rate limited. Skipped.
 	}
 	if f != nil {
 		err = f()
 	}
-	r.lastDoValue = atomic.LoadInt64(&r.tickerValue)
+	r.lastDoValue = r.tickerValue.Load()
 	return err
 }
 
