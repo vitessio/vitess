@@ -75,3 +75,18 @@ func TestRateLimiterStop(t *testing.T) {
 	}
 	assert.Equal(t, valSnapshot, val)
 }
+
+func TestRateLimiterDiff(t *testing.T) {
+	d := 2 * time.Second
+	r := NewRateLimiter(d)
+	require.NotNil(t, r)
+	defer r.Stop()
+
+	// This assumes the last couple lines of code run faster than 2 seconds, which should be the case.
+	// But if you see flakiness due to slow runners, we can revisit the logic.
+	assert.Equal(t, int64(1), r.Diff())
+	time.Sleep(d + time.Second)
+	assert.Greater(t, r.Diff(), int64(1))
+	r.Mark()
+	assert.LessOrEqual(t, r.Diff(), int64(1))
+}

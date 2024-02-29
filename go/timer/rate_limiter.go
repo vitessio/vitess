@@ -72,6 +72,19 @@ func (r *RateLimiter) Do(f func() error) (err error) {
 	return err
 }
 
+// Mark is a convenience method to invoke Do() with no function.
+func (r *RateLimiter) Mark() {
+	_ = r.Do(nil)
+}
+
+// Diff returns the logical clock diff between the ticker and the last Do() call.
+func (r *RateLimiter) Diff() int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.tickerValue.Load() - r.lastDoValue
+}
+
 // Stop terminates rate limiter's operation and will not allow any more Do() executions.
 func (r *RateLimiter) Stop() {
 	r.cancel()
