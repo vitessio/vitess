@@ -67,7 +67,7 @@ type EntityDiff interface {
 	// InstantDDLCapability returns the ability of this diff to run with ALGORITHM=INSTANT
 	InstantDDLCapability() InstantDDLCapability
 
-	// TextualAnnotation() (from string, to string)
+	Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations)
 }
 
 const (

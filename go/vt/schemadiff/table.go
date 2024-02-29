@@ -61,11 +61,7 @@ func (d *AlterTableEntityDiff) Entities() (from Entity, to Entity) {
 }
 
 func (d *AlterTableEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
-	fromStatementString := d.from.Create().CanonicalStatementString()
-	from = annotatedStatement(fromStatementString, RemovedTextualAnnotationType, d.annotations)
-	toStatementString := d.to.Create().CanonicalStatementString()
-	to = annotatedStatement(toStatementString, AddedTextualAnnotationType, d.annotations)
-	return from, to, unifiedAnnotated(from, to)
+	return annotatedDiff(d, d.annotations)
 }
 
 // Statement implements EntityDiff
@@ -164,6 +160,10 @@ func (d *CreateTableEntityDiff) Entities() (from Entity, to Entity) {
 	return nil, &CreateTableEntity{CreateTable: d.createTable}
 }
 
+func (d *CreateTableEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
+}
+
 // Statement implements EntityDiff
 func (d *CreateTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
@@ -235,6 +235,10 @@ func (d *DropTableEntityDiff) EntityName() string {
 // Entities implements EntityDiff
 func (d *DropTableEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, nil
+}
+
+func (d *DropTableEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
 }
 
 // Statement implements EntityDiff
@@ -309,6 +313,10 @@ func (d *RenameTableEntityDiff) EntityName() string {
 // Entities implements EntityDiff
 func (d *RenameTableEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
+}
+
+func (d *RenameTableEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
 }
 
 // Statement implements EntityDiff

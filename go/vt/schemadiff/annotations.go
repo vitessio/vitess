@@ -210,3 +210,30 @@ func unifiedAnnotated(from *TextualAnnotations, to *TextualAnnotations) *Textual
 	}
 	return unified
 }
+
+// annotatedDiff returns the annotated representations of the from and to entities, and their unified representation.
+func annotatedDiff(diff EntityDiff, entityAnnotations *TextualAnnotations) (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	fromEntity, toEntity := diff.Entities()
+	switch {
+	case fromEntity == nil && toEntity == nil:
+		// Should never get here.
+		return nil, nil, nil
+	case fromEntity == nil:
+		// A new entity was created.
+		from = NewTextualAnnotations()
+		to = annotateAll(toEntity.Create().CanonicalStatementString(), AddedTextualAnnotationType)
+	case toEntity == nil:
+		// An entity was dropped.
+		from = annotateAll(fromEntity.Create().CanonicalStatementString(), RemovedTextualAnnotationType)
+		to = NewTextualAnnotations()
+	case entityAnnotations == nil:
+		// Entity was modified, and we have no prior info about entity annotations. Treat this is as a complete rewrite.
+		from = annotateAll(fromEntity.Create().CanonicalStatementString(), RemovedTextualAnnotationType)
+		to = annotateAll(toEntity.Create().CanonicalStatementString(), AddedTextualAnnotationType)
+	default:
+		// Entity was modified, and we have prior info about entity annotations.
+		from = annotatedStatement(fromEntity.Create().CanonicalStatementString(), RemovedTextualAnnotationType, entityAnnotations)
+		to = annotatedStatement(toEntity.Create().CanonicalStatementString(), AddedTextualAnnotationType, entityAnnotations)
+	}
+	return from, to, unifiedAnnotated(from, to)
+}
