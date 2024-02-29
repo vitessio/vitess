@@ -689,6 +689,7 @@ func TestDistinctAggregation(t *testing.T) {
 }
 
 func TestHavingQueries(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
