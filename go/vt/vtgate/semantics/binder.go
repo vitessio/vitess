@@ -57,74 +57,93 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 }
 
 func (b *binder) up(cursor *sqlparser.Cursor) error {
-	node := cursor.Node()
-	switch node := node.(type) {
+	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
-		currScope := b.scoper.currentScope()
-		b.setSubQueryDependencies(node, currScope)
+		return b.setSubQueryDependencies(node)
 	case *sqlparser.JoinCondition:
-		currScope := b.scoper.currentScope()
-		for _, ident := range node.Using {
-			name := sqlparser.NewColName(ident.String())
-			deps, err := b.resolveColumn(name, currScope, true, true)
-			if err != nil {
-				return err
-			}
-			currScope.joinUsing[ident.Lowered()] = deps.direct
-		}
+		return b.bindJoinCondition(node)
 	case *sqlparser.ColName:
-		currentScope := b.scoper.currentScope()
-		deps, err := b.resolveColumn(node, currentScope, false, true)
-		if err != nil {
-			s := err.Error()
-			if deps.direct.IsEmpty() ||
-				!strings.HasSuffix(s, "is ambiguous") ||
-				!b.canRewriteUsingJoin(deps, node) {
-				return err
-			}
-
-			// if we got here it means we are dealing with a ColName that is involved in a JOIN USING.
-			// we do the rewriting of these ColName structs here because it would be difficult to copy all the
-			// needed state over to the earlyRewriter
-			deps, err = b.rewriteJoinUsingColName(deps, node, currentScope)
-			if err != nil {
-				return err
-			}
-		}
-		b.recursive[node] = deps.recursive
-		b.direct[node] = deps.direct
-		if deps.typ.Valid() {
-			b.typer.setTypeFor(node, deps.typ)
-		}
+		return b.bindColName(node)
 	case *sqlparser.CountStar:
-		b.bindCountStar(node)
+		return b.bindCountStar(node)
 	case *sqlparser.Union:
-		info := b.tc.unionInfo[node]
-		// TODO: this check can be removed and available type information should be used.
-		if !info.isAuthoritative {
-			return nil
+		return b.bindUnion(node)
+	case sqlparser.TableNames:
+		return b.bindTableNames(cursor, node)
+	default:
+		return nil
+	}
+}
+
+func (b *binder) bindTableNames(cursor *sqlparser.Cursor, tables sqlparser.TableNames) error {
+	_, isDelete := cursor.Parent().(*sqlparser.Delete)
+	if !isDelete {
+		return nil
+	}
+	current := b.scoper.currentScope()
+	for _, target := range tables {
+		finalDep, err := b.findDependentTableSet(current, target)
+		if err != nil {
+			return err
+		}
+		b.targets[target.Name] = finalDep.direct
+	}
+	return nil
+}
+
+func (b *binder) bindUnion(union *sqlparser.Union) error {
+	info := b.tc.unionInfo[union]
+	// TODO: this check can be removed and available type information should be used.
+	if !info.isAuthoritative {
+		return nil
+	}
+
+	for i, expr := range info.exprs {
+		ae := expr.(*sqlparser.AliasedExpr)
+		b.recursive[ae.Expr] = info.recursive[i]
+		if t := info.types[i]; t.Valid() {
+			b.typer.m[ae.Expr] = t
+		}
+	}
+	return nil
+}
+
+func (b *binder) bindColName(col *sqlparser.ColName) error {
+	currentScope := b.scoper.currentScope()
+	deps, err := b.resolveColumn(col, currentScope, false, true)
+	if err != nil {
+		s := err.Error()
+		if deps.direct.IsEmpty() ||
+			!strings.HasSuffix(s, "is ambiguous") ||
+			!b.canRewriteUsingJoin(deps, col) {
+			return err
 		}
 
-		for i, expr := range info.exprs {
-			ae := expr.(*sqlparser.AliasedExpr)
-			b.recursive[ae.Expr] = info.recursive[i]
-			if t := info.types[i]; t.Valid() {
-				b.typer.m[ae.Expr] = t
-			}
+		// if we got here it means we are dealing with a ColName that is involved in a JOIN USING.
+		// we do the rewriting of these ColName structs here because it would be difficult to copy all the
+		// needed state over to the earlyRewriter
+		deps, err = b.rewriteJoinUsingColName(deps, col, currentScope)
+		if err != nil {
+			return err
 		}
-	case sqlparser.TableNames:
-		_, isDelete := cursor.Parent().(*sqlparser.Delete)
-		if !isDelete {
-			return nil
+	}
+	b.recursive[col] = deps.recursive
+	b.direct[col] = deps.direct
+	if deps.typ.Valid() {
+		b.typer.setTypeFor(col, deps.typ)
+	}
+	return nil
+}
+
+func (b *binder) bindJoinCondition(condition *sqlparser.JoinCondition) error {
+	currScope := b.scoper.currentScope()
+	for _, ident := range condition.Using {
+		name := sqlparser.NewColName(ident.String())
+		deps, err := b.resolveColumn(name, currScope, true, true)
+		if err != nil {
+			return err
 		}
-		current := b.scoper.currentScope()
-		for _, target := range node {
-			finalDep, err := b.findDependentTableSet(current, target)
-			if err != nil {
-				return err
-			}
-			b.targets[target.Name] = finalDep.direct
-		}
+		currScope.joinUsing[ident.Lowered()] = deps.direct
 	}
 	return nil
 }
@@ -153,7 +172,7 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 	return finalDep, nil
 }
 
-func (b *binder) bindCountStar(node *sqlparser.CountStar) {
+func (b *binder) bindCountStar(node *sqlparser.CountStar) error {
 	scope := b.scoper.currentScope()
 	var ts TableSet
 	for _, tbl := range scope.tables {
@@ -170,6 +189,7 @@ func (b *binder) bindCountStar(node *sqlparser.CountStar) {
 	}
 	b.recursive[node] = ts
 	b.direct[node] = ts
+	return nil
 }
 
 func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColName, currentScope *scope) (dependency, error) {
@@ -211,7 +231,8 @@ func (b *binder) canRewriteUsingJoin(deps dependency, node *sqlparser.ColName) b
 // the binder usually only sets the dependencies of ColNames, but we need to
 // handle the subquery dependencies differently, so they are set manually here
 // this method will only keep dependencies to tables outside the subquery
-func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *scope) {
+func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery) error {
+	currScope := b.scoper.currentScope()
 	subqRecursiveDeps := b.recursive.dependencies(subq)
 	subqDirectDeps := b.direct.dependencies(subq)
 
@@ -226,6 +247,7 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 
 	b.recursive[subq] = subqRecursiveDeps.KeepOnly(tablesToKeep)
 	b.direct[subq] = subqDirectDeps.KeepOnly(tablesToKeep)
+	return nil
 }
 
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti, singleTableFallBack bool) (dependency, error) {
