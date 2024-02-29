@@ -159,6 +159,7 @@ type Throttler struct {
 	mysqlRefreshInterval          time.Duration
 	mysqlAggregateInterval        time.Duration
 	throttledAppsSnapshotInterval time.Duration
+	dormantPeriod                 time.Duration
 
 	configSettings   *config.ConfigurationSettings
 	env              tabletenv.Env
@@ -169,11 +170,7 @@ type Throttler struct {
 	heartbeatWriter  heartbeat.HeartbeatWriter
 	overrideTmClient tmclient.TabletManagerClient
 
-	// recentCheckTickerValue is an ever increasing number, incrementing once per second.
-	recentCheckTickerValue atomic.Int64
-	// recentCheckValue is set to match or exceed recentCheckTickerValue whenever a "check" was made (other than by the throttler itself).
-	// when recentCheckValue < recentCheckTickerValue that means there hasn't been a recent check.
-	recentCheckValue atomic.Int64
+	recentCheckRateLimiter *timer.RateLimiter
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
@@ -193,8 +190,6 @@ type Throttler struct {
 	throttledApps          *cache.Cache
 	recentApps             *cache.Cache
 	metricsHealth          *cache.Cache
-
-	lastCheckTimeNano atomic.Int64
 
 	initMutex           sync.Mutex
 	enableMutex         sync.Mutex
@@ -263,6 +258,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.mysqlRefreshInterval = mysqlRefreshInterval
 	throttler.mysqlAggregateInterval = mysqlAggregateInterval
 	throttler.throttledAppsSnapshotInterval = throttledAppsSnapshotInterval
+	throttler.dormantPeriod = dormantPeriod
 
 	throttler.StoreMetricsThreshold(defaultThrottleLagThreshold.Seconds()) //default
 	throttler.readSelfThrottleMetric = func(ctx context.Context, p *mysql.Probe) *mysql.MySQLThrottleMetric {
@@ -574,6 +570,9 @@ func (throttler *Throttler) Close() {
 // requestHeartbeats sends a heartbeat lease request to the heartbeat writer.
 // This action is recorded in stats.
 func (throttler *Throttler) requestHeartbeats() {
+	if !throttler.isLeader.Load() {
+		return
+	}
 	go throttler.heartbeatWriter.RequestHeartbeats()
 	go stats.GetOrNewCounter("ThrottlerHeartbeatRequests", "heartbeat requests").Add(1)
 }
@@ -669,8 +668,7 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 
 // isDormant returns true when the last check was more than dormantPeriod ago
 func (throttler *Throttler) isDormant() bool {
-	lastCheckTime := time.Unix(0, throttler.lastCheckTimeNano.Load())
-	return time.Since(lastCheckTime) > dormantPeriod
+	return throttler.recentCheckRateLimiter.Diff() > int64(throttler.dormantPeriod/time.Second)
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will
@@ -688,12 +686,13 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	mysqlRefreshTicker := addTicker(throttler.mysqlRefreshInterval)
 	mysqlAggregateTicker := addTicker(throttler.mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
-	recentCheckTicker := addTicker(time.Second)
-	primaryStimulatorRateLimiter := timer.NewRateLimiter(time.Minute)
+	primaryStimulatorRateLimiter := timer.NewRateLimiter(throttler.dormantPeriod)
+	throttler.recentCheckRateLimiter = timer.NewRateLimiter(time.Second)
 
 	wg.Add(1)
 	go func() {
 		defer func() {
+			throttler.recentCheckRateLimiter.Stop()
 			primaryStimulatorRateLimiter.Stop()
 			throttler.aggregatedMetrics.Flush()
 			throttler.recentApps.Flush()
@@ -755,10 +754,17 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 						throttler.collectMySQLMetrics(ctx, tmClient)
 					}
 					//
-					if throttler.recentCheckValue.Load() >= throttler.recentCheckTickerValue.Load() {
+					if throttler.recentCheckRateLimiter.Diff() <= 1 {
 						if !throttler.isLeader.Load() {
 							// This is a replica, and has just recently been checked.
 							// We want to proactively "stimulate" the primary throttler to renew the heartbeat lease.
+							// The intent is to "wake up" an on-demand heartbeat lease. We don't need to poke the
+							// primary for every single time this replica was checked, so we rate limit. The idea is that
+							// once heartbeats update, more checks will be successful, this replica will be "recently checked"
+							// more than not, and the primary throttler will pick that up, extending the on-demand lease
+							// even further.
+							// Another outcome is that the primary will go out of "dormant" mode, and start collecting
+							// replica metrics more frequently.
 							primaryStimulatorRateLimiter.Do(
 								func() error {
 									return throttler.stimulatePrimaryThrottler(ctx, tmClient)
@@ -795,9 +801,6 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				}
 			case throttlerConfig := <-throttler.throttlerConfigChan:
 				throttler.applyThrottlerConfig(ctx, throttlerConfig)
-			case <-recentCheckTicker.C:
-				// Increment recentCheckTickerValue by one.
-				throttler.recentCheckTickerValue.Add(1)
 			}
 		}
 	}()
@@ -1213,29 +1216,25 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		// continuous and do not generate a substantial load.
 		return okMetricCheckResult
 	}
+
+	checkResult = throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
+
 	shouldRequestHeartbeats := !flags.SkipRequestHeartbeats
 	if throttlerapp.VitessName.Equals(appName) {
 		// Override: "vitess" app never requests heartbeats.
 		shouldRequestHeartbeats = false
 	}
 	if throttlerapp.ThrottlerStimulatorName.Equals(appName) {
-		// Ovreride: throttler-stimulator app always requests heartbeats.
+		// Ovreride: "throttler-stimulator" app always requests heartbeats.
 		shouldRequestHeartbeats = true
 	}
+
 	if shouldRequestHeartbeats {
 		throttler.requestHeartbeats()
+		throttler.recentCheckRateLimiter.DoEmpty()
 		// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
 		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
 		// to the PRIMARY so that it knows it must renew the heartbeat lease.
-		throttler.recentCheckValue.Store(1 + throttler.recentCheckTickerValue.Load())
-	}
-	checkResult = throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
-
-	if throttler.recentCheckValue.Load() >= throttler.recentCheckTickerValue.Load() {
-		// This indicates someone, who is not "vitess" ie not internal to the throttling logic, did a _recent_ `check`.
-		// This could be online-ddl, or vreplication or whoever else.
-		// If this tablet is a REPLICA or RDONLY, we want to advertise to the PRIMARY that someone did a recent check,
-		// so that the PRIMARY knows it must renew the heartbeat lease.
 		checkResult.RecentlyChecked = true
 		go stats.GetOrNewCounter("ThrottlerRecentlyChecked", "recently checked").Add(1)
 	}

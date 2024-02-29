@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -56,7 +57,7 @@ func (c *fakeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Ta
 		StatusCode:      http.StatusOK,
 		Value:           0,
 		Threshold:       1,
-		RecentlyChecked: true,
+		RecentlyChecked: false,
 	}
 	return resp, nil
 }
@@ -80,8 +81,8 @@ func (ts *FakeTopoServer) GetTablet(ctx context.Context, alias *topodatapb.Table
 
 func (ts *FakeTopoServer) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
 	aliases := []*topodatapb.TabletAlias{
-		{Cell: "zone1", Uid: 100},
-		{Cell: "zone2", Uid: 101},
+		{Cell: "fakezone1", Uid: 100},
+		{Cell: "fakezone2", Uid: 101},
 	}
 	return aliases, nil
 }
@@ -92,9 +93,15 @@ func (ts *FakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace str
 }
 
 type FakeHeartbeatWriter struct {
+	requests atomic.Int64
 }
 
-func (w FakeHeartbeatWriter) RequestHeartbeats() {
+func (w *FakeHeartbeatWriter) RequestHeartbeats() {
+	w.requests.Add(1)
+}
+
+func (w *FakeHeartbeatWriter) Requests() int64 {
+	return w.requests.Load()
 }
 
 func newTestThrottler() *Throttler {
@@ -113,7 +120,7 @@ func newTestThrottler() *Throttler {
 	throttler := &Throttler{
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
-		heartbeatWriter:        FakeHeartbeatWriter{},
+		heartbeatWriter:        &FakeHeartbeatWriter{},
 		ts:                     &FakeTopoServer{},
 		mysqlInventory:         mysql.NewInventory(),
 		pool:                   connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{}),
@@ -137,13 +144,14 @@ func newTestThrottler() *Throttler {
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
-	// High contention & racy itnervals:
+	// High contention & racy intervals:
 	throttler.leaderCheckInterval = 10 * time.Millisecond
 	throttler.mysqlCollectInterval = 10 * time.Millisecond
 	throttler.mysqlDormantCollectInterval = 10 * time.Millisecond
 	throttler.mysqlRefreshInterval = 10 * time.Millisecond
 	throttler.mysqlAggregateInterval = 10 * time.Millisecond
 	throttler.throttledAppsSnapshotInterval = 10 * time.Millisecond
+	throttler.dormantPeriod = 5 * time.Second
 
 	throttler.readSelfThrottleMetric = func(ctx context.Context, p *mysql.Probe) *mysql.MySQLThrottleMetric {
 		return &mysql.MySQLThrottleMetric{
@@ -160,7 +168,7 @@ func newTestThrottler() *Throttler {
 func TestIsAppThrottled(t *testing.T) {
 	throttler := Throttler{
 		throttledApps:   cache.New(cache.NoExpiration, 0),
-		heartbeatWriter: FakeHeartbeatWriter{},
+		heartbeatWriter: &FakeHeartbeatWriter{},
 	}
 	assert.False(t, throttler.IsAppThrottled("app1"))
 	assert.False(t, throttler.IsAppThrottled("app2"))
@@ -190,7 +198,7 @@ func TestIsAppExempted(t *testing.T) {
 
 	throttler := Throttler{
 		throttledApps:   cache.New(cache.NoExpiration, 0),
-		heartbeatWriter: FakeHeartbeatWriter{},
+		heartbeatWriter: &FakeHeartbeatWriter{},
 	}
 	assert.False(t, throttler.IsAppExempted("app1"))
 	assert.False(t, throttler.IsAppExempted("app2"))
@@ -315,10 +323,10 @@ func TestRefreshMySQLInventory(t *testing.T) {
 	})
 }
 
-// runThrottler opens and enables the throttler, therby making it run the Operate() function, for a given amount of time.
+// runThrottler opens and enables the throttler, thereby making it run the Operate() function, for a given amount of time.
 // Optionally, running a given function halfway while the throttler is still open and running.
-func runThrottler(t *testing.T, throttler *Throttler, timeout time.Duration, f func(*testing.T)) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func runThrottler(t *testing.T, ctx context.Context, throttler *Throttler, timeout time.Duration, f func(*testing.T, context.Context)) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	assert.False(t, throttler.IsOpen())
@@ -339,9 +347,17 @@ func runThrottler(t *testing.T, throttler *Throttler, timeout time.Duration, f f
 	wg2 := throttler.Enable()
 	assert.Nil(t, wg2)
 
+	sleepTime := 3 * time.Second
+	if timeout/2 < sleepTime {
+		sleepTime = timeout / 2
+	}
 	if f != nil {
-		time.Sleep(timeout / 2)
-		f(t)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(sleepTime):
+			f(t, ctx)
+		}
 	}
 
 	<-ctx.Done()
@@ -355,7 +371,7 @@ func runThrottler(t *testing.T, throttler *Throttler, timeout time.Duration, f f
 // This is relevant to `go test -race`
 func TestRace(t *testing.T) {
 	throttler := newTestThrottler()
-	runThrottler(t, throttler, 5*time.Second, nil)
+	runThrottler(t, context.Background(), throttler, 5*time.Second, nil)
 }
 
 // TestProbes enables a throttler for a few seocnds, and afterwards expects to find probes and metrics.
@@ -365,7 +381,9 @@ func TestProbesWhileOperating(t *testing.T) {
 	t.Run("aggregated", func(t *testing.T) {
 		assert.Equal(t, 0, throttler.aggregatedMetrics.ItemCount())
 	})
-	runThrottler(t, throttler, 5*time.Second, func(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runThrottler(t, ctx, throttler, 5*time.Second, func(t *testing.T, ctx context.Context) {
 		t.Run("aggregated", func(t *testing.T) {
 			assert.Equal(t, 2, throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
 			aggr := throttler.aggregatedMetricsSnapshot()
@@ -382,6 +400,7 @@ func TestProbesWhileOperating(t *testing.T) {
 					assert.Failf(t, "unknown clusterName", "%v", clusterName)
 				}
 			}
+			cancel()
 		})
 	})
 }
@@ -389,7 +408,7 @@ func TestProbesWhileOperating(t *testing.T) {
 // TestProbesPostDisable runs the throttler for some time, and then investigates the internal throttler maps and values.
 func TestProbesPostDisable(t *testing.T) {
 	throttler := newTestThrottler()
-	runThrottler(t, throttler, 2*time.Second, nil)
+	runThrottler(t, context.Background(), throttler, 2*time.Second, nil)
 
 	probes := throttler.mysqlInventory.ClustersProbes
 	assert.NotEmpty(t, probes)
@@ -429,5 +448,57 @@ func TestProbesPostDisable(t *testing.T) {
 		assert.Zero(t, throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
 		aggr := throttler.aggregatedMetricsSnapshot()
 		assert.Empty(t, aggr)
+	})
+}
+
+func TestDormant(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	throttler := newTestThrottler()
+
+	heartbeatWriter, ok := throttler.heartbeatWriter.(*FakeHeartbeatWriter)
+	assert.True(t, ok)
+	assert.Zero(t, heartbeatWriter.Requests()) // once upon Enable()
+
+	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+		assert.True(t, throttler.isDormant())
+		assert.EqualValues(t, 1, heartbeatWriter.Requests()) // once upon Enable()
+		flags := &CheckFlags{}
+		throttler.CheckByType(ctx, throttlerapp.VitessName.String(), "", flags, ThrottleCheckSelf)
+		go func() {
+			select {
+			case <-ctx.Done():
+				require.FailNow(t, "context expired before testing completed")
+			case <-time.After(time.Second):
+				assert.True(t, throttler.isDormant())
+				assert.EqualValues(t, 1, heartbeatWriter.Requests()) // "vitess" name does not cause heartbeat requests
+			}
+			throttler.CheckByType(ctx, throttlerapp.ThrottlerStimulatorName.String(), "", flags, ThrottleCheckSelf)
+			select {
+			case <-ctx.Done():
+				require.FailNow(t, "context expired before testing completed")
+			case <-time.After(time.Second):
+				assert.False(t, throttler.isDormant())
+				assert.Greater(t, heartbeatWriter.Requests(), int64(1))
+			}
+			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", flags, ThrottleCheckSelf)
+			select {
+			case <-ctx.Done():
+				require.FailNow(t, "context expired before testing completed")
+			case <-time.After(time.Second):
+				assert.False(t, throttler.isDormant())
+				assert.Greater(t, heartbeatWriter.Requests(), int64(2))
+			}
+
+			// Dormant period
+			select {
+			case <-ctx.Done():
+				require.FailNow(t, "context expired before testing completed")
+			case <-time.After(throttler.dormantPeriod):
+				assert.True(t, throttler.isDormant())
+			}
+			cancel()
+		}()
 	})
 }
