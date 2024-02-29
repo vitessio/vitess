@@ -186,23 +186,26 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus int64, expec
 func TestShardReplicationFix(t *testing.T) {
 	// make sure the replica is in the replication graph, 2 nodes: 1 primary, 1 replica
 	defer cluster.PanicHandler(t)
-	result, err := clusterInstance.TopoProcess.Server.GetShardReplication(context.Background(), cell, keyspaceName, shardName)
+	result, err := clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceShard, cell)
 	require.Nil(t, err, "error should be Nil")
-	assert.Len(t, result.Nodes, 3)
+	require.NotNil(t, result[cell], "result should not be Nil")
+	assert.Len(t, result[cell].Nodes, 3)
 
 	// Manually add a bogus entry to the replication graph, and check it is removed by ShardReplicationFix
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, fmt.Sprintf("%s-9000", cell))
 	require.Nil(t, err, "error should be Nil")
 
-	result, err = clusterInstance.TopoProcess.Server.GetShardReplication(context.Background(), cell, keyspaceName, shardName)
+	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceShard, cell)
 	require.Nil(t, err, "error should be Nil")
-	assert.Len(t, result.Nodes, 4)
+	require.NotNil(t, result[cell], "result should not be Nil")
+	assert.Len(t, result[cell].Nodes, 4)
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationFix", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
-	result, err = clusterInstance.TopoProcess.Server.GetShardReplication(context.Background(), cell, keyspaceName, shardName)
+	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceShard, cell)
 	require.Nil(t, err, "error should be Nil")
-	assert.Len(t, result.Nodes, 3)
+	require.NotNil(t, result[cell], "result should not be Nil")
+	assert.Len(t, result[cell].Nodes, 3)
 }
 
 func TestGetSchema(t *testing.T) {

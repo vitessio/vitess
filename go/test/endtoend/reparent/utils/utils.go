@@ -606,12 +606,13 @@ func CheckReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttab
 
 // CheckReparentFromOutside checks that cluster was reparented from outside
 func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, downPrimary bool, baseTime int64) {
-	result, err := clusterInstance.TopoProcess.Server.GetShardReplication(context.Background(), cell1, KeyspaceName, ShardName)
+	result, err := clusterInstance.VtctldClientProcess.GetShardReplication(KeyspaceName, ShardName, cell1)
 	require.Nil(t, err, "error should be Nil")
+	require.NotNil(t, result[cell1], "result should not be nil")
 	if !downPrimary {
-		assert.Len(t, result.Nodes, 3)
+		assert.Len(t, result[cell1].Nodes, 3)
 	} else {
-		assert.Len(t, result.Nodes, 2)
+		assert.Len(t, result[cell1].Nodes, 2)
 	}
 
 	// make sure the primary status page says it's the primary
