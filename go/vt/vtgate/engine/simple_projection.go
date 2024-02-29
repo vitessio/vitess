@@ -109,12 +109,11 @@ func (sc *SimpleProjection) buildFields(inner *sqltypes.Result) []*querypb.Field
 	}
 	fields := make([]*querypb.Field, 0, len(sc.Cols))
 	for idx, col := range sc.Cols {
-		if sc.ColNames[idx] == "" {
-			fields = append(fields, inner.Fields[col])
-			continue
+		field := inner.Fields[col]
+		if sc.ColNames[idx] != "" {
+			field = proto.Clone(field).(*querypb.Field)
+			field.Name = sc.ColNames[idx]
 		}
-		field := proto.Clone(inner.Fields[col]).(*querypb.Field)
-		field.Name = sc.ColNames[idx]
 		fields = append(fields, field)
 	}
 	return fields
