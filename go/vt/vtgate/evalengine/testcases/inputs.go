@@ -199,24 +199,6 @@ var inputStrings = []string{
 	// "_ucs2 'AabcÅå'",
 }
 
-var inputFieldStrings = []string{
-	"NULL",
-	"\"\"",
-	"\"a\"",
-	"\"abc\"",
-	"1",
-	"-1",
-	"0123",
-	"0xAACC",
-	"3.1415926",
-	"'123'",
-	"9223372036854775807",
-	"-9223372036854775808",
-	"999999999999999999999999",
-	"-999999999999999999999999",
-	"_binary 'Müller' ",
-}
-
 var insertStrings = []string{
 	"NULL",
 	"\"\"",

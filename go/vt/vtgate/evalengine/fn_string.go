@@ -19,7 +19,6 @@ package evalengine
 import (
 	"bytes"
 	"math"
-	"reflect"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -145,47 +144,85 @@ func (call *builtinField) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	strs := make([]*evalBytes, len(args))
-
-	tt := ""
-	for _, arg := range args {
-		switch arg.(type) {
-		case *evalBytes:
-			if tt == "n" {
-				tt = "f"
-			} else {
-				tt = "s"
-			}
-		case evalNumeric:
-			if tt == "s" {
-				tt = "f"
-			} else {
-				tt = "n"
-			}
-		}
+	if args[0] == nil {
+		return newEvalInt64(0), nil
 	}
 
-	// switch tt {
-	// case "s":
-	// 	for i, arg := range args {
-	// 		strs[i], err = evalToVarchar(arg, call.collate, false)
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 	}
-	// case "n":
-	// 	for i, arg := range args {
-	// 		strs[i], err = evalToIn(arg, call.collate, false)
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 	}
-	// }
+	// If the arguments contain both integral and string values
+	// MySQL converts all the arguments to DOUBLE
+	containsOnlyInt64, containsOnlyString := true, true
+	for _, arg := range args {
+		if arg == nil {
+			continue
+		}
 
-	for i, str := range strs[1:] {
-		if reflect.DeepEqual(str, strs[0]) {
-			return newEvalInt64(int64(i + 1)), nil
+		containsOnlyInt64 = sqltypes.IsIntegral(arg.SQLType()) && containsOnlyInt64
+		containsOnlyString = !sqltypes.IsNumber(arg.SQLType()) && containsOnlyString
+	}
+
+	if containsOnlyInt64 {
+		tar := evalToInt64(args[0])
+
+		for i, arg := range args[1:] {
+			if arg == nil {
+				continue
+			}
+
+			e := evalToInt64(arg)
+			if tar.i == e.i {
+				return newEvalInt64(int64(i + 1)), nil
+			}
+		}
+	} else if containsOnlyString {
+		tar, ok := args[0].(*evalBytes)
+		if !ok {
+			tar, err = evalToVarchar(args[0], call.collate, true)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		for i, arg := range args[1:] {
+			if arg == nil {
+				continue
+			}
+
+			var ok bool
+			e, ok := arg.(*evalBytes)
+			if !ok {
+				e, err = evalToVarchar(arg, call.collate, true)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			// Compare target and current string
+			if len(tar.bytes) == len(e.bytes) {
+				eq := true
+				for i, b := range tar.bytes {
+					if e.bytes[i] != b {
+						eq = false
+						break
+					}
+				}
+
+				if eq {
+					return newEvalInt64(int64(i + 1)), nil
+				}
+			}
+		}
+	} else {
+		tar, _ := evalToFloat(args[0])
+
+		for i, arg := range args[1:] {
+			if arg == nil {
+				continue
+			}
+
+			e, _ := evalToFloat(arg)
+			if tar.f == e.f {
+				return newEvalInt64(int64(i + 1)), nil
+			}
 		}
 	}
 
@@ -203,20 +240,49 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 		}
 	}
 
-	for i, str := range strs {
-		offset := len(strs) - i
-		skip := c.compileNullCheckOffset(str, offset)
-
-		switch {
-		case str.isTextual():
-		default:
-			c.asm.Convert_xce(offset, sqltypes.VarChar, c.collation)
+	// If the arguments contain both integral and string values
+	// MySQL converts all the arguments to DOUBLE
+	containsOnlyString, containsOnlyInt64 := true, true
+	for _, str := range strs {
+		if sqltypes.IsNull(str.Type) {
+			continue
 		}
 
-		c.asm.jumpDestination(skip)
+		containsOnlyString = !sqltypes.IsNumber(str.Type) && containsOnlyString
+		containsOnlyInt64 = sqltypes.IsIntegral(str.Type) && containsOnlyInt64
 	}
 
-	c.asm.Fn_FIELD(len(call.Arguments))
+	if containsOnlyInt64 {
+		for i, str := range strs {
+			offset := len(strs) - i
+			skip := c.compileNullCheckOffset(str, offset)
+
+			_ = c.compileToInt64(str, offset)
+			c.asm.jumpDestination(skip)
+		}
+	} else if containsOnlyString {
+		for i, str := range strs {
+			offset := len(strs) - i
+			skip := c.compileNullCheckOffset(str, offset)
+
+			switch {
+			case str.isTextual():
+			default:
+				c.asm.Convert_xce(offset, sqltypes.VarChar, call.collate)
+			}
+			c.asm.jumpDestination(skip)
+		}
+	} else {
+		for i, str := range strs {
+			offset := len(strs) - i
+			skip := c.compileNullCheckOffset(str, offset)
+
+			c.asm.Convert_xf(offset)
+			c.asm.jumpDestination(skip)
+		}
+	}
+
+	c.asm.Fn_FIELD(len(call.Arguments), containsOnlyString, containsOnlyInt64)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 }

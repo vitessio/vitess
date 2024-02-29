@@ -1318,16 +1318,25 @@ var JSONExtract_Schema = []*querypb.Field{
 }
 
 func FnField(yield Query) {
-	// for _, s1 := range inputFieldStrings {
-	// 	for _, s2 := range inputFieldStrings {
-	// 		for _, s3 := range inputFieldStrings {
-	// 			yield(fmt.Sprintf("FIELD(%s, %s, %s)", s1, s2, s3), nil)
-	// 		}
-	// 	}
-	// }
+	for _, s1 := range inputStrings {
+		for _, s2 := range inputStrings {
+			for _, s3 := range inputStrings {
+				yield(fmt.Sprintf("FIELD(%s, %s, %s)", s1, s2, s3), nil)
+			}
+		}
+	}
+
+	for _, s1 := range radianInputs {
+		for _, s2 := range radianInputs {
+			for _, s3 := range radianInputs {
+				yield(fmt.Sprintf("FIELD(%s, %s, %s)", s1, s2, s3), nil)
+			}
+		}
+	}
 
 	mysqlDocSamples := []string{
-		"FIELD('😊😂🤢', '😂🤢', '😊😂', '😊😂🤢')",
+		"FIELD('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff')",
+		"FIELD('Gg', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff')",
 	}
 	for _, q := range mysqlDocSamples {
 		yield(q, nil)
@@ -1345,16 +1354,6 @@ func FnElt(yield Query) {
 		for _, s2 := range inputStrings {
 			for _, n := range inputBitwise {
 				yield(fmt.Sprintf("ELT(%s, %s, %s)", n, s1, s2), nil)
-			}
-		}
-	}
-
-	for _, s1 := range inputStrings {
-		for _, s2 := range inputStrings {
-			for _, s3 := range inputStrings {
-				for _, n := range inputBitwise {
-					yield(fmt.Sprintf("ELT(%s, %s, %s, %s)", n, s1, s2, s3), nil)
-				}
 			}
 		}
 	}
