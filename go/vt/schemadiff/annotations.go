@@ -167,6 +167,16 @@ func annotatedStatement(stmt string, annotationType TextualAnnotationType, annot
 	return result
 }
 
+// annotateAll blindly annotates all lines of the given statement with the given annotation type.
+func annotateAll(stmt string, annotationType TextualAnnotationType) *TextualAnnotations {
+	stmtLines := strings.Split(stmt, "\n")
+	result := NewTextualAnnotations()
+	for _, line := range stmtLines {
+		result.mark(line, annotationType)
+	}
+	return result
+}
+
 // unifiedAnnotated takes two annotations of from, to statements and returns a unified annotation.
 func unifiedAnnotated(from *TextualAnnotations, to *TextualAnnotations) *TextualAnnotations {
 	unified := NewTextualAnnotations()

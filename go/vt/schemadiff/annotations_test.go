@@ -25,6 +25,22 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+func TestAnnotateAll(t *testing.T) {
+	stmt := `create table t(
+	id int,
+	name varchar(100),
+	primary key(id)
+) engine=innodb`
+	annotations := annotateAll(stmt, RemovedTextualAnnotationType)
+	assert.Equal(t, 5, annotations.Len())
+	expect := `-create table t(
+-	id int,
+-	name varchar(100),
+-	primary key(id)
+-) engine=innodb`
+	assert.Equal(t, expect, annotations.Export())
+}
+
 func TestUnifiedAnnotated(t *testing.T) {
 	tcases := []struct {
 		name            string
@@ -66,4 +82,21 @@ func TestUnifiedAnnotated(t *testing.T) {
 			assert.Equalf(t, tcase.expected, export, "from: %v, to: %v", annotatedFrom.Export(), annotatedTo.Export())
 		})
 	}
+}
+
+func TestUnifiedAnnotatedAll(t *testing.T) {
+	stmt := `create table t(
+	id int,
+	name varchar(100),
+	primary key(id)
+) engine=innodb`
+	annotatedTo := annotateAll(stmt, AddedTextualAnnotationType)
+	annotatedFrom := NewTextualAnnotations()
+	unified := unifiedAnnotated(annotatedFrom, annotatedTo)
+	expect := `+create table t(
++	id int,
++	name varchar(100),
++	primary key(id)
++) engine=innodb`
+	assert.Equal(t, expect, unified.Export())
 }
