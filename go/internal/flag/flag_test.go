@@ -95,22 +95,23 @@ func TestIsFlagProvided(t *testing.T) {
 
 	pflag.CommandLine = pflag.NewFlagSet("testFlagSet", pflag.ExitOnError)
 
-	isProvided := IsFlagProvided("testFlag")
-	assert.False(t, isProvided, "expected IsFlagProvided to return false as provided flag doesn't exist, got true")
+	flagName := "testFlag"
+	isProvided := IsFlagProvided(flagName)
+	assert.False(t, isProvided, "flag %q should not exist", flagName)
 
 	var testFlag bool
-	pflag.BoolVar(&testFlag, "testFlag", false, "")
+	pflag.BoolVar(&testFlag, flagName, false, "")
 
 	// Should return false as testFlag is not set
-	isProvided = IsFlagProvided("testFlag")
-	assert.False(t, isProvided, "expected IsFlagProvided to return false as no flag was provided, got true")
+	isProvided = IsFlagProvided(flagName)
+	assert.False(t, isProvided, "flag %q should not be provided", flagName)
 
 	pflag.Parse()
-	_ = pflag.Set("testFlag", "true")
+	_ = pflag.Set(flagName, "true")
 
 	// Should return true as testFlag is set
-	isProvided = IsFlagProvided("testFlag")
-	assert.True(t, isProvided, "expected IsFlagProvided to return true after providing the flag, got false")
+	isProvided = IsFlagProvided(flagName)
+	assert.True(t, isProvided, "flag %q should be provided", flagName)
 }
 
 func TestFilterTestFlags(t *testing.T) {
@@ -188,11 +189,11 @@ func TestParsed(t *testing.T) {
 	goflag.CommandLine = goflag.NewFlagSet("testGoflagSet", goflag.ExitOnError)
 
 	b := Parsed()
-	assert.False(t, b, "expected Parsed to return false as command-line flags weren't parsed, got true")
+	assert.False(t, b, "command-line flags should not be parsed")
 
 	pflag.Parse()
 	b = Parsed()
-	assert.True(t, b, "expected Parsed to return true as command-line flags were parsed, got false")
+	assert.True(t, b, "command-line flags should be parsed")
 }
 
 func TestLookup(t *testing.T) {
@@ -290,8 +291,8 @@ func TestIsZeroValue(t *testing.T) {
 	f := testFlagSet.Lookup("testflag")
 
 	result := isZeroValue(f, "")
-	assert.True(t, result, "expected isZeroValue to return true as empty string represents zero value for string flag, got false")
+	assert.True(t, result, "empty string should represent zero value for string flag")
 
 	result = isZeroValue(f, "anyValue")
-	assert.False(t, result, "expected isZeroValue to return false as non-empty string doesn't represent zero value for string flag, got true")
+	assert.False(t, result, "non-empty string should not represent zero value for string flag")
 }
