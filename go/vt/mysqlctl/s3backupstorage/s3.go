@@ -83,9 +83,6 @@ var (
 
 	// path component delimiter
 	delimiter = "/"
-
-	// use a shared transport for all connections
-	defaultS3Transport *http.Transport
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -284,10 +281,11 @@ func (s3ServerSideEncryption *S3ServerSideEncryption) reset() {
 
 // S3BackupStorage implements the backupstorage.BackupStorage interface.
 type S3BackupStorage struct {
-	_client *s3.S3
-	mu      sync.Mutex
-	s3SSE   S3ServerSideEncryption
-	params  backupstorage.Params
+	_client   *s3.S3
+	mu        sync.Mutex
+	s3SSE     S3ServerSideEncryption
+	params    backupstorage.Params
+	transport *http.Transport
 }
 
 // ListBackups is part of the backupstorage.BackupStorage interface.
@@ -430,6 +428,20 @@ func (bs *S3BackupStorage) WithParams(params backupstorage.Params) backupstorage
 	return &S3BackupStorage{params: params}
 }
 
+// This creates a new transport based off http.DefaultTransport the first time and returns the same
+// transport on subsequent calls so connections can be reused as part of the same transport.
+func (bs *S3BackupStorage) getTransport() *http.Transport {
+	if bs.transport == nil {
+		tlsClientConf := &tls.Config{InsecureSkipVerify: tlsSkipVerifyCert}
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.TLSClientConfig = tlsClientConf
+
+		bs.transport = transport
+	}
+
+	return bs.transport
+}
+
 var _ backupstorage.BackupStorage = (*S3BackupStorage)(nil)
 
 // getLogLevel converts the string loglevel to an aws.LogLevelType
@@ -448,7 +460,7 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 	if bs._client == nil {
 		logLevel := getLogLevel()
 
-		httpClient := &http.Client{Transport: getS3Transport()}
+		httpClient := &http.Client{Transport: bs.getTransport()}
 
 		session, err := session.NewSession()
 		if err != nil {
@@ -495,19 +507,6 @@ func objName(parts ...string) *string {
 	}
 	res += strings.Join(parts, delimiter)
 	return &res
-}
-
-// This creates a new transport based off http.DefaultTransport the first time and returns the same
-// transport on subsequent calls so connections can be reused as part of the same transport.
-func getS3Transport() *http.Transport {
-	if defaultS3Transport == nil {
-		tlsClientConf := &tls.Config{InsecureSkipVerify: tlsSkipVerifyCert}
-
-		defaultS3Transport = http.DefaultTransport.(*http.Transport).Clone()
-		defaultS3Transport.TLSClientConfig = tlsClientConf
-	}
-
-	return defaultS3Transport
 }
 
 func init() {
