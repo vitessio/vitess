@@ -504,7 +504,7 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 			}
 
 			if item.ambiguous {
-				err = &AmbiguousColumnError{Column: sqlparser.String(col)}
+				err = newAmbiguousColumnError(col)
 			} else if insideAggr && sqlparser.ContainsAggregation(item.expr) {
 				err = &InvalidUseOfGroupFunction{}
 			}
@@ -576,7 +576,7 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 
 		// If we get here, it means we have found an alias and want to use it
 		if item.ambiguous {
-			err = &AmbiguousColumnError{Column: sqlparser.String(col)}
+			err = newAmbiguousColumnError(col)
 		} else if insideAggr && sqlparser.ContainsAggregation(item.expr) {
 			err = &InvalidUseOfGroupFunction{}
 		}
@@ -661,7 +661,7 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlpar
 		}
 
 		if item.ambiguous {
-			err = &AmbiguousColumnError{Column: sqlparser.String(col)}
+			err = newAmbiguousColumnError(col)
 		} else if insideAggr && sqlparser.ContainsAggregation(item.expr) {
 			err = &InvalidUseOfGroupFunction{}
 		}

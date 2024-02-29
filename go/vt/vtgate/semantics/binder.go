@@ -76,8 +76,9 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		currentScope := b.scoper.currentScope()
 		deps, err := b.resolveColumn(node, currentScope, false, true)
 		if err != nil {
+			s := err.Error()
 			if deps.direct.IsEmpty() ||
-				!strings.HasSuffix(err.Error(), "is ambiguous") ||
+				!strings.HasSuffix(s, "is ambiguous") ||
 				!b.canRewriteUsingJoin(deps, node) {
 				return err
 			}
@@ -142,7 +143,7 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 		c := createCertain(ts, ts, evalengine.Type{})
 		deps = deps.merge(c, false)
 	}
-	finalDep, err := deps.get()
+	finalDep, err := deps.get(nil)
 	if err != nil {
 		return dependency{}, err
 	}
@@ -229,7 +230,7 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti, singleTableFallBack bool) (dependency, error) {
 	if !current.stmtScope && current.inGroupBy {
-		return b.resolveColInGroupBy(colName, current, allowMulti, singleTableFallBack)
+		return b.resolveColInGroupBy(colName, current, allowMulti)
 	}
 	if !current.stmtScope && current.inHaving && !current.inHavingAggr {
 		return b.resolveColumnInHaving(colName, current, allowMulti)
@@ -243,11 +244,10 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		var err error
 		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
 		if err != nil {
-			return dependency{}, makeAmbiguousError(colName, err)
+			return dependency{}, err
 		}
 		if !thisDeps.empty() {
-			deps, err := thisDeps.get()
-			return deps, makeAmbiguousError(colName, err)
+			return thisDeps.get(colName)
 		}
 		if current.parent == nil &&
 			len(current.tables) == 1 &&
@@ -294,16 +294,12 @@ func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scop
 	// Here we are searching among the SELECT expressions for a match
 	thisDeps, err := b.resolveColumnInScope(current, colName, allowMulti)
 	if err != nil {
-		return dependency{}, makeAmbiguousError(colName, err)
+		return dependency{}, err
 	}
 
 	if !thisDeps.empty() {
 		// we found something! let's return it
-		deps, err := thisDeps.get()
-		if err != nil {
-			err = makeAmbiguousError(colName, err)
-		}
-		return deps, err
+		return thisDeps.get(colName)
 	}
 
 	notFoundErr := &ColumnNotFoundClauseError{Column: colName.Name.String(), Clause: "having clause"}
@@ -376,7 +372,6 @@ func (b *binder) resolveColInGroupBy(
 	colName *sqlparser.ColName,
 	current *scope,
 	allowMulti bool,
-	singleTableFallBack bool,
 ) (dependency, error) {
 	if current.parent == nil {
 		return dependency{}, vterrors.VT13001("did not expect this to be the last scope")
@@ -408,7 +403,7 @@ func (b *binder) resolveColInGroupBy(
 		}
 		return deps, firstErr
 	}
-	return dependencies.get()
+	return dependencies.get(colName)
 }
 
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {
@@ -425,16 +420,9 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 	}
 	if deps, isUncertain := deps.(*uncertain); isUncertain && deps.fail {
 		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables
-		return nil, ProjError{Inner: &AmbiguousColumnError{Column: sqlparser.String(expr)}}
+		return nil, ProjError{Inner: newAmbiguousColumnError(expr)}
 	}
 	return deps, nil
-}
-
-func makeAmbiguousError(colName *sqlparser.ColName, err error) error {
-	if err == ambigousErr {
-		err = &AmbiguousColumnError{Column: sqlparser.String(colName)}
-	}
-	return err
 }
 
 // GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery
