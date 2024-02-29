@@ -148,20 +148,21 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeTyp
 	}
 
 	checkResult = check.checkAppMetricResult(ctx, appName, storeType, storeName, metricResultFunc, flags)
-	check.throttler.lastCheckTimeNano.Store(time.Now().UnixNano())
+	if !throttlerapp.VitessName.Equals(appName) {
+		check.throttler.lastCheckTimeNano.Store(time.Now().UnixNano())
 
-	go func(statusCode int) {
-		stats.GetOrNewCounter("ThrottlerCheckAnyTotal", "total number of checks").Add(1)
-		stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sTotal", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
+		go func(statusCode int) {
+			stats.GetOrNewCounter("ThrottlerCheckAnyTotal", "total number of checks").Add(1)
+			stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sTotal", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
 
-		if statusCode != http.StatusOK {
-			stats.GetOrNewCounter("ThrottlerCheckAnyError", "total number of failed checks").Add(1)
-			stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sError", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
-		}
+			if statusCode != http.StatusOK {
+				stats.GetOrNewCounter("ThrottlerCheckAnyError", "total number of failed checks").Add(1)
+				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheckAny%s%sError", textutil.SingleWordCamel(storeType), textutil.SingleWordCamel(storeName)), "").Add(1)
+			}
 
-		check.throttler.markRecentApp(appName, remoteAddr)
-	}(checkResult.StatusCode)
-
+			check.throttler.markRecentApp(appName, remoteAddr)
+		}(checkResult.StatusCode)
+	}
 	return checkResult
 }
 
