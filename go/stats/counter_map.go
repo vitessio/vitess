@@ -25,7 +25,7 @@ var (
 	countersMu  sync.RWMutex
 )
 
-// GetOrNewCounter returns a Counter with given name; the functiona either creates the counter
+// GetOrNewCounter returns a Counter with given name; the function either creates the counter
 // if it does not exist, or returns a pre-existing one. The function is thread safe.
 func GetOrNewCounter(name string, help string) *Counter {
 	// first, attempt read lock only
