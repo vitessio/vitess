@@ -200,6 +200,9 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		if !reshard {
 			continue
 		}
+		if flags.StopOnReshard {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace %s has been resharded", keyspace)
+		}
 		if keyspaces[keyspace] { // Last tablepk values were provided
 			// So we can try to resume the copy phase for the tables.
 			// Remove the old shards from the vgtid and add the new shards.
@@ -207,8 +210,8 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 			var lastPKs []*binlogdatapb.TableLastPK
 			for _, cursgtid := range vs.vgtid.ShardGtids {
 				if cursgtid.Keyspace == keyspace {
-					if lastPKs != nil && !slices.Equal(cursgtid.TablePKs, lastPKs) {
-						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace %s has been resharded and different table last PK values were found across shards so we cannot resume",
+					if (cursgtid.TablePKs == nil) || (lastPKs != nil && !slices.Equal(cursgtid.TablePKs, lastPKs)) {
+						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace %s has been resharded and empty or different table last PK values were found across shards so we cannot resume",
 							keyspace)
 					}
 					lastPKs = cursgtid.TablePKs
@@ -228,15 +231,8 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 			}
 			vs.vgtid.ShardGtids = newsgtids
 		} else {
-			newShards := strings.Builder{}
-			for i, shard := range servingShards {
-				if i > 0 {
-					newShards.WriteByte(',')
-				}
-				newShards.WriteString(shard.ShardName())
-			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace %s has been resharded but no last tablepk values have been provided so we cannot resume; current serving shards: %s",
-				keyspace, newShards.String())
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace %s has been resharded but no last tablepk values have been provided so we cannot resume",
+				keyspace)
 		}
 	}
 
@@ -571,37 +567,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		tablet, err := tp.PickForStreaming(tpCtx)
 		if err != nil {
 			log.Errorf(err.Error())
-			if vterrors.Code(err) == vtrpcpb.Code_CANCELED {
-				// See if the provided shards do not line up with the currently serving shards.
-				reshardUnderway := false
-				smap, err := vs.ts.FindAllShardsInKeyspace(ctx, sgtid.GetKeyspace(), nil)
-				if err == nil && len(smap) > len(vs.vgtid.ShardGtids) {
-					shards := maps.Values(smap)
-					for i, shard := range shards {
-						for n, s := range shards {
-							if i == n { // Same shard
-								continue
-							}
-							if key.KeyRangeIntersect(shard.GetKeyRange(), s.GetKeyRange()) {
-								reshardUnderway = true
-								break
-							}
-						}
-					}
-					if reshardUnderway {
-						servingShardNames := strings.Builder{}
-						sis, _ := vs.ts.GetServingShards(ctx, sgtid.GetKeyspace())
-						for i, si := range sis {
-							if i > 0 {
-								servingShardNames.WriteByte(',')
-							}
-							servingShardNames.WriteString(si.ShardName())
-						}
-						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "A Reshard operation is underway in the %s keyspace, the currently serving shards are: %s",
-							sgtid.GetKeyspace(), servingShardNames.String())
-					}
-				}
-			}
 			return err
 		}
 		log.Infof("Picked tablet %s for for %s/%s/%s/%s", tablet.Alias.String(), strings.Join(cells, ","),
@@ -828,7 +793,7 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 		if err := vs.getError(); err != nil {
 			return err
 		}
-		// convert all gtids to vgtids. This should be done here while holding the lock.
+		// Convert all gtids to vgtids. This should be done here while holding the lock.
 		for j, event := range events {
 			if event.Type == binlogdatapb.VEventType_GTID {
 				// Update the VGtid and send that instead.
@@ -843,6 +808,11 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 				var foundIndex = -1
 				eventTablePK := event.LastPKEvent.TableLastPK
 				for idx, pk := range sgtid.TablePKs {
+					// There was no matching row on the given shard. This can happen
+					// when resuming after a Reshard.
+					if pk == nil {
+						continue
+					}
 					if pk.TableName == eventTablePK.TableName {
 						foundIndex = idx
 						break
@@ -1015,7 +985,7 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 
 func (vs *vstream) keyspaceHasBeenResharded(ctx context.Context, keyspace string) (bool, []*topo.ShardInfo, error) {
 	smap, err := vs.ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
-	if err != nil {
+	if err != nil || len(smap) == 0 {
 		return false, nil, err
 	}
 	ksShardGTIDs := make([]*binlogdatapb.ShardGtid, 0, len(vs.vgtid.ShardGtids))
@@ -1024,18 +994,26 @@ func (vs *vstream) keyspaceHasBeenResharded(ctx context.Context, keyspace string
 			ksShardGTIDs = append(ksShardGTIDs, sg)
 		}
 	}
+	reshard := false
+	shards := maps.Values(smap)
+	servingShards := make([]*topo.ShardInfo, 0, len(shards))
 	if len(smap) != len(ksShardGTIDs) {
-		shards := maps.Values(smap)
 		for i, shard := range shards {
-			for n, s := range shards {
-				if i == n { // Same shard
-					continue
-				}
-				if key.KeyRangeIntersect(shard.GetKeyRange(), s.GetKeyRange()) {
-					return true, maps.Values(smap), nil
+			if shard.IsPrimaryServing {
+				servingShards = append(servingShards, shard)
+			}
+			if !reshard {
+				for n, s := range shards {
+					if i == n { // Same shard
+						continue
+					}
+					if key.KeyRangeIntersect(shard.GetKeyRange(), s.GetKeyRange()) {
+						reshard = true
+						break
+					}
 				}
 			}
 		}
 	}
-	return false, nil, nil
+	return reshard, servingShards, nil
 }

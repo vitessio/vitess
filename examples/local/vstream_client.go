@@ -23,13 +23,16 @@ import (
 	"log"
 	"time"
 
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 /*
@@ -38,7 +41,7 @@ import (
 */
 func main() {
 	ctx := context.Background()
-	streamCustomer := true
+	streamCustomer := false
 	var vgtid *binlogdatapb.VGtid
 	if streamCustomer {
 		vgtid = &binlogdatapb.VGtid{
@@ -47,18 +50,28 @@ func main() {
 				Shard:    "-80",
 				// Gtid "" is to stream from the start, "current" is to stream from the current gtid
 				// you can also specify a gtid to start with.
-				Gtid: "MySQL56/d96014f4-d808-11ee-bb36-65ec7170dd04:1-52", //"current"  // "MySQL56/36a89abd-978f-11eb-b312-04ed332e05c2:1-265"
+				Gtid: "", //"current"  // "MySQL56/36a89abd-978f-11eb-b312-04ed332e05c2:1-265"
 			}, {
 				Keyspace: "customer",
 				Shard:    "80-",
-				Gtid:     "MySQL56/d96014f4-d808-11ee-bb36-65ec7170dd04:1-52",
+				Gtid:     "",
 			}}}
 	} else {
+		lastPK := sqltypes.Result{
+			Fields: []*querypb.Field{{Name: "customer_id", Type: querypb.Type_INT64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_BINARY_FLAG)}},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(5)}},
+		}
 		vgtid = &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: "customer",
 				Shard:    "0",
 				Gtid:     "",
+				TablePKs: []*binlogdatapb.TableLastPK{
+					{
+						TableName: "customer",
+						Lastpk:    sqltypes.ResultToProto3(&lastPK),
+					},
+				},
 			}}}
 	}
 	filter := &binlogdatapb.Filter{

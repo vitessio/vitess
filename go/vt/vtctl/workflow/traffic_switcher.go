@@ -671,45 +671,6 @@ func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows [
 		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, statement); err != nil {
 			return err
 		}
-		/*
-			if ts.workflowType == binlogdatapb.VReplicationWorkflowType_Reshard {
-				// Add this source's GTID_EXECUTED set to each target shard's GTID_PURGED
-				// set to avoid losing GTID metadata history and support smooth vstream
-				// resumes.
-				err := ts.ForAllTargets(func(target *MigrationTarget) error {
-					if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-						return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
-					}); err != nil {
-						return err
-					}
-					rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
-					defer cancel()
-					_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
-					if key.KeyRangeIntersect(source.si.KeyRange, target.si.KeyRange) {
-						var localGTIDSet string
-						before, after, found := strings.Cut(journal.LocalPosition, "/")
-						if found {
-							localGTIDSet = after
-						} else {
-							localGTIDSet = before
-						}
-						query := fmt.Sprintf("set @@global.gtid_purged=concat(@@global.gtid_purged, gtid_subtract('%s', @@global.gtid_purged))", localGTIDSet)
-						_, err = ts.TabletManagerClient().ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-							Query: []byte(query),
-						})
-						if err != nil {
-							return fmt.Errorf("failed to add the GTID_EXECUTED set metdata from %s to the GTID_EXECUTED set on %s: %v",
-								topoproto.TabletAliasString(source.GetPrimary().Tablet.GetAlias()), topoproto.TabletAliasString(target.GetPrimary().Tablet.GetAlias()), err)
-						}
-					}
-					return err
-				})
-				if err != nil {
-					return vterrors.Wrapf(err, "failed to add the GTID_EXECUTED set metadata from the source shards (%v) to the GTID_PURGED metadata on the target shards (%s)",
-						ts.SourceShards(), ts.TargetShards())
-				}
-			}
-		*/
 		return nil
 	})
 }
