@@ -162,16 +162,16 @@ func (vtctldclient *VtctldClientProcess) ChangeTabletType(tablet *Vttablet, tabl
 }
 
 // GetShardReplication returns a mapping of cell to shard replication for the given keyspace and shard.
-func (vtctldclient *VtctldClientProcess) GetShardReplication(keyspace string, shard string, cells ...string) (replication map[string]*topodatapb.ShardReplication, err error) {
+func (vtctldclient *VtctldClientProcess) GetShardReplication(keyspace string, shard string, cells ...string) (map[string]*topodatapb.ShardReplication, error) {
 	args := append([]string{"GetShardReplication", keyspace + "/" + shard}, cells...)
 	out, err := vtctldclient.ExecuteCommandWithOutput(args...)
 	if err != nil {
 		return nil, err
 	}
 
-	replication = map[string]*topodatapb.ShardReplication{}
-	err = json2.Unmarshal([]byte(out), &replication)
-	return replication, err
+	var resp vtctldatapb.GetShardReplicationResponse
+	err = json2.Unmarshal([]byte(out), &resp)
+	return resp.ShardReplicationByCell, err
 }
 
 // GetSrvKeyspaces returns a mapping of cell to srv keyspace for the given keyspace.
