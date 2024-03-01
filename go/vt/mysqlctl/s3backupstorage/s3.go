@@ -288,6 +288,16 @@ type S3BackupStorage struct {
 	transport *http.Transport
 }
 
+func newS3BackupStorage() *S3BackupStorage {
+	// This initialises a new transport based off http.DefaultTransport the first time and returns the same
+	// transport on subsequent calls so connections can be reused as part of the same transport.
+	tlsClientConf := &tls.Config{InsecureSkipVerify: tlsSkipVerifyCert}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = tlsClientConf
+
+	return &S3BackupStorage{params: backupstorage.NoParams(), transport: transport}
+}
+
 // ListBackups is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
 	log.Infof("ListBackups: [s3] dir: %v, bucket: %v", dir, bucket)
@@ -428,20 +438,6 @@ func (bs *S3BackupStorage) WithParams(params backupstorage.Params) backupstorage
 	return &S3BackupStorage{params: params}
 }
 
-// This creates a new transport based off http.DefaultTransport the first time and returns the same
-// transport on subsequent calls so connections can be reused as part of the same transport.
-func (bs *S3BackupStorage) getTransport() *http.Transport {
-	if bs.transport == nil {
-		tlsClientConf := &tls.Config{InsecureSkipVerify: tlsSkipVerifyCert}
-		transport := http.DefaultTransport.(*http.Transport).Clone()
-		transport.TLSClientConfig = tlsClientConf
-
-		bs.transport = transport
-	}
-
-	return bs.transport
-}
-
 var _ backupstorage.BackupStorage = (*S3BackupStorage)(nil)
 
 // getLogLevel converts the string loglevel to an aws.LogLevelType
@@ -460,7 +456,7 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 	if bs._client == nil {
 		logLevel := getLogLevel()
 
-		httpClient := &http.Client{Transport: bs.getTransport()}
+		httpClient := &http.Client{Transport: bs.transport}
 
 		session, err := session.NewSession()
 		if err != nil {
@@ -510,7 +506,7 @@ func objName(parts ...string) *string {
 }
 
 func init() {
-	backupstorage.BackupStorageMap["s3"] = &S3BackupStorage{params: backupstorage.NoParams()}
+	backupstorage.BackupStorageMap["s3"] = newS3BackupStorage()
 
 	logNameMap = logNameToLogLevel{
 		"LogOff":                     aws.LogOff,
