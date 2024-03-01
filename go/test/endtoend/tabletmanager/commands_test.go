@@ -186,7 +186,7 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus int64, expec
 func TestShardReplicationFix(t *testing.T) {
 	// make sure the replica is in the replication graph, 2 nodes: 1 primary, 1 replica
 	defer cluster.PanicHandler(t)
-	result, err := clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceShard, cell)
+	result, err := clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)
 	require.Nil(t, err, "error should be Nil")
 	require.NotNil(t, result[cell], "result should not be Nil")
 	assert.Len(t, result[cell].Nodes, 3)
@@ -195,14 +195,14 @@ func TestShardReplicationFix(t *testing.T) {
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, fmt.Sprintf("%s-9000", cell))
 	require.Nil(t, err, "error should be Nil")
 
-	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceShard, cell)
+	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)
 	require.Nil(t, err, "error should be Nil")
 	require.NotNil(t, result[cell], "result should not be Nil")
 	assert.Len(t, result[cell].Nodes, 4)
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationFix", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
-	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceShard, cell)
+	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)
 	require.Nil(t, err, "error should be Nil")
 	require.NotNil(t, result[cell], "result should not be Nil")
 	assert.Len(t, result[cell].Nodes, 3)
