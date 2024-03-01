@@ -24,7 +24,6 @@ import (
 type rewriter struct {
 	semTable     *semantics.SemTable
 	reservedVars *sqlparser.ReservedVars
-	inSubquery   int
 	err          error
 }
 
@@ -33,16 +32,8 @@ func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.Reserved
 		semTable:     semTable,
 		reservedVars: reservedVars,
 	}
-	sqlparser.Rewrite(statement, r.rewriteDown, r.rewriteUp)
+	sqlparser.Rewrite(statement, r.rewriteDown, nil)
 	return nil
-}
-
-func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
-	_, ok := cursor.Node().(*sqlparser.Subquery)
-	if ok {
-		r.inSubquery--
-	}
-	return true
 }
 
 func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
@@ -50,9 +41,7 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	case *sqlparser.Select:
 		rewriteHavingClause(node)
 	case *sqlparser.AliasedTableExpr:
-		// rewrite names of the routed tables for the subquery
-		// We only need to do this for non-derived tables and if they are in a subquery
-		if _, isDerived := node.Expr.(*sqlparser.DerivedTable); isDerived || r.inSubquery == 0 {
+		if _, isDerived := node.Expr.(*sqlparser.DerivedTable); isDerived {
 			break
 		}
 		// find the tableSet and tableInfo that this table points to
@@ -81,10 +70,9 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 			node.As = tableName.Name
 		}
 		// replace the table name with the original table
+		tableName.Qualifier = sqlparser.IdentifierCS{}
 		tableName.Name = vindexTable.Name
 		node.Expr = tableName
-	case *sqlparser.Subquery:
-		r.inSubquery++
 	}
 	return true
 }

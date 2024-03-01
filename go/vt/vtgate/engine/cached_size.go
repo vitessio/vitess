@@ -177,34 +177,48 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	size += cached.RoutingParameters.CachedSize(true)
 	return size
 }
+func (cached *DMLWithInput) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field DMLs []vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.DMLs)) * int64(16))
+		for _, elem := range cached.DMLs {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	// field OutputCols [][]int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.OutputCols)) * int64(24))
+		for _, elem := range cached.OutputCols {
+			{
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(8))
+			}
+		}
+	}
+	return size
+}
 func (cached *Delete) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(8)
+		size += int64(16)
 	}
 	// field DML *vitess.io/vitess/go/vt/vtgate/engine.DML
 	size += cached.DML.CachedSize(true)
-	return size
-}
-func (cached *DeleteMulti) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(32)
-	}
-	// field Delete vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Delete.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Input.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
 	return size
 }
 func (cached *Distinct) CachedSize(alloc bool) int64 {

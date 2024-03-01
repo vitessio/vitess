@@ -28,24 +28,24 @@ import (
 
 func TestCreateTableDiff(t *testing.T) {
 	tt := []struct {
-		name       string
-		from       string
-		to         string
-		fromName   string
-		toName     string
-		diff       string
-		diffs      []string
-		cdiff      string
-		cdiffs     []string
-		isError    bool
-		errorMsg   string
-		autoinc    int
-		rotation   int
-		fulltext   int
-		colrename  int
-		constraint int
-		charset    int
-		algorithm  int
+		name        string
+		from        string
+		to          string
+		fromName    string
+		toName      string
+		diff        string
+		diffs       []string
+		cdiff       string
+		cdiffs      []string
+		errorMsg    string
+		autoinc     int
+		rotation    int
+		fulltext    int
+		colrename   int
+		constraint  int
+		charset     int
+		algorithm   int
+		enumreorder int
 	}{
 		{
 			name: "identical",
@@ -300,6 +300,80 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:  "alter table t1 modify column c int after a, add column x int after c, add column y int",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int AFTER `a`, ADD COLUMN `x` int AFTER `c`, ADD COLUMN `y` int",
 		},
+		// enum
+		{
+			name:  "expand enum",
+			from:  "create table t1 (id int primary key, e enum('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e enum('a', 'b', 'c', 'd'))",
+			diff:  "alter table t1 modify column e enum('a', 'b', 'c', 'd')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` enum('a', 'b', 'c', 'd')",
+		},
+		{
+			name:  "truncate enum",
+			from:  "create table t1 (id int primary key, e enum('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e enum('a', 'b'))",
+			diff:  "alter table t1 modify column e enum('a', 'b')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` enum('a', 'b')",
+		},
+		{
+			name:  "rename enum value",
+			from:  "create table t1 (id int primary key, e enum('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e enum('a', 'b', 'd'))",
+			diff:  "alter table t1 modify column e enum('a', 'b', 'd')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` enum('a', 'b', 'd')",
+		},
+		{
+			name:        "reorder enum, fail",
+			from:        "create table t1 (id int primary key, e enum('a', 'b', 'c'))",
+			to:          "create table t2 (id int primary key, e enum('b', 'a', 'c'))",
+			enumreorder: EnumReorderStrategyReject,
+			errorMsg:    (&EnumValueOrdinalChangedError{Table: "t1", Column: "e", Value: "'a'", Ordinal: 0, NewOrdinal: 1}).Error(),
+		},
+		{
+			name:        "reorder enum, allow",
+			from:        "create table t1 (id int primary key, e enum('a', 'b', 'c'))",
+			to:          "create table t2 (id int primary key, e enum('b', 'a', 'c'))",
+			diff:        "alter table t1 modify column e enum('b', 'a', 'c')",
+			cdiff:       "ALTER TABLE `t1` MODIFY COLUMN `e` enum('b', 'a', 'c')",
+			enumreorder: EnumReorderStrategyAllow,
+		},
+		{
+			name:  "expand set",
+			from:  "create table t1 (id int primary key, e set('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e set('a', 'b', 'c', 'd'))",
+			diff:  "alter table t1 modify column e set('a', 'b', 'c', 'd')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` set('a', 'b', 'c', 'd')",
+		},
+		{
+			name:  "truncate set",
+			from:  "create table t1 (id int primary key, e set('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e set('a', 'b'))",
+			diff:  "alter table t1 modify column e set('a', 'b')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` set('a', 'b')",
+		},
+		{
+			name:  "rename set value",
+			from:  "create table t1 (id int primary key, e set('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e set('a', 'b', 'd'))",
+			diff:  "alter table t1 modify column e set('a', 'b', 'd')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` set('a', 'b', 'd')",
+		},
+		{
+			name:        "reorder set, fail",
+			from:        "create table t1 (id int primary key, e set('a', 'b', 'c'))",
+			to:          "create table t2 (id int primary key, e set('b', 'a', 'c'))",
+			enumreorder: EnumReorderStrategyReject,
+			errorMsg:    (&EnumValueOrdinalChangedError{Table: "t1", Column: "e", Value: "'a'", Ordinal: 0, NewOrdinal: 1}).Error(),
+		},
+		{
+			name:        "reorder set, allow",
+			from:        "create table t1 (id int primary key, e set('a', 'b', 'c'))",
+			to:          "create table t2 (id int primary key, e set('b', 'a', 'c'))",
+			diff:        "alter table t1 modify column e set('b', 'a', 'c')",
+			cdiff:       "ALTER TABLE `t1` MODIFY COLUMN `e` set('b', 'a', 'c')",
+			enumreorder: EnumReorderStrategyAllow,
+		},
+
 		// keys
 		{
 			name:  "added key",
@@ -1289,12 +1363,12 @@ func TestCreateTableDiff(t *testing.T) {
 	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			fromStmt, err := env.Parser.ParseStrictDDL(ts.from)
+			fromStmt, err := env.Parser().ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := fromStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			toStmt, err := env.Parser.ParseStrictDDL(ts.to)
+			toStmt, err := env.Parser().ParseStrictDDL(ts.to)
 			require.NoError(t, err)
 			toCreateTable, ok := toStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -1312,6 +1386,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.FullTextKeyStrategy = ts.fulltext
 			hints.TableCharsetCollateStrategy = ts.charset
 			hints.AlterTableAlgorithmStrategy = ts.algorithm
+			hints.EnumReorderStrategy = ts.enumreorder
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))
@@ -1319,13 +1394,20 @@ func TestCreateTableDiff(t *testing.T) {
 				ts.diff = ts.diffs[0]
 				ts.cdiff = ts.cdiffs[0]
 			}
-			switch {
-			case ts.isError:
-				require.Error(t, err)
-				if ts.errorMsg != "" {
-					assert.Contains(t, err.Error(), ts.errorMsg)
-				}
-			case ts.diff == "":
+
+			if ts.diff != "" {
+				_, err := env.Parser().ParseStrictDDL(ts.diff)
+				require.NoError(t, err)
+			}
+			if ts.cdiff != "" {
+				_, err := env.Parser().ParseStrictDDL(ts.cdiff)
+				require.NoError(t, err)
+			}
+			if ts.errorMsg != "" {
+				require.ErrorContains(t, err, ts.errorMsg)
+				return
+			}
+			if ts.diff == "" {
 				assert.NoError(t, err)
 				assert.True(t, alter.IsEmpty(), "expected empty diff, found changes")
 				if !alter.IsEmpty() {
@@ -1334,60 +1416,61 @@ func TestCreateTableDiff(t *testing.T) {
 					t.Logf("c: %v", sqlparser.CanonicalString(c.CreateTable))
 					t.Logf("other: %v", sqlparser.CanonicalString(other.CreateTable))
 				}
-			default:
+				return
+			}
+
+			// Expecting diff
+			assert.NoError(t, err)
+			require.NotNil(t, alter)
+			assert.False(t, alter.IsEmpty(), "expected changes, found empty diff")
+
+			{
+				diff := alter.StatementString()
+				assert.Equal(t, ts.diff, diff)
+
+				if len(ts.diffs) > 0 {
+
+					allSubsequentDiffs := AllSubsequent(alter)
+					require.Equal(t, len(ts.diffs), len(allSubsequentDiffs))
+					require.Equal(t, len(ts.cdiffs), len(allSubsequentDiffs))
+					for i := range ts.diffs {
+						assert.Equal(t, ts.diffs[i], allSubsequentDiffs[i].StatementString())
+						assert.Equal(t, ts.cdiffs[i], allSubsequentDiffs[i].CanonicalStatementString())
+					}
+				}
+				// validate we can parse back the statement
+				_, err := env.Parser().ParseStrictDDL(diff)
 				assert.NoError(t, err)
-				require.NotNil(t, alter)
-				assert.False(t, alter.IsEmpty(), "expected changes, found empty diff")
 
-				{
-					diff := alter.StatementString()
-					assert.Equal(t, ts.diff, diff)
-
-					if len(ts.diffs) > 0 {
-
-						allSubsequentDiffs := AllSubsequent(alter)
-						require.Equal(t, len(ts.diffs), len(allSubsequentDiffs))
-						require.Equal(t, len(ts.cdiffs), len(allSubsequentDiffs))
-						for i := range ts.diffs {
-							assert.Equal(t, ts.diffs[i], allSubsequentDiffs[i].StatementString())
-							assert.Equal(t, ts.cdiffs[i], allSubsequentDiffs[i].CanonicalStatementString())
-						}
-					}
-					// validate we can parse back the statement
-					_, err := env.Parser.ParseStrictDDL(diff)
-					assert.NoError(t, err)
-
-					// Validate "from/to" entities
-					eFrom, eTo := alter.Entities()
-					if ts.fromName != "" {
-						assert.Equal(t, ts.fromName, eFrom.Name())
-					}
-					if ts.toName != "" {
-						assert.Equal(t, ts.toName, eTo.Name())
-					}
-
-					{ // Validate "apply()" on "from" converges with "to"
-						applied, err := c.Apply(alter)
-						assert.NoError(t, err)
-						require.NotNil(t, applied)
-						appliedDiff, err := eTo.Diff(applied, &hints)
-						require.NoError(t, err)
-						assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v.\nc=%v\n,alter=%v\n,eTo=%v\napplied=%v\n",
-							appliedDiff.CanonicalStatementString(),
-							c.Create().CanonicalStatementString(),
-							alter.CanonicalStatementString(),
-							eTo.Create().CanonicalStatementString(),
-							applied.Create().CanonicalStatementString(),
-						)
-					}
+				// Validate "from/to" entities
+				eFrom, eTo := alter.Entities()
+				if ts.fromName != "" {
+					assert.Equal(t, ts.fromName, eFrom.Name())
 				}
-				{
-					cdiff := alter.CanonicalStatementString()
-					assert.Equal(t, ts.cdiff, cdiff)
-					_, err := env.Parser.ParseStrictDDL(cdiff)
-					assert.NoError(t, err)
+				if ts.toName != "" {
+					assert.Equal(t, ts.toName, eTo.Name())
 				}
 
+				{ // Validate "apply()" on "from" converges with "to"
+					applied, err := c.Apply(alter)
+					assert.NoError(t, err)
+					require.NotNil(t, applied)
+					appliedDiff, err := eTo.Diff(applied, &hints)
+					require.NoError(t, err)
+					assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v.\nc=%v\n,alter=%v\n,eTo=%v\napplied=%v\n",
+						appliedDiff.CanonicalStatementString(),
+						c.Create().CanonicalStatementString(),
+						alter.CanonicalStatementString(),
+						eTo.Create().CanonicalStatementString(),
+						applied.Create().CanonicalStatementString(),
+					)
+				}
+			}
+			{
+				cdiff := alter.CanonicalStatementString()
+				assert.Equal(t, ts.cdiff, cdiff)
+				_, err := env.Parser().ParseStrictDDL(cdiff)
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -1882,12 +1965,12 @@ func TestValidate(t *testing.T) {
 	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := env.Parser.ParseStrictDDL(ts.from)
+			stmt, err := env.Parser().ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = env.Parser.ParseStrictDDL(ts.alter)
+			stmt, err = env.Parser().ParseStrictDDL(ts.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -1911,7 +1994,7 @@ func TestValidate(t *testing.T) {
 				require.True(t, ok)
 				applied = c.normalize()
 
-				stmt, err := env.Parser.ParseStrictDDL(ts.to)
+				stmt, err := env.Parser().ParseStrictDDL(ts.to)
 				require.NoError(t, err)
 				toCreateTable, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
@@ -2196,7 +2279,7 @@ func TestNormalize(t *testing.T) {
 	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := env.Parser.ParseStrictDDL(ts.from)
+			stmt, err := env.Parser().ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -2286,7 +2369,7 @@ func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
 	}
 
 	env := NewTestEnv()
-	stmt, err := env.Parser.ParseStrictDDL(sql)
+	stmt, err := env.Parser().ParseStrictDDL(sql)
 	require.NoError(t, err)
 	createTable, ok := stmt.(*sqlparser.CreateTable)
 	require.True(t, ok)

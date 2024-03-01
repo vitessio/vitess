@@ -1105,12 +1105,6 @@ func VisitRefOfColumnType(in *ColumnType, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitRefOfLiteral(in.Length, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfLiteral(in.Scale, f); err != nil {
-		return err
-	}
 	return nil
 }
 func VisitColumns(in Columns, f Visit) error {
@@ -1216,12 +1210,6 @@ func VisitRefOfConvertType(in *ConvertType, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitRefOfLiteral(in.Length, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfLiteral(in.Scale, f); err != nil {
 		return err
 	}
 	return nil
@@ -1377,8 +1365,10 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitTableExprs(in.TableExprs, f); err != nil {
-		return err
+	for _, el := range in.TableExprs {
+		if err := VisitTableExpr(el, f); err != nil {
+			return err
+		}
 	}
 	if err := VisitTableNames(in.Targets, f); err != nil {
 		return err
@@ -1684,7 +1674,7 @@ func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitSelectExprs(in.Exprs, f); err != nil {
+	if err := VisitExprs(in.Exprs, f); err != nil {
 		return err
 	}
 	return nil
@@ -4014,8 +4004,10 @@ func VisitRefOfUpdate(in *Update, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitTableExprs(in.TableExprs, f); err != nil {
-		return err
+	for _, el := range in.TableExprs {
+		if err := VisitTableExpr(el, f); err != nil {
+			return err
+		}
 	}
 	if err := VisitUpdateExprs(in.Exprs, f); err != nil {
 		return err

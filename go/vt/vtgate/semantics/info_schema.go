@@ -26,6 +26,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -1610,7 +1611,7 @@ var infoSchema80 = getInfoSchema80()
 
 // newSchemaInfo returns a SchemaInformation that has the column information for all info_schema tables
 func newSchemaInfo(inner SchemaInformation) SchemaInformation {
-	return &infoSchemaWithColumns{inner: inner, infoSchemaData: loadSchemaInfo(inner.MySQLVersion())}
+	return &infoSchemaWithColumns{inner: inner, infoSchemaData: loadSchemaInfo(inner.Environment().MySQLVersion())}
 }
 
 func loadSchemaInfo(version string) map[string][]vindexes.Column {
@@ -1645,13 +1646,8 @@ func (i *infoSchemaWithColumns) ConnCollation() collations.ID {
 	return i.inner.ConnCollation()
 }
 
-// CollationEnv implements the SchemaInformation interface
-func (i *infoSchemaWithColumns) CollationEnv() *collations.Environment {
-	return i.inner.CollationEnv()
-}
-
-func (i *infoSchemaWithColumns) MySQLVersion() string {
-	return i.inner.MySQLVersion()
+func (i *infoSchemaWithColumns) Environment() *vtenv.Environment {
+	return i.inner.Environment()
 }
 
 func (i *infoSchemaWithColumns) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {

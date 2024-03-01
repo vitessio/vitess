@@ -28,7 +28,9 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/servenv"
@@ -53,7 +55,7 @@ func init() {
 }
 
 const (
-	vtexplainCell = "explainCell"
+	Cell = "explainCell"
 
 	// ModeMulti is the default mode with autocommit implemented at vtgate
 	ModeMulti = "multi"
@@ -147,9 +149,7 @@ type (
 		batchTime       *sync2.Batcher
 		globalTabletEnv *tabletEnv
 
-		collationEnv *collations.Environment
-		parser       *sqlparser.Parser
-		mysqlVersion string
+		env *vtenv.Environment
 	}
 )
 
@@ -185,18 +185,18 @@ type TabletActions struct {
 }
 
 // Init sets up the fake execution environment
-func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) (*VTExplain, error) {
+func Init(ctx context.Context, env *vtenv.Environment, ts *topo.Server, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options, srvTopoCounts *stats.CountersWithSingleLabel) (*VTExplain, error) {
 	// Verify options
 	if opts.ReplicationMode != "ROW" && opts.ReplicationMode != "STATEMENT" {
 		return nil, fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
 	}
 
-	parsedDDLs, err := parseSchema(sqlSchema, opts, parser)
+	parsedDDLs, err := parseSchema(sqlSchema, opts, env.Parser())
 	if err != nil {
 		return nil, fmt.Errorf("parseSchema: %v", err)
 	}
 
-	tabletEnv, err := newTabletEnvironment(parsedDDLs, opts, collationEnv)
+	tabletEnv, err := newTabletEnvironment(parsedDDLs, opts, env.CollationEnv())
 	if err != nil {
 		return nil, fmt.Errorf("initTabletEnvironment: %v", err)
 	}
@@ -205,12 +205,10 @@ func Init(ctx context.Context, vSchemaStr, sqlSchema, ksShardMapStr string, opts
 			TargetString: "",
 			Autocommit:   true,
 		},
-		collationEnv: collationEnv,
-		parser:       parser,
-		mysqlVersion: mysqlVersion,
+		env: env,
 	}
 	vte.setGlobalTabletEnv(tabletEnv)
-	err = vte.initVtgateExecutor(ctx, vSchemaStr, ksShardMapStr, opts)
+	err = vte.initVtgateExecutor(ctx, ts, vSchemaStr, ksShardMapStr, opts, srvTopoCounts)
 	if err != nil {
 		return nil, fmt.Errorf("initVtgateExecutor: %v", err.Error())
 	}
@@ -303,7 +301,7 @@ func (vte *VTExplain) Run(sql string) ([]*Explain, error) {
 			sql = s
 		}
 
-		sql, rem, err = vte.parser.SplitStatement(sql)
+		sql, rem, err = vte.env.Parser().SplitStatement(sql)
 		if err != nil {
 			return nil, err
 		}
@@ -390,7 +388,7 @@ func (vte *VTExplain) specialHandlingOfSavepoints(q *MysqlQuery) error {
 		return nil
 	}
 
-	stmt, err := vte.parser.Parse(q.SQL)
+	stmt, err := vte.env.Parser().Parse(q.SQL)
 	if err != nil {
 		return err
 	}

@@ -245,7 +245,14 @@ func (d Date) Hash(h *vthash.Hasher) {
 }
 
 func (d Date) Weekday() time.Weekday {
-	return d.ToStdTime(time.Local).Weekday()
+	// Go considers 0000-01-01 day as Saturday, while
+	// MySQL considers it to be Sunday, now 0000-02-29 exists in
+	// Go but not in MySQL so it balances out after that
+	wd := d.ToStdTime(time.Local).Weekday()
+	if d.Year() == 0 && d.Month() <= 2 {
+		wd = (wd + 1) % 7
+	}
+	return wd
 }
 
 func (d Date) Yearday() int {
@@ -368,9 +375,12 @@ func (d Date) YearWeek(mode int) int {
 	case 1, 3:
 		year, week := d.ISOWeek()
 		return year*100 + week
-	case 4, 5, 6, 7:
-		// TODO
-		return 0
+	case 4, 6:
+		year, week := d.Sunday4DayWeek()
+		return year*100 + week
+	case 5, 7:
+		year, week := d.MondayWeek()
+		return year*100 + week
 	default:
 		return d.YearWeek(DefaultWeekMode)
 	}
@@ -446,6 +456,10 @@ func (t Time) toDuration() time.Duration {
 		return -dur
 	}
 	return dur
+}
+
+func (t Time) ToSeconds() int64 {
+	return int64(t.ToDuration().Seconds())
 }
 
 func (d Date) ToStdTime(loc *time.Location) (out time.Time) {
@@ -546,9 +560,9 @@ func (dt DateTime) Compare(dt2 DateTime) int {
 	return dt.Time.Compare(dt2.Time)
 }
 
-func (dt DateTime) AddInterval(itv *Interval, stradd bool) (DateTime, uint8, bool) {
+func (dt DateTime) AddInterval(itv *Interval, prec uint8, stradd bool) (DateTime, uint8, bool) {
 	ok := dt.addInterval(itv)
-	return dt, itv.precision(stradd), ok
+	return dt, max(prec, itv.precision(stradd)), ok
 }
 
 func (dt DateTime) Round(p int) (r DateTime) {
@@ -610,7 +624,7 @@ func (dt *DateTime) addInterval(itv *Interval) bool {
 		dt.Time.minute = uint8((dur % time.Hour) / time.Minute)
 		dt.Time.hour = uint16(dur / time.Hour)
 
-		daynum := mysqlDayNumber(dt.Date.Year(), dt.Date.Month(), 1) + int(days)
+		daynum := MysqlDayNumber(dt.Date.Year(), dt.Date.Month(), 1) + int(days)
 		if daynum < 0 || daynum > maxDay {
 			return false
 		}
@@ -619,7 +633,7 @@ func (dt *DateTime) addInterval(itv *Interval) bool {
 		return true
 
 	case itv.unit.HasDayParts():
-		daynum := mysqlDayNumber(dt.Date.Year(), dt.Date.Month(), dt.Date.Day())
+		daynum := MysqlDayNumber(dt.Date.Year(), dt.Date.Month(), dt.Date.Day())
 		daynum += itv.day
 		dt.Date.year, dt.Date.month, dt.Date.day = mysqlDateFromDayNumber(daynum)
 		return true

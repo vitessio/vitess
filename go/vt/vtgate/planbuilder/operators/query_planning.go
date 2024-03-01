@@ -21,18 +21,8 @@ import (
 	"io"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
-)
-
-type (
-	projector struct {
-		columns               []*ProjExpr
-		columnAliases         sqlparser.Columns
-		explicitColumnAliases bool
-	}
 )
 
 func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
@@ -99,7 +89,9 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		case *LockAndComment:
 			return pushLockAndComment(in)
 		case *Delete:
-			return tryPushDelete(ctx, in)
+			return tryPushDelete(in)
+		case *Update:
+			return tryPushUpdate(in)
 		default:
 			return in, NoRewrite
 		}
@@ -108,21 +100,21 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func tryPushDelete(ctx *plancontext.PlanningContext, in *Delete) (Operator, *ApplyResult) {
-	switch src := in.Source.(type) {
-	case *Route:
-		return pushDeleteUnderRoute(in, src)
-	case *ApplyJoin:
-		return pushDeleteUnderJoin(ctx, in, src)
+func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
+	if src, ok := in.Source.(*Route); ok {
+		return pushDMLUnderRoute(in, src, "pushed delete under route")
 	}
-	return in, nil
+	return in, NoRewrite
 }
 
-func pushDeleteUnderRoute(in *Delete, src *Route) (Operator, *ApplyResult) {
-	if in.Limit != nil && !src.IsSingleShardOrByDestination() {
-		panic(vterrors.VT12001("multi shard DELETE with LIMIT"))
+func tryPushUpdate(in *Update) (Operator, *ApplyResult) {
+	if src, ok := in.Source.(*Route); ok {
+		return pushDMLUnderRoute(in, src, "pushed update under route")
 	}
+	return in, NoRewrite
+}
 
+func pushDMLUnderRoute(in Operator, src *Route, msg string) (Operator, *ApplyResult) {
 	switch r := src.Routing.(type) {
 	case *SequenceRouting:
 		// Sequences are just unsharded routes
@@ -134,61 +126,7 @@ func pushDeleteUnderRoute(in *Delete, src *Route) (Operator, *ApplyResult) {
 		// Alternates are not required.
 		r.Alternates = nil
 	}
-	return Swap(in, src, "pushed delete under route")
-}
-
-func pushDeleteUnderJoin(ctx *plancontext.PlanningContext, in *Delete, src Operator) (Operator, *ApplyResult) {
-	if len(in.Target.VTable.PrimaryKey) == 0 {
-		panic(vterrors.VT09015())
-	}
-	dm := &DeleteMulti{}
-	var selExprs sqlparser.SelectExprs
-	var leftComp sqlparser.ValTuple
-	for _, col := range in.Target.VTable.PrimaryKey {
-		colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
-		selExprs = append(selExprs, sqlparser.NewAliasedExpr(colName, ""))
-		leftComp = append(leftComp, colName)
-		ctx.SemTable.Recursive[colName] = in.Target.ID
-	}
-
-	sel := &sqlparser.Select{
-		SelectExprs: selExprs,
-		OrderBy:     in.OrderBy,
-		Limit:       in.Limit,
-		Lock:        sqlparser.ForUpdateLock,
-	}
-	dm.Source = newHorizon(src, sel)
-
-	var targetTable *Table
-	_ = Visit(src, func(operator Operator) error {
-		if tbl, ok := operator.(*Table); ok && tbl.QTable.ID == in.Target.ID {
-			targetTable = tbl
-			return io.EOF
-		}
-		return nil
-	})
-	if targetTable == nil {
-		panic(vterrors.VT13001("target DELETE table not found"))
-	}
-	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, leftComp, sqlparser.ListArg(engine.DM_VALS), nil)
-	targetQT := targetTable.QTable
-	qt := &QueryTable{
-		ID:         targetQT.ID,
-		Alias:      sqlparser.CloneRefOfAliasedTableExpr(targetQT.Alias),
-		Table:      sqlparser.CloneTableName(targetQT.Table),
-		Predicates: []sqlparser.Expr{compExpr},
-	}
-
-	qg := &QueryGraph{Tables: []*QueryTable{qt}}
-	in.Source = qg
-
-	if in.OwnedVindexQuery != nil {
-		in.OwnedVindexQuery.From = sqlparser.TableExprs{targetQT.Alias}
-		in.OwnedVindexQuery.Where = sqlparser.NewWhere(sqlparser.WhereClause, compExpr)
-	}
-	dm.Delete = in
-
-	return dm, Rewrote("Delete Multi on top of Delete and ApplyJoin")
+	return Swap(in, src, msg)
 }
 
 func pushLockAndComment(l *LockAndComment) (Operator, *ApplyResult) {
@@ -201,6 +139,20 @@ func pushLockAndComment(l *LockAndComment) (Operator, *ApplyResult) {
 		src.Comments = l.Comments
 		src.Lock = l.Lock
 		return src, Rewrote("put lock and comment into route")
+	case *SubQueryContainer:
+		src.Outer = &LockAndComment{
+			Source:   src.Outer,
+			Comments: l.Comments,
+			Lock:     l.Lock,
+		}
+		for _, sq := range src.Inner {
+			sq.Subquery = &LockAndComment{
+				Source:   sq.Subquery,
+				Comments: l.Comments,
+				Lock:     l.Lock,
+			}
+		}
+		return src, Rewrote("push lock and comment into subquery container")
 	default:
 		inputs := src.Inputs()
 		for i, op := range inputs {
@@ -257,280 +209,6 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 	return expandHorizon(ctx, in)
 }
 
-func tryPushProjection(
-	ctx *plancontext.PlanningContext,
-	p *Projection,
-) (Operator, *ApplyResult) {
-	switch src := p.Source.(type) {
-	case *Route:
-		return Swap(p, src, "push projection under route")
-	case *ApplyJoin:
-		if p.FromAggr || !p.canPush(ctx) {
-			return p, NoRewrite
-		}
-		return pushProjectionInApplyJoin(ctx, p, src)
-	case *HashJoin:
-		if !p.canPush(ctx) {
-			return p, NoRewrite
-		}
-		return pushProjectionThroughHashJoin(ctx, p, src)
-	case *Vindex:
-		if !p.canPush(ctx) {
-			return p, NoRewrite
-		}
-		return pushProjectionInVindex(ctx, p, src)
-	case *SubQueryContainer:
-		if !p.canPush(ctx) {
-			return p, NoRewrite
-		}
-		return pushProjectionToOuterContainer(ctx, p, src)
-	case *SubQuery:
-		return pushProjectionToOuter(ctx, p, src)
-	case *Limit:
-		return Swap(p, src, "push projection under limit")
-	default:
-		return p, NoRewrite
-	}
-}
-
-func pushProjectionThroughHashJoin(ctx *plancontext.PlanningContext, p *Projection, hj *HashJoin) (Operator, *ApplyResult) {
-	cols := p.Columns.(AliasedProjections)
-	for _, col := range cols {
-		if !col.isSameInAndOut(ctx) {
-			return p, NoRewrite
-		}
-		hj.columns.add(col.ColExpr)
-	}
-	return hj, Rewrote("merged projection into hash join")
-}
-
-func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *SubQuery) (Operator, *ApplyResult) {
-	ap, err := p.GetAliasedProjections()
-	if err != nil {
-		return p, NoRewrite
-	}
-
-	if !reachedPhase(ctx, subquerySettling) {
-		return p, NoRewrite
-	}
-
-	outer := TableID(sq.Outer)
-	for _, pe := range ap {
-		_, isOffset := pe.Info.(*Offset)
-		if isOffset {
-			continue
-		}
-
-		if !ctx.SemTable.RecursiveDeps(pe.EvalExpr).IsSolvedBy(outer) {
-			return p, NoRewrite
-		}
-
-		se, ok := pe.Info.(SubQueryExpression)
-		if ok {
-			pe.EvalExpr = rewriteColNameToArgument(ctx, pe.EvalExpr, se, sq)
-		}
-	}
-	// all projections can be pushed to the outer
-	sq.Outer, p.Source = p, sq.Outer
-	return sq, Rewrote("push projection into outer side of subquery")
-}
-
-func pushProjectionInVindex(
-	ctx *plancontext.PlanningContext,
-	p *Projection,
-	src *Vindex,
-) (Operator, *ApplyResult) {
-	ap, err := p.GetAliasedProjections()
-	if err != nil {
-		panic(err)
-	}
-	for _, pe := range ap {
-		src.AddColumn(ctx, true, false, aeWrap(pe.EvalExpr))
-	}
-	return src, Rewrote("push projection into vindex")
-}
-
-func (p *projector) add(pe *ProjExpr, col *sqlparser.IdentifierCI) {
-	p.columns = append(p.columns, pe)
-	if col != nil {
-		p.columnAliases = append(p.columnAliases, *col)
-	}
-}
-
-// pushProjectionInApplyJoin pushes down a projection operation into an ApplyJoin operation.
-// It processes each input column and creates new JoinPredicates for the ApplyJoin operation based on
-// the input column's expression. It also creates new Projection operators for the left and right
-// children of the ApplyJoin operation, if needed.
-func pushProjectionInApplyJoin(
-	ctx *plancontext.PlanningContext,
-	p *Projection,
-	src *ApplyJoin,
-) (Operator, *ApplyResult) {
-	ap, err := p.GetAliasedProjections()
-	if src.LeftJoin || err != nil {
-		// we can't push down expression evaluation to the rhs if we are not sure if it will even be executed
-		return p, NoRewrite
-	}
-	lhs, rhs := &projector{}, &projector{}
-	if p.DT != nil && len(p.DT.Columns) > 0 {
-		lhs.explicitColumnAliases = true
-		rhs.explicitColumnAliases = true
-	}
-
-	src.JoinColumns = &applyJoinColumns{}
-	for idx, pe := range ap {
-		var col *sqlparser.IdentifierCI
-		if p.DT != nil && idx < len(p.DT.Columns) {
-			col = &p.DT.Columns[idx]
-		}
-		splitProjectionAcrossJoin(ctx, src, lhs, rhs, pe, col)
-	}
-
-	if p.isDerived() {
-		exposeColumnsThroughDerivedTable(ctx, p, src, lhs)
-	}
-
-	// Create and update the Projection operators for the left and right children, if needed.
-	src.LHS = createProjectionWithTheseColumns(ctx, src.LHS, lhs, p.DT)
-	src.RHS = createProjectionWithTheseColumns(ctx, src.RHS, rhs, p.DT)
-
-	return src, Rewrote("split projection to either side of join")
-}
-
-// splitProjectionAcrossJoin creates JoinPredicates for all projections,
-// and pushes down columns as needed between the LHS and RHS of a join
-func splitProjectionAcrossJoin(
-	ctx *plancontext.PlanningContext,
-	join *ApplyJoin,
-	lhs, rhs *projector,
-	pe *ProjExpr,
-	colAlias *sqlparser.IdentifierCI,
-) {
-
-	// Check if the current expression can reuse an existing column in the ApplyJoin.
-	if _, found := canReuseColumn(ctx, join.JoinColumns.columns, pe.EvalExpr, joinColumnToExpr); found {
-		return
-	}
-
-	// Add the new applyJoinColumn to the ApplyJoin's JoinPredicates.
-	join.JoinColumns.add(splitUnexploredExpression(ctx, join, lhs, rhs, pe, colAlias))
-}
-
-func splitUnexploredExpression(
-	ctx *plancontext.PlanningContext,
-	join *ApplyJoin,
-	lhs, rhs *projector,
-	pe *ProjExpr,
-	colAlias *sqlparser.IdentifierCI,
-) applyJoinColumn {
-	// Get a applyJoinColumn for the current expression.
-	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
-
-	// Update the left and right child columns and names based on the applyJoinColumn type.
-	switch {
-	case col.IsPureLeft():
-		lhs.add(pe, colAlias)
-	case col.IsPureRight():
-		rhs.add(pe, colAlias)
-	case col.IsMixedLeftAndRight():
-		for _, lhsExpr := range col.LHSExprs {
-			var lhsAlias *sqlparser.IdentifierCI
-			if colAlias != nil {
-				// we need to add an explicit column alias here. let's try just the ColName as is first
-				ci := sqlparser.NewIdentifierCI(sqlparser.String(lhsExpr.Expr))
-				lhsAlias = &ci
-			}
-			lhs.add(newProjExpr(aeWrap(lhsExpr.Expr)), lhsAlias)
-		}
-		innerPE := newProjExprWithInner(pe.Original, col.RHSExpr)
-		innerPE.ColExpr = col.RHSExpr
-		innerPE.Info = pe.Info
-		rhs.add(innerPE, colAlias)
-	}
-	return col
-}
-
-// exposeColumnsThroughDerivedTable rewrites expressions within a join that is inside a derived table
-// in order to make them accessible outside the derived table. This is necessary when swapping the
-// positions of the derived table and join operation.
-//
-// For example, consider the input query:
-// select ... from (select T1.foo from T1 join T2 on T1.id = T2.id) as t
-// If we push the derived table under the join, with T1 on the LHS of the join, we need to expose
-// the values of T1.id through the derived table, or they will not be accessible on the RHS.
-//
-// The function iterates through each join predicate, rewriting the expressions in the predicate's
-// LHS expressions to include the derived table. This allows the expressions to be accessed outside
-// the derived table.
-func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Projection, src *ApplyJoin, lhs *projector) {
-	derivedTbl, err := ctx.SemTable.TableInfoFor(p.DT.TableID)
-	if err != nil {
-		panic(err)
-	}
-	derivedTblName, err := derivedTbl.Name()
-	if err != nil {
-		panic(err)
-	}
-	for _, predicate := range src.JoinPredicates.columns {
-		for idx, bve := range predicate.LHSExprs {
-			expr := bve.Expr
-			tbl, err := ctx.SemTable.TableInfoForExpr(expr)
-			if err != nil {
-				panic(err)
-			}
-			tblName, err := tbl.Name()
-			if err != nil {
-				panic(err)
-			}
-
-			expr = semantics.RewriteDerivedTableExpression(expr, derivedTbl)
-			out := prefixColNames(ctx, tblName, expr)
-
-			alias := sqlparser.UnescapedString(out)
-			predicate.LHSExprs[idx].Expr = sqlparser.NewColNameWithQualifier(alias, derivedTblName)
-			identifierCI := sqlparser.NewIdentifierCI(alias)
-			projExpr := newProjExprWithInner(&sqlparser.AliasedExpr{Expr: out, As: identifierCI}, out)
-			var colAlias *sqlparser.IdentifierCI
-			if lhs.explicitColumnAliases {
-				colAlias = &identifierCI
-			}
-			lhs.add(projExpr, colAlias)
-		}
-	}
-}
-
-// prefixColNames adds qualifier prefixes to all ColName:s.
-// We want to be more explicit than the user was to make sure we never produce invalid SQL
-func prefixColNames(ctx *plancontext.PlanningContext, tblName sqlparser.TableName, e sqlparser.Expr) sqlparser.Expr {
-	return sqlparser.CopyOnRewrite(e, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		col, ok := cursor.Node().(*sqlparser.ColName)
-		if !ok {
-			return
-		}
-		cursor.Replace(sqlparser.NewColNameWithQualifier(col.Name.String(), tblName))
-	}, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
-}
-
-func createProjectionWithTheseColumns(
-	ctx *plancontext.PlanningContext,
-	src Operator,
-	p *projector,
-	dt *DerivedTable,
-) Operator {
-	if len(p.columns) == 0 {
-		return src
-	}
-	proj := createProjection(ctx, src)
-	proj.Columns = AliasedProjections(p.columns)
-	if dt != nil {
-		kopy := *dt
-		kopy.Columns = p.columnAliases
-		proj.DT = &kopy
-	}
-
-	return proj
-}
-
 func tryPushLimit(in *Limit) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Route:
@@ -543,7 +221,7 @@ func tryPushLimit(in *Limit) (Operator, *ApplyResult) {
 }
 
 func tryPushingDownLimitInRoute(in *Limit, src *Route) (Operator, *ApplyResult) {
-	if src.IsSingleShard() {
+	if src.IsSingleShardOrByDestination() {
 		return Swap(in, src, "push limit under route")
 	}
 
@@ -571,7 +249,7 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 				Pushed: false,
 			}
 			op.Source = newSrc
-			result = result.Merge(Rewrote("push limit under route"))
+			result = result.Merge(Rewrote("push upper limit under route"))
 			return SkipChildren
 		default:
 			return VisitChildren

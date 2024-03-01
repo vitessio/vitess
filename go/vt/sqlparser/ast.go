@@ -53,16 +53,17 @@ type (
 		Commented
 	}
 
+	OrderAndLimit interface {
+		AddOrder(*Order)
+		SetLimit(*Limit)
+	}
+
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
 		Statement
 		InsertRows
+		OrderAndLimit
 		iSelectStatement()
-		AddOrder(*Order)
-		SetOrderBy(OrderBy)
-		GetOrderBy() OrderBy
-		GetLimit() *Limit
-		SetLimit(*Limit)
 		GetLock() Lock
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
@@ -72,6 +73,9 @@ type (
 		GetColumns() SelectExprs
 		Commented
 		IsDistinct() bool
+		GetOrderBy() OrderBy
+		SetOrderBy(OrderBy)
+		GetLimit() *Limit
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -352,7 +356,7 @@ type (
 		With       *With
 		Comments   *ParsedComments
 		Ignore     Ignore
-		TableExprs TableExprs
+		TableExprs []TableExpr
 		Exprs      UpdateExprs
 		Where      *Where
 		OrderBy    OrderBy
@@ -365,7 +369,7 @@ type (
 		With       *With
 		Ignore     Ignore
 		Comments   *ParsedComments
-		TableExprs TableExprs
+		TableExprs []TableExpr
 		Targets    TableNames
 		Partitions Partitions
 		Where      *Where
@@ -711,6 +715,10 @@ type (
 	// IndexType is the type of index in a DDL statement
 	IndexType int8
 )
+
+var _ OrderAndLimit = (*Select)(nil)
+var _ OrderAndLimit = (*Update)(nil)
+var _ OrderAndLimit = (*Delete)(nil)
 
 func (*Union) iStatement()               {}
 func (*Select) iStatement()              {}
@@ -1807,10 +1815,10 @@ type ColumnType struct {
 	Options *ColumnTypeOptions
 
 	// Numeric field options
-	Length   *Literal
+	Length   *int
 	Unsigned bool
 	Zerofill bool
-	Scale    *Literal
+	Scale    *int
 
 	// Text field options
 	Charset ColumnCharset
@@ -2398,7 +2406,7 @@ type (
 	FuncExpr struct {
 		Qualifier IdentifierCS
 		Name      IdentifierCI
-		Exprs     SelectExprs
+		Exprs     Exprs
 	}
 
 	// ValuesFuncExpr represents a function call.
@@ -3419,8 +3427,8 @@ func (ListArg) iColTuple()   {}
 // ConvertType represents the type in call to CONVERT(expr, type)
 type ConvertType struct {
 	Type    string
-	Length  *Literal
-	Scale   *Literal
+	Length  *int
+	Scale   *int
 	Charset ColumnCharset
 }
 

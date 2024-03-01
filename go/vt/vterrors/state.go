@@ -48,6 +48,7 @@ const (
 	WrongValue
 	WrongArguments
 	BadNullError
+	InvalidGroupFuncUse
 
 	// failed precondition
 	NoDB
@@ -59,6 +60,7 @@ const (
 	RowIsReferenced2
 	NoReferencedRow2
 	UnknownStmtHandler
+	KeyDoesNotExist
 
 	// not found
 	BadDb

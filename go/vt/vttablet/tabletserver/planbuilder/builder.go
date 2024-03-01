@@ -19,8 +19,8 @@ package planbuilder
 import (
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -28,7 +28,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table, collationEnv *collations.Environment, mysqlVersion string) (plan *Plan, err error) {
+func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
 		PlanID:    PlanSelect,
 		FullQuery: GenerateLimitQuery(sel),
@@ -50,9 +50,8 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table, colla
 		}
 		plan.PlanID = PlanNextval
 		v, err := evalengine.Translate(nextVal.Expr, &evalengine.Config{
-			CollationEnv: collationEnv,
-			Collation:    collationEnv.DefaultConnectionCharset(),
-			MySQLVersion: mysqlVersion,
+			Environment: env,
+			Collation:   env.CollationEnv().DefaultConnectionCharset(),
 		})
 		if err != nil {
 			return nil, err

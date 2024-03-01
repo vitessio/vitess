@@ -26,8 +26,12 @@ func (p *Parser) GetTruncateErrLen() int {
 func TruncateQuery(query string, max int) string {
 	sql, comments := SplitMarginComments(query)
 
-	if max == 0 || len(sql) <= max {
+	if max == 0 || len(sql) <= max || len(sql) < len(TruncationText) {
 		return comments.Leading + sql + comments.Trailing
+	}
+
+	if max < len(TruncationText)+1 {
+		max = len(TruncationText) + 1
 	}
 
 	return comments.Leading + sql[:max-(len(TruncationText)+1)] + " " + TruncationText + comments.Trailing

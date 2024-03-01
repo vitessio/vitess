@@ -26,11 +26,11 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -258,8 +258,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
-			collationEnv: collations.MySQL8(),
-			mysqlVersion: config.DefaultMySQLVersion,
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -290,8 +289,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0},
 				KeyRange:      nil,
 			}},
-			collationEnv: collations.MySQL8(),
-			mysqlVersion: config.DefaultMySQLVersion,
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -314,8 +312,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
-			collationEnv: collations.MySQL8(),
-			mysqlVersion: config.DefaultMySQLVersion,
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -338,8 +335,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 				},
 			}},
-			collationEnv: collations.MySQL8(),
-			mysqlVersion: config.DefaultMySQLVersion,
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -362,8 +358,7 @@ func TestPlanBuilder(t *testing.T) {
 					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 				},
 			}},
-			collationEnv: collations.MySQL8(),
-			mysqlVersion: config.DefaultMySQLVersion,
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -394,8 +389,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0},
 				KeyRange:      nil,
 			}},
-			collationEnv: collations.MySQL8(),
-			mysqlVersion: config.DefaultMySQLVersion,
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -426,8 +420,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0},
 				KeyRange:      nil,
 			}},
-			collationEnv: collations.MySQL8(),
-			mysqlVersion: config.DefaultMySQLVersion,
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -458,8 +451,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: nil,
 				KeyRange:      nil,
 			}},
-			collationEnv: collations.MySQL8(),
-			mysqlVersion: config.DefaultMySQLVersion,
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t2,
@@ -493,8 +485,7 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: []int{0, 1},
 				KeyRange:      nil,
 			}},
-			collationEnv: collations.MySQL8(),
-			mysqlVersion: config.DefaultMySQLVersion,
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -518,8 +509,7 @@ func TestPlanBuilder(t *testing.T) {
 				},
 			}},
 			convertUsingUTF8Columns: map[string]bool{"val": true},
-			collationEnv:            collations.MySQL8(),
-			mysqlVersion:            config.DefaultMySQLVersion,
+			env:                     vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: regional,
@@ -543,8 +533,7 @@ func TestPlanBuilder(t *testing.T) {
 				Vindex:        testLocalVSchema.vschema.Keyspaces["ks"].Vindexes["region_vdx"],
 				VindexColumns: []int{0, 1},
 			}},
-			collationEnv: collations.MySQL8(),
-			mysqlVersion: config.DefaultMySQLVersion,
+			env: vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t1,
@@ -604,10 +593,6 @@ func TestPlanBuilder(t *testing.T) {
 		outErr:  `unsupported: id`,
 	}, {
 		inTable: t1,
-		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(*, 'hash', '-80')"},
-		outErr:  `[BUG] unexpected: *sqlparser.StarExpr *`,
-	}, {
-		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(1, 'hash', '-80')"},
 		outErr:  `[BUG] unexpected: *sqlparser.Literal 1`,
 	}, {
@@ -644,20 +629,15 @@ func TestPlanBuilder(t *testing.T) {
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select t1.id, val from t1"},
 		outErr:  `unsupported qualifier for column: t1.id`,
 	}, {
-		// selString
-		inTable: t1,
-		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, *, '-80')"},
-		outErr:  `unsupported: *`,
-	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 1+1, '-80')"},
 		outErr:  `unsupported: 1 + 1`,
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.inRule.String(), func(t *testing.T) {
-			plan, err := buildPlan(tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
+			plan, err := buildPlan(vtenv.NewTestEnv(), tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{tcase.inRule},
-			}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+			})
 
 			if tcase.outErr != "" {
 				assert.Nil(t, plan)
@@ -752,9 +732,9 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			plan, err := buildPlan(t1, testLocalVSchema, &binlogdatapb.Filter{
+			plan, err := buildPlan(vtenv.NewTestEnv(), t1, testLocalVSchema, &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: tcase.inFilter}},
-			}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+			})
 
 			if tcase.outErr != "" {
 				assert.Nil(t, plan)

@@ -18,12 +18,14 @@ package tabletserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
@@ -614,13 +616,13 @@ func (*QueryExecutor) BeginAgain(ctx context.Context, dc *StatefulConnection) er
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
-	env := evalengine.NewExpressionEnv(qre.ctx, qre.bindVars, evalengine.NewEmptyVCursor(qre.tsv.collationEnv, time.Local, qre.tsv.mysqlVersion))
+	env := evalengine.NewExpressionEnv(qre.ctx, qre.bindVars, evalengine.NewEmptyVCursor(qre.tsv.Environment(), time.Local))
 	result, err := env.Evaluate(qre.plan.NextCount)
 	if err != nil {
 		return nil, err
 	}
 	tableName := qre.plan.TableName()
-	v := result.Value(qre.tsv.collationEnv.DefaultConnectionCharset())
+	v := result.Value(qre.tsv.env.CollationEnv().DefaultConnectionCharset())
 	inc, err := v.ToInt64()
 	if err != nil || inc < 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid increment for sequence %s: %s", tableName, v.String())
@@ -757,7 +759,7 @@ func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
-		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.SQLParser()))
+		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.env.Parser()))
 	}
 	return nil
 }
@@ -775,12 +777,13 @@ func (qre *QueryExecutor) getConn() (*connpool.PooledConn, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getConn")
 	defer span.Finish()
 
-	start := time.Now()
+	defer func(start time.Time) {
+		qre.logStats.WaitingForConnection += time.Since(start)
+	}(time.Now())
 	conn, err := qre.tsv.qe.conns.Get(ctx, qre.setting)
 
 	switch err {
 	case nil:
-		qre.logStats.WaitingForConnection += time.Since(start)
 		return conn, nil
 	case connpool.ErrConnPoolClosed:
 		return nil, err
@@ -792,11 +795,13 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getStreamConn")
 	defer span.Finish()
 
-	start := time.Now()
+	defer func(start time.Time) {
+		qre.logStats.WaitingForConnection += time.Since(start)
+	}(time.Now())
 	conn, err := qre.tsv.qe.streamConns.Get(ctx, qre.setting)
+
 	switch err {
 	case nil:
-		qre.logStats.WaitingForConnection += time.Since(start)
 		return conn, nil
 	case connpool.ErrConnPoolClosed:
 		return nil, err
@@ -878,6 +883,9 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	}
 
 	qr, err := qre.execDBConn(conn.Conn, sql, true)
+	if errors.Is(err, mysql.ErrExecuteFetchMultipleResults) {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+	}
 	if err != nil {
 		return nil, rewriteOUTParamError(err)
 	}
@@ -1109,7 +1117,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 
 	// Add query detail object into QueryExecutor TableServer list w.r.t if it is a transactional or not. Previously we were adding it
 	// to olapql list regardless but that resulted in problems, where long-running stream queries which can be stateful (or transactional)
-	// weren't getting cleaned up during unserveCommon>handleShutdownGracePeriod in state_manager.go.
+	// weren't getting cleaned up during unserveCommon>terminateAllQueries in state_manager.go.
 	// This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
 	// once their grace period is over.
 	qd := NewQueryDetail(qre.logStats.Ctx, conn.Conn)
@@ -1146,7 +1154,7 @@ func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType
 }
 
 func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query, err := eschema.GetFetchViewQuery(viewNames, qre.tsv.SQLParser())
+	query, err := eschema.GetFetchViewQuery(viewNames, qre.tsv.env.Parser())
 	if err != nil {
 		return err
 	}
@@ -1154,7 +1162,7 @@ func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(s
 }
 
 func (qre *QueryExecutor) getTableDefinitions(tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query, err := eschema.GetFetchTableQuery(tableNames, qre.tsv.SQLParser())
+	query, err := eschema.GetFetchTableQuery(tableNames, qre.tsv.env.Parser())
 	if err != nil {
 		return err
 	}
@@ -1162,7 +1170,7 @@ func (qre *QueryExecutor) getTableDefinitions(tableNames []string, callback func
 }
 
 func (qre *QueryExecutor) getAllDefinitions(tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query, err := eschema.GetFetchTableAndViewsQuery(tableNames, qre.tsv.SQLParser())
+	query, err := eschema.GetFetchTableAndViewsQuery(tableNames, qre.tsv.env.Parser())
 	if err != nil {
 		return err
 	}
@@ -1179,7 +1187,12 @@ func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(sche
 	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
 		schemaDef := make(map[string]string)
 		for _, row := range result.Rows {
-			schemaDef[row[0].ToString()] = row[1].ToString()
+			tableName := row[0].ToString()
+			// Schema RPC should ignore the internal table in the response.
+			if schema.IsInternalOperationTableName(tableName) {
+				continue
+			}
+			schemaDef[tableName] = row[1].ToString()
 		}
 		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
 	})

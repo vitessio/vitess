@@ -43,6 +43,7 @@ Available Commands:
   GetRoutingRules             Displays the VSchema routing rules.
   GetSchema                   Displays the full schema for a tablet, optionally restricted to the specified tables/views.
   GetShard                    Returns information about a shard in the topology.
+  GetShardReplication         Returns information about the replication relationships for a shard in the given cell(s).
   GetShardRoutingRules        Displays the currently active shard routing rules as a JSON document.
   GetSrvKeyspaceNames         Outputs a JSON mapping of cell=>keyspace names served in that cell. Omit to query all cells.
   GetSrvKeyspaces             Returns the SrvKeyspaces for the given keyspace in one or more cells.

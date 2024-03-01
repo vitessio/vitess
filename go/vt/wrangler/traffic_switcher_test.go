@@ -949,8 +949,10 @@ func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
 		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", &sqltypes.Result{}, nil)
+		tme.tmeDB.AddQuery("SET SESSION foreign_key_checks = OFF", &sqltypes.Result{})
 		tme.tmeDB.AddQuery(fmt.Sprintf("rename table `vt_ks1`.`t1` TO `vt_ks1`.`%s`", getRenameFileName("t1")), &sqltypes.Result{})
 		tme.tmeDB.AddQuery(fmt.Sprintf("rename table `vt_ks1`.`t2` TO `vt_ks1`.`%s`", getRenameFileName("t2")), &sqltypes.Result{})
+		tme.tmeDB.AddQuery("SET SESSION foreign_key_checks = ON", &sqltypes.Result{})
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", &sqltypes.Result{}, nil) //
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", &sqltypes.Result{}, nil)
 	}
@@ -1009,8 +1011,8 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 		"\tKeyspace ks1, Shard 0 at Position MariaDB/5-456-892",
 		"Wait for VReplication on stopped streams to catchup for up to 1s",
 		"Create reverse replication workflow test_reverse",
-		"Create journal entries on source databases",
 		"The following sequence backing tables used by tables being moved will be initialized: t1_seq,t2_seq",
+		"Create journal entries on source databases",
 		"Enable writes on keyspace ks2 tables [t1,t2]",
 		"Switch routing from keyspace ks1 to keyspace ks2",
 		"Routing rules for tables [t1,t2] will be updated",

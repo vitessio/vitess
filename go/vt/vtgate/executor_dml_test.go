@@ -3018,11 +3018,11 @@ func TestInsertReference(t *testing.T) {
 	require.NoError(t, err) // Gen4 planner can redirect the query to correct source for update when reference table is involved.
 }
 
-func TestDeleteMulti(t *testing.T) {
+func TestDeleteMultiTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 	executor.vschema.Keyspaces["TestExecutor"].Tables["user"].PrimaryKey = sqlparser.Columns{sqlparser.NewIdentifierCI("id")}
 
-	logChan := executor.queryLogger.Subscribe("TestDeleteMulti")
+	logChan := executor.queryLogger.Subscribe("TestDeleteMultiTable")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	session := &vtgatepb.Session{TargetString: "@primary"}
@@ -3031,7 +3031,7 @@ func TestDeleteMulti(t *testing.T) {
 
 	var dmlVals []*querypb.Value
 	for i := 0; i < 8; i++ {
-		dmlVals = append(dmlVals, sqltypes.TupleToProto([]sqltypes.Value{sqltypes.TestValue(sqltypes.Int32, "1")}))
+		dmlVals = append(dmlVals, sqltypes.ValueToProto(sqltypes.NewInt32(1)))
 	}
 
 	bq := &querypb.BoundQuery{
@@ -3041,14 +3041,14 @@ func TestDeleteMulti(t *testing.T) {
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
 		bq, bq, bq, bq, bq, bq, bq, bq,
-		{Sql: "select `user`.Id, `user`.`name` from `user` where (`user`.id) in ::dm_vals for update", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
-		{Sql: "delete from `user` where (`user`.id) in ::dm_vals", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}}}
+		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dml_vals for update", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}}}
 	assertQueries(t, sbc1, wantQueries)
 
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select `user`.id, `user`.col from `user`", BindVariables: map[string]*querypb.BindVariable{}},
-		{Sql: "select `user`.Id, `user`.`name` from `user` where (`user`.id) in ::dm_vals for update", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
-		{Sql: "delete from `user` where (`user`.id) in ::dm_vals", BindVariables: map[string]*querypb.BindVariable{"dm_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+		{Sql: "select `user`.Id, `user`.`name` from `user` where `user`.id in ::dml_vals for update", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
+		{Sql: "delete from `user` where `user`.id in ::dml_vals", BindVariables: map[string]*querypb.BindVariable{"dml_vals": {Type: querypb.Type_TUPLE, Values: dmlVals}}},
 	}
 	assertQueries(t, sbc2, wantQueries)
 
@@ -3067,7 +3067,7 @@ func TestDeleteMulti(t *testing.T) {
 	testQueryLog(t, executor, logChan, "VindexDelete", "DELETE", "delete from name_user_map where `name` = :name and user_id = :user_id", 1)
 	// select `user`.id, `user`.col from `user` - 8 shard
 	// select 1 from music where music.user_id = 1 and music.col = :user_col - 8 shards
-	// select Id, `name` from `user` where (`user`.id) in ::dm_vals for update - 1 shard
-	// delete from `user` where (`user`.id) in ::dm_vals - 1 shard
+	// select Id, `name` from `user` where (`user`.id) in ::dml_vals for update - 1 shard
+	// delete from `user` where (`user`.id) in ::dml_vals - 1 shard
 	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete `user` from `user` join music on `user`.col = music.col where music.user_id = 1", 18)
 }

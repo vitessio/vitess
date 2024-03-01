@@ -31,10 +31,11 @@ var _ Primitive = (*Projection)(nil)
 
 // Projection can evaluate expressions and project the results
 type Projection struct {
+	noTxNeeded
+
 	Cols  []string
 	Exprs []evalengine.Expr
 	Input Primitive
-	noTxNeeded
 }
 
 // RouteType implements the Primitive interface
@@ -157,10 +158,12 @@ func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*query
 			fl |= uint32(querypb.MySqlFlag_NOT_NULL_FLAG)
 		}
 		fields = append(fields, &querypb.Field{
-			Name:    col,
-			Type:    typ.Type(),
-			Charset: uint32(typ.Collation()),
-			Flags:   fl,
+			Name:         col,
+			Type:         typ.Type(),
+			Charset:      uint32(typ.Collation()),
+			ColumnLength: uint32(typ.Size()),
+			Decimals:     uint32(typ.Scale()),
+			Flags:        fl,
 		})
 	}
 	return fields, nil

@@ -21,9 +21,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // columnDetails decorates a column with more details, used by diffing logic
@@ -99,19 +96,21 @@ func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionE
 // We need to denormalize the column's charset/collate properties, so that the comparison can be done.
 func (c *ColumnDefinitionEntity) ColumnDiff(
 	env *Environment,
+	tableName string,
 	other *ColumnDefinitionEntity,
 	t1cc *charsetCollate,
 	t2cc *charsetCollate,
+	hints *DiffHints,
 ) (*ModifyColumnDiff, error) {
 	if c.IsTextual() || other.IsTextual() {
 		// We will now denormalize the columns charset & collate as needed (if empty, populate from table.)
 
 		if c.columnDefinition.Type.Charset.Name == "" && c.columnDefinition.Type.Options.Collate != "" {
 			// Column has explicit collation but no charset. We can infer the charset from the collation.
-			collationID := env.CollationEnv.LookupByName(c.columnDefinition.Type.Options.Collate)
-			charset := env.CollationEnv.LookupCharsetName(collationID)
+			collationID := env.CollationEnv().LookupByName(c.columnDefinition.Type.Options.Collate)
+			charset := env.CollationEnv().LookupCharsetName(collationID)
 			if charset == "" {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot match charset to collation %v", c.columnDefinition.Type.Options.Collate)
+				return nil, &UnknownColumnCollationCharsetError{Column: c.columnDefinition.Name.String(), Collation: c.columnDefinition.Type.Options.Collate}
 			}
 			defer func() {
 				c.columnDefinition.Type.Charset.Name = ""
@@ -131,19 +130,19 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 				c.columnDefinition.Type.Options.Collate = t1cc.collate
 			}
 			if c.columnDefinition.Type.Options.Collate = t1cc.collate; c.columnDefinition.Type.Options.Collate == "" {
-				collation := env.CollationEnv.DefaultCollationForCharset(t1cc.charset)
+				collation := env.CollationEnv().DefaultCollationForCharset(t1cc.charset)
 				if collation == collations.Unknown {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot match collation to charset %v", t1cc.charset)
+					return nil, &UnknownColumnCharsetCollationError{Column: c.columnDefinition.Name.String(), Charset: t1cc.charset}
 				}
-				c.columnDefinition.Type.Options.Collate = env.CollationEnv.LookupName(collation)
+				c.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
 			}
 		}
 		if other.columnDefinition.Type.Charset.Name == "" && other.columnDefinition.Type.Options.Collate != "" {
 			// Column has explicit collation but no charset. We can infer the charset from the collation.
-			collationID := env.CollationEnv.LookupByName(other.columnDefinition.Type.Options.Collate)
-			charset := env.CollationEnv.LookupCharsetName(collationID)
+			collationID := env.CollationEnv().LookupByName(other.columnDefinition.Type.Options.Collate)
+			charset := env.CollationEnv().LookupCharsetName(collationID)
 			if charset == "" {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot match charset to collation %v", other.columnDefinition.Type.Options.Collate)
+				return nil, &UnknownColumnCollationCharsetError{Column: other.columnDefinition.Name.String(), Collation: other.columnDefinition.Type.Options.Collate}
 			}
 			defer func() {
 				other.columnDefinition.Type.Charset.Name = ""
@@ -158,11 +157,11 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 			}()
 			other.columnDefinition.Type.Charset.Name = t2cc.charset
 			if other.columnDefinition.Type.Options.Collate = t2cc.collate; other.columnDefinition.Type.Options.Collate == "" {
-				collation := env.CollationEnv.DefaultCollationForCharset(t2cc.charset)
+				collation := env.CollationEnv().DefaultCollationForCharset(t2cc.charset)
 				if collation == collations.Unknown {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot match collation to charset %v", t2cc.charset)
+					return nil, &UnknownColumnCharsetCollationError{Column: other.columnDefinition.Name.String(), Charset: t2cc.charset}
 				}
-				other.columnDefinition.Type.Options.Collate = env.CollationEnv.LookupName(collation)
+				other.columnDefinition.Type.Options.Collate = env.CollationEnv().LookupName(collation)
 			}
 		}
 	}
@@ -171,6 +170,24 @@ func (c *ColumnDefinitionEntity) ColumnDiff(
 		return nil, nil
 	}
 
+	getEnumValuesMap := func(enumValues []string) map[string]int {
+		m := make(map[string]int, len(enumValues))
+		for i, enumValue := range enumValues {
+			m[enumValue] = i
+		}
+		return m
+	}
+	switch hints.EnumReorderStrategy {
+	case EnumReorderStrategyReject:
+		otherEnumValuesMap := getEnumValuesMap(other.columnDefinition.Type.EnumValues)
+		for ordinal, enumValue := range c.columnDefinition.Type.EnumValues {
+			if otherOrdinal, ok := otherEnumValuesMap[enumValue]; ok {
+				if ordinal != otherOrdinal {
+					return nil, &EnumValueOrdinalChangedError{Table: tableName, Column: c.columnDefinition.Name.String(), Value: enumValue, Ordinal: ordinal, NewOrdinal: otherOrdinal}
+				}
+			}
+		}
+	}
 	return NewModifyColumnDiffByDefinition(other.columnDefinition), nil
 }
 

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -35,21 +34,16 @@ import (
 
 type (
 	Update struct {
-		QTable              *QueryTable
-		VTable              *vindexes.Table
+		*DMLCommon
+
 		Assignments         []SetExpr
 		ChangedVindexValues map[string]*engine.VindexValues
-		OwnedVindexQuery    string
-		Ignore              sqlparser.Ignore
-		OrderBy             sqlparser.OrderBy
-		Limit               *sqlparser.Limit
 
 		// these subqueries cannot be merged as they are part of the changed vindex values
 		// these values are needed to be sent over to lookup vindex for update.
 		// On merging this information will be lost, so subquery merge is blocked.
 		SubQueriesArgOnChangedVindex []string
 
-		noInputs
 		noColumns
 		noPredicates
 	}
@@ -60,20 +54,30 @@ type (
 	}
 )
 
+func (u *Update) Inputs() []Operator {
+	if u.Source == nil {
+		return nil
+	}
+	return []Operator{u.Source}
+}
+
+func (u *Update) SetInputs(inputs []Operator) {
+	if len(inputs) != 1 {
+		panic(vterrors.VT13001("unexpected number of inputs for Update operator"))
+	}
+	u.Source = inputs[0]
+}
+
 func (se SetExpr) String() string {
 	return fmt.Sprintf("%s = %s", sqlparser.String(se.Name), sqlparser.String(se.Expr.EvalExpr))
 }
 
-// Introduces implements the PhysicalOperator interface
-func (u *Update) introducesTableID() semantics.TableSet {
-	return u.QTable.ID
-}
-
 // Clone implements the Operator interface
-func (u *Update) Clone([]Operator) Operator {
+func (u *Update) Clone(inputs []Operator) Operator {
 	upd := *u
 	upd.Assignments = slices.Clone(u.Assignments)
 	upd.ChangedVindexValues = maps.Clone(u.ChangedVindexValues)
+	upd.SetInputs(inputs)
 	return &upd
 }
 
@@ -82,35 +86,31 @@ func (u *Update) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 }
 
 func (u *Update) TablesUsed() []string {
-	if u.VTable != nil {
-		return SingleQualifiedIdentifier(u.VTable.Keyspace, u.VTable.Name)
-	}
-	return nil
+	return SingleQualifiedIdentifier(u.Target.VTable.Keyspace, u.Target.VTable.Name)
 }
 
 func (u *Update) ShortDescription() string {
-	s := []string{u.VTable.String()}
-	if u.Limit != nil {
-		s = append(s, sqlparser.String(u.Limit))
-	}
-	if len(u.OrderBy) > 0 {
-		s = append(s, sqlparser.String(u.OrderBy))
-	}
-	return strings.Join(s, " ")
+	return shortDesc(u.Target, u.OwnedVindexQuery)
 }
 
-func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) Operator {
-	tableInfo, qt := createQueryTableForDML(ctx, updStmt.TableExprs[0], updStmt.Where)
+func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (op Operator) {
+	errIfUpdateNotSupported(ctx, updStmt)
 
-	vindexTable, routing := buildVindexTableForDML(ctx, tableInfo, qt, "update")
+	var updClone *sqlparser.Update
+	var vTbl *vindexes.Table
 
-	updClone := sqlparser.CloneRefOfUpdate(updStmt)
-	updOp := createUpdateOperator(ctx, updStmt, vindexTable, qt, routing)
+	op, vTbl, updClone = createUpdateOperator(ctx, updStmt)
+
+	op = &LockAndComment{
+		Source:   op,
+		Comments: updStmt.Comments,
+		Lock:     sqlparser.ShareModeLock,
+	}
 
 	parentFks := ctx.SemTable.GetParentForeignKeysList()
 	childFks := ctx.SemTable.GetChildForeignKeysList()
 	if len(childFks) == 0 && len(parentFks) == 0 {
-		return updOp
+		return op
 	}
 
 	// If the delete statement has a limit, we don't support it yet.
@@ -124,16 +124,57 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		panic(err)
 	}
 
-	return buildFkOperator(ctx, updOp, updClone, parentFks, childFks, vindexTable)
+	return buildFkOperator(ctx, op, updClone, parentFks, childFks, vTbl)
 }
 
-func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, vindexTable *vindexes.Table, qt *QueryTable, routing Routing) Operator {
+func errIfUpdateNotSupported(ctx *plancontext.PlanningContext, stmt *sqlparser.Update) {
+	var vTbl *vindexes.Table
+	for _, ue := range stmt.Exprs {
+		tblInfo, err := ctx.SemTable.TableInfoForExpr(ue.Name)
+		if err != nil {
+			panic(err)
+		}
+		if _, isATable := tblInfo.(*semantics.RealTable); !isATable {
+			var tblName string
+			ate := tblInfo.GetAliasedTableExpr()
+			if ate != nil {
+				tblName = sqlparser.String(ate)
+			}
+			panic(vterrors.VT03032(tblName))
+		}
+
+		if vTbl == nil {
+			vTbl = tblInfo.GetVindexTable()
+		}
+		if vTbl != tblInfo.GetVindexTable() {
+			panic(vterrors.VT12001("multi-table UPDATE statement with multi-target column update"))
+		}
+	}
+}
+
+func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (Operator, *vindexes.Table, *sqlparser.Update) {
+	op := crossJoin(ctx, updStmt.TableExprs)
+
 	sqc := &SubQueryBuilder{}
+	if updStmt.Where != nil {
+		op = addWherePredsToSubQueryBuilder(ctx, updStmt.Where.Expr, op, sqc)
+	}
+
+	outerID := TableID(op)
 	assignments := make([]SetExpr, len(updStmt.Exprs))
+	// updClone is used in foreign key planning to create the selection statements to be used for verification and selection.
+	// If we encounter subqueries, we want to fix the updClone to use the replaced expression, so that the pulled out subquery's
+	// result is used everywhere instead of running the subquery multiple times, which is wasteful.
+	updClone := sqlparser.CloneRefOfUpdate(updStmt)
+	var tblInfo semantics.TableInfo
+	var err error
 	for idx, updExpr := range updStmt.Exprs {
-		expr, subqs := sqc.pullOutValueSubqueries(ctx, updExpr.Expr, qt.ID, true)
+		expr, subqs := sqc.pullOutValueSubqueries(ctx, updExpr.Expr, outerID, true)
 		if len(subqs) == 0 {
 			expr = updExpr.Expr
+		} else {
+			updClone.Exprs[idx].Expr = sqlparser.CloneExpr(expr)
+			ctx.SemTable.UpdateChildFKExpr(updExpr, expr)
 		}
 		proj := newProjExpr(aeWrap(expr))
 		if len(subqs) != 0 {
@@ -143,59 +184,98 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 			Name: updExpr.Name,
 			Expr: proj,
 		}
-	}
-
-	vp, cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, vindexTable, qt.ID, assignments)
-
-	tr, ok := routing.(*ShardedRouting)
-	if ok {
-		tr.VindexPreds = vp
-	}
-
-	for _, predicate := range qt.Predicates {
-		if subq := sqc.handleSubquery(ctx, predicate, qt.ID); subq != nil {
-			continue
+		tblInfo, err = ctx.SemTable.TableInfoForExpr(updExpr.Name)
+		if err != nil {
+			panic(err)
 		}
-		routing = UpdateRoutingLogic(ctx, predicate, routing)
 	}
 
-	if routing.OpCode() == engine.Scatter && updStmt.Limit != nil {
-		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		panic(vterrors.VT12001("multi shard UPDATE with LIMIT"))
+	tblID := ctx.SemTable.TableSetFor(tblInfo.GetAliasedTableExpr())
+	vTbl := tblInfo.GetVindexTable()
+	// Reference table should update the source table.
+	if vTbl.Type == vindexes.TypeReference && vTbl.Source != nil {
+		vTbl = updateQueryGraphWithSource(ctx, op, tblID, vTbl)
 	}
 
-	route := &Route{
-		Source: &Update{
-			QTable:                       qt,
-			VTable:                       vindexTable,
-			Assignments:                  assignments,
-			ChangedVindexValues:          cvv,
-			OwnedVindexQuery:             ovq,
-			Ignore:                       updStmt.Ignore,
-			Limit:                        updStmt.Limit,
-			OrderBy:                      updStmt.OrderBy,
-			SubQueriesArgOnChangedVindex: subQueriesArgOnChangedVindex,
+	name, err := tblInfo.Name()
+	if err != nil {
+		panic(err)
+	}
+
+	targetTbl := TargetTable{
+		ID:     tblID,
+		VTable: vTbl,
+		Name:   name,
+	}
+
+	_, cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, targetTbl, assignments)
+
+	updOp := &Update{
+		DMLCommon: &DMLCommon{
+			Ignore:           updStmt.Ignore,
+			Target:           targetTbl,
+			OwnedVindexQuery: ovq,
+			Source:           op,
 		},
-		Routing:  routing,
-		Comments: updStmt.Comments,
+		Assignments:                  assignments,
+		ChangedVindexValues:          cvv,
+		SubQueriesArgOnChangedVindex: subQueriesArgOnChangedVindex,
 	}
 
-	decorator := func(op Operator) Operator {
-		return &LockAndComment{
-			Source: op,
-			Lock:   sqlparser.ShareModeLock,
+	if len(updStmt.OrderBy) > 0 {
+		addOrdering(ctx, updStmt.OrderBy, updOp)
+	}
+
+	if updStmt.Limit != nil {
+		updOp.Source = &Limit{
+			Source: updOp.Source,
+			AST:    updStmt.Limit,
 		}
 	}
 
-	return sqc.getRootOperator(route, decorator)
+	return sqc.getRootOperator(updOp, nil), vTbl, updClone
+}
+
+func getUpdateVindexInformation(
+	ctx *plancontext.PlanningContext,
+	updStmt *sqlparser.Update,
+	table TargetTable,
+	assignments []SetExpr,
+) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, *sqlparser.Select, []string) {
+	if !table.VTable.Keyspace.Sharded {
+		return nil, nil, nil, nil
+	}
+
+	primaryVindex, vindexAndPredicates := getVindexInformation(table.ID, table.VTable)
+	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex := buildChangedVindexesValues(ctx, updStmt, table.VTable, primaryVindex.Columns, assignments)
+	return vindexAndPredicates, changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex
 }
 
 func buildFkOperator(ctx *plancontext.PlanningContext, updOp Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) Operator {
+	// If there is a subquery container above update operator, we want to do the foreign key planning inside it,
+	// because we want the Inner of the subquery to execute first and its result be used for the entire foreign key update planning.
+	foundSubqc := false
+	TopDown(updOp, TableID, func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		if op, isSubqc := in.(*SubQueryContainer); isSubqc {
+			foundSubqc = true
+			op.Outer = buildFkOperator(ctx, op.Outer, updClone, parentFks, childFks, updatedTable)
+		}
+		return in, NoRewrite
+	}, stopAtUpdateOp)
+	if foundSubqc {
+		return updOp
+	}
+
 	restrictChildFks, cascadeChildFks := splitChildFks(childFks)
 
 	op := createFKCascadeOp(ctx, updOp, updClone, cascadeChildFks, updatedTable)
 
 	return createFKVerifyOp(ctx, op, updClone, parentFks, restrictChildFks, updatedTable)
+}
+
+func stopAtUpdateOp(operator Operator) VisitRule {
+	_, isUpdate := operator.(*Update)
+	return VisitRule(!isUpdate)
 }
 
 // splitChildFks splits the child foreign keys into restrict and cascade list as restrict is handled through Verify operator and cascade is handled through Cascade operator.
@@ -233,7 +313,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updS
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
 		var selectOffsets []int
-		selectOffsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs)
+		selectOffsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs, updatedTable.GetTableName())
 
 		// If we are updating a foreign key column to a non-literal value then, need information about
 		// 1. whether the new value is different from the old value
@@ -276,11 +356,11 @@ func hasNonLiteralUpdate(exprs sqlparser.UpdateExprs) bool {
 
 // addColumns adds the given set of columns to the select expressions provided. It tries to reuse the columns if already present in it.
 // It returns the list of offsets for the columns and the updated select expressions.
-func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exprs []sqlparser.SelectExpr) ([]int, []sqlparser.SelectExpr) {
+func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exprs []sqlparser.SelectExpr, tableName sqlparser.TableName) ([]int, []sqlparser.SelectExpr) {
 	var offsets []int
 	selectExprs := exprs
 	for _, column := range columns {
-		ae := aeWrap(sqlparser.NewColName(column.String()))
+		ae := aeWrap(sqlparser.NewColNameWithQualifier(column.String(), tableName))
 		exists := false
 		for idx, expr := range exprs {
 			if ctx.SemTable.EqualsExpr(expr.(*sqlparser.AliasedExpr).Expr, ae.Expr) {

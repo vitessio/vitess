@@ -31,6 +31,7 @@ type RealTable struct {
 	dbName, tableName string
 	ASTNode           *sqlparser.AliasedTableExpr
 	Table             *vindexes.Table
+	VindexHint        *sqlparser.IndexHint
 	isInfSchema       bool
 	collationEnv      *collations.Environment
 }
@@ -102,6 +103,11 @@ func (r *RealTable) GetVindexTable() *vindexes.Table {
 	return r.Table
 }
 
+// GetVindexHint implements the TableInfo interface
+func (r *RealTable) GetVindexHint() *sqlparser.IndexHint {
+	return r.VindexHint
+}
+
 // Name implements the TableInfo interface
 func (r *RealTable) Name() (sqlparser.TableName, error) {
 	return r.ASTNode.TableName()
@@ -124,7 +130,6 @@ func vindexTableToColumnInfo(tbl *vindexes.Table, collationEnv *collations.Envir
 	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
-
 		cols = append(cols, ColumnInfo{
 			Name:      col.Name.String(),
 			Type:      col.ToEvalengineType(collationEnv),

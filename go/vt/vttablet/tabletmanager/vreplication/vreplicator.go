@@ -330,8 +330,8 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	req := &tabletmanagerdatapb.GetSchemaRequest{
 		Tables: []string{"/.*/"},
 		ExcludeTables: []string{
+			"/" + schema.OldGCTableNameExpression + "/",
 			"/" + schema.GCTableNameExpression + "/",
-			"/" + schema.NewGCTableNameExpression + "/",
 		},
 	}
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
@@ -580,10 +580,21 @@ func (vr *vreplicator) throttlerAppName() string {
 	return throttlerapp.Concatenate(names...)
 }
 
+// updateTimeThrottled updates the time_throttled field in the _vt.vreplication record
+// with a rate limit so that it's only saved in the database at most once per
+// throttleUpdatesRateLimiter.tickerTime.
+// It also increments the throttled count in the stats to keep track of how many
+// times a VReplication workflow, and the specific sub-component, is throttled by the
+// tablet throttler over time. It also increments the global throttled count to keep
+// track of how many times in total vreplication has been throttled across all workflows
+// (both ones that currently exist and ones that no longer do).
 func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {
+	appName := appThrottled.String()
+	vr.stats.ThrottledCounts.Add([]string{"tablet", appName}, 1)
+	globalStats.ThrottledCount.Add(1)
 	err := vr.throttleUpdatesRateLimiter.Do(func() error {
 		tm := time.Now().Unix()
-		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appThrottled.String())
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appName)
 		if err != nil {
 			return err
 		}
@@ -736,7 +747,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	}
 	tableSchema := schema.TableDefinitions[0].Schema
 	var secondaryKeys []*sqlparser.IndexDefinition
-	parsedDDL, err := vr.vre.parser.ParseStrictDDL(tableSchema)
+	parsedDDL, err := vr.vre.env.Parser().ParseStrictDDL(tableSchema)
 	if err != nil {
 		return secondaryKeys, err
 	}
@@ -983,7 +994,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 				// the table schema and if so move forward and delete the
 				// post_copy_action record.
 				if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERDupKeyName {
-					stmt, err := vr.vre.parser.ParseStrictDDL(action.Task)
+					stmt, err := vr.vre.env.Parser().ParseStrictDDL(action.Task)
 					if err != nil {
 						return failedAlterErr
 					}

@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -66,6 +67,7 @@ func TestOffsetPlanning(t *testing.T) {
 		VSchema: &vschemawrapper.VSchemaWrapper{
 			V:             &vindexes.VSchema{},
 			SysVarEnabled: true,
+			Env:           vtenv.NewTestEnv(),
 		},
 	}
 	lid := semantics.SingleTableSet(0)

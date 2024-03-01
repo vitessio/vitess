@@ -279,7 +279,7 @@ func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (
 
 // parseQuery parses the input query
 func (vx *vexec) parseQuery() (err error) {
-	if vx.stmt, err = vx.wr.parser.Parse(vx.query); err != nil {
+	if vx.stmt, err = vx.wr.SQLParser().Parse(vx.query); err != nil {
 		return err
 	}
 	if vx.tableName, err = extractTableName(vx.stmt); err != nil {
@@ -857,7 +857,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 		where = " where state <> 'Stopped'"
 	}
 	query := "select distinct workflow from _vt.vreplication" + where
-	vx := vtctldvexec.NewVExec(keyspace, "", wr.ts, wr.tmc, wr.parser)
+	vx := vtctldvexec.NewVExec(keyspace, "", wr.ts, wr.tmc, wr.SQLParser())
 	results, err := vx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -880,8 +880,9 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 }
 
 // ShowWorkflow will return all of the relevant replication related information for the given workflow.
-func (wr *Wrangler) ShowWorkflow(ctx context.Context, workflow, keyspace string, shards []string) (*ReplicationStatusResult, error) {
-	replStatus, err := wr.getStreams(ctx, workflow, keyspace, shards)
+// If shardSubset is nil, then all shards will be queried.
+func (wr *Wrangler) ShowWorkflow(ctx context.Context, workflow, keyspace string, shardSubset []string) (*ReplicationStatusResult, error) {
+	replStatus, err := wr.getStreams(ctx, workflow, keyspace, shardSubset)
 	if err != nil {
 		return nil, err
 	}

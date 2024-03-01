@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -34,8 +35,7 @@ type compiler struct {
 	dynamicTypes []ctype
 	asm          assembler
 	sqlmode      SQLMode
-	collationEnv *collations.Environment
-	mysqlVersion string
+	env          *vtenv.Environment
 }
 
 type CompilerLog interface {
@@ -327,6 +327,15 @@ func (c *compiler) compileNullCheck3(arg1, arg2, arg3 ctype) *jump {
 	return nil
 }
 
+func (c *compiler) compileNullCheck4(arg1, arg2, arg3, arg4 ctype) *jump {
+	if arg1.nullable() || arg2.nullable() || arg3.nullable() || arg4.nullable() {
+		j := c.asm.jumpFrom()
+		c.asm.NullCheck4(j)
+		return j
+	}
+	return nil
+}
+
 func (c *compiler) compileNullCheckArg(ct ctype, offset int) *jump {
 	if ct.nullable() {
 		j := c.asm.jumpFrom()
@@ -421,7 +430,7 @@ func (c *compiler) compareNumericTypes(lt ctype, rt ctype) (swapped bool) {
 }
 
 func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
-	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type, c.collationEnv)
+	merged, coerceLeft, coerceRight, err := mergeCollations(lt.Col, rt.Col, lt.Type, rt.Type, c.env.CollationEnv())
 	if err != nil {
 		return err
 	}
@@ -525,7 +534,7 @@ func (c *compiler) compileToJSONKey(key ctype) error {
 	if key.Type == sqltypes.VarBinary {
 		return nil
 	}
-	c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, 0, false)
+	c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
 	return nil
 }
 

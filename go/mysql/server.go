@@ -38,7 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -133,7 +133,7 @@ type Handler interface {
 
 	ComResetConnection(c *Conn)
 
-	SQLParser() *sqlparser.Parser
+	Env() *vtenv.Environment
 }
 
 // UnimplementedHandler implemnts all of the optional callbacks so as to satisy
@@ -233,9 +233,6 @@ func NewFromListener(
 	connBufferPooling bool,
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
-	mysqlServerVersion string,
-	truncateErrLen int,
-
 ) (*Listener, error) {
 	cfg := ListenerConfig{
 		Listener:            l,
@@ -247,8 +244,6 @@ func NewFromListener(
 		ConnBufferPooling:   connBufferPooling,
 		ConnKeepAlivePeriod: keepAlivePeriod,
 		FlushDelay:          flushDelay,
-		MySQLServerVersion:  mysqlServerVersion,
-		TruncateErrLen:      truncateErrLen,
 	}
 	return NewListenerWithConfig(cfg)
 }
@@ -264,8 +259,6 @@ func NewListener(
 	connBufferPooling bool,
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
-	mysqlServerVersion string,
-	truncateErrLen int,
 ) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
@@ -273,10 +266,10 @@ func NewListener(
 	}
 	if proxyProtocol {
 		proxyListener := &proxyproto.Listener{Listener: listener}
-		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay, mysqlServerVersion, truncateErrLen)
+		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay)
 	}
 
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay, mysqlServerVersion, truncateErrLen)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
@@ -293,8 +286,6 @@ type ListenerConfig struct {
 	ConnBufferPooling   bool
 	ConnKeepAlivePeriod time.Duration
 	FlushDelay          time.Duration
-	MySQLServerVersion  string
-	TruncateErrLen      int
 }
 
 // NewListenerWithConfig creates new listener using provided config. There are
@@ -315,7 +306,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		authServer:          cfg.AuthServer,
 		handler:             cfg.Handler,
 		listener:            l,
-		ServerVersion:       cfg.MySQLServerVersion,
+		ServerVersion:       cfg.Handler.Env().MySQLVersion(),
 		connectionID:        1,
 		connReadTimeout:     cfg.ConnReadTimeout,
 		connWriteTimeout:    cfg.ConnWriteTimeout,
@@ -323,7 +314,8 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connBufferPooling:   cfg.ConnBufferPooling,
 		connKeepAlivePeriod: cfg.ConnKeepAlivePeriod,
 		flushDelay:          cfg.FlushDelay,
-		truncateErrLen:      cfg.TruncateErrLen,
+		truncateErrLen:      cfg.Handler.Env().TruncateErrLen(),
+		charset:             cfg.Handler.Env().CollationEnv().DefaultConnectionCharset(),
 	}, nil
 }
 

@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -39,6 +40,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
 )
@@ -204,7 +206,7 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 var seenGoldenTests []GoldenTest
 
 type vcursor struct {
-	mysqlVersion string
+	env *vtenv.Environment
 }
 
 func (vc *vcursor) GetKeyspace() string {
@@ -219,12 +221,8 @@ func (vc *vcursor) SQLMode() string {
 	return config.DefaultSQLMode
 }
 
-func (vc *vcursor) CollationEnv() *collations.Environment {
-	return collations.MySQL8()
-}
-
-func (vc *vcursor) MySQLVersion() string {
-	return vc.mysqlVersion
+func (vc *vcursor) Environment() *vtenv.Environment {
+	return vc.env
 }
 
 func initTimezoneData(t *testing.T, conn *mysql.Conn) {
@@ -263,12 +261,16 @@ func TestMySQL(t *testing.T) {
 	servenv.OnParse(registerFlags)
 	initTimezoneData(t, conn)
 
+	venv, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: conn.ServerVersion,
+	})
+	require.NoError(t, err)
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			ctx := callerid.NewContext(context.Background(), &vtrpc.CallerID{Principal: "testuser"}, &querypb.VTGateCallerID{
 				Username: "vt_dba",
 			})
-			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{mysqlVersion: conn.ServerVersion})
+			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{env: venv})
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
 				compareRemoteExprEnv(t, collationEnv, env, conn, query, tc.Schema, tc.Compare)

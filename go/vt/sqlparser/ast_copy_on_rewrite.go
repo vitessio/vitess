@@ -1445,18 +1445,6 @@ func (c *cow) copyOnRewriteRefOfColumnType(n *ColumnType, parent SQLNode) (out S
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Length, changedLength := c.copyOnRewriteRefOfLiteral(n.Length, n)
-		_Scale, changedScale := c.copyOnRewriteRefOfLiteral(n.Scale, n)
-		if changedLength || changedScale {
-			res := *n
-			res.Length, _ = _Length.(*Literal)
-			res.Scale, _ = _Scale.(*Literal)
-			out = &res
-			if c.cloned != nil {
-				c.cloned(n, out)
-			}
-			changed = true
-		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -1616,18 +1604,6 @@ func (c *cow) copyOnRewriteRefOfConvertType(n *ConvertType, parent SQLNode) (out
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Length, changedLength := c.copyOnRewriteRefOfLiteral(n.Length, n)
-		_Scale, changedScale := c.copyOnRewriteRefOfLiteral(n.Scale, n)
-		if changedLength || changedScale {
-			res := *n
-			res.Length, _ = _Length.(*Literal)
-			res.Scale, _ = _Scale.(*Literal)
-			out = &res
-			if c.cloned != nil {
-				c.cloned(n, out)
-			}
-			changed = true
-		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -1850,7 +1826,15 @@ func (c *cow) copyOnRewriteRefOfDelete(n *Delete, parent SQLNode) (out SQLNode, 
 	if c.pre == nil || c.pre(n, parent) {
 		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		_TableExprs, changedTableExprs := c.copyOnRewriteTableExprs(n.TableExprs, n)
+		var changedTableExprs bool
+		_TableExprs := make([]TableExpr, len(n.TableExprs))
+		for x, el := range n.TableExprs {
+			this, changed := c.copyOnRewriteTableExpr(el, n)
+			_TableExprs[x] = this.(TableExpr)
+			if changed {
+				changedTableExprs = true
+			}
+		}
 		_Targets, changedTargets := c.copyOnRewriteTableNames(n.Targets, n)
 		_Partitions, changedPartitions := c.copyOnRewritePartitions(n.Partitions, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
@@ -1860,7 +1844,7 @@ func (c *cow) copyOnRewriteRefOfDelete(n *Delete, parent SQLNode) (out SQLNode, 
 			res := *n
 			res.With, _ = _With.(*With)
 			res.Comments, _ = _Comments.(*ParsedComments)
-			res.TableExprs, _ = _TableExprs.(TableExprs)
+			res.TableExprs = _TableExprs
 			res.Targets, _ = _Targets.(TableNames)
 			res.Partitions, _ = _Partitions.(Partitions)
 			res.Where, _ = _Where.(*Where)
@@ -2339,12 +2323,12 @@ func (c *cow) copyOnRewriteRefOfFuncExpr(n *FuncExpr, parent SQLNode) (out SQLNo
 	if c.pre == nil || c.pre(n, parent) {
 		_Qualifier, changedQualifier := c.copyOnRewriteIdentifierCS(n.Qualifier, n)
 		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
-		_Exprs, changedExprs := c.copyOnRewriteSelectExprs(n.Exprs, n)
+		_Exprs, changedExprs := c.copyOnRewriteExprs(n.Exprs, n)
 		if changedQualifier || changedName || changedExprs {
 			res := *n
 			res.Qualifier, _ = _Qualifier.(IdentifierCS)
 			res.Name, _ = _Name.(IdentifierCI)
-			res.Exprs, _ = _Exprs.(SelectExprs)
+			res.Exprs, _ = _Exprs.(Exprs)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6023,7 +6007,15 @@ func (c *cow) copyOnRewriteRefOfUpdate(n *Update, parent SQLNode) (out SQLNode, 
 	if c.pre == nil || c.pre(n, parent) {
 		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		_TableExprs, changedTableExprs := c.copyOnRewriteTableExprs(n.TableExprs, n)
+		var changedTableExprs bool
+		_TableExprs := make([]TableExpr, len(n.TableExprs))
+		for x, el := range n.TableExprs {
+			this, changed := c.copyOnRewriteTableExpr(el, n)
+			_TableExprs[x] = this.(TableExpr)
+			if changed {
+				changedTableExprs = true
+			}
+		}
 		_Exprs, changedExprs := c.copyOnRewriteUpdateExprs(n.Exprs, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
@@ -6032,7 +6024,7 @@ func (c *cow) copyOnRewriteRefOfUpdate(n *Update, parent SQLNode) (out SQLNode, 
 			res := *n
 			res.With, _ = _With.(*With)
 			res.Comments, _ = _Comments.(*ParsedComments)
-			res.TableExprs, _ = _TableExprs.(TableExprs)
+			res.TableExprs = _TableExprs
 			res.Exprs, _ = _Exprs.(UpdateExprs)
 			res.Where, _ = _Where.(*Where)
 			res.OrderBy, _ = _OrderBy.(OrderBy)

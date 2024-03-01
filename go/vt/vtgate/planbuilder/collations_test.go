@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/vschemawrapper"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/test/vschemawrapper"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -45,6 +45,7 @@ func (tc *collationTestCase) run(t *testing.T) {
 		V:             loadSchema(t, "vschemas/schema.json", false),
 		SysVarEnabled: true,
 		Version:       Gen4,
+		Env:           vtenv.NewTestEnv(),
 	}
 
 	tc.addCollationsToSchema(vschemaWrapper)
@@ -59,7 +60,6 @@ func (tc *collationTestCase) addCollationsToSchema(vschema *vschemawrapper.VSche
 		for i, c := range tbl.Columns {
 			if c.Name.EqualString(collation.colName) {
 				tbl.Columns[i].CollationName = collation.collationName
-				break
 			}
 		}
 	}

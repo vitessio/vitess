@@ -134,7 +134,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	cell, tabletTypesStr string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
 	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string,
 	sourceShards []string, noRoutingRules bool, atomicCopy bool) (err error) {
-	//FIXME validate tableSpecs, allTables, excludeTables
+	// FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
 
@@ -178,7 +178,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			return err
 		}
 		if len(tables) > 0 {
-			err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, tables)
+			err = wr.validateSourceTablesExist(sourceKeyspace, ksTables, tables)
 			if err != nil {
 				return err
 			}
@@ -193,7 +193,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		excludeTables = strings.TrimSpace(excludeTables)
 		if excludeTables != "" {
 			excludeTablesList = strings.Split(excludeTables, ",")
-			err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, excludeTablesList)
+			err = wr.validateSourceTablesExist(sourceKeyspace, ksTables, excludeTablesList)
 			if err != nil {
 				return err
 			}
@@ -366,7 +366,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	return nil
 }
 
-func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
+func (wr *Wrangler) validateSourceTablesExist(sourceKeyspace string, ksTables, tables []string) error {
 	// validate that tables provided are present in the source keyspace
 	var missingTables []string
 	for _, table := range tables {
@@ -445,7 +445,7 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 		mu      sync.Mutex
 		exists  bool
 		tablets []string
-		ws      = workflow.NewServer(wr.ts, wr.tmc, wr.collationEnv, wr.parser, wr.mysqlVersion)
+		ws      = workflow.NewServer(wr.env, wr.ts, wr.tmc)
 	)
 
 	err := forAllSources(func(si *topo.ShardInfo) error {
@@ -540,7 +540,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		return nil, nil, nil, fmt.Errorf("vindex %s is not a lookup type", vindex.Type)
 	}
 
-	targetKeyspace, targetTableName, err = wr.parser.ParseTable(vindex.Params["table"])
+	targetKeyspace, targetTableName, err = wr.env.Parser().ParseTable(vindex.Params["table"])
 	if err != nil || targetKeyspace == "" {
 		return nil, nil, nil, fmt.Errorf("vindex table name must be in the form <keyspace>.<table>. Got: %v", vindex.Params["table"])
 	}
@@ -837,7 +837,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 		return fmt.Errorf("vindex %s not found in vschema", qualifiedVindexName)
 	}
 
-	targetKeyspace, targetTableName, err := wr.parser.ParseTable(sourceVindex.Params["table"])
+	targetKeyspace, targetTableName, err := wr.env.Parser().ParseTable(sourceVindex.Params["table"])
 	if err != nil || targetKeyspace == "" {
 		return fmt.Errorf("vindex table name must be in the form <keyspace>.<table>. Got: %v", sourceVindex.Params["table"])
 	}
@@ -1064,7 +1064,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if err != nil {
 		return nil, err
 	}
-	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace, wr.parser)
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace, wr.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -1205,9 +1205,9 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			var err error
 			mu.Lock()
 			if len(sourceDDLs) == 0 {
-				//only get ddls for tables, once and lazily: if we need to copy the schema from source to target
-				//we copy schemas from primaries on the source keyspace
-				//and we have found use cases where user just has a replica (no primary) in the source keyspace
+				// only get ddls for tables, once and lazily: if we need to copy the schema from source to target
+				// we copy schemas from primaries on the source keyspace
+				// and we have found use cases where user just has a replica (no primary) in the source keyspace
 				sourceDDLs, err = mz.getSourceTableDDLs(ctx)
 			}
 			mu.Unlock()
@@ -1220,7 +1220,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropForeignKeys {
 				if ts.SourceExpression != "" {
 					// Check for table if non-empty SourceExpression.
-					sourceTableName, err := mz.wr.parser.TableFromStatement(ts.SourceExpression)
+					sourceTableName, err := mz.wr.env.Parser().TableFromStatement(ts.SourceExpression)
 					if err != nil {
 						return err
 					}
@@ -1236,7 +1236,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				}
 
 				if createDDL == createDDLAsCopyDropConstraint {
-					strippedDDL, err := stripTableConstraints(ddl, mz.wr.parser)
+					strippedDDL, err := stripTableConstraints(ddl, mz.wr.env.Parser())
 					if err != nil {
 						return err
 					}
@@ -1245,7 +1245,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				}
 
 				if createDDL == createDDLAsCopyDropForeignKeys {
-					strippedDDL, err := stripTableForeignKeys(ddl, mz.wr.parser)
+					strippedDDL, err := stripTableForeignKeys(ddl, mz.wr.env.Parser())
 					if err != nil {
 						return err
 					}
@@ -1266,7 +1266,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				// We use schemadiff to normalize the schema.
 				// For now, and because this is could have wider implications, we ignore any errors in
 				// reading the source schema.
-				env := schemadiff.NewEnv(mz.wr.collationEnv, mz.wr.collationEnv.DefaultConnectionCharset(), mz.wr.parser, mz.wr.mysqlVersion)
+				env := schemadiff.NewEnv(mz.wr.env, mz.wr.env.CollationEnv().DefaultConnectionCharset())
 				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
 				if err != nil {
 					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
@@ -1368,7 +1368,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 			}
 
 			// Validate non-empty query.
-			stmt, err := mz.wr.parser.Parse(ts.SourceExpression)
+			stmt, err := mz.wr.env.Parser().Parse(ts.SourceExpression)
 			if err != nil {
 				return "", err
 			}
@@ -1391,13 +1391,13 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 					}
 					mappedCols = append(mappedCols, colName)
 				}
-				subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
+				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
 				for _, mappedCol := range mappedCols {
-					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
+					subExprs = append(subExprs, mappedCol)
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
+				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
+				subExprs = append(subExprs, sqlparser.NewStrLiteral("{{.keyrange}}"))
 				inKeyRange := &sqlparser.FuncExpr{
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,

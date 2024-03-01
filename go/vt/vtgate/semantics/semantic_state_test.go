@@ -844,7 +844,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 				Tables: map[string]*vindexes.Table{
 					"t1": {
 						Name:     sqlparser.NewIdentifierCS("t1"),
-						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
+						Keyspace: &vindexes.Keyspace{Name: keyspaceName, Sharded: true},
 					},
 				},
 			},

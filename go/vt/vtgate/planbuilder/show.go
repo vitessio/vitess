@@ -561,11 +561,11 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	}
 	return &engine.OrderedAggregate{
 		Aggregates: []*engine.AggregateParams{
-			engine.NewAggregateParam(popcode.AggregateGtid, 1, "global vgtid_executed", vschema.CollationEnv()),
+			engine.NewAggregateParam(popcode.AggregateGtid, 1, "global vgtid_executed", vschema.Environment().CollationEnv()),
 		},
 		TruncateColumnCount: 2,
 		Input:               send,
-		CollationEnv:        vschema.CollationEnv(),
+		CollationEnv:        vschema.Environment().CollationEnv(),
 	}, nil
 }
 

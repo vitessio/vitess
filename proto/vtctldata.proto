@@ -260,6 +260,9 @@ message Workflow {
     repeated string tags = 15;
     int64 rows_copied = 16;
     ThrottlerStatus throttler_status = 17;
+    repeated topodata.TabletType tablet_types = 18;
+    tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 19;
+    repeated string cells = 20;
 
     message CopyState {
       string table = 1;
@@ -848,6 +851,18 @@ message GetSchemaMigrationsRequest {
 
 message GetSchemaMigrationsResponse {
   repeated SchemaMigration migrations = 1;
+}
+
+message GetShardReplicationRequest {
+  string keyspace = 1;
+  string shard = 2;
+  // Cells is the list of cells to fetch data for. Omit to fetch data from all
+  // cells.
+  repeated string cells = 3;
+}
+
+message GetShardReplicationResponse {
+  map<string, topodata.ShardReplication> shard_replication_by_cell = 1;
 }
 
 message GetShardRequest {

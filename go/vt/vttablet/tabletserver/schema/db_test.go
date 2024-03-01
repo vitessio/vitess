@@ -26,13 +26,12 @@ import (
 	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -99,7 +98,7 @@ func TestGenerateFullQuery(t *testing.T) {
 
 func TestGetCreateStatement(t *testing.T) {
 	db := fakesqldb.New(t)
-	env := tabletenv.NewEnv(nil, "TestGetCreateStatement", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestGetCreateStatement")
 	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
@@ -135,7 +134,7 @@ func TestGetCreateStatement(t *testing.T) {
 
 func TestGetChangedViewNames(t *testing.T) {
 	db := fakesqldb.New(t)
-	env := tabletenv.NewEnv(nil, "TestGetChangedViewNames", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestGetChangedViewNames")
 	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
@@ -169,7 +168,7 @@ func TestGetChangedViewNames(t *testing.T) {
 
 func TestGetViewDefinition(t *testing.T) {
 	db := fakesqldb.New(t)
-	env := tabletenv.NewEnv(nil, "TestGetViewDefinition", collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestGetViewDefinition")
 	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
@@ -232,7 +231,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 		expectedError      string
 	}{
 		{
-			name: "Table create time differs",
+			name: "TableCreateTimeDiffers",
 			tables: map[string]*Table{
 				"t1": {
 					Name:       sqlparser.NewIdentifierCS("t1"),
@@ -245,7 +244,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			isServingPrimary:   true,
 			expectedTableNames: []string{"t1"},
 		}, {
-			name: "Table got deleted",
+			name: "TableGotDeleted",
 			tables: map[string]*Table{
 				"t1": {
 					Name:       sqlparser.NewIdentifierCS("t1"),
@@ -259,7 +258,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			isServingPrimary:   true,
 			expectedTableNames: []string{"t2"},
 		}, {
-			name: "Table got created",
+			name: "TableGotCreated",
 			tables: map[string]*Table{
 				"t1": {
 					Name:       sqlparser.NewIdentifierCS("t1"),
@@ -276,7 +275,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			isServingPrimary:   true,
 			expectedTableNames: []string{"t2"},
 		}, {
-			name: "Dual gets ignored",
+			name: "DualGetsIgnored",
 			tables: map[string]*Table{
 				"dual": NewTable("dual", NoType),
 				"t2": {
@@ -290,7 +289,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			isServingPrimary:   true,
 			expectedTableNames: []string{},
 		}, {
-			name: "All problems",
+			name: "AllProblems",
 			tables: map[string]*Table{
 				"dual": NewTable("dual", NoType),
 				"t2": {
@@ -310,7 +309,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			isServingPrimary:   true,
 			expectedTableNames: []string{"t1", "t2", "t3"},
 		}, {
-			name: "Not serving primary",
+			name: "NotServingPrimary",
 			tables: map[string]*Table{
 				"t1": {
 					Name:       sqlparser.NewIdentifierCS("t1"),
@@ -323,7 +322,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			isServingPrimary:   false,
 			expectedTableNames: []string{},
 		}, {
-			name: "Error in query",
+			name: "ErrorInQuery",
 			tables: map[string]*Table{
 				"t1": {
 					Name:       sqlparser.NewIdentifierCS("t1"),
@@ -342,7 +341,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
@@ -377,7 +376,7 @@ func TestReloadTablesInDB(t *testing.T) {
 		expectedError   string
 	}{
 		{
-			name:           "Only tables to delete",
+			name:           "OnlyTablesToDelete",
 			tablesToDelete: []string{"t1", "lead"},
 			expectedQueries: map[string]*sqltypes.Result{
 				"begin":    {},
@@ -386,7 +385,7 @@ func TestReloadTablesInDB(t *testing.T) {
 				"delete from _vt.`tables` where table_schema = database() and table_name in ('t1', 'lead')": {},
 			},
 		}, {
-			name: "Only tables to reload",
+			name: "OnlyTablesToReload",
 			tablesToReload: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("t1"),
@@ -411,7 +410,7 @@ func TestReloadTablesInDB(t *testing.T) {
 				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
 			},
 		}, {
-			name: "Reload and Delete",
+			name: "ReloadAndDelete",
 			tablesToReload: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("t1"),
@@ -437,7 +436,7 @@ func TestReloadTablesInDB(t *testing.T) {
 				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
 			},
 		}, {
-			name: "Error In Insert",
+			name: "ErrorInInsert",
 			tablesToReload: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("t1"),
@@ -463,7 +462,7 @@ func TestReloadTablesInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
@@ -499,7 +498,7 @@ func TestReloadViewsInDB(t *testing.T) {
 		expectedError   string
 	}{
 		{
-			name:          "Only views to delete",
+			name:          "OnlyViewsToDelete",
 			viewsToDelete: []string{"v1", "lead"},
 			expectedQueries: map[string]*sqltypes.Result{
 				"begin":    {},
@@ -508,7 +507,7 @@ func TestReloadViewsInDB(t *testing.T) {
 				"delete from _vt.views where table_schema = database() and table_name in ('v1', 'lead')": {},
 			},
 		}, {
-			name: "Only views to reload",
+			name: "OnlyViewsToReload",
 			viewsToReload: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("v1"),
@@ -537,7 +536,7 @@ func TestReloadViewsInDB(t *testing.T) {
 				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
 			},
 		}, {
-			name: "Reload and delete",
+			name: "ReloadAndDelete",
 			viewsToReload: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("v1"),
@@ -567,7 +566,7 @@ func TestReloadViewsInDB(t *testing.T) {
 				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
 			},
 		}, {
-			name: "Error In Insert",
+			name: "ErrorInInsert",
 			viewsToReload: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("v1"),
@@ -596,7 +595,7 @@ func TestReloadViewsInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
@@ -634,7 +633,7 @@ func TestReloadDataInDB(t *testing.T) {
 		expectedError   string
 	}{
 		{
-			name: "Only views to delete",
+			name: "OnlyViewsToDelete",
 			dropped: []*Table{
 				NewTable("v1", View),
 				NewTable("lead", View),
@@ -646,7 +645,7 @@ func TestReloadDataInDB(t *testing.T) {
 				"delete from _vt.views where table_schema = database() and table_name in ('v1', 'lead')": {},
 			},
 		}, {
-			name: "Only views to reload",
+			name: "OnlyViewsToReload",
 			created: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("v1"),
@@ -678,7 +677,7 @@ func TestReloadDataInDB(t *testing.T) {
 				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
 			},
 		}, {
-			name: "Reload and delete views",
+			name: "ReloadAndDeleteViews",
 			created: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("v1"),
@@ -714,7 +713,7 @@ func TestReloadDataInDB(t *testing.T) {
 				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
 			},
 		}, {
-			name: "Error In Inserting View Data",
+			name: "ErrorInInsertingViewData",
 			created: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("v1"),
@@ -738,7 +737,7 @@ func TestReloadDataInDB(t *testing.T) {
 			},
 			expectedError: errMessage,
 		}, {
-			name: "Only tables to delete",
+			name: "OnlyTablesToDelete",
 			dropped: []*Table{
 				NewTable("t1", NoType),
 				NewTable("lead", NoType),
@@ -750,7 +749,7 @@ func TestReloadDataInDB(t *testing.T) {
 				"delete from _vt.`tables` where table_schema = database() and table_name in ('t1', 'lead')": {},
 			},
 		}, {
-			name: "Only tables to reload",
+			name: "OnlyTablesToReload",
 			created: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("t1"),
@@ -778,7 +777,7 @@ func TestReloadDataInDB(t *testing.T) {
 				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
 			},
 		}, {
-			name: "Reload and delete tables",
+			name: "ReloadAndDeleteTables",
 			created: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("t1"),
@@ -810,7 +809,7 @@ func TestReloadDataInDB(t *testing.T) {
 				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
 			},
 		}, {
-			name: "Error In Inserting Table Data",
+			name: "ErrorInInsertingTableData",
 			altered: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("t1"),
@@ -831,7 +830,7 @@ func TestReloadDataInDB(t *testing.T) {
 			},
 			expectedError: errMessage,
 		}, {
-			name: "Reload and delete all",
+			name: "ReloadAndDeleteAll",
 			created: []*Table{
 				{
 					Name:       sqlparser.NewIdentifierCS("v1"),
@@ -887,7 +886,7 @@ func TestReloadDataInDB(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
-			env := tabletenv.NewEnv(nil, tc.name, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
 			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 

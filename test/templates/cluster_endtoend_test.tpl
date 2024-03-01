@@ -41,19 +41,34 @@ jobs:
         draft=$(echo "$PR_DATA" | jq .draft -r)
         echo "is_draft=${draft}" >> $GITHUB_OUTPUT
 
+    {{if .MemoryCheck}}
+
+    - name: Check Memory
+      run: |
+        totalMem=$(free -g | awk 'NR==2 {print $2}')
+        echo "total memory $totalMem GB"
+        if [[ "$totalMem" -lt 15 ]]; then 
+          echo "Less memory than required"
+          exit 1
+        fi
+
+    {{end}}
+
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v3
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: frouioui/paths-filter@main
+      uses: dorny/paths-filter@v3.0.1
       id: changes
       with:
         token: ''
         filters: |
           end_to_end:
             - 'go/**/*.go'
+            - 'go/vt/sidecardb/**/*.sql'
+            - 'go/test/endtoend/onlineddl/vrepl_suite/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'
@@ -72,7 +87,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v4
       with:
-        go-version: 1.21.6
+        go-version: 1.22.0
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

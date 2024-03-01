@@ -52,9 +52,9 @@ var (
 		) Engine=InnoDB;
 	`
 	sqlCreateView = `
-		create or replace view v1 as select * from t1;
+		create or replace view v1 as select * from t1
 	`
-	sqlSchema = sqlCreateTable + sqlCreateView
+	sqlSchema = []string{sqlCreateTable, sqlCreateView}
 
 	vSchema = `
 	{
@@ -110,7 +110,7 @@ func TestMain(m *testing.M) {
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
+			SchemaSQL: strings.Join(sqlSchema, ";"),
 			VSchema:   vSchema,
 		}
 
@@ -147,8 +147,9 @@ func checkTableRows(t *testing.T, tableName string, expect int64) {
 }
 
 func populateTable(t *testing.T) {
-	_, err := primaryTablet.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
+	err := primaryTablet.VttabletProcess.QueryTabletMultiple(sqlSchema, keyspaceName, true)
 	require.NoError(t, err)
+
 	_, err = primaryTablet.VttabletProcess.QueryTablet("delete from t1", keyspaceName, true)
 	require.NoError(t, err)
 	_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) values (null, md5(rand()))", keyspaceName, true)
@@ -320,9 +321,9 @@ func TestPopulateTable(t *testing.T) {
 
 func generateRenameStatement(newFormat bool, fromTableName string, state schema.TableGCState, tm time.Time) (statement string, toTableName string, err error) {
 	if newFormat {
-		return schema.GenerateRenameStatementNewFormat(fromTableName, state, tm)
+		return schema.GenerateRenameStatement(fromTableName, state, tm)
 	}
-	return schema.GenerateRenameStatement(fromTableName, state, tm)
+	return schema.GenerateRenameStatementOldFormat(fromTableName, state, tm)
 }
 
 func TestHold(t *testing.T) {
@@ -448,7 +449,7 @@ func TestPurge(t *testing.T) {
 
 func TestPurgeView(t *testing.T) {
 	populateTable(t)
-	query, tableName, err := schema.GenerateRenameStatement("v1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
+	query, tableName, err := generateRenameStatement(true, "v1", schema.PurgeTableGCState, time.Now().UTC().Add(tableTransitionExpiration))
 	require.NoError(t, err)
 
 	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)

@@ -74,6 +74,10 @@ func (node *CommentOnly) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.astPrintf(node, "%v", node.With)
+	}
+
 	if requiresParen(node.Left) {
 		buf.astPrintf(node, "(%v)", node.Left)
 	} else {
@@ -158,9 +162,14 @@ func (node *Update) Format(buf *TrackedBuffer) {
 	if node.With != nil {
 		buf.astPrintf(node, "%v", node.With)
 	}
-	buf.astPrintf(node, "update %v%s%v set %v%v%v%v",
-		node.Comments, node.Ignore.ToString(), node.TableExprs,
-		node.Exprs, node.Where, node.OrderBy, node.Limit)
+	buf.astPrintf(node, "update %v%s",
+		node.Comments, node.Ignore.ToString())
+	prefix := ""
+	for _, expr := range node.TableExprs {
+		buf.astPrintf(node, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+	buf.astPrintf(node, " set %v%v%v%v", node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
 // Format formats the node.
@@ -172,10 +181,15 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 	if node.Ignore {
 		buf.literal("ignore ")
 	}
-	if node.Targets != nil && !node.isSingleAliasExpr() {
+	if node.Targets != nil && !node.IsSingleAliasExpr() {
 		buf.astPrintf(node, "%v ", node.Targets)
 	}
-	buf.astPrintf(node, "from %v%v%v%v%v", node.TableExprs, node.Partitions, node.Where, node.OrderBy, node.Limit)
+	prefix := "from "
+	for _, expr := range node.TableExprs {
+		buf.astPrintf(node, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+	buf.astPrintf(node, "%v%v%v%v", node.Partitions, node.Where, node.OrderBy, node.Limit)
 }
 
 // Format formats the node.
@@ -686,10 +700,10 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	buf.astPrintf(ct, "%#s", ct.Type)
 
 	if ct.Length != nil && ct.Scale != nil {
-		buf.astPrintf(ct, "(%v,%v)", ct.Length, ct.Scale)
+		buf.astPrintf(ct, "(%d,%d)", *ct.Length, *ct.Scale)
 
 	} else if ct.Length != nil {
-		buf.astPrintf(ct, "(%v)", ct.Length)
+		buf.astPrintf(ct, "(%d)", *ct.Length)
 	}
 
 	if ct.EnumValues != nil {
@@ -814,7 +828,7 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		} else {
 			buf.astPrintf(idx, "%v", col.Column)
 			if col.Length != nil {
-				buf.astPrintf(idx, "(%v)", col.Length)
+				buf.astPrintf(idx, "(%d)", *col.Length)
 			}
 		}
 		if col.Direction == DescOrder {
@@ -1231,7 +1245,7 @@ func (node IndexHints) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IndexHint) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, " %sindex ", node.Type.ToString())
+	buf.astPrintf(node, " %s ", node.Type.ToString())
 	if node.ForType != NoForType {
 		buf.astPrintf(node, "for %s ", node.ForType.ToString())
 	}
@@ -1842,9 +1856,9 @@ func (node *ConvertUsingExpr) Format(buf *TrackedBuffer) {
 func (node *ConvertType) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%#s", node.Type)
 	if node.Length != nil {
-		buf.astPrintf(node, "(%v", node.Length)
+		buf.astPrintf(node, "(%d", *node.Length)
 		if node.Scale != nil {
-			buf.astPrintf(node, ", %v", node.Scale)
+			buf.astPrintf(node, ", %d", *node.Scale)
 		}
 		buf.astPrintf(node, ")")
 	}

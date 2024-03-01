@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"strconv"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -35,6 +37,7 @@ func (l *Limit) Clone(inputs []Operator) Operator {
 	return &Limit{
 		Source: inputs[0],
 		AST:    sqlparser.CloneRefOfLimit(l.AST),
+		Pushed: l.Pushed,
 	}
 }
 
@@ -72,5 +75,5 @@ func (l *Limit) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 func (l *Limit) ShortDescription() string {
-	return sqlparser.String(l.AST)
+	return sqlparser.String(l.AST) + " Pushed:" + strconv.FormatBool(l.Pushed)
 }

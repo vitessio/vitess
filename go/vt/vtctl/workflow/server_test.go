@@ -25,13 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -135,7 +133,6 @@ func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -147,7 +144,7 @@ func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 				},
 			}
 
-			ws := NewServer(nil, tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+			ws := NewServer(vtenv.NewTestEnv(), nil, tmc)
 			journal, exists, err := ws.CheckReshardingJournalExistsOnTablet(ctx, tt.tablet, 1)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -175,7 +172,7 @@ func TestVDiffCreate(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer(ctx, "cell")
 	tmc := &fakeTMC{}
-	s := NewServer(ts, tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	s := NewServer(vtenv.NewTestEnv(), ts, tmc)
 
 	tests := []struct {
 		name    string
@@ -185,7 +182,7 @@ func TestVDiffCreate(t *testing.T) {
 		{
 			name:    "no values",
 			req:     &vtctldatapb.VDiffCreateRequest{},
-			wantErr: "node doesn't exist: keyspaces/shards", // We did not provide any keyspace or shard
+			wantErr: "FindAllShardsInKeyspace(): List: node doesn't exist: keyspaces/shards", // We did not provide any keyspace or shard
 		},
 	}
 	for _, tt := range tests {

@@ -106,7 +106,7 @@ func (hj *HashJoin) SetInputs(operators []Operator) {
 }
 
 func (hj *HashJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	return AddPredicate(ctx, hj, expr, false, newFilter)
+	return AddPredicate(ctx, hj, expr, false, newFilterSinglePredicate)
 }
 
 func (hj *HashJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
@@ -332,10 +332,9 @@ func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Exp
 
 	rewrittenExpr := sqlparser.CopyOnRewrite(in, pre, r.post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
 	cfg := &evalengine.Config{
-		ResolveType:  ctx.SemTable.TypeForExpr,
-		Collation:    ctx.SemTable.Collation,
-		CollationEnv: ctx.VSchema.CollationEnv(),
-		MySQLVersion: ctx.VSchema.MySQLVersion(),
+		ResolveType: ctx.SemTable.TypeForExpr,
+		Collation:   ctx.SemTable.Collation,
+		Environment: ctx.VSchema.Environment(),
 	}
 	eexpr, err := evalengine.Translate(rewrittenExpr, cfg)
 	if err != nil {
@@ -435,6 +434,7 @@ func (hj *HashJoin) addSingleSidedColumn(
 	cfg := &evalengine.Config{
 		ResolveType: ctx.SemTable.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
+		Environment: ctx.VSchema.Environment(),
 	}
 	eexpr, err := evalengine.Translate(rewrittenExpr, cfg)
 	if err != nil {

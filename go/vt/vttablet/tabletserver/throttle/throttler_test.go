@@ -28,10 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
-	cfg "vitess.io/vitess/go/mysql/config"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
@@ -111,7 +109,7 @@ func newTestThrottler() *Throttler {
 		s.ThrottleThreshold = &atomic.Uint64{}
 		s.ThrottleThreshold.Store(1)
 	}
-	env := tabletenv.NewEnv(nil, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser(), cfg.DefaultMySQLVersion)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TabletServerTest")
 	throttler := &Throttler{
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),

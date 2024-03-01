@@ -34,8 +34,6 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -62,6 +60,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -94,13 +93,13 @@ type VtctldServer struct {
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
-func NewVtctldServer(ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) *VtctldServer {
+func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(ts, tmc, collationEnv, parser, mysqlVersion),
+		ws:  workflow.NewServer(env, ts, tmc),
 	}
 }
 
@@ -110,7 +109,7 @@ func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *Vtc
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(ts, tmc, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion),
+		ws:  workflow.NewServer(vtenv.NewTestEnv(), ts, tmc),
 	}
 }
 
@@ -223,6 +222,8 @@ func (s *VtctldServer) ApplyShardRoutingRules(ctx context.Context, req *vtctldat
 
 // ApplySchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySchemaRequest) (resp *vtctldatapb.ApplySchemaResponse, err error) {
+	log.Infof("VtctldServer.ApplySchema: keyspace=%s, migrationContext=%v, ddlStrategy=%v, batchSize=%v", req.Keyspace, req.MigrationContext, req.DdlStrategy, req.BatchSize)
+
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplySchema")
 	defer span.Finish()
 
@@ -1763,6 +1764,43 @@ func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRe
 			Name:     req.ShardName,
 			Shard:    shard.Shard,
 		},
+	}, nil
+}
+
+// GetShardReplication is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetShardReplication(ctx context.Context, req *vtctldatapb.GetShardReplicationRequest) (resp *vtctldatapb.GetShardReplicationResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetShardReplication")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	cells := req.Cells
+	if len(cells) == 0 {
+		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer cancel()
+
+		cells, err = s.ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("cells", strings.Join(cells, ","))
+
+	replicationByCell := make(map[string]*topodatapb.ShardReplication, len(cells))
+	for _, cell := range cells {
+		data, err := s.ts.GetShardReplication(ctx, cell, req.Keyspace, req.Shard)
+		if err != nil {
+			return nil, err
+		}
+
+		replicationByCell[cell] = data.ShardReplication
+	}
+
+	return &vtctldatapb.GetShardReplicationResponse{
+		ShardReplicationByCell: replicationByCell,
 	}, nil
 }
 
@@ -4991,8 +5029,8 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
-func StartServer(s *grpc.Server, ts *topo.Server, collationEnv *collations.Environment, parser *sqlparser.Parser, mysqlVersion string) {
-	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts, collationEnv, parser, mysqlVersion))
+func StartServer(s *grpc.Server, env *vtenv.Environment, ts *topo.Server) {
+	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(env, ts))
 }
 
 // getTopologyCell is a helper method that returns a topology cell given its path.

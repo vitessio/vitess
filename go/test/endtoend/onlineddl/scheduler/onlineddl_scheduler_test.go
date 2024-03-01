@@ -82,7 +82,7 @@ var (
 	keyspaceName          = "ks"
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
-	overrideVtctlParams   *cluster.VtctlClientParams
+	overrideVtctlParams   *cluster.ApplySchemaParams
 )
 
 type WriteMetrics struct {
@@ -949,7 +949,7 @@ func testScheduler(t *testing.T) {
 
 	t.Run("Idempotent submission, retry failed migration", func(t *testing.T) {
 		uuid := "00000000_1111_2222_3333_444444444444"
-		overrideVtctlParams = &cluster.VtctlClientParams{DDLStrategy: ddlStrategy, UUIDList: uuid, MigrationContext: "idempotent:1111-2222-3333"}
+		overrideVtctlParams = &cluster.ApplySchemaParams{DDLStrategy: ddlStrategy, UUIDs: uuid, MigrationContext: "idempotent:1111-2222-3333"}
 		defer func() { overrideVtctlParams = nil }()
 		// create a migration and cancel it. We don't let it complete. We want it in "failed" state
 		t.Run("start and fail migration", func(t *testing.T) {
@@ -985,7 +985,7 @@ func testScheduler(t *testing.T) {
 	t.Run("Idempotent submission, retry failed migration in singleton context", func(t *testing.T) {
 		uuid := "00000000_1111_3333_3333_444444444444"
 		ddlStrategy := ddlStrategy + " --singleton-context"
-		overrideVtctlParams = &cluster.VtctlClientParams{DDLStrategy: ddlStrategy, UUIDList: uuid, MigrationContext: "idempotent:1111-3333-3333"}
+		overrideVtctlParams = &cluster.ApplySchemaParams{DDLStrategy: ddlStrategy, UUIDs: uuid, MigrationContext: "idempotent:1111-3333-3333"}
 		defer func() { overrideVtctlParams = nil }()
 		// create a migration and cancel it. We don't let it complete. We want it in "failed" state
 		t.Run("start and fail migration", func(t *testing.T) {
@@ -2391,7 +2391,7 @@ func testForeignKeys(t *testing.T) {
 							continue
 						}
 						statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", artifact)
-						_, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.VtctlClientParams{DDLStrategy: "direct"})
+						_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.ApplySchemaParams{DDLStrategy: "direct"})
 						if err == nil {
 							droppedTables[artifact] = true
 						}
@@ -2423,11 +2423,11 @@ func testOnlineDDLStatement(t *testing.T, params *testOnlineDDLStatementParams) 
 			}
 		}
 	} else {
-		vtctlParams := &cluster.VtctlClientParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext}
+		vtctlParams := &cluster.ApplySchemaParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext}
 		if overrideVtctlParams != nil {
 			vtctlParams = overrideVtctlParams
 		}
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, params.ddlStatement, *vtctlParams)
+		output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, params.ddlStatement, *vtctlParams)
 		switch params.expectError {
 		case anyErrorIndicator:
 			if err != nil {
@@ -2472,7 +2472,7 @@ func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid 
 			}
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.VtctlClientParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext})
+		output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.ApplySchemaParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext})
 		if params.expectError == "" {
 			assert.NoError(t, err)
 			uuid = output

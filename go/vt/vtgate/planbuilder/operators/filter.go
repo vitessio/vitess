@@ -39,9 +39,13 @@ type Filter struct {
 	Truncate int
 }
 
-func newFilter(op Operator, expr sqlparser.Expr) Operator {
+func newFilterSinglePredicate(op Operator, expr sqlparser.Expr) Operator {
+	return newFilter(op, expr)
+}
+
+func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
 	return &Filter{
-		Source: op, Predicates: []sqlparser.Expr{expr},
+		Source: op, Predicates: expr,
 	}
 }
 
@@ -119,10 +123,9 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (Operator, *ApplyResult) 
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	cfg := &evalengine.Config{
-		ResolveType:  ctx.SemTable.TypeForExpr,
-		Collation:    ctx.SemTable.Collation,
-		CollationEnv: ctx.VSchema.CollationEnv(),
-		MySQLVersion: ctx.VSchema.MySQLVersion(),
+		ResolveType: ctx.SemTable.TypeForExpr,
+		Collation:   ctx.SemTable.Collation,
+		Environment: ctx.VSchema.Environment(),
 	}
 
 	predicate := sqlparser.AndExpressions(f.Predicates...)

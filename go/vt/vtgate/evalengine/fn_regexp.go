@@ -218,7 +218,7 @@ func compileConstantRegex(c *compiler, args TupleExpr, pat, mt int, cs collation
 		return nil, errNonConstantRegexp
 	}
 	var err error
-	staticEnv := EmptyExpressionEnv(c.collationEnv, c.mysqlVersion)
+	staticEnv := EmptyExpressionEnv(c.env)
 	pattern, err = simplifyExpr(staticEnv, pattern)
 	if err != nil {
 		return nil, err
@@ -348,7 +348,7 @@ func (r *builtinRegexpLike) compile(c *compiler) (ctype, error) {
 		skips = append(skips, c.compileNullCheckArg(f, 2))
 	}
 
-	merged, flags, err := compileRegexpCollation(c.collationEnv, input, pat, "regexp_like")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_like")
 	if err != nil {
 		return ctype{}, err
 	}
@@ -551,11 +551,11 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		switch {
 		case matchType.isTextual():
 		default:
-			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+			c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 		}
 	}
 
-	merged, flags, err := compileRegexpCollation(c.collationEnv, input, pat, "regexp_instr")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_instr")
 	if err != nil {
 		return ctype{}, err
 	}
@@ -728,11 +728,11 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 		switch {
 		case matchType.isTextual():
 		default:
-			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+			c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 		}
 	}
 
-	merged, flags, err := compileRegexpCollation(c.collationEnv, input, pat, "regexp_substr")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_substr")
 	if err != nil {
 		return ctype{}, err
 	}
@@ -968,11 +968,11 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		switch {
 		case matchType.isTextual():
 		default:
-			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+			c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 		}
 	}
 
-	merged, flags, err := compileRegexpCollation(c.collationEnv, input, pat, "regexp_replace")
+	merged, flags, err := compileRegexpCollation(c.env.CollationEnv(), input, pat, "regexp_replace")
 	if err != nil {
 		return ctype{}, err
 	}

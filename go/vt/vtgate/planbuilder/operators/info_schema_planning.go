@@ -46,8 +46,7 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningConte
 		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
 			Collation:     collations.SystemCollation.Collation,
 			ResolveColumn: NotImplementedSchemaInfoResolver,
-			CollationEnv:  ctx.VSchema.CollationEnv(),
-			MySQLVersion:  ctx.VSchema.MySQLVersion(),
+			Environment:   ctx.VSchema.Environment(),
 		})
 		if err != nil {
 			panic(err)
@@ -60,8 +59,7 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningConte
 		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
 			Collation:     collations.SystemCollation.Collation,
 			ResolveColumn: NotImplementedSchemaInfoResolver,
-			CollationEnv:  ctx.VSchema.CollationEnv(),
-			MySQLVersion:  ctx.VSchema.MySQLVersion(),
+			Environment:   ctx.VSchema.Environment(),
 		})
 		if err != nil {
 			panic(err)
@@ -124,7 +122,7 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 		return false, "", nil
 	}
 
-	isSchemaName, col := isTableOrSchemaRoutable(cmp, ctx.VSchema.MySQLVersion())
+	isSchemaName, col := isTableOrSchemaRoutable(cmp, ctx.VSchema.Environment().MySQLVersion())
 	rhs := cmp.Right
 	if col == nil || !shouldRewrite(rhs) {
 		return false, "", nil
@@ -135,8 +133,7 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 	_, err := evalengine.Translate(rhs, &evalengine.Config{
 		Collation:     collations.SystemCollation.Collation,
 		ResolveColumn: NotImplementedSchemaInfoResolver,
-		CollationEnv:  ctx.VSchema.CollationEnv(),
-		MySQLVersion:  ctx.VSchema.MySQLVersion(),
+		Environment:   ctx.VSchema.Environment(),
 	})
 	if err != nil {
 		// if we can't translate this to an evalengine expression,

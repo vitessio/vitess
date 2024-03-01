@@ -25,21 +25,24 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 func TestDiffTables(t *testing.T) {
+	env57, err := vtenv.New(vtenv.Options{MySQLServerVersion: "5.7.9"})
+	require.NoError(t, err)
 	tt := []struct {
-		name     string
-		from     string
-		to       string
-		diff     string
-		cdiff    string
-		fromName string
-		toName   string
-		action   string
-		isError  bool
-		hints    *DiffHints
-		env      *Environment
+		name        string
+		from        string
+		to          string
+		diff        string
+		cdiff       string
+		fromName    string
+		toName      string
+		action      string
+		expectError string
+		hints       *DiffHints
+		env         *Environment
 	}{
 		{
 			name: "identical",
@@ -217,7 +220,16 @@ func TestDiffTables(t *testing.T) {
 				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
 				TableCharsetCollateStrategy: TableCharsetCollateIgnoreAlways,
 			},
-			isError: true,
+			expectError: (&UnknownColumnCollationCharsetError{Column: "a", Collation: "latin1_nonexisting"}).Error(),
+		},
+		{
+			name: "error on unknown charset",
+			from: "create table t (a varchar(64)) default charset=latin_nonexisting collate=''",
+			to:   "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
+			hints: &DiffHints{
+				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
+			},
+			expectError: (&UnknownColumnCharsetCollationError{Column: "a", Charset: "latin_nonexisting"}).Error(),
 		},
 		{
 			name:     "changing table level defaults with column specific settings",
@@ -294,7 +306,7 @@ func TestDiffTables(t *testing.T) {
 			hints: &DiffHints{
 				TableCharsetCollateStrategy: TableCharsetCollateIgnoreAlways,
 			},
-			env: NewEnv(collations.NewEnvironment("5.7.9"), collations.CollationUtf8mb3ID, sqlparser.NewTestParser(), "5.7.9"),
+			env: NewEnv(env57, collations.CollationUtf8mb3ID),
 		},
 	}
 	env := NewTestEnv()
@@ -309,7 +321,7 @@ func TestDiffTables(t *testing.T) {
 				env = ts.env
 			}
 			if ts.from != "" {
-				fromStmt, err := env.Parser.ParseStrictDDL(ts.from)
+				fromStmt, err := env.Parser().ParseStrictDDL(ts.from)
 				assert.NoError(t, err)
 				var ok bool
 				fromCreateTable, ok = fromStmt.(*sqlparser.CreateTable)
@@ -317,7 +329,7 @@ func TestDiffTables(t *testing.T) {
 			}
 			var toCreateTable *sqlparser.CreateTable
 			if ts.to != "" {
-				toStmt, err := env.Parser.ParseStrictDDL(ts.to)
+				toStmt, err := env.Parser().ParseStrictDDL(ts.to)
 				assert.NoError(t, err)
 				var ok bool
 				toCreateTable, ok = toStmt.(*sqlparser.CreateTable)
@@ -332,9 +344,9 @@ func TestDiffTables(t *testing.T) {
 			dq, dqerr := DiffCreateTablesQueries(env, ts.from, ts.to, hints)
 			d, err := DiffTables(env, fromCreateTable, toCreateTable, hints)
 			switch {
-			case ts.isError:
-				assert.Error(t, err)
-				assert.Error(t, dqerr)
+			case ts.expectError != "":
+				assert.ErrorContains(t, err, ts.expectError)
+				assert.ErrorContains(t, dqerr, ts.expectError)
 			case ts.diff == "":
 				assert.NoError(t, err)
 				assert.NoError(t, dqerr)
@@ -356,7 +368,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = env.Parser.ParseStrictDDL(diff)
+					_, err = env.Parser().ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -375,7 +387,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = env.Parser.ParseStrictDDL(canonicalDiff)
+					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
 				// let's also check dq, and also validate that dq's statement is identical to d's
@@ -442,7 +454,7 @@ func TestDiffViews(t *testing.T) {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateView *sqlparser.CreateView
 			if ts.from != "" {
-				fromStmt, err := env.Parser.ParseStrictDDL(ts.from)
+				fromStmt, err := env.Parser().ParseStrictDDL(ts.from)
 				assert.NoError(t, err)
 				var ok bool
 				fromCreateView, ok = fromStmt.(*sqlparser.CreateView)
@@ -450,7 +462,7 @@ func TestDiffViews(t *testing.T) {
 			}
 			var toCreateView *sqlparser.CreateView
 			if ts.to != "" {
-				toStmt, err := env.Parser.ParseStrictDDL(ts.to)
+				toStmt, err := env.Parser().ParseStrictDDL(ts.to)
 				assert.NoError(t, err)
 				var ok bool
 				toCreateView, ok = toStmt.(*sqlparser.CreateView)
@@ -489,7 +501,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = env.Parser.ParseStrictDDL(diff)
+					_, err = env.Parser().ParseStrictDDL(diff)
 					assert.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -508,7 +520,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = env.Parser.ParseStrictDDL(canonicalDiff)
+					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
 
@@ -948,11 +960,11 @@ func TestDiffSchemas(t *testing.T) {
 
 				// validate we can parse back the diff statements
 				for _, s := range statements {
-					_, err := env.Parser.ParseStrictDDL(s)
+					_, err := env.Parser().ParseStrictDDL(s)
 					assert.NoError(t, err)
 				}
 				for _, s := range cstatements {
-					_, err := env.Parser.ParseStrictDDL(s)
+					_, err := env.Parser().ParseStrictDDL(s)
 					assert.NoError(t, err)
 				}
 

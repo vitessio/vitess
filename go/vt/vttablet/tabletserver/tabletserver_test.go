@@ -30,11 +30,12 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/test/utils"
@@ -152,6 +153,10 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	defer cancel()
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t, ctx)
+	// This is required because the test is verifying that we rollback transactions on changing serving type,
+	// but that only happens immediately if the shut down grace period is not specified.
+	tsv.te.shutdownGracePeriod = 0
+	tsv.sm.shutdownGracePeriod = 0
 	defer tsv.StopService()
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
@@ -179,7 +184,7 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	select {
 	case <-ch:
 		t.Fatal("ch should not fire")
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(100 * time.Millisecond):
 	}
 	require.EqualValues(t, 1, tsv.te.txPool.scp.active.Size(), "tsv.te.txPool.scp.active.Size()")
 
@@ -444,7 +449,7 @@ func TestTabletServerBeginFail(t *testing.T) {
 	defer cancel()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TxPool.Size = 1
-	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", sqlparser.NewTestParser())
+	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -952,7 +957,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	cfg.HotRowProtection.MaxConcurrency = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	cfg.TxPool.Size = 2
-	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", sqlparser.NewTestParser())
+	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1059,7 +1064,7 @@ func TestDMLQueryWithoutWhereClause(t *testing.T) {
 	cfg.HotRowProtection.Mode = tabletenv.Enable
 	cfg.HotRowProtection.MaxConcurrency = 1
 	cfg.TxPool.Size = 2
-	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", sqlparser.NewTestParser())
+	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1087,7 +1092,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	cfg.HotRowProtection.MaxConcurrency = 2
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	cfg.TxPool.Size = 2
-	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", sqlparser.NewTestParser())
+	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1223,7 +1228,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	cfg.HotRowProtection.Mode = tabletenv.Enable
 	cfg.HotRowProtection.MaxQueueSize = 1
 	cfg.HotRowProtection.MaxConcurrency = 1
-	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", sqlparser.NewTestParser())
+	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1306,7 +1311,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.HotRowProtection.Mode = tabletenv.Enable
 	cfg.HotRowProtection.MaxConcurrency = 1
-	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", sqlparser.NewTestParser())
+	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -1560,9 +1565,58 @@ func TestHandleExecUnknownError(t *testing.T) {
 	defer cancel()
 	logStats := tabletenv.NewLogStats(ctx, "TestHandleExecError")
 	cfg := tabletenv.NewDefaultConfig()
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, logStats)
 	panic("unknown exec error")
+}
+
+// TestHandlePanicAndSendLogStatsMessageTruncation tests that when an error truncation
+// length is set and a panic occurs, the code in handlePanicAndSendLogStats will
+// truncate the error text in logs, but will not truncate the error text in the
+// error value.
+func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tl := newTestLogger()
+	defer tl.Close()
+	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation")
+	env, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: config.DefaultMySQLVersion,
+		TruncateErrLen:     32,
+	})
+	require.NoError(t, err)
+
+	db, tsv := setupTabletServerTestCustom(t, ctx, tabletenv.NewDefaultConfig(), "", env)
+	defer tsv.StopService()
+	defer db.Close()
+
+	longSql := "select * from test_table_loooooooooooooooooooooooooooooooooooong"
+	longBv := map[string]*querypb.BindVariable{
+		"bv1": sqltypes.Int64BindVariable(1111111111),
+		"bv2": sqltypes.Int64BindVariable(2222222222),
+		"bv3": sqltypes.Int64BindVariable(3333333333),
+		"bv4": sqltypes.Int64BindVariable(4444444444),
+	}
+
+	defer func() {
+		err := logStats.Error
+		want := "Uncaught panic for Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {bv1: \"type:INT64 value:\\\"1111111111\\\"\"bv2: \"type:INT64 value:\\\"2222222222\\\"\"bv3: \"type:INT64 value:\\\"3333333333\\\"\"bv4: \"type:INT64 value:\\\"4444444444\\\"\"}"
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), want)
+		want = "Uncaught panic for Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]"
+		gotWhatWeWant := false
+		for _, log := range tl.getLogs() {
+			if strings.HasPrefix(log, want) {
+				gotWhatWeWant = true
+				break
+			}
+		}
+		assert.True(t, gotWhatWeWant)
+	}()
+
+	defer tsv.handlePanicAndSendLogStats(longSql, longBv, logStats)
+	panic("panic from TestHandlePanicAndSendLogStatsMessageTruncation")
 }
 
 func TestQueryAsString(t *testing.T) {
@@ -1682,7 +1736,8 @@ func TestHandleExecTabletError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cfg := tabletenv.NewDefaultConfig()
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(
@@ -1707,7 +1762,8 @@ func TestTerseErrors(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = true
 	cfg.SanitizeLogMessages = false
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 
@@ -1741,7 +1797,8 @@ func TestSanitizeLogMessages(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = false
 	cfg.SanitizeLogMessages = true
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 
@@ -1774,7 +1831,8 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	defer cancel()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = true
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(
@@ -1799,7 +1857,8 @@ func TestSanitizeLogMessagesNonSQLError(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = false
 	cfg.SanitizeLogMessages = true
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(
@@ -1824,7 +1883,8 @@ func TestSanitizeMessagesBindVars(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = true
 	cfg.SanitizeLogMessages = true
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 
@@ -1855,7 +1915,8 @@ func TestSanitizeMessagesNoBindVars(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = true
 	cfg.SanitizeLogMessages = true
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "sensitive message"), nil)
@@ -1873,7 +1934,8 @@ func TestTruncateErrorLen(t *testing.T) {
 	defer cancel()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TruncateErrorLen = 32
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(
@@ -1899,12 +1961,13 @@ func TestTruncateMessages(t *testing.T) {
 	cfg.TerseErrors = false
 	// Sanitize the log messages, which means that the bind vars are omitted
 	cfg.SanitizeLogMessages = true
-	parser, err := sqlparser.New(sqlparser.Options{
+	env, err := vtenv.New(vtenv.Options{
 		MySQLServerVersion: config.DefaultMySQLVersion,
 		TruncateErrLen:     52,
 	})
 	require.NoError(t, err)
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), parser, config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, env, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 
@@ -1931,7 +1994,7 @@ func TestTruncateMessages(t *testing.T) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
 	}
 
-	parser.SetTruncateErrLen(140)
+	env.Parser().SetTruncateErrLen(140)
 	err = tsv.convertAndLogError(
 		ctx,
 		sql,
@@ -1958,7 +2021,8 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	defer cancel()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = true
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
@@ -2000,7 +2064,8 @@ func TestACLHUP(t *testing.T) {
 	defer cancel()
 	tableacl.Register("simpleacl", &simpleacl.Factory{})
 	cfg := tabletenv.NewDefaultConfig()
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), sqlparser.NewTestParser(), config.DefaultMySQLVersion)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 
 	f, err := os.CreateTemp("", "tableacl")
 	require.NoError(t, err)
@@ -2510,13 +2575,14 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 
 func setupTabletServerTest(t testing.TB, ctx context.Context, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
 	cfg := tabletenv.NewDefaultConfig()
-	return setupTabletServerTestCustom(t, ctx, cfg, keyspaceName, sqlparser.NewTestParser())
+	return setupTabletServerTestCustom(t, ctx, cfg, keyspaceName, vtenv.NewTestEnv())
 }
 
-func setupTabletServerTestCustom(t testing.TB, ctx context.Context, cfg *tabletenv.TabletConfig, keyspaceName string, parser *sqlparser.Parser) (*fakesqldb.DB, *TabletServer) {
+func setupTabletServerTestCustom(t testing.TB, ctx context.Context, cfg *tabletenv.TabletConfig, keyspaceName string, env *vtenv.Environment) (*fakesqldb.DB, *TabletServer) {
 	db := setupFakeDB(t)
-	sidecardb.AddSchemaInitQueries(db, true, parser)
-	tsv := NewTabletServer(ctx, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, collations.MySQL8(), parser, config.DefaultMySQLVersion)
+	sidecardb.AddSchemaInitQueries(db, true, env.Parser())
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, env, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	require.Equal(t, StateNotConnected, tsv.sm.State())
 	dbcfgs := newDBConfigs(db)
 	target := &querypb.Target{

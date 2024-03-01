@@ -391,8 +391,7 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 	}
 
 	// if there are no routing rules defined, then movetables is not in progress, exit early
-	if (vs.RoutingRules != nil && len(vs.RoutingRules.Rules) == 0) &&
-		(vs.ShardRoutingRules != nil && len(vs.ShardRoutingRules.Rules) == 0) {
+	if len(vs.GetRoutingRules().GetRules()) == 0 && len(vs.GetShardRoutingRules().GetRules()) == 0 {
 		return mtState, nil
 	}
 
@@ -529,6 +528,11 @@ func (kss *keyspaceState) isServing() bool {
 // In addition, the traffic switcher updates SrvVSchema when the DeniedTables attributes in a Shard record is
 // modified.
 func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool {
+	// the vschema can be nil if the server is currently shutting down
+	if vs == nil {
+		return true
+	}
+
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
 	kss.moveTablesState, _ = kss.getMoveTablesStatus(vs)

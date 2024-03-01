@@ -45,6 +45,7 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -420,8 +421,8 @@ func (vh *vtgateHandler) KillQuery(connectionID uint32) error {
 	return nil
 }
 
-func (vh *vtgateHandler) SQLParser() *sqlparser.Parser {
-	return vh.vtg.executor.parser
+func (vh *vtgateHandler) Env() *vtenv.Environment {
+	return vh.vtg.executor.env
 }
 
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
@@ -534,8 +535,6 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
 			mysqlServerFlushDelay,
-			servenv.MySQLServerVersion(),
-			servenv.TruncateErrLen,
 		)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
@@ -581,8 +580,6 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		mysqlConnBufferPooling,
 		mysqlKeepAlivePeriod,
 		mysqlServerFlushDelay,
-		servenv.MySQLServerVersion(),
-		servenv.TruncateErrLen,
 	)
 
 	switch err := err.(type) {
@@ -616,8 +613,6 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
 			mysqlServerFlushDelay,
-			servenv.MySQLServerVersion(),
-			servenv.TruncateErrLen,
 		)
 		return listener, listenerErr
 	default:

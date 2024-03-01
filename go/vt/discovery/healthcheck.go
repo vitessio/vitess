@@ -46,6 +46,7 @@ import (
 	"github.com/google/safehtml/template"
 	"github.com/google/safehtml/template/uncheckedconversions"
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
@@ -87,8 +88,8 @@ var (
 	// refreshKnownTablets tells us whether to process all tablets or only new tablets.
 	refreshKnownTablets = true
 
-	// topoReadConcurrency tells us how many topo reads are allowed in parallel.
-	topoReadConcurrency int64 = 32
+	// healthCheckDialConcurrency tells us how many healthcheck connections can be opened to tablets at once. This should be less than the golang max thread limit of 10000.
+	healthCheckDialConcurrency int64 = 1024
 
 	// How much to sleep between each check.
 	waitAvailableTabletInterval = 100 * time.Millisecond
@@ -107,11 +108,6 @@ const (
 	DefaultHealthCheckRetryDelay = 5 * time.Second
 	DefaultHealthCheckTimeout    = 1 * time.Minute
 
-	// DefaultTopoReadConcurrency is used as the default value for the topoReadConcurrency parameter of a TopologyWatcher.
-	DefaultTopoReadConcurrency int = 5
-	// DefaultTopologyWatcherRefreshInterval is used as the default value for
-	// the refresh interval of a topology watcher.
-	DefaultTopologyWatcherRefreshInterval = 1 * time.Minute
 	// healthCheckTemplate is the HTML code to display a TabletsCacheStatusList, it takes a parameter for the title
 	// as the template can be used for both HealthCheck's cache and healthy tablets list.
 	healthCheckTemplate = `
@@ -176,7 +172,7 @@ func registerWebUIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&TabletURLTemplateString, "tablet_url_template", "http://{{.GetTabletHostPort}}", "Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this.")
 	fs.DurationVar(&refreshInterval, "tablet_refresh_interval", 1*time.Minute, "Tablet refresh interval.")
 	fs.BoolVar(&refreshKnownTablets, "tablet_refresh_known_tablets", true, "Whether to reload the tablet's address/port map from topo in case they change.")
-	fs.Int64Var(&topoReadConcurrency, "topo_read_concurrency", 32, "Concurrency of topo reads.")
+	fs.Int64Var(&healthCheckDialConcurrency, "healthcheck-dial-concurrency", 1024, "Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000.")
 	ParseTabletURLTemplateFromFlag()
 }
 
@@ -296,6 +292,8 @@ type HealthCheckImpl struct {
 	subscribers map[chan *TabletHealth]struct{}
 	// loadTablets trigger is used to immediately load a new primary tablet when the current one has been demoted
 	loadTabletsTrigger chan struct{}
+	// healthCheckDialSem is used to limit how many healthcheck connections can be opened to tablets at once.
+	healthCheckDialSem *semaphore.Weighted
 }
 
 // NewHealthCheck creates a new HealthCheck object.
@@ -330,6 +328,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		cell:               localCell,
 		retryDelay:         retryDelay,
 		healthCheckTimeout: healthCheckTimeout,
+		healthCheckDialSem: semaphore.NewWeighted(healthCheckDialConcurrency),
 		healthByAlias:      make(map[tabletAliasString]*tabletHealthCheck),
 		healthData:         make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
 		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
@@ -362,7 +361,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		} else if len(KeyspacesToWatch) > 0 {
 			filter = NewFilterByKeyspace(KeyspacesToWatch)
 		}
-		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, topoReadConcurrency))
+		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, topo.DefaultConcurrency))
 	}
 
 	hc.topoWatchers = topoWatchers
@@ -759,30 +758,8 @@ func (hc *HealthCheckImpl) WaitForAllServingTablets(ctx context.Context, targets
 	return hc.waitForTablets(ctx, targets, true)
 }
 
-// FilterTargetsByKeyspaces only returns the targets that are part of the provided keyspaces
-func FilterTargetsByKeyspaces(keyspaces []string, targets []*query.Target) []*query.Target {
-	filteredTargets := make([]*query.Target, 0)
-
-	// Keep them all if there are no keyspaces to watch
-	if len(KeyspacesToWatch) == 0 {
-		return append(filteredTargets, targets...)
-	}
-
-	// Let's remove from the target shards that are not in the keyspaceToWatch list.
-	for _, target := range targets {
-		for _, keyspaceToWatch := range keyspaces {
-			if target.Keyspace == keyspaceToWatch {
-				filteredTargets = append(filteredTargets, target)
-			}
-		}
-	}
-	return filteredTargets
-}
-
 // waitForTablets is the internal method that polls for tablets.
 func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.Target, requireServing bool) error {
-	targets = FilterTargetsByKeyspaces(KeyspacesToWatch, targets)
-
 	for {
 		// We nil targets as we find them.
 		allPresent := true
@@ -859,7 +836,7 @@ func (hc *HealthCheckImpl) TabletConnection(alias *topodata.TabletAlias, target 
 		// TODO: test that throws this error
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}
-	return thc.Connection(), nil
+	return thc.Connection(hc), nil
 }
 
 // getAliasByCell should only be called while holding hc.mu

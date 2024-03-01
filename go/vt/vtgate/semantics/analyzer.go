@@ -28,49 +28,65 @@ import (
 // analyzer controls the flow of the analysis.
 // It starts the tree walking and controls which part of the analysis sees which parts of the tree
 type analyzer struct {
-	scoper   *scoper
-	tables   *tableCollector
-	binder   *binder
-	typer    *typer
-	rewriter *earlyRewriter
-	sig      QuerySignature
+	scoper      *scoper
+	earlyTables *earlyTableCollector
+	tables      *tableCollector
+	binder      *binder
+	typer       *typer
+	rewriter    *earlyRewriter
+	sig         QuerySignature
+	si          SchemaInformation
+	currentDb   string
+	recheck     bool
 
 	err          error
 	inProjection int
 
-	projErr      error
-	unshardedErr error
-	warning      string
+	projErr                 error
+	unshardedErr            error
+	warning                 string
+	singleUnshardedKeyspace bool
+	fullAnalysis            bool
 }
 
 // newAnalyzer create the semantic analyzer
-func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
+func newAnalyzer(dbName string, si SchemaInformation, fullAnalysis bool) *analyzer {
 	// TODO  dependencies between these components are a little tangled. We should try to clean up
 	s := newScoper()
 	a := &analyzer{
-		scoper: s,
-		tables: newTableCollector(s, si, dbName),
-		typer:  newTyper(si.CollationEnv()),
+		scoper:       s,
+		earlyTables:  newEarlyTableCollector(si, dbName),
+		typer:        newTyper(si.Environment().CollationEnv()),
+		si:           si,
+		currentDb:    dbName,
+		fullAnalysis: fullAnalysis,
 	}
 	s.org = a
-	a.tables.org = a
-
-	b := newBinder(s, a, a.tables, a.typer)
-	a.binder = b
-	a.rewriter = &earlyRewriter{
-		scoper:          s,
-		binder:          b,
-		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
-		collationEnv:    si.CollationEnv(),
-		mysqlVersion:    si.MySQLVersion(),
-	}
-	s.binder = b
 	return a
+}
+
+func (a *analyzer) lateInit() {
+	a.tables = a.earlyTables.newTableCollector(a.scoper, a)
+	a.binder = newBinder(a.scoper, a, a.tables, a.typer)
+	a.scoper.binder = a.binder
+	a.rewriter = &earlyRewriter{
+		binder:          a.binder,
+		scoper:          a.scoper,
+		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
+		env:             a.si.Environment(),
+		aliasMapCache:   map[*sqlparser.Select]map[string]exprContainer{},
+		reAnalyze:       a.reAnalyze,
+		tables:          a.tables,
+	}
 }
 
 // Analyze analyzes the parsed query.
 func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
-	analyzer := newAnalyzer(currentDb, newSchemaInfo(si))
+	return analyseAndGetSemTable(statement, currentDb, si, false)
+}
+
+func analyseAndGetSemTable(statement sqlparser.Statement, currentDb string, si SchemaInformation, fullAnalysis bool) (*SemTable, error) {
+	analyzer := newAnalyzer(currentDb, newSchemaInfo(si), fullAnalysis)
 
 	// Analysis for initial scope
 	err := analyzer.analyze(statement)
@@ -79,12 +95,12 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	}
 
 	// Creation of the semantic table
-	return analyzer.newSemTable(statement, si.ConnCollation(), si.GetForeignKeyChecksState())
+	return analyzer.newSemTable(statement, si.ConnCollation(), si.GetForeignKeyChecksState(), si.Environment().CollationEnv())
 }
 
 // AnalyzeStrict analyzes the parsed query, and fails the analysis for any possible errors
 func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
-	st, err := Analyze(statement, currentDb, si)
+	st, err := analyseAndGetSemTable(statement, currentDb, si, true)
 	if err != nil {
 		return nil, err
 	}
@@ -99,12 +115,43 @@ func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInf
 	return st, nil
 }
 
-func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID, fkChecksState *bool) (*SemTable, error) {
+func (a *analyzer) newSemTable(
+	statement sqlparser.Statement,
+	coll collations.ID,
+	fkChecksState *bool,
+	env *collations.Environment,
+) (*SemTable, error) {
 	var comments *sqlparser.ParsedComments
 	commentedStmt, isCommented := statement.(sqlparser.Commented)
 	if isCommented {
 		comments = commentedStmt.GetParsedComments()
 	}
+
+	if a.singleUnshardedKeyspace {
+		return &SemTable{
+			Tables:                    a.earlyTables.Tables,
+			Comments:                  comments,
+			Warning:                   a.warning,
+			Collation:                 coll,
+			ExprTypes:                 map[sqlparser.Expr]evalengine.Type{},
+			NotSingleRouteErr:         a.projErr,
+			NotUnshardedErr:           a.unshardedErr,
+			Recursive:                 ExprDependencies{},
+			Direct:                    ExprDependencies{},
+			Targets:                   map[sqlparser.IdentifierCS]TableSet{},
+			ColumnEqualities:          map[columnName][]sqlparser.Expr{},
+			ExpandedColumns:           map[sqlparser.TableName][]*sqlparser.ColName{},
+			columns:                   map[*sqlparser.Union]sqlparser.SelectExprs{},
+			comparator:                nil,
+			StatementIDs:              a.scoper.statementIDs,
+			QuerySignature:            QuerySignature{},
+			childForeignKeysInvolved:  map[TableSet][]vindexes.ChildFKInfo{},
+			parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
+			childFkToUpdExprs:         map[string]sqlparser.UpdateExprs{},
+			collEnv:                   env,
+		}, nil
+	}
+
 	columns := map[*sqlparser.Union]sqlparser.SelectExprs{}
 	for union, info := range a.tables.unionInfo {
 		columns[union] = info.exprs
@@ -134,6 +181,7 @@ func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID
 		childForeignKeysInvolved:  childFks,
 		parentForeignKeysInvolved: parentFks,
 		childFkToUpdExprs:         childFkToUpdExprs,
+		collEnv:                   env,
 	}, nil
 }
 
@@ -188,10 +236,6 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if err := a.scoper.up(cursor); err != nil {
-		a.setError(err)
-		return false
-	}
 	if err := a.tables.up(cursor); err != nil {
 		a.setError(err)
 		return false
@@ -207,9 +251,17 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if err := a.rewriter.up(cursor); err != nil {
+	if !a.recheck {
+		// no need to run the rewriter on rechecking
+		if err := a.rewriter.up(cursor); err != nil {
+			a.setError(err)
+			return true
+		}
+	}
+
+	if err := a.scoper.up(cursor); err != nil {
 		a.setError(err)
-		return true
+		return false
 	}
 
 	a.leaveProjection(cursor)
@@ -269,6 +321,12 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 	return isSelect
 }
 
+func isParentDeleteOrUpdate(cursor *sqlparser.Cursor) bool {
+	_, isDelete := cursor.Parent().(*sqlparser.Delete)
+	_, isUpdate := cursor.Parent().(*sqlparser.Update)
+	return isDelete || isUpdate
+}
+
 func isParentSelectStatement(cursor *sqlparser.Cursor) bool {
 	_, isSelect := cursor.Parent().(sqlparser.SelectStatement)
 	return isSelect
@@ -287,8 +345,76 @@ func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet,
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
+	_ = sqlparser.Rewrite(statement, nil, a.earlyUp)
+	if a.err != nil {
+		return a.err
+	}
+
+	if a.canShortCut(statement) {
+		return nil
+	}
+
+	a.lateInit()
+
+	return a.lateAnalyze(statement)
+}
+
+func (a *analyzer) lateAnalyze(statement sqlparser.SQLNode) error {
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
+}
+
+func (a *analyzer) reAnalyze(statement sqlparser.SQLNode) error {
+	a.recheck = true
+	defer func() {
+		a.recheck = false
+	}()
+	return a.lateAnalyze(statement)
+}
+
+// canShortCut checks if we are dealing with a single unsharded keyspace and no tables that have managed foreign keys
+// if so, we can stop the analyzer early
+func (a *analyzer) canShortCut(statement sqlparser.Statement) (canShortCut bool) {
+	if a.fullAnalysis {
+		return false
+	}
+	ks, _ := singleUnshardedKeyspace(a.earlyTables.Tables)
+	if ks == nil {
+		return false
+	}
+
+	defer func() {
+		a.singleUnshardedKeyspace = canShortCut
+	}()
+
+	if !sqlparser.IsDMLStatement(statement) {
+		return true
+	}
+
+	fkMode, err := a.si.ForeignKeyMode(ks.Name)
+	if err != nil {
+		a.err = err
+		return false
+	}
+	if fkMode != vschemapb.Keyspace_managed {
+		return true
+	}
+
+	for _, table := range a.earlyTables.Tables {
+		vtbl := table.GetVindexTable()
+		if len(vtbl.ChildForeignKeys) > 0 || len(vtbl.ParentForeignKeys) > 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// earlyUp collects tables in the query, so we can check
+// if this a single unsharded query we are dealing with
+func (a *analyzer) earlyUp(cursor *sqlparser.Cursor) bool {
+	a.earlyTables.up(cursor)
+	return true
 }
 
 func (a *analyzer) shouldContinue() bool {
@@ -317,6 +443,8 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 		}
 	case sqlparser.AggrFunc:
 		a.sig.Aggregation = true
+	case *sqlparser.Delete, *sqlparser.Update, *sqlparser.Insert:
+		a.sig.DML = true
 	}
 }
 
@@ -351,25 +479,24 @@ func (a *analyzer) getInvolvedForeignKeys(statement sqlparser.Statement, fkCheck
 		}
 		// If only a certain set of columns are being updated, then there might be some child foreign keys that don't need any consideration since their columns aren't being updated.
 		// So, we filter these child foreign keys out. We can't filter any parent foreign keys because the statement will INSERT a row too, which requires validating all the parent foreign keys.
-		updatedChildFks, _, childFkToUpdExprs := a.filterForeignKeysUsingUpdateExpressions(allChildFks, nil, sqlparser.UpdateExprs(stmt.OnDup))
-		return updatedChildFks, allParentFKs, childFkToUpdExprs, nil
+		updatedChildFks, _, childFkToUpdExprs, err := a.filterForeignKeysUsingUpdateExpressions(allChildFks, nil, sqlparser.UpdateExprs(stmt.OnDup))
+		return updatedChildFks, allParentFKs, childFkToUpdExprs, err
 	case *sqlparser.Update:
 		// For UPDATE queries we get all the parent and child foreign keys, but we can filter some of them out if the columns that they consist off aren't being updated or are set to NULLs.
 		allChildFks, allParentFks, err := a.getAllManagedForeignKeys()
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		childFks, parentFks, childFkToUpdExprs := a.filterForeignKeysUsingUpdateExpressions(allChildFks, allParentFks, stmt.Exprs)
-		return childFks, parentFks, childFkToUpdExprs, nil
+		return a.filterForeignKeysUsingUpdateExpressions(allChildFks, allParentFks, stmt.Exprs)
 	default:
 		return nil, nil, nil, nil
 	}
 }
 
 // filterForeignKeysUsingUpdateExpressions filters the child and parent foreign key constraints that don't require any validations/cascades given the updated expressions.
-func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[TableSet][]vindexes.ChildFKInfo, allParentFks map[TableSet][]vindexes.ParentFKInfo, updExprs sqlparser.UpdateExprs) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, map[string]sqlparser.UpdateExprs) {
+func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[TableSet][]vindexes.ChildFKInfo, allParentFks map[TableSet][]vindexes.ParentFKInfo, updExprs sqlparser.UpdateExprs) (map[TableSet][]vindexes.ChildFKInfo, map[TableSet][]vindexes.ParentFKInfo, map[string]sqlparser.UpdateExprs, error) {
 	if len(allChildFks) == 0 && len(allParentFks) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	pFksRequired := make(map[TableSet][]bool, len(allParentFks))
@@ -391,7 +518,10 @@ func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[Table
 	for _, updateExpr := range updExprs {
 		deps := a.binder.direct.dependencies(updateExpr.Name)
 		if deps.NumberOfTables() != 1 {
-			panic("expected to have single table dependency")
+			// If we don't get exactly one table for the given update expression, we would have definitely run into an error
+			// during the binder phase that we would have stored. We should return that error, since we can't safely proceed with
+			// foreign key related changes without having all the information.
+			return nil, nil, nil, a.getError()
 		}
 		updExprToTableSet[updateExpr.Name] = deps
 		// Get all the child and parent foreign keys for the given table that the update expression belongs to.
@@ -458,7 +588,18 @@ func (a *analyzer) filterForeignKeysUsingUpdateExpressions(allChildFks map[Table
 		}
 		cFksNeedsHandling[ts] = cFKNeeded
 	}
-	return cFksNeedsHandling, pFksNeedsHandling, childFKToUpdExprs
+	return cFksNeedsHandling, pFksNeedsHandling, childFKToUpdExprs, nil
+}
+
+// getError gets the error stored in the analyzer during previous phases.
+func (a *analyzer) getError() error {
+	if a.projErr != nil {
+		return a.projErr
+	}
+	if a.unshardedErr != nil {
+		return a.unshardedErr
+	}
+	return a.err
 }
 
 // getAllManagedForeignKeys gets all the foreign keys for the query we are analyzing that Vitess is responsible for managing.
@@ -474,7 +615,7 @@ func (a *analyzer) getAllManagedForeignKeys() (map[TableSet][]vindexes.ChildFKIn
 			continue
 		}
 		// Check whether Vitess needs to manage the foreign keys in this keyspace or not.
-		fkMode, err := a.tables.si.ForeignKeyMode(vi.Keyspace.Name)
+		fkMode, err := a.si.ForeignKeyMode(vi.Keyspace.Name)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -482,7 +623,7 @@ func (a *analyzer) getAllManagedForeignKeys() (map[TableSet][]vindexes.ChildFKIn
 			continue
 		}
 		// Cyclic foreign key constraints error is stored in the keyspace.
-		ksErr := a.tables.si.KeyspaceError(vi.Keyspace.Name)
+		ksErr := a.si.KeyspaceError(vi.Keyspace.Name)
 		if ksErr != nil {
 			return nil, nil, ksErr
 		}
@@ -509,6 +650,10 @@ func (p ProjError) Error() string {
 // if the query is not unsharded
 type ShardedError struct {
 	Inner error
+}
+
+func (p ShardedError) Unwrap() error {
+	return p.Inner
 }
 
 func (p ShardedError) Error() string {

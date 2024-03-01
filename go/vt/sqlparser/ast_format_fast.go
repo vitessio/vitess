@@ -86,6 +86,10 @@ func (node *CommentOnly) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *Union) FormatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.FormatFast(buf)
+	}
+
 	if requiresParen(node.Left) {
 		buf.WriteByte('(')
 		node.Left.FormatFast(buf)
@@ -234,17 +238,17 @@ func (node *Update) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("update ")
 	node.Comments.FormatFast(buf)
 	buf.WriteString(node.Ignore.ToString())
-	node.TableExprs.FormatFast(buf)
+	prefix := ""
+	for _, expr := range node.TableExprs {
+		buf.WriteString(prefix)
+		expr.FormatFast(buf)
+		prefix = ", "
+	}
 	buf.WriteString(" set ")
-
 	node.Exprs.FormatFast(buf)
-
 	node.Where.FormatFast(buf)
-
 	node.OrderBy.FormatFast(buf)
-
 	node.Limit.FormatFast(buf)
-
 }
 
 // FormatFast formats the node.
@@ -257,12 +261,16 @@ func (node *Delete) FormatFast(buf *TrackedBuffer) {
 	if node.Ignore {
 		buf.WriteString("ignore ")
 	}
-	if node.Targets != nil && !node.isSingleAliasExpr() {
+	if node.Targets != nil && !node.IsSingleAliasExpr() {
 		node.Targets.FormatFast(buf)
 		buf.WriteByte(' ')
 	}
-	buf.WriteString("from ")
-	node.TableExprs.FormatFast(buf)
+	prefix := "from "
+	for _, expr := range node.TableExprs {
+		buf.WriteString(prefix)
+		expr.FormatFast(buf)
+		prefix = ", "
+	}
 	node.Partitions.FormatFast(buf)
 	node.Where.FormatFast(buf)
 	node.OrderBy.FormatFast(buf)
@@ -903,14 +911,14 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 
 	if ct.Length != nil && ct.Scale != nil {
 		buf.WriteByte('(')
-		ct.Length.FormatFast(buf)
+		buf.WriteString(fmt.Sprintf("%d", *ct.Length))
 		buf.WriteByte(',')
-		ct.Scale.FormatFast(buf)
+		buf.WriteString(fmt.Sprintf("%d", *ct.Scale))
 		buf.WriteByte(')')
 
 	} else if ct.Length != nil {
 		buf.WriteByte('(')
-		ct.Length.FormatFast(buf)
+		buf.WriteString(fmt.Sprintf("%d", *ct.Length))
 		buf.WriteByte(')')
 	}
 
@@ -1107,7 +1115,7 @@ func (idx *IndexDefinition) FormatFast(buf *TrackedBuffer) {
 			col.Column.FormatFast(buf)
 			if col.Length != nil {
 				buf.WriteByte('(')
-				col.Length.FormatFast(buf)
+				buf.WriteString(fmt.Sprintf("%d", *col.Length))
 				buf.WriteByte(')')
 			}
 		}
@@ -1612,7 +1620,7 @@ func (node IndexHints) FormatFast(buf *TrackedBuffer) {
 func (node *IndexHint) FormatFast(buf *TrackedBuffer) {
 	buf.WriteByte(' ')
 	buf.WriteString(node.Type.ToString())
-	buf.WriteString("index ")
+	buf.WriteByte(' ')
 	if node.ForType != NoForType {
 		buf.WriteString("for ")
 		buf.WriteString(node.ForType.ToString())
@@ -2482,10 +2490,10 @@ func (node *ConvertType) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Type)
 	if node.Length != nil {
 		buf.WriteByte('(')
-		node.Length.FormatFast(buf)
+		buf.WriteString(fmt.Sprintf("%d", *node.Length))
 		if node.Scale != nil {
 			buf.WriteString(", ")
-			node.Scale.FormatFast(buf)
+			buf.WriteString(fmt.Sprintf("%d", *node.Scale))
 		}
 		buf.WriteByte(')')
 	}

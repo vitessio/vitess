@@ -25,6 +25,7 @@ import (
 
 	golcs "github.com/yudai/golcs"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -389,12 +390,12 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 		switch opt.Name {
 		case "charset":
 			opt.String = strings.ToLower(opt.String)
-			if charset, ok := c.Env.CollationEnv.CharsetAlias(opt.String); ok {
+			if charset, ok := c.Env.CollationEnv().CharsetAlias(opt.String); ok {
 				opt.String = charset
 			}
 		case "collate":
 			opt.String = strings.ToLower(opt.String)
-			if collation, ok := c.Env.CollationEnv.CollationAlias(opt.String); ok {
+			if collation, ok := c.Env.CollationEnv().CollationAlias(opt.String); ok {
 				opt.String = collation
 			}
 		case "engine":
@@ -414,7 +415,7 @@ func (c *CreateTableEntity) GetCharset() string {
 	for _, opt := range c.CreateTable.TableSpec.Options {
 		if strings.ToLower(opt.Name) == "charset" {
 			opt.String = strings.ToLower(opt.String)
-			if charsetName, ok := c.Env.CollationEnv.CharsetAlias(opt.String); ok {
+			if charsetName, ok := c.Env.CollationEnv().CharsetAlias(opt.String); ok {
 				return charsetName
 			}
 			return opt.String
@@ -429,7 +430,7 @@ func (c *CreateTableEntity) GetCollation() string {
 	for _, opt := range c.CreateTable.TableSpec.Options {
 		if strings.ToLower(opt.Name) == "collate" {
 			opt.String = strings.ToLower(opt.String)
-			if collationName, ok := c.Env.CollationEnv.CollationAlias(opt.String); ok {
+			if collationName, ok := c.Env.CollationEnv().CollationAlias(opt.String); ok {
 				return collationName
 			}
 			return opt.String
@@ -444,8 +445,8 @@ func (c *CreateTableEntity) Clone() Entity {
 
 func getTableCharsetCollate(env *Environment, tableOptions *sqlparser.TableOptions) *charsetCollate {
 	cc := &charsetCollate{
-		charset: env.CollationEnv.LookupCharsetName(env.DefaultColl),
-		collate: env.CollationEnv.LookupName(env.DefaultColl),
+		charset: env.CollationEnv().LookupCharsetName(env.DefaultColl),
+		collate: env.CollationEnv().LookupName(env.DefaultColl),
 	}
 	for _, option := range *tableOptions {
 		if strings.EqualFold(option.Name, "charset") {
@@ -506,13 +507,13 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 
 		// Map any charset aliases to the real charset. This applies mainly right
 		// now to utf8 being an alias for utf8mb3.
-		if charset, ok := c.Env.CollationEnv.CharsetAlias(col.Type.Charset.Name); ok {
+		if charset, ok := c.Env.CollationEnv().CharsetAlias(col.Type.Charset.Name); ok {
 			col.Type.Charset.Name = charset
 		}
 
 		// Map any collation aliases to the real collation. This applies mainly right
 		// now to utf8 being an alias for utf8mb3 collations.
-		if collation, ok := c.Env.CollationEnv.CollationAlias(col.Type.Options.Collate); ok {
+		if collation, ok := c.Env.CollationEnv().CollationAlias(col.Type.Options.Collate); ok {
 			col.Type.Options.Collate = collation
 		}
 
@@ -530,10 +531,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		// "show create table" reports it as a tinyint(1).
 		if col.Type.Type == "boolean" {
 			col.Type.Type = "tinyint"
-			col.Type.Length = &sqlparser.Literal{
-				Type: sqlparser.IntVal,
-				Val:  "1",
-			}
+			col.Type.Length = ptr.Of(1)
 
 			if col.Type.Options.Default != nil {
 				val, ok := col.Type.Options.Default.(sqlparser.BoolVal)
@@ -562,16 +560,14 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 				col.Type.Type = "double"
 			}
 
-			if col.Type.Length != nil && col.Type.Scale == nil && col.Type.Length.Type == sqlparser.IntVal {
-				if l, err := strconv.ParseInt(col.Type.Length.Val, 10, 64); err == nil {
-					// See https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html, but the docs are
-					// subtly wrong. We use a float for a precision of 24, not a double as the documentation
-					// mentioned. Validated against the actual behavior of MySQL.
-					if l <= 24 {
-						col.Type.Type = "float"
-					} else {
-						col.Type.Type = "double"
-					}
+			if col.Type.Length != nil && col.Type.Scale == nil {
+				// See https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html, but the docs are
+				// subtly wrong. We use a float for a precision of 24, not a double as the documentation
+				// mentioned. Validated against the actual behavior of MySQL.
+				if *col.Type.Length <= 24 {
+					col.Type.Type = "float"
+				} else {
+					col.Type.Type = "double"
 				}
 				col.Type.Length = nil
 			}
@@ -604,7 +600,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			if col.Type.Charset.Name != "" {
 				col.Type.Charset.Name = ""
 				if col.Type.Options.Collate == "" {
-					col.Type.Options.Collate = c.Env.CollationEnv.LookupName(c.Env.DefaultColl)
+					col.Type.Options.Collate = c.Env.CollationEnv().LookupName(c.Env.DefaultColl)
 				}
 			}
 
@@ -627,7 +623,7 @@ func (c *CreateTableEntity) normalizeIndexOptions() {
 }
 
 func isBool(colType *sqlparser.ColumnType) bool {
-	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length != nil && sqlparser.CanonicalString(colType.Length) == "1"
+	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length != nil && *colType.Length == 1
 }
 
 func (c *CreateTableEntity) normalizePartitionOptions() {
@@ -1018,7 +1014,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 			case "CHARSET":
 				switch hints.TableCharsetCollateStrategy {
 				case TableCharsetCollateStrict:
-					tableOption = &sqlparser.TableOption{Name: "CHARSET", String: c.Env.CollationEnv.LookupCharsetName(c.Env.DefaultColl), CaseSensitive: true}
+					tableOption = &sqlparser.TableOption{Name: "CHARSET", String: c.Env.CollationEnv().LookupCharsetName(c.Env.DefaultColl), CaseSensitive: true}
 					// in all other strategies we ignore the charset
 				}
 			case "CHECKSUM":
@@ -1599,7 +1595,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColEntity := NewColumnDefinitionEntity(t2Col)
 
 		// check diff between before/after columns:
-		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, t2ColEntity, t1cc, t2cc)
+		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, t1cc, t2cc, hints)
 		if err != nil {
 			return err
 		}

@@ -20,9 +20,9 @@ import (
 	"encoding/json"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -202,7 +202,7 @@ func (plan *Plan) TableNames() (names []string) {
 }
 
 // Build builds a plan based on the schema.
-func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, viewsEnabled bool, collationEnv *collations.Environment, mysqlVersion string) (plan *Plan, err error) {
+func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, viewsEnabled bool) (plan *Plan, err error) {
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan, err = &Plan{
@@ -210,7 +210,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 			FullQuery: GenerateLimitQuery(stmt),
 		}, nil
 	case *sqlparser.Select:
-		plan, err = analyzeSelect(stmt, tables, collationEnv, mysqlVersion)
+		plan, err = analyzeSelect(env, stmt, tables)
 	case *sqlparser.Insert:
 		plan, err = analyzeInsert(stmt, tables)
 	case *sqlparser.Update:

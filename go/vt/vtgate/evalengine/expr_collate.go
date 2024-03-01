@@ -111,14 +111,14 @@ func (expr *CollateExpr) compile(c *compiler) (ctype, error) {
 
 	switch ct.Type {
 	case sqltypes.VarChar:
-		if err := c.collationEnv.EnsureCollate(ct.Col.Collation, expr.TypedCollation.Collation); err != nil {
+		if err := c.env.CollationEnv().EnsureCollate(ct.Col.Collation, expr.TypedCollation.Collation); err != nil {
 			return ctype{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 		}
 		fallthrough
 	case sqltypes.VarBinary:
 		c.asm.Collate(expr.TypedCollation.Collation)
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, expr.TypedCollation.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, expr.TypedCollation.Collation, nil)
 	}
 
 	c.asm.jumpDestination(skip)

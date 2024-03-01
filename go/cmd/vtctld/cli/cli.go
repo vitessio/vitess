@@ -20,20 +20,16 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctld"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 var (
-	ts           *topo.Server
-	collationEnv *collations.Environment
-	parser       *sqlparser.Parser
-	mysqlVersion string
-	Main         = &cobra.Command{
+	ts   *topo.Server
+	env  *vtenv.Environment
+	Main = &cobra.Command{
 		Use:   "vtctld",
 		Short: "The Vitess cluster management daemon.",
 		Long: `vtctld provides web and gRPC interfaces to manage a single Vitess cluster.
@@ -66,10 +62,8 @@ func run(cmd *cobra.Command, args []string) error {
 	defer ts.Close()
 
 	var err error
-	mysqlVersion = servenv.MySQLServerVersion()
-	collationEnv = collations.NewEnvironment(mysqlVersion)
-	parser, err = sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: mysqlVersion,
+	env, err = vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
@@ -77,7 +71,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	// Init the vtctld core
-	if err := vtctld.InitVtctld(ts, collationEnv, parser, mysqlVersion); err != nil {
+	if err := vtctld.InitVtctld(env, ts); err != nil {
 		return err
 	}
 
@@ -103,14 +97,4 @@ func init() {
 	servenv.MoveFlagsToCobraCommand(Main)
 
 	acl.RegisterFlags(Main.Flags())
-
-	var err error
-	parser, err = sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
-		TruncateUILen:      servenv.TruncateUILen,
-		TruncateErrLen:     servenv.TruncateErrLen,
-	})
-	if err != nil {
-		log.Fatalf("cannot initialize sql parser: %v", err)
-	}
 }
