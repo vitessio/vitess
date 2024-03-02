@@ -17,10 +17,11 @@ limitations under the License.
 package opentsdb
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/stats"
 )
 
 type mockWriter struct {
@@ -32,47 +33,40 @@ func (mw *mockWriter) Write(data []*DataPoint) error {
 	return nil
 }
 
-type mockVariable struct{}
-
-func (mv *mockVariable) Help() string {
-	return ""
-}
-
-func (mv *mockVariable) String() string {
-	return ""
-}
-
 func TestPushAll(t *testing.T) {
 	mw := &mockWriter{}
-	p := "testPrefix"
-	ct := map[string]string{
-		"tag1": "value1",
-		"tag2": "value2",
-	}
-
 	b := &backend{
-		prefix:     p,
-		commonTags: ct,
-		writer:     mw,
-	}
-
-	// TODO: Add asserts
-	err := b.PushAll()
-	assert.NoError(t, err)
-}
-
-func TestPushOne(t *testing.T) {
-	mw := &mockWriter{}
-	mv := &mockVariable{}
-	b := &backend{
-		prefix:     "test",
+		prefix:     "testPrefix",
 		commonTags: map[string]string{"tag1": "value1"},
 		writer:     mw,
 	}
 
-	// TODO: Add asserts
-	err := b.PushOne("var1", mv)
+	err := b.PushAll()
+	assert.NoError(t, err)
+	before := len(mw.data)
+
+	stats.NewGaugeFloat64("test_push_all1", "help")
+	stats.NewGaugeFloat64("test_push_all2", "help")
+
+	err = b.PushAll()
+	assert.NoError(t, err)
+	after := len(mw.data)
+
+	assert.Equalf(t, after-before, 2, "expected length of writer.data to have been increased by 2")
+}
+
+func TestPushOne(t *testing.T) {
+	mw := &mockWriter{}
+	b := &backend{
+		prefix:     "testPrefix",
+		commonTags: map[string]string{"tag1": "value1"},
+		writer:     mw,
+	}
+
+	s := stats.NewGaugeFloat64("test_push_one", "help")
+	err := b.PushOne("test_push_one", s)
 	assert.NoError(t, err)
 
-	fmt.Println(b.collector().data)
+	assert.Len(t, mw.data, 1)
+	assert.Equal(t, "testprefix.test_push_one", mw.data[0].Metric)
 }
