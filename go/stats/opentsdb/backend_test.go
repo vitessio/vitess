@@ -52,7 +52,7 @@ func TestPushAll(t *testing.T) {
 	assert.NoError(t, err)
 	after := len(mw.data)
 
-	assert.Equalf(t, after-before, 2, "expected length of writer.data to have been increased by 2")
+	assert.Equalf(t, after-before, 2, "length of writer.data should have been increased by 2")
 }
 
 func TestPushOne(t *testing.T) {
