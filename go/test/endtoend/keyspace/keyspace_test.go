@@ -18,7 +18,6 @@ package sequence
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"flag"
 	"os"
 	"testing"
@@ -211,12 +210,9 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 
 func TestShardNames(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, keyspaceShardedName)
-	require.Nil(t, err)
-	var srvKeyspace topodatapb.SrvKeyspace
-
-	err = json.Unmarshal([]byte(output), &srvKeyspace)
-	require.Nil(t, err)
+	output, err := clusterForKSTest.VtctldClientProcess.GetSrvKeyspaces(keyspaceShardedName, cell)
+	require.NoError(t, err)
+	require.NotNil(t, output[cell], "no srvkeyspace for cell %s", cell)
 }
 
 func TestGetKeyspace(t *testing.T) {
@@ -430,11 +426,11 @@ func packKeyspaceID(keyspaceID uint64) []byte {
 }
 
 func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodatapb.SrvKeyspace {
-	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
-	require.Nil(t, err)
-	var srvKeyspace topodatapb.SrvKeyspace
+	output, err := clusterForKSTest.VtctldClientProcess.GetSrvKeyspaces(ksname, cell)
+	require.NoError(t, err)
 
-	err = json.Unmarshal([]byte(output), &srvKeyspace)
-	require.Nil(t, err)
-	return &srvKeyspace
+	srvKeyspace := output[cell]
+	require.NotNil(t, srvKeyspace, "no srvkeyspace for cell %s", cell)
+
+	return srvKeyspace
 }
