@@ -88,7 +88,7 @@ const (
 	mysqlRefreshInterval           = 10 * time.Second       // Refreshing tablet inventory
 	mysqlAggregateInterval         = 125 * time.Millisecond
 	throttledAppsSnapshotInterval  = 5 * time.Second
-	recentCheckRateLimiterInterval = 1 * time.Second // Ticker assisting in determining dormancy
+	recentCheckRateLimiterInterval = 1 * time.Second // Ticker assisting in determining when the throttler was last checked
 
 	aggregatedMetricsExpiration = 5 * time.Second
 	recentAppsExpiration        = time.Hour * 24
