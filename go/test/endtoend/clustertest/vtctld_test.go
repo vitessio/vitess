@@ -84,7 +84,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 
 func testListAllTablets(t *testing.T) {
 	// first w/o any filters, aside from cell
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets", clusterInstance.Cell)
+	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetTablets", "--cell", clusterInstance.Cell)
 	require.NoError(t, err)
 
 	tablets := getAllTablets()
@@ -102,10 +102,12 @@ func testListAllTablets(t *testing.T) {
 
 	// now filtering with the first keyspace and tablet type of primary, in
 	// addition to the cell
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"ListAllTablets", "--", "--keyspace", clusterInstance.Keyspaces[0].Name,
-		"--tablet_type", "primary",
-		clusterInstance.Cell)
+	result, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"GetTablets",
+		"--keyspace", clusterInstance.Keyspaces[0].Name,
+		"--tablet-type", "primary",
+		"--cell", clusterInstance.Cell,
+	)
 	require.NoError(t, err)
 
 	// We should only return a single primary tablet per shard in the first keyspace
