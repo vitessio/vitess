@@ -82,19 +82,20 @@ import (
 )
 
 const (
-	leaderCheckInterval           = 5 * time.Second
-	mysqlCollectInterval          = 250 * time.Millisecond
-	mysqlDormantCollectInterval   = 5 * time.Second
-	mysqlRefreshInterval          = 10 * time.Second
-	mysqlAggregateInterval        = 125 * time.Millisecond
-	throttledAppsSnapshotInterval = 5 * time.Second
+	leaderCheckInterval            = 5 * time.Second
+	mysqlCollectInterval           = 250 * time.Millisecond // PRIMARY polls replicas
+	mysqlDormantCollectInterval    = 5 * time.Second        // PRIMARY polls replicas when dormant (no recent checks)
+	mysqlRefreshInterval           = 10 * time.Second       // Refreshing tablet inventory
+	mysqlAggregateInterval         = 125 * time.Millisecond
+	throttledAppsSnapshotInterval  = 5 * time.Second
+	recentCheckRateLimiterInterval = 1 * time.Second // Ticker assisting in determining dormancy
 
 	aggregatedMetricsExpiration = 5 * time.Second
 	recentAppsExpiration        = time.Hour * 24
 
 	nonDeprioritizedAppMapExpiration = time.Second
 
-	dormantPeriod              = time.Minute
+	dormantPeriod              = time.Minute // How long since last check to be considered dormant
 	DefaultAppThrottleDuration = time.Hour
 	DefaultThrottleRatio       = 1.0
 
@@ -171,6 +172,7 @@ type Throttler struct {
 	overrideTmClient tmclient.TabletManagerClient
 
 	recentCheckRateLimiter *timer.RateLimiter
+	recentCheckDormantDiff int64
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
@@ -259,6 +261,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.mysqlAggregateInterval = mysqlAggregateInterval
 	throttler.throttledAppsSnapshotInterval = throttledAppsSnapshotInterval
 	throttler.dormantPeriod = dormantPeriod
+	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
 
 	throttler.StoreMetricsThreshold(defaultThrottleLagThreshold.Seconds()) //default
 	throttler.readSelfThrottleMetric = func(ctx context.Context, p *mysql.Probe) *mysql.MySQLThrottleMetric {
@@ -666,9 +669,11 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 	return result
 }
 
-// isDormant returns true when the last check was more than dormantPeriod ago
+// isDormant returns true when the last check was more than dormantPeriod ago.
+// Instead of measuring actual time, we use the fact recentCheckRateLimiter ticks every second, and take
+// a logical diff, counting the number of ticks since the last check. This is a good enough approximation.
 func (throttler *Throttler) isDormant() bool {
-	return throttler.recentCheckRateLimiter.Diff() > int64(throttler.dormantPeriod/time.Second)
+	return throttler.recentCheckRateLimiter.Diff() > throttler.recentCheckDormantDiff
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will
@@ -687,7 +692,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	mysqlAggregateTicker := addTicker(throttler.mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
 	primaryStimulatorRateLimiter := timer.NewRateLimiter(throttler.dormantPeriod)
-	throttler.recentCheckRateLimiter = timer.NewRateLimiter(time.Second)
+	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
 
 	wg.Add(1)
 	go func() {
@@ -754,7 +759,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 						throttler.collectMySQLMetrics(ctx, tmClient)
 					}
 					//
-					if throttler.recentCheckRateLimiter.Diff() <= 1 {
+					if throttler.recentCheckRateLimiter.Diff() <= 1 { // recently checked
 						if !throttler.isLeader.Load() {
 							// This is a replica, and has just recently been checked.
 							// We want to proactively "stimulate" the primary throttler to renew the heartbeat lease.
