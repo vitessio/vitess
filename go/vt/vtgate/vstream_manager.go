@@ -946,17 +946,30 @@ func (vs *vstream) keyspaceHasBeenResharded(ctx context.Context, keyspace string
 	if err != nil || len(shards) == 0 {
 		return false, err
 	}
+
+	// First check the typical case, where the vgtid shards match the serving shards.
+	// In that case it's NOT possible that an applicable reshard has happened because
+	// the vgtid contains shards that are all serving.
+	reshardPossible := false
+	ksShardGTIDs := make([]*binlogdatapb.ShardGtid, 0, len(vs.vgtid.ShardGtids))
 	for _, g := range vs.vgtid.ShardGtids {
 		if g.GetKeyspace() == keyspace {
-			// If we already have the correct (serving) shards in our vgtid then the
-			// keyspace MAY have an active Reshard workflow but the keyspace has not
-			// been resharded (meaning traffic has been switched in an active Reshard
-			// workflow) since we were last streaming.
-			if shards[g.GetShard()].GetIsPrimaryServing() {
-				return false, nil
-			}
+			ksShardGTIDs = append(ksShardGTIDs, g)
 		}
 	}
+	for _, s := range ksShardGTIDs {
+		if !shards[s.GetShard()].GetIsPrimaryServing() {
+			reshardPossible = true
+			break
+		}
+	}
+	log.Errorf("DEBUG: reshard possible: %v", reshardPossible)
+	if !reshardPossible {
+		return false, nil
+	}
+
+	// Now that we know there MAY have been an applicable reshard, let's make a
+	// definitive determination by looking at the shard keyranges.
 	for _, i := range shards {
 		for _, j := range shards {
 			if i.ShardName() == j.ShardName() && key.KeyRangeEqual(i.GetKeyRange(), j.GetKeyRange()) {
@@ -965,10 +978,11 @@ func (vs *vstream) keyspaceHasBeenResharded(ctx context.Context, keyspace string
 			}
 			if key.KeyRangeIntersect(i.GetKeyRange(), j.GetKeyRange()) {
 				// We have different shards with overlapping keyranges so we know
-				// that a reshard has occurred.
+				// that a reshard has happened.
 				return true, nil
 			}
 		}
 	}
+
 	return false, nil
 }
