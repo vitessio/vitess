@@ -47,6 +47,7 @@ const (
 
 type fakeTMClient struct {
 	tmclient.TabletManagerClient
+	appNames []string
 }
 
 func (c *fakeTMClient) Close() {
@@ -59,6 +60,7 @@ func (c *fakeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Ta
 		Threshold:       1,
 		RecentlyChecked: false,
 	}
+	c.appNames = append(c.appNames, request.AppName)
 	return resp, nil
 }
 
@@ -66,6 +68,10 @@ type FakeTopoServer struct {
 }
 
 func (ts *FakeTopoServer) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
+	tabletType := topodatapb.TabletType_PRIMARY
+	if alias.Uid != 100 {
+		tabletType = topodatapb.TabletType_REPLICA
+	}
 	tablet := &topo.TabletInfo{
 		Tablet: &topodatapb.Tablet{
 			Alias:         alias,
@@ -73,7 +79,7 @@ func (ts *FakeTopoServer) GetTablet(ctx context.Context, alias *topodatapb.Table
 			MysqlHostname: "127.0.0.1",
 			MysqlPort:     3306,
 			PortMap:       map[string]int32{"vt": 5000},
-			Type:          topodatapb.TabletType_REPLICA,
+			Type:          tabletType,
 		},
 	}
 	return tablet, nil
@@ -83,6 +89,7 @@ func (ts *FakeTopoServer) FindAllTabletAliasesInShard(ctx context.Context, keysp
 	aliases := []*topodatapb.TabletAlias{
 		{Cell: "fakezone1", Uid: 100},
 		{Cell: "fakezone2", Uid: 101},
+		{Cell: "fakezone3", Uid: 103},
 	}
 	return aliases, nil
 }
@@ -152,6 +159,7 @@ func newTestThrottler() *Throttler {
 	throttler.mysqlAggregateInterval = 10 * time.Millisecond
 	throttler.throttledAppsSnapshotInterval = 10 * time.Millisecond
 	throttler.dormantPeriod = 5 * time.Second
+	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
 
 	throttler.readSelfThrottleMetric = func(ctx context.Context, p *mysql.Probe) *mysql.MySQLThrottleMetric {
 		return &mysql.MySQLThrottleMetric{
@@ -374,9 +382,13 @@ func TestRace(t *testing.T) {
 	runThrottler(t, context.Background(), throttler, 5*time.Second, nil)
 }
 
-// TestProbes enables a throttler for a few seocnds, and afterwards expects to find probes and metrics.
+// TestProbes enables a throttler for a few seconds, and afterwards expects to find probes and metrics.
 func TestProbesWhileOperating(t *testing.T) {
 	throttler := newTestThrottler()
+
+	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
+	require.True(t, ok)
+	assert.Empty(t, tmClient.appNames)
 
 	t.Run("aggregated", func(t *testing.T) {
 		assert.Equal(t, 0, throttler.aggregatedMetrics.ItemCount())
@@ -400,6 +412,20 @@ func TestProbesWhileOperating(t *testing.T) {
 					assert.Failf(t, "unknown clusterName", "%v", clusterName)
 				}
 			}
+			assert.NotEmpty(t, tmClient.appNames)
+			// The throttler here emulates a PRIMARY tablet, and therefore should probe the replicas using
+			// the "vitess" app name.
+			uniqueNames := map[string]int{}
+			for _, appName := range tmClient.appNames {
+				uniqueNames[appName]++
+			}
+			// PRIMARY throttler probes replicas with empty app name, which is then
+			// interpreted as "vitess" name.
+			_, ok := uniqueNames[""]
+			assert.Truef(t, ok, "%+v", uniqueNames)
+			// And that's the only app we expect to see.
+			assert.Equalf(t, 1, len(uniqueNames), "%+v", uniqueNames)
+
 			cancel() // end test early
 		})
 	})
@@ -497,6 +523,51 @@ func TestDormant(t *testing.T) {
 				require.FailNow(t, "context expired before testing completed")
 			case <-time.After(throttler.dormantPeriod):
 				assert.True(t, throttler.isDormant())
+			}
+			cancel() // end test early
+		}()
+	})
+}
+
+func TestReplica(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	throttler := newTestThrottler()
+	throttler.dormantPeriod = time.Minute
+	throttler.tabletTypeFunc = func() topodatapb.TabletType { return topodatapb.TabletType_REPLICA }
+
+	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
+	require.True(t, ok)
+	assert.Empty(t, tmClient.appNames)
+
+	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+		assert.Empty(t, tmClient.appNames)
+		flags := &CheckFlags{}
+		throttler.CheckByType(ctx, throttlerapp.VitessName.String(), "", flags, ThrottleCheckSelf)
+		go func() {
+			select {
+			case <-ctx.Done():
+				require.FailNow(t, "context expired before testing completed")
+			case <-time.After(time.Second):
+				assert.Empty(t, tmClient.appNames)
+			}
+			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", flags, ThrottleCheckSelf)
+			select {
+			case <-ctx.Done():
+				require.FailNow(t, "context expired before testing completed")
+			case <-time.After(time.Second):
+				assert.NotEmpty(t, tmClient.appNames)
+				assert.Containsf(t, tmClient.appNames, throttlerapp.ThrottlerStimulatorName.String(), "%+v", tmClient.appNames)
+				assert.Equalf(t, 1, len(tmClient.appNames), "%+v", tmClient.appNames)
+			}
+			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", flags, ThrottleCheckSelf)
+			select {
+			case <-ctx.Done():
+				require.FailNow(t, "context expired before testing completed")
+			case <-time.After(time.Second):
+				// Due to stimulation rate limiting, we shouldn't see a 2nd CheckThrottler request.
+				assert.Equalf(t, 1, len(tmClient.appNames), "%+v", tmClient.appNames)
 			}
 			cancel() // end test early
 		}()
