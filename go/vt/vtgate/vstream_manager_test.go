@@ -1389,7 +1389,7 @@ func TestKeyspaceHasBeenSharded(t *testing.T) {
 				"20-40",
 				"40-60",
 				"60-80",
-				// -80 is not being resharded
+				// 80- is not being resharded.
 			},
 			vgtid: &binlogdatapb.VGtid{
 				ShardGtids: []*binlogdatapb.ShardGtid{
@@ -1450,8 +1450,8 @@ func TestKeyspaceHasBeenSharded(t *testing.T) {
 				"c0-",
 			},
 			newshards: []string{
-				// -40, 40-80, and 80-c0 are not being resharded
-				"80-",
+				// -40 and 40-80 are not being resharded.
+				"80-", // Merge of 80-c0 and c0-
 			},
 			vgtid: &binlogdatapb.VGtid{
 				ShardGtids: []*binlogdatapb.ShardGtid{
@@ -1485,8 +1485,8 @@ func TestKeyspaceHasBeenSharded(t *testing.T) {
 				"c0-",
 			},
 			newshards: []string{
-				// -40, 40-80, and 80-c0 are not being resharded
-				"80-",
+				// -40 and 40-80 are not being resharded.
+				"80-", // Merge of 80-c0 and c0-
 			},
 			vgtid: &binlogdatapb.VGtid{
 				ShardGtids: []*binlogdatapb.ShardGtid{
@@ -1513,6 +1513,22 @@ func TestKeyspaceHasBeenSharded(t *testing.T) {
 		},
 	}
 
+	addTablet := func(t *testing.T, ctx context.Context, host string, port int32, cell, ks, shard string, ts *topo.Server, hc *discovery.FakeHealthCheck, serving bool) {
+		tabletconn := hc.AddTestTablet(cell, host, port, ks, shard, topodatapb.TabletType_PRIMARY, serving, 0, nil)
+		err := ts.CreateTablet(ctx, tabletconn.Tablet())
+		require.NoError(t, err)
+		var alias *topodatapb.TabletAlias
+		if serving {
+			alias = tabletconn.Tablet().Alias
+		}
+		_, err = ts.UpdateShardFields(ctx, ks, shard, func(si *topo.ShardInfo) error {
+			si.PrimaryAlias = alias
+			si.IsPrimaryServing = serving
+			return nil
+		})
+		require.NoError(t, err)
+	}
+
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			hc := discovery.NewFakeHealthCheck(nil)
@@ -1527,42 +1543,10 @@ func TestKeyspaceHasBeenSharded(t *testing.T) {
 				ts:         st.topoServer,
 			}
 			for i, shard := range tc.oldshards {
-				serving := true
-				if tc.trafficSwitched {
-					serving = false
-				}
-				tabletconn := hc.AddTestTablet(cell, fmt.Sprintf("1.1.0.%d", i), int32(1000+i), ks, shard, topodatapb.TabletType_PRIMARY, serving, 0, nil)
-				err := st.topoServer.CreateTablet(ctx, tabletconn.Tablet())
-				require.NoError(t, err)
-				var alias *topodatapb.TabletAlias
-				if serving {
-					alias = tabletconn.Tablet().Alias
-				}
-				_, err = st.topoServer.UpdateShardFields(ctx, ks, shard, func(si *topo.ShardInfo) error {
-					si.PrimaryAlias = alias
-					si.IsPrimaryServing = serving
-					return nil
-				})
-				require.NoError(t, err)
+				addTablet(t, ctx, fmt.Sprintf("1.1.0.%d", i), int32(1000+i), cell, ks, shard, st.topoServer, hc, !tc.trafficSwitched)
 			}
 			for i, shard := range tc.newshards {
-				serving := false
-				if tc.trafficSwitched {
-					serving = true
-				}
-				tabletconn := hc.AddTestTablet(cell, fmt.Sprintf("1.1.1.%d", i), int32(2000+i), ks, shard, topodatapb.TabletType_PRIMARY, serving, 0, nil)
-				err := st.topoServer.CreateTablet(ctx, tabletconn.Tablet())
-				require.NoError(t, err)
-				var alias *topodatapb.TabletAlias
-				if serving {
-					alias = tabletconn.Tablet().Alias
-				}
-				_, err = st.topoServer.UpdateShardFields(ctx, ks, shard, func(si *topo.ShardInfo) error {
-					si.PrimaryAlias = alias
-					si.IsPrimaryServing = serving
-					return nil
-				})
-				require.NoError(t, err)
+				addTablet(t, ctx, fmt.Sprintf("1.1.1.%d", i), int32(2000+i), cell, ks, shard, st.topoServer, hc, tc.trafficSwitched)
 			}
 			got, err := vs.keyspaceHasBeenResharded(ctx, ks)
 			if tc.wantErr != "" {
