@@ -57,6 +57,7 @@
  * vtgate/engine: Fix race condition in join logic [#14435](https://github.com/vitessio/vitess/pull/14435)
  * Bug fix: Use target tablet from health stats cache when checking replication status [#14436](https://github.com/vitessio/vitess/pull/14436)
  * Ensure hexval and int don't share BindVar after Normalization [#14451](https://github.com/vitessio/vitess/pull/14451)
+ * Make connection killing resilient to MySQL hangs [#14500](https://github.com/vitessio/vitess/pull/14500)
  * planbuilder bugfix: expose columns through derived tables [#14501](https://github.com/vitessio/vitess/pull/14501)
  * Fix missing query serving error code [#14520](https://github.com/vitessio/vitess/pull/14520)
  * Fix type coercion in cascading non-literal updates [#14524](https://github.com/vitessio/vitess/pull/14524)
@@ -99,7 +100,9 @@
  * [release-19.0] Fix Go routine leaks in streaming calls (#15293) [#15301](https://github.com/vitessio/vitess/pull/15301)
  * [release-19.0] planner: support union statements with ctes (#15312) [#15324](https://github.com/vitessio/vitess/pull/15324)
  * [release-19.0] Column alias expanding on ORDER BY (#15302) [#15329](https://github.com/vitessio/vitess/pull/15329)
- * [release-19.0] go/vt/discovery: use protobuf getters for SrvVschema (#15343) [#15346](https://github.com/vitessio/vitess/pull/15346) 
+ * [release-19.0] go/vt/discovery: use protobuf getters for SrvVschema (#15343) [#15346](https://github.com/vitessio/vitess/pull/15346)
+ * [release-19.0] SHOW VITESS_REPLICATION_STATUS: Only use replication tracker when it's enabled (#15348) [#15362](https://github.com/vitessio/vitess/pull/15362)
+ * This is a backport of vitessio#15344 [#15377](https://github.com/vitessio/vitess/pull/15377) 
 #### Schema Tracker
  * discovery: fix crash with nil server vschema [#15086](https://github.com/vitessio/vitess/pull/15086) 
 #### TabletManager
@@ -329,6 +332,8 @@
 ### Feature Request 
 #### Build/CI
  * Automatically update the Golang dependencies using a CRON [#14891](https://github.com/vitessio/vitess/pull/14891) 
+#### Cluster management
+ * [release-19.0] [vtctldclient] Add GetShardReplication (#15389) [#15390](https://github.com/vitessio/vitess/pull/15390) 
 #### Evalengine
  * evalengine: implement AggregateEvalTypes [#15085](https://github.com/vitessio/vitess/pull/15085) 
 #### Query Serving
@@ -556,7 +561,8 @@
  * Flaky TestFKExtWorkflow: fix Foreign Key stress test flakiness [#14714](https://github.com/vitessio/vitess/pull/14714)
  * Some VReplication e2e Refactoring [#14735](https://github.com/vitessio/vitess/pull/14735)
  * Test: Take test host/runner specs into account for VDiff diff duration test [#14868](https://github.com/vitessio/vitess/pull/14868)
- * vtctldclient CLI validation: Add e2e test to check that options to the vtctldclient commands are supported [#14957](https://github.com/vitessio/vitess/pull/14957) 
+ * vtctldclient CLI validation: Add e2e test to check that options to the vtctldclient commands are supported [#14957](https://github.com/vitessio/vitess/pull/14957)
+ * [release-19.0] VtctldClient Reshard: add e2e tests to confirm CLI options and fix discovered issues. (#15353) [#15364](https://github.com/vitessio/vitess/pull/15364) 
 #### vtctl
  * Reduce flakiness in TestShardReplicationPositions [#14708](https://github.com/vitessio/vitess/pull/14708)
 
