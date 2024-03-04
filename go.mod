@@ -93,6 +93,7 @@ require (
 require (
 	github.com/DataDog/datadog-go/v5 v5.5.0
 	github.com/Shopify/toxiproxy/v2 v2.7.0
+	github.com/andybalholm/brotli v1.0.6
 	github.com/bndr/gotabulate v1.1.2
 	github.com/gammazero/deque v0.2.1
 	github.com/google/safehtml v0.1.0
