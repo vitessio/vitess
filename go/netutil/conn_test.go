@@ -15,7 +15,6 @@ package netutil
 
 import (
 	"net"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -73,9 +72,7 @@ func TestReadTimeout(t *testing.T) {
 
 	select {
 	case err := <-c:
-		assert.Error(t, err)
-
-		assert.True(t, strings.HasSuffix(err.Error(), "i/o timeout"), "Expected error timeout, got %s", err)
+		assert.ErrorContains(t, err, "i/o timeout", "Expected error timeout")
 	case <-time.After(10 * time.Second):
 		t.Errorf("Timeout did not happen")
 	}
@@ -105,9 +102,7 @@ func TestWriteTimeout(t *testing.T) {
 
 	select {
 	case err := <-c:
-		assert.Error(t, err)
-
-		assert.True(t, strings.HasSuffix(err.Error(), "i/o timeout"), "Expected error timeout, got %s", err)
+		assert.ErrorContains(t, err, "i/o timeout", "Expected error timeout")
 	case <-time.After(10 * time.Second):
 		t.Errorf("Timeout did not happen")
 	}
