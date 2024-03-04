@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -73,7 +74,13 @@ var (
 		PreRunE: servenv.CobraPreRunE,
 		RunE:    run,
 	}
+
+	srvTopoCounts *stats.CountersWithSingleLabel
 )
+
+func init() {
+	srvTopoCounts = stats.NewCountersWithSingleLabel("ResilientSrvTopoServer", "Resilient srvtopo server operations", "type")
+}
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag
 // it will help to avoid strange behaviors when vtgate runs but actually does not work
@@ -139,7 +146,7 @@ func run(cmd *cobra.Command, args []string) error {
 	ts := topo.Open()
 	defer ts.Close()
 
-	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, "ResilientSrvTopoServer")
+	resilientServer = srvtopo.NewResilientServer(context.Background(), ts, srvTopoCounts)
 
 	tabletTypes := make([]topodatapb.TabletType, 0, 1)
 	for _, tt := range tabletTypesToWait {

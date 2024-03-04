@@ -3,6 +3,8 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
+  - **[Breaking changes](#breaking-changes)**
+    - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
   - **[Query Compatibility](#query-compatibility)**
     - [Vindex Hints](#vindex-hints)
     - [Update with Limit Support](#update-limit)
@@ -10,11 +12,21 @@
     - [Delete with Subquery Support](#delete-subquery)
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
+    - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
 
 ## <a id="major-changes"/>Major Changes
+
+### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="shutdown-grace-period-default"/>`shutdown_grace_period` Default Change
+
+The `--shutdown_grace_period` flag, which was introduced in v2 with a default of `0 seconds`, has now been changed to default to `3 seconds`.
+This makes reparenting in Vitess resilient to client errors, and prevents PlannedReparentShard from timing out.
+
+In order to preserve the old behaviour, the users can set the flag back to `0 seconds` causing open transactions to never be shutdown, but in that case, they run the risk of PlannedReparentShard calls timing out.
 
 ### <a id="query-compatibility"/>Query Compatibility
 
@@ -61,6 +73,9 @@ The `--pprof-http` flag, which was introduced in v19 with a default of `true`, h
 This makes HTTP `pprof` endpoints now an *opt-in* feature, rather than opt-out.
 To continue enabling these endpoints, explicitly set `--pprof-http` when starting up Vitess components.
 
+#### <a id="healthcheck-dial-concurrency-flag"/>New `--healthcheck-dial-concurrency` flag
+
+The new `--healthcheck-dial-concurrency` flag defines the maximum number of healthcheck connections that can open concurrently. This limit is to avoid hitting Go runtime panics on deployments watching enough tablets [to hit the runtime's maximum thread limit of `10000`](https://pkg.go.dev/runtime/debug#SetMaxThreads) due to blocking network syscalls. This flag applies to `vtcombo`, `vtctld` and `vtgate` only and a value less than the runtime max thread limit _(`10000`)_ is recommended.
 
 ## <a id="minor-changes"/>Minor Changes
 

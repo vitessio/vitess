@@ -37,6 +37,7 @@ type analyzer struct {
 	sig         QuerySignature
 	si          SchemaInformation
 	currentDb   string
+	recheck     bool
 
 	err          error
 	inProjection int
@@ -69,10 +70,13 @@ func (a *analyzer) lateInit() {
 	a.binder = newBinder(a.scoper, a, a.tables, a.typer)
 	a.scoper.binder = a.binder
 	a.rewriter = &earlyRewriter{
-		env:             a.si.Environment(),
-		scoper:          a.scoper,
 		binder:          a.binder,
+		scoper:          a.scoper,
 		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
+		env:             a.si.Environment(),
+		aliasMapCache:   map[*sqlparser.Select]map[string]exprContainer{},
+		reAnalyze:       a.reAnalyze,
+		tables:          a.tables,
 	}
 }
 
@@ -232,10 +236,6 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if err := a.scoper.up(cursor); err != nil {
-		a.setError(err)
-		return false
-	}
 	if err := a.tables.up(cursor); err != nil {
 		a.setError(err)
 		return false
@@ -251,9 +251,17 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if err := a.rewriter.up(cursor); err != nil {
+	if !a.recheck {
+		// no need to run the rewriter on rechecking
+		if err := a.rewriter.up(cursor); err != nil {
+			a.setError(err)
+			return true
+		}
+	}
+
+	if err := a.scoper.up(cursor); err != nil {
 		a.setError(err)
-		return true
+		return false
 	}
 
 	a.leaveProjection(cursor)
@@ -348,8 +356,20 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 	a.lateInit()
 
+	return a.lateAnalyze(statement)
+}
+
+func (a *analyzer) lateAnalyze(statement sqlparser.SQLNode) error {
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
+}
+
+func (a *analyzer) reAnalyze(statement sqlparser.SQLNode) error {
+	a.recheck = true
+	defer func() {
+		a.recheck = false
+	}()
+	return a.lateAnalyze(statement)
 }
 
 // canShortCut checks if we are dealing with a single unsharded keyspace and no tables that have managed foreign keys
@@ -630,6 +650,10 @@ func (p ProjError) Error() string {
 // if the query is not unsharded
 type ShardedError struct {
 	Inner error
+}
+
+func (p ShardedError) Unwrap() error {
+	return p.Inner
 }
 
 func (p ShardedError) Error() string {

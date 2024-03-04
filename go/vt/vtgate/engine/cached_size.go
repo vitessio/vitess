@@ -185,17 +185,27 @@ func (cached *DMLWithInput) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
-	// field DML vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.DML.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field OutputCols []int
+	// field DMLs []vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OutputCols)) * int64(8))
+		size += hack.RuntimeAllocSize(int64(cap(cached.DMLs)) * int64(16))
+		for _, elem := range cached.DMLs {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	// field OutputCols [][]int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.OutputCols)) * int64(24))
+		for _, elem := range cached.OutputCols {
+			{
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(8))
+			}
+		}
 	}
 	return size
 }

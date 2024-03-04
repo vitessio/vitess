@@ -22,9 +22,9 @@ import (
 
 type dmlWithInput struct {
 	input logicalPlan
-	dml   logicalPlan
+	dmls  []logicalPlan
 
-	outputCols []int
+	outputCols [][]int
 }
 
 var _ logicalPlan = (*dmlWithInput)(nil)
@@ -32,9 +32,12 @@ var _ logicalPlan = (*dmlWithInput)(nil)
 // Primitive implements the logicalPlan interface
 func (d *dmlWithInput) Primitive() engine.Primitive {
 	inp := d.input.Primitive()
-	del := d.dml.Primitive()
+	var dels []engine.Primitive
+	for _, dml := range d.dmls {
+		dels = append(dels, dml.Primitive())
+	}
 	return &engine.DMLWithInput{
-		DML:        del,
+		DMLs:       dels,
 		Input:      inp,
 		OutputCols: d.outputCols,
 	}

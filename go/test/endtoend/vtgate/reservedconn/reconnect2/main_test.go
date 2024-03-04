@@ -129,7 +129,7 @@ func TestTabletChange(t *testing.T) {
 	utils.Exec(t, conn, "select * from test")
 
 	// Change Primary
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, "-80"))
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PlannedReparentShard", fmt.Sprintf("%s/%s", keyspaceName, "-80"))
 	require.NoError(t, err)
 
 	// this should pass as there is a new primary tablet and is serving.
@@ -150,7 +150,7 @@ func TestTabletChangeStreaming(t *testing.T) {
 	utils.Exec(t, conn, "select * from test")
 
 	// Change Primary
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, "-80"))
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PlannedReparentShard", fmt.Sprintf("%s/%s", keyspaceName, "-80"))
 	require.NoError(t, err)
 
 	// this should pass as there is a new primary tablet and is serving.

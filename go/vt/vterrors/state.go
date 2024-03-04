@@ -48,6 +48,7 @@ const (
 	WrongValue
 	WrongArguments
 	BadNullError
+	InvalidGroupFuncUse
 
 	// failed precondition
 	NoDB
