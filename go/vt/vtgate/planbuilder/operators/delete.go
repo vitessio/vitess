@@ -73,7 +73,10 @@ func (d *Delete) ShortDescription() string {
 }
 
 func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (op Operator) {
-	childFks := ctx.SemTable.GetChildForeignKeysForTable(deleteStmt.Targets[0])
+	var childFks []vindexes.ChildFKInfo
+	for _, target := range deleteStmt.Targets {
+		childFks = append(childFks, ctx.SemTable.GetChildForeignKeysForTable(target)...)
+	}
 
 	// We check if delete with input plan is required. DML with input planning is generally
 	// slower, because it does a selection and then creates a delete statement wherein we have to
