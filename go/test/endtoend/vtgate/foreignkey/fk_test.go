@@ -379,6 +379,7 @@ func TestFkScenarios(t *testing.T) {
 		name             string
 		dataQueries      []string
 		dmlQuery         string
+		dmlShouldErr     bool
 		assertionQueries []string
 	}{
 		{
@@ -386,7 +387,8 @@ func TestFkScenarios(t *testing.T) {
 			dataQueries: []string{
 				"insert into fk_t1(id, col) values (1, 5)",
 			},
-			dmlQuery: "insert into t2(id, col) values (1, 7)",
+			dmlQuery:     "insert into t2(id, col) values (1, 7)",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -407,7 +409,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t1(id, col) values (1, 7)",
 				"insert into fk_t2(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t1 set col = 5 where id = 1",
+			dmlShouldErr: true,
+			dmlQuery:     "update fk_t1 set col = 5 where id = 1",
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -429,7 +432,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t1(id, col) values (1, 7)",
 				"insert into fk_t2(id, col) values (1, 7)",
 			},
-			dmlQuery: "delete from fk_t1 where id = 1",
+			dmlQuery:     "delete from fk_t1 where id = 1",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -450,7 +454,7 @@ func TestFkScenarios(t *testing.T) {
 			dataQueries: []string{
 				"insert into fk_t1(id, col) values (1, 7), (2, 9)",
 				"insert into fk_t2(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t3(id, col) values (1, 7), (2, 9)",
+				"insert into fk_t3(id, col) values (1, 7)",
 				"insert into fk_t6(id, col) values (1, 7)",
 			},
 			dmlQuery: "update fk_t3 set col = 9 where id = 1",
@@ -469,7 +473,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t4(id, col) values (1, 7)",
 				"insert into fk_t5(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t3 set col = 9 where id = 1",
+			dmlQuery:     "update fk_t3 set col = 9 where id = 1",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -518,7 +523,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t4(id, col) values (1, 7)",
 				"insert into fk_t5(id, col) values (1, 7)",
 			},
-			dmlQuery: "delete from fk_t3 where id = 1",
+			dmlQuery:     "delete from fk_t3 where id = 1",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t1 order by id",
 				"select * from fk_t2 order by id",
@@ -561,7 +567,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t11(id, col) values (1, 7)",
 				"insert into fk_t13(id, col) values (1, 7)",
 			},
-			dmlQuery: "update fk_t10 set col = 5 where id = 1",
+			dmlQuery:     "update fk_t10 set col = 5 where id = 1",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t10 order by id",
 				"select * from fk_t11 order by id",
@@ -598,7 +605,8 @@ func TestFkScenarios(t *testing.T) {
 				"insert into fk_t11(id, col) values (1, 7)",
 				"insert into fk_t13(id, col) values (1, 7)",
 			},
-			dmlQuery: "delete from fk_t10 where id = 1",
+			dmlQuery:     "delete from fk_t10 where id = 1",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t10 order by id",
 				"select * from fk_t11 order by id",
@@ -620,47 +628,47 @@ func TestFkScenarios(t *testing.T) {
 		}, {
 			name: "Delete success with set null to an update cascade foreign key",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t18(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "delete from fk_t16 where id = 1",
+			dmlQuery: "delete from fk_multicol_t16 where id = 1",
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t18 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t18 order by id",
 			},
 		}, {
 			name: "Delete success with cascade to delete with set null to an update set null foreign key",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t19(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "delete from fk_t15 where id = 1",
+			dmlQuery: "delete from fk_multicol_t15 where id = 1",
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t19 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t18 order by id",
 			},
 		}, {
 			name: "Update success with cascade to an update set null to an update cascade foreign key",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t18(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t18(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "update fk_t15 set col = 3 where id = 1",
+			dmlQuery: "update fk_multicol_t15 set cola = 3 where id = 1",
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t18 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t18 order by id",
 			},
 		}, {
 			name: "Insert success for self-referenced foreign key",
@@ -676,99 +684,130 @@ func TestFkScenarios(t *testing.T) {
 			dataQueries: []string{
 				"insert into fk_t20(id, col, col2) values (5, 7, NULL)",
 			},
-			dmlQuery: "insert into fk_t20(id, col, col2) values (6, 9, 6)",
+			dmlQuery:     "insert into fk_t20(id, col, col2) values (6, 9, 6)",
+			dmlShouldErr: true,
 			assertionQueries: []string{
 				"select * from fk_t20 order by id",
 			},
 		}, {
 			name: "Multi Table Delete success",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t19(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "delete fk_t15 from fk_t15 join fk_t17 using id",
+			dmlQuery: "delete fk_multicol_t15 from fk_multicol_t15 join fk_multicol_t17 where fk_multicol_t15.id = fk_multicol_t17.id",
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t19 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
 			name: "Delete with limit success",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t19(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "delete from fk_t15 order by id limit 1",
+			dmlQuery: "delete from fk_multicol_t15 order by id limit 1",
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t19 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
 			name: "Delete with limit 0 success",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t19(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "delete from fk_t15 order by id limit 0",
+			dmlQuery: "delete from fk_multicol_t15 order by id limit 0",
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t19 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
 			name: "Update with limit success",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t19(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "update fk_t15 set col = '2' order by id limit 1",
+			dmlQuery: "update fk_multicol_t15 set cola = '2' order by id limit 1",
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t19 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
 			name: "Update with limit 0 success",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t19(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "update fk_t15 set col = '8' order by id limit 0",
+			dmlQuery: "update fk_multicol_t15 set cola = '8' order by id limit 0",
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t19 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
 			},
 		}, {
 			name: "Update with non-literal update and limit success",
 			dataQueries: []string{
-				"insert into fk_t15(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t16(id, col) values (1, 7), (2, 9)",
-				"insert into fk_t17(id, col) values (1, 7)",
-				"insert into fk_t19(id, col) values (1, 7)",
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
 			},
-			dmlQuery: "update fk_t15 set col = id + 3 order by id limit 1",
+			dmlQuery: "update fk_multicol_t15 set cola = id + 3 order by id limit 1",
 			assertionQueries: []string{
-				"select * from fk_t15 order by id",
-				"select * from fk_t16 order by id",
-				"select * from fk_t17 order by id",
-				"select * from fk_t19 order by id",
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name: "Update with non-literal update order by and limit - multiple update",
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 set cola = id + 8 order by id asc limit 2",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
+			},
+		}, {
+			name: "Update with non-literal update order by and limit - single update",
+			dataQueries: []string{
+				"insert into fk_multicol_t15(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t16(id, cola, colb) values (1, 7, 1), (2, 9, 1), (3, 12, 1)",
+				"insert into fk_multicol_t17(id, cola, colb) values (1, 7, 1)",
+				"insert into fk_multicol_t19(id, cola, colb) values (1, 7, 1)",
+			},
+			dmlQuery: "update fk_multicol_t15 set cola = id + 8 where id < 3 order by id desc limit 2",
+			assertionQueries: []string{
+				"select * from fk_multicol_t15 order by id",
+				"select * from fk_multicol_t16 order by id",
+				"select * from fk_multicol_t17 order by id",
+				"select * from fk_multicol_t19 order by id",
 			},
 		},
 	}
@@ -792,7 +831,12 @@ func TestFkScenarios(t *testing.T) {
 				}
 
 				// Run the DML query that needs to be tested and verify output with MySQL.
-				_, _ = mcmp.ExecAllowAndCompareError(tt.dmlQuery)
+				_, err := mcmp.ExecAllowAndCompareError(tt.dmlQuery)
+				if tt.dmlShouldErr {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+				}
 
 				// Run the assertion queries and verify we get the expected outputs.
 				for _, query := range tt.assertionQueries {
