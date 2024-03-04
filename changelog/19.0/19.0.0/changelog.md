@@ -446,7 +446,8 @@
 #### Evalengine
  * Tiny Weights [#14402](https://github.com/vitessio/vitess/pull/14402) 
 #### General
- * Replace usages of bytes.Buffer with strings.Builder [#14539](https://github.com/vitessio/vitess/pull/14539) 
+ * Replace usages of bytes.Buffer with strings.Builder [#14539](https://github.com/vitessio/vitess/pull/14539)
+ * [release-19.0] prevent vtctld from creating tons of S3 connections (#15296) [#15401](https://github.com/vitessio/vitess/pull/15401) 
 #### Query Serving
  * Improved Connection Pooling [#14034](https://github.com/vitessio/vitess/pull/14034)
  * schemadiff: improved heuristic for dependent migration permutation evaluation time [#14249](https://github.com/vitessio/vitess/pull/14249)
