@@ -311,6 +311,11 @@ func (client *localVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.G
 	return client.s.GetShard(ctx, in)
 }
 
+// GetShardReplication is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetShardReplication(ctx context.Context, in *vtctldatapb.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardReplicationResponse, error) {
+	return client.s.GetShardReplication(ctx, in)
+}
+
 // GetShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetShardRoutingRules(ctx context.Context, in *vtctldatapb.GetShardRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardRoutingRulesResponse, error) {
 	return client.s.GetShardRoutingRules(ctx, in)
