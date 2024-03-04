@@ -102,7 +102,7 @@
  * [release-19.0] Column alias expanding on ORDER BY (#15302) [#15329](https://github.com/vitessio/vitess/pull/15329)
  * [release-19.0] go/vt/discovery: use protobuf getters for SrvVschema (#15343) [#15346](https://github.com/vitessio/vitess/pull/15346)
  * [release-19.0] SHOW VITESS_REPLICATION_STATUS: Only use replication tracker when it's enabled (#15348) [#15362](https://github.com/vitessio/vitess/pull/15362)
- * This is a backport of vitessio#15344 [#15377](https://github.com/vitessio/vitess/pull/15377) 
+ * [release-19.0] Bugfix: GROUP BY/HAVING alias resolution (#15344) [#15377](https://github.com/vitessio/vitess/pull/15377) 
 #### Schema Tracker
  * discovery: fix crash with nil server vschema [#15086](https://github.com/vitessio/vitess/pull/15086) 
 #### TabletManager
