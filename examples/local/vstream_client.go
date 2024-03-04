@@ -38,7 +38,7 @@ import (
 */
 func main() {
 	ctx := context.Background()
-	streamCustomer := false
+	streamCustomer := true
 	var vgtid *binlogdatapb.VGtid
 	if streamCustomer {
 		vgtid = &binlogdatapb.VGtid{
@@ -56,7 +56,7 @@ func main() {
 	} else {
 		vgtid = &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
-				Keyspace: "customer",
+				Keyspace: "commerce",
 				Shard:    "0",
 				Gtid:     "",
 			}}}
