@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,7 +34,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -297,6 +300,59 @@ func TestDBConnKill(t *testing.T) {
 	}
 }
 
+func TestDBKillWithContext(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	require.NoError(t, err)
+
+	query := fmt.Sprintf("kill %d", dbConn.ID())
+	db.AddQuery(query, &sqltypes.Result{})
+	db.SetBeforeFunc(query, func() {
+		// should take longer than our context deadline below.
+		time.Sleep(200 * time.Millisecond)
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// KillWithContext should return context.DeadlineExceeded
+	err = dbConn.KillWithContext(ctx, "test kill", 0)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestDBKillWithContextDoneContext(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	require.NoError(t, err)
+
+	query := fmt.Sprintf("kill %d", dbConn.ID())
+	db.AddRejectedQuery(query, errors.New("rejected"))
+
+	contextErr := errors.New("context error")
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(contextErr) // cancel the context immediately
+
+	// KillWithContext should return the cancellation cause
+	err = dbConn.KillWithContext(ctx, "test kill", 0)
+	require.ErrorIs(t, err, contextErr)
+}
+
 // TestDBConnClose tests that an Exec returns immediately if a connection
 // is asynchronously killed (and closed) in the middle of an execution.
 func TestDBConnClose(t *testing.T) {
@@ -530,4 +586,52 @@ func TestDBConnReApplySetting(t *testing.T) {
 	require.NotEqual(t, oldConnID, dbConn.conn.ID())
 
 	db.VerifyAllExecutedOrFail()
+}
+
+func TestDBExecOnceKillTimeout(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	require.NoError(t, err)
+
+	// A very long running query that will be killed.
+	expectedQuery := "select 1"
+	var timestampQuery atomic.Int64
+	db.AddQuery(expectedQuery, &sqltypes.Result{})
+	db.SetBeforeFunc(expectedQuery, func() {
+		timestampQuery.Store(time.Now().UnixMicro())
+		// should take longer than our context deadline below.
+		time.Sleep(1000 * time.Millisecond)
+	})
+
+	// We expect a kill-query to be fired, too.
+	// It should also run into a timeout.
+	var timestampKill atomic.Int64
+	dbConn.killTimeout = 100 * time.Millisecond
+	db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(string) {
+		timestampKill.Store(time.Now().UnixMicro())
+		// should take longer than the configured kill timeout above.
+		time.Sleep(200 * time.Millisecond)
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	result, err := dbConn.ExecOnce(ctx, "select 1", 1, false)
+	timeDone := time.Now()
+
+	require.Error(t, err)
+	require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
+	require.Nil(t, result)
+	timeQuery := time.UnixMicro(timestampQuery.Load())
+	timeKill := time.UnixMicro(timestampKill.Load())
+	require.WithinDuration(t, timeQuery, timeKill, 150*time.Millisecond)
+	require.WithinDuration(t, timeKill, timeDone, 150*time.Millisecond)
 }
