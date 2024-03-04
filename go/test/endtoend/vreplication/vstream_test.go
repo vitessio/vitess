@@ -538,7 +538,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "global", "0", vschemaUnsharded, schemaUnsharded, defaultReplicas, defaultRdonly, baseTabletID, nil)
 	require.NoError(t, err)
 
-	// Setup the keyspace with our old shards.
+	// Setup the keyspace with our old/original shards.
 	keyspace, err := vc.AddKeyspace(t, []*Cell{defaultCell}, ks, oldShards, vschemaSharded, schemaSharded, defaultReplicas, defaultRdonly, baseTabletID+1000, nil)
 	require.NoError(t, err)
 
@@ -553,23 +553,12 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	require.NoError(t, err)
 	defer vstreamConn.Close()
-	vgtid := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: "/.*", // Match all keyspaces just to be more realistic.
-		}}}
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			// Only stream the customer table.
-			Match: "customer",
-		}},
-	}
-	flags := &vtgatepb.VStreamFlags{}
 
 	// Ensure that we're starting with a clean slate.
 	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("delete from %s.customer", ks), 1000, false)
 	require.NoError(t, err)
 
+	// Coordinate go-routines.
 	streamCtx, streamCancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer streamCancel()
 	done := make(chan struct{})
@@ -597,6 +586,19 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	// Create the Reshard workflow and wait for it to finish the copy phase.
 	reshardAction(t, "Create", wf, ks, oldShards, newShards, defaultCellName, tabletType)
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", ks, wf), binlogdatapb.VReplicationWorkflowState_Running.String())
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: "/.*", // Match all keyspaces just to be more realistic.
+		}}}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			// Only stream the customer table and its sequence backing table.
+			Match: "/customer.*",
+		}},
+	}
+	flags := &vtgatepb.VStreamFlags{}
 
 	// Stream events but stop once we have a VGTID with positions for the old/original shards.
 	var newVGTID *binlogdatapb.VGtid
@@ -639,7 +641,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 					}
 				}
 			default:
-				require.FailNow(t, "VStream returned unexpected error: %v", err)
+				require.FailNow(t, fmt.Sprintf("VStream returned unexpected error: %v", err))
 				return
 			}
 			select {
@@ -650,6 +652,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 		}
 	}()
 
+	// Confirm that we have shard GTIDs for the global shard and the old/original shards.
 	require.Len(t, newVGTID.GetShardGtids(), 3)
 
 	// Switch the traffic to the new shards.
@@ -695,14 +698,15 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 		}
 	}()
 
-	require.GreaterOrEqual(t, oldShardRowEvents, 1)
-	require.GreaterOrEqual(t, newShardRowEvents, 1)
+	// We should have a mix of events across the old and new shards.
+	require.NotZero(t, oldShardRowEvents)
+	require.NotZero(t, newShardRowEvents)
 
 	// The number of row events streamed by the VStream API should match the number of rows inserted.
 	customerResult := execVtgateQuery(t, vtgateConn, ks, "select count(*) from customer")
-	insertedCustomerRows, err := customerResult.Rows[0][0].ToCastInt64()
+	customerCount, err := customerResult.Rows[0][0].ToInt64()
 	require.NoError(t, err)
-	require.Equal(t, insertedCustomerRows, int64(oldShardRowEvents+newShardRowEvents))
+	require.Equal(t, customerCount, int64(oldShardRowEvents+newShardRowEvents))
 }
 
 func TestVStreamFailover(t *testing.T) {

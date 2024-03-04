@@ -940,30 +940,33 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 }
 
 // keyspaceHasBeenResharded returns true if the keyspace's serving shard set has changed
-// since the last VStream as indicated by the shard definitions provided in the vgtid.
+// since the last VStream as indicated by the shard definitions provided in the VGTID.
 func (vs *vstream) keyspaceHasBeenResharded(ctx context.Context, keyspace string) (bool, error) {
 	shards, err := vs.ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil || len(shards) == 0 {
 		return false, err
 	}
 
-	// First check the typical case, where the vgtid shards match the serving shards.
+	// First check the typical case, where the VGTID shards match the serving shards.
 	// In that case it's NOT possible that an applicable reshard has happened because
-	// the vgtid contains shards that are all serving.
+	// the VGTID contains shards that are all serving.
 	reshardPossible := false
 	ksShardGTIDs := make([]*binlogdatapb.ShardGtid, 0, len(vs.vgtid.ShardGtids))
-	for _, g := range vs.vgtid.ShardGtids {
-		if g.GetKeyspace() == keyspace {
-			ksShardGTIDs = append(ksShardGTIDs, g)
+	for _, s := range vs.vgtid.ShardGtids {
+		if s.GetKeyspace() == keyspace {
+			ksShardGTIDs = append(ksShardGTIDs, s)
 		}
 	}
 	for _, s := range ksShardGTIDs {
-		if !shards[s.GetShard()].GetIsPrimaryServing() {
+		shard := shards[s.GetShard()]
+		if shard == nil {
+			return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard provided in VGTID, %s, not found in keyspace %s", s.GetShard(), keyspace)
+		}
+		if !shard.GetIsPrimaryServing() {
 			reshardPossible = true
 			break
 		}
 	}
-	log.Errorf("DEBUG: reshard possible: %v", reshardPossible)
 	if !reshardPossible {
 		return false, nil
 	}
