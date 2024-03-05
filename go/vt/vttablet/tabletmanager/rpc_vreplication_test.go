@@ -780,7 +780,7 @@ func TestUpdateVReplicationWorkflowsState(t *testing.T) {
 			if len(tt.request.GetExcludeWorkflows()) > 0 {
 				addlPredicates = fmt.Sprintf(" and workflow not in ('%s')", strings.Join(tt.request.GetExcludeWorkflows(), "', '"))
 			}
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("select id from _vt.vreplication where db_name = 'vt_%s'%s", tenv.dbName, addlPredicates),
+			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("select id from _vt.vreplication where db_name = '%s'%s", tenv.dbName, addlPredicates),
 				sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
 						"id",
