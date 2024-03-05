@@ -19,6 +19,8 @@ package engine
 import (
 	"context"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -29,8 +31,10 @@ var _ Primitive = (*SimpleProjection)(nil)
 type SimpleProjection struct {
 	// Cols defines the column numbers from the underlying primitive
 	// to be returned.
-	Cols  []int
-	Input Primitive
+	Cols []int
+	// ColNames are the column names to use for the columns.
+	ColNames []string
+	Input    Primitive
 }
 
 // NeedsTransaction implements the Primitive interface
@@ -104,8 +108,13 @@ func (sc *SimpleProjection) buildFields(inner *sqltypes.Result) []*querypb.Field
 		return nil
 	}
 	fields := make([]*querypb.Field, 0, len(sc.Cols))
-	for _, col := range sc.Cols {
-		fields = append(fields, inner.Fields[col])
+	for idx, col := range sc.Cols {
+		field := inner.Fields[col]
+		if sc.ColNames[idx] != "" {
+			field = proto.Clone(field).(*querypb.Field)
+			field.Name = sc.ColNames[idx]
+		}
+		fields = append(fields, field)
 	}
 	return fields
 }
@@ -113,6 +122,16 @@ func (sc *SimpleProjection) buildFields(inner *sqltypes.Result) []*querypb.Field
 func (sc *SimpleProjection) description() PrimitiveDescription {
 	other := map[string]any{
 		"Columns": sc.Cols,
+	}
+	emptyColNames := true
+	for _, cName := range sc.ColNames {
+		if cName != "" {
+			emptyColNames = false
+			break
+		}
+	}
+	if !emptyColNames {
+		other["ColumnNames"] = sc.ColNames
 	}
 	return PrimitiveDescription{
 		OperatorType: "SimpleProjection",

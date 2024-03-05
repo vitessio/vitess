@@ -3760,8 +3760,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative where 1 != 1",
-            "Query": "select authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative",
+            "FieldQuery": "select authoritative.col1, authoritative.user_id, authoritative.col2 from authoritative where 1 != 1",
+            "Query": "select authoritative.col1, authoritative.user_id, authoritative.col2 from authoritative",
             "Table": "authoritative"
           },
           {
@@ -3771,8 +3771,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select unsharded_authoritative.col2 as col2 from unsharded_authoritative where 1 != 1",
-            "Query": "select unsharded_authoritative.col2 as col2 from unsharded_authoritative where unsharded_authoritative.col1 = :authoritative_col1",
+            "FieldQuery": "select unsharded_authoritative.col2 from unsharded_authoritative where 1 != 1",
+            "Query": "select unsharded_authoritative.col2 from unsharded_authoritative where unsharded_authoritative.col1 = :authoritative_col1",
             "Table": "unsharded_authoritative"
           }
         ]
