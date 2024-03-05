@@ -17,6 +17,7 @@ limitations under the License.
 package docgen
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -176,7 +177,8 @@ func TestNewParentLinkSedCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := newParentLinkSedCommand(tt.parentDir, tt.fileName)
-			require.Contains(t, cmd.String(), tt.expectedOutput)
+			// We only check for suffix because the sed command's actual path may differ on different machines.
+			require.True(t, strings.HasSuffix(cmd.String(), tt.expectedOutput))
 		})
 	}
 }
