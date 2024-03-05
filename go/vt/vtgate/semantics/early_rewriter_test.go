@@ -122,17 +122,17 @@ func TestExpandStar(t *testing.T) {
 		expSQL: "select 42, a, b, c from t1",
 	}, {
 		sql:      "select * from t1, t2",
-		expSQL:   "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1, t2",
+		expSQL:   "select t1.a, t1.b, t1.c, t2.c1, t2.c2 from t1, t2",
 		expanded: "main.t1.a, main.t1.b, main.t1.c, main.t2.c1, main.t2.c2",
 	}, {
 		sql:    "select t1.* from t1, t2",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c from t1, t2",
+		expSQL: "select t1.a, t1.b, t1.c from t1, t2",
 	}, {
 		sql:    "select *, t1.* from t1, t2",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2, t1.a as a, t1.b as b, t1.c as c from t1, t2",
+		expSQL: "select t1.a, t1.b, t1.c, t2.c1, t2.c2, t1.a, t1.b, t1.c from t1, t2",
 	}, { // aliased table
 		sql:    "select * from t1 a, t2 b",
-		expSQL: "select a.a as a, a.b as b, a.c as c, b.c1 as c1, b.c2 as c2 from t1 as a, t2 as b",
+		expSQL: "select a.a, a.b, a.c, b.c1, b.c2 from t1 as a, t2 as b",
 	}, { // t3 is non-authoritative table
 		sql:    "select * from t3",
 		expSQL: "select * from t3",
@@ -141,36 +141,36 @@ func TestExpandStar(t *testing.T) {
 		expSQL: "select * from t1, t2, t3",
 	}, { // t3 is non-authoritative table
 		sql:    "select t1.*, t2.*, t3.* from t1, t2, t3",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2, t3.* from t1, t2, t3",
+		expSQL: "select t1.a, t1.b, t1.c, t2.c1, t2.c2, t3.* from t1, t2, t3",
 	}, {
 		sql:    "select foo.* from t1, t2",
 		expErr: "Unknown table 'foo'",
 	}, {
 		sql:    "select * from t1 join t2 on t1.a = t2.c1",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1 join t2 on t1.a = t2.c1",
+		expSQL: "select t1.a, t1.b, t1.c, t2.c1, t2.c2 from t1 join t2 on t1.a = t2.c1",
 	}, {
 		sql:    "select * from t1 left join t2 on t1.a = t2.c1",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1 left join t2 on t1.a = t2.c1",
+		expSQL: "select t1.a, t1.b, t1.c, t2.c1, t2.c2 from t1 left join t2 on t1.a = t2.c1",
 	}, {
 		sql:    "select * from t1 right join t2 on t1.a = t2.c1",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1 right join t2 on t1.a = t2.c1",
+		expSQL: "select t1.a, t1.b, t1.c, t2.c1, t2.c2 from t1 right join t2 on t1.a = t2.c1",
 	}, {
 		sql:      "select * from t2 join t4 using (c1)",
-		expSQL:   "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4 from t2 join t4 on t2.c1 = t4.c1",
+		expSQL:   "select t2.c1, t2.c2, t4.c4 from t2 join t4 on t2.c1 = t4.c1",
 		expanded: "main.t2.c1, main.t2.c2, main.t4.c4",
 	}, {
 		sql:    "select * from t2 join t4 using (c1) join t2 as X using (c1)",
-		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, X.c2 as c2 from t2 join t4 on t2.c1 = t4.c1 join t2 as X on t2.c1 = t4.c1 and t2.c1 = X.c1 and t4.c1 = X.c1",
+		expSQL: "select t2.c1, t2.c2, t4.c4, X.c2 from t2 join t4 on t2.c1 = t4.c1 join t2 as X on t2.c1 = t4.c1 and t2.c1 = X.c1 and t4.c1 = X.c1",
 	}, {
 		sql:    "select * from t2 join t4 using (c1), t2 as t2b join t4 as t4b using (c1)",
-		expSQL: "select t2.c1 as c1, t2.c2 as c2, t4.c4 as c4, t2b.c1 as c1, t2b.c2 as c2, t4b.c4 as c4 from t2 join t4 on t2.c1 = t4.c1, t2 as t2b join t4 as t4b on t2b.c1 = t4b.c1",
+		expSQL: "select t2.c1, t2.c2, t4.c4, t2b.c1, t2b.c2, t4b.c4 from t2 join t4 on t2.c1 = t4.c1, t2 as t2b join t4 as t4b on t2b.c1 = t4b.c1",
 	}, {
 		sql:      "select * from t1 join t5 using (b)",
-		expSQL:   "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 on t1.b = t5.b",
+		expSQL:   "select t1.b, t1.a, t1.c, t5.a from t1 join t5 on t1.b = t5.b",
 		expanded: "main.t1.a, main.t1.b, main.t1.c, main.t5.a",
 	}, {
 		sql:    "select * from t1 join t5 using (b) having b = 12",
-		expSQL: "select t1.b as b, t1.a as a, t1.c as c, t5.a as a from t1 join t5 on t1.b = t5.b having t1.b = 12",
+		expSQL: "select t1.b, t1.a, t1.c, t5.a from t1 join t5 on t1.b = t5.b having t1.b = 12",
 	}, {
 		sql:    "select 1 from t1 join t5 using (b) where b = 12",
 		expSQL: "select 1 from t1 join t5 on t1.b = t5.b where t1.b = 12",
@@ -183,7 +183,7 @@ func TestExpandStar(t *testing.T) {
 	}, {
 		// if we are only star-expanding authoritative tables, we don't need to stop the expansion
 		sql:    "SELECT * FROM (SELECT t2.*, 12 AS foo FROM t3, t2) as results",
-		expSQL: "select c1, c2, foo from (select t2.c1 as c1, t2.c2 as c2, 12 as foo from t3, t2) as results",
+		expSQL: "select c1, c2, foo from (select t2.c1, t2.c2, 12 as foo from t3, t2) as results",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
@@ -761,11 +761,11 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 		otherTbl: -1, sameTbl: 0, expandedCol: 1,
 	}, {
 		sql:      "select t2.a, t1.a, t1.* from t1, t2",
-		expSQL:   "select t2.a, t1.a, t1.a as a from t1, t2",
+		expSQL:   "select t2.a, t1.a, t1.a from t1, t2",
 		otherTbl: 0, sameTbl: 1, expandedCol: 2,
 	}, {
 		sql:      "select t2.a, t.a, t.* from t1 t, t2",
-		expSQL:   "select t2.a, t.a, t.a as a from t1 as t, t2",
+		expSQL:   "select t2.a, t.a, t.a from t1 as t, t2",
 		otherTbl: 0, sameTbl: 1, expandedCol: 2,
 	}}
 	for _, tcase := range tcases {
