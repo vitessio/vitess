@@ -209,12 +209,6 @@ func (dr *switcherDryRun) stopSourceWrites(ctx context.Context) error {
 	return nil
 }
 
-// Note: this is a legacy function that is only used by the legacy wrangler migrater and it
-// should be deleted along with the vtctl client / wrangler.
-func (dr *switcherDryRun) legacyStopStreams(ctx context.Context, sm *workflow.StreamMigrator) ([]string, error) {
-	return dr.stopStreams(ctx, sm)
-}
-
 func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *workflow.StreamMigrator) ([]string, error) {
 	logs := make([]string, 0)
 	for _, streams := range sm.Streams() {

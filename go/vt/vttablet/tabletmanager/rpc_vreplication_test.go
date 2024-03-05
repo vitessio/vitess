@@ -697,6 +697,109 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	}
 }
 
+func TestUpdateVReplicationWorkflowsState(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	keyspace := "testks"
+	tabletUID := 100
+	// VREngine.Exec queries the records in the table and explicitly adds a where id in (...) clause.
+	vreplIDs := []string{"1", "2", "3"}
+
+	tenv := newTestEnv(t, ctx, keyspace, []string{shard})
+	defer tenv.close()
+
+	tablet := tenv.addTablet(t, tabletUID, keyspace, shard)
+	defer tenv.deleteTablet(tablet.tablet)
+
+	tests := []struct {
+		name    string
+		request *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest
+		query   string
+	}{
+		{
+			name: "update only state=running for all workflows",
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest{
+				AllWorkflows: true,
+				State:        binlogdatapb.VReplicationWorkflowState_Running,
+				Message:      textutil.SimulatedNullString,
+				StopPosition: textutil.SimulatedNullString,
+			},
+			query: fmt.Sprintf(`update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running' where id in (%s)`, strings.Join(vreplIDs, ", ")),
+		},
+		{
+			name: "update only state=running for all but reverse workflows",
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest{
+				ExcludeWorkflows: []string{workflow.ReverseWorkflowName("testwf")},
+				State:            binlogdatapb.VReplicationWorkflowState_Running,
+				Message:          textutil.SimulatedNullString,
+				StopPosition:     textutil.SimulatedNullString,
+			},
+			query: fmt.Sprintf(`update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running' where id in (%s)`, strings.Join(vreplIDs, ", ")),
+		},
+		{
+			name: "update all vals for all workflows",
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest{
+				AllWorkflows: true,
+				State:        binlogdatapb.VReplicationWorkflowState_Running,
+				Message:      "hi",
+				StopPosition: position,
+			},
+			query: fmt.Sprintf(`update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running', message = 'hi', stop_pos = '%s' where id in (%s)`, position, strings.Join(vreplIDs, ", ")),
+		},
+		{
+			name: "update state=stopped, messege=for vdiff for two workflows",
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest{
+				IncludeWorkflows: []string{"testwf", "testwf2"},
+				State:            binlogdatapb.VReplicationWorkflowState_Running,
+				Message:          textutil.SimulatedNullString,
+				StopPosition:     textutil.SimulatedNullString,
+			},
+			query: fmt.Sprintf(`update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running' where id in (%s)`, strings.Join(vreplIDs, ", ")),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// This is needed because MockDBClient uses t.Fatal()
+			// which doesn't play well with subtests.
+			defer func() {
+				if err := recover(); err != nil {
+					t.Errorf("Recovered from panic: %v", err)
+				}
+			}()
+
+			require.NotNil(t, tt.request, "No request provided")
+			require.NotEqual(t, "", tt.query, "No expected query provided")
+
+			// These are the same for each RPC call.
+			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
+			addlPredicates := ""
+			if len(tt.request.GetIncludeWorkflows()) > 0 {
+				addlPredicates = fmt.Sprintf(" and workflow in ('%s')", strings.Join(tt.request.GetIncludeWorkflows(), "', '"))
+			}
+			if len(tt.request.GetExcludeWorkflows()) > 0 {
+				addlPredicates = fmt.Sprintf(" and workflow not in ('%s')", strings.Join(tt.request.GetExcludeWorkflows(), "', '"))
+			}
+			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(fmt.Sprintf("select id from _vt.vreplication where db_name = 'vt_%s'%s", tenv.dbName, addlPredicates),
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"id",
+						"int64",
+					),
+					vreplIDs...),
+				nil)
+
+			// This is our expected query, which will also short circuit
+			// the test with an error as at this point we've tested what
+			// we wanted to test.
+			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{}, errShortCircuit)
+			_, err := tenv.tmc.tablets[tabletUID].tm.UpdateVReplicationWorkflowsState(ctx, tt.request)
+			tenv.tmc.tablets[tabletUID].vrdbClient.Wait()
+			require.ErrorIs(t, err, errShortCircuit)
+		})
+	}
+}
+
 // TestSourceShardSelection tests the RPC calls made by VtctldServer to tablet
 // managers include the correct set of BLS settings.
 //

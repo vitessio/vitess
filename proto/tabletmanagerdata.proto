@@ -666,6 +666,19 @@ message UpdateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }
 
+message UpdateVReplicationWorkflowsStateRequest {
+  bool all_workflows = 1;
+  repeated string include_workflows = 2;
+  repeated string exclude_workflows = 3;
+  binlogdata.VReplicationWorkflowState state = 4;
+  string message = 5;
+  string stop_position = 6;
+}
+
+message UpdateVReplicationWorkflowsStateResponse {
+  query.QueryResult result = 1;
+}
+
 message ResetSequencesRequest {
   repeated string tables = 1;
 }

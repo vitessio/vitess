@@ -90,6 +90,10 @@ func (client *FakeTabletManagerClient) UpdateVReplicationWorkflow(ctx context.Co
 	return nil, nil
 }
 
+func (client *FakeTabletManagerClient) UpdateVReplicationWorkflowsState(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse, error) {
+	return nil, nil
+}
+
 func (client *FakeTabletManagerClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	return nil, nil
 }

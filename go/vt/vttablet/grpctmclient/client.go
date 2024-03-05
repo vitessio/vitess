@@ -799,6 +799,19 @@ func (client *Client) UpdateVReplicationWorkflow(ctx context.Context, tablet *to
 	return response, nil
 }
 
+func (client *Client) UpdateVReplicationWorkflowsState(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.UpdateVReplicationWorkflowsState(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 // VDiff is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	log.Infof("VDiff for tablet %s, request %+v", tablet.Alias.String(), req)

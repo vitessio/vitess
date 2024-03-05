@@ -563,7 +563,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		}
 
 		ts.Logger().Infof("Stopping streams")
-		sourceWorkflows, err = sw.legacyStopStreams(ctx, sm)
+		sourceWorkflows, err = sw.stopStreams(ctx, sm)
 		if err != nil {
 			for key, streams := range sm.Streams() {
 				for _, stream := range streams {

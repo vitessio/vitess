@@ -893,6 +893,10 @@ func (itmc *internalTabletManagerClient) UpdateVReplicationWorkflow(context.Cont
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) UpdateVReplicationWorkflowsState(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) ResetReplication(context.Context, *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }

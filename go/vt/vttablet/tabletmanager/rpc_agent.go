@@ -107,6 +107,7 @@ type RPCTM interface {
 	VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error)
 	VReplicationWaitForPos(ctx context.Context, id int32, pos string) error
 	UpdateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error)
+	UpdateVReplicationWorkflowsState(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse, error)
 
 	// VDiff API
 	VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error)

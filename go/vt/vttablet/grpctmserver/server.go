@@ -410,6 +410,13 @@ func (s *server) UpdateVReplicationWorkflow(ctx context.Context, request *tablet
 	return s.tm.UpdateVReplicationWorkflow(ctx, request)
 }
 
+func (s *server) UpdateVReplicationWorkflowsState(ctx context.Context, request *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest) (response *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "UpdateVReplicationWorkflowsState", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse{}
+	return s.tm.UpdateVReplicationWorkflowsState(ctx, request)
+}
+
 func (s *server) VDiff(ctx context.Context, request *tabletmanagerdatapb.VDiffRequest) (response *tabletmanagerdatapb.VDiffResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "VDiff", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

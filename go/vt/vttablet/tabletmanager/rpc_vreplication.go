@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -56,6 +57,9 @@ const (
 	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
 	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
+	// Update state values for multiple workflows. The final format specifier is
+	// used to optionally add any additional predicates to the query.
+	sqlUpdateVReplicationWorkflowsState = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = 'vt_%s'%s"
 )
 
 func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
@@ -529,6 +533,81 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 	}
 
 	return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{
+		Result: &querypb.QueryResult{
+			RowsAffected: uint64(len(res.Rows)),
+		},
+	}, nil
+}
+
+// UpdateVReplicationWorkflowsState operates in much the same way that
+// UpdateVReplicationWorkflow does, but it allows you to update the state
+// related fields -- state, message, stop_pos -- for multiple workflows.
+// Note: today this is only used during Reshard as all of the vreplication
+// streams need to be migrated from the old shards to the new ones.
+func (tm *TabletManager) UpdateVReplicationWorkflowsState(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse, error) {
+	if req.GetAllWorkflows() && (len(req.GetIncludeWorkflows()) > 0 || len(req.GetExcludeWorkflows()) > 0) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify all workflows along with either of include or exclude workflows")
+	}
+	if textutil.ValueIsSimulatedNull(req.GetState()) && textutil.ValueIsSimulatedNull(req.GetMessage()) && textutil.ValueIsSimulatedNull(req.GetStopPosition()) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no state fields values to update")
+	}
+	sets := strings.Builder{}
+	predicates := strings.Builder{}
+
+	// First add the SET clauses.
+	if !textutil.ValueIsSimulatedNull(req.GetState()) {
+		state, ok := binlogdatapb.VReplicationWorkflowState_name[int32(req.GetState())]
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid state value: %v", req.GetState())
+		}
+		sets.WriteString(" state = ")
+		sets.WriteString(sqltypes.EncodeStringSQL(state))
+	}
+	if !textutil.ValueIsSimulatedNull(req.GetMessage()) {
+		if sets.Len() > 0 {
+			sets.WriteByte(',')
+		}
+		sets.WriteString(" message = ")
+		sets.WriteString(sqltypes.EncodeStringSQL(req.GetMessage()))
+	}
+	if !textutil.ValueIsSimulatedNull(req.GetStopPosition()) {
+		if sets.Len() > 0 {
+			sets.WriteByte(',')
+		}
+		sets.WriteString(" stop_pos = ")
+		sets.WriteString(sqltypes.EncodeStringSQL(req.GetStopPosition()))
+	}
+
+	// Now add any WHERE predicate clauses.
+	if len(req.GetIncludeWorkflows()) > 0 {
+		predicates.WriteString(" and workflow in (")
+		for i, wf := range req.GetIncludeWorkflows() {
+			if i > 0 {
+				predicates.WriteByte(',')
+			}
+			predicates.WriteString(sqltypes.EncodeStringSQL(wf))
+		}
+		predicates.WriteString(")")
+	}
+	if len(req.GetExcludeWorkflows()) > 0 {
+		predicates.WriteString(" and workflow not in (")
+		for i, wf := range req.GetExcludeWorkflows() {
+			if i > 0 {
+				predicates.WriteByte(',')
+			}
+			predicates.WriteString(sqltypes.EncodeStringSQL(wf))
+		}
+		predicates.WriteString(")")
+	}
+
+	query := sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowsState, sidecar.GetIdentifier(), sets.String(), tm.DBConfigs.DBName, predicates.String()).Query
+	log.Errorf("DEBUG: %s", query)
+	res, err := tm.VREngine.Exec(query)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse{
 		Result: &querypb.QueryResult{
 			RowsAffected: uint64(len(res.Rows)),
 		},

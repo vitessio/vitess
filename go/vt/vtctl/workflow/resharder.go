@@ -36,7 +36,6 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -325,18 +324,15 @@ func (rs *resharder) startStreams(ctx context.Context) error {
 		// because we've already confirmed that there were no existing workflows
 		// on the shards when we started, and we want to start all of the ones
 		// that we've created on the new shards as we're migrating them.
-		req := &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-			Workflow: rs.workflow,
-			State:    binlogdatapb.VReplicationWorkflowState_Running,
-			// Don't change anything else, so pass simulated NULLs.
-			Cells: textutil.SimulatedNullStringSlice,
-			TabletTypes: []topodatapb.TabletType{
-				topodatapb.TabletType(textutil.SimulatedNullInt),
-			},
-			OnDdl: binlogdatapb.OnDDLAction(textutil.SimulatedNullInt),
+		req := &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest{
+			AllWorkflows: true,
+			State:        binlogdatapb.VReplicationWorkflowState_Running,
+			// We don't want to update anything else so use simulated NULLs.
+			Message:      textutil.SimulatedNullString,
+			StopPosition: textutil.SimulatedNullString,
 		}
-		if _, err := rs.s.tmc.UpdateVReplicationWorkflow(ctx, targetPrimary.Tablet, req); err != nil {
-			return vterrors.Wrapf(err, "UpdateVReplicationWorkflow(%v, 'state='%s')",
+		if _, err := rs.s.tmc.UpdateVReplicationWorkflowsState(ctx, targetPrimary.Tablet, req); err != nil {
+			return vterrors.Wrapf(err, "UpdateVReplicationWorkflowsState(%v, 'state='%s')",
 				targetPrimary.Tablet, binlogdatapb.VReplicationWorkflowState_Running.String())
 		}
 		return nil
