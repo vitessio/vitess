@@ -450,7 +450,6 @@ func TestMigrateVSchema(t *testing.T) {
 	defer env.close()
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
@@ -512,7 +511,6 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			// a circular dependency.
 			// The TabletManager portion is tested in rpc_vreplication_test.go.
 			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
-			env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
 			env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
@@ -564,7 +562,6 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	// a circular dependency.
 	// The TabletManager portion is tested in rpc_vreplication_test.go.
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, getWorkflowQuery, getWorkflowRes)
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetWorkflowStatusQuery, getWorkflowStatusRes)
@@ -667,7 +664,6 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	}
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`", &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='lookup'", &sqltypes.Result{})
@@ -2447,7 +2443,6 @@ func TestMaterializerOneToOne(t *testing.T) {
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
@@ -2491,7 +2486,6 @@ func TestMaterializerManyToOne(t *testing.T) {
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"-80", "80-"}, []string{"0"})
 	defer env.close()
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
@@ -2546,8 +2540,6 @@ func TestMaterializerOneToMany(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
@@ -2606,8 +2598,6 @@ func TestMaterializerManyToMany(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
@@ -2670,8 +2660,6 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
@@ -2715,7 +2703,6 @@ func TestMaterializerDeploySchema(t *testing.T) {
 
 	delete(env.tmc.schema, "targetks.t2")
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, `t2ddl`, &sqltypes.Result{})
 	env.tmc.expectVRQuery(
 		200,
@@ -2756,7 +2743,6 @@ func TestMaterializerCopySchema(t *testing.T) {
 
 	delete(env.tmc.schema, "targetks.t1")
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, `t1_schema`, &sqltypes.Result{})
 	env.tmc.expectVRQuery(
 		200,
@@ -2816,8 +2802,6 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
@@ -2879,8 +2863,6 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
@@ -2923,7 +2905,6 @@ func TestMaterializerStopAfterCopy(t *testing.T) {
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, insertPrefix+`.*stop_after_copy:true`, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
@@ -2956,8 +2937,6 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
 		t.Fatal(err)
 	}
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "table t1 not found in vschema for keyspace targetks")
 }
@@ -2981,7 +2960,6 @@ func TestMaterializerNoDDL(t *testing.T) {
 
 	delete(env.tmc.schema, "targetks.t1")
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
 	require.Equal(t, env.tmc.getSchemaRequestCount(100), 0)
@@ -3034,7 +3012,6 @@ func TestMaterializerNoSourcePrimary(t *testing.T) {
 
 	env.expectValidation()
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "shard must have a primary for copying schema: 0")
 }
@@ -3058,7 +3035,6 @@ func TestMaterializerTableMismatchNonCopy(t *testing.T) {
 
 	delete(env.tmc.schema, "targetks.t1")
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
 }
@@ -3082,7 +3058,6 @@ func TestMaterializerTableMismatchCopy(t *testing.T) {
 
 	delete(env.tmc.schema, "targetks.t1")
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "source and target table names must match for copying schema: t2 vs t1")
 }
@@ -3107,7 +3082,6 @@ func TestMaterializerNoSourceTable(t *testing.T) {
 	delete(env.tmc.schema, "targetks.t1")
 	delete(env.tmc.schema, "sourceks.t1")
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "source table t1 does not exist")
 }
@@ -3129,7 +3103,6 @@ func TestMaterializerSyntaxError(t *testing.T) {
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "syntax error at position 4 near 'bad'")
 }
@@ -3151,7 +3124,6 @@ func TestMaterializerNotASelect(t *testing.T) {
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
 	defer env.close()
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "unrecognized statement: update t1 set val=1")
 }
@@ -3199,8 +3171,6 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "could not find a vindex to compute keyspace id for table t1")
 }
@@ -3242,8 +3212,6 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "vindex column cannot be a complex expression: a + b as c1")
 }
@@ -3285,8 +3253,6 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "could not find vindex column c1")
 }
