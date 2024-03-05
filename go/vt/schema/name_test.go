@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNameIsGCTableName(t *testing.T) {
@@ -165,10 +166,61 @@ func TestAnalyzeInternalTableName(t *testing.T) {
 			assert.Equal(t, ts.isInternal, isInternal)
 			if ts.isInternal {
 				assert.NoError(t, err)
-				assert.True(t, IsGCUUID(uuid))
+				assert.True(t, isCondensedUUID(uuid))
 				assert.Equal(t, ts.hint, hint)
 				assert.Equal(t, ts.t, tm)
 			}
 		})
+	}
+}
+
+func TestToReadableTimestamp(t *testing.T) {
+	ti, err := time.Parse(time.UnixDate, "Wed Feb 25 11:06:39 PST 2015")
+	assert.NoError(t, err)
+
+	readableTimestamp := ToReadableTimestamp(ti)
+	assert.Equal(t, "20150225110639", readableTimestamp)
+}
+
+func TestGenerateInternalTableName(t *testing.T) {
+	ti, err := time.Parse(time.UnixDate, "Wed Feb 25 11:06:39 PST 2015")
+	assert.NoError(t, err)
+
+	{
+		uuid := "6ace8bcef73211ea87e9f875a4d24e90"
+		tableName, err := GenerateInternalTableName(InternalTableGCPurgeHint.String(), uuid, ti)
+		require.NoError(t, err)
+		assert.Equal(t, "_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20150225110639_", tableName)
+		assert.True(t, IsInternalOperationTableName(tableName))
+	}
+	{
+		uuid := "4e5dcf80_354b_11eb_82cd_f875a4d24e90"
+		tableName, err := GenerateInternalTableName(InternalTableGCPurgeHint.String(), uuid, ti)
+		require.NoError(t, err)
+		assert.Equal(t, "_vt_prg_4e5dcf80354b11eb82cdf875a4d24e90_20150225110639_", tableName)
+		assert.True(t, IsInternalOperationTableName(tableName))
+	}
+	{
+		uuid := "4e5dcf80-354b-11eb-82cd-f875a4d24e90"
+		tableName, err := GenerateInternalTableName(InternalTableGCPurgeHint.String(), uuid, ti)
+		require.NoError(t, err)
+		assert.Equal(t, "_vt_prg_4e5dcf80354b11eb82cdf875a4d24e90_20150225110639_", tableName)
+		assert.True(t, IsInternalOperationTableName(tableName))
+	}
+	{
+		uuid := ""
+		tableName, err := GenerateInternalTableName(InternalTableGCPurgeHint.String(), uuid, ti)
+		require.NoError(t, err)
+		assert.True(t, IsInternalOperationTableName(tableName))
+	}
+	{
+		uuid := "4e5dcf80_354b_11eb_82cd_f875a4d24e90_00001111"
+		_, err := GenerateInternalTableName(InternalTableGCPurgeHint.String(), uuid, ti)
+		require.ErrorContains(t, err, "Invalid UUID")
+	}
+	{
+		uuid := "6ace8bcef73211ea87e9f875a4d24e90"
+		_, err := GenerateInternalTableName("abcdefg", uuid, ti)
+		require.ErrorContains(t, err, "Invalid hint")
 	}
 }

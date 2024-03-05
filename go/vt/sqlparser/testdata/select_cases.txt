@@ -8384,7 +8384,7 @@ INPUT
 select quote(concat('abc'', 'cba'));
 END
 ERROR
-syntax error at position 37 near '));'
+syntax error at position 33 near 'cba'
 END
 INPUT
 select max(t1.a1), max(t2.a1) from t1, t2 where t2.a2=9;

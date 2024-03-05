@@ -221,8 +221,6 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
-
-	log.Flush()
 }
 
 type noopCloser struct{}

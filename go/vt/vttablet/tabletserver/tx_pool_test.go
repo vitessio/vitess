@@ -305,7 +305,6 @@ func TestTxPoolWaitTimeoutError(t *testing.T) {
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
 	env.Config().TxPool.Timeout = time.Second
 	// given
 	db, txPool, _, closer := setupWithEnv(t, env)
@@ -428,7 +427,6 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
 	env.Config().Oltp.TxTimeout = time.Second
 	_, txPool, limiter, closer := setupWithEnv(t, env)
 	defer closer()
@@ -477,7 +475,6 @@ func TestTxTimeoutDoesNotKillShortLivedTransactions(t *testing.T) {
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
 	env.Config().Oltp.TxTimeout = time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
@@ -510,7 +507,6 @@ func TestTxTimeoutKillsOlapTransactions(t *testing.T) {
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
 	env.Config().Oltp.TxTimeout = time.Second
 	env.Config().Olap.TxTimeout = 2 * time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
@@ -548,7 +544,6 @@ func TestTxTimeoutNotEnforcedForZeroLengthTimeouts(t *testing.T) {
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 2
-	env.Config().TxPool.MaxWaiters = 0
 	env.Config().Oltp.TxTimeout = 0
 	env.Config().Olap.TxTimeout = 0
 	_, txPool, _, closer := setupWithEnv(t, env)
@@ -591,7 +586,6 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
 	env.Config().Oltp.TxTimeout = time.Second
 	env.Config().Olap.TxTimeout = 2 * time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
@@ -634,7 +628,6 @@ func TestTxTimeoutReusedReservedConn(t *testing.T) {
 
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
 	env.Config().Oltp.TxTimeout = time.Second
 	env.Config().Olap.TxTimeout = 2 * time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
@@ -820,7 +813,6 @@ func newEnv(exporterName string) tabletenv.Env {
 	cfg.TxPool.Size = 300
 	cfg.Oltp.TxTimeout = 30 * time.Second
 	cfg.TxPool.Timeout = 40 * time.Second
-	cfg.TxPool.MaxWaiters = 500000
 	cfg.OltpReadPool.IdleTimeout = 30 * time.Second
 	cfg.OlapReadPool.IdleTimeout = 30 * time.Second
 	cfg.TxPool.IdleTimeout = 30 * time.Second

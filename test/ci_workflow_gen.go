@@ -137,6 +137,9 @@ var (
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
 	}
+	clustersRequiringMemoryCheck = []string{
+		"vtorc",
+	}
 	clusterRequiring16CoresMachines = []string{
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
@@ -154,6 +157,7 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard, Platform              string
 	FileName                           string
+	MemoryCheck                        bool
 	MakeTools, InstallXtraBackup       bool
 	Docker                             bool
 	LimitResourceUsage                 bool
@@ -348,6 +352,13 @@ func generateClusterWorkflows(list []string, tpl string) {
 			for _, makeToolCluster := range makeToolClusters {
 				if makeToolCluster == cluster {
 					test.MakeTools = true
+					break
+				}
+			}
+			memoryCheckClusters := canonnizeList(clustersRequiringMemoryCheck)
+			for _, memCheckCluster := range memoryCheckClusters {
+				if memCheckCluster == cluster {
+					test.MemoryCheck = true
 					break
 				}
 			}

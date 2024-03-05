@@ -506,6 +506,9 @@ var (
 		input:  "WITH topsales2003 AS (SELECT salesRepEmployeeNumber employeeNumber, SUM(quantityOrdered * priceEach) sales FROM orders INNER JOIN orderdetails USING (orderNumber) INNER JOIN customers USING (customerNumber) WHERE YEAR(shippedDate) = 2003 AND status = 'Shipped' GROUP BY salesRepEmployeeNumber ORDER BY sales DESC LIMIT 5)SELECT employeeNumber, firstName, lastName, sales FROM employees JOIN topsales2003 USING (employeeNumber)",
 		output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, sum(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
 	}, {
+		input:  "WITH count_a AS (SELECT COUNT(`id`) AS `num` FROM `tbl_a`), count_b AS (SELECT COUNT(`id`) AS `num` FROM tbl_b) SELECT 'a', `num` FROM `count_a` UNION SELECT 'b', `num` FROM `count_b`",
+		output: "with count_a as (select count(id) as num from tbl_a) , count_b as (select count(id) as num from tbl_b) select 'a', num from count_a union select 'b', num from count_b",
+	}, {
 		input: "select 1 from t",
 	}, {
 		input:  "select * from (select 1) as x(user)",
@@ -2659,6 +2662,20 @@ var (
 	}, {
 		input:  "SELECT id FROM blog_posts USE INDEX (PRIMARY) WHERE id = 10",
 		output: "select id from blog_posts use index (`PRIMARY`) where id = 10",
+	}, {
+		input: "select * from payment_pulls ignore vindex (lookup_vindex_name) where customer_id in (1, 10) and payment_id = 5",
+	}, {
+		input:  "select * from payment_pulls ignore vindex (lookup_vindex_name, x, t) order by id",
+		output: "select * from payment_pulls ignore vindex (lookup_vindex_name, x, t) order by id asc",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name) where customer_id in (1, 10) and payment_id = 5",
+	}, {
+		input:  "select * from payment_pulls use vindex (lookup_vindex_name, x, t) order by id",
+		output: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) order by id asc",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) ignore vindex (x, t)",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) ignore vindex (x, t) join tab ignore vindex (y)",
 	}, {
 		input:  "select name, group_concat(score) from t group by name",
 		output: "select `name`, group_concat(score) from t group by `name`",

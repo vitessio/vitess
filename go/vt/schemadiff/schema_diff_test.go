@@ -23,6 +23,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 func TestPermutations(t *testing.T) {
@@ -911,11 +914,15 @@ func TestSchemaDiff(t *testing.T) {
 	}
 	baseHints := &DiffHints{
 		RangeRotationStrategy: RangeRotationDistinctStatements,
-		MySQLServerVersion:    "8.0.32",
 	}
-	env := NewTestEnv()
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			vtenv, err := vtenv.New(vtenv.Options{
+				MySQLServerVersion: tc.mysqlServerVersion,
+			})
+			require.NoError(t, err)
+			env := NewEnv(vtenv, collations.CollationUtf8mb4ID)
+
 			if tc.fromQueries == nil {
 				tc.fromQueries = createQueries
 			}
@@ -927,11 +934,7 @@ func TestSchemaDiff(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, toSchema)
 
-			hints := *baseHints
-			if tc.mysqlServerVersion != "" {
-				hints.MySQLServerVersion = tc.mysqlServerVersion
-			}
-			schemaDiff, err := fromSchema.SchemaDiff(toSchema, &hints)
+			schemaDiff, err := fromSchema.SchemaDiff(toSchema, baseHints)
 			require.NoError(t, err)
 
 			allDiffs := schemaDiff.UnorderedDiffs()

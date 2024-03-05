@@ -177,19 +177,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	size += cached.RoutingParameters.CachedSize(true)
 	return size
 }
-func (cached *Delete) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(8)
-	}
-	// field DML *vitess.io/vitess/go/vt/vtgate/engine.DML
-	size += cached.DML.CachedSize(true)
-	return size
-}
-func (cached *DeleteWithInput) CachedSize(alloc bool) int64 {
+func (cached *DMLWithInput) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -197,18 +185,40 @@ func (cached *DeleteWithInput) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
-	// field Delete vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Delete.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field OutputCols []int
+	// field DMLs []vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OutputCols)) * int64(8))
+		size += hack.RuntimeAllocSize(int64(cap(cached.DMLs)) * int64(16))
+		for _, elem := range cached.DMLs {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
 	}
+	// field OutputCols [][]int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.OutputCols)) * int64(24))
+		for _, elem := range cached.OutputCols {
+			{
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(8))
+			}
+		}
+	}
+	return size
+}
+func (cached *Delete) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field DML *vitess.io/vitess/go/vt/vtgate/engine.DML
+	size += cached.DML.CachedSize(true)
 	return size
 }
 func (cached *Distinct) CachedSize(alloc bool) int64 {
@@ -1149,11 +1159,18 @@ func (cached *SimpleProjection) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Cols []int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
+	}
+	// field ColNames []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ColNames)) * int64(16))
+		for _, elem := range cached.ColNames {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {

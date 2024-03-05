@@ -69,6 +69,11 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 
 func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) Operator {
 	sqc := &SubQueryBuilder{}
+	op = addWherePredsToSubQueryBuilder(ctx, expr, op, sqc)
+	return sqc.getRootOperator(op, nil)
+}
+
+func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator, sqc *SubQueryBuilder) Operator {
 	outerID := TableID(op)
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, expr := range exprs {
@@ -80,7 +85,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 		op = op.AddPredicate(ctx, expr)
 		addColumnEquality(ctx, expr)
 	}
-	return sqc.getRootOperator(op, nil)
+	return op
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
@@ -196,6 +201,10 @@ func createOpFromStmt(inCtx *plancontext.PlanningContext, stmt sqlparser.Stateme
 	if err != nil {
 		panic(err)
 	}
+
+	// need to remember which predicates have been broken up during join planning
+	inCtx.KeepPredicateInfo(ctx)
+
 	return op
 }
 

@@ -26,19 +26,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/common/version"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/mysql"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -57,22 +57,15 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	return false
 }
 
-type TestColumn struct {
-	name, dataType, colType string
-	len, charset            int64
-}
-
-type TestFieldEvent struct {
-	table, db string
-	cols      []*TestColumn
-}
-
 func (tfe *TestFieldEvent) String() string {
 	s := fmt.Sprintf("type:FIELD field_event:{table_name:\"%s\"", tfe.table)
 	fld := ""
 	for _, col := range tfe.cols {
+		if col.skip {
+			continue
+		}
 		fld += fmt.Sprintf(" fields:{name:\"%s\" type:%s table:\"%s\" org_table:\"%s\" database:\"%s\" org_name:\"%s\" column_length:%d charset:%d",
-			col.name, col.dataType, tfe.table, tfe.table, tfe.db, col.name, col.len, col.charset)
+			col.name, col.dataType, tfe.table, tfe.table, tfe.db, col.name, col.len, col.collationID)
 		if col.colType != "" {
 			fld += fmt.Sprintf(" column_type:\"%s\"", col.colType)
 		}
@@ -83,8 +76,10 @@ func (tfe *TestFieldEvent) String() string {
 	return s
 }
 
-// TestPlayerNoBlob sets up a new environment with mysql running with binlog_row_image as noblob. It confirms that
-// the VEvents created are correct: that they don't contain the missing columns and that the DataColumns bitmap is sent
+// TestPlayerNoBlob sets up a new environment with mysql running with
+// binlog_row_image as noblob. It confirms that the VEvents created are
+// correct: that they don't contain the missing columns and that the
+// DataColumns bitmap is sent.
 func TestNoBlob(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -94,166 +89,132 @@ func TestNoBlob(t *testing.T) {
 	env = nil
 	newEngine(t, ctx, "noblob")
 	defer func() {
+		if engine != nil {
+			engine.Close()
+		}
+		if env != nil {
+			env.Close()
+		}
 		engine = oldEngine
 		env = oldEnv
 	}()
-	execStatements(t, []string{
-		"create table t1(id int, blb blob, val varchar(4), primary key(id))",
-		"create table t2(id int, txt text, val varchar(4), unique key(id, val))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-		"drop table t2",
-	})
-	engine.se.Reload(context.Background())
-	queries := []string{
-		"begin",
-		"insert into t1 values (1, 'blob1', 'aaa')",
-		"update t1 set val = 'bbb'",
-		"commit",
-		"begin",
-		"insert into t2 values (1, 'text1', 'aaa')",
-		"update t2 set val = 'bbb'",
-		"commit",
-	}
 
-	fe1 := &TestFieldEvent{
-		table: "t1",
-		db:    "vttest",
-		cols: []*TestColumn{
-			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
-			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, charset: 63},
-			{name: "val", dataType: "VARCHAR", colType: "varchar(4)", len: 16, charset: 45},
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			// t1 has a blob column and a primary key. The blob column will not be in update row events.
+			"create table t1(id int, blb blob, val varchar(4), primary key(id))",
+			// t2 has a text column and no primary key. The text column will be in update row events.
+			"create table t2(id int, txt text, val varchar(4), unique key(id, val))",
+			// t3 has a text column and a primary key. The text column will not be in update row events.
+			"create table t3(id int, txt text, val varchar(4), primary key(id))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
 		},
 	}
-	fe2 := &TestFieldEvent{
-		table: "t2",
-		db:    "vttest",
-		cols: []*TestColumn{
-			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
-			{name: "txt", dataType: "TEXT", colType: "text", len: 262140, charset: 45},
-			{name: "val", dataType: "VARCHAR", colType: "varchar(4)", len: 16, charset: 45},
-		},
-	}
-
-	testcases := []testcase{{
-		input: queries,
-		output: [][]string{{
-			"begin",
-			fe1.String(),
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:5 lengths:3 values:"1blob1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:-1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:-1 lengths:3 values:"1bbb"} data_columns:{count:3 cols:"\x05"}}}`,
-			"gtid",
-			"commit",
-		}, {
-			"begin",
-			fe2.String(),
-			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:5 lengths:3 values:"1text1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t2" row_changes:{before:{lengths:1 lengths:5 lengths:3 values:"1text1aaa"} after:{lengths:1 lengths:-1 lengths:3 values:"1bbb"} data_columns:{count:3 cols:"\x05"}}}`,
-			"gtid",
-			"commit",
-		}},
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 'blob1', 'aaa')", nil},
+		{"update t1 set val = 'bbb'", nil},
+		{"commit", nil},
+	}, {{"begin", nil},
+		{"insert into t2 values (1, 'text1', 'aaa')", nil},
+		{"update t2 set val = 'bbb'", nil},
+		{"commit", nil},
+	}, {{"begin", nil},
+		{"insert into t3 values (1, 'text1', 'aaa')", nil},
+		{"update t3 set val = 'bbb'", nil},
+		{"commit", nil},
 	}}
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
 }
 
+// TestSetAndEnum confirms that the events for set and enum columns are correct.
 func TestSetAndEnum(t *testing.T) {
-	execStatements(t, []string{
-		"create table t1(id int, val binary(4), color set('red','green','blue'), size enum('S','M','L'), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-	queries := []string{
-		"begin",
-		"insert into t1 values (1, 'aaa', 'red,blue', 'S')",
-		"insert into t1 values (2, 'bbb', 'green', 'M')",
-		"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')",
-		"commit",
-	}
-
-	fe := &TestFieldEvent{
-		table: "t1",
-		db:    "vttest",
-		cols: []*TestColumn{
-			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
-			{name: "val", dataType: "BINARY", colType: "binary(4)", len: 4, charset: 63},
-			{name: "color", dataType: "SET", colType: "set('red','green','blue')", len: 56, charset: 45},
-			{name: "size", dataType: "ENUM", colType: "enum('S','M','L')", len: 4, charset: 45},
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id int, val binary(4), color set('red','green','blue'), size enum('S','M','L'), primary key(id))",
 		},
 	}
-
-	testcases := []testcase{{
-		input: queries,
-		output: [][]string{{
-			`begin`,
-			fe.String(),
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 lengths:1 lengths:1 values:"1aaa\x0051"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 lengths:1 lengths:1 values:"2bbb\x0022"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 lengths:1 lengths:1 values:"3ccc\x0073"}}}`,
-			`gtid`,
-			`commit`,
-		}},
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 'aaa', 'red,blue', 'S')", nil},
+		{"insert into t1 values (2, 'bbb', 'green', 'M')", nil},
+		{"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')", nil},
+		{"commit", nil},
 	}}
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
 }
 
+// TestCellValuePadding tests that the events are correctly padded for binary columns.
 func TestCellValuePadding(t *testing.T) {
-
-	execStatements(t, []string{
-		"create table t1(id int, val binary(4), primary key(val))",
-		"create table t2(id int, val char(4), primary key(val))",
-		"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-		"drop table t2",
-		"drop table t3",
-	})
-	engine.se.Reload(context.Background())
-	queries := []string{
-		"begin",
-		"insert into t1 values (1, 'aaa\000')",
-		"insert into t1 values (2, 'bbb\000')",
-		"update t1 set id = 11 where val = 'aaa\000'",
-		"insert into t2 values (1, 'aaa')",
-		"insert into t2 values (2, 'bbb')",
-		"update t2 set id = 11 where val = 'aaa'",
-		"insert into t3 values (1, 'aaa')",
-		"insert into t3 values (2, 'bb')",
-		"update t3 set id = 11 where val = 'aaa'",
-		"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id int, val binary(4), primary key(val))",
+			"create table t2(id int, val char(4), primary key(val))",
+			"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))",
+		},
 	}
-
-	testcases := []testcase{{
-		input: queries,
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"t1" fields:{name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:BINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:4 charset:63 column_type:"binary(4)"}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"1aaa\x00"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"2bbb\x00"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:4 values:"1aaa\x00"} after:{lengths:2 lengths:4 values:"11aaa\x00"}}}`,
-			`type:FIELD field_event:{table_name:"t2" fields:{name:"id" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:CHAR table:"t2" org_table:"t2" database:"vttest" org_name:"val" column_length:16 charset:45 column_type:"char(4)"}}`,
-			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:3 values:"2bbb"}}}`,
-			`type:ROW row_event:{table_name:"t2" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:2 lengths:3 values:"11aaa"}}}`,
-			`type:FIELD field_event:{table_name:"t3" fields:{name:"id" type:INT32 table:"t3" org_table:"t3" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:BINARY table:"t3" org_table:"t3" database:"vttest" org_name:"val" column_length:16 charset:45 column_type:"char(4)"}}`,
-			`type:ROW row_event:{table_name:"t3" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t3" row_changes:{after:{lengths:1 lengths:2 values:"2bb"}}}`,
-			`type:ROW row_event:{table_name:"t3" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:2 lengths:3 values:"11aaa"}}}`,
-			`gtid`,
-			`commit`,
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 'aaa\000')", nil},
+		{"insert into t1 values (2, 'bbb\000')", nil},
+		{"update t1 set id = 11 where val = 'aaa\000'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa\x00"}, after: []string{"11", "aaa\x00"}}}}},
 		}},
+		{"insert into t2 values (1, 'aaa')", nil},
+		{"insert into t2 values (2, 'bbb')", nil},
+		{"update t2 set id = 11 where val = 'aaa'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t2", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"11", "aaa"}}}}},
+		}},
+		{"insert into t3 values (1, 'aaa')", nil},
+		{"insert into t3 values (2, 'bb')", nil},
+		{"update t3 set id = 11 where val = 'aaa'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t3", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"11", "aaa"}}}}},
+		}},
+		{"commit", nil},
 	}}
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
+}
+
+// TestColumnCollationHandling confirms that we handle column collations
+// properly in vstreams now that we parse any optional collation ID values
+// in binlog_row_metadata AND we query mysqld for the collation when possible.
+func TestColumnCollationHandling(t *testing.T) {
+	extraCollation := "utf8mb4_ja_0900_as_cs"           // Test 2 byte collation ID handling
+	if strings.HasPrefix(testenv.MySQLVersion, "5.7") { // 5.7 does not support 2 byte collation IDs
+		extraCollation = "utf8mb4_croatian_ci"
+	}
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			fmt.Sprintf("create table t1(id int, txt text, val char(4) collate utf8mb4_bin, id2 int, val2 varchar(64) collate utf8mb4_general_ci, valvb varbinary(128), val3 varchar(255) collate %s, primary key(val))", extraCollation),
+		},
+	}
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 'aaa', 'aaa', 1, 'aaa', 'aaa', 'aaa')", nil},
+		{"insert into t1 values (2, 'bb', 'bb', 1, 'bb', 'bb', 'bb')", nil},
+		{"update t1 set id = 11 where val = 'aaa'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa", "aaa", "1", "aaa", "aaa", "aaa"}, after: []string{"11", "aaa", "aaa", "1", "aaa", "aaa", "aaa"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	ts.Run()
 }
 
 func TestSetStatement(t *testing.T) {
-
-	if testing.Short() {
-		t.Skip()
-	}
 	if !checkIfOptionIsSupported(t, "log_builtin_as_identified_by_password") {
 		// the combination of setting this option and support for "set password" only works on a few flavors
 		log.Info("Cannot test SetStatement on this flavor")
@@ -296,45 +257,25 @@ func TestSetForeignKeyCheck(t *testing.T) {
 	testRowEventFlags = true
 	defer func() { testRowEventFlags = false }()
 
-	execStatements(t, []string{
-		"create table t1(id int, val binary(4), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-	queries := []string{
-		"begin",
-		"insert into t1 values (1, 'aaa')",
-		"set @@session.foreign_key_checks=1",
-		"insert into t1 values (2, 'bbb')",
-		"set @@session.foreign_key_checks=0",
-		"insert into t1 values (3, 'ccc')",
-		"commit",
-	}
-
-	fe := &TestFieldEvent{
-		table: "t1",
-		db:    "vttest",
-		cols: []*TestColumn{
-			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
-			{name: "val", dataType: "BINARY", colType: "binary(4)", len: 4, charset: 63},
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id int, val binary(4), primary key(id))",
 		},
 	}
-
-	testcases := []testcase{{
-		input: queries,
-		output: [][]string{{
-			`begin`,
-			fe.String(),
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"1aaa\x00"}} flags:1}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"2bbb\x00"}} flags:1}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"3ccc\x00"}} flags:3}`,
-			`gtid`,
-			`commit`,
-		}},
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 'aaa')", []TestRowEvent{{flags: 1}}},
+		{"set @@session.foreign_key_checks=1", noEvents},
+		{"insert into t1 values (2, 'bbb')", []TestRowEvent{{flags: 1}}},
+		{"set @@session.foreign_key_checks=0", noEvents},
+		{"insert into t1 values (3, 'ccc')", []TestRowEvent{{flags: 3}}},
+		{"commit", nil},
 	}}
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
+
 }
 
 func TestStmtComment(t *testing.T) {
@@ -598,9 +539,9 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		t.Skip()
 	}
 	execStatements(t, []string{
-		"create table t1(id1 int, id2 int, id3 int, primary key(id1))",
-		"create table t2a(id1 int, id2 int, primary key(id1))",
-		"create table t2b(id1 varchar(20), id2 int, primary key(id1))",
+		"create table t1(id1 int, id2 int, id3 int, primary key(id1)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table t2a(id1 int, id2 int, primary key(id1)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table t2b(id1 varchar(20), id2 int, primary key(id1)) ENGINE=InnoDB CHARSET=utf8mb4",
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -645,10 +586,10 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2a\"} completed:true}",
 		"type:COMMIT",
 		"type:BEGIN",
-		"type:FIELD field_event:{table_name:\"t2b\" fields:{name:\"id1\" type:VARCHAR table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id1\" column_length:80 charset:45 column_type:\"varchar(20)\"} fields:{name:\"id2\" type:INT32 table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63 column_type:\"int(11)\"}}",
+		fmt.Sprintf("type:FIELD field_event:{table_name:\"t2b\" fields:{name:\"id1\" type:VARCHAR table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id1\" column_length:80 charset:%d column_type:\"varchar(20)\"} fields:{name:\"id2\" type:INT32 table:\"t2b\" org_table:\"t2b\" database:\"vttest\" org_name:\"id2\" column_length:11 charset:63 column_type:\"int(11)\"}}", testenv.DefaultCollationID),
 		"type:ROW row_event:{table_name:\"t2b\" row_changes:{after:{lengths:1 lengths:1 values:\"a5\"}}}",
 		"type:ROW row_event:{table_name:\"t2b\" row_changes:{after:{lengths:1 lengths:1 values:\"b6\"}}}",
-		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\" lastpk:{fields:{name:\"id1\" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:\"b\"}}}}",
+		fmt.Sprintf("type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\" lastpk:{fields:{name:\"id1\" type:VARCHAR charset:%d flags:20483} rows:{lengths:1 values:\"b\"}}}}", testenv.DefaultCollationID),
 		"type:COMMIT",
 		"type:BEGIN",
 		"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2b\"} completed:true}",
@@ -711,225 +652,179 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 	}
 }
 
+// TestFilteredVarBinary confirms that adding a filter using a varbinary column results in the correct set of events.
 func TestFilteredVarBinary(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
-	execStatements(t, []string{
-		"create table t1(id1 int, val varbinary(128), primary key(id1))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select id1, val from t1 where val = 'newton'",
-		}},
-	}
-
-	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into t1 values (1, 'kepler')",
-			"insert into t1 values (2, 'newton')",
-			"insert into t1 values (3, 'newton')",
-			"insert into t1 values (4, 'kepler')",
-			"insert into t1 values (5, 'newton')",
-			"update t1 set val = 'newton' where id1 = 1",
-			"update t1 set val = 'kepler' where id1 = 2",
-			"update t1 set val = 'newton' where id1 = 2",
-			"update t1 set val = 'kepler' where id1 = 1",
-			"delete from t1 where id1 in (2,3)",
-			"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, val varbinary(128), primary key(id1))",
 		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"t1" fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:6 values:"2newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:6 values:"3newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:6 values:"5newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:6 values:"1newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:6 values:"2newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:6 values:"2newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:6 values:"1newton"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:6 values:"2newton"}} row_changes:{before:{lengths:1 lengths:6 values:"3newton"}}}`,
-			`gtid`,
-			`commit`,
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id1, val from t1 where val = 'newton'",
+				}},
+			},
+		},
+	}
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 'kepler')", noEvents},
+		{"insert into t1 values (2, 'newton')", nil},
+		{"insert into t1 values (3, 'newton')", nil},
+		{"insert into t1 values (4, 'kepler')", noEvents},
+		{"insert into t1 values (5, 'newton')", nil},
+		{"update t1 set val = 'newton' where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "newton"}}}}},
 		}},
+		{"update t1 set val = 'kepler' where id1 = 2", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "newton"}}}}},
+		}},
+		{"update t1 set val = 'newton' where id1 = 2", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "newton"}}}}},
+		}},
+		{"update t1 set val = 'kepler' where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "newton"}}}}},
+		}},
+		{"delete from t1 where id1 in (2,3)", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "newton"}}, {before: []string{"3", "newton"}}}}},
+		}},
+		{"commit", nil},
 	}}
-	runCases(t, filter, testcases, "", nil)
+	ts.Run()
 }
 
+// TestFilteredInt confirms that adding a filter using an int column results in the correct set of events.
 func TestFilteredInt(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	engine.se.Reload(context.Background())
-
-	execStatements(t, []string{
-		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select id1, val from t1 where id2 = 200",
-		}},
-	}
-
-	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into t1 values (1, 100, 'aaa')",
-			"insert into t1 values (2, 200, 'bbb')",
-			"insert into t1 values (3, 100, 'ccc')",
-			"insert into t1 values (4, 200, 'ddd')",
-			"insert into t1 values (5, 200, 'eee')",
-			"update t1 set val = 'newddd' where id1 = 4",
-			"update t1 set id2 = 200 where id1 = 1",
-			"update t1 set id2 = 100 where id1 = 2",
-			"update t1 set id2 = 100 where id1 = 1",
-			"update t1 set id2 = 200 where id1 = 2",
-			"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
 		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"t1" fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"2bbb"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"4ddd"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"5eee"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:3 values:"4ddd"} after:{lengths:1 lengths:6 values:"4newddd"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:3 values:"2bbb"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"2bbb"}}}`,
-			`gtid`,
-			`commit`,
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id1, val from t1 where id2 = 200",
+				}},
+			},
+		},
+	}
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	ts.fieldEvents["t1"].cols[1].skip = true
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 100, 'aaa')", noEvents},
+		{"insert into t1 values (2, 200, 'bbb')", nil},
+		{"insert into t1 values (3, 100, 'ccc')", noEvents},
+		{"insert into t1 values (4, 200, 'ddd')", nil},
+		{"insert into t1 values (5, 200, 'eee')", nil},
+		{"update t1 set val = 'newddd' where id1 = 4", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"4", "ddd"}, after: []string{"4", "newddd"}}}}},
 		}},
+		{"update t1 set id2 = 200 where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "aaa"}}}}},
+		}},
+		{"update t1 set id2 = 100 where id1 = 2", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "bbb"}}}}},
+		}},
+		{"update t1 set id2 = 100 where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa"}}}}},
+		}},
+		{"update t1 set id2 = 200 where id1 = 2", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "bbb"}}}}},
+		}},
+		{"commit", nil},
 	}}
-	runCases(t, filter, testcases, "", nil)
+	ts.Run()
 }
 
+// TestSavepoint confirms that rolling back to a savepoint drops the dmls that were executed during the savepoint.
 func TestSavepoint(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
-	execStatements(t, []string{
-		"create table stream1(id int, val varbinary(128), primary key(id))",
-		"create table stream2(id int, val varbinary(128), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table stream1",
-		"drop table stream2",
-	})
-	engine.se.Reload(context.Background())
-	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into stream1 values (1, 'aaa')",
-			"savepoint a",
-			"insert into stream1 values (2, 'aaa')",
-			"rollback work to savepoint a",
-			"savepoint b",
-			"update stream1 set val='bbb' where id = 1",
-			"release savepoint b",
-			"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table stream1(id int, val varbinary(128), primary key(id))",
 		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:{table_name:"stream1" fields:{name:"id" type:INT32 table:"stream1" org_table:"stream1" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"stream1" org_table:"stream1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"stream1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"stream1" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:1 lengths:3 values:"1bbb"}}}`,
-			`gtid`,
-			`commit`,
+	}
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into stream1 values (1, 'aaa')", nil},
+		{"savepoint a", noEvents},
+		{"insert into stream1 values (2, 'aaa')", noEvents},
+		{"rollback work to savepoint a", noEvents},
+		{"savepoint b", noEvents},
+		{"update stream1 set val='bbb' where id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "stream1", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"1", "bbb"}}}}},
 		}},
+		{"release savepoint b", noEvents},
+		{"commit", nil},
 	}}
-	runCases(t, nil, testcases, "current", nil)
+	ts.Run()
 }
 
+// TestSavepointWithFilter tests that using savepoints with both filtered and unfiltered tables works as expected.
 func TestSavepointWithFilter(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
-	execStatements(t, []string{
-		"create table stream1(id int, val varbinary(128), primary key(id))",
-		"create table stream2(id int, val varbinary(128), primary key(id))",
-	})
-	defer execStatements(t, []string{
-		"drop table stream1",
-		"drop table stream2",
-	})
-	engine.se.Reload(context.Background())
-	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into stream1 values (1, 'aaa')",
-			"savepoint a",
-			"insert into stream1 values (2, 'aaa')",
-			"savepoint b",
-			"insert into stream1 values (3, 'aaa')",
-			"savepoint c",
-			"insert into stream1 values (4, 'aaa')",
-			"savepoint d",
-			"commit",
-
-			"begin",
-			"insert into stream1 values (5, 'aaa')",
-			"savepoint d",
-			"insert into stream1 values (6, 'aaa')",
-			"savepoint c",
-			"insert into stream1 values (7, 'aaa')",
-			"savepoint b",
-			"insert into stream1 values (8, 'aaa')",
-			"savepoint a",
-			"commit",
-
-			"begin",
-			"insert into stream1 values (9, 'aaa')",
-			"savepoint a",
-			"insert into stream2 values (1, 'aaa')",
-			"savepoint b",
-			"insert into stream1 values (10, 'aaa')",
-			"savepoint c",
-			"insert into stream2 values (2, 'aaa')",
-			"savepoint d",
-			"commit",
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table stream1(id int, val varbinary(128), primary key(id))",
+			"create table stream2(id int, val varbinary(128), primary key(id))",
 		},
-		output: [][]string{{
-			`begin`,
-			`gtid`,
-			`commit`,
-		}, {
-			`begin`,
-			`gtid`,
-			`commit`,
-		}, {
-			`begin`,
-			`type:FIELD field_event:{table_name:"stream2" fields:{name:"id" type:INT32 table:"stream2" org_table:"stream2" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"stream2" org_table:"stream2" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
-			`type:ROW row_event:{table_name:"stream2" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
-			`type:ROW row_event:{table_name:"stream2" row_changes:{after:{lengths:1 lengths:3 values:"2aaa"}}}`,
-			`gtid`,
-			`commit`,
-		}},
-	}}
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "stream2",
-			Filter: "select * from stream2",
-		}},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "stream2",
+					Filter: "select * from stream2",
+				}},
+			},
+		},
 	}
-	runCases(t, filter, testcases, "current", nil)
+	defer ts.Close()
+	require.NoError(t, ts.Init())
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into stream1 values (1, 'aaa')", noEvents},
+		{"savepoint a", noEvents},
+		{"insert into stream1 values (2, 'aaa')", noEvents},
+		{"savepoint b", noEvents},
+		{"insert into stream1 values (3, 'aaa')", noEvents},
+		{"savepoint c", noEvents},
+		{"insert into stream1 values (4, 'aaa')", noEvents},
+		{"savepoint d", noEvents},
+		{"commit", nil},
+	}, {
+		{"begin", nil},
+		{"insert into stream1 values (5, 'aaa')", noEvents},
+		{"savepoint d", noEvents},
+		{"insert into stream1 values (6, 'aaa')", noEvents},
+		{"savepoint c", noEvents},
+		{"insert into stream1 values (7, 'aaa')", noEvents},
+		{"savepoint b", noEvents},
+		{"insert into stream1 values (8, 'aaa')", noEvents},
+		{"savepoint a", noEvents},
+		{"commit", nil},
+	}, {
+		{"begin", nil},
+		{"insert into stream1 values (9, 'aaa')", noEvents},
+		{"savepoint a", noEvents},
+		{"insert into stream2 values (1, 'aaa')", nil},
+		{"savepoint b", noEvents},
+		{"insert into stream1 values (10, 'aaa')", noEvents},
+		{"savepoint c", noEvents},
+		{"insert into stream2 values (2, 'aaa')", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "stream2", changes: []TestRowChange{{after: []string{"2", "aaa"}}}}},
+		}},
+		{"savepoint d", noEvents},
+		{"commit", nil},
+	}}
+	ts.Run()
 }
 
 func TestStatements(t *testing.T) {
@@ -1424,6 +1319,7 @@ func TestDDLAddColumn(t *testing.T) {
 		"commit",
 	})
 	engine.se.Reload(context.Background())
+	env.SchemaEngine.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1633,9 +1529,19 @@ func TestBuffering(t *testing.T) {
 	runCases(t, nil, testcases, "", nil)
 }
 
+// TestBestEffortNameInFieldEvent tests that we make a valid best effort
+// attempt to deduce the type and collation in the event of table renames.
+// In both cases the varbinary becomes a varchar. We get the correct
+// collation information, however, in the binlog_row_metadata in 8.0 but
+// not in 5.7. So in 5.7 our best effort uses varchar with its default
+// collation for text fields.
 func TestBestEffortNameInFieldEvent(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
+	}
+	bestEffortCollation := collations.ID(collations.CollationBinaryID)
+	if strings.HasPrefix(testenv.MySQLVersion, "5.7") {
+		bestEffortCollation = testenv.DefaultCollationID
 	}
 	filter := &binlogdatapb.Filter{
 		FieldEventMode: binlogdatapb.Filter_BEST_EFFORT,
@@ -1645,7 +1551,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 	}
 	// Modeled after vttablet endtoend compatibility tests.
 	execStatements(t, []string{
-		"create table vitess_test(id int, val varbinary(128), primary key(id))",
+		"create table vitess_test(id int, val varbinary(128), primary key(id)) ENGINE=InnoDB CHARSET=utf8mb4",
 	})
 	position := primaryPosition(t)
 	execStatements(t, []string{
@@ -1665,7 +1571,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 		// information returned by binlog for val column == varchar (rather than varbinary).
 		output: [][]string{{
 			`begin`,
-			`type:FIELD field_event:{table_name:"vitess_test" fields:{name:"@1" type:INT32 charset:63} fields:{name:"@2" type:VARCHAR charset:255}}`,
+			fmt.Sprintf(`type:FIELD field_event:{table_name:"vitess_test" fields:{name:"@1" type:INT32 charset:63} fields:{name:"@2" type:VARCHAR charset:%d}}`, bestEffortCollation),
 			`type:ROW row_event:{table_name:"vitess_test" row_changes:{after:{lengths:1 lengths:3 values:"1abc"}}}`,
 			`gtid`,
 			`commit`,
@@ -1685,6 +1591,9 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 
 // test that vstreamer ignores tables created by OnlineDDL
 func TestInternalTables(t *testing.T) {
+	if version.GoOS == "darwin" {
+		t.Skip("internal online ddl table matching doesn't work on Mac because it is case insensitive")
+	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -1746,12 +1655,12 @@ func TestTypes(t *testing.T) {
 
 	// Modeled after vttablet endtoend compatibility tests.
 	execStatements(t, []string{
-		"create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))",
-		"create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id))",
-		"create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb))",
-		"create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id))",
-		"create table vitess_null(id int, val varbinary(128), primary key(id))",
-		"create table vitess_decimal(id int, dec1 decimal(12,4), dec2 decimal(13,4), primary key(id))",
+		"create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table vitess_null(id int, val varbinary(128), primary key(id)) ENGINE=InnoDB CHARSET=utf8mb4",
+		"create table vitess_decimal(id int, dec1 decimal(12,4), dec2 decimal(13,4), primary key(id)) ENGINE=InnoDB CHARSET=utf8mb4",
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
@@ -1804,7 +1713,7 @@ func TestTypes(t *testing.T) {
 		},
 		output: [][]string{{
 			`begin`,
-			`type:FIELD field_event:{table_name:"vitess_strings" fields:{name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:64 charset:45 column_type:"char(16)"} fields:{name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:64 charset:45 column_type:"varchar(16)"} fields:{name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 column_type:"binary(4)"} fields:{name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 column_type:"tinyblob"} fields:{name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 column_type:"blob"} fields:{name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:1020 charset:45 column_type:"tinytext"} fields:{name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:262140 charset:45 column_type:"text"} fields:{name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:4 charset:45 column_type:"enum('a','b')"} fields:{name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:12 charset:45 column_type:"set('a','b')"}}`,
+			fmt.Sprintf(`type:FIELD field_event:{table_name:"vitess_strings" fields:{name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:64 charset:%d column_type:"char(16)"} fields:{name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:64 charset:%d column_type:"varchar(16)"} fields:{name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 column_type:"binary(4)"} fields:{name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 column_type:"tinyblob"} fields:{name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 column_type:"blob"} fields:{name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:1020 charset:%d column_type:"tinytext"} fields:{name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:262140 charset:%d column_type:"text"} fields:{name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:4 charset:%d column_type:"enum('a','b')"} fields:{name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:12 charset:%d column_type:"set('a','b')"}}`, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID, testenv.DefaultCollationID),
 			`type:ROW row_event:{table_name:"vitess_strings" row_changes:{after:{lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
 				`values:"abcd\x00\x00\x00efgh13"}}}`,
 			`gtid`,
@@ -1991,6 +1900,12 @@ func TestMinimalMode(t *testing.T) {
 	env = nil
 	newEngine(t, ctx, "minimal")
 	defer func() {
+		if engine != nil {
+			engine.Close()
+		}
+		if env != nil {
+			env.Close()
+		}
 		engine = oldEngine
 		env = oldEnv
 	}()
@@ -2158,11 +2073,11 @@ func TestGeneratedColumns(t *testing.T) {
 		table: "t1",
 		db:    "vttest",
 		cols: []*TestColumn{
-			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
-			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
-			{name: "val2", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
-			{name: "val3", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
-			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, collationID: 63},
+			{name: "val2", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, collationID: 63},
+			{name: "val3", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, collationID: 63},
+			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 		},
 	}
 
@@ -2205,8 +2120,8 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 		table: "t1",
 		db:    "vttest",
 		cols: []*TestColumn{
-			{name: "my_row_id", dataType: "UINT64", colType: "bigint unsigned", len: 20, charset: 63},
-			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, charset: 63},
+			{name: "my_row_id", dataType: "UINT64", colType: "bigint unsigned", len: 20, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(6)", len: 6, collationID: 63},
 		},
 	}
 
@@ -2225,7 +2140,6 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 }
 
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	wg, ch := startStream(ctx, t, filter, position, tablePK)
@@ -2288,10 +2202,16 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				break
 			}
 		}
+
+		numEventsToMatch := len(evs)
 		if len(wantset) != len(evs) {
-			t.Fatalf("%v: evs\n%v, want\n%v, >> got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
+			log.Warningf("%v: evs\n%v, want\n%v, >> got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
+			if len(wantset) < len(evs) {
+				numEventsToMatch = len(wantset)
+			}
 		}
-		for i, want := range wantset {
+		for i := 0; i < numEventsToMatch; i++ {
+			want := wantset[i]
 			// CurrentTime is not testable.
 			evs[i].CurrentTime = 0
 			evs[i].Keyspace = ""
@@ -2350,6 +2270,9 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				}
 			}
 		}
+		if len(wantset) != len(evs) {
+			t.Fatalf("%v: evs\n%v, want\n%v, got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
+		}
 	}
 }
 
@@ -2385,7 +2308,7 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 		timer := time.NewTimer(2 * time.Second)
 		defer timer.Stop()
 
-		t.Logf("Received events: %v", evs)
+		log.Infof("Received events: %v", evs)
 		select {
 		case ch <- evs:
 		case <-ctx.Done():

@@ -74,7 +74,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildVSchemaGraph")
 		if err != nil {
 			return 1
 		}
@@ -134,7 +134,7 @@ func TestLookupQueries(t *testing.T) {
 	(3, 'monkey', 'monkey')`)
 
 	for _, workload := range []string{"olap", "oltp"} {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 
 			mcmp.AssertMatches("select id from user where lookup = 'apa'", "[[INT64(1)] [INT64(2)]]")

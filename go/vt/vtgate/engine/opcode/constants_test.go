@@ -30,7 +30,7 @@ import (
 func TestCheckAllAggrOpCodes(t *testing.T) {
 	// This test is just checking that we never reach the panic when using Type() on valid opcodes
 	for i := AggregateOpcode(0); i < _NumOfOpCodes; i++ {
-		i.Type(sqltypes.Null)
+		i.SQLType(sqltypes.Null)
 	}
 }
 
@@ -56,7 +56,7 @@ func TestType(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.opcode.String()+"_"+tc.typ.String(), func(t *testing.T) {
-			out := tc.opcode.Type(tc.typ)
+			out := tc.opcode.SQLType(tc.typ)
 			assert.Equal(t, tc.out, out)
 		})
 	}
@@ -70,7 +70,7 @@ func TestType_Panic(t *testing.T) {
 			assert.Contains(t, errMsg, "ERROR", "Expected panic message containing 'ERROR'")
 		}
 	}()
-	AggregateOpcode(999).Type(sqltypes.VarChar)
+	AggregateOpcode(999).SQLType(sqltypes.VarChar)
 }
 
 func TestNeedsListArg(t *testing.T) {

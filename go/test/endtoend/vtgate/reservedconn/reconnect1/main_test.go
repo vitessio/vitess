@@ -133,7 +133,7 @@ func TestServingChange(t *testing.T) {
 
 	// changing rdonly tablet to spare (non serving).
 	rdonlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "replica")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "replica")
 	require.NoError(t, err)
 	rdonlyTablet.Type = "replica"
 
@@ -143,12 +143,12 @@ func TestServingChange(t *testing.T) {
 
 	// changing replica tablet to rdonly to make rdonly available for serving.
 	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
 	require.NoError(t, err)
 	replicaTablet.Type = "rdonly"
 
 	// to see/make the new rdonly available
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", replicaTablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", replicaTablet.Alias)
 	require.NoError(t, err)
 
 	// this should pass now as there is rdonly present
@@ -174,7 +174,7 @@ func TestServingChangeStreaming(t *testing.T) {
 
 	// changing rdonly tablet to spare (non serving).
 	rdonlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "replica")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "replica")
 	require.NoError(t, err)
 	rdonlyTablet.Type = "replica"
 
@@ -192,12 +192,12 @@ func TestServingChangeStreaming(t *testing.T) {
 
 	// changing replica tablet to rdonly to make rdonly available for serving.
 	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
 	require.NoError(t, err)
 	replicaTablet.Type = "rdonly"
 
 	// to see/make the new rdonly available
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", replicaTablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", replicaTablet.Alias)
 	require.NoError(t, err)
 
 	// this should pass now as there is rdonly present
