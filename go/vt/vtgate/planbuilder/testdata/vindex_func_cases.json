@@ -73,6 +73,11 @@
       "Original": "select id, keyspace_id, id from user_index where id = :id",
       "Instructions": {
         "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "id",
+          "keyspace_id",
+          "id"
+        ],
         "Columns": [
           0,
           1,
@@ -113,6 +118,11 @@
       "Original": "select id, keyspace_id, id from second_user.hash_dup where id = :id",
       "Instructions": {
         "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "id",
+          "keyspace_id",
+          "id"
+        ],
         "Columns": [
           0,
           1,

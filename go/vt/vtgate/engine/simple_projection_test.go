@@ -44,8 +44,9 @@ func TestSubqueryExecute(t *testing.T) {
 	}
 
 	sq := &SimpleProjection{
-		Cols:  []int{0, 2},
-		Input: prim,
+		Cols:     []int{0, 2},
+		ColNames: []string{"", ""},
+		Input:    prim,
 	}
 
 	bv := map[string]*querypb.BindVariable{
@@ -93,8 +94,9 @@ func TestSubqueryStreamExecute(t *testing.T) {
 	}
 
 	sq := &SimpleProjection{
-		Cols:  []int{0, 2},
-		Input: prim,
+		Cols:     []int{0, 2},
+		ColNames: []string{"", ""},
+		Input:    prim,
 	}
 
 	bv := map[string]*querypb.BindVariable{
@@ -142,8 +144,9 @@ func TestSubqueryGetFields(t *testing.T) {
 	}
 
 	sq := &SimpleProjection{
-		Cols:  []int{0, 2},
-		Input: prim,
+		Cols:     []int{0, 2},
+		ColNames: []string{"", ""},
+		Input:    prim,
 	}
 
 	bv := map[string]*querypb.BindVariable{
