@@ -88,12 +88,6 @@ func TestRemove(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.args != nil {
-				cmd.SetArgs(tt.args)
-				err := cmd.Execute()
-				require.NoError(t, err)
-			}
-
 			originalStdOut := os.Stdout
 			defer func() {
 				os.Stdout = originalStdOut
@@ -102,6 +96,11 @@ func TestRemove(t *testing.T) {
 			r, w, _ := os.Pipe()
 			os.Stdout = w
 
+			if tt.args != nil {
+				cmd.SetArgs(tt.args)
+				err := cmd.Execute()
+				require.NoError(t, err)
+			}
 			cmd.Run(&cobra.Command{}, []string{})
 
 			err := w.Close()

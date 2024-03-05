@@ -19,6 +19,7 @@ package common
 import (
 	"io"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,35 +30,55 @@ func TestGetRules(t *testing.T) {
 	require.NotEmpty(t, rules)
 }
 
+type testStruct struct {
+	StringField  string  `yaml:"stringfield"`
+	IntField     int     `yaml:"intfield"`
+	BoolField    bool    `yaml:"boolfield"`
+	Float64Field float64 `yaml:"float64field"`
+}
+
+var testData = testStruct{
+	"tricky text to test text",
+	32,
+	true,
+	3.141,
+}
+
 func TestMustPrintJSON(t *testing.T) {
-	jsonFile, err := os.ReadFile("testdata/rules.json")
-	require.NoError(t, err)
+	originalStdOut := os.Stdout
+	defer func() {
+		os.Stdout = originalStdOut
+	}()
 
 	// Redirect stdout to a buffer
-	rescueStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
+	MustPrintJSON(testData)
 
-	MustPrintJSON(jsonFile)
-
-	w.Close()
-	got, _ := io.ReadAll(r)
-	os.Stdout = rescueStdout
-
-	want := `"WwogICAgewogICAgICAgICJEZXNjcmlwdGlvbiI6ICJTb21lIHZhbHVlIiwKICAgICAgICAiTmFtZSI6ICJOYW1lIgogICAgfQpdCg=="` + "\n"
-	require.Equal(t, want, string(got))
+	err := w.Close()
+	require.NoError(t, err)
+	got, err := io.ReadAll(r)
+	require.NoError(t, err)
+	require.Equal(t, `{
+  "StringField": "tricky text to test text",
+  "IntField": 32,
+  "BoolField": true,
+  "Float64Field": 3.141
+}
+`, string(got))
 }
 
 func TestMustWriteJSON(t *testing.T) {
-	jsonFile, err := os.ReadFile("testdata/rules.json")
+	tmpFile := path.Join(t.TempDir(), "temp.json")
+	MustWriteJSON(testData, tmpFile)
+
+	res, err := os.ReadFile(tmpFile)
 	require.NoError(t, err)
 
-	tmpFile := "testdata/temp.json"
-	MustWriteJSON(jsonFile, tmpFile)
-
-	_, err = os.ReadFile(tmpFile)
-	require.NoError(t, err)
-
-	err = os.Remove(tmpFile)
-	require.NoError(t, err)
+	require.EqualValues(t, `{
+  "StringField": "tricky text to test text",
+  "IntField": 32,
+  "BoolField": true,
+  "Float64Field": 3.141
+}`, string(res))
 }
