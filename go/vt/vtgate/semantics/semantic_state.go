@@ -928,6 +928,7 @@ func (st *SemTable) Clone(n sqlparser.SQLNode) sqlparser.SQLNode {
 	}, st.CopySemanticInfo)
 }
 
+// UpdateChildFKExpr updates the child foreign key expression with the new expression.
 func (st *SemTable) UpdateChildFKExpr(origUpdExpr *sqlparser.UpdateExpr, newExpr sqlparser.Expr) {
 	for _, exprs := range st.childFkToUpdExprs {
 		for idx, updateExpr := range exprs {
@@ -936,4 +937,13 @@ func (st *SemTable) UpdateChildFKExpr(origUpdExpr *sqlparser.UpdateExpr, newExpr
 			}
 		}
 	}
+}
+
+// GetSortedTargets returns the targets in the semantic table in a sorted order
+func (st *SemTable) GetSortedTargets() []TableSet {
+	var targets TableSet
+	for _, target := range st.Targets {
+		targets = targets.Merge(target)
+	}
+	return targets.Constituents()
 }

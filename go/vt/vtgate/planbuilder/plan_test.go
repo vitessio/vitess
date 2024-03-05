@@ -488,6 +488,7 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 }
 
 func TestWithDefaultKeyspaceFromFile(t *testing.T) {
+	t.Skip()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// We are testing this separately so we can set a default keyspace

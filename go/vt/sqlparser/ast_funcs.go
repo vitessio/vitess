@@ -2686,3 +2686,10 @@ func (node *Update) SetWherePredicate(expr Expr) {
 		Expr: expr,
 	}
 }
+
+func (lock Lock) Merge(newLock Lock) Lock {
+	if newLock > lock {
+		return newLock
+	}
+	return lock
+}

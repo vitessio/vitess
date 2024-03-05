@@ -522,11 +522,11 @@ const (
 // Constants for Enum Type - Lock
 const (
 	NoLock Lock = iota
-	ForUpdateLock
 	ShareModeLock
 	ForShareLock
 	ForShareLockNoWait
 	ForShareLockSkipLocked
+	ForUpdateLock
 	ForUpdateLockNoWait
 	ForUpdateLockSkipLocked
 )

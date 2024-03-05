@@ -124,6 +124,20 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 			}
 			b.targets[target.Name] = finalDep.direct
 		}
+	case *sqlparser.UpdateExpr:
+		ts, ok := b.direct[node.Name]
+		if !ok {
+			return nil
+		}
+		tblInfo, err := b.tc.tableInfoFor(ts)
+		if err != nil {
+			return err
+		}
+		tblName, err := tblInfo.Name()
+		if err != nil {
+			return err
+		}
+		b.targets[tblName.Name] = ts
 	}
 	return nil
 }
