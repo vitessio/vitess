@@ -64,6 +64,9 @@ func TestPlan(t *testing.T) {
 	}
 	testOutputTempDir := makeTestOutput(t)
 	addPKs(t, vschemaWrapper.V, "user", []string{"user", "music"})
+	addPKsProvided(t, vschemaWrapper.V, "user", []string{"user_extra"}, []string{"id", "user_id"})
+	addPKsProvided(t, vschemaWrapper.V, "ordering", []string{"order"}, []string{"oid", "region_id"})
+	addPKsProvided(t, vschemaWrapper.V, "ordering", []string{"order_event"}, []string{"oid", "ename"})
 
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
@@ -238,6 +241,13 @@ func addPKs(t *testing.T, vschema *vindexes.VSchema, ks string, tbls []string) {
 	}
 }
 
+func addPKsProvided(t *testing.T, vschema *vindexes.VSchema, ks string, tbls []string, pks []string) {
+	for _, tbl := range tbls {
+		require.NoError(t,
+			vschema.AddPrimaryKey(ks, tbl, pks))
+	}
+}
+
 func TestSystemTables57(t *testing.T) {
 	// first we move everything to use 5.7 logic
 	env, err := vtenv.New(vtenv.Options{
@@ -279,6 +289,10 @@ func TestOne(t *testing.T) {
 	lv := loadSchema(t, "vschemas/schema.json", true)
 	setFks(t, lv)
 	addPKs(t, lv, "user", []string{"user", "music"})
+	addPKs(t, lv, "main", []string{"unsharded"})
+	addPKsProvided(t, lv, "user", []string{"user_extra"}, []string{"id", "user_id"})
+	addPKsProvided(t, lv, "ordering", []string{"order"}, []string{"oid", "region_id"})
+	addPKsProvided(t, lv, "ordering", []string{"order_event"}, []string{"oid", "ename"})
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:           lv,
 		TestBuilder: TestBuilder,
@@ -289,6 +303,9 @@ func TestOne(t *testing.T) {
 }
 
 func TestOneTPCC(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
+
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:   loadSchema(t, "vschemas/tpcc_schema.json", true),
 		Env: vtenv.NewTestEnv(),
@@ -298,6 +315,8 @@ func TestOneTPCC(t *testing.T) {
 }
 
 func TestOneWithMainAsDefault(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/schema.json", true),
 		Keyspace: &vindexes.Keyspace{
@@ -311,6 +330,8 @@ func TestOneWithMainAsDefault(t *testing.T) {
 }
 
 func TestOneWithSecondUserAsDefault(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/schema.json", true),
 		Keyspace: &vindexes.Keyspace{
@@ -324,6 +345,8 @@ func TestOneWithSecondUserAsDefault(t *testing.T) {
 }
 
 func TestOneWithUserAsDefault(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/schema.json", true),
 		Keyspace: &vindexes.Keyspace{
@@ -349,6 +372,8 @@ func TestOneWithTPCHVSchema(t *testing.T) {
 }
 
 func TestOneWith57Version(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	// first we move everything to use 5.7 logic
 	env, err := vtenv.New(vtenv.Options{
 		MySQLServerVersion: "5.7.9",
@@ -586,7 +611,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 		if setCollation {
 			for _, table := range ks.Tables {
 				for i, col := range table.Columns {
-					if sqltypes.IsText(col.Type) {
+					if sqltypes.IsText(col.Type) && col.CollationName == "" {
 						table.Columns[i].CollationName = "latin1_swedish_ci"
 					}
 				}

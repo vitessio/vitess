@@ -48,7 +48,7 @@ var (
 	successResult          = "success"
 )
 
-// ChooseNewPrimary finds a tablet that should become a primary after reparent.
+// ElectNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
 // cell as the current primary, and to be different from avoidPrimaryAlias. The
 // tablet with the most advanced replication position is chosen to minimize the
@@ -58,11 +58,12 @@ var (
 // with transactions being executed on the current primary, so when all tablets
 // are at roughly the same position, then the choice of new primary-elect will
 // be somewhat unpredictable.
-func ChooseNewPrimary(
+func ElectNewPrimary(
 	ctx context.Context,
 	tmc tmclient.TabletManagerClient,
 	shardInfo *topo.ShardInfo,
 	tabletMap map[string]*topo.TabletInfo,
+	newPrimaryAlias *topodatapb.TabletAlias,
 	avoidPrimaryAlias *topodatapb.TabletAlias,
 	waitReplicasTimeout time.Duration,
 	tolerableReplLag time.Duration,
@@ -85,8 +86,15 @@ func ChooseNewPrimary(
 		errorGroup, groupCtx = errgroup.WithContext(ctx)
 	)
 
+	// candidates are the list of tablets that can be potentially promoted after filtering out based on preliminary checks.
+	candidates := []*topodatapb.Tablet{}
 	for _, tablet := range tabletMap {
 		switch {
+		case newPrimaryAlias != nil:
+			// If newPrimaryAlias is provided, then that is the only valid tablet, even if it is not of type replica or in a different cell.
+			if !topoproto.TabletAliasEqual(tablet.Alias, newPrimaryAlias) {
+				continue
+			}
 		case primaryCell != "" && tablet.Alias.Cell != primaryCell:
 			continue
 		case avoidPrimaryAlias != nil && topoproto.TabletAliasEqual(tablet.Alias, avoidPrimaryAlias):
@@ -95,7 +103,19 @@ func ChooseNewPrimary(
 			continue
 		}
 
-		tb := tablet.Tablet
+		candidates = append(candidates, tablet.Tablet)
+	}
+
+	// There is only one tablet and tolerable replication lag is unspecified,
+	// then we don't need to find the position of the said tablet for sorting.
+	// We can just return the tablet quickly.
+	// This check isn't required, but it saves us an RPC call that is otherwise unnecessary.
+	if len(candidates) == 1 && tolerableReplLag == 0 {
+		return candidates[0].Alias, nil
+	}
+
+	for _, tablet := range candidates {
+		tb := tablet
 		errorGroup.Go(func() error {
 			// find and store the positions for the tablet
 			pos, replLag, err := findPositionAndLagForTablet(groupCtx, tb, logger, tmc, waitReplicasTimeout)
@@ -114,9 +134,9 @@ func ChooseNewPrimary(
 		return nil, err
 	}
 
-	// return nothing if there are no valid tablets available
+	// return an error if there are no valid tablets available
 	if len(validTablets) == 0 {
-		return nil, nil
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to in the same cell as the current primary")
 	}
 
 	// sort the tablets for finding the best primary

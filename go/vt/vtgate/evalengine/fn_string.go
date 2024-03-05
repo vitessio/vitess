@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"bytes"
+	"math"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -29,6 +30,11 @@ import (
 )
 
 type (
+	builtinInsert struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinChangeCase struct {
 		CallExpr
 		upcase  bool
@@ -47,6 +53,16 @@ type (
 		CallExpr
 	}
 
+	builtinReverse struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinSpace struct {
+		CallExpr
+		collate collations.ID
+	}
+
 	builtinOrd struct {
 		CallExpr
 		collate collations.ID
@@ -62,9 +78,8 @@ type (
 
 	builtinWeightString struct {
 		CallExpr
-		Cast   string
-		Len    int
-		HasLen bool
+		Cast string
+		Len  *int
 	}
 
 	builtinLeftRight struct {
@@ -94,19 +109,176 @@ type (
 		CallExpr
 		collate collations.ID
 	}
+
+	builtinLocate struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinChar struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinRepeat struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinConcat struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinConcatWs struct {
+		CallExpr
+		collate collations.ID
+	}
+
+	builtinReplace struct {
+		CallExpr
+		collate collations.ID
+	}
 )
 
+var _ IR = (*builtinInsert)(nil)
 var _ IR = (*builtinChangeCase)(nil)
 var _ IR = (*builtinCharLength)(nil)
 var _ IR = (*builtinLength)(nil)
 var _ IR = (*builtinASCII)(nil)
+var _ IR = (*builtinReverse)(nil)
+var _ IR = (*builtinSpace)(nil)
 var _ IR = (*builtinOrd)(nil)
 var _ IR = (*builtinBitLength)(nil)
 var _ IR = (*builtinCollation)(nil)
 var _ IR = (*builtinWeightString)(nil)
 var _ IR = (*builtinLeftRight)(nil)
 var _ IR = (*builtinPad)(nil)
+var _ IR = (*builtinStrcmp)(nil)
 var _ IR = (*builtinTrim)(nil)
+var _ IR = (*builtinSubstring)(nil)
+var _ IR = (*builtinLocate)(nil)
+var _ IR = (*builtinChar)(nil)
+var _ IR = (*builtinRepeat)(nil)
+var _ IR = (*builtinConcat)(nil)
+var _ IR = (*builtinConcatWs)(nil)
+var _ IR = (*builtinReplace)(nil)
+
+func insert(str, newstr *evalBytes, pos, l int) []byte {
+	pos--
+
+	cs := colldata.Lookup(str.col.Collation).Charset()
+	strLen := charset.Length(cs, str.bytes)
+
+	if pos < 0 || strLen <= pos {
+		return str.bytes
+	}
+	if l < 0 {
+		l = strLen
+	}
+
+	front := charset.Slice(cs, str.bytes, 0, pos)
+	var back []byte
+	if pos <= math.MaxInt-l && pos+l < strLen {
+		back = charset.Slice(cs, str.bytes, pos+l, strLen)
+	}
+
+	res := make([]byte, len(front)+len(newstr.bytes)+len(back))
+
+	copy(res[:len(front)], front)
+	copy(res[len(front):], newstr.bytes)
+	copy(res[len(front)+len(newstr.bytes):], back)
+
+	return res
+}
+
+func (call *builtinInsert) eval(env *ExpressionEnv) (eval, error) {
+	args, err := call.args(env)
+	if err != nil {
+		return nil, err
+	}
+	if args[0] == nil || args[1] == nil || args[2] == nil || args[3] == nil {
+		return nil, nil
+	}
+
+	str, ok := args[0].(*evalBytes)
+	if !ok {
+		str, err = evalToVarchar(args[0], call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	pos := evalToInt64(args[1]).i
+	l := evalToInt64(args[2]).i
+
+	newstr, err := evalToVarchar(args[3], str.col.Collation, true)
+	if err != nil {
+		return nil, err
+	}
+
+	res := insert(str, newstr, int(pos), int(l))
+	if !validMaxLength(int64(len(res)), 1) {
+		return nil, nil
+	}
+	return newEvalText(res, str.col), nil
+}
+
+func (call *builtinInsert) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	pos, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	l, err := call.Arguments[2].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	newstr, err := call.Arguments[3].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck4(str, pos, l, newstr)
+
+	_ = c.compileToInt64(pos, 3)
+	_ = c.compileToInt64(l, 2)
+
+	if err != nil {
+		return ctype{}, nil
+	}
+
+	col := str.Col
+
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xce(4, sqltypes.VarChar, c.collation)
+		col = typedCoercionCollation(sqltypes.VarChar, c.collation)
+	}
+
+	switch {
+	case newstr.isTextual():
+		fromCharset := colldata.Lookup(newstr.Col.Collation).Charset()
+		toCharset := colldata.Lookup(col.Collation).Charset()
+		if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
+			c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
+		}
+	default:
+		c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
+	}
+
+	c.asm.Fn_INSERT(col)
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
+}
 
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -151,7 +323,7 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
 	}
 
 	c.asm.Fn_LUCASE(call.upcase)
@@ -244,13 +416,107 @@ func (call *builtinASCII) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 	}
 
 	c.asm.Fn_ASCII()
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(str.Flag)}, nil
+}
+
+func reverse(in *evalBytes) []byte {
+	cs := colldata.Lookup(in.col.Collation).Charset()
+	b := in.bytes
+
+	out, end := make([]byte, len(b)), len(b)
+	for len(b) > 0 {
+		_, size := cs.DecodeRune(b)
+		copy(out[end-size:end], b[:size])
+		b = b[size:]
+		end -= size
+	}
+	return out
+}
+
+func (call *builtinReverse) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	b, ok := arg.(*evalBytes)
+	if !ok {
+		b, err = evalToVarchar(arg, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return newEvalText(reverse(b), b.col), nil
+}
+
+func (call *builtinReverse) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case arg.isTextual():
+	default:
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+	}
+
+	c.asm.Fn_REVERSE()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: arg.Col, Flag: flagNullable}, nil
+}
+
+func space(num int64) []byte {
+	num = max(num, 0)
+
+	spaces := bytes.Repeat([]byte{0x20}, int(num))
+	return spaces
+}
+
+func (call *builtinSpace) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	num := evalToInt64(arg).i
+
+	if !validMaxLength(1, num) {
+		return nil, nil
+	}
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
+	return newEvalText(space(num), col), nil
+}
+
+func (call *builtinSpace) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	_ = c.compileToInt64(arg, 1)
+
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
+	c.asm.Fn_SPACE(col)
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
 }
 
 func charOrd(b []byte, coll collations.ID) int64 {
@@ -299,7 +565,7 @@ func (call *builtinOrd) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		col = str.Col.Collation
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, call.collate, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, call.collate, nil)
 	}
 
 	c.asm.Fn_ORD(col)
@@ -321,11 +587,6 @@ func (call *builtinOrd) compile(c *compiler) (ctype, error) {
 //     error: `ERROR 2020 (HY000): Got packet bigger than 'max_allowed_packet' bytes` and the client gets disconnected.
 //   - `> max_allowed_packet`, no error and returns `NULL`.
 const maxRepeatLength = 1073741824
-
-type builtinRepeat struct {
-	CallExpr
-	collate collations.ID
-}
 
 func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	arg1, arg2, err := call.arg2(env)
@@ -382,7 +643,7 @@ func (expr *builtinRepeat) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, nil)
 	}
 	_ = c.compileToInt64(repeat, 1)
 
@@ -434,7 +695,7 @@ func (c *builtinWeightString) eval(env *ExpressionEnv) (eval, error) {
 			typ = sqltypes.Blob
 		}
 
-		weights, _, err = evalWeightString(weights, evalToBinary(input), c.Len, 0)
+		weights, _, err = evalWeightString(weights, evalToBinary(input), *c.Len, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -469,7 +730,7 @@ func (c *builtinWeightString) eval(env *ExpressionEnv) (eval, error) {
 		} else {
 			var strLen int
 			if c.Cast == "char" {
-				strLen = c.Len
+				strLen = *c.Len
 			}
 			weights, _, err = evalWeightString(weights, val, strLen, 0)
 		}
@@ -499,14 +760,14 @@ func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(str)
 	if call.Cast == "binary" {
 		if !sqltypes.IsBinary(str.Type) {
-			c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
+			c.asm.Convert_xb(1, sqltypes.VarBinary, nil)
 		}
 		switch str.Type {
 		case sqltypes.Blob, sqltypes.Text, sqltypes.TypeJSON:
 			typ = sqltypes.Blob
 		}
 
-		c.asm.Fn_WEIGHT_STRING(typ, call.Len)
+		c.asm.Fn_WEIGHT_STRING(typ, *call.Len)
 		c.asm.jumpDestination(skip)
 		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
 	}
@@ -527,7 +788,7 @@ func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
 		}
 		var strLen int
 		if call.Cast == "char" {
-			strLen = call.Len
+			strLen = *call.Len
 		}
 		c.asm.Fn_WEIGHT_STRING(typ, strLen)
 
@@ -597,7 +858,7 @@ func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		col = str.Col
 	default:
-		c.asm.Convert_xc(2, sqltypes.VarChar, col.Collation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, col.Collation, nil)
 	}
 	_ = c.compileToInt64(l, 1)
 
@@ -890,7 +1151,7 @@ func (call *builtinTrim) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		col = str.Col
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, col.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, col.Collation, nil)
 	}
 
 	if len(call.Arguments) == 1 {
@@ -1014,7 +1275,7 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 		col = str.Col
 	default:
 		tt = sqltypes.VarChar
-		c.asm.Convert_xc(2, tt, col.Collation, 0, false)
+		c.asm.Convert_xc(2, tt, col.Collation, nil)
 	}
 	_ = c.compileToInt64(p, 1)
 
@@ -1036,9 +1297,109 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 	return ctype{Type: tt, Col: col, Flag: flagNullable}, nil
 }
 
-type builtinConcat struct {
-	CallExpr
-	collate collations.ID
+func (call *builtinLocate) eval(env *ExpressionEnv) (eval, error) {
+	substr, err := call.Arguments[0].eval(env)
+	if err != nil || substr == nil {
+		return nil, err
+	}
+
+	str, err := call.Arguments[1].eval(env)
+	if err != nil || str == nil {
+		return nil, err
+	}
+
+	if _, ok := str.(*evalBytes); !ok {
+		str, err = evalToVarchar(str, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	col := str.(*evalBytes).col.Collation
+	substr, err = evalToVarchar(substr, col, true)
+	if err != nil {
+		return nil, err
+	}
+
+	pos := int64(1)
+	if len(call.Arguments) > 2 {
+		p, err := call.Arguments[2].eval(env)
+		if err != nil || p == nil {
+			return nil, err
+		}
+		pos = evalToInt64(p).i
+		if pos < 1 || pos > math.MaxInt {
+			return newEvalInt64(0), nil
+		}
+	}
+
+	var coll colldata.Collation
+	if typeIsTextual(substr.SQLType()) && typeIsTextual(str.SQLType()) {
+		coll = colldata.Lookup(col)
+	} else {
+		coll = colldata.Lookup(collations.CollationBinaryID)
+	}
+	found := colldata.Index(coll, str.ToRawBytes(), substr.ToRawBytes(), int(pos)-1)
+	return newEvalInt64(int64(found) + 1), nil
+}
+
+func (call *builtinLocate) compile(c *compiler) (ctype, error) {
+	substr, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	str, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip1 := c.compileNullCheck2(substr, str)
+	var skip2 *jump
+	if len(call.Arguments) > 2 {
+		l, err := call.Arguments[2].compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		skip2 = c.compileNullCheck2(str, l)
+		_ = c.compileToInt64(l, 1)
+	}
+
+	if !str.isTextual() {
+		c.asm.Convert_xce(len(call.Arguments)-1, sqltypes.VarChar, c.collation)
+		str.Col = collations.TypedCollation{
+			Collation:    c.collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	fromCharset := colldata.Lookup(substr.Col.Collation).Charset()
+	toCharset := colldata.Lookup(str.Col.Collation).Charset()
+	if !substr.isTextual() || (fromCharset != toCharset && !toCharset.IsSuperset(fromCharset)) {
+		c.asm.Convert_xce(len(call.Arguments), sqltypes.VarChar, str.Col.Collation)
+		substr.Col = collations.TypedCollation{
+			Collation:    str.Col.Collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	var coll colldata.Collation
+	if typeIsTextual(substr.Type) && typeIsTextual(str.Type) {
+		coll = colldata.Lookup(str.Col.Collation)
+	} else {
+		coll = colldata.Lookup(collations.CollationBinaryID)
+	}
+
+	if len(call.Arguments) > 2 {
+		c.asm.Locate3(coll)
+	} else {
+		c.asm.Locate2(coll)
+	}
+
+	c.asm.jumpDestination(skip1, skip2)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}, nil
 }
 
 func concatSQLType(arg sqltypes.Type, tt sqltypes.Type) sqltypes.Type {
@@ -1167,11 +1528,6 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 	c.asm.jumpDestination(skips...)
 
 	return ctype{Type: tt, Flag: f, Col: tc}, nil
-}
-
-type builtinConcatWs struct {
-	CallExpr
-	collate collations.ID
 }
 
 func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
@@ -1303,4 +1659,197 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: tt, Flag: args[0].Flag, Col: tc}, nil
+}
+
+func (call *builtinChar) eval(env *ExpressionEnv) (eval, error) {
+	vals := make([]eval, 0, len(call.Arguments))
+	for _, arg := range call.Arguments {
+		a, err := arg.eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if a == nil {
+			continue
+		}
+		vals = append(vals, a)
+	}
+
+	buf := make([]byte, 0, len(vals))
+	for _, v := range vals {
+		buf = encodeChar(buf, uint32(evalToInt64(v).i))
+	}
+	if call.collate == collations.CollationBinaryID {
+		return newEvalBinary(buf), nil
+	}
+
+	cs := colldata.Lookup(call.collate).Charset()
+	if !charset.Validate(cs, buf) {
+		return nil, nil
+	}
+
+	return newEvalText(buf, collations.TypedCollation{
+		Collation:    call.collate,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}), nil
+}
+
+func (call *builtinChar) compile(c *compiler) (ctype, error) {
+	for _, arg := range call.Arguments {
+		a, err := arg.compile(c)
+		if err != nil {
+			return ctype{}, err
+		}
+		j := c.compileNullCheck1(a)
+		switch a.Type {
+		case sqltypes.Int64:
+			// No-op, already correct type
+		case sqltypes.Uint64:
+			c.asm.Convert_ui(1)
+		default:
+			c.asm.Convert_xi(1)
+		}
+		c.asm.jumpDestination(j)
+	}
+	tt := sqltypes.VarBinary
+	if call.collate != collations.CollationBinaryID {
+		tt = sqltypes.VarChar
+	}
+	col := collations.TypedCollation{
+		Collation:    call.collate,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+	c.asm.Fn_CHAR(tt, col, len(call.Arguments))
+	return ctype{Type: tt, Flag: flagNullable, Col: col}, nil
+}
+
+func encodeChar(buf []byte, i uint32) []byte {
+	switch {
+	case i < 0x100:
+		buf = append(buf, byte(i))
+	case i < 0x10000:
+		buf = append(buf, byte(i>>8), byte(i))
+	case i < 0x1000000:
+		buf = append(buf, byte(i>>16), byte(i>>8), byte(i))
+	default:
+		buf = append(buf, byte(i>>24), byte(i>>16), byte(i>>8), byte(i))
+	}
+	return buf
+}
+
+func (call *builtinReplace) eval(env *ExpressionEnv) (eval, error) {
+	str, err := call.Arguments[0].eval(env)
+	if err != nil || str == nil {
+		return nil, err
+	}
+
+	fromStr, err := call.Arguments[1].eval(env)
+	if err != nil || fromStr == nil {
+		return nil, err
+	}
+
+	toStr, err := call.Arguments[2].eval(env)
+	if err != nil || toStr == nil {
+		return nil, err
+	}
+
+	if _, ok := str.(*evalBytes); !ok {
+		str, err = evalToVarchar(str, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	col := str.(*evalBytes).col
+	fromStr, err = evalToVarchar(fromStr, col.Collation, true)
+	if err != nil {
+		return nil, err
+	}
+
+	toStr, err = evalToVarchar(toStr, col.Collation, true)
+	if err != nil {
+		return nil, err
+	}
+
+	strBytes := str.(*evalBytes).bytes
+	fromBytes := fromStr.(*evalBytes).bytes
+	toBytes := toStr.(*evalBytes).bytes
+
+	out := replace(strBytes, fromBytes, toBytes)
+	return newEvalRaw(str.SQLType(), out, col), nil
+}
+
+func (call *builtinReplace) compile(c *compiler) (ctype, error) {
+	str, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	fromStr, err := call.Arguments[1].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	toStr, err := call.Arguments[2].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck3(str, fromStr, toStr)
+	if !str.isTextual() {
+		c.asm.Convert_xce(3, sqltypes.VarChar, c.collation)
+		str.Col = collations.TypedCollation{
+			Collation:    c.collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	fromCharset := colldata.Lookup(fromStr.Col.Collation).Charset()
+	toCharset := colldata.Lookup(toStr.Col.Collation).Charset()
+	strCharset := colldata.Lookup(str.Col.Collation).Charset()
+	if !fromStr.isTextual() || (fromCharset != strCharset && !strCharset.IsSuperset(fromCharset)) {
+		c.asm.Convert_xce(2, sqltypes.VarChar, str.Col.Collation)
+		fromStr.Col = collations.TypedCollation{
+			Collation:    str.Col.Collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	if !toStr.isTextual() || (toCharset != strCharset && !strCharset.IsSuperset(toCharset)) {
+		c.asm.Convert_xce(1, sqltypes.VarChar, str.Col.Collation)
+		toStr.Col = collations.TypedCollation{
+			Collation:    str.Col.Collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	c.asm.Replace()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: str.Col, Flag: flagNullable}, nil
+}
+
+func replace(str, from, to []byte) []byte {
+	if len(from) == 0 {
+		return str
+	}
+	n := bytes.Count(str, from)
+	if n == 0 {
+		return str
+	}
+
+	out := make([]byte, len(str)+n*(len(to)-len(from)))
+	end := 0
+	start := 0
+	for i := 0; i < n; i++ {
+		pos := start + bytes.Index(str[start:], from)
+		end += copy(out[end:], str[start:pos])
+		end += copy(out[end:], to)
+		start = pos + len(from)
+	}
+	end += copy(out[end:], str[start:])
+	return out[0:end]
 }

@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -152,6 +153,10 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	defer cancel()
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t, ctx)
+	// This is required because the test is verifying that we rollback transactions on changing serving type,
+	// but that only happens immediately if the shut down grace period is not specified.
+	tsv.te.shutdownGracePeriod = 0
+	tsv.sm.shutdownGracePeriod = 0
 	defer tsv.StopService()
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
@@ -179,7 +184,7 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	select {
 	case <-ch:
 		t.Fatal("ch should not fire")
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(100 * time.Millisecond):
 	}
 	require.EqualValues(t, 1, tsv.te.txPool.scp.active.Size(), "tsv.te.txPool.scp.active.Size()")
 
@@ -1117,6 +1122,20 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
 		func() {
 			close(tx1Started)
+
+			// Wait for other queries to be pending.
+			<-allQueriesPending
+		})
+
+	db.SetBeforeFunc("update test_table set name_string = 'tx2' where pk = 1 and `name` = 1 limit 10001",
+		func() {
+			// Wait for other queries to be pending.
+			<-allQueriesPending
+		})
+
+	db.SetBeforeFunc("update test_table set name_string = 'tx3' where pk = 1 and `name` = 1 limit 10001",
+		func() {
+			// Wait for other queries to be pending.
 			<-allQueriesPending
 		})
 
@@ -1185,6 +1204,8 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	// to allow more than connection attempt at a time.
 	err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 3)
 	require.NoError(t, err)
+
+	// Signal that all queries are pending now.
 	close(allQueriesPending)
 
 	wg.Wait()
@@ -1560,7 +1581,8 @@ func TestHandleExecUnknownError(t *testing.T) {
 	defer cancel()
 	logStats := tabletenv.NewLogStats(ctx, "TestHandleExecError")
 	cfg := tabletenv.NewDefaultConfig()
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, logStats)
 	panic("unknown exec error")
 }
@@ -1730,7 +1752,8 @@ func TestHandleExecTabletError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cfg := tabletenv.NewDefaultConfig()
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(
@@ -1755,7 +1778,8 @@ func TestTerseErrors(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = true
 	cfg.SanitizeLogMessages = false
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 
@@ -1789,7 +1813,8 @@ func TestSanitizeLogMessages(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = false
 	cfg.SanitizeLogMessages = true
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 
@@ -1822,7 +1847,8 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	defer cancel()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = true
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(
@@ -1847,7 +1873,8 @@ func TestSanitizeLogMessagesNonSQLError(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = false
 	cfg.SanitizeLogMessages = true
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(
@@ -1872,7 +1899,8 @@ func TestSanitizeMessagesBindVars(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = true
 	cfg.SanitizeLogMessages = true
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 
@@ -1903,7 +1931,8 @@ func TestSanitizeMessagesNoBindVars(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = true
 	cfg.SanitizeLogMessages = true
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "sensitive message"), nil)
@@ -1921,7 +1950,8 @@ func TestTruncateErrorLen(t *testing.T) {
 	defer cancel()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TruncateErrorLen = 32
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(
@@ -1952,7 +1982,8 @@ func TestTruncateMessages(t *testing.T) {
 		TruncateErrLen:     52,
 	})
 	require.NoError(t, err)
-	tsv := NewTabletServer(ctx, env, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, env, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 
@@ -2006,7 +2037,8 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	defer cancel()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TerseErrors = true
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
@@ -2048,7 +2080,8 @@ func TestACLHUP(t *testing.T) {
 	defer cancel()
 	tableacl.Register("simpleacl", &simpleacl.Factory{})
 	cfg := tabletenv.NewDefaultConfig()
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 
 	f, err := os.CreateTemp("", "tableacl")
 	require.NoError(t, err)
@@ -2564,7 +2597,8 @@ func setupTabletServerTest(t testing.TB, ctx context.Context, keyspaceName strin
 func setupTabletServerTestCustom(t testing.TB, ctx context.Context, cfg *tabletenv.TabletConfig, keyspaceName string, env *vtenv.Environment) (*fakesqldb.DB, *TabletServer) {
 	db := setupFakeDB(t)
 	sidecardb.AddSchemaInitQueries(db, true, env.Parser())
-	tsv := NewTabletServer(ctx, env, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{})
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, env, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	require.Equal(t, StateNotConnected, tsv.sm.State())
 	dbcfgs := newDBConfigs(db)
 	target := &querypb.Target{

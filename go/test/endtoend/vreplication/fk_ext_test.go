@@ -32,10 +32,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-const (
-	shardStatusWaitTimeout = 30 * time.Second
-)
-
 var (
 	//go:embed schema/fkext/source_schema.sql
 	FKExtSourceSchema string

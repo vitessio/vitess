@@ -186,11 +186,27 @@ func TestQueryPlanCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 
+	initialHits := qe.queryCacheHits.Get()
+	initialMisses := qe.queryCacheMisses.Get()
+
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan, "plan should not be nil")
 
 	assertPlanCacheSize(t, qe, 1)
+
+	require.Equal(t, int64(0), qe.queryCacheHits.Get()-initialHits)
+	require.Equal(t, int64(1), qe.queryCacheMisses.Get()-initialMisses)
+
+	secondPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
+	require.NoError(t, err)
+	require.NotNil(t, secondPlan, "plan should not be nil")
+
+	assertPlanCacheSize(t, qe, 1)
+
+	require.Equal(t, int64(1), qe.queryCacheHits.Get()-initialHits)
+	require.Equal(t, int64(1), qe.queryCacheMisses.Get()-initialMisses)
+
 	qe.ClearQueryPlanCache()
 }
 

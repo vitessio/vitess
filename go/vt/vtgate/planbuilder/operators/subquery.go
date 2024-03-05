@@ -167,7 +167,7 @@ func (sq *SubQuery) ShortDescription() string {
 		preds := append(sq.Predicates, sq.OuterPredicate)
 		pred = " MERGE ON " + sqlparser.String(sqlparser.AndExpressions(preds...))
 	}
-	return fmt.Sprintf("%s %v%s", typ, sq.FilterType.String(), pred)
+	return fmt.Sprintf(":%s %s %v%s", sq.ArgName, typ, sq.FilterType.String(), pred)
 }
 
 func (sq *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
@@ -269,10 +269,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		predicates = append(predicates, rhsPred)
 		sq.SubqueryValueName = sq.ArgName
 	}
-	return &Filter{
-		Source:     outer,
-		Predicates: predicates,
-	}
+	return newFilter(outer, predicates...)
 }
 
 func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {

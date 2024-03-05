@@ -255,7 +255,6 @@ func TestCreateShard(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			defer tt.tc.Cluster.Close()
 			_, err := tt.tc.Cluster.CreateShard(ctx, tt.req)
@@ -595,8 +594,6 @@ func TestFindTablet(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -807,8 +804,6 @@ func TestFindTablets(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1195,8 +1190,6 @@ func TestFindWorkflows(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1474,7 +1467,6 @@ func TestGetCellInfos(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1557,7 +1549,6 @@ func TestGetCellsAliases(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1704,8 +1695,6 @@ func TestGetSchema(t *testing.T) {
 
 	for i, tt := range tests {
 		i := i
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2683,8 +2672,6 @@ func TestGetSchema(t *testing.T) {
 		}
 
 		for _, tt := range tests {
-			tt := tt
-
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
@@ -2942,8 +2929,6 @@ func TestGetShardReplicationPositions(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3032,8 +3017,6 @@ func TestGetVSchema(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3191,8 +3174,6 @@ func TestGetWorkflow(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3358,8 +3339,6 @@ func TestGetWorkflows(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3436,8 +3415,6 @@ func TestSetWritable(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3583,8 +3560,6 @@ func TestToggleTabletReplication(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

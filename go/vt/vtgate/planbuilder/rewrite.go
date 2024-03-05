@@ -70,6 +70,7 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 			node.As = tableName.Name
 		}
 		// replace the table name with the original table
+		tableName.Qualifier = sqlparser.IdentifierCS{}
 		tableName.Name = vindexTable.Name
 		node.Expr = tableName
 	}

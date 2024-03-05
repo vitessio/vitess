@@ -71,11 +71,11 @@ const (
 	numInitialRows   = 10
 )
 
-type state struct {
+type TestState struct {
 	tables []string
 }
 
-var testState = &state{}
+var testState = &TestState{}
 
 var positions map[string]string
 var allEvents []*binlogdatapb.VEvent
@@ -240,17 +240,17 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		insertRow(t, "t1", 1, numInitialRows+4)
 		insertRow(t, "t2", 2, numInitialRows+3)
 		// savepoints should not be sent in the event stream
-		execStatement(t, `
-begin;
-insert into t3 (id31, id32) values (12, 360);
-savepoint a;
-insert into t3 (id31, id32) values (13, 390);
-rollback work to savepoint a;
-savepoint b;
-insert into t3 (id31, id32) values (13, 390);
-release savepoint b;
-commit;"
-`)
+		execStatements(t, []string{
+			"begin",
+			"insert into t3 (id31, id32) values (12, 360)",
+			"savepoint a",
+			"insert into t3 (id31, id32) values (13, 390)",
+			"rollback work to savepoint a",
+			"savepoint b",
+			"insert into t3 (id31, id32) values (13, 390)",
+			"release savepoint b",
+			"commit",
+		})
 	}
 
 	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*TestEvent: Copy Start*/ + 2 /*begin,commit*/ + 3 /* LastPK Completed*/)

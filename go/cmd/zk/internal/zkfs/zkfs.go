@@ -158,6 +158,10 @@ func IsFile(path string) bool {
 
 // ParsePermMode parses the mode string as a perm mask.
 func ParsePermMode(mode string) (mask int32) {
+	if len(mode) < 2 {
+		panic("invalid mode")
+	}
+
 	for _, c := range mode[2:] {
 		mask |= charPermMap[string(c)]
 	}

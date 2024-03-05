@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-	"time"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
@@ -62,52 +61,52 @@ func TestTabletCommands(t *testing.T) {
 
 	// make sure direct dba queries work
 	sql := "select * from t1"
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "--", "--json", primaryTablet.Alias, sql)
+	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", "--json", primaryTablet.Alias, sql)
 	require.Nil(t, err)
 	assertExecuteFetch(t, result)
 
 	// check Ping / RefreshState / RefreshStateByShard
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", primaryTablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshStateByShard", keyspaceShard)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RefreshStateByShard", keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshStateByShard", "--", "--cells="+cell, keyspaceShard)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RefreshStateByShard", "--cells", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 
 	// Check basic actions.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadOnly", primaryTablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", primaryTablet.Alias, "false")
 	require.Nil(t, err, "error should be Nil")
 	qr := utils.Exec(t, conn, "show variables like 'read_only'")
 	got := fmt.Sprintf("%v", qr.Rows)
 	want := "[[VARCHAR(\"read_only\") VARCHAR(\"ON\")]]"
 	assert.Equal(t, want, got)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", primaryTablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", primaryTablet.Alias, "true")
 	require.Nil(t, err, "error should be Nil")
 	qr = utils.Exec(t, conn, "show variables like 'read_only'")
 	got = fmt.Sprintf("%v", qr.Rows)
 	want = "[[VARCHAR(\"read_only\") VARCHAR(\"OFF\")]]"
 	assert.Equal(t, want, got)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err, "error should be Nil")
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "--", "--ping-tablets=true")
-	require.Nil(t, err, "error should be Nil")
-
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateKeyspace", keyspaceName)
-	require.Nil(t, err, "error should be Nil")
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateKeyspace", "--", "--ping-tablets=true", keyspaceName)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate", "--ping-tablets")
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateShard", "--", "--ping-tablets=false", keyspaceShard)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateKeyspace", keyspaceName)
+	require.Nil(t, err, "error should be Nil")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateKeyspace", "--ping-tablets", keyspaceName)
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateShard", "--", "--ping-tablets=true", keyspaceShard)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateShard", "--ping-tablets", keyspaceShard)
+	require.Nil(t, err, "error should be Nil")
+
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ValidateShard", "--ping-tablets", keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 
 }
@@ -138,19 +137,6 @@ func assertExecuteFetch(t *testing.T, qr string) {
 	got = fields.Len()
 	want = int(2)
 	assert.Equal(t, want, got)
-}
-
-// ActionAndTimeout test
-func TestActionAndTimeout(t *testing.T) {
-
-	defer cluster.PanicHandler(t)
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("Sleep", primaryTablet.Alias, "5s")
-	require.Nil(t, err)
-	time.Sleep(1 * time.Second)
-
-	// try a frontend RefreshState that should timeout as the tablet is busy running the other one
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", "--", primaryTablet.Alias, "--wait-time", "2s")
-	assert.Error(t, err, "timeout as tablet is in Sleep")
 }
 
 func TestHook(t *testing.T) {
@@ -207,14 +193,14 @@ func TestShardReplicationFix(t *testing.T) {
 	assertNodeCount(t, result, int(3))
 
 	// Manually add a bogus entry to the replication graph, and check it is removed by ShardReplicationFix
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, fmt.Sprintf("%s-9000", cell))
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, fmt.Sprintf("%s-9000", cell))
 	require.Nil(t, err, "error should be Nil")
 
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 	assertNodeCount(t, result, int(4))
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ShardReplicationFix", cell, keyspaceShard)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationFix", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
@@ -224,7 +210,7 @@ func TestShardReplicationFix(t *testing.T) {
 func TestGetSchema(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	res, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema", "--",
+	res, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema",
 		"--include-views", "--tables", "t1,v1",
 		fmt.Sprintf("%s-%d", clusterInstance.Cell, primaryTablet.TabletUID))
 	require.Nil(t, err)

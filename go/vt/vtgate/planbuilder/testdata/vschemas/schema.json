@@ -26,6 +26,12 @@
         ]
       },
       {
+        "from_table": "second_user.bar",
+        "to_tables": [
+          "user.music"
+        ]
+      },
+      {
         "from_table": "primary_redirect@primary",
         "to_tables": [
           "user.user"
@@ -219,7 +225,8 @@
             },
             {
               "name": "textcol2",
-              "type": "VARCHAR"
+              "type": "VARCHAR",
+              "collation_name": "big5_bin"
             }
           ]
         },
@@ -507,8 +514,7 @@
       "sharded": true,
       "vindexes": {
         "hash_dup": {
-          "type": "hash_test",
-          "owner": "user"
+          "type": "hash_test"
         }
       },
       "tables": {
@@ -888,6 +894,53 @@
         "u_multicol_tbl1": {},
         "u_multicol_tbl2": {},
         "u_multicol_tbl3": {}
+      }
+    },
+    "ordering": {
+      "sharded": true,
+      "vindexes": {
+        "xxhash": {
+          "type": "xxhash"
+        },
+        "oid_vdx": {
+          "type": "consistent_lookup_unique",
+          "params": {
+            "table": "oid_idx",
+            "from": "oid",
+            "to": "keyspace_id"
+          },
+          "owner": "order"
+        }
+      },
+      "tables": {
+        "order": {
+          "column_vindexes": [
+            {
+              "column": "region_id",
+              "name": "xxhash"
+            },
+            {
+              "column": "oid",
+              "name": "oid_vdx"
+            }
+          ]
+        },
+        "oid_idx": {
+          "column_vindexes": [
+            {
+              "column": "oid",
+              "name": "xxhash"
+            }
+          ]
+        },
+        "order_event": {
+          "column_vindexes": [
+            {
+              "column": "oid",
+              "name": "oid_vdx"
+            }
+          ]
+        }
       }
     }
   }

@@ -165,7 +165,7 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 			Config: &cluster.Config{
 				TopoReadPoolConfig: &cluster.RPCPoolConfig{
 					Size: 100,
-					WaitTimeout: time.Millisecond * 50,
+					WaitTimeout: time.Millisecond * 500,
 				},
 			},
 		},

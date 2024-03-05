@@ -57,7 +57,12 @@ func TestPerformVDiffAction(t *testing.T) {
 		wantErr       error
 	}{
 		{
+			name:    "nil request",
+			wantErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "nil vdiff request"),
+		},
+		{
 			name:    "engine not open",
+			req:     &tabletmanagerdatapb.VDiffRequest{},
 			vde:     &Engine{isOpen: false},
 			wantErr: vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vdiff engine is closed"),
 		},
@@ -208,6 +213,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 		},
 	}
+	errCount := int64(0)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.preFunc != nil {
@@ -224,6 +230,9 @@ func TestPerformVDiffAction(t *testing.T) {
 				vdiffenv.dbClient.ExpectRequest(queryResult.query, queryResult.result, nil)
 			}
 			got, err := tt.vde.PerformVDiffAction(ctx, tt.req)
+			if err != nil {
+				errCount++
+			}
 			vdiffenv.dbClient.Wait()
 			if tt.wantErr != nil && !vterrors.Equals(err, tt.wantErr) {
 				t.Errorf("Engine.PerformVDiffAction() error = %v, wantErr %v", err, tt.wantErr)
@@ -239,6 +248,8 @@ func TestPerformVDiffAction(t *testing.T) {
 			// No VDiffs should be running anymore.
 			require.Equal(t, 0, len(vdiffenv.vde.controllers), "expected no controllers to be running, but found %d",
 				len(vdiffenv.vde.controllers))
+			require.Equal(t, int64(0), globalStats.numControllers(), "expected no controllers, but found %d")
 		})
+		require.Equal(t, errCount, globalStats.ErrorCount.Get(), "expected error count %d, got %d", errCount, globalStats.ErrorCount.Get())
 	}
 }

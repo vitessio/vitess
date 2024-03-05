@@ -80,10 +80,7 @@ func (a *Aggregator) SetInputs(operators []Operator) {
 }
 
 func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	return &Filter{
-		Source:     a,
-		Predicates: []sqlparser.Expr{expr},
-	}
+	return newFilter(a, expr)
 }
 
 func (a *Aggregator) addColumnWithoutPushing(_ *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
@@ -118,6 +115,14 @@ func (a *Aggregator) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, 
 
 func (a *Aggregator) isDerived() bool {
 	return a.DT != nil
+}
+
+func (a *Aggregator) derivedName() string {
+	if a.DT == nil {
+		return ""
+	}
+
+	return a.DT.Alias
 }
 
 func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr, underRoute bool) int {

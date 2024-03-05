@@ -21,6 +21,9 @@
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
     - [Explain Statement](#explain-statement)
     - [Partial Multi-shard Commit Warnings](#partial-multi-shard-commit-warnings)
+    - [New Lock Syntax](#lock-syntax)
+    - [Support for AVG()](#avg-support)
+    - [Support for non-recursive CTEs](#cte-support)
   - **[Vttestserver](#vttestserver)**
     - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
 - **[Minor Changes](#minor-changes)**
@@ -184,6 +187,29 @@ mysql> show warnings;
 
 A new flag `--vtcombo-bind-host` has been added to vttestserver that allows the users to configure the bind host that vtcombo uses. This is especially useful when running vttestserver as a docker image and you want to run vtctld commands and look at the vtcombo `/debug/status` dashboard.
 
+### <a id="lock-syntax"/>New lock syntax
+
+Vitess now supports the following LOCK syntax
+
+```sql
+SELECT .. FOR SHARE (NOWAIT|SKIP LOCKED)
+SELECT .. FOR UPDATE (NOWAIT|SKIP LOCKED)
+```
+
+### <a id="avg-support"/>Support for AVG() aggregation function
+
+Vtgate can now evaluate `AVG` on sharded keyspaces, by using a combination of `SUM/COUNT`
+
+### <a id="cte-support"/>Support for non-recursive CTEs
+
+Common table expressions that are not recursive can now be used. 
+
+```sql
+with userCount as (
+    select id, count(*) as nr from user group by id)
+select ref.col, userCount.nr
+from ref join userCount on ref.user_id = userCount.id
+```
 
 ## <a id="minor-changes"/>Minor Changes
 

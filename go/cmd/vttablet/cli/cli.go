@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -102,7 +103,13 @@ vttablet \
 		PreRunE: servenv.CobraPreRunE,
 		RunE:    run,
 	}
+
+	srvTopoCounts *stats.CountersWithSingleLabel
 )
+
+func init() {
+	srvTopoCounts = stats.NewCountersWithSingleLabel("TabletSrvTopo", "Resilient srvtopo server operations", "type")
+}
 
 func run(cmd *cobra.Command, args []string) error {
 	servenv.Init()
@@ -129,7 +136,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	ts := topo.Open()
-	qsc, err := createTabletServer(context.Background(), env, config, ts, tabletAlias)
+	qsc, err := createTabletServer(context.Background(), env, config, ts, tabletAlias, srvTopoCounts)
 	if err != nil {
 		ts.Close()
 		return err
@@ -249,7 +256,7 @@ func extractOnlineDDL() error {
 	return nil
 }
 
-func createTabletServer(ctx context.Context, env *vtenv.Environment, config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias) (*tabletserver.TabletServer, error) {
+func createTabletServer(ctx context.Context, env *vtenv.Environment, config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, srvTopoCounts *stats.CountersWithSingleLabel) (*tabletserver.TabletServer, error) {
 	if tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
@@ -258,7 +265,7 @@ func createTabletServer(ctx context.Context, env *vtenv.Environment, config *tab
 	}
 
 	// creates and registers the query service
-	qsc := tabletserver.NewTabletServer(ctx, env, "", config, ts, tabletAlias)
+	qsc := tabletserver.NewTabletServer(ctx, env, "", config, ts, tabletAlias, srvTopoCounts)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)

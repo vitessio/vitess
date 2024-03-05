@@ -134,7 +134,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	cell, tabletTypesStr string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
 	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string,
 	sourceShards []string, noRoutingRules bool, atomicCopy bool) (err error) {
-	//FIXME validate tableSpecs, allTables, excludeTables
+	// FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
 
@@ -1205,9 +1205,9 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			var err error
 			mu.Lock()
 			if len(sourceDDLs) == 0 {
-				//only get ddls for tables, once and lazily: if we need to copy the schema from source to target
-				//we copy schemas from primaries on the source keyspace
-				//and we have found use cases where user just has a replica (no primary) in the source keyspace
+				// only get ddls for tables, once and lazily: if we need to copy the schema from source to target
+				// we copy schemas from primaries on the source keyspace
+				// and we have found use cases where user just has a replica (no primary) in the source keyspace
 				sourceDDLs, err = mz.getSourceTableDDLs(ctx)
 			}
 			mu.Unlock()
@@ -1391,13 +1391,13 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 					}
 					mappedCols = append(mappedCols, colName)
 				}
-				subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
+				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
 				for _, mappedCol := range mappedCols {
-					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
+					subExprs = append(subExprs, mappedCol)
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
+				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
+				subExprs = append(subExprs, sqlparser.NewStrLiteral("{{.keyrange}}"))
 				inKeyRange := &sqlparser.FuncExpr{
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,

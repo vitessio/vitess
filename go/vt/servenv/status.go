@@ -21,6 +21,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -171,7 +172,8 @@ func newStatusPage(name string) *statusPage {
 		registerDebugBlockProfileRate()
 		registerDebugMutexProfileFraction()
 	} else {
-		HTTPHandleFunc("/"+name+StatusURLPath(), sp.statusHandler)
+		pat, _ := url.JoinPath("/", name, StatusURLPath())
+		HTTPHandleFunc(pat, sp.statusHandler)
 	}
 	return sp
 }

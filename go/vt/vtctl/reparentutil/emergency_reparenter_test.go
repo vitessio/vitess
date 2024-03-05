@@ -60,8 +60,6 @@ func TestNewEmergencyReparenter(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -100,8 +98,6 @@ func TestEmergencyReparenter_getLockAction(t *testing.T) {
 	erp := &EmergencyReparenter{}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1900,8 +1896,6 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -2428,8 +2422,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 
 	durability, _ := GetDurabilityPolicy("none")
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2716,8 +2708,6 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3542,8 +3532,6 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 
 	durability, _ := GetDurabilityPolicy("none")
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3990,8 +3978,6 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 
 	durability, _ := GetDurabilityPolicy("none")
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
