@@ -35,6 +35,28 @@ type DMLCommon struct {
 	Source           Operator
 }
 
+type TargetTable struct {
+	ID     semantics.TableSet
+	VTable *vindexes.Table
+	Name   sqlparser.TableName
+}
+
+func shortDesc(target TargetTable, ovq *sqlparser.Select) string {
+	ovqString := ""
+	if ovq != nil {
+		var cols, orderby, limit string
+		cols = fmt.Sprintf("COLUMNS: [%s]", sqlparser.String(ovq.SelectExprs))
+		if len(ovq.OrderBy) > 0 {
+			orderby = fmt.Sprintf(" ORDERBY: [%s]", sqlparser.String(ovq.OrderBy))
+		}
+		if ovq.Limit != nil {
+			limit = fmt.Sprintf(" LIMIT: [%s]", sqlparser.String(ovq.Limit))
+		}
+		ovqString = fmt.Sprintf(" vindexQuery(%s%s%s)", cols, orderby, limit)
+	}
+	return fmt.Sprintf("%s.%s%s", target.VTable.Keyspace.Name, target.VTable.Name.String(), ovqString)
+}
+
 // getVindexInformation returns the vindex and VindexPlusPredicates for the DML,
 // If it cannot find a unique vindex match, it returns an error.
 func getVindexInformation(id semantics.TableSet, table *vindexes.Table) (
@@ -144,15 +166,8 @@ func buildChangedVindexesValues(
 		return nil, nil, nil
 	}
 	// generate rest of the owned vindex query.
-	aTblExpr, ok := update.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		panic(vterrors.VT12001("UPDATE on complex table expression"))
-	}
-	tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: table.Name}, As: aTblExpr.As}
 	ovq := &sqlparser.Select{
-		From:        []sqlparser.TableExpr{tblExpr},
 		SelectExprs: selExprs,
-		Where:       update.Where,
 		OrderBy:     update.OrderBy,
 		Limit:       update.Limit,
 		Lock:        sqlparser.ForUpdateLock,

@@ -711,8 +711,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select m1.col from unsharded as m1 join unsharded as m2 where 1 != 1",
-        "Query": "select m1.col from unsharded as m1 join unsharded as m2",
+        "FieldQuery": "select m1.col from unsharded as m1 straight_join unsharded as m2 where 1 != 1",
+        "Query": "select m1.col from unsharded as m1 straight_join unsharded as m2",
         "Table": "unsharded"
       },
       "TablesUsed": [
@@ -3760,8 +3760,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative where 1 != 1",
-            "Query": "select authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative",
+            "FieldQuery": "select authoritative.col1, authoritative.user_id, authoritative.col2 from authoritative where 1 != 1",
+            "Query": "select authoritative.col1, authoritative.user_id, authoritative.col2 from authoritative",
             "Table": "authoritative"
           },
           {
@@ -3771,8 +3771,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select unsharded_authoritative.col2 as col2 from unsharded_authoritative where 1 != 1",
-            "Query": "select unsharded_authoritative.col2 as col2 from unsharded_authoritative where unsharded_authoritative.col1 = :authoritative_col1",
+            "FieldQuery": "select unsharded_authoritative.col2 from unsharded_authoritative where 1 != 1",
+            "Query": "select unsharded_authoritative.col2 from unsharded_authoritative where unsharded_authoritative.col1 = :authoritative_col1",
             "Table": "unsharded_authoritative"
           }
         ]
@@ -3989,8 +3989,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select A.col1 as col1, A.col2 as col2, B.col2 as col2 from unsharded_authoritative as A left join unsharded_authoritative as B on A.col1 = B.col1 where 1 != 1",
-        "Query": "select A.col1 as col1, A.col2 as col2, B.col2 as col2 from unsharded_authoritative as A left join unsharded_authoritative as B on A.col1 = B.col1",
+        "FieldQuery": "select * from unsharded_authoritative as A left join unsharded_authoritative as B using (col1) where 1 != 1",
+        "Query": "select * from unsharded_authoritative as A left join unsharded_authoritative as B using (col1)",
         "Table": "unsharded_authoritative"
       },
       "TablesUsed": [

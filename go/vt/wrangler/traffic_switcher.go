@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -49,6 +50,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -618,6 +620,20 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			sw.cancelMigration(ctx, sm)
 			return handleError("failed to create the reverse vreplication streams", err)
 		}
+
+		// Initialize any target sequences, if there are any, before allowing new writes.
+		if initializeTargetSequences && len(sequenceMetadata) > 0 {
+			ts.Logger().Infof("Initializing target sequences")
+			// Writes are blocked so we can safely initialize the sequence tables but
+			// we also want to use a shorter timeout than the parent context.
+			// We use at most half of the overall timeout.
+			initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
+			defer cancel()
+			if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
+				sw.cancelMigration(ctx, sm)
+				return handleError(fmt.Sprintf("failed to initialize the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
+			}
+		}
 	} else {
 		if cancel {
 			return handleError("invalid cancel", fmt.Errorf("traffic switching has reached the point of no return, cannot cancel"))
@@ -633,17 +649,6 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	// traffic can be redirected to target shards.
 	if err := sw.createJournals(ctx, sourceWorkflows); err != nil {
 		return handleError("failed to create the journal", err)
-	}
-	// Initialize any target sequences, if there are any, before allowing new writes.
-	if initializeTargetSequences && len(sequenceMetadata) > 0 {
-		// Writes are blocked so we can safely initialize the sequence tables but
-		// we also want to use a shorter timeout than the parent context.
-		// We use up at most half of the overall timeout.
-		initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
-		defer cancel()
-		if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
-			return handleError(fmt.Sprintf("failed to initialize the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
-		}
 	}
 	if err := sw.allowTargetWrites(ctx); err != nil {
 		return handleError(fmt.Sprintf("failed to allow writes in the %s keyspace", ts.TargetKeyspaceName()), err)
@@ -1790,7 +1795,12 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType w
 					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
 				query = fmt.Sprintf("rename table %s.%s TO %s.%s", primaryDbName, tableNameEscaped, primaryDbName, renameName)
 			}
-			_, err = ts.wr.ExecuteFetchAsDba(ctx, source.GetPrimary().Alias, query, 1, false, true)
+			_, err = ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+				Query:                   []byte(query),
+				MaxRows:                 1,
+				ReloadSchema:            true,
+				DisableForeignKeyChecks: true,
+			})
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v", source.GetPrimary().String(), tableName, err)
 				return err
@@ -1896,7 +1906,12 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
 			ts.Logger().Infof("%s: Dropping table %s.%s\n",
 				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
-			_, err = ts.wr.ExecuteFetchAsDba(ctx, target.GetPrimary().Alias, query, 1, false, true)
+			_, err = ts.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+				Query:                   []byte(query),
+				MaxRows:                 1,
+				ReloadSchema:            true,
+				DisableForeignKeyChecks: true,
+			})
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v",
 					target.GetPrimary().String(), tableName, err)
@@ -2186,13 +2201,17 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 			)
 			qr, terr := ts.wr.ExecuteFetchAsApp(ictx, primary.GetAlias(), true, query.Query, 1)
 			if terr != nil || len(qr.Rows) != 1 {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
-					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
+					ts.targetKeyspace, sequenceMetadata.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
 			}
-			maxID, terr := sqltypes.Proto3ToResult(qr).Rows[0][0].ToInt64()
-			if terr != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s in order to initialize the backing sequence table: %v",
-					ts.targetKeyspace, sequenceMetadata.usingTableName, terr)
+			rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
+			maxID := int64(0)
+			if !rawVal.IsNull() { // If it's NULL then there are no rows and 0 remains the max
+				maxID, terr = rawVal.ToInt64()
+				if terr != nil {
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
+						ts.targetKeyspace, sequenceMetadata.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
+				}
 			}
 			srMu.Lock()
 			defer srMu.Unlock()

@@ -167,6 +167,7 @@ Flags:
       --grpc_server_keepalive_timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
       --grpc_use_effective_callerid                                      If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.
       --health_check_interval duration                                   Interval between health checks (default 20s)
+      --healthcheck-dial-concurrency int                                 Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000. (default 1024)
       --healthcheck_retry_delay duration                                 health check retry delay (default 2ms)
       --healthcheck_timeout duration                                     the health check timeout period (default 1m0s)
       --heartbeat_enable                                                 If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.
@@ -258,7 +259,7 @@ Flags:
       --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
-      --pprof-http                                                       enable pprof http endpoints (default true)
+      --pprof-http                                                       enable pprof http endpoints
       --proto_topo vttest.TopoData                                       vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.
       --proxy_protocol                                                   Enable HAProxy PROXY protocol on MySQL listener socket
       --proxy_tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
@@ -283,21 +284,18 @@ Flags:
       --queryserver-config-pool-size int                                 query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction) (default 16)
       --queryserver-config-query-cache-memory int                        query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
       --queryserver-config-query-pool-timeout duration                   query server query pool timeout, it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.
-      --queryserver-config-query-pool-waiter-cap int                     query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection (default 5000)
       --queryserver-config-query-timeout duration                        query server query timeout, this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed. (default 30s)
       --queryserver-config-schema-change-signal                          query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work (default true)
       --queryserver-config-schema-reload-time duration                   query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time. (default 30m0s)
       --queryserver-config-stream-buffer-size int                        query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size. (default 32768)
       --queryserver-config-stream-pool-size int                          query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion (default 200)
       --queryserver-config-stream-pool-timeout duration                  query server stream pool timeout, it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.
-      --queryserver-config-stream-pool-waiter-cap int                    query server stream pool waiter limit, this is the maximum number of streaming queries that can be queued waiting to get a connection
       --queryserver-config-strict-table-acl                              only allow queries that pass table acl checks
       --queryserver-config-terse-errors                                  prevent bind vars from escaping in client error messages
       --queryserver-config-transaction-cap int                           query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout) (default 20)
       --queryserver-config-transaction-timeout duration                  query server transaction timeout, a transaction will be killed if it takes longer than this value (default 30s)
       --queryserver-config-truncate-error-len int                        truncate errors sent to client if they are longer than this value (0 means do not truncate)
       --queryserver-config-txpool-timeout duration                       query server transaction pool timeout, it is how long vttablet waits if tx pool is full (default 1s)
-      --queryserver-config-txpool-waiter-cap int                         query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection (default 5000)
       --queryserver-config-warn-result-size int                          query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this
       --queryserver-enable-settings-pool                                 Enable pooling of connections with modified system settings (default true)
       --queryserver-enable-views                                         Enable views support in vttablet.
@@ -322,7 +320,7 @@ Flags:
       --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --serving_state_grace_period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state
       --shard_sync_retry_delay duration                                  delay between retries of updates to keep the tablet and its shard record in sync (default 30s)
-      --shutdown_grace_period duration                                   how long to wait for queries and transactions to complete during graceful shutdown.
+      --shutdown_grace_period duration                                   how long to wait for queries and transactions to complete during graceful shutdown. (default 3s)
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
@@ -345,7 +343,7 @@ Flags:
       --tablet_hostname string                                           if not empty, this hostname will be assumed instead of trying to resolve it
       --tablet_manager_grpc_ca string                                    the server ca to use to validate servers when connecting
       --tablet_manager_grpc_cert string                                  the cert to use to connect
-      --tablet_manager_grpc_concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App} and CheckThrottler) (default 8)
+      --tablet_manager_grpc_concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus) (default 8)
       --tablet_manager_grpc_connpool_size int                            number of tablets to keep tmclient connections open to (default 100)
       --tablet_manager_grpc_crl string                                   the server crl to use to validate server certificates when connecting
       --tablet_manager_grpc_key string                                   the key to use to connect
@@ -353,6 +351,7 @@ Flags:
       --tablet_manager_protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
       --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
+      --tablet_types_to_wait strings                                     Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.
       --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
       --throttle_tablet_types string                                     Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included (default "replica")
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)

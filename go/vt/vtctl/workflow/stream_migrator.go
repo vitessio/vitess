@@ -1046,7 +1046,7 @@ func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogda
 			continue
 		}
 
-		var krExpr sqlparser.SelectExpr
+		var krExpr sqlparser.Expr
 		switch len(funcExpr.Exprs) {
 		case 1:
 			krExpr = funcExpr.Exprs[0]
@@ -1056,12 +1056,7 @@ func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogda
 			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
 
-		aliased, ok := krExpr.(*sqlparser.AliasedExpr)
-		if !ok {
-			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
-		}
-
-		val, ok := aliased.Expr.(*sqlparser.Literal)
+		val, ok := krExpr.(*sqlparser.Literal)
 		if !ok {
 			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
@@ -1079,10 +1074,10 @@ func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogda
 	vtable := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
 	inkr := &sqlparser.FuncExpr{
 		Name: sqlparser.NewIdentifierCI("in_keyrange"),
-		Exprs: sqlparser.SelectExprs{
-			&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: vtable.ColumnVindexes[0].Columns[0]}},
-			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vtable.ColumnVindexes[0].Type)},
-			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.}}")},
+		Exprs: sqlparser.Exprs{
+			&sqlparser.ColName{Name: vtable.ColumnVindexes[0].Columns[0]},
+			sqlparser.NewStrLiteral(vtable.ColumnVindexes[0].Type),
+			sqlparser.NewStrLiteral("{{.}}"),
 		},
 	}
 	sel.AddWhere(inkr)

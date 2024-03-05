@@ -103,7 +103,7 @@ func (call *builtinToBase64) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, t, 0, false)
+		c.asm.Convert_xb(1, t, nil)
 	}
 
 	col := typedCoercionCollation(t, c.collation)
@@ -149,7 +149,7 @@ func (call *builtinFromBase64) compile(c *compiler) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xb(1, t, 0, false)
+		c.asm.Convert_xb(1, t, nil)
 	}
 
 	c.asm.Fn_FROM_BASE64(t)

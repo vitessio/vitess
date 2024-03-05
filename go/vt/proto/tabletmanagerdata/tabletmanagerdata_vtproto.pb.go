@@ -792,10 +792,11 @@ func (m *ExecuteFetchAsDbaRequest) CloneVT() *ExecuteFetchAsDbaRequest {
 		return (*ExecuteFetchAsDbaRequest)(nil)
 	}
 	r := &ExecuteFetchAsDbaRequest{
-		DbName:         m.DbName,
-		MaxRows:        m.MaxRows,
-		DisableBinlogs: m.DisableBinlogs,
-		ReloadSchema:   m.ReloadSchema,
+		DbName:                  m.DbName,
+		MaxRows:                 m.MaxRows,
+		DisableBinlogs:          m.DisableBinlogs,
+		ReloadSchema:            m.ReloadSchema,
+		DisableForeignKeyChecks: m.DisableForeignKeyChecks,
 	}
 	if rhs := m.Query; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
@@ -4199,6 +4200,16 @@ func (m *ExecuteFetchAsDbaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.DisableForeignKeyChecks {
+		i--
+		if m.DisableForeignKeyChecks {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
 	}
 	if m.ReloadSchema {
 		i--
@@ -8911,6 +8922,9 @@ func (m *ExecuteFetchAsDbaRequest) SizeVT() (n int) {
 		n += 2
 	}
 	if m.ReloadSchema {
+		n += 2
+	}
+	if m.DisableForeignKeyChecks {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -14407,6 +14421,26 @@ func (m *ExecuteFetchAsDbaRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ReloadSchema = bool(v != 0)
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DisableForeignKeyChecks", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DisableForeignKeyChecks = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

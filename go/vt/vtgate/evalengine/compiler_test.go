@@ -627,6 +627,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `locate("", "😊😂🤢", 3)`,
 			result:     `INT64(3)`,
 		},
+		{
+			expression: `REPLACE('www.mysql.com', '', 'Ww')`,
+			result:     `VARCHAR("www.mysql.com")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

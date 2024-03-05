@@ -311,7 +311,7 @@ func TestAnalyze(t *testing.T) {
 	defer closer()
 
 	for _, workload := range []string{"olap", "oltp"} {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
 			utils.Exec(t, mcmp.VtConn, "analyze table t1")
 			utils.Exec(t, mcmp.VtConn, "analyze table uks.unsharded")
@@ -344,11 +344,30 @@ func TestTransactionModeVar(t *testing.T) {
 	}}
 
 	for _, tcase := range tcases {
-		t.Run(tcase.setStmt, func(t *testing.T) {
+		mcmp.Run(tcase.setStmt, func(mcmp *utils.MySQLCompare) {
 			if tcase.setStmt != "" {
 				utils.Exec(t, mcmp.VtConn, tcase.setStmt)
 			}
 			utils.AssertMatches(t, mcmp.VtConn, "select @@transaction_mode", tcase.expRes)
 		})
 	}
+}
+
+// TestAliasesInOuterJoinQueries tests that aliases work in queries that have outer join clauses.
+func TestAliasesInOuterJoinQueries(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert data into the 2 tables
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,2,3), (2,5,3), (3, 42, 2)")
+
+	// Check that the select query works as intended and then run it again verifying the column names as well.
+	mcmp.AssertMatches("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col", `[[INT64(1) INT64(1) INT64(42)] [INT64(5) INT64(5) NULL] [INT64(42) INT64(42) NULL]]`)
+	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col")
+
+	mcmp.AssertMatches("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2", `[[INT64(1) INT64(1) INT64(42)] [INT64(42) INT64(42) NULL]]`)
+	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2")
 }

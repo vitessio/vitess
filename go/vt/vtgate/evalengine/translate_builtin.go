@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -46,11 +47,7 @@ func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]IR, error)
 func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 	var args TupleExpr
 	for _, expr := range fn.Exprs {
-		aliased, ok := expr.(*sqlparser.AliasedExpr)
-		if !ok {
-			return nil, translateExprNotSupported(fn)
-		}
-		convertedExpr, err := ast.translateExpr(aliased.Expr)
+		convertedExpr, err := ast.translateExpr(expr)
 		if err != nil {
 			return nil, err
 		}
@@ -255,6 +252,22 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &builtinConv{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "bin":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		args = append(args, NewLiteralInt(10))
+		args = append(args, NewLiteralInt(2))
+		var cexpr = CallExpr{Arguments: args, Method: "BIN"}
+		return &builtinConv{CallExpr: cexpr, collate: ast.cfg.Collation}, nil
+	case "oct":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		args = append(args, NewLiteralInt(10))
+		args = append(args, NewLiteralInt(8))
+		var cexpr = CallExpr{Arguments: args, Method: "OCT"}
+		return &builtinConv{CallExpr: cexpr, collate: ast.cfg.Collation}, nil
 	case "left", "right":
 		if len(args) != 2 {
 			return nil, argError(method)
@@ -610,6 +623,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		}
 		call = CallExpr{Arguments: []IR{call.Arguments[1], call.Arguments[0]}, Method: method}
 		return &builtinLocate{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "replace":
+		if len(args) != 3 {
+			return nil, argError(method)
+		}
+		return &builtinReplace{CallExpr: call, collate: ast.cfg.Collation}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}
@@ -639,10 +657,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		}
 		if call.As != nil {
 			ws.Cast = strings.ToLower(call.As.Type)
-			ws.Len, ws.HasLen, err = ast.translateIntegral(call.As.Length)
-			if err != nil {
-				return nil, err
-			}
+			ws.Len = call.As.Length
 		}
 		return ws, nil
 
@@ -1043,6 +1058,32 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (IR, error) {
 		return &builtinInsert{
 			CallExpr: cexpr,
 			collate:  ast.cfg.Collation,
+		}, nil
+	case *sqlparser.CharExpr:
+		args := make([]IR, 0, len(call.Exprs))
+		for _, expr := range call.Exprs {
+			arg, err := ast.translateExpr(expr)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, arg)
+		}
+
+		var cexpr = CallExpr{Arguments: args, Method: "CHAR"}
+		var coll collations.ID
+		if call.Charset == "" {
+			coll = collations.CollationBinaryID
+		} else {
+			var err error
+			coll, err = ast.translateConvertCharset(call.Charset, false)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return &builtinChar{
+			CallExpr: cexpr,
+			collate:  coll,
 		}, nil
 	default:
 		return nil, translateExprNotSupported(call)

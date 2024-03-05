@@ -59,7 +59,7 @@ func TestGetGCUUID(t *testing.T) {
 		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "", "", parser)
 		assert.NoError(t, err)
 		gcUUID := onlineDDL.GetGCUUID()
-		assert.True(t, IsGCUUID(gcUUID))
+		assert.True(t, isCondensedUUID(gcUUID))
 		uuids[gcUUID] = true
 	}
 	assert.Equal(t, count, len(uuids))

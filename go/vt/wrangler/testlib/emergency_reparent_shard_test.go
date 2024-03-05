@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -279,7 +280,13 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	defer moreAdvancedReplica.StopActionLoop(t)
 
 	// run EmergencyReparentShard
-	err := wr.EmergencyReparentShard(ctx, newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard, newPrimary.Tablet.Alias, 10*time.Second, sets.New[string](), false, false)
+	err := wr.EmergencyReparentShard(ctx, newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard, reparentutil.EmergencyReparentOptions{
+		NewPrimaryAlias:           newPrimary.Tablet.Alias,
+		WaitAllTablets:            false,
+		WaitReplicasTimeout:       10 * time.Second,
+		IgnoreReplicas:            sets.New[string](),
+		PreventCrossCellPromotion: false,
+	})
 	cancel()
 
 	assert.NoError(t, err)

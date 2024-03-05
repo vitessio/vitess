@@ -213,6 +213,10 @@ func (cached *ConvertExpr) CachedSize(alloc bool) int64 {
 	size += cached.UnaryExpr.CachedSize(false)
 	// field Type string
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
+	// field Length *int
+	size += hack.RuntimeAllocSize(int64(8))
+	// field Scale *int
+	size += hack.RuntimeAllocSize(int64(8))
 	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
 	size += cached.CollationEnv.CachedSize(true)
 	return size
@@ -369,7 +373,7 @@ func (cached *TupleBindVariable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(32)
 	}
 	// field Key string
 	size += hack.RuntimeAllocSize(int64(len(cached.Key)))
@@ -560,6 +564,18 @@ func (cached *builtinCeil) CachedSize(alloc bool) int64 {
 	return size
 }
 func (cached *builtinChangeCase) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinChar) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -1447,6 +1463,18 @@ func (cached *builtinRepeat) CachedSize(alloc bool) int64 {
 	size += cached.CallExpr.CachedSize(false)
 	return size
 }
+func (cached *builtinReplace) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
 func (cached *builtinReverse) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1801,12 +1829,14 @@ func (cached *builtinWeightString) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(64)
 	}
 	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
 	size += cached.CallExpr.CachedSize(false)
 	// field Cast string
 	size += hack.RuntimeAllocSize(int64(len(cached.Cast)))
+	// field Len *int
+	size += hack.RuntimeAllocSize(int64(8))
 	return size
 }
 func (cached *builtinYear) CachedSize(alloc bool) int64 {

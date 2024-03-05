@@ -34,21 +34,15 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run FOSSA scan and upload build data
-        # Fails on pull requests when using the API key secret.
-        # In order to run it on pull requests we would need to
-        # generate a push only token and specify that as plain
-        # text here:
-        #   https://github.com/fossa-contrib/fossa-action#push-only-api-token
-        # BUT, it also requires that the fork have its own
-        # independent integration setup with fossa.com.
-        if: github.ref == 'refs/heads/main'
         uses: fossa-contrib/fossa-action@v3
         with:
-          fossa-api-key: ${{ secrets.FOSSA_API_KEY }}
+          # This is a push-only API token: https://github.com/fossa-contrib/fossa-action#push-only-api-token
+          fossa-api-key: f62c11ef0c249fef239947f01279aa0f
+          github-token: ${{ github.token }}
 
       - name: Check for changes in Go files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: frouioui/paths-filter@main
+        uses: dorny/paths-filter@v3.0.1
         id: changes
         with:
           token: ''

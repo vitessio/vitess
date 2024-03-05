@@ -1048,15 +1048,16 @@ func (asm *assembler) Convert_ui(offset int) {
 	}, "CONV UINT64(SP-%d), INT64", offset)
 }
 
-func (asm *assembler) Convert_xb(offset int, t sqltypes.Type, length int, hasLength bool) {
-	if hasLength {
+func (asm *assembler) Convert_xb(offset int, t sqltypes.Type, length *int) {
+	if length != nil {
+		l := *length
 		asm.emit(func(env *ExpressionEnv) int {
 			arg := evalToBinary(env.vm.stack[env.vm.sp-offset])
-			arg.truncateInPlace(length)
+			arg.truncateInPlace(l)
 			arg.tt = int16(t)
 			env.vm.stack[env.vm.sp-offset] = arg
 			return 1
-		}, "CONV (SP-%d), VARBINARY[%d]", offset, length)
+		}, "CONV (SP-%d), VARBINARY[%d]", offset, l)
 	} else {
 		asm.emit(func(env *ExpressionEnv) int {
 			arg := evalToBinary(env.vm.stack[env.vm.sp-offset])
@@ -1067,19 +1068,20 @@ func (asm *assembler) Convert_xb(offset int, t sqltypes.Type, length int, hasLen
 	}
 }
 
-func (asm *assembler) Convert_xc(offset int, t sqltypes.Type, collation collations.ID, length int, hasLength bool) {
-	if hasLength {
+func (asm *assembler) Convert_xc(offset int, t sqltypes.Type, collation collations.ID, length *int) {
+	if length != nil {
+		l := *length
 		asm.emit(func(env *ExpressionEnv) int {
 			arg, err := evalToVarchar(env.vm.stack[env.vm.sp-offset], collation, true)
 			if err != nil {
 				env.vm.stack[env.vm.sp-offset] = nil
 			} else {
-				arg.truncateInPlace(length)
+				arg.truncateInPlace(l)
 				arg.tt = int16(t)
 				env.vm.stack[env.vm.sp-offset] = arg
 			}
 			return 1
-		}, "CONV (SP-%d), VARCHAR[%d]", offset, length)
+		}, "CONV (SP-%d), VARCHAR[%d]", offset, l)
 	} else {
 		asm.emit(func(env *ExpressionEnv) int {
 			arg, err := evalToVarchar(env.vm.stack[env.vm.sp-offset], collation, true)
@@ -2008,7 +2010,7 @@ func (asm *assembler) Fn_CONV_bu(offset int, baseOffset int) {
 		i, err := fastparse.ParseInt64(arg.string(), int(base.i))
 		u = uint64(i)
 		if errors.Is(err, fastparse.ErrOverflow) {
-			u, _ = fastparse.ParseUint64(arg.string(), int(base.i))
+			u, _ = fastparse.ParseUint64WithNeg(arg.string(), int(base.i))
 		}
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(u)
 		return 1
@@ -3018,6 +3020,19 @@ func (asm *assembler) Locate2(collation colldata.Collation) {
 		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(found) + 1)
 		return 1
 	}, "LOCATE VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
+}
+
+func (asm *assembler) Replace() {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		from := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		to := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		env.vm.sp -= 2
+		str.bytes = replace(str.bytes, from.bytes, to.bytes)
+		return 1
+	}, "REPLACE VARCHAR(SP-3), VARCHAR(SP-2) VARCHAR(SP-1)")
 }
 
 func (asm *assembler) Strcmp(collation collations.TypedCollation) {
@@ -4204,6 +4219,29 @@ func (asm *assembler) Fn_CONCAT_WS(tt querypb.Type, tc collations.TypedCollation
 		env.vm.sp -= args
 		return 1
 	}, "FN CONCAT_WS VARCHAR(SP-1) VARCHAR(SP-2)...VARCHAR(SP-N)")
+}
+
+func (asm *assembler) Fn_CHAR(tt querypb.Type, tc collations.TypedCollation, args int) {
+	cs := colldata.Lookup(tc.Collation).Charset()
+	asm.adjustStack(-(args - 1))
+	asm.emit(func(env *ExpressionEnv) int {
+		buf := make([]byte, 0, args)
+		for i := 0; i < args; i++ {
+			if env.vm.stack[env.vm.sp-args+i] == nil {
+				continue
+			}
+			arg := env.vm.stack[env.vm.sp-args+i].(*evalInt64)
+			buf = encodeChar(buf, uint32(arg.i))
+		}
+
+		if charset.Validate(cs, buf) {
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalRaw(buf, tt, tc)
+		} else {
+			env.vm.stack[env.vm.sp-args] = nil
+		}
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN CHAR INT64(SP-1) INT64(SP-2)...INT64(SP-N)")
 }
 
 func (asm *assembler) Fn_BIN_TO_UUID0(col collations.TypedCollation) {

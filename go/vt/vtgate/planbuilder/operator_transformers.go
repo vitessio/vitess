@@ -87,13 +87,17 @@ func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWi
 		return nil, err
 	}
 
-	del, err := transformToLogicalPlan(ctx, op.DML)
-	if err != nil {
-		return nil, err
+	var dmls []logicalPlan
+	for _, dml := range op.DML {
+		del, err := transformToLogicalPlan(ctx, dml)
+		if err != nil {
+			return nil, err
+		}
+		dmls = append(dmls, del)
 	}
 	return &dmlWithInput{
 		input:      input,
-		dml:        del,
+		dmls:       dmls,
 		outputCols: op.Offsets,
 	}, nil
 }
@@ -351,10 +355,10 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return nil, err
 	}
 
-	if cols := op.AllOffsets(); cols != nil {
+	if cols, colNames := op.AllOffsets(); cols != nil {
 		// if all this op is doing is passing through columns from the input, we
 		// can use the faster SimpleProjection
-		return useSimpleProjection(ctx, op, cols, src)
+		return useSimpleProjection(ctx, op, cols, colNames, src)
 	}
 
 	ap, err := op.GetAliasedProjections()
@@ -399,7 +403,7 @@ func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr
 
 // useSimpleProjection uses nothing at all if the output is already correct,
 // or SimpleProjection when we have to reorder or truncate the columns
-func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Projection, cols []int, src logicalPlan) (logicalPlan, error) {
+func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Projection, cols []int, colNames []string, src logicalPlan) (logicalPlan, error) {
 	columns := op.Source.GetColumns(ctx)
 	if len(columns) == len(cols) && elementsMatchIndices(cols) {
 		// the columns are already in the right order. we don't need anything at all here
@@ -408,7 +412,8 @@ func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Project
 	return &simpleProjection{
 		logicalPlanCommon: newBuilderCommon(src),
 		eSimpleProj: &engine.SimpleProjection{
-			Cols: cols,
+			Cols:     cols,
+			ColNames: colNames,
 		},
 	}, nil
 }
@@ -688,6 +693,8 @@ func buildUpdateLogicalPlan(
 	var vindexes []*vindexes.ColumnVindex
 	vQuery := ""
 	if len(upd.ChangedVindexValues) > 0 {
+		upd.OwnedVindexQuery.From = stmt.GetFrom()
+		upd.OwnedVindexQuery.Where = stmt.Where
 		vQuery = sqlparser.String(upd.OwnedVindexQuery)
 		vindexes = upd.Target.VTable.ColumnVindexes
 		if upd.OwnedVindexQuery.Limit != nil && len(upd.OwnedVindexQuery.OrderBy) == 0 {
@@ -709,6 +716,8 @@ func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Rout
 	var vindexes []*vindexes.ColumnVindex
 	vQuery := ""
 	if del.OwnedVindexQuery != nil {
+		del.OwnedVindexQuery.From = stmt.GetFrom()
+		del.OwnedVindexQuery.Where = stmt.Where
 		vQuery = sqlparser.String(del.OwnedVindexQuery)
 		vindexes = del.Target.VTable.Owned
 	}

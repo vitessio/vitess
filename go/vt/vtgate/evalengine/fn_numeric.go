@@ -1267,7 +1267,7 @@ func (expr *builtinCrc32) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.Binary, nil)
 	}
 
 	c.asm.Fn_CRC32()
@@ -1332,7 +1332,7 @@ func (call *builtinConv) eval(env *ExpressionEnv) (eval, error) {
 		i, err := fastparse.ParseInt64(nStr.string(), int(fromBase))
 		u = uint64(i)
 		if errors.Is(err, fastparse.ErrOverflow) {
-			u, _ = fastparse.ParseUint64(nStr.string(), int(fromBase))
+			u, _ = fastparse.ParseUint64WithNeg(nStr.string(), int(fromBase))
 		}
 	}
 
@@ -1374,7 +1374,7 @@ func (expr *builtinConv) compile(c *compiler) (ctype, error) {
 	switch {
 	case n.isTextual():
 	default:
-		c.asm.Convert_xb(3, t, 0, false)
+		c.asm.Convert_xb(3, t, nil)
 	}
 
 	if n.isHexOrBitLiteral() {
