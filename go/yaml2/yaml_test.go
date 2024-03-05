@@ -14,10 +14,10 @@ limitations under the License.
 package yaml2
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestYamlVars(t *testing.T) {
@@ -36,17 +36,26 @@ func TestYamlVars(t *testing.T) {
 	}
 
 	//testing Marshal
-	marshaledData, err := Marshal(inputData)
-	assert.NoError(t, err)
+	var marshalData []byte
+	var err error
+	t.Run("Marshal", func(t *testing.T) {
+		marshalData, err = Marshal(inputData)
+		assert.NoError(t, err)
+		require.EqualValues(t, `BoolField: true
+Float64Field: 3.141
+IntField: 32
+StringField: tricky text to test text
+`, string(marshalData))
+	})
 
 	//testing Unmarshal
-	var unmarshaledData TestStruct
-	err = Unmarshal(marshaledData, &unmarshaledData)
-	assert.NoError(t, err)
-	assert.Equal(t, inputData, unmarshaledData)
+	t.Run("Unmarshal", func(t *testing.T) {
+		var unmarshalData TestStruct
+		err = Unmarshal(marshalData, &unmarshalData)
+		assert.NoError(t, err)
+		assert.Equal(t, inputData, unmarshalData)
 
-	unmarshaledData.StringField = "changed text"
-	unmarshaledData.BoolField = false
-	assert.NotEqual(t, inputData, unmarshaledData)
-
+		unmarshalData.StringField = "changed text"
+		assert.NotEqual(t, inputData, unmarshalData)
+	})
 }
