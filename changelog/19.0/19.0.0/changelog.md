@@ -6,7 +6,8 @@
 ### Bug fixes 
 #### Backup and Restore
  * MysqlCtl: implement missing `ReadBinlogFilesTimestamps` function [#14525](https://github.com/vitessio/vitess/pull/14525)
- * Replication: Have the DB flavor process waiting for a pos [#14745](https://github.com/vitessio/vitess/pull/14745) 
+ * Replication: Have the DB flavor process waiting for a pos [#14745](https://github.com/vitessio/vitess/pull/14745)
+ * [release-19.0 backport] Mysqld: capture mysqlbinlog std error output (#15278) [#15379](https://github.com/vitessio/vitess/pull/15379) 
 #### Build/CI
  * Update create_release.sh [#14492](https://github.com/vitessio/vitess/pull/14492)
  *  Set minimal tokens for auto_approve_pr [#14534](https://github.com/vitessio/vitess/pull/14534)
