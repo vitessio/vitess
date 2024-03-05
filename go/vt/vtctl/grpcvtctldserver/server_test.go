@@ -1426,8 +1426,8 @@ func TestCancelSchemaMigration(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -1660,8 +1660,6 @@ func TestChangeTabletType(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1932,6 +1930,8 @@ func TestCleanupSchemaMigration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
@@ -2134,6 +2134,8 @@ func TestForceCutOverSchemaMigration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
@@ -2335,11 +2337,11 @@ func TestCompleteSchemaMigration(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-			ctx, Complete := context.WithCancel(context.Background())
-			defer Complete()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -2590,8 +2592,6 @@ func TestCreateKeyspace(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2869,8 +2869,6 @@ func TestCreateShard(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			if tt.req == nil {
@@ -3731,8 +3729,6 @@ func TestDeleteShards(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3860,8 +3856,6 @@ func TestDeleteSrvKeyspace(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -4334,8 +4328,6 @@ func TestDeleteTablets(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -4708,7 +4700,6 @@ func TestExecuteFetchAsApp(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -4835,7 +4826,6 @@ func TestExecuteFetchAsDBA(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -5382,8 +5372,6 @@ func TestGetFullStatus(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -5579,7 +5567,6 @@ func TestGetPermissions(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -5648,7 +5635,6 @@ func TestGetRoutingRules(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -6016,7 +6002,6 @@ func TestGetSchemaMigrations(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -6136,8 +6121,6 @@ func TestGetShard(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -6162,6 +6145,211 @@ func TestGetShard(t *testing.T) {
 				return
 			}
 
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestGetShardReplication(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                   string
+		shardReplicationByCell map[string]map[string]map[string]*topodatapb.ShardReplication
+		topoError              error
+		req                    *vtctldatapb.GetShardReplicationRequest
+		expected               *vtctldatapb.GetShardReplicationResponse
+		shouldErr              bool
+	}{
+		{
+			name: "success",
+			shardReplicationByCell: map[string]map[string]map[string]*topodatapb.ShardReplication{
+				"zone1": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+							},
+						},
+					},
+				},
+				"zone2": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.GetShardReplicationRequest{
+				Keyspace: "ks1",
+				Shard:    "0",
+			},
+			expected: &vtctldatapb.GetShardReplicationResponse{
+				ShardReplicationByCell: map[string]*topodatapb.ShardReplication{
+					"zone1": {
+						Nodes: []*topodatapb.ShardReplication_Node{
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+						},
+					},
+					"zone2": {
+						Nodes: []*topodatapb.ShardReplication_Node{
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "cell filtering",
+			shardReplicationByCell: map[string]map[string]map[string]*topodatapb.ShardReplication{
+				"zone1": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+							},
+						},
+					},
+				},
+				"zone2": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.GetShardReplicationRequest{
+				Keyspace: "ks1",
+				Shard:    "0",
+				Cells:    []string{"zone2"},
+			},
+			expected: &vtctldatapb.GetShardReplicationResponse{
+				ShardReplicationByCell: map[string]*topodatapb.ShardReplication{
+					"zone2": {
+						Nodes: []*topodatapb.ShardReplication_Node{
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "all cells topo down",
+			shardReplicationByCell: map[string]map[string]map[string]*topodatapb.ShardReplication{
+				"zone1": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+							},
+						},
+					},
+				},
+				"zone2": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.GetShardReplicationRequest{
+				Keyspace: "ks1",
+				Shard:    "0",
+			},
+			topoError: errors.New("topo down for testing"),
+			shouldErr: true,
+		},
+		{
+			name: "cell filtering topo down",
+			shardReplicationByCell: map[string]map[string]map[string]*topodatapb.ShardReplication{
+				"zone1": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+							},
+						},
+					},
+				},
+				"zone2": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.GetShardReplicationRequest{
+				Keyspace: "ks1",
+				Shard:    "0",
+				Cells:    []string{"zone2"},
+			},
+			topoError: errors.New("topo down for testing"),
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cells := make([]string, 0, len(tt.shardReplicationByCell))
+			for cell := range tt.shardReplicationByCell {
+				cells = append(cells, cell)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
+
+			for cell, shardReplication := range tt.shardReplicationByCell {
+				for ks, shardRepl := range shardReplication {
+					for shard, repl := range shardRepl {
+						err := ts.UpdateShardReplicationFields(ctx, cell, ks, shard, func(sr *topodatapb.ShardReplication) error {
+							sr.Nodes = repl.Nodes
+							return nil
+						})
+						require.NoError(t, err, "UpdateShardReplicationFields(%s, %s, %s, %+v) failed", cell, ks, shard, repl)
+					}
+				}
+			}
+
+			if tt.topoError != nil {
+				factory.SetError(tt.topoError)
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			resp, err := vtctld.GetShardReplication(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -6258,8 +6446,6 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -6425,8 +6611,6 @@ func TestGetSrvKeyspaces(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -6670,8 +6854,6 @@ func TestGetSrvVSchemas(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -7353,8 +7535,6 @@ func TestGetTablets(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -7447,8 +7627,6 @@ func TestGetTopologyPath(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -7694,11 +7872,11 @@ func TestLaunchSchemaMigration(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-			ctx, Launch := context.WithCancel(context.Background())
-			defer Launch()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			ts := memorytopo.NewServer(ctx, "zone1")
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
@@ -8178,7 +8356,6 @@ func TestRebuildVSchemaGraph(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -8570,7 +8747,6 @@ func TestReloadSchema(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -8664,7 +8840,6 @@ func TestReloadSchemaKeyspace(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -8822,7 +8997,6 @@ func TestReloadSchemaShard(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -9034,8 +9208,6 @@ func TestRemoveKeyspaceCell(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -9323,8 +9495,6 @@ func TestRemoveShardCell(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -9929,8 +10099,6 @@ func TestReparentTablet(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -10391,7 +10559,6 @@ func TestRunHealthCheck(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -10471,7 +10638,6 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -11021,7 +11187,6 @@ func TestSetWritable(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -11532,7 +11697,6 @@ func TestSourceShardAdd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -11667,7 +11831,6 @@ func TestSourceShardDelete(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -11853,7 +12016,6 @@ func TestStartReplication(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -11992,7 +12154,6 @@ func TestStopReplication(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -12377,8 +12538,6 @@ func TestTabletExternallyReparented(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -12558,7 +12717,6 @@ func TestUpdateCellInfo(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -12699,7 +12857,6 @@ func TestUpdateCellsAlias(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

@@ -74,26 +74,30 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op operators.Opera
 		return transformHashJoin(ctx, op)
 	case *operators.Sequential:
 		return transformSequential(ctx, op)
-	case *operators.DeleteWithInput:
-		return transformDeleteWithInput(ctx, op)
+	case *operators.DMLWithInput:
+		return transformDMLWithInput(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
 }
 
-func transformDeleteWithInput(ctx *plancontext.PlanningContext, op *operators.DeleteWithInput) (logicalPlan, error) {
+func transformDMLWithInput(ctx *plancontext.PlanningContext, op *operators.DMLWithInput) (logicalPlan, error) {
 	input, err := transformToLogicalPlan(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 
-	del, err := transformToLogicalPlan(ctx, op.Delete)
-	if err != nil {
-		return nil, err
+	var dmls []logicalPlan
+	for _, dml := range op.DML {
+		del, err := transformToLogicalPlan(ctx, dml)
+		if err != nil {
+			return nil, err
+		}
+		dmls = append(dmls, del)
 	}
-	return &deleteWithInput{
+	return &dmlWithInput{
 		input:      input,
-		delete:     del,
+		dmls:       dmls,
 		outputCols: op.Offsets,
 	}, nil
 }
@@ -351,10 +355,10 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return nil, err
 	}
 
-	if cols := op.AllOffsets(); cols != nil {
+	if cols, colNames := op.AllOffsets(); cols != nil {
 		// if all this op is doing is passing through columns from the input, we
 		// can use the faster SimpleProjection
-		return useSimpleProjection(ctx, op, cols, src)
+		return useSimpleProjection(ctx, op, cols, colNames, src)
 	}
 
 	ap, err := op.GetAliasedProjections()
@@ -399,7 +403,7 @@ func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr
 
 // useSimpleProjection uses nothing at all if the output is already correct,
 // or SimpleProjection when we have to reorder or truncate the columns
-func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Projection, cols []int, src logicalPlan) (logicalPlan, error) {
+func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Projection, cols []int, colNames []string, src logicalPlan) (logicalPlan, error) {
 	columns := op.Source.GetColumns(ctx)
 	if len(columns) == len(cols) && elementsMatchIndices(cols) {
 		// the columns are already in the right order. we don't need anything at all here
@@ -408,7 +412,8 @@ func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Project
 	return &simpleProjection{
 		logicalPlanCommon: newBuilderCommon(src),
 		eSimpleProj: &engine.SimpleProjection{
-			Cols: cols,
+			Cols:     cols,
+			ColNames: colNames,
 		},
 	}, nil
 }
@@ -685,66 +690,65 @@ func buildUpdateLogicalPlan(
 	hints *queryHints,
 ) (logicalPlan, error) {
 	upd := dmlOp.(*operators.Update)
-	rp := newRoutingParams(ctx, rb.Routing.OpCode())
-	rb.Routing.UpdateRoutingParams(ctx, rp)
-	edml := &engine.DML{
-		Query:             generateQuery(stmt),
-		TableNames:        []string{upd.VTable.Name.String()},
-		Vindexes:          upd.VTable.ColumnVindexes,
-		OwnedVindexQuery:  upd.OwnedVindexQuery,
-		RoutingParameters: rp,
+	var vindexes []*vindexes.ColumnVindex
+	vQuery := ""
+	if len(upd.ChangedVindexValues) > 0 {
+		upd.OwnedVindexQuery.From = stmt.GetFrom()
+		upd.OwnedVindexQuery.Where = stmt.Where
+		vQuery = sqlparser.String(upd.OwnedVindexQuery)
+		vindexes = upd.Target.VTable.ColumnVindexes
+		if upd.OwnedVindexQuery.Limit != nil && len(upd.OwnedVindexQuery.OrderBy) == 0 {
+			return nil, vterrors.VT12001("Vindex update should have ORDER BY clause when using LIMIT")
+		}
 	}
 
-	transformDMLPlan(upd.VTable, edml, rb.Routing, len(upd.ChangedVindexValues) > 0)
+	edml := createDMLPrimitive(ctx, rb, hints, upd.Target.VTable, generateQuery(stmt), vindexes, vQuery)
 
-	e := &engine.Update{
-		ChangedVindexValues: upd.ChangedVindexValues,
+	return &primitiveWrapper{prim: &engine.Update{
 		DML:                 edml,
-	}
-	if hints != nil {
-		e.MultiShardAutocommit = hints.multiShardAutocommit
-		e.QueryTimeout = hints.queryTimeout
-	}
-
-	return &primitiveWrapper{prim: e}, nil
+		ChangedVindexValues: upd.ChangedVindexValues,
+	}}, nil
 }
 
 func buildDeleteLogicalPlan(ctx *plancontext.PlanningContext, rb *operators.Route, dmlOp operators.Operator, stmt *sqlparser.Delete, hints *queryHints) (logicalPlan, error) {
 	del := dmlOp.(*operators.Delete)
+
+	var vindexes []*vindexes.ColumnVindex
+	vQuery := ""
+	if del.OwnedVindexQuery != nil {
+		del.OwnedVindexQuery.From = stmt.GetFrom()
+		del.OwnedVindexQuery.Where = stmt.Where
+		vQuery = sqlparser.String(del.OwnedVindexQuery)
+		vindexes = del.Target.VTable.Owned
+	}
+
+	edml := createDMLPrimitive(ctx, rb, hints, del.Target.VTable, generateQuery(stmt), vindexes, vQuery)
+
+	return &primitiveWrapper{prim: &engine.Delete{DML: edml}}, nil
+}
+
+func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, hints *queryHints, vTbl *vindexes.Table, query string, colVindexes []*vindexes.ColumnVindex, vindexQuery string) *engine.DML {
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
 	rb.Routing.UpdateRoutingParams(ctx, rp)
-	vtable := del.Target.VTable
 	edml := &engine.DML{
-		Query:             generateQuery(stmt),
-		TableNames:        []string{vtable.Name.String()},
-		Vindexes:          vtable.Owned,
+		Query:             query,
+		TableNames:        []string{vTbl.Name.String()},
+		Vindexes:          colVindexes,
+		OwnedVindexQuery:  vindexQuery,
 		RoutingParameters: rp,
 	}
 
-	hasLookupVindex := del.OwnedVindexQuery != nil
-	if hasLookupVindex {
-		edml.OwnedVindexQuery = sqlparser.String(del.OwnedVindexQuery)
-	}
-
-	transformDMLPlan(vtable, edml, rb.Routing, hasLookupVindex)
-
-	e := &engine.Delete{
-		DML: edml,
-	}
-	if hints != nil {
-		e.MultiShardAutocommit = hints.multiShardAutocommit
-		e.QueryTimeout = hints.queryTimeout
-	}
-
-	return &primitiveWrapper{prim: e}, nil
-}
-
-func transformDMLPlan(vtable *vindexes.Table, edml *engine.DML, routing operators.Routing, setVindex bool) {
-	if routing.OpCode() != engine.Unsharded && setVindex {
-		primary := vtable.ColumnVindexes[0]
+	if rb.Routing.OpCode() != engine.Unsharded && vindexQuery != "" {
+		primary := vTbl.ColumnVindexes[0]
 		edml.KsidVindex = primary.Vindex
 		edml.KsidLength = len(primary.Columns)
 	}
+
+	if hints != nil {
+		edml.MultiShardAutocommit = hints.multiShardAutocommit
+		edml.QueryTimeout = hints.queryTimeout
+	}
+	return edml
 }
 
 func updateSelectedVindexPredicate(op *operators.Route) sqlparser.Expr {
@@ -910,4 +914,10 @@ func transformHashJoin(ctx *plancontext.PlanningContext, op *operators.HashJoin)
 			CollationEnv:   ctx.VSchema.Environment().CollationEnv(),
 		},
 	}, nil
+}
+
+func generateQuery(statement sqlparser.Statement) string {
+	buf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	statement.Format(buf)
+	return buf.String()
 }

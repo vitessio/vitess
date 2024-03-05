@@ -354,7 +354,7 @@
 			"type": "reference",
 			"source": "TestUnsharded.zip_detail"
 		},
-       "multicol_tbl": {
+        "multicol_tbl": {
             "column_vindexes": [
                 {
                     "columns": ["cola", "colb"],

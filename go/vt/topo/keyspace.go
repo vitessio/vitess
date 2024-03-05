@@ -19,11 +19,15 @@ package topo
 import (
 	"context"
 	"path"
+	"sort"
 	"sync"
 
+	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -34,7 +38,25 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// This file contains keyspace utility functions
+// This file contains keyspace utility functions.
+
+// Default concurrency to use in order to avoid overhwelming the topo server.
+var DefaultConcurrency = 32
+
+// shardKeySuffix is the suffix of a shard key.
+// The full key looks like this:
+// /vitess/global/keyspaces/customer/shards/80-/Shard
+const shardKeySuffix = "Shard"
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.IntVar(&DefaultConcurrency, "topo_read_concurrency", DefaultConcurrency, "Concurrency of topo reads.")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerFlags)
+	servenv.OnParseFor("vtctld", registerFlags)
+	servenv.OnParseFor("vtgate", registerFlags)
+}
 
 // KeyspaceInfo is a meta struct that contains metadata to give the
 // data more context and convenience. This is the main way we interact
@@ -188,12 +210,67 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 		opt = &FindAllShardsInKeyspaceOptions{}
 	}
 	if opt.Concurrency <= 0 {
-		opt.Concurrency = 1
+		opt.Concurrency = DefaultConcurrency
 	}
 
+	// First try to get all shards using List if we can.
+	buildResultFromList := func(kvpairs []KVInfo) (map[string]*ShardInfo, error) {
+		result := make(map[string]*ShardInfo, len(kvpairs))
+		for _, entry := range kvpairs {
+			// The shard key looks like this: /vitess/global/keyspaces/commerce/shards/-80/Shard
+			shardKey := string(entry.Key)
+			// We don't want keys that aren't Shards. For example:
+			// /vitess/global/keyspaces/commerce/shards/0/locks/7587876423742065323
+			// This example key can happen with Shards because you can get a shard
+			// lock in the topo via TopoServer.LockShard().
+			if path.Base(shardKey) != shardKeySuffix {
+				continue
+			}
+			shardName := path.Base(path.Dir(shardKey)) // The base part of the dir is "-80"
+			// Validate the extracted shard name.
+			if _, _, err := ValidateShardName(shardName); err != nil {
+				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): unexpected shard key/path %q contains invalid shard name/range %q",
+					keyspace, shardKey, shardName)
+			}
+			shard := &topodatapb.Shard{}
+			if err := shard.UnmarshalVT(entry.Value); err != nil {
+				return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): invalid data found for shard %q in %q",
+					keyspace, shardName, shardKey)
+			}
+			result[shardName] = &ShardInfo{
+				keyspace:  keyspace,
+				shardName: shardName,
+				version:   entry.Version,
+				Shard:     shard,
+			}
+		}
+		return result, nil
+	}
+	shardsPath := path.Join(KeyspacesPath, keyspace, ShardsPath)
+	listRes, err := ts.globalCell.List(ctx, shardsPath)
+	if err == nil { // We have everything we need to build the result
+		return buildResultFromList(listRes)
+	}
+	if IsErrType(err, NoNode) {
+		// The path doesn't exist, let's see if the keyspace exists.
+		if _, kerr := ts.GetKeyspace(ctx, keyspace); kerr != nil {
+			return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): List", keyspace)
+		}
+		// We simply have no shards.
+		return make(map[string]*ShardInfo, 0), nil
+	}
+	// Currently the ZooKeeper implementation does not support index prefix
+	// scans so we fall back to concurrently fetching the shards one by one.
+	// It is also possible that the response containing all shards is too
+	// large in which case we also fall back to the one by one fetch.
+	if !IsErrType(err, NoImplementation) && !IsErrType(err, ResourceExhausted) {
+		return nil, vterrors.Wrapf(err, "FindAllShardsInKeyspace(%s): List", keyspace)
+	}
+
+	// Fall back to the shard by shard method.
 	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
+		return nil, vterrors.Wrapf(err, "failed to get list of shard names for keyspace '%s'", keyspace)
 	}
 
 	// Keyspaces with a large number of shards and geographically distributed
@@ -213,7 +290,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	)
 
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(opt.Concurrency)
+	eg.SetLimit(int(opt.Concurrency))
 
 	for _, shard := range shards {
 		shard := shard
@@ -222,7 +299,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 			si, err := ts.GetShard(ctx, keyspace, shard)
 			switch {
 			case IsErrType(err, NoNode):
-				log.Warningf("GetShard(%v, %v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
+				log.Warningf("GetShard(%s, %s) returned ErrNoNode, consider checking the topology.", keyspace, shard)
 				return nil
 			case err == nil:
 				mu.Lock()
@@ -231,7 +308,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 
 				return nil
 			default:
-				return vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
+				return vterrors.Wrapf(err, "GetShard(%s, %s) failed", keyspace, shard)
 			}
 		})
 	}
@@ -245,25 +322,26 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 
 // GetServingShards returns all shards where the primary is serving.
 func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*ShardInfo, error) {
-	shards, err := ts.GetShardNames(ctx, keyspace)
+	shards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
 	}
 
 	result := make([]*ShardInfo, 0, len(shards))
 	for _, shard := range shards {
-		si, err := ts.GetShard(ctx, keyspace, shard)
-		if err != nil {
-			return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
-		}
-		if !si.IsPrimaryServing {
+		if !shard.IsPrimaryServing {
 			continue
 		}
-		result = append(result, si)
+		result = append(result, shard)
 	}
 	if len(result) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v has no serving shards", keyspace)
 	}
+	// Sort the shards by KeyRange for deterministic results.
+	sort.Slice(result, func(i, j int) bool {
+		return key.KeyRangeLess(result[i].KeyRange, result[j].KeyRange)
+	})
+
 	return result, nil
 }
 

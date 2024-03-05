@@ -159,7 +159,7 @@ type VtctldClient interface {
 	Backup(ctx context.Context, in *vtctldata.BackupRequest, opts ...grpc.CallOption) (Vtctld_BackupClient, error)
 	// BackupShard chooses a tablet in the shard and uses it to create a backup.
 	BackupShard(ctx context.Context, in *vtctldata.BackupShardRequest, opts ...grpc.CallOption) (Vtctld_BackupShardClient, error)
-	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+	// CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
 	CancelSchemaMigration(ctx context.Context, in *vtctldata.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
@@ -239,6 +239,8 @@ type VtctldClient interface {
 	// Different fields in the request message result in different filtering
 	// behaviors. See the documentation on GetSchemaMigrationsRequest for details.
 	GetSchemaMigrations(ctx context.Context, in *vtctldata.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaMigrationsResponse, error)
+	// GetShardReplication returns the replication graph for a shard in a cell.
+	GetShardReplication(ctx context.Context, in *vtctldata.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldata.GetShardReplicationResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(ctx context.Context, in *vtctldata.GetShardRequest, opts ...grpc.CallOption) (*vtctldata.GetShardResponse, error)
 	// GetShardRoutingRules returns the VSchema shard routing rules.
@@ -835,6 +837,15 @@ func (c *vtctldClient) GetSchema(ctx context.Context, in *vtctldata.GetSchemaReq
 func (c *vtctldClient) GetSchemaMigrations(ctx context.Context, in *vtctldata.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaMigrationsResponse, error) {
 	out := new(vtctldata.GetSchemaMigrationsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetSchemaMigrations", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetShardReplication(ctx context.Context, in *vtctldata.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldata.GetShardReplicationResponse, error) {
+	out := new(vtctldata.GetShardReplicationResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetShardReplication", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1557,7 +1568,7 @@ type VtctldServer interface {
 	Backup(*vtctldata.BackupRequest, Vtctld_BackupServer) error
 	// BackupShard chooses a tablet in the shard and uses it to create a backup.
 	BackupShard(*vtctldata.BackupShardRequest, Vtctld_BackupShardServer) error
-	// CancelSchemaMigration cancels one or all migrations, terminating any runnign ones as needed.
+	// CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
 	CancelSchemaMigration(context.Context, *vtctldata.CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
@@ -1637,6 +1648,8 @@ type VtctldServer interface {
 	// Different fields in the request message result in different filtering
 	// behaviors. See the documentation on GetSchemaMigrationsRequest for details.
 	GetSchemaMigrations(context.Context, *vtctldata.GetSchemaMigrationsRequest) (*vtctldata.GetSchemaMigrationsResponse, error)
+	// GetShardReplication returns the replication graph for a shard in a cell.
+	GetShardReplication(context.Context, *vtctldata.GetShardReplicationRequest) (*vtctldata.GetShardReplicationResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error)
 	// GetShardRoutingRules returns the VSchema shard routing rules.
@@ -1967,6 +1980,9 @@ func (UnimplementedVtctldServer) GetSchema(context.Context, *vtctldata.GetSchema
 }
 func (UnimplementedVtctldServer) GetSchemaMigrations(context.Context, *vtctldata.GetSchemaMigrationsRequest) (*vtctldata.GetSchemaMigrationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSchemaMigrations not implemented")
+}
+func (UnimplementedVtctldServer) GetShardReplication(context.Context, *vtctldata.GetShardReplicationRequest) (*vtctldata.GetShardReplicationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetShardReplication not implemented")
 }
 func (UnimplementedVtctldServer) GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetShard not implemented")
@@ -2871,6 +2887,24 @@ func _Vtctld_GetSchemaMigrations_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetSchemaMigrations(ctx, req.(*vtctldata.GetSchemaMigrationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetShardReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetShardReplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetShardReplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetShardReplication",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetShardReplication(ctx, req.(*vtctldata.GetShardReplicationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4356,6 +4390,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSchemaMigrations",
 			Handler:    _Vtctld_GetSchemaMigrations_Handler,
+		},
+		{
+			MethodName: "GetShardReplication",
+			Handler:    _Vtctld_GetShardReplication_Handler,
 		},
 		{
 			MethodName: "GetShard",

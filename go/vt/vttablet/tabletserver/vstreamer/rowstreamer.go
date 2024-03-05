@@ -168,7 +168,7 @@ func (rs *rowStreamer) buildPlan() error {
 		Name: st.Name,
 	}
 
-	ti.Fields, err = getFields(rs.ctx, rs.cp, st.Name, rs.cp.DBName(), st.Fields)
+	ti.Fields, err = getFields(rs.ctx, rs.cp, rs.vse.se, st.Name, rs.cp.DBName(), st.Fields)
 	if err != nil {
 		return err
 	}
@@ -273,8 +273,11 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 	// of the PK columns which are used in the ORDER BY clause below.
 	var indexHint string
 	if st.PKIndexName != "" {
-		indexHint = fmt.Sprintf(" force index (%s)",
-			sqlescape.EscapeID(sqlescape.UnescapeID(st.PKIndexName)))
+		escapedPKIndexName, err := sqlescape.EnsureEscaped(st.PKIndexName)
+		if err != nil {
+			return "", err
+		}
+		indexHint = fmt.Sprintf(" force index (%s)", escapedPKIndexName)
 	}
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 {

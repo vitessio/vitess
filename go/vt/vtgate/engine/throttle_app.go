@@ -31,12 +31,11 @@ var _ Primitive = (*ThrottleApp)(nil)
 
 // ThrottleApp represents the instructions to perform an online schema change via vtctld
 type ThrottleApp struct {
+	noTxNeeded
+	noInputs
+
 	Keyspace         *vindexes.Keyspace
 	ThrottledAppRule *topodatapb.ThrottledAppRule
-
-	noTxNeeded
-
-	noInputs
 }
 
 func (v *ThrottleApp) description() PrimitiveDescription {

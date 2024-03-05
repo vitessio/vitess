@@ -19,9 +19,11 @@ package planbuilder
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -31,7 +33,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	err = rewriteRoutedTables(insStmt, vschema)
+	err = queryRewrite(ctx.SemTable, reservedVars, insStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -60,12 +62,11 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable()); err != nil {
-		return nil, err
+	if _, isVindex := tblInfo.(*semantics.VindexTable); isVindex {
+		return nil, vterrors.VT09014()
 	}
 
-	err = queryRewrite(ctx.SemTable, reservedVars, insStmt)
-	if err != nil {
+	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable()); err != nil {
 		return nil, err
 	}
 

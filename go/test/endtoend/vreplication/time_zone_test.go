@@ -56,7 +56,7 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	// it seems to take some time for the mysql server to load time zone info after the tables in mysql db have been populated
 	loadTimeZoneInfo := func(tab *cluster.VttabletProcess, sql, timezone string) {
-		_, err := tab.QueryTabletWithDB(timeZoneSQL, "mysql")
+		err := tab.MultiQueryTabletWithDB(timeZoneSQL, "mysql")
 		require.NoError(t, err)
 		timer := time.NewTimer(1 * time.Minute)
 		for {

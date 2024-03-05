@@ -23,7 +23,7 @@ func TestSketch(t *testing.T) {
 	sketch.SampleSize = 5120
 
 	failed := 0
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		key := fmt.Sprintf("key:%d", i)
 		keyh := xxhash.Sum64String(key)
 		sketch.Add(keyh)

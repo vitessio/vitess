@@ -81,8 +81,8 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "FieldQuery": "select colb, cola, y, colc, x from multicol_tbl1 where 1 != 1",
-            "Query": "select colb, cola, y, colc, x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
+            "FieldQuery": "select multicol_tbl1.colb, multicol_tbl1.cola, multicol_tbl1.y, multicol_tbl1.colc, multicol_tbl1.x from multicol_tbl1 where 1 != 1",
+            "Query": "select multicol_tbl1.colb, multicol_tbl1.cola, multicol_tbl1.y, multicol_tbl1.colc, multicol_tbl1.x from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3 for update",
             "Table": "multicol_tbl1",
             "Values": [
               "1",
@@ -160,8 +160,8 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "FieldQuery": "select col5, t5col5 from tbl5 where 1 != 1",
-            "Query": "select col5, t5col5 from tbl5 for update",
+            "FieldQuery": "select tbl5.col5, tbl5.t5col5 from tbl5 where 1 != 1",
+            "Query": "select tbl5.col5, tbl5.t5col5 from tbl5 for update",
             "Table": "tbl5"
           },
           {
@@ -242,8 +242,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-            "Query": "select col9 from u_tbl9 where col9 = 5 for update nowait",
+            "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+            "Query": "select u_tbl9.col9 from u_tbl9 where col9 = 5 for update nowait",
             "Table": "u_tbl9"
           },
           {
@@ -321,8 +321,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-            "Query": "select col2 from u_tbl2 where id = 1 for update",
+            "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+            "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update",
             "Table": "u_tbl2"
           },
           {
@@ -432,8 +432,8 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "FieldQuery": "select t5col5 from tbl5 where 1 != 1",
-            "Query": "select t5col5 from tbl5 for update",
+            "FieldQuery": "select tbl5.t5col5 from tbl5 where 1 != 1",
+            "Query": "select tbl5.t5col5 from tbl5 for update",
             "Table": "tbl5"
           },
           {
@@ -601,8 +601,8 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "FieldQuery": "select col9 from tbl9 where 1 != 1",
-            "Query": "select col9 from tbl9 where col9 = 34 for update",
+            "FieldQuery": "select tbl9.col9 from tbl9 where 1 != 1",
+            "Query": "select tbl9.col9 from tbl9 where col9 = 34 for update",
             "Table": "tbl9",
             "Values": [
               "34"
@@ -666,8 +666,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-            "Query": "select col1 from u_tbl1 for update",
+            "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+            "Query": "select u_tbl1.col1 from u_tbl1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -686,8 +686,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -736,8 +736,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR))) for update nowait",
+                "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR))) for update nowait",
                 "Table": "u_tbl9"
               },
               {
@@ -816,7 +816,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where 1 != 1",
-            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where cast(u_tbl2.col1 + 'bar' as CHAR) is not null and not (u_tbl2.col2) <=> (cast(u_tbl2.col1 + 'bar' as CHAR)) and u_tbl2.id = 1 and u_tbl1.col1 is null limit 1 for share",
+            "Query": "select 1 from u_tbl2 left join u_tbl1 on u_tbl1.col1 = cast(u_tbl2.col1 + 'bar' as CHAR) where u_tbl1.col1 is null and cast(u_tbl2.col1 + 'bar' as CHAR) is not null and not (u_tbl2.col2) <=> (cast(u_tbl2.col1 + 'bar' as CHAR)) and u_tbl2.id = 1 limit 1 for share",
             "Table": "u_tbl1, u_tbl2"
           },
           {
@@ -831,8 +831,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where 1 != 1",
-                "Query": "select col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where id = 1 for update",
+                "FieldQuery": "select u_tbl2.col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2, col2 <=> cast(col1 + 'bar' as CHAR), cast(col1 + 'bar' as CHAR) from u_tbl2 where id = 1 for update",
                 "Table": "u_tbl2"
               },
               {
@@ -898,8 +898,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where 1 != 1",
-            "Query": "select col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where id = 1 for update",
+            "FieldQuery": "select u_tbl1.col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where 1 != 1",
+            "Query": "select u_tbl1.col1, col1 <=> cast(x + 'bar' as CHAR), cast(x + 'bar' as CHAR) from u_tbl1 where id = 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -925,8 +925,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -982,8 +982,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (col9) not in ((:fkc_upd1))) for update nowait",
+                "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (col9) not in ((:fkc_upd1))) for update nowait",
                 "Table": "u_tbl9"
               },
               {
@@ -1056,8 +1056,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-            "Query": "select col2 from u_tbl2 where id = 1 for update",
+            "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+            "Query": "select u_tbl2.col2 from u_tbl2 where id = 1 for update",
             "Table": "u_tbl2"
           },
           {
@@ -1113,8 +1113,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-            "Query": "select col1 from u_tbl1 where id = 1 for update",
+            "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+            "Query": "select u_tbl1.col1 from u_tbl1 where id = 1 for update",
             "Table": "u_tbl1"
           },
           {
@@ -1133,8 +1133,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                 "Table": "u_tbl2"
               },
               {
@@ -1183,8 +1183,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR))) for update nowait",
+                "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR))) for update nowait",
                 "Table": "u_tbl9"
               },
               {
@@ -1246,9 +1246,81 @@
     "plan": "VT09016: Cannot delete or update a parent row: a foreign key constraint fails"
   },
   {
-    "comment": "delete in a table with limit - disallowed",
+    "comment": "delete in a table with limit",
     "query": "delete from u_tbl2 limit 2",
-    "plan": "VT12001: unsupported: foreign keys management at vitess with limit"
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from u_tbl2 limit 2",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select u_tbl2.id from u_tbl2 where 1 != 1",
+            "Query": "select u_tbl2.id from u_tbl2 limit 2 for update",
+            "Table": "u_tbl2"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals for update",
+                "Table": "u_tbl2"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals",
+                "Table": "u_tbl3"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl2 where u_tbl2.id in ::dml_vals",
+                "Table": "u_tbl2"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl2",
+        "unsharded_fk_allow.u_tbl3"
+      ]
+    }
   },
   {
     "comment": "update with fk on cross-shard with a update condition on non-literal value",
@@ -1430,8 +1502,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col6 from u_tbl6 where 1 != 1",
-            "Query": "select col6 from u_tbl6 for update",
+            "FieldQuery": "select u_tbl6.col6 from u_tbl6 where 1 != 1",
+            "Query": "select u_tbl6.col6 from u_tbl6 for update",
             "Table": "u_tbl6"
           },
           {
@@ -1451,7 +1523,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where not (u_tbl8.col8) <=> (cast('foo' as CHAR)) and (u_tbl8.col8) in ::fkc_vals and u_tbl9.col9 is null limit 1 for share nowait",
+                "Query": "select 1 from u_tbl8 left join u_tbl9 on u_tbl9.col9 = cast('foo' as CHAR) where u_tbl9.col9 is null and cast('foo' as CHAR) is not null and not (u_tbl8.col8) <=> (cast('foo' as CHAR)) and (u_tbl8.col8) in ::fkc_vals limit 1 for share nowait",
                 "Table": "u_tbl8, u_tbl9"
               },
               {
@@ -1506,8 +1578,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col7 from u_tbl7 where 1 != 1",
-            "Query": "select col7 from u_tbl7 for update",
+            "FieldQuery": "select u_tbl7.col7 from u_tbl7 where 1 != 1",
+            "Query": "select u_tbl7.col7 from u_tbl7 for update",
             "Table": "u_tbl7"
           },
           {
@@ -1527,7 +1599,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where not (u_tbl4.col4) <=> (cast('foo' as CHAR)) and (u_tbl4.col4) in ::fkc_vals and u_tbl3.col3 is null limit 1 for share",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast('foo' as CHAR) where u_tbl3.col3 is null and cast('foo' as CHAR) is not null and not (u_tbl4.col4) <=> (cast('foo' as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -1539,7 +1611,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (u_tbl9.col9) not in ((cast('foo' as CHAR))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share",
+                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (cast('foo' as CHAR) is null or (u_tbl9.col9) not in ((cast('foo' as CHAR)))) limit 1 for share",
                 "Table": "u_tbl4, u_tbl9"
               },
               {
@@ -1595,8 +1667,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col7 from u_tbl7 where 1 != 1",
-            "Query": "select col7 from u_tbl7 for update",
+            "FieldQuery": "select u_tbl7.col7 from u_tbl7 where 1 != 1",
+            "Query": "select u_tbl7.col7 from u_tbl7 for update",
             "Table": "u_tbl7"
           },
           {
@@ -1616,7 +1688,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where not (u_tbl4.col4) <=> (cast(:v1 as CHAR)) and (u_tbl4.col4) in ::fkc_vals and cast(:v1 as CHAR) is not null and u_tbl3.col3 is null limit 1 for share",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:v1 as CHAR) where u_tbl3.col3 is null and cast(:v1 as CHAR) is not null and not (u_tbl4.col4) <=> (cast(:v1 as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -1628,7 +1700,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (cast(:v1 as CHAR) is null or (u_tbl9.col9) not in ((cast(:v1 as CHAR)))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share",
+                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (cast(:v1 as CHAR) is null or (u_tbl9.col9) not in ((cast(:v1 as CHAR)))) limit 1 for share",
                 "Table": "u_tbl4, u_tbl9"
               },
               {
@@ -1702,8 +1774,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-                "Query": "select col1 from u_tbl1 where id = 1 for update",
+                "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+                "Query": "select u_tbl1.col1 from u_tbl1 where id = 1 for update",
                 "Table": "u_tbl1"
               },
               {
@@ -1722,8 +1794,8 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                    "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                     "Table": "u_tbl2"
                   },
                   {
@@ -1772,8 +1844,8 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                    "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR))) for update nowait",
+                    "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR))) for update nowait",
                     "Table": "u_tbl9"
                   },
                   {
@@ -1878,8 +1950,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-                "Query": "select col1 from u_tbl1 where (id) in ((1)) for update",
+                "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+                "Query": "select u_tbl1.col1 from u_tbl1 where (id) in ((1)) for update",
                 "Table": "u_tbl1"
               },
               {
@@ -1898,8 +1970,8 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                    "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                     "Table": "u_tbl2"
                   },
                   {
@@ -1984,8 +2056,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select cola, colb from u_multicol_tbl1 where 1 != 1",
-            "Query": "select cola, colb from u_multicol_tbl1 where id = 3 for update",
+            "FieldQuery": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where 1 != 1",
+            "Query": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where id = 3 for update",
             "Table": "u_multicol_tbl1"
           },
           {
@@ -2005,8 +2077,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2)) for update",
+                "FieldQuery": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where 1 != 1",
+                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2)) for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -2078,8 +2150,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select cola, colb from u_multicol_tbl1 where 1 != 1",
-            "Query": "select cola, colb from u_multicol_tbl1 where id = :v3 for update",
+            "FieldQuery": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where 1 != 1",
+            "Query": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb from u_multicol_tbl1 where id = :v3 for update",
             "Table": "u_multicol_tbl1"
           },
           {
@@ -2099,8 +2171,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2)))) for update",
+                "FieldQuery": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where 1 != 1",
+                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2)))) for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -2178,8 +2250,8 @@
                   "Name": "sharded_fk_allow",
                   "Sharded": true
                 },
-                "FieldQuery": "select col5, t5col5 from tbl5 where 1 != 1",
-                "Query": "select col5, t5col5 from tbl5 where id = :v1 for update",
+                "FieldQuery": "select tbl5.col5, tbl5.t5col5 from tbl5 where 1 != 1",
+                "Query": "select tbl5.col5, tbl5.t5col5 from tbl5 where id = :v1 for update",
                 "Table": "tbl5"
               },
               {
@@ -2262,8 +2334,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where 1 != 1",
-            "Query": "select col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where bar = 42 for update",
+            "FieldQuery": "select u_tbl7.col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where 1 != 1",
+            "Query": "select u_tbl7.col7, col7 <=> cast(baz + 1 + col7 as CHAR), cast(baz + 1 + col7 as CHAR) from u_tbl7 where bar = 42 for update",
             "Table": "u_tbl7"
           },
           {
@@ -2290,7 +2362,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:fkc_upd as CHAR) where 1 != 1",
-                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:fkc_upd as CHAR) where not (u_tbl4.col4) <=> (cast(:fkc_upd as CHAR)) and (u_tbl4.col4) in ::fkc_vals and cast(:fkc_upd as CHAR) is not null and u_tbl3.col3 is null limit 1 for share",
+                "Query": "select 1 from u_tbl4 left join u_tbl3 on u_tbl3.col3 = cast(:fkc_upd as CHAR) where u_tbl3.col3 is null and cast(:fkc_upd as CHAR) is not null and not (u_tbl4.col4) <=> (cast(:fkc_upd as CHAR)) and (u_tbl4.col4) in ::fkc_vals limit 1 for share",
                 "Table": "u_tbl3, u_tbl4"
               },
               {
@@ -2302,7 +2374,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4, u_tbl9 where 1 != 1",
-                "Query": "select 1 from u_tbl4, u_tbl9 where (u_tbl4.col4) in ::fkc_vals and (cast(:fkc_upd as CHAR) is null or (u_tbl9.col9) not in ((cast(:fkc_upd as CHAR)))) and u_tbl4.col4 = u_tbl9.col9 limit 1 for share",
+                "Query": "select 1 from u_tbl4, u_tbl9 where u_tbl4.col4 = u_tbl9.col9 and (u_tbl4.col4) in ::fkc_vals and (cast(:fkc_upd as CHAR) is null or (u_tbl9.col9) not in ((cast(:fkc_upd as CHAR)))) limit 1 for share",
                 "Table": "u_tbl4, u_tbl9"
               },
               {
@@ -2358,8 +2430,8 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "FieldQuery": "select cola, colb, cola <=> cola + 3, cola + 3 from u_multicol_tbl1 where 1 != 1",
-            "Query": "select cola, colb, cola <=> cola + 3, cola + 3 from u_multicol_tbl1 where id = 3 for update",
+            "FieldQuery": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb, cola <=> cola + 3, cola + 3 from u_multicol_tbl1 where 1 != 1",
+            "Query": "select u_multicol_tbl1.cola, u_multicol_tbl1.colb, cola <=> cola + 3, cola + 3 from u_multicol_tbl1 where id = 3 for update",
             "Table": "u_multicol_tbl1"
           },
           {
@@ -2386,8 +2458,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select cola, colb from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:fkc_upd is null or (cola) not in ((:fkc_upd))) for update",
+                "FieldQuery": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where 1 != 1",
+                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb from u_multicol_tbl2 where (cola, colb) in ::fkc_vals and (:fkc_upd is null or (cola) not in ((:fkc_upd))) for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -2465,7 +2537,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where 1 != 1",
-            "Query": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl2.colc - 2 is not null and not (u_multicol_tbl2.cola, u_multicol_tbl2.colb) <=> (2, u_multicol_tbl2.colc - 2) and u_multicol_tbl2.id = 7 and u_multicol_tbl1.cola is null and u_multicol_tbl1.colb is null limit 1 for share",
+            "Query": "select 1 from u_multicol_tbl2 left join u_multicol_tbl1 on u_multicol_tbl1.cola = 2 and u_multicol_tbl1.colb = u_multicol_tbl2.colc - 2 where u_multicol_tbl1.cola is null and 2 is not null and u_multicol_tbl1.colb is null and u_multicol_tbl2.colc - 2 is not null and not (u_multicol_tbl2.cola, u_multicol_tbl2.colb) <=> (2, u_multicol_tbl2.colc - 2) and u_multicol_tbl2.id = 7 limit 1 for share",
             "Table": "u_multicol_tbl1, u_multicol_tbl2"
           },
           {
@@ -2480,8 +2552,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select cola, colb, cola <=> 2, 2, colb <=> colc - 2, colc - 2 from u_multicol_tbl2 where 1 != 1",
-                "Query": "select cola, colb, cola <=> 2, 2, colb <=> colc - 2, colc - 2 from u_multicol_tbl2 where id = 7 for update",
+                "FieldQuery": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb, cola <=> 2, 2, colb <=> colc - 2, colc - 2 from u_multicol_tbl2 where 1 != 1",
+                "Query": "select u_multicol_tbl2.cola, u_multicol_tbl2.colb, cola <=> 2, 2, colb <=> colc - 2, colc - 2 from u_multicol_tbl2 where id = 7 for update",
                 "Table": "u_multicol_tbl2"
               },
               {
@@ -2556,8 +2628,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                "Query": "select col9 from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3)) for update nowait",
+                "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+                "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3)) for update nowait",
                 "Table": "u_tbl9"
               },
               {
@@ -2720,8 +2792,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col1 from u_tbl1 where 1 != 1",
-                "Query": "select col1 from u_tbl1 where id = 1 for update",
+                "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+                "Query": "select u_tbl1.col1 from u_tbl1 where id = 1 for update",
                 "Table": "u_tbl1"
               },
               {
@@ -2740,8 +2812,8 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                    "Query": "select col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                    "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                     "Table": "u_tbl2"
                   },
                   {
@@ -2790,8 +2862,8 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "FieldQuery": "select col9 from u_tbl9 where 1 != 1",
-                    "Query": "select col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(3 as CHAR))) for update nowait",
+                    "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (col9) not in ((cast(3 as CHAR))) for update nowait",
                     "Table": "u_tbl9"
                   },
                   {
@@ -2884,8 +2956,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where id = :v1 for update",
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where id = :v1 for update",
                 "Table": "u_tbl2"
               },
               {
@@ -2943,8 +3015,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where id = :v3 for update",
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where id = :v3 for update",
                 "Table": "u_tbl2"
               },
               {
@@ -3002,8 +3074,8 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "FieldQuery": "select col2 from u_tbl2 where 1 != 1",
-                "Query": "select col2 from u_tbl2 where id = :v5 for update",
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select u_tbl2.col2 from u_tbl2 where id = :v5 for update",
                 "Table": "u_tbl2"
               },
               {
@@ -3043,5 +3115,701 @@
         "unsharded_fk_allow.u_tbl3"
       ]
     }
+  },
+  {
+    "comment": "Unknown update column in foreign keys",
+    "query": "update tbl_auth set unknown_col = 'verified' where id = 1",
+    "plan": "column 'unknown_col' not found in table 'tbl_auth'"
+  },
+  {
+    "comment": "Unsharded multi-table delete with foreign keys",
+    "query": "delete u from u_tbl6 u join u_tbl5 m on u.col = m.col where u.col2 = 4 and m.col3 = 6",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u from u_tbl6 u join u_tbl5 m on u.col = m.col where u.col2 = 4 and m.col3 = 6",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select u.id from u_tbl6 as u, u_tbl5 as m where 1 != 1",
+            "Query": "select u.id from u_tbl6 as u, u_tbl5 as m where u.col2 = 4 and m.col3 = 6 and u.col = m.col for update",
+            "Table": "u_tbl5, u_tbl6"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl6.col6 from u_tbl6 as u where 1 != 1",
+                "Query": "select u_tbl6.col6 from u_tbl6 as u where u.id in ::dml_vals for update",
+                "Table": "u_tbl6"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals",
+                "Table": "u_tbl8"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl6 as u where u.id in ::dml_vals",
+                "Table": "u_tbl6"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl5",
+        "unsharded_fk_allow.u_tbl6",
+        "unsharded_fk_allow.u_tbl8"
+      ]
+    }
+  },
+  {
+    "comment": "Multi table delete with using",
+    "query": "delete u_tbl10 from u_tbl10 join u_tbl11 using (id) where id = 5",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u_tbl10 from u_tbl10 join u_tbl11 using (id) where id = 5",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select u_tbl10.id from u_tbl10, u_tbl11 where 1 != 1",
+            "Query": "select u_tbl10.id from u_tbl10, u_tbl11 where u_tbl10.id = 5 and u_tbl10.id = u_tbl11.id for update",
+            "Table": "u_tbl10, u_tbl11"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl10.col from u_tbl10 where 1 != 1",
+                "Query": "select u_tbl10.col from u_tbl10 where u_tbl10.id in ::dml_vals for update",
+                "Table": "u_tbl10"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "delete from u_tbl11 where (col) in ::fkc_vals",
+                "Table": "u_tbl11"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl10 where u_tbl10.id in ::dml_vals",
+                "Table": "u_tbl10"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl10",
+        "unsharded_fk_allow.u_tbl11"
+      ]
+    }
+  },
+  {
+    "comment": "Multi table delete with unrelated tables",
+    "query": "delete u_tbl1 from u_tbl10 join u_tbl1 on u_tbl10.col = u_tbl1.col",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u_tbl1 from u_tbl10 join u_tbl1 on u_tbl10.col = u_tbl1.col",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select u_tbl1.id from u_tbl10, u_tbl1 where 1 != 1",
+            "Query": "select u_tbl1.id from u_tbl10, u_tbl1 where u_tbl10.col = u_tbl1.col for update",
+            "Table": "u_tbl1, u_tbl10"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+                "Query": "select u_tbl1.col1 from u_tbl1 where u_tbl1.id in ::dml_vals for update",
+                "Table": "u_tbl1"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "FkCascade",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "Selection",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                    "Table": "u_tbl2"
+                  },
+                  {
+                    "InputName": "CascadeChild-1",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "BvName": "fkc_vals1",
+                    "Cols": [
+                      0
+                    ],
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
+                    "Table": "u_tbl3"
+                  },
+                  {
+                    "InputName": "Parent",
+                    "OperatorType": "Delete",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
+                    "Table": "u_tbl2"
+                  }
+                ]
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl1 where u_tbl1.id in ::dml_vals",
+                "Table": "u_tbl1"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
+        "unsharded_fk_allow.u_tbl10",
+        "unsharded_fk_allow.u_tbl2",
+        "unsharded_fk_allow.u_tbl3"
+      ]
+    }
+  },
+  {
+    "comment": "Delete with limit",
+    "query": "delete from u_tbl1 order by id limit 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from u_tbl1 order by id limit 1",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select u_tbl1.id from u_tbl1 where 1 != 1",
+            "Query": "select u_tbl1.id from u_tbl1 order by id asc limit 1 for update",
+            "Table": "u_tbl1"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+                "Query": "select u_tbl1.col1 from u_tbl1 where u_tbl1.id in ::dml_vals for update",
+                "Table": "u_tbl1"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "FkCascade",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "Selection",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
+                    "Table": "u_tbl2"
+                  },
+                  {
+                    "InputName": "CascadeChild-1",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "BvName": "fkc_vals1",
+                    "Cols": [
+                      0
+                    ],
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1",
+                    "Table": "u_tbl3"
+                  },
+                  {
+                    "InputName": "Parent",
+                    "OperatorType": "Delete",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
+                    "Table": "u_tbl2"
+                  }
+                ]
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl1 where u_tbl1.id in ::dml_vals",
+                "Table": "u_tbl1"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
+        "unsharded_fk_allow.u_tbl2",
+        "unsharded_fk_allow.u_tbl3"
+      ]
+    }
+  },
+  {
+    "comment": "update query with an uncorrelated subquery",
+    "query": "update u_tbl4 set col41 = (select col14 from u_tbl1 where x = 2 and y = 4) where col4 = 3",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_tbl4 set col41 = (select col14 from u_tbl1 where x = 2 and y = 4) where col4 = 3",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select col14 from u_tbl1 where 1 != 1",
+            "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ col14 from u_tbl1 where x = 2 and y = 4 lock in share mode",
+            "Table": "u_tbl1"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "FKVerify",
+            "Inputs": [
+              {
+                "InputName": "VerifyParent-1",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where 1 != 1",
+                "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where u_tbl1.col14 is null and cast(:__sq1 as SIGNED) is not null and not (u_tbl4.col41) <=> (cast(:__sq1 as SIGNED)) and u_tbl4.col4 = 3 limit 1 lock in share mode",
+                "Table": "u_tbl1, u_tbl4"
+              },
+              {
+                "InputName": "PostVerify",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col41 = :__sq1 where col4 = 3",
+                "Table": "u_tbl4"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
+        "unsharded_fk_allow.u_tbl4"
+      ]
+    }
+  },
+  {
+    "comment": "update with a subquery",
+    "query": "update u_tbl1 set col1 = (select foo from u_tbl1 where id = 1) order by id desc",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_tbl1 set col1 = (select foo from u_tbl1 where id = 1) order by id desc",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select foo from u_tbl1 where 1 != 1",
+            "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ foo from u_tbl1 where id = 1 lock in share mode",
+            "Table": "u_tbl1"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
+                "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1.col1 from u_tbl1 order by id desc lock in share mode",
+                "Table": "u_tbl1"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "FkCascade",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "Selection",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                    "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals lock in share mode",
+                    "Table": "u_tbl2"
+                  },
+                  {
+                    "InputName": "CascadeChild-1",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "BvName": "fkc_vals1",
+                    "Cols": [
+                      0
+                    ],
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:__sq1 as CHAR) is null or (col3) not in ((cast(:__sq1 as CHAR))))",
+                    "Table": "u_tbl3"
+                  },
+                  {
+                    "InputName": "Parent",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = :__sq1 where (col2) in ::fkc_vals",
+                    "Table": "u_tbl2"
+                  }
+                ]
+              },
+              {
+                "InputName": "CascadeChild-2",
+                "OperatorType": "FkCascade",
+                "BvName": "fkc_vals2",
+                "Cols": [
+                  0
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "Selection",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
+                    "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR)))) lock in share mode",
+                    "Table": "u_tbl9"
+                  },
+                  {
+                    "InputName": "CascadeChild-1",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "BvName": "fkc_vals3",
+                    "Cols": [
+                      0
+                    ],
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
+                    "Table": "u_tbl8"
+                  },
+                  {
+                    "InputName": "Parent",
+                    "OperatorType": "Update",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "unsharded_fk_allow",
+                      "Sharded": false
+                    },
+                    "TargetTabletType": "PRIMARY",
+                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR))))",
+                    "Table": "u_tbl9"
+                  }
+                ]
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set col1 = :__sq1 order by id desc",
+                "Table": "u_tbl1"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl1",
+        "unsharded_fk_allow.u_tbl2",
+        "unsharded_fk_allow.u_tbl3",
+        "unsharded_fk_allow.u_tbl8",
+        "unsharded_fk_allow.u_tbl9"
+      ]
+    }
+  },
+  {
+    "comment": "Multi table delete such that the two tables are foreign key related",
+    "query": "delete u_tbl6 from u_tbl6 join u_tbl8 on u_tbl6.id = u_tbl8.id where u_tbl6.id = 4",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete u_tbl6 from u_tbl6 join u_tbl8 on u_tbl6.id = u_tbl8.id where u_tbl6.id = 4",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select u_tbl6.id from u_tbl6, u_tbl8 where 1 != 1",
+            "Query": "select u_tbl6.id from u_tbl6, u_tbl8 where u_tbl6.id = 4 and u_tbl6.id = u_tbl8.id for update",
+            "Table": "u_tbl6, u_tbl8"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl6.col6 from u_tbl6 where 1 != 1",
+                "Query": "select u_tbl6.col6 from u_tbl6 where u_tbl6.id in ::dml_vals for update",
+                "Table": "u_tbl6"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals",
+                "Table": "u_tbl8"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Delete",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "delete from u_tbl6 where u_tbl6.id in ::dml_vals",
+                "Table": "u_tbl6"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl6",
+        "unsharded_fk_allow.u_tbl8"
+      ]
+    }
+  },
+  {
+    "comment": "multi table delete on foreign key enabled tables",
+    "query": "delete u, m from u_tbl6 u join u_tbl5 m on u.col = m.col where u.col2 = 4 and m.col3 = 6",
+    "plan": "VT12001: unsupported: multi table delete with foreign keys"
   }
 ]

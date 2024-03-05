@@ -34,14 +34,13 @@ var _ Primitive = (*RevertMigration)(nil)
 
 // RevertMigration represents the instructions to perform an online schema change via vtctld
 type RevertMigration struct {
+	noTxNeeded
+	noInputs
+
 	Keyspace          *vindexes.Keyspace
 	Stmt              *sqlparser.RevertMigration
 	Query             string
 	TargetDestination key.Destination
-
-	noTxNeeded
-
-	noInputs
 }
 
 func (v *RevertMigration) description() PrimitiveDescription {

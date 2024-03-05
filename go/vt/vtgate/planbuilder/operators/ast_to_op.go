@@ -69,10 +69,15 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 
 func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) Operator {
 	sqc := &SubQueryBuilder{}
+	op = addWherePredsToSubQueryBuilder(ctx, expr, op, sqc)
+	return sqc.getRootOperator(op, nil)
+}
+
+func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator, sqc *SubQueryBuilder) Operator {
 	outerID := TableID(op)
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, expr := range exprs {
-		sqlparser.RemoveKeyspace(expr)
+		sqlparser.RemoveKeyspaceInCol(expr)
 		subq := sqc.handleSubquery(ctx, expr, outerID)
 		if subq != nil {
 			continue
@@ -80,7 +85,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 		op = op.AddPredicate(ctx, expr)
 		addColumnEquality(ctx, expr)
 	}
-	return sqc.getRootOperator(op, nil)
+	return op
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
@@ -106,26 +111,6 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 		return true, nil
 	}, node)
 	return
-}
-
-func checkForCorrelatedSubqueries(
-	ctx *plancontext.PlanningContext,
-	stmt sqlparser.SelectStatement,
-	subqID semantics.TableSet,
-) (correlated bool) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		colname, isColname := node.(*sqlparser.ColName)
-		if !isColname {
-			return true, nil
-		}
-		deps := ctx.SemTable.RecursiveDeps(colname)
-		if deps.IsSolvedBy(subqID) {
-			return true, nil
-		}
-		correlated = true
-		return false, nil
-	}, stmt)
-	return correlated
 }
 
 // joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any
@@ -216,6 +201,10 @@ func createOpFromStmt(inCtx *plancontext.PlanningContext, stmt sqlparser.Stateme
 	if err != nil {
 		panic(err)
 	}
+
+	// need to remember which predicates have been broken up during join planning
+	inCtx.KeepPredicateInfo(ctx)
+
 	return op
 }
 

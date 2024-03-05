@@ -23,7 +23,9 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql"
@@ -35,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -105,7 +106,7 @@ type explainTablet struct {
 
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
-func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opts *Options, t *topodatapb.Tablet) *explainTablet {
+func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opts *Options, t *topodatapb.Tablet, ts *topo.Server, srvTopoCounts *stats.CountersWithSingleLabel) *explainTablet {
 	db := fakesqldb.New(nil)
 	sidecardb.AddSchemaInitQueries(db, true, env.Parser())
 
@@ -120,7 +121,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 	config.EnableTableGC = false
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(ctx, env, topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(ctx, ""), t.Alias)
+	tsv := tabletserver.NewTabletServer(ctx, env, topoproto.TabletAliasString(t.Alias), config, ts, t.Alias, srvTopoCounts)
 
 	tablet := explainTablet{db: db, tsv: tsv, vte: vte, collationEnv: env.CollationEnv()}
 	db.Handler = &tablet
@@ -454,10 +455,18 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 	indexRows := make([][]sqltypes.Value, 0, 4)
 	for _, ddl := range ddls {
 		table := sqlparser.String(ddl.GetTable().Name)
-		backtickedTable := sqlescape.EscapeID(sqlescape.UnescapeID(table))
+		sanitizedTable, err := sqlescape.UnescapeID(table)
+		if err != nil {
+			return nil, err
+		}
+		backtickedTable := sqlescape.EscapeID(sanitizedTable)
 		if ddl.GetOptLike() != nil {
 			likeTable := ddl.GetOptLike().LikeTable.Name.String()
-			backtickedLikeTable := sqlescape.EscapeID(sqlescape.UnescapeID(likeTable))
+			sanitizedLikeTable, err := sqlescape.UnescapeID(likeTable)
+			if err != nil {
+				return nil, err
+			}
+			backtickedLikeTable := sqlescape.EscapeID(sanitizedLikeTable)
 
 			likeQuery := "SELECT * FROM " + backtickedLikeTable + " WHERE 1 != 1"
 			query := "SELECT * FROM " + backtickedTable + " WHERE 1 != 1"
@@ -466,8 +475,8 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 			}
 			tEnv.addResult(query, tEnv.getResult(likeQuery))
 
-			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(likeTable))
-			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqltypes.EncodeStringSQL(sanitizedLikeTable))
+			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqltypes.EncodeStringSQL(sanitizedTable))
 			if tEnv.getResult(likeQuery) == nil {
 				return nil, fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
@@ -508,7 +517,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 		tEnv.addResult("SELECT * FROM "+backtickedTable+" WHERE 1 != 1", &sqltypes.Result{
 			Fields: rowTypes,
 		})
-		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqltypes.EncodeStringSQL(sanitizedTable))
 		tEnv.addResult(query, &sqltypes.Result{
 			Fields: colTypes,
 			Rows:   colValues,
@@ -610,7 +619,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 
 	// Gen4 supports more complex queries so we now need to
 	// handle multiple FROM clauses
-	tables := make([]*sqlparser.AliasedTableExpr, len(selStmt.From))
+	tables := make([]*sqlparser.AliasedTableExpr, 0, len(selStmt.From))
 	for _, from := range selStmt.From {
 		tables = append(tables, getTables(from)...)
 	}

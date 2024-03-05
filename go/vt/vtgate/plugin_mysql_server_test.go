@@ -36,14 +36,13 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/trace"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 type testHandler struct {
 	mysql.UnimplementedHandler
 	lastConn *mysql.Conn
-	parser   *sqlparser.Parser
 }
 
 func (th *testHandler) NewConnection(c *mysql.Conn) {
@@ -83,8 +82,8 @@ func (th *testHandler) WarningCount(c *mysql.Conn) uint16 {
 	return 0
 }
 
-func (th *testHandler) SQLParser() *sqlparser.Parser {
-	return th.parser
+func (th *testHandler) Env() *vtenv.Environment {
+	return vtenv.NewTestEnv()
 }
 
 func TestConnectionUnixSocket(t *testing.T) {
@@ -352,7 +351,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected})
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, "8.0.30-Vitess", 0)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -382,7 +381,7 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 
 	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected})
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, "8.0.30-Vitess", 0)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err)
 	defer listener.Close()
 

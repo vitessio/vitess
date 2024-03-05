@@ -94,17 +94,14 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
 		if errors.Is(err, semantics.ErrNotSingleTable) {
-			return &Filter{
-				Source:     h,
-				Predicates: []sqlparser.Expr{expr},
-			}
+			return newFilter(h, expr)
 		}
 		panic(err)
 	}
 
 	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
 	if sqlparser.ContainsAggregation(newExpr) {
-		return &Filter{Source: h, Predicates: []sqlparser.Expr{expr}}
+		return newFilter(h, expr)
 	}
 	h.Source = h.Source.AddPredicate(ctx, newExpr)
 	return h

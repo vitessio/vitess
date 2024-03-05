@@ -34,7 +34,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -185,7 +184,7 @@ func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.Loca
 	}
 
 	// Initialize shard
-	err := clusterInstance.VtctlclientProcess.InitializeShard(KeyspaceName, shardName, tablets[0].Cell, tablets[0].TabletUID)
+	err := clusterInstance.VtctldClientProcess.InitializeShard(KeyspaceName, shardName, tablets[0].Cell, tablets[0].TabletUID)
 	require.NoError(t, err)
 
 	ValidateTopology(t, clusterInstance, true)
@@ -258,10 +257,16 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	return connParams
 }
 
-// RunSQLs is used to run SQL commands directly on the MySQL instance of a vttablet
+// RunSQLs is used to run SQL commands directly on the MySQL instance of a vttablet. All commands are
+// run in a single connection.
 func RunSQLs(ctx context.Context, t *testing.T, sqls []string, tablet *cluster.Vttablet) (results []*sqltypes.Result) {
+	tabletParams := getMysqlConnParam(tablet)
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
 	for _, sql := range sqls {
-		result := RunSQL(ctx, t, sql, tablet)
+		result := execute(t, conn, sql)
 		results = append(results, result)
 	}
 	return results
@@ -300,21 +305,21 @@ func PrsAvoid(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *c
 // PrsWithTimeout runs PRS
 func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, avoid bool, actionTimeout, waitTimeout string) (string, error) {
 	args := []string{
-		"PlannedReparentShard", "--",
-		"--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
 	if actionTimeout != "" {
 		args = append(args, "--action_timeout", actionTimeout)
 	}
 	if waitTimeout != "" {
-		args = append(args, "--wait_replicas_timeout", waitTimeout)
+		args = append(args, "--wait-replicas-timeout", waitTimeout)
 	}
 	if avoid {
-		args = append(args, "--avoid_tablet")
+		args = append(args, "--avoid-primary")
 	} else {
-		args = append(args, "--new_primary")
+		args = append(args, "--new-primary")
 	}
 	args = append(args, tab.Alias)
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
 	return out, err
 }
 
@@ -329,15 +334,15 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 	if timeout != "" {
 		args = append(args, "--action_timeout", timeout)
 	}
-	args = append(args, "EmergencyReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
+	args = append(args, "EmergencyReparentShard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
 	if tab != nil {
-		args = append(args, "--new_primary", tab.Alias)
+		args = append(args, "--new-primary", tab.Alias)
 	}
 	if waitReplicasTimeout != "" {
-		args = append(args, "--wait_replicas_timeout", waitReplicasTimeout)
+		args = append(args, "--wait-replicas-timeout", waitReplicasTimeout)
 	}
 	if preventCrossCellPromotion {
-		args = append(args, "--prevent_cross_cell_promotion=true")
+		args = append(args, "--prevent-cross-cell-promotion")
 	}
 	if len(tabletsToIgnore) != 0 {
 		tabsString := ""
@@ -348,9 +353,9 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 				tabsString = tabsString + "," + vttablet.Alias
 			}
 		}
-		args = append(args, "--ignore_replicas", tabsString)
+		args = append(args, "--ignore-replicas", tabsString)
 	}
-	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
+	return clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
 }
 
 // ErsWithVtctl runs ERS via vtctl binary
@@ -368,10 +373,10 @@ func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 	args := []string{"Validate"}
 
 	if pingTablets {
-		args = append(args, "--", "--ping-tablets=true")
+		args = append(args, "--ping-tablets")
 	}
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
-	require.Empty(t, out)
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
+	require.Contains(t, out, "no issues found")
 	require.NoError(t, err)
 }
 
@@ -392,17 +397,14 @@ func ConfirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 
 // ConfirmOldPrimaryIsHangingAround confirms that the old primary is hanging around
 func ConfirmOldPrimaryIsHangingAround(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Validate")
 	require.Error(t, err)
 	require.Contains(t, out, "already has primary")
 }
 
 // CheckPrimaryTablet makes sure the tablet type is primary, and its health check agrees.
 func CheckPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) {
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
-	require.NoError(t, err)
-	var tabletInfo topodatapb.Tablet
-	err = json2.Unmarshal([]byte(result), &tabletInfo)
+	tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tabletInfo.GetType())
 
@@ -418,10 +420,7 @@ func CheckPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessClust
 
 // isHealthyPrimaryTablet will return if tablet is primary AND healthy.
 func isHealthyPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) bool {
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
-	require.Nil(t, err)
-	var tabletInfo topodatapb.Tablet
-	err = json2.Unmarshal([]byte(result), &tabletInfo)
+	tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.Nil(t, err)
 	if tabletInfo.GetType() != topodatapb.TabletType_PRIMARY {
 		return false
@@ -535,9 +534,9 @@ func ResurrectTablet(ctx context.Context, t *testing.T, clusterInstance *cluster
 
 // DeleteTablet is used to delete the given tablet
 func DeleteTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) {
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"DeleteTablet", "--",
-		"--allow_primary",
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand(
+		"DeleteTablets",
+		"--allow-primary",
 		tab.Alias)
 	require.NoError(t, err)
 }
@@ -623,7 +622,7 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 
 	// make sure the primary health stream says it's the primary too
 	// (health check is disabled on these servers, force it first)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
 	require.NoError(t, err)
 
 	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
@@ -704,7 +703,7 @@ func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
 
 // CheckReplicationStatus checks that the replication for sql and io threads is setup as expected
 func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sqlThreadRunning bool, ioThreadRunning bool) {
-	res := RunSQL(ctx, t, "show slave status;", tablet)
+	res := RunSQL(ctx, t, "show slave status", tablet)
 	if ioThreadRunning {
 		require.Equal(t, "Yes", res.Rows[0][10].ToString())
 	} else {

@@ -20,12 +20,15 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -73,9 +76,15 @@ create table t2 (
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	vte, err := Init(ctx, vtenv.NewTestEnv(), testVSchema, testSchema, "", opts)
+	ts := memorytopo.NewServer(ctx, Cell)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	vte, err := Init(ctx, vtenv.NewTestEnv(), ts, testVSchema, testSchema, "", opts, srvTopoCounts)
 	require.NoError(t, err)
 	defer vte.Stop()
+
+	// Check if the correct schema query is registered.
+	_, found := vte.globalTabletEnv.schemaQueries["SELECT COLUMN_NAME as column_name\n\t\tFROM INFORMATION_SCHEMA.COLUMNS\n\t\tWHERE TABLE_SCHEMA = database() AND TABLE_NAME = 't1'\n\t\tORDER BY ORDINAL_POSITION"]
+	assert.True(t, found)
 
 	sql := "SELECT * FROM t1 INNER JOIN t2 ON t1.id = t2.id"
 
@@ -128,17 +137,22 @@ create table test_partitioned (
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vte := initTest(ctx, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ts := memorytopo.NewServer(ctx, Cell)
+	vte := initTest(ctx, ts, ModeMulti, defaultTestOpts(), &testopts{}, t)
 	defer vte.Stop()
 
 	tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts(), env.CollationEnv())
 	vte.setGlobalTabletEnv(tabletEnv)
-
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tablet := vte.newTablet(ctx, env, defaultTestOpts(), &topodatapb.Tablet{
-		Keyspace: "test_keyspace",
+		Keyspace: "ks_sharded",
 		Shard:    "-80",
-		Alias:    &topodatapb.TabletAlias{},
-	})
+		Alias: &topodatapb.TabletAlias{
+			Cell: Cell,
+		},
+	}, ts, srvTopoCounts)
+
+	time.Sleep(10 * time.Millisecond)
 	se := tablet.tsv.SchemaEngine()
 	tables := se.GetSchema()
 

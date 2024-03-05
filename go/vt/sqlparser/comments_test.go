@@ -18,15 +18,14 @@ package sqlparser
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/vt/sysvars"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sysvars"
 )
 
 func TestSplitComments(t *testing.T) {
@@ -143,15 +142,9 @@ func TestSplitComments(t *testing.T) {
 			gotSQL, gotComments := SplitMarginComments(testCase.input)
 			gotLeadingComments, gotTrailingComments := gotComments.Leading, gotComments.Trailing
 
-			if gotSQL != testCase.outSQL {
-				t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
-			}
-			if gotLeadingComments != testCase.outLeadingComments {
-				t.Errorf("test input: '%s', got LeadingComments\n%+v, want\n%+v", testCase.input, gotLeadingComments, testCase.outLeadingComments)
-			}
-			if gotTrailingComments != testCase.outTrailingComments {
-				t.Errorf("test input: '%s', got TrailingComments\n%+v, want\n%+v", testCase.input, gotTrailingComments, testCase.outTrailingComments)
-			}
+			assert.Equal(t, testCase.outSQL, gotSQL, "SQL mismatch")
+			assert.Equal(t, testCase.outLeadingComments, gotLeadingComments, "LeadingComments mismatch")
+			assert.Equal(t, testCase.outTrailingComments, gotTrailingComments, "TrailingCommints mismatch")
 		})
 	}
 }
@@ -225,10 +218,7 @@ a`,
 	}}
 	for _, testCase := range testCases {
 		gotSQL := StripLeadingComments(testCase.input)
-
-		if gotSQL != testCase.outSQL {
-			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
-		}
+		assert.Equal(t, testCase.outSQL, gotSQL)
 	}
 }
 
@@ -254,10 +244,8 @@ func TestExtractMysqlComment(t *testing.T) {
 	}}
 	for _, testCase := range testCases {
 		gotVersion, gotSQL := ExtractMysqlComment(testCase.input)
+		assert.Equal(t, testCase.outVersion, gotVersion, "version mismatch")
 
-		if gotVersion != testCase.outVersion {
-			t.Errorf("test input: '%s', got version\n%+v, want\n%+v", testCase.input, gotVersion, testCase.outVersion)
-		}
 		if gotSQL != testCase.outSQL {
 			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
 		}
@@ -369,9 +357,8 @@ func TestExtractCommentDirectives(t *testing.T) {
 						require.Nil(t, vals)
 						return
 					}
-					if !reflect.DeepEqual(vals.m, testCase.vals) {
-						t.Errorf("test input: '%v', got vals %T:\n%+v, want %T\n%+v", testCase.input, vals, vals, testCase.vals, testCase.vals)
-					}
+
+					assert.Equal(t, testCase.vals, vals.m)
 				})
 			}
 		})
@@ -543,17 +530,16 @@ func TestGetPriorityFromStatement(t *testing.T) {
 
 	parser := NewTestParser()
 	for _, testCase := range testCases {
-		theThestCase := testCase
-		t.Run(theThestCase.query, func(t *testing.T) {
+		t.Run(testCase.query, func(t *testing.T) {
 			t.Parallel()
-			stmt, err := parser.Parse(theThestCase.query)
+			stmt, err := parser.Parse(testCase.query)
 			assert.NoError(t, err)
 			actualPriority, actualError := GetPriorityFromStatement(stmt)
-			if theThestCase.expectedError != nil {
-				assert.ErrorIs(t, actualError, theThestCase.expectedError)
+			if testCase.expectedError != nil {
+				assert.ErrorIs(t, actualError, testCase.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, theThestCase.expectedPriority, actualPriority)
+				assert.Equal(t, testCase.expectedPriority, actualPriority)
 			}
 		})
 	}
