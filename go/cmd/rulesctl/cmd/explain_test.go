@@ -31,16 +31,20 @@ func TestExplainWithQueryPlanArguement(t *testing.T) {
 	require.NotNil(t, explainCmd)
 	require.Equal(t, "explain", explainCmd.Name())
 
+	originalStdOut := os.Stdout
+	defer func() {
+		os.Stdout = originalStdOut
+	}()
 	// Redirect stdout to a buffer
-	rescueStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
 	explainCmd.Run(&cobra.Command{}, []string{"query-plans"})
 
-	w.Close()
-	got, _ := io.ReadAll(r)
-	os.Stdout = rescueStdout
+	err := w.Close()
+	require.NoError(t, err)
+	got, err := io.ReadAll(r)
+	require.NoError(t, err)
 
 	expected := "Query Plans!"
 	require.Contains(t, string(got), expected)
@@ -53,15 +57,20 @@ func TestExplainWithRandomArguement(t *testing.T) {
 	require.Equal(t, "explain", explainCmd.Name())
 
 	// Redirect stdout to a buffer
-	rescueStdout := os.Stdout
+	originalStdOut := os.Stdout
+	defer func() {
+		os.Stdout = originalStdOut
+	}()
+	// Redirect stdout to a buffer
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
 	explainCmd.Run(&cobra.Command{}, []string{"random"})
 
-	w.Close()
-	got, _ := io.ReadAll(r)
-	os.Stdout = rescueStdout
+	err := w.Close()
+	require.NoError(t, err)
+	got, err := io.ReadAll(r)
+	require.NoError(t, err)
 
 	expected := "I don't know anything about"
 	require.Contains(t, string(got), expected)

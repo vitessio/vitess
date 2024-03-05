@@ -31,17 +31,21 @@ func TestRemoveOld(t *testing.T) {
 	require.NotNil(t, removeCmd)
 	require.Equal(t, "remove-rule", removeCmd.Name())
 
+	originalStdOut := os.Stdout
+	defer func() {
+		os.Stdout = originalStdOut
+	}()
 	// Redirect stdout to a buffer
-	rescueStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
 	configFile = "../common/testdata/rules.json"
 	removeCmd.Run(&cobra.Command{}, []string{""})
 
-	w.Close()
-	got, _ := io.ReadAll(r)
-	os.Stdout = rescueStdout
+	err := w.Close()
+	require.NoError(t, err)
+	got, err := io.ReadAll(r)
+	require.NoError(t, err)
 
 	expected := "No rule found:"
 	require.Contains(t, string(got), expected)
@@ -52,6 +56,15 @@ func TestRemove(t *testing.T) {
 	require.NotNil(t, cmd)
 	require.Equal(t, "remove-rule", cmd.Name())
 	configFile = "./testdata/rules.json"
+	defer func() {
+		_ = os.WriteFile(configFile, []byte(`[
+    {
+        "Description": "Some value",
+        "Name": "Name"
+    }
+]
+`), 0777)
+	}()
 
 	tests := []struct {
 		name           string
@@ -74,7 +87,6 @@ func TestRemove(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.args != nil {
 				cmd.SetArgs(tt.args)
@@ -82,16 +94,20 @@ func TestRemove(t *testing.T) {
 				require.NoError(t, err)
 			}
 
+			originalStdOut := os.Stdout
+			defer func() {
+				os.Stdout = originalStdOut
+			}()
 			// Redirect stdout to a buffer
-			rescueStdout := os.Stdout
 			r, w, _ := os.Pipe()
 			os.Stdout = w
 
 			cmd.Run(&cobra.Command{}, []string{})
 
-			w.Close()
-			got, _ := io.ReadAll(r)
-			os.Stdout = rescueStdout
+			err := w.Close()
+			require.NoError(t, err)
+			got, err := io.ReadAll(r)
+			require.NoError(t, err)
 
 			require.Contains(t, string(got), tt.expectedOutput)
 		})

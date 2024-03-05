@@ -37,23 +37,75 @@ func TestAdd(t *testing.T) {
 		expectedOutput string
 	}{
 		{
-			name:           "Action fail",
-			args:           []string{"--dry-run=true", "--name=Rule", `--description="New rules that will be added to the file"`, "--action=fail", "--plan=Select"},
-			expectedOutput: "[\n  {\n    \"Description\": \"Some value\",\n    \"Name\": \"Name\",\n    \"Action\": \"FAIL\"\n  },\n  {\n    \"Description\": \"\\\"New rules that will be added to the file\\\"\",\n    \"Name\": \"Rule\",\n    \"Plans\": [\n      \"Select\"\n    ],\n    \"Action\": \"FAIL\"\n  }\n]\n",
+			name: "Action fail",
+			args: []string{"--dry-run=true", "--name=Rule", `--description="New rules that will be added to the file"`, "--action=fail", "--plan=Select"},
+			expectedOutput: `[
+  {
+    "Description": "Some value",
+    "Name": "Name",
+    "Action": "FAIL"
+  },
+  {
+    "Description": "\"New rules that will be added to the file\"",
+    "Name": "Rule",
+    "Plans": [
+      "Select"
+    ],
+    "Action": "FAIL"
+  }
+]
+`,
 		},
 		{
-			name:           "Action fail_retry",
-			args:           []string{"--dry-run=true", "--name=Rule", `--description="New rules that will be added to the file"`, "--action=fail_retry", "--plan=Select"},
-			expectedOutput: "[\n  {\n    \"Description\": \"Some value\",\n    \"Name\": \"Name\",\n    \"Action\": \"FAIL\"\n  },\n  {\n    \"Description\": \"\\\"New rules that will be added to the file\\\"\",\n    \"Name\": \"Rule\",\n    \"Plans\": [\n      \"Select\",\n      \"Select\"\n    ],\n    \"Action\": \"FAIL_RETRY\"\n  }\n]\n",
+			name: "Action fail_retry",
+			args: []string{"--dry-run=true", "--name=Rule", `--description="New rules that will be added to the file"`, "--action=fail_retry", "--plan=Select"},
+			expectedOutput: `[
+  {
+    "Description": "Some value",
+    "Name": "Name",
+    "Action": "FAIL"
+  },
+  {
+    "Description": "\"New rules that will be added to the file\"",
+    "Name": "Rule",
+    "Plans": [
+      "Select",
+      "Select"
+    ],
+    "Action": "FAIL_RETRY"
+  }
+]
+`,
 		},
 		{
-			name:           "Action continue with query",
-			args:           []string{"--dry-run=true", "--name=Rule", `--description="New rules that will be added to the file"`, "--action=continue", "--plan=Select", "--query=secret", "--leading-comment=None", "--trailing-comment=Yoho", "--table=Temp"},
-			expectedOutput: "[\n  {\n    \"Description\": \"Some value\",\n    \"Name\": \"Name\",\n    \"Action\": \"FAIL\"\n  },\n  {\n    \"Description\": \"\\\"New rules that will be added to the file\\\"\",\n    \"Name\": \"Rule\",\n    \"Query\": \"secret\",\n    \"LeadingComment\": \"None\",\n    \"TrailingComment\": \"Yoho\",\n    \"Plans\": [\n      \"Select\",\n      \"Select\",\n      \"Select\"\n    ],\n    \"TableNames\": [\n      \"Temp\"\n    ]\n  }\n]\n",
+			name: "Action continue with query",
+			args: []string{"--dry-run=true", "--name=Rule", `--description="New rules that will be added to the file"`, "--action=continue", "--plan=Select", "--query=secret", "--leading-comment=None", "--trailing-comment=Yoho", "--table=Temp"},
+			expectedOutput: `[
+  {
+    "Description": "Some value",
+    "Name": "Name",
+    "Action": "FAIL"
+  },
+  {
+    "Description": "\"New rules that will be added to the file\"",
+    "Name": "Rule",
+    "Query": "secret",
+    "LeadingComment": "None",
+    "TrailingComment": "Yoho",
+    "Plans": [
+      "Select",
+      "Select",
+      "Select"
+    ],
+    "TableNames": [
+      "Temp"
+    ]
+  }
+]
+`,
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.args != nil {
 				cmd.SetArgs(tt.args)
@@ -61,18 +113,21 @@ func TestAdd(t *testing.T) {
 				require.NoError(t, err)
 			}
 
+			originalStdOut := os.Stdout
+			defer func() {
+				os.Stdout = originalStdOut
+			}()
 			// Redirect stdout to a buffer
-			rescueStdout := os.Stdout
 			r, w, _ := os.Pipe()
 			os.Stdout = w
 
 			cmd.Run(&cobra.Command{}, []string{})
 
-			w.Close()
-			got, _ := io.ReadAll(r)
-			os.Stdout = rescueStdout
-
-			require.Contains(t, string(got), tt.expectedOutput)
+			err := w.Close()
+			require.NoError(t, err)
+			got, err := io.ReadAll(r)
+			require.NoError(t, err)
+			require.EqualValues(t, tt.expectedOutput, string(got))
 		})
 	}
 }

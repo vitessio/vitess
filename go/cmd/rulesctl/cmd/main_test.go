@@ -24,16 +24,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(t *testing.T) {
+func TestMainFunction(t *testing.T) {
 	rootCmd := Main()
 	require.NotNil(t, rootCmd)
 	require.Equal(t, "rulesctl", rootCmd.Name())
 
+	originalStdOut := os.Stdout
+	defer func() {
+		os.Stdout = originalStdOut
+	}()
 	// Redirect stdout to a buffer
-	rescueStdout := os.Stdout
-	t.Cleanup(func() {
-		os.Stdout = rescueStdout
-	})
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
@@ -43,9 +43,18 @@ func TestMain(t *testing.T) {
 	err := rootCmd.Execute()
 	require.NoError(t, err)
 
-	w.Close()
-	got, _ := io.ReadAll(r)
+	err = w.Close()
+	require.NoError(t, err)
+	got, err := io.ReadAll(r)
+	require.NoError(t, err)
 
-	expected := "[\n  {\n    \"Description\": \"Some value\",\n    \"Name\": \"Name\",\n    \"Action\": \"FAIL\"\n  }\n]\n"
-	require.Equal(t, string(got), expected)
+	expected := `[
+  {
+    "Description": "Some value",
+    "Name": "Name",
+    "Action": "FAIL"
+  }
+]
+`
+	require.EqualValues(t, expected, string(got))
 }
