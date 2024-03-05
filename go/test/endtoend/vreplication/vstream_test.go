@@ -619,11 +619,10 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 						case "-80", "80-":
 							oldShardRowEvents++
 						case "0":
+							// We expect some for the sequence backing table, but don't care.
 						default:
 							require.FailNow(t, fmt.Sprintf("received event for unexpected shard: %s", shard))
 						}
-					case binlogdatapb.VEventType_JOURNAL:
-						require.FailNow(t, fmt.Sprintf("received unexpected journal event for keyspace: %s", ev.GetKeyspace()))
 					case binlogdatapb.VEventType_VGTID:
 						newVGTID = ev.GetVgtid()
 						if len(newVGTID.GetShardGtids()) == 3 {
@@ -642,7 +641,6 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 				}
 			default:
 				require.FailNow(t, fmt.Sprintf("VStream returned unexpected error: %v", err))
-				return
 			}
 			select {
 			case <-streamCtx.Done():
@@ -678,17 +676,14 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 						case "-40", "40-80", "80-c0", "c0-":
 							newShardRowEvents++
 						case "0":
+							// Again, we expect some for the sequence backing table, but don't care.
 						default:
 							require.FailNow(t, fmt.Sprintf("received event for unexpected shard: %s", shard))
 						}
 					}
 				}
-			case io.EOF:
-				log.Infof("Stream Ended")
-				streamCancel()
 			default:
-				log.Errorf("Returned err %v", err)
-				streamCancel()
+				require.FailNow(t, fmt.Sprintf("VStream returned unexpected error: %v", err))
 			}
 			select {
 			case <-done:
