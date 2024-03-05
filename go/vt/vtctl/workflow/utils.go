@@ -113,10 +113,6 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 			}{{
 				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(primary.DbName()), encodeString(workflow)),
 				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias),
-			}, { // temporarily commenting this, since it doesn't allow to create a new workflow if there is a frozen workflow. Need to check if we really need this validation.
-				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN' and workflow_sub_type != %d", encodeString(primary.DbName()), binlogdatapb.VReplicationWorkflowSubType_Partial),
-				fmt.Sprintf("found previous frozen workflow on tablet %v, please review and delete it first before creating a new workflow",
-					primary.Alias),
 			}}
 			for _, validation := range validations {
 				p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, validation.query)

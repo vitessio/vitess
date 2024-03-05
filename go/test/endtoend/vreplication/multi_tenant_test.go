@@ -30,9 +30,9 @@ const (
 	sourceAliasKeyspaceTemplate = "sourceAlias_tenant%d"
 	targetKeyspaceName          = "multi_tenant"
 
-	numTenants                 = 30
-	numInitialRowsPerTenant    = 10
-	numAdditionalRowsPerTenant = 10
+	numTenants                 = 50
+	numInitialRowsPerTenant    = 100
+	numAdditionalRowsPerTenant = 100
 	baseInitialTabletId        = 1000
 	tabletIdStep               = 100
 	maxRandomDelaySeconds      = 5
