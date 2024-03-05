@@ -26,10 +26,10 @@ const (
 	tenantMigrationStatusMigrating
 	tenantMigrationStatusMigrated
 
-	numTenants             = int64(30)
-	sourceKeyspaceTemplate = "unmanaged_tenant%d"
-	userKeyspaceTemplate   = "userks_tenant%d"
-	targetKeyspaceName     = "multi_tenant"
+	numTenants                  = int64(30)
+	sourceKeyspaceTemplate      = "unmanaged_tenant%d"
+	sourceAliasKeyspaceTemplate = "sourceAlias_tenant%d"
+	targetKeyspaceName          = "multi_tenant"
 )
 
 var (
@@ -67,8 +67,8 @@ func getSourceKeyspace(tenantId int64) string {
 	return fmt.Sprintf(sourceKeyspaceTemplate, tenantId)
 }
 
-func getUserKeyspace(tenantId int64) string {
-	return fmt.Sprintf(userKeyspaceTemplate, tenantId)
+func getSourceAliasKeyspace(tenantId int64) string {
+	return fmt.Sprintf(sourceAliasKeyspaceTemplate, tenantId)
 }
 
 func printKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, msg string) {
@@ -162,24 +162,24 @@ func (mtm *multiTenantMigration) getLastID(tenantId int64) int64 {
 	return mtm.lastIDs[tenantId]
 }
 
-func (mtm *multiTenantMigration) initTenantData(t *testing.T, tenantId int64, userKeyspace string) {
-	mtm.insertSomeData(t, tenantId, userKeyspace, 10)
+func (mtm *multiTenantMigration) initTenantData(t *testing.T, tenantId int64, sourceAliasKeyspace string) {
+	mtm.insertSomeData(t, tenantId, sourceAliasKeyspace, 10)
 }
 
 func (mtm *multiTenantMigration) setup(tenantId int64) {
 	log.Infof("Creating MoveTables for tenant %d", tenantId)
 	mtm.setLastID(tenantId, 0)
 	sourceKeyspace := getSourceKeyspace(tenantId)
-	userKeyspace := getUserKeyspace(tenantId)
+	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
 	_, err := vc.AddKeyspace(mtm.t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", mtVSchema, mtSchema, 1, 0, int(1000+tenantId*100), nil)
 	require.NoError(mtm.t, err)
-	updateKeyspaceRoutingRules(mtm.t, vc, userKeyspace, sourceKeyspace)
-	mtm.initTenantData(mtm.t, tenantId, userKeyspace)
+	updateKeyspaceRoutingRules(mtm.t, vc, sourceAliasKeyspace, sourceKeyspace)
+	mtm.initTenantData(mtm.t, tenantId, sourceAliasKeyspace)
 }
 
 func (mtm *multiTenantMigration) start(tenantId int64) {
 	sourceKeyspace := getSourceKeyspace(tenantId)
-	userKeyspace := getUserKeyspace(tenantId)
+	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
 	mtm.setTenantMigrationStatus(tenantId, tenantMigrationStatusMigrating)
 	mt := newVtctldMoveTables(&moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
@@ -192,34 +192,34 @@ func (mtm *multiTenantMigration) start(tenantId int64) {
 		createFlags: []string{
 			"--additional-filter", fmt.Sprintf("%s=%d", mtm.tenantIdColumnName, tenantId),
 			"--use-keyspace-routing-rules",
-			"--source-keyspace-alias", userKeyspace,
+			"--source-keyspace-alias", sourceAliasKeyspace,
 		},
 	})
 	mtm.setActiveMoveTables(tenantId, mt)
 	mt.Create()
 }
 
-func (mtm *multiTenantMigration) insertSomeData(t *testing.T, tenantId int64, userKeyspace string, numRows int64) {
+func (mtm *multiTenantMigration) insertSomeData(t *testing.T, tenantId int64, sourceAliasKeyspace string, numRows int64) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	idx := mtm.getLastID(tenantId)
 	for i := idx + 1; i <= idx+numRows; i++ {
 		execVtgateQuery(t, vtgateConn, "",
-			fmt.Sprintf("insert into %s.t1(id, tenant_id) values(%d, %d)", userKeyspace, i, tenantId))
+			fmt.Sprintf("insert into %s.t1(id, tenant_id) values(%d, %d)", sourceAliasKeyspace, i, tenantId))
 	}
 	mtm.setLastID(tenantId, idx+numRows)
 }
 
 func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 	t := mtm.t
-	userKeyspace := getUserKeyspace(tenantId)
+	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
 	mt := mtm.activeMoveTables[tenantId]
 	ksWorkflow := fmt.Sprintf("%s.%s", mtm.targetKeyspace, mt.workflowName)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-	mtm.insertSomeData(t, tenantId, userKeyspace, 10)
+	mtm.insertSomeData(t, tenantId, sourceAliasKeyspace, 10)
 	mt.SwitchReadsAndWrites()
 	//printKeyspaceRoutingRules(t, vc, "After MoveTables SwitchTraffic")
-	mtm.insertSomeData(t, tenantId, userKeyspace, 10)
+	mtm.insertSomeData(t, tenantId, sourceAliasKeyspace, 10)
 }
 
 func (mtm *multiTenantMigration) complete(tenantId int64) {
