@@ -960,7 +960,7 @@ func (vs *vstream) keyspaceHasBeenResharded(ctx context.Context, keyspace string
 	for _, s := range ksShardGTIDs {
 		shard := shards[s.GetShard()]
 		if shard == nil {
-			return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard provided in VGTID, %s, not found in keyspace %s", s.GetShard(), keyspace)
+			return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard provided in VGTID, %s, not found in the %s keyspace", s.GetShard(), keyspace)
 		}
 		if !shard.GetIsPrimaryServing() {
 			reshardPossible = true
