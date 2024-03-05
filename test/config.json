@@ -1036,7 +1036,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "MultiTenant"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_cellalias",
+			"Shard": "vreplication_multi_tenant",
 			"RetryMax": 0,
 			"Tags": []
 		},

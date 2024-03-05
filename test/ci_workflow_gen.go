@@ -118,6 +118,7 @@ var (
 		"vreplication_partial_movetables_and_materialize",
 		"vreplication_foreign_key_stress",
 		"vreplication_migrate_vdiff2_convert_tz",
+		"vreplication_multi_tenant",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 		"vtgate_partial_keyspace",
