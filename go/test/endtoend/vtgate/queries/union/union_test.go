@@ -57,7 +57,7 @@ func TestUnionDistinct(t *testing.T) {
 	mcmp.Exec("insert into t2(id3, id4) values (2, 3), (3, 4), (4,4), (5,5)")
 
 	for _, workload := range []string{"oltp", "olap"} {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			mcmp.AssertMatches("select 1 union select null", "[[INT64(1)] [NULL]]")
 			mcmp.AssertMatches("select null union select null", "[[NULL]]")
@@ -69,10 +69,7 @@ func TestUnionDistinct(t *testing.T) {
 			mcmp.AssertMatchesNoOrder("select id1 from t1 where id1 = 1 union select 452 union select id1 from t1 where id1 = 4", "[[INT64(1)] [INT64(452)] [INT64(4)]]")
 			mcmp.AssertMatchesNoOrder("select id1, id2 from t1 union select 827, 452 union select id3,id4 from t2",
 				"[[INT64(4) INT64(4)] [INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(827) INT64(452)] [INT64(2) INT64(3)] [INT64(3) INT64(4)] [INT64(5) INT64(5)]]")
-			t.Run("skipped for now", func(t *testing.T) {
-				t.Skip()
-				mcmp.AssertMatches("select 1 from dual where 1 IN (select 1 as col union select 2)", "[[INT64(1)]]")
-			})
+			mcmp.AssertMatches("select 1 from dual where 1 IN (select 1 as col union select 2)", "[[INT64(1)]]")
 			if utils.BinaryIsAtLeastAtVersion(19, "vtgate") {
 				mcmp.AssertMatches(`SELECT 1 from t1 UNION SELECT 2 from t1`, `[[INT64(1)] [INT64(2)]]`)
 				mcmp.AssertMatches(`SELECT 5 from t1 UNION SELECT 6 from t1`, `[[INT64(5)] [INT64(6)]]`)
@@ -97,7 +94,7 @@ func TestUnionAll(t *testing.T) {
 	mcmp.Exec("insert into t2(id3, id4) values(3, 3), (4, 4)")
 
 	for _, workload := range []string{"oltp", "olap"} {
-		t.Run(workload, func(t *testing.T) {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			// union all between two selectuniqueequal
 			mcmp.AssertMatches("select id1 from t1 where id1 = 1 union all select id1 from t1 where id1 = 4", "[[INT64(1)]]")

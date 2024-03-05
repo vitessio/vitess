@@ -59,10 +59,12 @@ type vrStats struct {
 	mu          sync.Mutex
 	isOpen      bool
 	controllers map[int32]*controller
+
+	ThrottledCount *stats.Counter
 }
 
 func (st *vrStats) register() {
-
+	st.ThrottledCount = stats.NewCounter("", "")
 	stats.NewGaugeFunc("VReplicationStreamCount", "Number of vreplication streams", st.numControllers)
 	stats.NewGaugeFunc("VReplicationLagSecondsMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
 	stats.NewStringMapFuncWithMultiLabels(
@@ -502,6 +504,29 @@ func (st *vrStats) register() {
 			return result
 		})
 
+	stats.NewCounterFunc(
+		"VReplicationThrottledCountTotal",
+		"The total number of times that vreplication has been throttled",
+		func() int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			return st.ThrottledCount.Get()
+		})
+	stats.NewCountersFuncWithMultiLabels(
+		"VReplicationThrottledCounts",
+		"The number of times vreplication was throttled by workflow, id, throttler (trx or tablet), and the sub-component that was throttled",
+		[]string{"workflow", "id", "throttler", "component"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64)
+			for _, ct := range st.controllers {
+				for key, val := range ct.blpStats.ThrottledCounts.Counts() {
+					result[fmt.Sprintf("%s.%d.%s", ct.workflow, ct.id, key)] = val
+				}
+			}
+			return result
+		})
 }
 
 func (st *vrStats) numControllers() int64 {

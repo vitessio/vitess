@@ -32,12 +32,6 @@ type (
 		Index     int
 		Type      sqltypes.Type
 		Collation collations.ID
-
-		// dynamicTypeOffset is set when the type of this bind variable cannot be calculated
-		// at translation time. Since expressions with dynamic types cannot be compiled ahead of time,
-		// compilation will be delayed until the expression is first executed with the bind variables
-		// sent by the user. See: UntypedExpr
-		dynamicTypeOffset int
 	}
 )
 

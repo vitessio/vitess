@@ -48,7 +48,6 @@ func TestConfigParse(t *testing.T) {
 		},
 		OltpReadPool: ConnPoolConfig{
 			Size:        16,
-			MaxWaiters:  40,
 			Timeout:     10 * time.Second,
 			IdleTimeout: 20 * time.Second,
 			MaxLifetime: 50 * time.Second,
@@ -86,7 +85,6 @@ oltp: {}
 oltpReadPool:
   idleTimeoutSeconds: 20s
   maxLifetimeSeconds: 50s
-  maxWaiters: 40
   size: 16
   timeoutSeconds: 10s
 replicationTracker: {}
@@ -109,7 +107,6 @@ txPool: {}
 oltpReadPool:
   size: 16
   idleTimeoutSeconds: 20s
-  maxWaiters: 40
   maxLifetimeSeconds: 50s
 `)
 	gotCfg := cfg
@@ -126,7 +123,8 @@ func TestDefaultConfig(t *testing.T) {
 	want := `consolidator: enable
 consolidatorStreamQuerySize: 2097152
 consolidatorStreamTotalSize: 134217728
-gracePeriods: {}
+gracePeriods:
+  shutdownSeconds: 3s
 healthcheck:
   degradedThresholdSeconds: 30s
   intervalSeconds: 20s
@@ -148,7 +146,6 @@ oltp:
   txTimeoutSeconds: 30s
 oltpReadPool:
   idleTimeoutSeconds: 30m0s
-  maxWaiters: 5000
   size: 16
 queryCacheDoorkeeper: true
 queryCacheMemory: 33554432
@@ -164,7 +161,6 @@ signalWhenSchemaChange: true
 streamBufferSize: 32768
 txPool:
   idleTimeoutSeconds: 30m0s
-  maxWaiters: 5000
   size: 20
   timeoutSeconds: 1s
 `
@@ -178,7 +174,6 @@ func TestClone(t *testing.T) {
 	cfg1 := &TabletConfig{
 		OltpReadPool: ConnPoolConfig{
 			Size:        16,
-			MaxWaiters:  40,
 			Timeout:     10 * time.Second,
 			IdleTimeout: 20 * time.Second,
 			MaxLifetime: 50 * time.Second,
@@ -424,7 +419,6 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 

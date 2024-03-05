@@ -205,8 +205,6 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1280,8 +1278,6 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			durability, err := GetDurabilityPolicy(tt.durability)
 			require.NoError(t, err)
@@ -1377,8 +1373,6 @@ func TestReplicaWasRunning(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1465,8 +1459,6 @@ func TestSQLThreadWasRunning(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1563,8 +1555,6 @@ func TestWaitForRelayLogsToApply(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

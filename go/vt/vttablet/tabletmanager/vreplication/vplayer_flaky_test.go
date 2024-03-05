@@ -186,7 +186,6 @@ func TestPlayerInvisibleColumns(t *testing.T) {
 		output := qh.Expect(tcases.output)
 		expectNontxQueries(t, output)
 		time.Sleep(1 * time.Second)
-		log.Flush()
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
@@ -2901,7 +2900,7 @@ func TestPlayerInvalidDates(t *testing.T) {
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
 	pos := primaryPosition(t)
-	execStatements(t, []string{"set sql_mode='';insert into src1 values(1, '0000-00-00');set sql_mode='STRICT_TRANS_TABLES';"})
+	execStatements(t, []string{"set sql_mode=''", "insert into src1 values(1, '0000-00-00')", "set sql_mode='STRICT_TRANS_TABLES'"})
 	env.SchemaEngine.Reload(context.Background())
 
 	// default mysql flavor allows invalid dates: so disallow explicitly for this test
@@ -3094,7 +3093,6 @@ func TestPlayerNoBlob(t *testing.T) {
 		output := qh.Expect(tcases.output)
 		expectNontxQueries(t, output)
 		time.Sleep(1 * time.Second)
-		log.Flush()
 		if tcases.table != "" {
 			expectData(t, tcases.table, tcases.data)
 		}
@@ -3333,7 +3331,6 @@ func TestPlayerBatchMode(t *testing.T) {
 			}
 			expectNontxQueries(t, output)
 			time.Sleep(1 * time.Second)
-			log.Flush()
 			if tcase.table != "" {
 				expectData(t, tcase.table, tcase.data)
 			}

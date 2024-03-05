@@ -138,7 +138,7 @@ func PanicHandler(t testing.TB) {
 
 // ListBackups Lists back preset in shard
 func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, error) {
-	output, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("ListBackups", shardKsName)
+	output, err := cluster.VtctldClientProcess.ExecuteCommandWithOutput("GetBackups", shardKsName)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func (cluster LocalProcessCluster) RemoveAllBackups(t *testing.T, shardKsName st
 	backups, err := cluster.ListBackups(shardKsName)
 	require.Nil(t, err)
 	for _, backup := range backups {
-		cluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
+		cluster.VtctldClientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
 	}
 }
 

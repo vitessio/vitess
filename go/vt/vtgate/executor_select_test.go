@@ -1932,7 +1932,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, col2, weight_string(col2) from `user` order by col2 desc",
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by `user`.col2 desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2005,7 +2005,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, textcol, weight_string(textcol) from `user` order by textcol desc",
+		Sql:           "select col1, textcol, weight_string(textcol) from `user` order by `user`.textcol desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2071,7 +2071,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id, col, weight_string(col) from `user` order by col desc",
+		Sql:           "select id, col, weight_string(col) from `user` order by `user`.col desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2133,7 +2133,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id, textcol, weight_string(textcol) from `user` order by textcol desc",
+		Sql:           "select id, textcol, weight_string(textcol) from `user` order by `user`.textcol desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2329,7 +2329,7 @@ func TestSelectScatterLimit(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, col2, weight_string(col2) from `user` order by col2 desc limit :__upper_limit",
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by `user`.col2 desc limit :__upper_limit",
 		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
 	}}
 	for _, conn := range conns {
@@ -2401,7 +2401,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, col2, weight_string(col2) from `user` order by col2 desc limit :__upper_limit",
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by `user`.col2 desc limit :__upper_limit",
 		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
 	}}
 	for _, conn := range conns {

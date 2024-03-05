@@ -27,7 +27,7 @@ import (
 func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
 	c.factory.callstats.Add([]string{"Watch"}, 1)
 
-	if c.closed {
+	if c.closed.Load() {
 		return nil, nil, ErrConnectionClosed
 	}
 
@@ -79,7 +79,7 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
 	c.factory.callstats.Add([]string{"WatchRecursive"}, 1)
 
-	if c.closed {
+	if c.closed.Load() {
 		return nil, nil, ErrConnectionClosed
 	}
 

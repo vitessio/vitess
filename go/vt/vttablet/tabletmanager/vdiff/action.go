@@ -63,7 +63,15 @@ var (
 	}
 )
 
-func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (resp *tabletmanagerdatapb.VDiffResponse, err error) {
+	defer func() {
+		if err != nil {
+			globalStats.ErrorCount.Add(1)
+		}
+	}()
+	if req == nil {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "nil vdiff request")
+	}
 	if !vde.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vdiff engine is closed")
 	}
@@ -71,7 +79,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vdiff engine is still trying to open")
 	}
 
-	resp := &tabletmanagerdatapb.VDiffResponse{
+	resp = &tabletmanagerdatapb.VDiffResponse{
 		Id:     0,
 		Output: nil,
 	}
@@ -368,6 +376,9 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		}
 		controller.Stop()
 		delete(vde.controllers, controller.id)
+		globalStats.mu.Lock()
+		defer globalStats.mu.Unlock()
+		delete(globalStats.controllers, controller.id)
 	}
 
 	switch req.ActionArg {

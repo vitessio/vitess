@@ -16,6 +16,8 @@ limitations under the License.
 %{
 package sqlparser
 
+import "vitess.io/vitess/go/ptr"
+
 func setParseTree(yylex yyLexer, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
@@ -191,6 +193,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   partitionByType PartitionByType
   definer 	*Definer
   integer 	int
+  intPtr *int
 
   JSONTableExpr	*JSONTableExpr
   jtColumnDefinition *JtColumnDefinition
@@ -466,9 +469,9 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
-%type <selectExprs> select_expression_list select_expression_list_opt
+%type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
-%type <strs> select_options flush_option_list
+%type <strs> select_options select_options_opt flush_option_list
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
@@ -546,7 +549,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <boolean> array_opt
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt partition_comment partition_data_directory partition_index_directory
+%type <literal> partition_comment partition_data_directory partition_index_directory
+%type <intPtr> length_opt
 %type <integer> func_datetime_precision
 %type <columnCharset> charset_opt
 %type <str> collate_opt
@@ -906,11 +910,11 @@ vstream_statement:
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
 query_primary:
 //  1         2            3              4                    5             6                7           8            9           10
-  SELECT comment_opt select_options select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
+  SELECT comment_opt select_options_opt select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
     $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), GroupBy($8), NewWhere(HavingClause, $9), $10)
   }
-| SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
+| SELECT comment_opt select_options_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
     $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8), $9)
   }
@@ -1473,14 +1477,12 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt NULL
   {
-    val := true
-    $1.Null = &val
+    $1.Null = ptr.Of(true)
     $$ = $1
   }
 | column_attribute_list_opt NOT NULL
   {
-    val := false
-    $1.Null = &val
+    $1.Null = ptr.Of(false)
     $$ = $1
   }
 | column_attribute_list_opt DEFAULT openb expression closeb
@@ -1534,14 +1536,12 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt VISIBLE
   {
-    val := false
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(false)
     $$ = $1
   }
 | column_attribute_list_opt INVISIBLE
   {
-    val := true
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(true)
     $$ = $1
   }
 | column_attribute_list_opt ENGINE_ATTRIBUTE equal_opt STRING
@@ -1588,14 +1588,12 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt NULL
   {
-    val := true
-    $1.Null = &val
+    $1.Null = ptr.Of(true)
     $$ = $1
   }
 | generated_column_attribute_list_opt NOT NULL
   {
-    val := false
-    $1.Null = &val
+    $1.Null = ptr.Of(false)
     $$ = $1
   }
 | generated_column_attribute_list_opt COMMENT_KEYWORD STRING
@@ -1610,14 +1608,12 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt VISIBLE
   {
-    val := false
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(false)
     $$ = $1
   }
 | generated_column_attribute_list_opt INVISIBLE
   {
-    val := true
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(true)
     $$ = $1
   }
 
@@ -2232,7 +2228,7 @@ length_opt:
   }
 | '(' INTEGRAL ')'
   {
-    $$ = NewIntLiteral($2)
+    $$ = ptr.Of(convertStringToInt($2))
   }
 
 double_length_opt:
@@ -2242,8 +2238,8 @@ double_length_opt:
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
-        Scale: NewIntLiteral($4),
+        Length: ptr.Of(convertStringToInt($2)),
+        Scale: ptr.Of(convertStringToInt($4)),
     }
   }
 
@@ -2255,7 +2251,7 @@ double_length_opt
 | '(' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
+        Length: ptr.Of(convertStringToInt($2)),
     }
   }
 
@@ -2266,14 +2262,14 @@ decimal_length_opt:
 | '(' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
+        Length: ptr.Of(convertStringToInt($2)),
     }
   }
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
-        Scale: NewIntLiteral($4),
+        Length: ptr.Of(convertStringToInt($2)),
+        Scale: ptr.Of(convertStringToInt($4)),
     }
   }
 
@@ -3021,13 +3017,11 @@ alter_option:
   }
 | ALTER column_opt column_name SET VISIBLE
   {
-    val := false
-    $$ = &AlterColumn{Column: $3, Invisible:&val}
+    $$ = &AlterColumn{Column: $3, Invisible: ptr.Of(false)}
   }
 | ALTER column_opt column_name SET INVISIBLE
   {
-    val := true
-    $$ = &AlterColumn{Column: $3, Invisible:&val}
+    $$ = &AlterColumn{Column: $3, Invisible: ptr.Of(true)}
   }
 | ALTER CHECK ci_identifier enforced
   {
@@ -3772,14 +3766,12 @@ partition_definition_attribute_list_opt:
   }
 | partition_definition_attribute_list_opt partition_max_rows
   {
-    val := $2
-    $1.MaxRows = &val
+    $1.MaxRows = ptr.Of($2)
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_min_rows
   {
-    val := $2
-    $1.MinRows = &val
+    $1.MinRows = ptr.Of($2)
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_tablespace_name
@@ -3840,14 +3832,12 @@ subpartition_definition_attribute_list_opt:
   }
 | subpartition_definition_attribute_list_opt partition_max_rows
   {
-    val := $2
-    $1.MaxRows = &val
+    $1.MaxRows = ptr.Of($2)
     $$ = $1
   }
 | subpartition_definition_attribute_list_opt partition_min_rows
   {
-    val := $2
-    $1.MinRows = &val
+    $1.MinRows = ptr.Of($2)
     $$ = $1
   }
 | subpartition_definition_attribute_list_opt partition_tablespace_name
@@ -4803,34 +4793,23 @@ deallocate_statement:
     $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name: $4}
   }
 
-select_expression_list_opt:
+select_options_opt:
   {
     $$ = nil
   }
-| select_expression_list
+| select_options
   {
     $$ = $1
   }
 
 select_options:
-  {
-    $$ = nil
-  }
-| select_option
+select_option
   {
     $$ = []string{$1}
   }
-| select_option select_option // TODO: figure out a way to do this recursively instead.
-  {                           // TODO: This is a hack since I couldn't get it to work in a nicer way. I got 'conflicts: 8 shift/reduce'
-    $$ = []string{$1, $2}
-  }
-| select_option select_option select_option
+| select_options select_option
   {
-    $$ = []string{$1, $2, $3}
-  }
-| select_option select_option select_option select_option
-  {
-    $$ = []string{$1, $2, $3, $4}
+    $$ = append($1, $2)
   }
 
 select_option:
@@ -5225,6 +5204,14 @@ index_hint:
 | FORCE index_or_key index_hint_for_opt openb index_list closeb
   {
     $$ = &IndexHint{Type: ForceOp, ForType: $3, Indexes: $5}
+  }
+| USE VINDEX openb index_list closeb
+  {
+    $$ = &IndexHint{Type: UseVindexOp, Indexes: $4 }
+  }
+| IGNORE VINDEX openb index_list closeb
+  {
+    $$ = &IndexHint{Type: IgnoreVindexOp, Indexes: $4}
   }
 
 index_hint_for_opt:
@@ -5864,11 +5851,11 @@ expression_list:
   introduce side effects due to being a simple identifier
 */
 function_call_generic:
-  sql_id openb select_expression_list_opt closeb
+  sql_id openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
-| table_id '.' reserved_sql_id openb select_expression_list_opt closeb
+| table_id '.' reserved_sql_id openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
   }
@@ -5878,11 +5865,11 @@ function_call_generic:
   as a result
 */
 function_call_keyword:
-  LEFT openb select_expression_list closeb
+  LEFT openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: $3}
   }
-| RIGHT openb select_expression_list closeb
+| RIGHT openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: $3}
   }
@@ -7024,23 +7011,23 @@ func_datetime_precision:
   the names are non-reserved, they need a dedicated rule so as not to conflict
 */
 function_call_conflict:
-  IF openb select_expression_list closeb
+  IF openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: $3}
   }
-| DATABASE openb select_expression_list_opt closeb
+| DATABASE openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: $3}
   }
-| SCHEMA openb select_expression_list_opt closeb
+| SCHEMA openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: $3}
   }
-| MOD openb select_expression_list closeb
+| MOD openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: $3}
   }
-| REPLACE openb select_expression_list closeb
+| REPLACE openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3}
   }
@@ -7088,11 +7075,11 @@ convert_type_weight_string:
   }
 | AS BINARY '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+    $$ = &ConvertType{Type: string($2), Length: ptr.Of(convertStringToInt($4))}
   }
 | AS CHAR '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+    $$ = &ConvertType{Type: string($2), Length: ptr.Of(convertStringToInt($4))}
   }
 
 convert_type:
