@@ -54,9 +54,15 @@ type TypeAggregator struct {
 	types       typeAggregation
 	collations  collationAggregation
 	size, scale int32
+	invalid     int32
 }
 
 func (ta *TypeAggregator) Add(typ Type, env *collations.Environment) error {
+	if !typ.Valid() {
+		ta.invalid++
+		return nil
+	}
+
 	ta.types.addNullable(typ.typ, typ.nullable)
 	if err := ta.collations.add(typedCoercionCollation(typ.typ, typ.collation), env); err != nil {
 		return err
@@ -71,12 +77,19 @@ func (ta *TypeAggregator) AddField(f *query.Field, env *collations.Environment) 
 }
 
 func (ta *TypeAggregator) Type() Type {
+	if ta.invalid > 0 || ta.types.empty() {
+		return Type{}
+	}
 	return NewTypeEx(ta.types.result(), ta.collations.result().Collation, ta.types.nullable, ta.size, ta.scale)
 }
 
 func (ta *TypeAggregator) Field(name string) *query.Field {
 	typ := ta.Type()
 	return typ.ToField(name)
+}
+
+func (ta *typeAggregation) empty() bool {
+	return ta.total == 0
 }
 
 func (ta *typeAggregation) addEval(e eval) {

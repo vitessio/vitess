@@ -218,7 +218,7 @@ func (cc CheckCol) SwitchToWeightString() CheckCol {
 
 func (cc CheckCol) String() string {
 	var collation string
-	if sqltypes.IsText(cc.Type.Type()) && cc.Type.Collation() != collations.Unknown {
+	if cc.Type.Valid() && sqltypes.IsText(cc.Type.Type()) && cc.Type.Collation() != collations.Unknown {
 		collation = ": " + cc.CollationEnv.LookupName(cc.Type.Collation())
 	}
 
