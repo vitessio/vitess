@@ -9,9 +9,9 @@ import (
 )
 
 func getInKeyRange() *sqlparser.FuncExpr {
-	subExprs := make(sqlparser.SelectExprs, 0, 2)
-	subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("vindex1")})
-	subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("-80")})
+	subExprs := make(sqlparser.Exprs, 0, 2)
+	subExprs = append(subExprs, sqlparser.NewStrLiteral("vindex1"))
+	subExprs = append(subExprs, sqlparser.NewStrLiteral("-80"))
 	inKeyRange := &sqlparser.FuncExpr{
 		Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 		Exprs: subExprs,
