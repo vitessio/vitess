@@ -152,6 +152,28 @@ func (vtctldclient *VtctldClientProcess) ApplyVSchema(keyspace string, json stri
 	)
 }
 
+// ChangeTabletType changes the type of the given tablet.
+func (vtctldclient *VtctldClientProcess) ChangeTabletType(tablet *Vttablet, tabletType topodatapb.TabletType) error {
+	return vtctldclient.ExecuteCommand(
+		"ChangeTabletType",
+		tablet.Alias,
+		tabletType.String(),
+	)
+}
+
+// GetShardReplication returns a mapping of cell to shard replication for the given keyspace and shard.
+func (vtctldclient *VtctldClientProcess) GetShardReplication(keyspace string, shard string, cells ...string) (map[string]*topodatapb.ShardReplication, error) {
+	args := append([]string{"GetShardReplication", keyspace + "/" + shard}, cells...)
+	out, err := vtctldclient.ExecuteCommandWithOutput(args...)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp vtctldatapb.GetShardReplicationResponse
+	err = json2.Unmarshal([]byte(out), &resp)
+	return resp.ShardReplicationByCell, err
+}
+
 // GetSrvKeyspaces returns a mapping of cell to srv keyspace for the given keyspace.
 func (vtctldclient *VtctldClientProcess) GetSrvKeyspaces(keyspace string, cells ...string) (ksMap map[string]*topodatapb.SrvKeyspace, err error) {
 	args := append([]string{"GetSrvKeyspaces", keyspace}, cells...)
