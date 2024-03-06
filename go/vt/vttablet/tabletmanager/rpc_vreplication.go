@@ -134,11 +134,11 @@ func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *ta
 }
 
 func (tm *TabletManager) HasVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
-	if req == nil || req.DbName == "" {
+	if req.GetDbName() == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no DB name provided")
 	}
 	bindVars := map[string]*querypb.BindVariable{
-		"db": sqltypes.StringBindVariable(req.DbName),
+		"db": sqltypes.StringBindVariable(req.GetDbName()),
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlHasVReplicationWorkflows, sidecar.GetIdentifier(), ":db")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
@@ -167,7 +167,7 @@ func (tm *TabletManager) HasVReplicationWorkflows(ctx context.Context, req *tabl
 }
 
 func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
-	if req == nil || req.GetDbName() == "" {
+	if req.GetDbName() == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no DB name provided")
 	}
 	bindVars := map[string]*querypb.BindVariable{
@@ -586,7 +586,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflowsState(ctx context.Context, r
 			}
 			predicates.WriteString(sqltypes.EncodeStringSQL(wf))
 		}
-		predicates.WriteString(")")
+		predicates.WriteByte(')')
 	}
 	if len(req.GetExcludeWorkflows()) > 0 {
 		predicates.WriteString(" and workflow not in (")
@@ -596,7 +596,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflowsState(ctx context.Context, r
 			}
 			predicates.WriteString(sqltypes.EncodeStringSQL(wf))
 		}
-		predicates.WriteString(")")
+		predicates.WriteByte(')')
 	}
 
 	query := sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowsState, sidecar.GetIdentifier(), sets.String(), tm.DBConfigs.DBName, predicates.String()).Query

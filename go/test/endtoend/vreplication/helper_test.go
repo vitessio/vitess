@@ -583,8 +583,8 @@ func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, wo
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 
-// confirmAllStreamsRunning confirms that all of the migrated streams
-// are running after a Reshard.
+// confirmAllStreamsRunning confirms that all of the migrated streams are running
+// after a Reshard.
 func confirmAllStreamsRunning(t *testing.T, vtgateConn *mysql.Conn, database string) {
 	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where state != '%s'",
 		sidecarDBIdentifier, binlogdatapb.VReplicationWorkflowState_Running.String()).Query
