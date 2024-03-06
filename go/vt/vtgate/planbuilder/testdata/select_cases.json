@@ -5055,5 +5055,27 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "Over clause works for unsharded tables",
+    "query": "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM unsharded_a",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM unsharded_a",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from unsharded_a where 1 != 1",
+        "Query": "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from unsharded_a",
+        "Table": "unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded_a"
+      ]
+    }
   }
 ]
