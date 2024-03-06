@@ -65,7 +65,6 @@ func TestAppendStaticAuth(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.cFile, func(t *testing.T) {
 			defer func() {
-				ResetStaticAuth()
 				credsFile = oldCredsFile
 			}()
 
@@ -79,6 +78,8 @@ func TestAppendStaticAuth(t *testing.T) {
 			} else {
 				require.ErrorContains(t, err, tt.expectedErr)
 			}
+			ResetStaticAuth()
+			require.Nil(t, clientCredsCancel)
 		})
 	}
 }
@@ -93,7 +94,9 @@ func TestGetStaticAuthCreds(t *testing.T) {
 	assert.Nil(t, err)
 	defer os.Remove(tmp.Name())
 	credsFile = tmp.Name()
+	clientCredsMu.Lock()
 	clientCredsSigChan = make(chan os.Signal, 1)
+	clientCredsMu.Unlock()
 
 	// load old creds
 	fmt.Fprint(tmp, `{"Username": "old", "Password": "123456"}`)
