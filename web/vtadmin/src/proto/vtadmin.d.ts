@@ -52773,6 +52773,212 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a GetShardReplicationRequest. */
+    interface IGetShardReplicationRequest {
+
+        /** GetShardReplicationRequest keyspace */
+        keyspace?: (string|null);
+
+        /** GetShardReplicationRequest shard */
+        shard?: (string|null);
+
+        /** GetShardReplicationRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a GetShardReplicationRequest. */
+    class GetShardReplicationRequest implements IGetShardReplicationRequest {
+
+        /**
+         * Constructs a new GetShardReplicationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetShardReplicationRequest);
+
+        /** GetShardReplicationRequest keyspace. */
+        public keyspace: string;
+
+        /** GetShardReplicationRequest shard. */
+        public shard: string;
+
+        /** GetShardReplicationRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new GetShardReplicationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetShardReplicationRequest instance
+         */
+        public static create(properties?: vtctldata.IGetShardReplicationRequest): vtctldata.GetShardReplicationRequest;
+
+        /**
+         * Encodes the specified GetShardReplicationRequest message. Does not implicitly {@link vtctldata.GetShardReplicationRequest.verify|verify} messages.
+         * @param message GetShardReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetShardReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetShardReplicationRequest message, length delimited. Does not implicitly {@link vtctldata.GetShardReplicationRequest.verify|verify} messages.
+         * @param message GetShardReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetShardReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetShardReplicationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetShardReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetShardReplicationRequest;
+
+        /**
+         * Decodes a GetShardReplicationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetShardReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetShardReplicationRequest;
+
+        /**
+         * Verifies a GetShardReplicationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetShardReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetShardReplicationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetShardReplicationRequest;
+
+        /**
+         * Creates a plain object from a GetShardReplicationRequest message. Also converts values to other types if specified.
+         * @param message GetShardReplicationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetShardReplicationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetShardReplicationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetShardReplicationRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetShardReplicationResponse. */
+    interface IGetShardReplicationResponse {
+
+        /** GetShardReplicationResponse shard_replication_by_cell */
+        shard_replication_by_cell?: ({ [k: string]: topodata.IShardReplication }|null);
+    }
+
+    /** Represents a GetShardReplicationResponse. */
+    class GetShardReplicationResponse implements IGetShardReplicationResponse {
+
+        /**
+         * Constructs a new GetShardReplicationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetShardReplicationResponse);
+
+        /** GetShardReplicationResponse shard_replication_by_cell. */
+        public shard_replication_by_cell: { [k: string]: topodata.IShardReplication };
+
+        /**
+         * Creates a new GetShardReplicationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetShardReplicationResponse instance
+         */
+        public static create(properties?: vtctldata.IGetShardReplicationResponse): vtctldata.GetShardReplicationResponse;
+
+        /**
+         * Encodes the specified GetShardReplicationResponse message. Does not implicitly {@link vtctldata.GetShardReplicationResponse.verify|verify} messages.
+         * @param message GetShardReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetShardReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetShardReplicationResponse message, length delimited. Does not implicitly {@link vtctldata.GetShardReplicationResponse.verify|verify} messages.
+         * @param message GetShardReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetShardReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetShardReplicationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetShardReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetShardReplicationResponse;
+
+        /**
+         * Decodes a GetShardReplicationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetShardReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetShardReplicationResponse;
+
+        /**
+         * Verifies a GetShardReplicationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetShardReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetShardReplicationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetShardReplicationResponse;
+
+        /**
+         * Creates a plain object from a GetShardReplicationResponse message. Also converts values to other types if specified.
+         * @param message GetShardReplicationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetShardReplicationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetShardReplicationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetShardReplicationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a GetShardRequest. */
     interface IGetShardRequest {
 
