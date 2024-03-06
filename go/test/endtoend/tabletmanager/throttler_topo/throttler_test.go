@@ -399,13 +399,15 @@ func TestLag(t *testing.T) {
 		err := clusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
 		assert.NoError(t, err)
 	})
+	t.Run("accumulating lag, expecting throttler push back", func(t *testing.T) {
+		time.Sleep(2 * throttler.DefaultThreshold)
+	})
 	t.Run("requesting heartbeats while replication stopped", func(t *testing.T) {
+		// By now on-demand heartbeats have stopped.
 		_ = warmUpHeartbeat(t)
 	})
 
-	t.Run("accumulating lag, expecting throttler push back", func(t *testing.T) {
-		time.Sleep(2 * throttler.DefaultThreshold)
-
+	t.Run("expecting throttler push back", func(t *testing.T) {
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -417,13 +419,9 @@ func TestLag(t *testing.T) {
 		defer resp.Body.Close()
 		// self (on primary) is unaffected by replication lag
 		if !assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp)) {
-			rs, err := replicaTablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
-			assert.NoError(t, err)
-			t.Logf("Seconds_Behind_Source: %s", rs.Named().Row()["Seconds_Behind_Source"].ToString())
 			t.Logf("throttler primary status: %+v", throttleStatus(t, primaryTablet))
 			t.Logf("throttler replica status: %+v", throttleStatus(t, replicaTablet))
 		}
-
 	})
 	t.Run("replica self-check should show error", func(t *testing.T) {
 		resp, err := throttleCheckSelf(replicaTablet)
