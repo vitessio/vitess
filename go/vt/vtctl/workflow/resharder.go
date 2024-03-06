@@ -60,14 +60,15 @@ type resharder struct {
 }
 
 type refStream struct {
-	workflow    string
-	bls         *binlogdatapb.BinlogSource
-	cell        string
-	tabletTypes string
+	workflow        string
+	bls             *binlogdatapb.BinlogSource
+	cell            string
+	tabletTypes     string
+	workflowType    binlogdatapb.VReplicationWorkflowType
+	workflowSubType binlogdatapb.VReplicationWorkflowSubType
 }
 
 func (s *Server) buildResharder(ctx context.Context, keyspace, workflow string, sources, targets []string, cell, tabletTypes string) (*resharder, error) {
-	ts := s.ts
 	rs := &resharder{
 		s:               s,
 		keyspace:        keyspace,
@@ -78,7 +79,7 @@ func (s *Server) buildResharder(ctx context.Context, keyspace, workflow string, 
 		tabletTypes:     tabletTypes,
 	}
 	for _, shard := range sources {
-		si, err := ts.GetShard(ctx, keyspace, shard)
+		si, err := s.ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%s) failed", shard)
 		}
@@ -86,14 +87,14 @@ func (s *Server) buildResharder(ctx context.Context, keyspace, workflow string, 
 			return nil, fmt.Errorf("source shard %v is not in serving state", shard)
 		}
 		rs.sourceShards = append(rs.sourceShards, si)
-		primary, err := ts.GetTablet(ctx, si.PrimaryAlias)
+		primary, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetTablet(%s) failed", si.PrimaryAlias)
 		}
 		rs.sourcePrimaries[si.ShardName()] = primary
 	}
 	for _, shard := range targets {
-		si, err := ts.GetShard(ctx, keyspace, shard)
+		si, err := s.ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%s) failed", shard)
 		}
@@ -101,7 +102,7 @@ func (s *Server) buildResharder(ctx context.Context, keyspace, workflow string, 
 			return nil, fmt.Errorf("target shard %v is in serving state", shard)
 		}
 		rs.targetShards = append(rs.targetShards, si)
-		primary, err := ts.GetTablet(ctx, si.PrimaryAlias)
+		primary, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetTablet(%s) failed", si.PrimaryAlias)
 		}
@@ -114,7 +115,7 @@ func (s *Server) buildResharder(ctx context.Context, keyspace, workflow string, 
 		return nil, vterrors.Wrap(err, "validateTargets")
 	}
 
-	vschema, err := ts.GetVSchema(ctx, keyspace)
+	vschema, err := s.ts.GetVSchema(ctx, keyspace)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "GetVSchema")
 	}
@@ -186,13 +187,15 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 				if !isReference {
 					continue
 				}
-				refKey := fmt.Sprintf("%s:%s:%s", workflow, bls.Keyspace, bls.Shard)
+				refKey := fmt.Sprintf("%s:%s:%s", workflow.Workflow, bls.Keyspace, bls.Shard)
 				if mustCreate {
 					rs.refStreams[refKey] = &refStream{
-						workflow:    workflow.Workflow,
-						bls:         bls,
-						cell:        workflow.Cells,
-						tabletTypes: buildTabletTypesString(workflow.TabletTypes, workflow.TabletSelectionPreference),
+						workflow:        workflow.Workflow,
+						bls:             bls,
+						cell:            workflow.Cells,
+						tabletTypes:     buildTabletTypesString(workflow.TabletTypes, workflow.TabletSelectionPreference),
+						workflowType:    workflow.WorkflowType,
+						workflowSubType: workflow.WorkflowSubType,
 					}
 				} else {
 					if !ref[refKey] {
@@ -302,9 +305,8 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 
 		for _, rstream := range rs.refStreams {
 			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes,
-				// TODO: fix based on original stream.
-				binlogdatapb.VReplicationWorkflowType_Reshard,
-				binlogdatapb.VReplicationWorkflowSubType_None,
+				rstream.workflowType,
+				rstream.workflowSubType,
 				rs.deferSecondaryKeys)
 		}
 		query := ig.String()

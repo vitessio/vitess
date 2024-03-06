@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -168,65 +167,65 @@ func (tm *TabletManager) HasVReplicationWorkflows(ctx context.Context, req *tabl
 }
 
 func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
-	if req == nil || req.DbName == "" {
+	if req == nil || req.GetDbName() == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no DB name provided")
 	}
 	bindVars := map[string]*querypb.BindVariable{
-		"db": sqltypes.StringBindVariable(req.DbName),
+		"db": sqltypes.StringBindVariable(req.GetDbName()),
 	}
 	additionalPredicates := strings.Builder{}
-	if req.ExcludeFrozen {
+	if req.GetExcludeFrozen() {
 		additionalPredicates.WriteString(fmt.Sprintf(" and message != '%s'", workflow.Frozen))
 	}
-	if len(req.IncludeIds) > 0 {
+	if len(req.GetIncludeIds()) > 0 {
 		additionalPredicates.WriteString(" and id in (")
-		for i, id := range req.IncludeIds {
+		for i, id := range req.GetIncludeIds() {
 			if i > 0 {
-				additionalPredicates.WriteString(",")
+				additionalPredicates.WriteByte(',')
 			}
 			additionalPredicates.WriteString(fmt.Sprintf("%d", id))
 		}
-		additionalPredicates.WriteString(")")
+		additionalPredicates.WriteByte(')')
 	}
-	if len(req.IncludeWorkflows) > 0 {
+	if len(req.GetIncludeWorkflows()) > 0 {
 		additionalPredicates.WriteString(" and workflow in (")
-		for i, wf := range req.IncludeWorkflows {
+		for i, wf := range req.GetIncludeWorkflows() {
 			if i > 0 {
-				additionalPredicates.WriteString(",")
+				additionalPredicates.WriteByte(',')
 			}
 			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(wf))
 		}
-		additionalPredicates.WriteString(")")
+		additionalPredicates.WriteByte(')')
 	}
-	if len(req.ExcludeWorkflows) > 0 {
+	if len(req.GetExcludeWorkflows()) > 0 {
 		additionalPredicates.WriteString(" and workflow not in (")
-		for i, wf := range req.ExcludeWorkflows {
+		for i, wf := range req.GetExcludeWorkflows() {
 			if i > 0 {
-				additionalPredicates.WriteString(",")
+				additionalPredicates.WriteByte(',')
 			}
 			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(wf))
 		}
-		additionalPredicates.WriteString(")")
+		additionalPredicates.WriteByte(')')
 	}
-	if len(req.IncludeStates) > 0 {
+	if len(req.GetIncludeStates()) > 0 {
 		additionalPredicates.WriteString(" and state in (")
-		for i, state := range req.IncludeStates {
+		for i, state := range req.GetIncludeStates() {
 			if i > 0 {
-				additionalPredicates.WriteString(",")
+				additionalPredicates.WriteByte(',')
 			}
 			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(state.String()))
 		}
-		additionalPredicates.WriteString(")")
+		additionalPredicates.WriteByte(')')
 	}
-	if len(req.ExcludeStates) > 0 {
+	if len(req.GetExcludeStates()) > 0 {
 		additionalPredicates.WriteString(" and state not in (")
-		for i, state := range req.ExcludeStates {
+		for i, state := range req.GetExcludeStates() {
 			if i > 0 {
-				additionalPredicates.WriteString(",")
+				additionalPredicates.WriteByte(',')
 			}
 			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(state.String()))
 		}
-		additionalPredicates.WriteString(")")
+		additionalPredicates.WriteByte(')')
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlReadVReplicationWorkflows, sidecar.GetIdentifier(), ":db", additionalPredicates.String())
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
@@ -601,7 +600,6 @@ func (tm *TabletManager) UpdateVReplicationWorkflowsState(ctx context.Context, r
 	}
 
 	query := sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowsState, sidecar.GetIdentifier(), sets.String(), tm.DBConfigs.DBName, predicates.String()).Query
-	log.Errorf("DEBUG: %s", query)
 	res, err := tm.VREngine.Exec(query)
 	if err != nil {
 		return nil, err

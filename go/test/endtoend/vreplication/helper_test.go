@@ -583,6 +583,14 @@ func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, wo
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 
+// confirmAllStreamsRunning confirms that all of the migrated streams
+// are running after a Reshard.
+func confirmAllStreamsRunning(t *testing.T, vtgateConn *mysql.Conn, database string) {
+	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where state != '%s'",
+		sidecarDBIdentifier, binlogdatapb.VReplicationWorkflowState_Running.String()).Query
+	waitForQueryResult(t, vtgateConn, database, query, `[[INT64(0)]]`)
+}
+
 func printShardPositions(vc *VitessCluster, ksShards []string) {
 	for _, ksShard := range ksShards {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ShardReplicationPositions", ksShard)
