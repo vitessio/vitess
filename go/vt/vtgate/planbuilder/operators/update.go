@@ -99,8 +99,14 @@ func (u *Update) ShortDescription() string {
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (op Operator) {
 	errIfUpdateNotSupported(ctx, updStmt)
-	parentFks := ctx.SemTable.GetParentForeignKeysList()
-	childFks := ctx.SemTable.GetChildForeignKeysList()
+	var parentFks []vindexes.ParentFKInfo
+	for _, ts := range ctx.SemTable.GetSortedTargets() {
+		parentFks = append(parentFks, ctx.SemTable.GetParentForeignKeysForTableSet(ts)...)
+	}
+	var childFks []vindexes.ChildFKInfo
+	for _, ts := range ctx.SemTable.GetSortedTargets() {
+		childFks = append(childFks, ctx.SemTable.GetChildForeignKeysForTableSet(ts)...)
+	}
 
 	// We check if dml with input plan is required. DML with input planning is generally
 	// slower, because it does a selection and then creates a update statement wherein we have to
