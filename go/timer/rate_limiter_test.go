@@ -17,6 +17,7 @@ limitations under the License.
 package timer
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -84,9 +85,9 @@ func TestRateLimiterDiff(t *testing.T) {
 
 	// This assumes the last couple lines of code run faster than 2 seconds, which should be the case.
 	// But if you see flakiness due to slow runners, we can revisit the logic.
-	assert.Equal(t, int64(1), r.Diff())
+	assert.Greater(t, r.Diff(), int64(math.MaxInt32))
 	time.Sleep(d + time.Second)
-	assert.Greater(t, r.Diff(), int64(1))
+	assert.Greater(t, r.Diff(), int64(math.MaxInt32))
 	r.DoEmpty()
 	assert.LessOrEqual(t, r.Diff(), int64(1))
 }
