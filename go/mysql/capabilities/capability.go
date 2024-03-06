@@ -45,7 +45,8 @@ const (
 	DynamicRedoLogCapacityFlavorCapability                              // supported in MySQL 8.0.30 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html
 	DisableRedoLogFlavorCapability                                      // supported in MySQL 8.0.21 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-21.html
 	CheckConstraintsCapability                                          // supported in MySQL 8.0.16 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-16.html
-	PerformanceSchemaDataLocksTableCapability
+	PerformanceSchemaDataLocksTableCapability                           // supported in MySQL 8.0.1 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-1.html
+	InstantDDLXtrabackupCapability                                      // Supported in 8.0.32 and above, solving a MySQL-vs-Xtrabackup bug starting 8.0.29
 )
 
 type CapableOf func(capability FlavorCapability) (bool, error)
@@ -109,6 +110,8 @@ func MySQLVersionHasCapability(serverVersion string, capability FlavorCapability
 		return atLeast(8, 0, 29)
 	case DynamicRedoLogCapacityFlavorCapability:
 		return atLeast(8, 0, 30)
+	case InstantDDLXtrabackupCapability:
+		return atLeast(8, 0, 32)
 	default:
 		return false, nil
 	}

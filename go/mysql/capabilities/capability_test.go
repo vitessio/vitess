@@ -230,6 +230,16 @@ func TestMySQLVersionCapableOf(t *testing.T) {
 			isCapable:  true,
 		},
 		{
+			version:    "8.0.29",
+			capability: InstantDDLXtrabackupCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "8.0.32",
+			capability: InstantDDLXtrabackupCapability,
+			isCapable:  true,
+		},
+		{
 			// What happens if server version is unspecified
 			version:    "",
 			capability: CheckConstraintsCapability,
