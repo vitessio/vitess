@@ -93,7 +93,7 @@ require (
 )
 
 require (
-	github.com/Shopify/toxiproxy/v2 v2.8.0
+	github.com/Shopify/toxiproxy/v2 v2.5.0
 	github.com/bndr/gotabulate v1.1.2
 	github.com/gammazero/deque v0.2.1
 	github.com/google/safehtml v0.1.0
