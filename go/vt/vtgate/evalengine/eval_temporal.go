@@ -153,7 +153,7 @@ func (e *evalTemporal) addInterval(interval *datetime.Interval, coll collations.
 		tmp.dt.Time, tmp.prec, ok = e.dt.Time.AddInterval(interval, coll != collations.Unknown)
 	case tt == sqltypes.Datetime || tt == sqltypes.Timestamp || (tt == sqltypes.Date && interval.Unit().HasTimeParts()) || (tt == sqltypes.Time && interval.Unit().HasDateParts()):
 		tmp = e.toDateTime(int(e.prec), now)
-		tmp.dt, tmp.prec, ok = e.dt.AddInterval(interval, coll != collations.Unknown)
+		tmp.dt, tmp.prec, ok = e.dt.AddInterval(interval, tmp.prec, coll != collations.Unknown)
 	}
 	if !ok {
 		return nil
@@ -203,8 +203,8 @@ func parseDateTime(s []byte) (*evalTemporal, error) {
 }
 
 func parseTime(s []byte) (*evalTemporal, error) {
-	t, l, ok := datetime.ParseTime(hack.String(s), -1)
-	if !ok {
+	t, l, state := datetime.ParseTime(hack.String(s), -1)
+	if state != datetime.TimeOK {
 		return nil, errIncorrectTemporal("TIME", s)
 	}
 	return newEvalTime(t, l), nil
@@ -228,7 +228,7 @@ func evalToTemporal(e eval, allowZero bool) *evalTemporal {
 		if d, ok := datetime.ParseDate(e.string()); ok {
 			return newEvalDate(d, allowZero)
 		}
-		if t, l, ok := datetime.ParseTime(e.string(), -1); ok {
+		if t, l, state := datetime.ParseTime(e.string(), -1); state == datetime.TimeOK {
 			return newEvalTime(t, l)
 		}
 	case *evalInt64:
@@ -293,7 +293,7 @@ func evalToTime(e eval, l int) *evalTemporal {
 		if dt, l, _ := datetime.ParseDateTime(e.string(), l); !dt.IsZero() {
 			return newEvalTime(dt.Time, l)
 		}
-		if t, l, ok := datetime.ParseTime(e.string(), l); ok || !t.IsZero() {
+		if t, l, state := datetime.ParseTime(e.string(), l); state != datetime.TimeInvalid {
 			return newEvalTime(t, l)
 		}
 	case *evalInt64:

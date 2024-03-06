@@ -35,6 +35,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -115,11 +116,11 @@ func (vc *vcursor) execute(query string, bindvars map[string]*querypb.BindVariab
 }
 
 func (vc *vcursor) ConnCollation() collations.ID {
-	return vc.CollationEnv().DefaultConnectionCharset()
+	return vc.Environment().CollationEnv().DefaultConnectionCharset()
 }
 
-func (vc *vcursor) CollationEnv() *collations.Environment {
-	return collations.MySQL8()
+func (vc *vcursor) Environment() *vtenv.Environment {
+	return vtenv.NewTestEnv()
 }
 
 func lookupCreateVindexTestCase(

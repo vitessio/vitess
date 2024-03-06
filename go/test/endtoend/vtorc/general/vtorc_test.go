@@ -163,7 +163,7 @@ func TestVTOrcRepairs(t *testing.T) {
 
 	t.Run("StopReplication", func(t *testing.T) {
 		// use vtctlclient to stop replication
-		_, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
+		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 		require.NoError(t, err)
 
 		// check replication is setup correctly
@@ -189,9 +189,13 @@ func TestVTOrcRepairs(t *testing.T) {
 
 	t.Run("ReplicationFromOtherReplica", func(t *testing.T) {
 		// point replica at otherReplica
-		changeReplicationSourceCommand := fmt.Sprintf("STOP SLAVE; RESET SLAVE ALL;"+
-			"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1; START SLAVE", utils.Hostname, otherReplica.MySQLPort)
-		_, err := utils.RunSQL(t, changeReplicationSourceCommand, replica, "")
+		changeReplicationSourceCommands := []string{
+			"STOP SLAVE",
+			"RESET SLAVE ALL",
+			fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", utils.Hostname, otherReplica.MySQLPort),
+			"START SLAVE",
+		}
+		err := utils.RunSQLs(t, changeReplicationSourceCommands, replica, "")
 		require.NoError(t, err)
 
 		// wait until the source port is set back correctly by vtorc
@@ -204,10 +208,13 @@ func TestVTOrcRepairs(t *testing.T) {
 
 	t.Run("CircularReplication", func(t *testing.T) {
 		// change the replication source on the primary
-		changeReplicationSourceCommands := fmt.Sprintf("STOP SLAVE; RESET SLAVE ALL;"+
-			"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
-			"START SLAVE;", replica.VttabletProcess.TabletHostname, replica.MySQLPort)
-		_, err := utils.RunSQL(t, changeReplicationSourceCommands, curPrimary, "")
+		changeReplicationSourceCommands := []string{
+			"STOP SLAVE",
+			"RESET SLAVE ALL",
+			fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", replica.VttabletProcess.TabletHostname, replica.MySQLPort),
+			"START SLAVE",
+		}
+		err := utils.RunSQLs(t, changeReplicationSourceCommands, curPrimary, "")
 		require.NoError(t, err)
 
 		// wait for curPrimary to reach stable state
@@ -293,7 +300,7 @@ func TestRepairAfterTER(t *testing.T) {
 	}
 
 	// TER to other tablet
-	_, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", newPrimary.Alias)
+	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("TabletExternallyReparented", newPrimary.Alias)
 	require.NoError(t, err)
 
 	utils.CheckReplication(t, clusterInfo, newPrimary, []*cluster.Vttablet{curPrimary}, 15*time.Second)
@@ -397,11 +404,11 @@ func TestVTOrcWithPrs(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, shard0.Vttablets, 10*time.Second)
 
-	output, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard", "--",
-		"--keyspace_shard", fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
-		"--wait_replicas_timeout", "31s",
-		"--new_primary", replica.Alias)
+	output, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
+		"--wait-replicas-timeout", "31s",
+		"--new-primary", replica.Alias)
 	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
 
 	time.Sleep(40 * time.Second)

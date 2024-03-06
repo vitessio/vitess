@@ -30,13 +30,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
@@ -78,7 +77,7 @@ func NewVtctlPipe(t *testing.T, ts *topo.Server) *VtctlPipe {
 
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
-	grpcvtctlserver.StartServer(server, ts, collations.MySQL8(), sqlparser.NewTestParser())
+	grpcvtctlserver.StartServer(server, vtenv.NewTestEnv(), ts)
 	go server.Serve(listener)
 
 	// Create a VtctlClient gRPC client to talk to the fake server

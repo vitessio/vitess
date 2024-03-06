@@ -91,7 +91,7 @@
         },
         "FieldQuery": "select c from sbtest1 where 1 != 1",
         "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-        "Query": "select c from sbtest1 where id between 50 and 235 order by c asc",
+        "Query": "select c from sbtest1 where id between 50 and 235 order by sbtest1.c asc",
         "Table": "sbtest1"
       },
       "TablesUsed": [
@@ -119,7 +119,7 @@
             },
             "FieldQuery": "select c from sbtest30 where 1 != 1 group by c",
             "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-            "Query": "select c from sbtest30 where id between 1 and 10 group by c order by c asc",
+            "Query": "select c from sbtest30 where id between 1 and 10 group by c order by sbtest30.c asc",
             "Table": "sbtest30"
           }
         ]

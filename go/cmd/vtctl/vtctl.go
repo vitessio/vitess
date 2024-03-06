@@ -31,16 +31,15 @@ import (
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 )
@@ -131,7 +130,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	installSignalHandlers(cancel)
 
-	parser, err := sqlparser.New(sqlparser.Options{
+	env, err := vtenv.New(vtenv.Options{
 		MySQLServerVersion: servenv.MySQLServerVersion(),
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
@@ -164,7 +163,7 @@ func main() {
 		// New behavior. Strip off the prefix, and set things up to run through
 		// the vtctldclient command tree, using the localvtctldclient (in-process)
 		// client.
-		vtctld := grpcvtctldserver.NewVtctldServer(ts, parser)
+		vtctld := grpcvtctldserver.NewVtctldServer(env, ts)
 		localvtctldclient.SetServer(vtctld)
 		command.VtctldClientProtocol = "local"
 
@@ -180,8 +179,7 @@ func main() {
 		fallthrough
 	default:
 		log.Warningf("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
-		collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
-		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), collationEnv, parser)
+		wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 		if args[0] == "--" {
 			vtctl.PrintDoubleDashDeprecationNotice(wr)

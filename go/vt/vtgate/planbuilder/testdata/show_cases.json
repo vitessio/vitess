@@ -734,7 +734,7 @@
           "Keyspace": "VARCHAR",
           "Sharded": "VARCHAR"
         },
-        "RowCount": 7
+        "RowCount": 8
       }
     }
   },

@@ -27,7 +27,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl/vrepl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -137,12 +138,13 @@ type VRepl struct {
 
 	convertCharset map[string](*binlogdatapb.CharsetConversion)
 
-	collationEnv *collations.Environment
-	sqlparser    *sqlparser.Parser
+	env *vtenv.Environment
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
-func NewVRepl(workflow string,
+func NewVRepl(
+	env *vtenv.Environment,
+	workflow string,
 	keyspace string,
 	shard string,
 	dbName string,
@@ -152,10 +154,9 @@ func NewVRepl(workflow string,
 	vreplShowCreateTable string,
 	alterQuery string,
 	analyzeTable bool,
-	collationEnv *collations.Environment,
-	parser *sqlparser.Parser,
 ) *VRepl {
 	return &VRepl{
+		env:                     env,
 		workflow:                workflow,
 		keyspace:                keyspace,
 		shard:                   shard,
@@ -170,8 +171,6 @@ func NewVRepl(workflow string,
 		enumToTextMap:           map[string]string{},
 		intToEnumMap:            map[string]bool{},
 		convertCharset:          map[string](*binlogdatapb.CharsetConversion){},
-		collationEnv:            collationEnv,
-		sqlparser:               parser,
 	}
 }
 
@@ -185,7 +184,7 @@ func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnec
 		return 0, err
 	}
 
-	rs, err := conn.ExecuteFetch(query, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(query, -1, true)
 	if err != nil {
 		return 0, err
 	}
@@ -199,7 +198,7 @@ func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnec
 // readTableColumns reads column list from given table
 func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (columns *vrepl.ColumnList, virtualColumns *vrepl.ColumnList, pkColumns *vrepl.ColumnList, err error) {
 	parsed := sqlparser.BuildParsedQuery(sqlShowColumnsFrom, tableName)
-	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(parsed.Query, -1, true)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -237,7 +236,7 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 	if err != nil {
 		return nil, err
 	}
-	rs, err := conn.ExecuteFetch(query, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(query, -1, true)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +259,7 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 // When `fast_analyze_table=1`, an `ANALYZE TABLE` command only analyzes the clustering index (normally the `PRIMARY KEY`).
 // This is useful when you want to get a better estimate of the number of table rows, as fast as possible.
 func (v *VRepl) isFastAnalyzeTableSupported(ctx context.Context, conn *dbconnpool.DBConnection) (isSupported bool, err error) {
-	rs, err := conn.ExecuteFetch(sqlShowVariablesLikeFastAnalyzeTable, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(sqlShowVariablesLikeFastAnalyzeTable, -1, true)
 	if err != nil {
 		return false, err
 	}
@@ -295,7 +294,7 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 // readTableStatus reads table status information
 func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (tableRows int64, err error) {
 	parsed := sqlparser.BuildParsedQuery(sqlShowTableStatus, tableName)
-	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(parsed.Query, -1, true)
 	if err != nil {
 		return 0, err
 	}
@@ -316,7 +315,7 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 	if err != nil {
 		return err
 	}
-	rs, err := conn.ExecuteFetch(query, math.MaxInt, true)
+	rs, err := conn.ExecuteFetch(query, -1, true)
 	if err != nil {
 		return err
 	}
@@ -391,7 +390,7 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 		// Happens for REVERT
 		return nil
 	}
-	if err := v.parser.ParseAlterStatement(v.alterQuery, v.sqlparser); err != nil {
+	if err := v.parser.ParseAlterStatement(v.alterQuery, v.env.Parser()); err != nil {
 		return err
 	}
 	if v.parser.IsRenameTable() {
@@ -462,7 +461,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.sqlparser, v.originalShowCreateTable, v.vreplShowCreateTable)
+	v.removedForeignKeyNames, err = vrepl.RemovedForeignKeyNames(v.env, v.originalShowCreateTable, v.vreplShowCreateTable)
 	if err != nil {
 		return err
 	}
@@ -492,11 +491,26 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	for i := range v.sourceSharedColumns.Columns() {
 		sourceColumn := v.sourceSharedColumns.Columns()[i]
 		mappedColumn := v.targetSharedColumns.Columns()[i]
-		if sourceColumn.Type == vrepl.EnumColumnType && mappedColumn.Type != vrepl.EnumColumnType && mappedColumn.Charset != "" {
-			// A column is converted from ENUM type to textual type
-			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
-			v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
+		if sourceColumn.Type == vrepl.EnumColumnType {
+			switch {
+			// Either this is an ENUM column that stays an ENUM, or it is converted to a textual type.
+			// We take note of the enum values, and make it available in vreplication's Filter.Rule.ConvertEnumToText.
+			// This, in turn, will be used by vplayer (in TablePlan) like so:
+			// - In the binary log, enum values are integers.
+			// - Upon seeing this map, PlanBuilder will convert said int to the enum's logical string value.
+			// - And will apply the value as a string (`StringBindVariable`) in the query.
+			// What this allows is for enum values to have different ordering in the before/after table schema,
+			// so that for example you could modify an enum column:
+			// - from `('red', 'green', 'blue')` to `('red', 'blue')`
+			// - from `('red', 'green', 'blue')` to `('blue', 'red', 'green')`
+			case mappedColumn.Type == vrepl.EnumColumnType:
+				v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
+			case mappedColumn.Charset != "":
+				v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
+				v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
+			}
 		}
+
 		if sourceColumn.IsIntegralType() && mappedColumn.Type == vrepl.EnumColumnType {
 			v.intToEnumMap[sourceColumn.Name] = true
 		}
@@ -560,11 +574,11 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		case sourceCol.Type == vrepl.StringColumnType:
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
-			fromCollation := v.collationEnv.DefaultCollationForCharset(sourceCol.Charset)
+			fromCollation := v.env.CollationEnv().DefaultCollationForCharset(sourceCol.Charset)
 			if fromCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
 			}
-			toCollation := v.collationEnv.DefaultCollationForCharset(targetCol.Charset)
+			toCollation := v.env.CollationEnv().DefaultCollationForCharset(targetCol.Charset)
 			// Let's see if target col is at all textual
 			if targetCol.Type == vrepl.StringColumnType && toCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
@@ -620,6 +634,7 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		SourceUniqueKeyColumns:       encodeColumns(&v.chosenSourceUniqueKey.Columns),
 		TargetUniqueKeyColumns:       encodeColumns(&v.chosenTargetUniqueKey.Columns),
 		SourceUniqueKeyTargetColumns: encodeColumns(v.chosenSourceUniqueKey.Columns.MappedNamesColumnList(v.sharedColumnsMap)),
+		ForceUniqueKey:               url.QueryEscape(v.chosenSourceUniqueKey.Name),
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset

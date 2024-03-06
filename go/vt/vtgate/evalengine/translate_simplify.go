@@ -26,6 +26,10 @@ func (expr *BindVariable) constant() bool {
 	return false
 }
 
+func (expr *TupleBindVariable) constant() bool {
+	return false
+}
+
 func (expr *Column) constant() bool {
 	return false
 }
@@ -52,6 +56,10 @@ func (expr *Literal) simplify(_ *ExpressionEnv) error {
 }
 
 func (expr *BindVariable) simplify(_ *ExpressionEnv) error {
+	return nil
+}
+
+func (expr *TupleBindVariable) simplify(_ *ExpressionEnv) error {
 	return nil
 }
 

@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
@@ -356,8 +357,8 @@ func testRevertible(t *testing.T) {
 		},
 		{
 			name:                "expanded: enum",
-			fromSchema:          `id int primary key, e1 enum('a', 'b'), e2 enum('a', 'b'), e3 enum('a', 'b'), e4 enum('a', 'b'), e5 enum('a', 'b'), e6 enum('a', 'b'), e7 enum('a', 'b'), e8 enum('a', 'b')`,
-			toSchema:            `id int primary key, e1 enum('a', 'b'), e2 enum('a'), e3 enum('a', 'b', 'c'), e4 enum('a', 'x'), e5 enum('a', 'x', 'b'), e6 enum('b'), e7 varchar(1), e8 tinyint`,
+			fromSchema:          `id int primary key, e1 enum('a', 'b'), e2 enum('a', 'b'), e3 enum('a', 'b'),      e4 enum('a', 'b'), e5 enum('a', 'b'),      e6 enum('a', 'b'), e7 enum('a', 'b'), e8 enum('a', 'b')`,
+			toSchema:            `id int primary key, e1 enum('a', 'b'), e2 enum('a'),      e3 enum('a', 'b', 'c'), e4 enum('a', 'x'), e5 enum('a', 'x', 'b'), e6 enum('b'),      e7 varchar(1), e8 tinyint`,
 			expandedColumnNames: `e3,e4,e5,e6,e7,e8`,
 		},
 		{
@@ -559,7 +560,7 @@ func testRevert(t *testing.T) {
 	mysqlVersion = onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
 
-	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 
 	var uuids []string
 	ddlStrategy := "online"
@@ -1041,7 +1042,7 @@ func testRevert(t *testing.T) {
 		require.NotNil(t, row)
 		specialPlan := row.AsString("special_plan", "")
 		artifacts := row.AsString("artifacts", "")
-		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
 		assert.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0
@@ -1058,7 +1059,7 @@ func testRevert(t *testing.T) {
 	t.Run("INSTANT DDL: fail revert", func(t *testing.T) {
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
 		assert.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0, therefore revert is impossible
@@ -1193,7 +1194,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
+		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)

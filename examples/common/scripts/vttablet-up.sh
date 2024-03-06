@@ -53,8 +53,6 @@ vttablet \
  --grpc_port $grpc_port \
  --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
  --pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
- --heartbeat_enable \
- --heartbeat_interval=250ms \
  --heartbeat_on_demand_duration=5s \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 

@@ -26,8 +26,9 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-var showOptions = struct {
+var ShowOptions = struct {
 	IncludeLogs bool
+	Shards      []string
 }{}
 
 func GetShowCommand(opts *SubCommandsOpts) *cobra.Command {
@@ -40,7 +41,7 @@ func GetShowCommand(opts *SubCommandsOpts) *cobra.Command {
 		Args:                  cobra.NoArgs,
 		RunE:                  commandShow,
 	}
-	cmd.Flags().BoolVar(&showOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
+	cmd.Flags().BoolVar(&ShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
 	return cmd
 }
 
@@ -50,7 +51,8 @@ func commandShow(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.GetWorkflowsRequest{
 		Keyspace:    BaseOptions.TargetKeyspace,
 		Workflow:    BaseOptions.Workflow,
-		IncludeLogs: showOptions.IncludeLogs,
+		IncludeLogs: ShowOptions.IncludeLogs,
+		Shards:      ShowOptions.Shards,
 	}
 	resp, err := GetClient().GetWorkflows(GetCommandCtx(), req)
 	if err != nil {

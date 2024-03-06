@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/datadog-go/statsd"
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/stats"
@@ -19,8 +19,7 @@ func getBackend(t *testing.T) (StatsBackend, *net.UDPConn) {
 	udpAddr, _ := net.ResolveUDPAddr("udp", addr)
 	server, _ := net.ListenUDP("udp", udpAddr)
 	bufferLength := 9
-	client, _ := statsd.NewBuffered(addr, bufferLength)
-	client.Namespace = "test."
+	client, _ := statsd.New(addr, statsd.WithMaxMessagesPerPayload(bufferLength), statsd.WithNamespace("test"))
 	var sb StatsBackend
 	sb.namespace = "foo"
 	sb.sampleRate = 1

@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -81,7 +82,7 @@ var (
 	keyspaceName          = "ks"
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
-	overrideVtctlParams   *cluster.VtctlClientParams
+	overrideVtctlParams   *cluster.ApplySchemaParams
 )
 
 type WriteMetrics struct {
@@ -334,7 +335,7 @@ func testScheduler(t *testing.T) {
 
 	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
-	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
+	capableOf := mysql.ServerVersionCapableOf(mysqlVersion)
 
 	var (
 		t1uuid string
@@ -549,7 +550,7 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
-	forceCutoverCapable, err := capableOf(mysql.PerformanceSchemaDataLocksTableCapability) // 8.0
+	forceCutoverCapable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability) // 8.0
 	require.NoError(t, err)
 	if forceCutoverCapable {
 		t.Run("force_cutover", func(t *testing.T) {
@@ -948,7 +949,7 @@ func testScheduler(t *testing.T) {
 
 	t.Run("Idempotent submission, retry failed migration", func(t *testing.T) {
 		uuid := "00000000_1111_2222_3333_444444444444"
-		overrideVtctlParams = &cluster.VtctlClientParams{DDLStrategy: ddlStrategy, UUIDList: uuid, MigrationContext: "idempotent:1111-2222-3333"}
+		overrideVtctlParams = &cluster.ApplySchemaParams{DDLStrategy: ddlStrategy, UUIDs: uuid, MigrationContext: "idempotent:1111-2222-3333"}
 		defer func() { overrideVtctlParams = nil }()
 		// create a migration and cancel it. We don't let it complete. We want it in "failed" state
 		t.Run("start and fail migration", func(t *testing.T) {
@@ -984,7 +985,7 @@ func testScheduler(t *testing.T) {
 	t.Run("Idempotent submission, retry failed migration in singleton context", func(t *testing.T) {
 		uuid := "00000000_1111_3333_3333_444444444444"
 		ddlStrategy := ddlStrategy + " --singleton-context"
-		overrideVtctlParams = &cluster.VtctlClientParams{DDLStrategy: ddlStrategy, UUIDList: uuid, MigrationContext: "idempotent:1111-3333-3333"}
+		overrideVtctlParams = &cluster.ApplySchemaParams{DDLStrategy: ddlStrategy, UUIDs: uuid, MigrationContext: "idempotent:1111-3333-3333"}
 		defer func() { overrideVtctlParams = nil }()
 		// create a migration and cancel it. We don't let it complete. We want it in "failed" state
 		t.Run("start and fail migration", func(t *testing.T) {
@@ -1023,6 +1024,9 @@ func testScheduler(t *testing.T) {
 		t.Run("start migration", func(t *testing.T) {
 			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion --retain-artifacts=1s", "vtctl", "", "", true)) // skip wait
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		})
+		t.Run("wait for ready_to_complete", func(t *testing.T) {
+			waitForReadyToComplete(t, t1uuid, true)
 		})
 		var artifacts []string
 		t.Run("validate artifact exists", func(t *testing.T) {
@@ -1071,7 +1075,7 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
-	checkConstraintCapable, err := capableOf(mysql.CheckConstraintsCapability) // 8.0.16 and above
+	checkConstraintCapable, err := capableOf(capabilities.CheckConstraintsCapability) // 8.0.16 and above
 	require.NoError(t, err)
 	if checkConstraintCapable {
 		// Constraints
@@ -1091,7 +1095,7 @@ func testScheduler(t *testing.T) {
 	}
 
 	// INSTANT DDL
-	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
+	instantDDLCapable, err := capableOf(capabilities.InstantAddLastColumnFlavorCapability)
 	require.NoError(t, err)
 	if instantDDLCapable {
 		t.Run("INSTANT DDL: postpone-completion", func(t *testing.T) {
@@ -2390,7 +2394,7 @@ func testForeignKeys(t *testing.T) {
 							continue
 						}
 						statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", artifact)
-						_, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.VtctlClientParams{DDLStrategy: "direct"})
+						_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.ApplySchemaParams{DDLStrategy: "direct"})
 						if err == nil {
 							droppedTables[artifact] = true
 						}
@@ -2422,11 +2426,11 @@ func testOnlineDDLStatement(t *testing.T, params *testOnlineDDLStatementParams) 
 			}
 		}
 	} else {
-		vtctlParams := &cluster.VtctlClientParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext}
+		vtctlParams := &cluster.ApplySchemaParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext}
 		if overrideVtctlParams != nil {
 			vtctlParams = overrideVtctlParams
 		}
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, params.ddlStatement, *vtctlParams)
+		output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, params.ddlStatement, *vtctlParams)
 		switch params.expectError {
 		case anyErrorIndicator:
 			if err != nil {
@@ -2471,7 +2475,7 @@ func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid 
 			}
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.VtctlClientParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext})
+		output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.ApplySchemaParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext})
 		if params.expectError == "" {
 			assert.NoError(t, err)
 			uuid = output
@@ -2511,7 +2515,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.Nil(t, err)
-	return assert.Equal(t, expectCount, len(queryResult.Rows))
+	return assert.Equalf(t, expectCount, len(queryResult.Rows), "checkTablesCount cannot find table like '%%%s%%'", showTableName)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration

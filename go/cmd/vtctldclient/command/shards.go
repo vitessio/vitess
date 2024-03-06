@@ -93,6 +93,14 @@ that shard.`,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetShard,
 	}
+	// GetShardReplication makes a GetShardReplication gRPC request to a vtctld.
+	GetShardReplication = &cobra.Command{
+		Use:                   "GetShardReplication <keyspace/shard> [cell1 [cell2...]]",
+		Short:                 "Returns information about the replication relationships for a shard in the given cell(s).",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.MinimumNArgs(1),
+		RunE:                  commandGetShardReplication,
+	}
 	// RemoveShardCell makes a RemoveShardCell gRPC request to a vtctld.
 	RemoveShardCell = &cobra.Command{
 		Use:                   "RemoveShardCell [--force|-f] [--recursive|-r] <keyspace/shard> <cell>",
@@ -284,6 +292,36 @@ func commandGetShard(cmd *cobra.Command, args []string) error {
 	fmt.Printf("%s\n", data)
 
 	return nil
+}
+
+func commandGetShardReplication(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cells := cmd.Flags().Args()[1:]
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.GetShardReplication(commandCtx, &vtctldatapb.GetShardReplicationRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Cells:    cells,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+
 }
 
 var removeShardCellOptions = struct {
@@ -558,7 +596,7 @@ func commandSourceShardDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	uid, err := strconv.ParseUint(cmd.Flags().Arg(1), 10, 32)
+	uid, err := strconv.ParseInt(cmd.Flags().Arg(1), 10, 32)
 	if err != nil {
 		return fmt.Errorf("Failed to parse SourceShard uid: %w", err) // nolint
 	}
@@ -624,6 +662,7 @@ func init() {
 	Root.AddCommand(DeleteShards)
 
 	Root.AddCommand(GetShard)
+	Root.AddCommand(GetShardReplication)
 	Root.AddCommand(GenerateShardRanges)
 
 	RemoveShardCell.Flags().BoolVarP(&removeShardCellOptions.Force, "force", "f", false, "Proceed even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")

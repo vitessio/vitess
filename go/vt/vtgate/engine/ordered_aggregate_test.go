@@ -32,18 +32,8 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/servenv"
 	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
-
-var collationEnv *collations.Environment
-
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.SetMySQLServerVersionForTest(mySQLVersion)
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-}
 
 func TestOrderedAggregateExecute(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
@@ -904,9 +894,10 @@ func TestOrderedAggregateCollate(t *testing.T) {
 		)},
 	}
 
+	collationEnv := collations.MySQL8()
 	collationID, _ := collationEnv.LookupID("utf8mb4_0900_ai_ci")
 	oa := &OrderedAggregate{
-		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collations.MySQL8())},
+		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collationEnv)},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.NewType(sqltypes.Unknown, collationID)}},
 		Input:       fp,
 	}
@@ -942,9 +933,10 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 		)},
 	}
 
+	collationEnv := collations.MySQL8()
 	collationID, _ := collationEnv.LookupID("utf8mb4_0900_as_ci")
 	oa := &OrderedAggregate{
-		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collations.MySQL8())},
+		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collationEnv)},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.NewType(sqltypes.Unknown, collationID)}},
 		Input:       fp,
 	}
@@ -982,9 +974,10 @@ func TestOrderedAggregateCollateKS(t *testing.T) {
 		)},
 	}
 
+	collationEnv := collations.MySQL8()
 	collationID, _ := collationEnv.LookupID("utf8mb4_ja_0900_as_cs_ks")
 	oa := &OrderedAggregate{
-		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collations.MySQL8())},
+		Aggregates:  []*AggregateParams{NewAggregateParam(AggregateSum, 1, "", collationEnv)},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0, Type: evalengine.NewType(sqltypes.Unknown, collationID)}},
 		Input:       fp,
 	}

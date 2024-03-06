@@ -421,7 +421,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 		}
 
 		// Make first tablet as primary
-		if err = cluster.VtctlclientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
+		if err = cluster.VtctldClientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			log.Errorf("error running InitializeShard on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
 			return
 		}
@@ -441,7 +441,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 
 	// Apply Schema SQL
 	if keyspace.SchemaSQL != "" {
-		if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
+		if err = cluster.VtctldClientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
 			log.Errorf("error applying schema: %v, %v", keyspace.SchemaSQL, err)
 			return
 		}
@@ -449,7 +449,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 
 	// Apply VSchema
 	if keyspace.VSchema != "" {
-		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
+		if err = cluster.VtctldClientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
 			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
 			return
 		}
@@ -581,7 +581,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		}
 
 		// Make first tablet as primary
-		if err = cluster.VtctlclientProcess.InitShardPrimary(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
+		if err = cluster.VtctldClientProcess.InitShardPrimary(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			log.Errorf("error running ISM on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
 			return
 		}
@@ -601,7 +601,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 
 	// Apply Schema SQL
 	if keyspace.SchemaSQL != "" {
-		if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
+		if err = cluster.VtctldClientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
 			log.Errorf("error applying schema: %v, %v", keyspace.SchemaSQL, err)
 			return
 		}
@@ -609,7 +609,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 
 	// Apply VSchema
 	if keyspace.VSchema != "" {
-		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
+		if err = cluster.VtctldClientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
 			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
 			return
 		}

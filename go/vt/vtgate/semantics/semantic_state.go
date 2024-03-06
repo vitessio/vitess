@@ -26,6 +26,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -76,11 +77,12 @@ type (
 
 	// QuerySignature is used to identify shortcuts in the planning process
 	QuerySignature struct {
-		Union,
-		Aggregation,
-		Distinct,
-		SubQueries,
-		HashJoin bool
+		Aggregation bool
+		DML         bool
+		Distinct    bool
+		HashJoin    bool
+		SubQueries  bool
+		Union       bool
 	}
 
 	// SemTable contains semantic analysis information about the query.
@@ -141,6 +143,7 @@ type (
 		childForeignKeysInvolved  map[TableSet][]vindexes.ChildFKInfo
 		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
 		childFkToUpdExprs         map[string]sqlparser.UpdateExprs
+		collEnv                   *collations.Environment
 	}
 
 	columnName struct {
@@ -152,7 +155,7 @@ type (
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 		ConnCollation() collations.ID
-		CollationEnv() *collations.Environment
+		Environment() *vtenv.Environment
 		// ForeignKeyMode returns the foreign_key flag value
 		ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
 		GetForeignKeyChecksState() *bool
@@ -184,6 +187,11 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 			}
 		}
 	}
+}
+
+// GetChildForeignKeysForTable gets the child foreign keys as a list for the specified table.
+func (st *SemTable) GetChildForeignKeysForTable(tableName sqlparser.TableName) []vindexes.ChildFKInfo {
+	return st.childForeignKeysInvolved[st.Targets[tableName.Name]]
 }
 
 // GetChildForeignKeysList gets the child foreign keys as a list.
@@ -298,7 +306,7 @@ func (st *SemTable) ErrIfFkDependentColumnUpdated(updateExprs sqlparser.UpdateEx
 	for _, updateExpr := range updateExprs {
 		deps := st.RecursiveDeps(updateExpr.Name)
 		if deps.NumberOfTables() != 1 {
-			panic("expected to have single table dependency")
+			return vterrors.VT13001("expected to have single table dependency")
 		}
 		// Get all the child and parent foreign keys for the given table that the update expression belongs to.
 		childFks := st.childForeignKeysInvolved[deps]
@@ -633,7 +641,12 @@ func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
 		if !found {
 			return true
 		}
-		return typ.Collation() == collations.Unknown && !sqltypes.IsNumber(typ.Type())
+
+		if !sqltypes.IsText(typ.Type()) {
+			return false
+		}
+
+		return !st.collEnv.IsSupported(typ.Collation())
 	}
 }
 
@@ -717,6 +730,10 @@ func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 
 // SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
 func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*vindexes.Table) {
+	return singleUnshardedKeyspace(st.Tables)
+}
+
+func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tables []*vindexes.Table) {
 	validKS := func(this *vindexes.Keyspace) bool {
 		if this == nil || this.Sharded {
 			return false
@@ -731,7 +748,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*
 		return true
 	}
 
-	for _, table := range st.Tables {
+	for _, table := range tableInfos {
 		if _, isDT := table.(*DerivedTable); isDT {
 			continue
 		}
@@ -762,6 +779,34 @@ func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*
 	return ks, tables
 }
 
+// SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same keyspace
+func (st *SemTable) SingleKeyspace() (ks *vindexes.Keyspace) {
+	validKS := func(this *vindexes.Keyspace) bool {
+		if this == nil {
+			return true
+		}
+		if ks == nil {
+			// first keyspace we see
+			ks = this
+		} else if ks != this {
+			return false
+		}
+		return true
+	}
+
+	for _, table := range st.Tables {
+		if _, isDT := table.(*DerivedTable); isDT {
+			continue
+		}
+
+		vtbl := table.GetVindexTable()
+		if !validKS(vtbl.Keyspace) {
+			return nil
+		}
+	}
+	return
+}
+
 // EqualsExpr compares two expressions using the semantic analysis information.
 // This means that we use the binding info to recognize that two ColName's can point to the same
 // table column even though they are written differently. Example would be the `foobar` column in the following query:
@@ -771,7 +816,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
 	// If there is no SemTable, then we cannot compare the expressions.
 	if st == nil {
-		return false
+		return sqlparser.Equals.Expr(a, b)
 	}
 	return st.ASTEquals().Expr(a, b)
 }
@@ -871,4 +916,24 @@ func (st *SemTable) ASTEquals() *sqlparser.Comparator {
 		}
 	}
 	return st.comparator
+}
+
+func (st *SemTable) Clone(n sqlparser.SQLNode) sqlparser.SQLNode {
+	return sqlparser.CopyOnRewrite(n, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		expr, isExpr := cursor.Node().(sqlparser.Expr)
+		if !isExpr {
+			return
+		}
+		cursor.Replace(sqlparser.CloneExpr(expr))
+	}, st.CopySemanticInfo)
+}
+
+func (st *SemTable) UpdateChildFKExpr(origUpdExpr *sqlparser.UpdateExpr, newExpr sqlparser.Expr) {
+	for _, exprs := range st.childFkToUpdExprs {
+		for idx, updateExpr := range exprs {
+			if updateExpr == origUpdExpr {
+				exprs[idx].Expr = newExpr
+			}
+		}
+	}
 }

@@ -25,11 +25,14 @@ import (
 
 	golcs "github.com/yudai/golcs"
 
-	"vitess.io/vitess/go/mysql/collations/colldata"
-
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+type charsetCollate struct {
+	charset string
+	collate string
+}
 
 type AlterTableEntityDiff struct {
 	from       *CreateTableEntity
@@ -38,6 +41,7 @@ type AlterTableEntityDiff struct {
 
 	canonicalStatementString string
 	subsequentDiff           *AlterTableEntityDiff
+	instantDDLCapability     InstantDDLCapability
 }
 
 // IsEmpty implements EntityDiff
@@ -121,6 +125,14 @@ func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
 	}
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *AlterTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	if d == nil {
+		return InstantDDLCapabilityUnknown
+	}
+	return d.instantDDLCapability
+}
+
 type CreateTableEntityDiff struct {
 	to          *CreateTableEntity
 	createTable *sqlparser.CreateTable
@@ -189,6 +201,11 @@ func (d *CreateTableEntityDiff) SubsequentDiff() EntityDiff {
 func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *CreateTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
 type DropTableEntityDiff struct {
 	from      *CreateTableEntity
 	dropTable *sqlparser.DropTable
@@ -255,6 +272,11 @@ func (d *DropTableEntityDiff) SubsequentDiff() EntityDiff {
 
 // SetSubsequentDiff implements EntityDiff
 func (d *DropTableEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
+// InstantDDLCapability implements EntityDiff
+func (d *DropTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
 }
 
 type RenameTableEntityDiff struct {
@@ -326,16 +348,22 @@ func (d *RenameTableEntityDiff) SubsequentDiff() EntityDiff {
 func (d *RenameTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
+// InstantDDLCapability implements EntityDiff
+func (d *RenameTableEntityDiff) InstantDDLCapability() InstantDDLCapability {
+	return InstantDDLCapabilityIrrelevant
+}
+
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
 type CreateTableEntity struct {
 	*sqlparser.CreateTable
+	Env *Environment
 }
 
-func NewCreateTableEntity(c *sqlparser.CreateTable) (*CreateTableEntity, error) {
+func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTableEntity, error) {
 	if !c.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.Table.Name.String(), Statement: sqlparser.CanonicalString(c)}
 	}
-	entity := &CreateTableEntity{CreateTable: c}
+	entity := &CreateTableEntity{CreateTable: c, Env: env}
 	entity.normalize()
 	return entity, nil
 }
@@ -362,12 +390,12 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 		switch opt.Name {
 		case "charset":
 			opt.String = strings.ToLower(opt.String)
-			if charset, ok := collationEnv.CharsetAlias(opt.String); ok {
+			if charset, ok := c.Env.CollationEnv().CharsetAlias(opt.String); ok {
 				opt.String = charset
 			}
 		case "collate":
 			opt.String = strings.ToLower(opt.String)
-			if collation, ok := collationEnv.CollationAlias(opt.String); ok {
+			if collation, ok := c.Env.CollationEnv().CollationAlias(opt.String); ok {
 				opt.String = collation
 			}
 		case "engine":
@@ -387,7 +415,7 @@ func (c *CreateTableEntity) GetCharset() string {
 	for _, opt := range c.CreateTable.TableSpec.Options {
 		if strings.ToLower(opt.Name) == "charset" {
 			opt.String = strings.ToLower(opt.String)
-			if charsetName, ok := collationEnv.CharsetAlias(opt.String); ok {
+			if charsetName, ok := c.Env.CollationEnv().CharsetAlias(opt.String); ok {
 				return charsetName
 			}
 			return opt.String
@@ -402,7 +430,7 @@ func (c *CreateTableEntity) GetCollation() string {
 	for _, opt := range c.CreateTable.TableSpec.Options {
 		if strings.ToLower(opt.Name) == "collate" {
 			opt.String = strings.ToLower(opt.String)
-			if collationName, ok := collationEnv.CollationAlias(opt.String); ok {
+			if collationName, ok := c.Env.CollationEnv().CollationAlias(opt.String); ok {
 				return collationName
 			}
 			return opt.String
@@ -412,45 +440,27 @@ func (c *CreateTableEntity) GetCollation() string {
 }
 
 func (c *CreateTableEntity) Clone() Entity {
-	return &CreateTableEntity{CreateTable: sqlparser.CloneRefOfCreateTable(c.CreateTable)}
+	return &CreateTableEntity{CreateTable: sqlparser.CloneRefOfCreateTable(c.CreateTable), Env: c.Env}
 }
 
-// Right now we assume MySQL 8.0 for the collation normalization handling.
-const mysqlCollationVersion = "8.0.0"
-
-var collationEnv = collations.NewEnvironment(mysqlCollationVersion)
-
-func defaultCharset() string {
-	collation := colldata.Lookup(collations.ID(collationEnv.DefaultConnectionCharset()))
-	if collation == nil {
-		return ""
+func getTableCharsetCollate(env *Environment, tableOptions *sqlparser.TableOptions) *charsetCollate {
+	cc := &charsetCollate{
+		charset: env.CollationEnv().LookupCharsetName(env.DefaultColl),
+		collate: env.CollationEnv().LookupName(env.DefaultColl),
 	}
-	return collation.Charset().Name()
-}
-
-func defaultCharsetCollation(charset string) string {
-	collation := collationEnv.DefaultCollationForCharset(charset)
-	if collation == collations.Unknown {
-		return ""
+	for _, option := range *tableOptions {
+		if strings.EqualFold(option.Name, "charset") {
+			cc.charset = option.String
+		}
+		if strings.EqualFold(option.Name, "collate") {
+			cc.collate = option.String
+		}
 	}
-	return collationEnv.LookupName(collation)
+	return cc
 }
 
 func (c *CreateTableEntity) normalizeColumnOptions() {
-	tableCharset := defaultCharset()
-	tableCollation := ""
-	for _, option := range c.CreateTable.TableSpec.Options {
-		switch strings.ToUpper(option.Name) {
-		case "CHARSET":
-			tableCharset = option.String
-		case "COLLATE":
-			tableCollation = option.String
-		}
-	}
-	defaultCollation := defaultCharsetCollation(tableCharset)
-	if tableCollation == "" {
-		tableCollation = defaultCollation
-	}
+	cc := getTableCharsetCollate(c.Env, &c.CreateTable.TableSpec.Options)
 
 	for _, col := range c.CreateTable.TableSpec.Columns {
 		if col.Type.Options == nil {
@@ -497,13 +507,13 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 
 		// Map any charset aliases to the real charset. This applies mainly right
 		// now to utf8 being an alias for utf8mb3.
-		if charset, ok := collationEnv.CharsetAlias(col.Type.Charset.Name); ok {
+		if charset, ok := c.Env.CollationEnv().CharsetAlias(col.Type.Charset.Name); ok {
 			col.Type.Charset.Name = charset
 		}
 
 		// Map any collation aliases to the real collation. This applies mainly right
 		// now to utf8 being an alias for utf8mb3 collations.
-		if collation, ok := collationEnv.CollationAlias(col.Type.Options.Collate); ok {
+		if collation, ok := c.Env.CollationEnv().CollationAlias(col.Type.Options.Collate); ok {
 			col.Type.Options.Collate = collation
 		}
 
@@ -521,10 +531,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		// "show create table" reports it as a tinyint(1).
 		if col.Type.Type == "boolean" {
 			col.Type.Type = "tinyint"
-			col.Type.Length = &sqlparser.Literal{
-				Type: sqlparser.IntVal,
-				Val:  "1",
-			}
+			col.Type.Length = ptr.Of(1)
 
 			if col.Type.Options.Default != nil {
 				val, ok := col.Type.Options.Default.(sqlparser.BoolVal)
@@ -553,16 +560,14 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 				col.Type.Type = "double"
 			}
 
-			if col.Type.Length != nil && col.Type.Scale == nil && col.Type.Length.Type == sqlparser.IntVal {
-				if l, err := strconv.ParseInt(col.Type.Length.Val, 10, 64); err == nil {
-					// See https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html, but the docs are
-					// subtly wrong. We use a float for a precision of 24, not a double as the documentation
-					// mentioned. Validated against the actual behavior of MySQL.
-					if l <= 24 {
-						col.Type.Type = "float"
-					} else {
-						col.Type.Type = "double"
-					}
+			if col.Type.Length != nil && col.Type.Scale == nil {
+				// See https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html, but the docs are
+				// subtly wrong. We use a float for a precision of 24, not a double as the documentation
+				// mentioned. Validated against the actual behavior of MySQL.
+				if *col.Type.Length <= 24 {
+					col.Type.Type = "float"
+				} else {
+					col.Type.Type = "double"
 				}
 				col.Type.Length = nil
 			}
@@ -571,13 +576,13 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 		if _, ok := charsetTypes[col.Type.Type]; ok {
 			// If the charset is explicitly configured and it mismatches, we don't normalize
 			// anything for charsets or collations and move on.
-			if col.Type.Charset.Name != "" && col.Type.Charset.Name != tableCharset {
+			if col.Type.Charset.Name != "" && col.Type.Charset.Name != cc.charset {
 				continue
 			}
 
 			// Alright, first check if both charset and collation are the same as
 			// the table level options, in that case we can remove both since that's equivalent.
-			if col.Type.Charset.Name == tableCharset && col.Type.Options.Collate == tableCollation {
+			if col.Type.Charset.Name == cc.charset && col.Type.Options.Collate == cc.collate {
 				col.Type.Charset.Name = ""
 				col.Type.Options.Collate = ""
 			}
@@ -595,13 +600,13 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			if col.Type.Charset.Name != "" {
 				col.Type.Charset.Name = ""
 				if col.Type.Options.Collate == "" {
-					col.Type.Options.Collate = defaultCollation
+					col.Type.Options.Collate = c.Env.CollationEnv().LookupName(c.Env.DefaultColl)
 				}
 			}
 
 			// We now have one case left, which is when we have set a collation but it's the same
 			// as the table level. In that case, we can clear it since that is equivalent.
-			if col.Type.Options.Collate == tableCollation {
+			if col.Type.Options.Collate == cc.collate {
 				col.Type.Options.Collate = ""
 			}
 		}
@@ -618,7 +623,7 @@ func (c *CreateTableEntity) normalizeIndexOptions() {
 }
 
 func isBool(colType *sqlparser.ColumnType) bool {
-	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length != nil && sqlparser.CanonicalString(colType.Length) == "1"
+	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length != nil && *colType.Length == 1
 }
 
 func (c *CreateTableEntity) normalizePartitionOptions() {
@@ -826,21 +831,21 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		alterTable.Table.Qualifier = other.Table.Qualifier
 	}
 
-	diffedTableCharset := ""
+	t1cc := getTableCharsetCollate(c.Env, &c.CreateTable.TableSpec.Options)
+	t2cc := getTableCharsetCollate(c.Env, &other.CreateTable.TableSpec.Options)
+
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
 	var partitionSpecs []*sqlparser.PartitionSpec
 	var superfluousFulltextKeys []*sqlparser.AddIndexDefinition
 	{
-		t1Options := c.CreateTable.TableSpec.Options
-		t2Options := other.CreateTable.TableSpec.Options
-		diffedTableCharset = c.diffTableCharset(t1Options, t2Options)
-	}
-	{
 		// diff columns
 		// ordered columns for both tables:
+
 		t1Columns := c.CreateTable.TableSpec.Columns
 		t2Columns := other.CreateTable.TableSpec.Columns
-		c.diffColumns(alterTable, t1Columns, t2Columns, hints, diffedTableCharset != "")
+		if err := c.diffColumns(alterTable, t1Columns, t2Columns, hints, t1cc, t2cc); err != nil {
+			return nil, err
+		}
 	}
 	{
 		// diff keys
@@ -927,21 +932,11 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 }
 
 func (c *CreateTableEntity) diffTableCharset(
-	t1Options sqlparser.TableOptions,
-	t2Options sqlparser.TableOptions,
+	t1cc *charsetCollate,
+	t2cc *charsetCollate,
 ) string {
-	getcharset := func(options sqlparser.TableOptions) string {
-		for _, option := range options {
-			if strings.EqualFold(option.Name, "CHARSET") {
-				return option.String
-			}
-		}
-		return ""
-	}
-	t1Charset := getcharset(t1Options)
-	t2Charset := getcharset(t2Options)
-	if t1Charset != t2Charset {
-		return t2Charset
+	if t1cc.charset != t2cc.charset {
+		return t2cc.charset
 	}
 	return ""
 }
@@ -1019,7 +1014,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 			case "CHARSET":
 				switch hints.TableCharsetCollateStrategy {
 				case TableCharsetCollateStrict:
-					tableOption = &sqlparser.TableOption{String: ""}
+					tableOption = &sqlparser.TableOption{Name: "CHARSET", String: c.Env.CollationEnv().LookupCharsetName(c.Env.DefaultColl), CaseSensitive: true}
 					// in all other strategies we ignore the charset
 				}
 			case "CHECKSUM":
@@ -1536,8 +1531,9 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	t1Columns []*sqlparser.ColumnDefinition,
 	t2Columns []*sqlparser.ColumnDefinition,
 	hints *DiffHints,
-	tableCharsetChanged bool,
-) {
+	t1cc *charsetCollate,
+	t2cc *charsetCollate,
+) error {
 	getColumnsMap := func(cols []*sqlparser.ColumnDefinition) map[string]*columnDetails {
 		var prevCol *columnDetails
 		m := map[string]*columnDetails{}
@@ -1599,13 +1595,16 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColEntity := NewColumnDefinitionEntity(t2Col)
 
 		// check diff between before/after columns:
-		modifyColumnDiff := t1ColEntity.ColumnDiff(t2ColEntity, hints)
+		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Env, c.Name(), t2ColEntity, t1cc, t2cc, hints)
+		if err != nil {
+			return err
+		}
 		if modifyColumnDiff == nil {
 			// even if there's no apparent change, there can still be implicit changes
 			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both versions 1 and 2,
-			// but implicitly the column has changed its characters set. So we need to explicitly ass a MODIFY COLUMN statement, so that
+			// but implicitly the column has changed its character set. So we need to explicitly add a MODIFY COLUMN statement, so that
 			// MySQL rebuilds it.
-			if tableCharsetChanged && t2ColEntity.IsTextual() && t2Col.Type.Charset.Name == "" {
+			if t1cc.charset != t2cc.charset && t2ColEntity.IsTextual() && t2Col.Type.Charset.Name == "" {
 				modifyColumnDiff = NewModifyColumnDiffByDefinition(t2Col)
 			}
 		}
@@ -1666,6 +1665,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	for _, c := range addColumns {
 		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
 	}
+	return nil
 }
 
 func heuristicallyDetectColumnRenames(

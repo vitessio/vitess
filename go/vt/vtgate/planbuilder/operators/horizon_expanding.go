@@ -98,10 +98,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if len(qp.OrderExprs) > 0 {
-		op = &Ordering{
-			Source: op,
-			Order:  qp.OrderExprs,
-		}
+		op = expandOrderBy(ctx, op, qp)
 		extracted = append(extracted, "Ordering")
 	}
 
@@ -114,6 +111,40 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	return op, Rewrote(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")))
+}
+
+func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection) Operator {
+	proj := newAliasedProjection(op)
+	var newOrder []OrderBy
+	sqc := &SubQueryBuilder{}
+	for _, expr := range qp.OrderExprs {
+		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr.SimplifiedExpr, TableID(op), false)
+		if newExpr == nil {
+			// no subqueries found, let's move on
+			newOrder = append(newOrder, expr)
+			continue
+		}
+		proj.addSubqueryExpr(aeWrap(newExpr), newExpr, subqs...)
+		newOrder = append(newOrder, OrderBy{
+			Inner: &sqlparser.Order{
+				Expr:      newExpr,
+				Direction: expr.Inner.Direction,
+			},
+			SimplifiedExpr: newExpr,
+		})
+
+	}
+
+	if len(proj.Columns.GetColumns()) > 0 {
+		// if we had to project columns for the ordering,
+		// we need the projection as source
+		op = proj
+	}
+
+	return &Ordering{
+		Source: op,
+		Order:  newOrder,
+	}
 }
 
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) Operator {
@@ -176,7 +207,7 @@ outer:
 		}
 		addedToCol := false
 		for idx, groupBy := range a.Grouping {
-			if ctx.SemTable.EqualsExprWithDeps(groupBy.SimplifiedExpr, ae.Expr) {
+			if ctx.SemTable.EqualsExprWithDeps(groupBy.Inner, ae.Expr) {
 				if !addedToCol {
 					a.Columns = append(a.Columns, ae)
 					addedToCol = true
@@ -214,7 +245,7 @@ func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) O
 	}
 	for i, by := range a.Grouping {
 		a.Grouping[i].ColOffset = len(a.Columns)
-		a.Columns = append(a.Columns, aeWrap(by.SimplifiedExpr))
+		a.Columns = append(a.Columns, aeWrap(by.Inner))
 	}
 	for i, aggregation := range a.Aggregations {
 		a.Aggregations[i].ColOffset = len(a.Columns)
@@ -242,7 +273,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 	sqc := &SubQueryBuilder{}
 	outerID := TableID(src)
 	for _, ae := range aes {
-		org := sqlparser.CloneRefOfAliasedExpr(ae)
+		org := ctx.SemTable.Clone(ae).(*sqlparser.AliasedExpr)
 		expr := ae.Expr
 		newExpr, subqs := sqc.pullOutValueSubqueries(ctx, expr, outerID, false)
 		if newExpr == nil {

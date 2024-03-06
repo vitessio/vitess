@@ -1236,7 +1236,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		var err error
-		queries, err = handler.SQLParser().SplitStatementToPieces(query)
+		queries, err = handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1256,7 +1256,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		PrepareStmt: queries[0],
 	}
 
-	statement, err := handler.SQLParser().ParseStrictDDL(query)
+	statement, err := handler.Env().Parser().ParseStrictDDL(query)
 	if err != nil {
 		log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
 		if !c.writeErrorPacketFromErrorAndLog(err) {
@@ -1364,7 +1364,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	var err error
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err = handler.SQLParser().SplitStatementToPieces(query)
+		queries, err = handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1525,35 +1525,30 @@ type PacketOK struct {
 	sessionStateData string
 }
 
-func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
+func (c *Conn) parseOKPacket(packetOK *PacketOK, in []byte) error {
 	data := &coder{
 		data: in,
 		pos:  1, // We already read the type.
-	}
-	packetOK := &PacketOK{}
-
-	fail := func(format string, args ...any) (*PacketOK, error) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, format, args...)
 	}
 
 	// Affected rows.
 	affectedRows, ok := data.readLenEncInt()
 	if !ok {
-		return fail("invalid OK packet affectedRows: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet affectedRows: %v", data.data)
 	}
 	packetOK.affectedRows = affectedRows
 
 	// Last Insert ID.
 	lastInsertID, ok := data.readLenEncInt()
 	if !ok {
-		return fail("invalid OK packet lastInsertID: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet lastInsertID: %v", data.data)
 	}
 	packetOK.lastInsertID = lastInsertID
 
 	// Status flags.
 	statusFlags, ok := data.readUint16()
 	if !ok {
-		return fail("invalid OK packet statusFlags: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet statusFlags: %v", data.data)
 	}
 	packetOK.statusFlags = statusFlags
 
@@ -1561,7 +1556,7 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	// Warnings.
 	warnings, ok := data.readUint16()
 	if !ok {
-		return fail("invalid OK packet warnings: %v", data)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet warnings: %v", data.data)
 	}
 	packetOK.warnings = warnings
 
@@ -1578,7 +1573,7 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 			if !ok || length == 0 {
 				// In case we have no more data or a zero length string, there's no additional information so
 				// we can return the packet.
-				return packetOK, nil
+				return nil
 			}
 
 			// Alright, now we need to read each sub packet from the session state change.
@@ -1590,7 +1585,7 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 				}
 				sessionLen, ok := data.readLenEncInt()
 				if !ok {
-					return fail("invalid OK packet session state change length for type %v", sscType)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet session state change length for type %v", sscType)
 				}
 
 				if sscType != SessionTrackGtids {
@@ -1603,19 +1598,19 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 				// read (and ignore for now) the GTIDS encoding specification code: 1 byte
 				_, ok = data.readByte()
 				if !ok {
-					return fail("invalid OK packet gtids type: %v", data)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet gtids type: %v", data.data)
 				}
 
 				gtids, ok := data.readLenEncString()
 				if !ok {
-					return fail("invalid OK packet gtids: %v", data)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet gtids: %v", data.data)
 				}
 				packetOK.sessionStateData = gtids
 			}
 		}
 	}
 
-	return packetOK, nil
+	return nil
 }
 
 // isErrorPacket determines whether or not the packet is an error packet. Mostly here for

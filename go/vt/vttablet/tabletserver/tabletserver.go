@@ -28,13 +28,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -43,7 +41,6 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -53,6 +50,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -130,12 +128,7 @@ type TabletServer struct {
 	// This field is only stored for testing
 	checkMysqlGaugeFunc *stats.GaugeFunc
 
-	collationEnv *collations.Environment
-	parser       *sqlparser.Parser
-}
-
-func (tsv *TabletServer) SQLParser() *sqlparser.Parser {
-	return tsv.parser
+	env *vtenv.Environment
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -146,18 +139,13 @@ var _ queryservice.QueryService = (*TabletServer)(nil)
 var RegisterFunctions []func(Controller)
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(ctx context.Context, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser) *TabletServer {
-	return NewTabletServer(ctx, name, tabletenv.NewCurrentConfig(), topoServer, alias, collationEnv, parser)
+func NewServer(ctx context.Context, env *vtenv.Environment, name string, topoServer *topo.Server, alias *topodatapb.TabletAlias, srvTopoCounts *stats.CountersWithSingleLabel) *TabletServer {
+	return NewTabletServer(ctx, env, name, tabletenv.NewCurrentConfig(), topoServer, alias, srvTopoCounts)
 }
-
-var (
-	tsOnce        sync.Once
-	srvTopoServer srvtopo.Server
-)
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser) *TabletServer {
+func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, config *tabletenv.TabletConfig, topoServer *topo.Server, alias *topodatapb.TabletAlias, srvTopoCounts *stats.CountersWithSingleLabel) *TabletServer {
 	exporter := servenv.NewExporter(name, "Tablet")
 	tsv := &TabletServer{
 		exporter:               exporter,
@@ -168,12 +156,11 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
 		alias:                  alias.CloneVT(),
-		collationEnv:           collationEnv,
-		parser:                 parser,
+		env:                    env,
 	}
 	tsv.QueryTimeout.Store(config.Oltp.QueryTimeout.Nanoseconds())
 
-	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(ctx, topoServer, "TabletSrvTopo") })
+	srvTopoServer := srvtopo.NewResilientServer(ctx, topoServer, srvTopoCounts)
 
 	tabletTypeFunc := func() topodatapb.TabletType {
 		if tsv.sm == nil || tsv.sm.Target() == nil {
@@ -182,9 +169,9 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		return tsv.sm.Target().TabletType
 	}
 
-	tsv.statelessql = NewQueryList("oltp-stateless", parser)
-	tsv.statefulql = NewQueryList("oltp-stateful", parser)
-	tsv.olapql = NewQueryList("olap", parser)
+	tsv.statelessql = NewQueryList("oltp-stateless", env.Parser())
+	tsv.statefulql = NewQueryList("oltp-stateful", env.Parser())
+	tsv.olapql = NewQueryList("olap", env.Parser())
 	tsv.se = schema.NewEngine(tsv)
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
@@ -217,6 +204,7 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 		ddle:        tsv.onlineDDLExecutor,
 		throttler:   tsv.lagThrottler,
 		tableGC:     tsv.tableGC,
+		rw:          newRequestsWaiter(),
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
@@ -233,6 +221,8 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 	tsv.registerHealthzHealthHandler()
 	tsv.registerDebugHealthHandler()
 	tsv.registerQueryzHandler()
+	tsv.registerQuerylogzHandler()
+	tsv.registerTxlogzHandler()
 	tsv.registerQueryListHandlers([]*QueryList{tsv.statelessql, tsv.statefulql, tsv.olapql})
 	tsv.registerTwopczHandler()
 	tsv.registerMigrationStatusHandler()
@@ -240,41 +230,6 @@ func NewTabletServer(ctx context.Context, name string, config *tabletenv.TabletC
 	tsv.registerDebugEnvHandler()
 
 	return tsv
-}
-
-// WaitForDBAGrants waits for DBA user to have the required privileges to function properly.
-func WaitForDBAGrants(config *tabletenv.TabletConfig, waitTime time.Duration) error {
-	// We don't wait for grants if the tablet is externally managed. Permissions
-	// are then the responsibility of the DBA.
-	if config == nil || config.DB.HasGlobalSettings() || waitTime == 0 {
-		return nil
-	}
-	timer := time.NewTimer(waitTime)
-	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
-	defer cancel()
-	for {
-		conn, err := dbconnpool.NewDBConnection(ctx, config.DB.DbaConnector())
-		if err == nil {
-			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
-			if fetchErr != nil {
-				log.Errorf("Error running SHOW GRANTS - %v", fetchErr)
-			}
-			if fetchErr == nil && res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
-				privileges := res.Rows[0][0].ToString()
-				// In MySQL 8.0, all the privileges are listed out explicitly, so we can search for SUPER in the output.
-				// In MySQL 5.7, all the privileges are not listed explicitly, instead ALL PRIVILEGES is written, so we search for that too.
-				if strings.Contains(privileges, "SUPER") || strings.Contains(privileges, "ALL PRIVILEGES") {
-					return nil
-				}
-			}
-		}
-		select {
-		case <-timer.C:
-			return fmt.Errorf("waited %v for dba user to have the required permissions", waitTime)
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
 }
 
 func (tsv *TabletServer) loadQueryTimeout() time.Duration {
@@ -346,9 +301,9 @@ func (tsv *TabletServer) Stats() *tabletenv.Stats {
 	return tsv.stats
 }
 
-// Stats satisfies tabletenv.Env.
-func (tsv *TabletServer) CollationEnv() *collations.Environment {
-	return tsv.collationEnv
+// Environment satisfies tabletenv.Env.
+func (tsv *TabletServer) Environment() *vtenv.Environment {
+	return tsv.env
 }
 
 // LogError satisfies tabletenv.Env.
@@ -1618,13 +1573,13 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 		// not a concern.
 		var messagef, logMessage, query, truncatedQuery string
 		messagef = fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-		query = queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.SQLParser())
+		query = queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.env.Parser())
 		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", fmt.Sprintf(messagef, query))
 		if tsv.TerseErrors == tsv.Config().SanitizeLogMessages {
-			truncatedQuery = queryAsString(sql, bindVariables, tsv.TerseErrors, true, tsv.SQLParser())
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.TerseErrors, true, tsv.env.Parser())
 			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		} else {
-			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser())
+			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())
 			logMessage = fmt.Sprintf(messagef, truncatedQuery)
 		}
 		log.Error(logMessage)
@@ -1684,20 +1639,20 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.SQLParser()))
+			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.env.Parser()))
 			if logMethod != nil {
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser()))
+				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser()))
 			}
 		} else {
-			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false, tsv.SQLParser()))
+			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false, tsv.env.Parser()))
 			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser()))
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser()))
 			}
 		}
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 		if logMethod != nil {
-			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.SQLParser()))
+			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser()))
 		}
 	}
 
@@ -1879,6 +1834,18 @@ func (tsv *TabletServer) registerQueryzHandler() {
 	tsv.exporter.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
 		queryzHandler(tsv.qe, w, r)
 	})
+}
+
+func (tsv *TabletServer) registerQuerylogzHandler() {
+	tsv.exporter.HandleFunc("/querylogz", func(w http.ResponseWriter, r *http.Request) {
+		ch := tabletenv.StatsLogger.Subscribe("querylogz")
+		defer tabletenv.StatsLogger.Unsubscribe(ch)
+		querylogzHandler(ch, w, r, tsv.env.Parser())
+	})
+}
+
+func (tsv *TabletServer) registerTxlogzHandler() {
+	tsv.exporter.HandleFunc("/txlogz", txlogzHandler)
 }
 
 func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {

@@ -30,7 +30,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
@@ -187,7 +187,7 @@ var (
 	// Error counters should be global so they can be set from anywhere
 	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
 
-	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded", "WarnPayloadSizeExceeded")
+	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "NonAtomicCommit", "ResultsExceeded", "WarnPayloadSizeExceeded", "WarnUnshardedOnly")
 
 	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
 		"Number of events that had to wait because the skew across shards was too high")
@@ -243,12 +243,12 @@ var RegisterVTGates []RegisterVTGate
 // Init initializes VTGate server.
 func Init(
 	ctx context.Context,
+	env *vtenv.Environment,
 	hc discovery.HealthCheck,
 	serv srvtopo.Server,
 	cell string,
 	tabletTypesToWait []topodatapb.TabletType,
 	pv plancontext.PlannerVersion,
-	collationEnv *collations.Environment,
 ) *VTGate {
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
@@ -299,19 +299,10 @@ func Init(
 		log.Fatal("Failed to create a new sidecar database identifier cache during init as one already existed!")
 	}
 
-	parser, err := sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
-		TruncateUILen:      servenv.TruncateUILen,
-		TruncateErrLen:     servenv.TruncateErrLen,
-	})
-	if err != nil {
-		log.Fatalf("unable to initialize sql parser: %v", err)
-	}
-
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews, parser)
+		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews, env.Parser())
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -320,6 +311,7 @@ func Init(
 
 	executor := NewExecutor(
 		ctx,
+		env,
 		serv,
 		cell,
 		resolver,
@@ -331,8 +323,6 @@ func Init(
 		noScatter,
 		pv,
 		warmingReadsPercent,
-		collationEnv,
-		parser,
 	)
 
 	if err := executor.defaultQueryLogger(); err != nil {
@@ -364,8 +354,10 @@ func Init(
 			st.Start()
 		}
 		srv := initMySQLProtocol(vtgateInst)
-		servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
-		servenv.OnClose(srv.rollbackAtShutdown)
+		if srv != nil {
+			servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
+			servenv.OnClose(srv.rollbackAtShutdown)
+		}
 	})
 	servenv.OnTerm(func() {
 		if st != nil && enableSchemaChangeSignal {

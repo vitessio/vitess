@@ -9,14 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -123,14 +120,14 @@ func onlineDDLTest(t *testing.T, args []string, expectedQuery string) {
 	tmclienttest.SetProtocol("go.vt.vtctl.endtoend", t.Name())
 
 	logger := logutil.NewMemoryLogger()
-	wr := wrangler.New(logger, fakeTopo, &tmc, collations.MySQL8(), sqlparser.NewTestParser())
+	wr := wrangler.New(vtenv.NewTestEnv(), logger, fakeTopo, &tmc)
 
 	err := vtctl.RunCommand(ctx, wr, args)
 	assert.Error(t, err)
 	assert.NotEmpty(t, err.Error())
 	containsExpectedError := false
 	expectedErrors := []string{
-		"unable to get shard names for keyspace",
+		"unable to get shards for keyspace",
 		"no ExecuteFetchAsDba results on fake TabletManagerClient",
 	}
 	for _, expect := range expectedErrors {

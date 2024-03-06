@@ -33,9 +33,16 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: actions/checkout@v3
 
+      - name: Run FOSSA scan and upload build data
+        uses: fossa-contrib/fossa-action@v3
+        with:
+          # This is a push-only API token: https://github.com/fossa-contrib/fossa-action#push-only-api-token
+          fossa-api-key: f62c11ef0c249fef239947f01279aa0f
+          github-token: ${{ github.token }}
+
       - name: Check for changes in Go files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: frouioui/paths-filter@main
+        uses: dorny/paths-filter@v3.0.1
         id: changes
         with:
           token: ''
@@ -106,7 +113,7 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
         uses: actions/setup-go@v4
         with:
-          go-version: 1.21.5
+          go-version: 1.22.1
 
       - name: Tune the OS
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
@@ -166,7 +173,7 @@ jobs:
 
       - name: Install golangci-lint
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.56.0
 
       - name: Clean Env
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'

@@ -80,18 +80,15 @@ func (a *Aggregator) SetInputs(operators []Operator) {
 }
 
 func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	return &Filter{
-		Source:     a,
-		Predicates: []sqlparser.Expr{expr},
-	}
+	return newFilter(a, expr)
 }
 
-func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
+func (a *Aggregator) addColumnWithoutPushing(_ *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	offset := len(a.Columns)
 	a.Columns = append(a.Columns, expr)
 
 	if addToGroupBy {
-		groupBy := NewGroupBy(expr.Expr, expr.Expr)
+		groupBy := NewGroupBy(expr.Expr)
 		groupBy.ColOffset = offset
 		a.Grouping = append(a.Grouping, groupBy)
 	} else {
@@ -118,6 +115,14 @@ func (a *Aggregator) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, 
 
 func (a *Aggregator) isDerived() bool {
 	return a.DT != nil
+}
+
+func (a *Aggregator) derivedName() string {
+	if a.DT == nil {
+		return ""
+	}
+
+	return a.DT.Alias
 }
 
 func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr, underRoute bool) int {
@@ -154,7 +159,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 	// This process also sets the weight string column offset, eliminating the need for a later addition in the aggregator operator's planOffset.
 	if wsExpr, isWS := rewritten.(*sqlparser.WeightStringFuncExpr); isWS {
 		idx := slices.IndexFunc(a.Grouping, func(by GroupBy) bool {
-			return ctx.SemTable.EqualsExprWithDeps(wsExpr.Expr, by.SimplifiedExpr)
+			return ctx.SemTable.EqualsExprWithDeps(wsExpr.Expr, by.Inner)
 		})
 		if idx >= 0 {
 			a.Grouping[idx].WSOffset = len(a.Columns)
@@ -241,7 +246,7 @@ func (a *Aggregator) ShortDescription() string {
 
 	var grouping []string
 	for _, gb := range a.Grouping {
-		grouping = append(grouping, sqlparser.String(gb.SimplifiedExpr))
+		grouping = append(grouping, sqlparser.String(gb.Inner))
 	}
 
 	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columns, ", "), strings.Join(grouping, ","))
@@ -268,11 +273,11 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			offset := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
 			a.Grouping[idx].ColOffset = offset
 		}
-		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
+		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
 			continue
 		}
 
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.SimplifiedExpr)), true)
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.Inner)), true)
 		a.Grouping[idx].WSOffset = offset
 	}
 
@@ -371,11 +376,11 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			a.Grouping[idx].ColOffset = offset
 		}
 
-		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
+		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
 			continue
 		}
 
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.SimplifiedExpr)), false)
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.Inner)), false)
 		a.Grouping[idx].WSOffset = offset
 	}
 	for idx, aggr := range a.Aggregations {

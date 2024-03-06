@@ -384,8 +384,7 @@ func (lu *clCommon) handleDup(ctx context.Context, vcursor VCursor, values []sql
 			return err
 		}
 		// Lock the target row using normal transaction priority.
-		// TODO: context needs to be passed on.
-		qr, err = vcursor.ExecuteKeyspaceID(context.Background(), lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
+		qr, err = vcursor.ExecuteKeyspaceID(ctx, lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
 		if err != nil {
 			return err
 		}
@@ -413,7 +412,7 @@ func (lu *clCommon) Delete(ctx context.Context, vcursor VCursor, rowsColValues [
 func (lu *clCommon) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	equal := true
 	for i := range oldValues {
-		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], vcursor.CollationEnv(), vcursor.ConnCollation())
+		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], vcursor.Environment().CollationEnv(), vcursor.ConnCollation())
 		// errors from NullsafeCompare can be ignored. if they are real problems, we'll see them in the Create/Update
 		if err != nil || result != 0 {
 			equal = false
@@ -490,7 +489,7 @@ func (lu *clCommon) GetCommitOrder() vtgatepb.CommitOrder {
 }
 
 // IsBackfilling implements the LookupBackfill interface
-func (lu *ConsistentLookupUnique) IsBackfilling() bool {
+func (lu *clCommon) IsBackfilling() bool {
 	return lu.writeOnly
 }
 

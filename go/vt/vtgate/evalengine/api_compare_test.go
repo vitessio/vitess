@@ -31,8 +31,8 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -51,17 +51,10 @@ type testCase struct {
 }
 
 var (
-	T            = true
-	F            = false
-	collationEnv *collations.Environment
+	T                                    = true
+	F                                    = false
+	collationEnv *collations.Environment = collations.MySQL8()
 )
-
-func init() {
-	// We require MySQL 8.0 collations for the comparisons in the tests
-	mySQLVersion := "8.0.0"
-	servenv.SetMySQLServerVersionForTest(mySQLVersion)
-	collationEnv = collations.NewEnvironment(mySQLVersion)
-}
 
 func defaultCollation() collations.TypedCollation {
 	return collations.TypedCollation{
@@ -78,12 +71,13 @@ func (tc testCase) run(t *testing.T) {
 	for i, value := range tc.row {
 		fields[i] = &querypb.Field{Type: value.Type()}
 	}
-	env := NewExpressionEnv(context.Background(), tc.bv, NewEmptyVCursor(collations.MySQL8(), time.UTC))
+	venv := vtenv.NewTestEnv()
+	env := NewExpressionEnv(context.Background(), tc.bv, NewEmptyVCursor(venv, time.UTC))
 	env.Row = tc.row
 	ast := &astCompiler{
 		cfg: &Config{
-			Collation:    collations.CollationUtf8mb4ID,
-			CollationEnv: collations.MySQL8(),
+			Collation:   collations.CollationUtf8mb4ID,
+			Environment: venv,
 		},
 	}
 	cmp, err := ast.translateComparisonExpr2(tc.op, tc.v1, tc.v2)

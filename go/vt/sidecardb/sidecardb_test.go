@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/require"
 
@@ -42,8 +43,8 @@ func TestInitErrors(t *testing.T) {
 
 	db := fakesqldb.New(t)
 	defer db.Close()
-	parser := sqlparser.NewTestParser()
-	AddSchemaInitQueries(db, false, parser)
+	env := vtenv.NewTestEnv()
+	AddSchemaInitQueries(db, false, env.Parser())
 
 	ddlErrorCount.Set(0)
 	ddlCount.Set(0)
@@ -71,7 +72,7 @@ func TestInitErrors(t *testing.T) {
 		}
 
 		// simulate errors for the table creation DDLs applied for tables specified in schemaErrors
-		stmt, err := parser.Parse(query)
+		stmt, err := env.Parser().Parse(query)
 		if err != nil {
 			return nil, err
 		}
@@ -87,7 +88,7 @@ func TestInitErrors(t *testing.T) {
 	}
 
 	require.Equal(t, int64(0), getDDLCount())
-	err = Init(ctx, exec, parser)
+	err = Init(ctx, env, exec)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)-len(schemaErrors)), getDDLCount())
 	require.Equal(t, int64(len(schemaErrors)), getDDLErrorCount())
@@ -126,8 +127,8 @@ func TestMiscSidecarDB(t *testing.T) {
 
 	db := fakesqldb.New(t)
 	defer db.Close()
-	parser := sqlparser.NewTestParser()
-	AddSchemaInitQueries(db, false, parser)
+	env := vtenv.NewTestEnv()
+	AddSchemaInitQueries(db, false, env.Parser())
 	db.AddQuery("use dbname", &sqltypes.Result{})
 	db.AddQueryPattern("set @@session.sql_mode=.*", &sqltypes.Result{})
 
@@ -152,30 +153,30 @@ func TestMiscSidecarDB(t *testing.T) {
 	require.NoError(t, err)
 	db.AddQuery(dbeq, result)
 	db.AddQuery(sidecar.GetCreateQuery(), &sqltypes.Result{})
-	AddSchemaInitQueries(db, false, parser)
+	AddSchemaInitQueries(db, false, env.Parser())
 
 	// tests init on empty db
 	ddlErrorCount.Set(0)
 	ddlCount.Set(0)
 	require.Equal(t, int64(0), getDDLCount())
-	err = Init(ctx, exec, parser)
+	err = Init(ctx, env, exec)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)), getDDLCount())
 
 	// Include the table DDLs in the expected queries.
 	// This causes them to NOT be created again.
-	AddSchemaInitQueries(db, true, parser)
+	AddSchemaInitQueries(db, true, env.Parser())
 
 	// tests init on already inited db
-	err = Init(ctx, exec, parser)
+	err = Init(ctx, env, exec)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)), getDDLCount())
 
 	// tests misc paths not covered above
 	si := &schemaInit{
-		ctx:    ctx,
-		exec:   exec,
-		parser: parser,
+		ctx:  ctx,
+		exec: exec,
+		env:  env,
 	}
 
 	err = si.setCurrentDatabase(sidecar.GetIdentifier())
@@ -226,14 +227,14 @@ func TestAlterTableAlgorithm(t *testing.T) {
 		{"modify column", "t1", "create table if not exists _vt.t1(i int)", "create table if not exists _vt.t(i float)"},
 	}
 	si := &schemaInit{
-		parser: sqlparser.NewTestParser(),
+		env: vtenv.NewTestEnv(),
 	}
 	copyAlgo := sqlparser.AlgorithmValue("COPY")
 	for _, tc := range testCases {
 		t.Run(tc.testName, func(t *testing.T) {
 			diff, err := si.findTableSchemaDiff(tc.tableName, tc.currentSchema, tc.desiredSchema)
 			require.NoError(t, err)
-			stmt, err := si.parser.Parse(diff)
+			stmt, err := si.env.Parser().Parse(diff)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)

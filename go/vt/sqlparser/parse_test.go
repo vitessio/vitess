@@ -28,12 +28,11 @@ import (
 	"sync"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 var (
@@ -506,6 +505,9 @@ var (
 	}, {
 		input:  "WITH topsales2003 AS (SELECT salesRepEmployeeNumber employeeNumber, SUM(quantityOrdered * priceEach) sales FROM orders INNER JOIN orderdetails USING (orderNumber) INNER JOIN customers USING (customerNumber) WHERE YEAR(shippedDate) = 2003 AND status = 'Shipped' GROUP BY salesRepEmployeeNumber ORDER BY sales DESC LIMIT 5)SELECT employeeNumber, firstName, lastName, sales FROM employees JOIN topsales2003 USING (employeeNumber)",
 		output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, sum(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
+	}, {
+		input:  "WITH count_a AS (SELECT COUNT(`id`) AS `num` FROM `tbl_a`), count_b AS (SELECT COUNT(`id`) AS `num` FROM tbl_b) SELECT 'a', `num` FROM `count_a` UNION SELECT 'b', `num` FROM `count_b`",
+		output: "with count_a as (select count(id) as num from tbl_a) , count_b as (select count(id) as num from tbl_b) select 'a', num from count_a union select 'b', num from count_b",
 	}, {
 		input: "select 1 from t",
 	}, {
@@ -2466,6 +2468,10 @@ var (
 		input:  "show foobar like select * from table where syntax is 'ignored'",
 		output: "show foobar",
 	}, {
+		// Making sure "force_cutover" is not a keyword
+		input:  "select force_cutover from t",
+		output: "select `force_cutover` from t",
+	}, {
 		input:  "use db",
 		output: "use db",
 	}, {
@@ -2520,16 +2526,6 @@ var (
 		input: "explain format = tree select * from t",
 	}, {
 		input: "explain format = json select * from t",
-	}, {
-		input: "explain format = vtexplain select * from t",
-	}, {
-		input: "explain format = vitess select * from t",
-	}, {
-		input:  "describe format = vitess select * from t",
-		output: "explain format = vitess select * from t",
-	}, {
-		input:  "describe format = vtexplain select * from t",
-		output: "explain format = vtexplain select * from t",
 	}, {
 		input: "explain delete from t",
 	}, {
@@ -2666,6 +2662,20 @@ var (
 	}, {
 		input:  "SELECT id FROM blog_posts USE INDEX (PRIMARY) WHERE id = 10",
 		output: "select id from blog_posts use index (`PRIMARY`) where id = 10",
+	}, {
+		input: "select * from payment_pulls ignore vindex (lookup_vindex_name) where customer_id in (1, 10) and payment_id = 5",
+	}, {
+		input:  "select * from payment_pulls ignore vindex (lookup_vindex_name, x, t) order by id",
+		output: "select * from payment_pulls ignore vindex (lookup_vindex_name, x, t) order by id asc",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name) where customer_id in (1, 10) and payment_id = 5",
+	}, {
+		input:  "select * from payment_pulls use vindex (lookup_vindex_name, x, t) order by id",
+		output: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) order by id asc",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) ignore vindex (x, t)",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) ignore vindex (x, t) join tab ignore vindex (y)",
 	}, {
 		input:  "select name, group_concat(score) from t group by name",
 		output: "select `name`, group_concat(score) from t group by `name`",
@@ -3686,6 +3696,21 @@ var (
 	}, {
 		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
+	}, {
+		input:  "select 1 from dual where 'bac' = 'b' 'a' 'c'",
+		output: "select 1 from dual where 'bac' = 'bac'",
+	}, {
+		input:  "select 'b' 'a' 'c'",
+		output: "select 'bac' from dual",
+	}, {
+		input:  "select 1 where 'bac' = N'b' 'a' 'c'",
+		output: "select 1 from dual where 'bac' = N'bac'",
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  "select _ascii 'b' 'a' 'c'",
+		output: "select _ascii 'bac' from dual",
 	}, {
 		input: `kill connection 18446744073709551615`,
 	}, {

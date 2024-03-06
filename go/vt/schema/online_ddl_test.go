@@ -59,7 +59,7 @@ func TestGetGCUUID(t *testing.T) {
 		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "", "", parser)
 		assert.NoError(t, err)
 		gcUUID := onlineDDL.GetGCUUID()
-		assert.True(t, IsGCUUID(gcUUID))
+		assert.True(t, isCondensedUUID(gcUUID))
 		uuids[gcUUID] = true
 	}
 	assert.Equal(t, count, len(uuids))
@@ -103,31 +103,50 @@ func TestGetActionStr(t *testing.T) {
 }
 
 func TestIsOnlineDDLTableName(t *testing.T) {
-	names := []string{
-		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_gho",
-		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_ghc",
-		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_del",
-		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new",
-		"_84371a37_6153_11eb_9917_f875a4d24e90_20210128122816_vrepl",
-		"_table_old",
-		"__table_old",
-	}
-	for _, tableName := range names {
-		assert.True(t, IsOnlineDDLTableName(tableName))
-	}
-	irrelevantNames := []string{
-		"t",
-		"_table_new",
-		"__table_new",
-		"_table_gho",
-		"_table_ghc",
-		"_table_del",
-		"_table_vrepl",
-		"table_old",
-	}
-	for _, tableName := range irrelevantNames {
-		assert.False(t, IsOnlineDDLTableName(tableName))
-	}
+	t.Run("accept", func(t *testing.T) {
+		names := []string{
+			"_vt_vrp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			"_vt_gho_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			"_vt_ghc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			"_vt_del_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			"_vt_new_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+			"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_gho",
+			"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_ghc",
+			"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_del",
+			"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new",
+			"_84371a37_6153_11eb_9917_f875a4d24e90_20210128122816_vrepl",
+			"_table_old",
+			"__table_old",
+		}
+		for _, tableName := range names {
+			t.Run(tableName, func(t *testing.T) {
+				assert.True(t, IsOnlineDDLTableName(tableName))
+			})
+		}
+	})
+	t.Run("reject", func(t *testing.T) {
+		irrelevantNames := []string{
+			"_vt_vrp_6ace8bcef73211ea87e9f875a4d24e90_20200915999999_", // time error
+			"_vt_xyz_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", // unrecognized hint
+			"_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", // GC table
+			"_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", // GC table
+			"_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", // GC table
+			"_vt_drp_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", // GC table
+			"t",
+			"_table_new",
+			"__table_new",
+			"_table_gho",
+			"_table_ghc",
+			"_table_del",
+			"_table_vrepl",
+			"table_old",
+		}
+		for _, tableName := range irrelevantNames {
+			t.Run(tableName, func(t *testing.T) {
+				assert.False(t, IsOnlineDDLTableName(tableName))
+			})
+		}
+	})
 }
 
 func TestGetRevertUUID(t *testing.T) {

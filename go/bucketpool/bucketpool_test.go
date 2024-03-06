@@ -19,156 +19,105 @@ package bucketpool
 import (
 	"math/rand"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPool(t *testing.T) {
 	maxSize := 16384
 	pool := New(1024, maxSize)
-	if pool.maxSize != maxSize {
-		t.Fatalf("Invalid max pool size: %d, expected %d", pool.maxSize, maxSize)
-	}
-	if len(pool.pools) != 5 {
-		t.Fatalf("Invalid number of pools: %d, expected %d", len(pool.pools), 5)
-	}
+	require.Equal(t, maxSize, pool.maxSize, "Invalid max pool size")
+	require.Len(t, pool.pools, 5, "Invalid number of pools")
 
 	buf := pool.Get(64)
-	if len(*buf) != 64 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 1024 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 64, "unexpected buf length")
+	require.Equal(t, 1024, cap(*buf), "unexpected buf cap")
 
 	// get from same pool, check that length is right
 	buf = pool.Get(128)
-	if len(*buf) != 128 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 1024 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 128, "unexpected buf length")
+	require.Equal(t, 1024, cap(*buf), "unexpected buf cap")
 	pool.Put(buf)
 
 	// get boundary size
 	buf = pool.Get(1024)
-	if len(*buf) != 1024 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 1024 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 1024, "unexpected buf length")
+	require.Equal(t, 1024, cap(*buf), "unexpected buf cap")
 	pool.Put(buf)
 
 	// get from the middle
 	buf = pool.Get(5000)
-	if len(*buf) != 5000 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 8192 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 5000, "unexpected buf length")
+	require.Equal(t, 8192, cap(*buf), "unexpected buf cap")
 	pool.Put(buf)
 
 	// check last pool
 	buf = pool.Get(16383)
-	if len(*buf) != 16383 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 16384 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 16383, "unexpected buf length")
+	require.Equal(t, 16384, cap(*buf), "unexpected buf cap")
 	pool.Put(buf)
 
 	// get big buffer
 	buf = pool.Get(16385)
-	if len(*buf) != 16385 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 16385 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 16385, "unexpected buf length")
+	require.Equal(t, 16385, cap(*buf), "unexpected buf cap")
 	pool.Put(buf)
 }
 
 func TestPoolOneSize(t *testing.T) {
 	maxSize := 1024
 	pool := New(1024, maxSize)
-	if pool.maxSize != maxSize {
-		t.Fatalf("Invalid max pool size: %d, expected %d", pool.maxSize, maxSize)
-	}
+	require.Equal(t, maxSize, pool.maxSize, "Invalid max pool size")
 	buf := pool.Get(64)
-	if len(*buf) != 64 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 1024 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 64, "unexpected buf length")
+	require.Equal(t, 1024, cap(*buf), "unexpected buf cap")
 	pool.Put(buf)
 
 	buf = pool.Get(1025)
-	if len(*buf) != 1025 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 1025 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 1025, "unexpected buf length")
+	require.Equal(t, 1025, cap(*buf), "unexpected buf cap")
 	pool.Put(buf)
 }
 
 func TestPoolTwoSizeNotMultiplier(t *testing.T) {
 	maxSize := 2000
 	pool := New(1024, maxSize)
-	if pool.maxSize != maxSize {
-		t.Fatalf("Invalid max pool size: %d, expected %d", pool.maxSize, maxSize)
-	}
+	require.Equal(t, maxSize, pool.maxSize, "Invalid max pool size")
 	buf := pool.Get(64)
-	if len(*buf) != 64 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 1024 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 64, "unexpected buf length")
+	require.Equal(t, 1024, cap(*buf), "unexpected buf cap")
 	pool.Put(buf)
 
 	buf = pool.Get(2001)
-	if len(*buf) != 2001 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 2001 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 2001, "unexpected buf length")
+	require.Equal(t, 2001, cap(*buf), "unexpected buf cap")
 	pool.Put(buf)
+}
+
+func TestPoolMaxSizeLessThanMinSize(t *testing.T) {
+	assert.Panics(t, func() { New(15000, 1024) })
 }
 
 func TestPoolWeirdMaxSize(t *testing.T) {
 	maxSize := 15000
 	pool := New(1024, maxSize)
-	if pool.maxSize != maxSize {
-		t.Fatalf("Invalid max pool size: %d, expected %d", pool.maxSize, maxSize)
-	}
+	require.Equal(t, maxSize, pool.maxSize, "Invalid max pool size")
 
 	buf := pool.Get(14000)
-	if len(*buf) != 14000 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 15000 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 14000, "unexpected buf length")
+	require.Equal(t, 15000, cap(*buf), "unexpected buf cap")
 	pool.Put(buf)
 
 	buf = pool.Get(16383)
-	if len(*buf) != 16383 {
-		t.Fatalf("unexpected buf length: %d", len(*buf))
-	}
-	if cap(*buf) != 16383 {
-		t.Fatalf("unexpected buf cap: %d", cap(*buf))
-	}
+	require.Len(t, *buf, 16383, "unexpected buf length")
+	require.Equal(t, 16383, cap(*buf), "unexpected buf cap")
 	pool.Put(buf)
 }
 
 func TestFuzz(t *testing.T) {
 	maxTestSize := 16384
-	for i := 0; i < 20000; i++ {
+	for range 20000 {
 		minSize := rand.Intn(maxTestSize)
 		if minSize == 0 {
 			minSize = 1
@@ -177,18 +126,12 @@ func TestFuzz(t *testing.T) {
 		p := New(minSize, maxSize)
 		bufSize := rand.Intn(maxTestSize)
 		buf := p.Get(bufSize)
-		if len(*buf) != bufSize {
-			t.Fatalf("Invalid length %d, expected %d", len(*buf), bufSize)
-		}
+		require.Len(t, *buf, bufSize, "unexpected buf length")
 		sPool := p.findPool(bufSize)
 		if sPool == nil {
-			if cap(*buf) != len(*buf) {
-				t.Fatalf("Invalid cap %d, expected %d", cap(*buf), len(*buf))
-			}
+			require.Equal(t, len(*buf), cap(*buf), "unexpected buf cap")
 		} else {
-			if cap(*buf) != sPool.size {
-				t.Fatalf("Invalid cap %d, expected %d", cap(*buf), sPool.size)
-			}
+			require.Equal(t, sPool.size, cap(*buf), "unexpected buf cap")
 		}
 		p.Put(buf)
 	}

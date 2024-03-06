@@ -69,7 +69,7 @@ type IndexColumn struct {
 	// Only one of Column or Expression can be specified
 	// Length is an optional field which is only applicable when Column is used
 	Column     IdentifierCI
-	Length     *Literal
+	Length     *int
 	Expression Expr
 	Direction  OrderDirection
 }
@@ -77,8 +77,8 @@ type IndexColumn struct {
 // LengthScaleOption is used for types that have an optional length
 // and scale
 type LengthScaleOption struct {
-	Length *Literal
-	Scale  *Literal
+	Length *int
+	Scale  *int
 }
 
 // IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING, WITH PARSER
@@ -429,6 +429,7 @@ func (node TableName) IsEmpty() bool {
 	// If Name is empty, Qualifier is also empty.
 	return node.Name.IsEmpty()
 }
+func (node TableName) NonEmpty() bool { return !node.Name.IsEmpty() }
 
 // NewWhere creates a WHERE or HAVING clause out
 // of a Expr. If the expression is nil, it returns nil.
@@ -1558,11 +1559,25 @@ func (ty IndexHintType) ToString() string {
 	case UseOp:
 		return UseStr
 	case IgnoreOp:
-		return IgnoreStr
+		return IgnoreIndexStr
 	case ForceOp:
 		return ForceStr
+	case UseVindexOp:
+		return UseVindexStr
+	case IgnoreVindexOp:
+		return IgnoreVindexStr
 	default:
 		return "Unknown IndexHintType"
+	}
+}
+
+// IsVindexHint returns if the given hint is a Vindex hint or not.
+func (ty IndexHintType) IsVindexHint() bool {
+	switch ty {
+	case UseVindexOp, IgnoreVindexOp:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -1815,10 +1830,6 @@ func (ty ExplainType) ToString() string {
 		return TreeStr
 	case JSONType:
 		return JSONStr
-	case VitessType:
-		return VitessStr
-	case VTExplainType:
-		return VTExplainStr
 	case TraditionalType:
 		return TraditionalStr
 	case AnalyzeType:
@@ -2154,8 +2165,8 @@ func (s SelectExprs) AllAggregation() bool {
 	return true
 }
 
-// RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
-func RemoveKeyspace(in SQLNode) {
+// RemoveKeyspaceInCol removes the Qualifier.Qualifier on all ColNames in the AST
+func RemoveKeyspaceInCol(in SQLNode) {
 	// Walk will only return an error if we return an error from the inner func. safe to ignore here
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		if col, ok := node.(*ColName); ok && col.Qualifier.Qualifier.NotEmpty() {
@@ -2175,6 +2186,24 @@ func RemoveKeyspaceInTables(in SQLNode) {
 			cursor.Replace(tbl)
 		}
 
+		return true
+	})
+}
+
+// RemoveKeyspace removes the Qualifier.Qualifier on all ColNames and Qualifier on all TableNames in the AST
+func RemoveKeyspace(in SQLNode) {
+	Rewrite(in, nil, func(cursor *Cursor) bool {
+		switch expr := cursor.Node().(type) {
+		case *ColName:
+			if expr.Qualifier.Qualifier.NotEmpty() {
+				expr.Qualifier.Qualifier = NewIdentifierCS("")
+			}
+		case TableName:
+			if expr.Qualifier.NotEmpty() {
+				expr.Qualifier = NewIdentifierCS("")
+				cursor.Replace(expr)
+			}
+		}
 		return true
 	})
 }
@@ -2537,11 +2566,28 @@ func IsLiteral(expr Expr) bool {
 	}
 }
 
+// AppendString appends a string to the expression provided.
+// This is intended to be used in the parser only for concatenating multiple strings together.
+func AppendString(expr Expr, in string) Expr {
+	switch node := expr.(type) {
+	case *Literal:
+		node.Val = node.Val + in
+		return node
+	case *UnaryExpr:
+		node.Expr = AppendString(node.Expr, in)
+		return node
+	case *IntroducerExpr:
+		node.Expr = AppendString(node.Expr, in)
+		return node
+	}
+	return nil
+}
+
 func (ct *ColumnType) Invisible() bool {
 	return ct.Options.Invisible != nil && *ct.Options.Invisible
 }
 
-func (node *Delete) isSingleAliasExpr() bool {
+func (node *Delete) IsSingleAliasExpr() bool {
 	if len(node.Targets) > 1 {
 		return false
 	}
@@ -2550,4 +2596,93 @@ func (node *Delete) isSingleAliasExpr() bool {
 	}
 	_, isAliasExpr := node.TableExprs[0].(*AliasedTableExpr)
 	return isAliasExpr
+}
+
+func MultiTable(node []TableExpr) bool {
+	if len(node) > 1 {
+		return true
+	}
+	_, singleTbl := node[0].(*AliasedTableExpr)
+	return !singleTbl
+}
+
+func (node *Update) AddOrder(order *Order) {
+	node.OrderBy = append(node.OrderBy, order)
+}
+
+func (node *Update) SetLimit(limit *Limit) {
+	node.Limit = limit
+}
+
+func (node *Delete) AddOrder(order *Order) {
+	node.OrderBy = append(node.OrderBy, order)
+}
+
+func (node *Delete) SetLimit(limit *Limit) {
+	node.Limit = limit
+}
+
+func (node *Select) GetFrom() []TableExpr {
+	return node.From
+}
+
+func (node *Select) SetFrom(exprs []TableExpr) {
+	node.From = exprs
+}
+
+func (node *Select) GetWherePredicate() Expr {
+	if node.Where == nil {
+		return nil
+	}
+	return node.Where.Expr
+}
+
+func (node *Select) SetWherePredicate(expr Expr) {
+	node.Where = &Where{
+		Type: WhereClause,
+		Expr: expr,
+	}
+}
+func (node *Delete) GetFrom() []TableExpr {
+	return node.TableExprs
+}
+
+func (node *Delete) SetFrom(exprs []TableExpr) {
+	node.TableExprs = exprs
+}
+
+func (node *Delete) GetWherePredicate() Expr {
+	if node.Where == nil {
+		return nil
+	}
+	return node.Where.Expr
+}
+
+func (node *Delete) SetWherePredicate(expr Expr) {
+	node.Where = &Where{
+		Type: WhereClause,
+		Expr: expr,
+	}
+}
+
+func (node *Update) GetFrom() []TableExpr {
+	return node.TableExprs
+}
+
+func (node *Update) SetFrom(exprs []TableExpr) {
+	node.TableExprs = exprs
+}
+
+func (node *Update) GetWherePredicate() Expr {
+	if node.Where == nil {
+		return nil
+	}
+	return node.Where.Expr
+}
+
+func (node *Update) SetWherePredicate(expr Expr) {
+	node.Where = &Where{
+		Type: WhereClause,
+		Expr: expr,
+	}
 }

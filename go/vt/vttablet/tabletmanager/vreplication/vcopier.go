@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/bytes2"
@@ -219,7 +221,7 @@ func newVCopierCopyWorker(
 func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	defer vc.vr.dbClient.Rollback()
 
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.collationEnv, vc.vr.vre.parser)
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
 	if err != nil {
 		return err
 	}
@@ -230,9 +232,12 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	if len(plan.TargetTables) != 0 {
 		var buf strings.Builder
 		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
+		// Sort the tables by name to ensure a consistent order.
+		tableNames := maps.Keys(plan.TargetTables)
+		slices.Sort(tableNames)
 		prefix := ""
-		for name := range plan.TargetTables {
-			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(name))
+		for _, tableName := range tableNames {
+			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(tableName))
 			prefix = ", "
 		}
 		if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
@@ -256,8 +261,8 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 					len(plan.TargetTables))); err != nil {
 					return err
 				}
-				for name := range plan.TargetTables {
-					if err := vc.vr.stashSecondaryKeys(ctx, name); err != nil {
+				for _, tableName := range tableNames {
+					if err := vc.vr.stashSecondaryKeys(ctx, tableName); err != nil {
 						return err
 					}
 				}
@@ -294,7 +299,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 // primary key that was copied. A nil Result means that nothing has been copied.
 // A table that was fully copied is removed from copyState.
 func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSettings) error {
-	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state group by vrepl_id, table_name)", vc.vr.id))
+	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state group by vrepl_id, table_name) order by table_name", vc.vr.id))
 	if err != nil {
 		return err
 	}
@@ -385,7 +390,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.collationEnv, vc.vr.vre.parser)
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
 	if err != nil {
 		return err
 	}

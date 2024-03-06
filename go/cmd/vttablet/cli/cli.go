@@ -27,16 +27,17 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
@@ -102,7 +103,13 @@ vttablet \
 		PreRunE: servenv.CobraPreRunE,
 		RunE:    run,
 	}
+
+	srvTopoCounts *stats.CountersWithSingleLabel
 )
+
+func init() {
+	srvTopoCounts = stats.NewCountersWithSingleLabel("TabletSrvTopo", "Resilient srvtopo server operations", "type")
+}
 
 func run(cmd *cobra.Command, args []string) error {
 	servenv.Init()
@@ -112,24 +119,24 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to parse --tablet-path: %w", err)
 	}
 
-	parser, err := sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
+	mysqlVersion := servenv.MySQLServerVersion()
+	env, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: mysqlVersion,
 		TruncateUILen:      servenv.TruncateUILen,
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		return fmt.Errorf("cannot initialize sql parser: %w", err)
+		return fmt.Errorf("cannot initialize vtenv: %w", err)
 	}
 
-	collationEnv := collations.NewEnvironment(servenv.MySQLServerVersion())
 	// config and mycnf initializations are intertwined.
-	config, mycnf, err := initConfig(tabletAlias, collationEnv)
+	config, mycnf, err := initConfig(tabletAlias, env.CollationEnv())
 	if err != nil {
 		return err
 	}
 
 	ts := topo.Open()
-	qsc, err := createTabletServer(context.Background(), config, ts, tabletAlias, collationEnv, parser)
+	qsc, err := createTabletServer(context.Background(), env, config, ts, tabletAlias, srvTopoCounts)
 	if err != nil {
 		ts.Close()
 		return err
@@ -142,36 +149,26 @@ func run(cmd *cobra.Command, args []string) error {
 		ts.Close()
 		return fmt.Errorf("failed to extract online DDL binaries: %w", err)
 	}
-
-	parser, err = sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
-		TruncateUILen:      servenv.TruncateUILen,
-		TruncateErrLen:     servenv.TruncateErrLen,
-	})
-	if err != nil {
-		return fmt.Errorf("cannot initialize sql parser: %w", err)
-	}
 	// Initialize and start tm.
 	gRPCPort := int32(0)
 	if servenv.GRPCPort() != 0 {
 		gRPCPort = int32(servenv.GRPCPort())
 	}
-	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(servenv.Port()), gRPCPort, config.DB, collationEnv)
+	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(servenv.Port()), gRPCPort, config.DB, env.CollationEnv())
 	if err != nil {
 		return fmt.Errorf("failed to parse --tablet-path: %w", err)
 	}
 	tm = &tabletmanager.TabletManager{
 		BatchCtx:            context.Background(),
+		Env:                 env,
 		TopoServer:          ts,
 		Cnf:                 mycnf,
 		MysqlDaemon:         mysqld,
 		DBConfigs:           config.DB.Clone(),
 		QueryServiceControl: qsc,
-		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine(), parser),
-		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler(), collationEnv, parser),
-		VDiffEngine:         vdiff.NewEngine(ts, tablet, collationEnv, parser),
-		CollationEnv:        collationEnv,
-		SQLParser:           parser,
+		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine(), env.Parser()),
+		VREngine:            vreplication.NewEngine(env, config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
+		VDiffEngine:         vdiff.NewEngine(ts, tablet, env.CollationEnv(), env.Parser()),
 	}
 	if err := tm.Start(tablet, config); err != nil {
 		ts.Close()
@@ -259,7 +256,7 @@ func extractOnlineDDL() error {
 	return nil
 }
 
-func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, collationEnv *collations.Environment, parser *sqlparser.Parser) (*tabletserver.TabletServer, error) {
+func createTabletServer(ctx context.Context, env *vtenv.Environment, config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, srvTopoCounts *stats.CountersWithSingleLabel) (*tabletserver.TabletServer, error) {
 	if tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
@@ -268,7 +265,7 @@ func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts 
 	}
 
 	// creates and registers the query service
-	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias, collationEnv, parser)
+	qsc := tabletserver.NewTabletServer(ctx, env, "", config, ts, tabletAlias, srvTopoCounts)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -57,7 +58,7 @@ type Plan struct {
 	// of the table.
 	Filters []Filter
 
-	collationEnv *collations.Environment
+	env *vtenv.Environment
 }
 
 // Opcode enumerates the operators supported in a where clause
@@ -230,7 +231,7 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 				return false, nil
 			}
 		default:
-			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value, plan.collationEnv, charsets[filter.ColNum])
+			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value, plan.env.CollationEnv(), charsets[filter.ColNum])
 			if err != nil {
 				return false, err
 			}
@@ -346,7 +347,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 	return ruleMatches(table.Name.String(), filter)
 }
 
-func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter, collationEnv *collations.Environment, parser *sqlparser.Parser) (*Plan, error) {
+func buildPlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*Plan, error) {
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):
@@ -358,9 +359,9 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter, co
 			if !result {
 				continue
 			}
-			return buildREPlan(ti, vschema, rule.Filter, collationEnv)
+			return buildREPlan(env, ti, vschema, rule.Filter)
 		case rule.Match == ti.Name:
-			return buildTablePlan(ti, vschema, rule.Filter, collationEnv, parser)
+			return buildTablePlan(env, ti, vschema, rule.Filter)
 		}
 	}
 	return nil, nil
@@ -368,10 +369,10 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter, co
 
 // buildREPlan handles cases where Match has a regular expression.
 // If so, the Filter can be an empty string or a keyrange, like "-80".
-func buildREPlan(ti *Table, vschema *localVSchema, filter string, collationEnv *collations.Environment) (*Plan, error) {
+func buildREPlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, filter string) (*Plan, error) {
 	plan := &Plan{
-		Table:        ti,
-		collationEnv: collationEnv,
+		env:   env,
+		Table: ti,
 	}
 	plan.ColExprs = make([]ColExpr, len(ti.Fields))
 	for i, col := range ti.Fields {
@@ -412,8 +413,8 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string, collationEnv *
 
 // BuildTablePlan handles cases where a specific table name is specified.
 // The filter must be a select statement.
-func buildTablePlan(ti *Table, vschema *localVSchema, query string, collationEnv *collations.Environment, parser *sqlparser.Parser) (*Plan, error) {
-	sel, fromTable, err := analyzeSelect(query, parser)
+func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, query string) (*Plan, error) {
+	sel, fromTable, err := analyzeSelect(query, env.Parser())
 	if err != nil {
 		log.Errorf("%s", err.Error())
 		return nil, err
@@ -424,8 +425,8 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string, collationEnv
 	}
 
 	plan := &Plan{
-		Table:        ti,
-		collationEnv: collationEnv,
+		Table: ti,
+		env:   env,
 	}
 	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
 		log.Errorf("%s", err.Error())
@@ -537,13 +538,13 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
 			pv, err := evalengine.Translate(val, &evalengine.Config{
-				Collation:    plan.collationEnv.DefaultConnectionCharset(),
-				CollationEnv: plan.collationEnv,
+				Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
+				Environment: plan.env,
 			})
 			if err != nil {
 				return err
 			}
-			env := evalengine.EmptyExpressionEnv(plan.collationEnv)
+			env := evalengine.EmptyExpressionEnv(plan.env)
 			resolved, err := env.Evaluate(pv)
 			if err != nil {
 				return err
@@ -551,7 +552,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			plan.Filters = append(plan.Filters, Filter{
 				Opcode: opcode,
 				ColNum: colnum,
-				Value:  resolved.Value(plan.collationEnv.DefaultConnectionCharset()),
+				Value:  resolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
 			})
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {
@@ -769,9 +770,9 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 // analyzeInKeyRange allows the following constructs: "in_keyrange('-80')",
 // "in_keyrange(col, 'hash', '-80')", "in_keyrange(col, 'local_vindex', '-80')", or
 // "in_keyrange(col, 'ks.external_vindex', '-80')".
-func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.SelectExprs) error {
+func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Exprs) error {
 	var colnames []sqlparser.IdentifierCI
-	var krExpr sqlparser.SelectExpr
+	var krExpr sqlparser.Expr
 	whereFilter := Filter{
 		Opcode: VindexMatch,
 	}
@@ -786,13 +787,9 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 		krExpr = exprs[0]
 	case len(exprs) >= 3:
 		for _, expr := range exprs[:len(exprs)-2] {
-			aexpr, ok := expr.(*sqlparser.AliasedExpr)
+			qualifiedName, ok := expr.(*sqlparser.ColName)
 			if !ok {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected: %T %s", expr, sqlparser.String(expr))
-			}
-			qualifiedName, ok := aexpr.Expr.(*sqlparser.ColName)
-			if !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected: %T %s", aexpr.Expr, sqlparser.String(aexpr.Expr))
 			}
 			if !qualifiedName.Qualifier.IsEmpty() {
 				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
@@ -837,16 +834,12 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 	return nil
 }
 
-func selString(expr sqlparser.SelectExpr) (string, error) {
-	aexpr, ok := expr.(*sqlparser.AliasedExpr)
+func selString(expr sqlparser.Expr) (string, error) {
+	val, ok := expr.(*sqlparser.Literal)
 	if !ok {
 		return "", fmt.Errorf("unsupported: %v", sqlparser.String(expr))
 	}
-	val, ok := aexpr.Expr.(*sqlparser.Literal)
-	if !ok {
-		return "", fmt.Errorf("unsupported: %v", sqlparser.String(expr))
-	}
-	return string(val.Val), nil
+	return val.Val, nil
 }
 
 // buildVindexColumns builds the list of column numbers of the table

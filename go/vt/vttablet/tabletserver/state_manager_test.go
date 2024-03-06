@@ -29,8 +29,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -701,6 +701,29 @@ func TestRefreshReplHealthLocked(t *testing.T) {
 	assert.False(t, sm.replHealthy)
 }
 
+// TestPanicInWait tests that we don't panic when we wait for requests if more StartRequest calls come up after we start waiting.
+func TestPanicInWait(t *testing.T) {
+	sm := newTestStateManager(t)
+	sm.wantState = StateServing
+	sm.state = StateServing
+	sm.replHealthy = true
+	ctx := context.Background()
+	// Simulate an Execute RPC running
+	err := sm.StartRequest(ctx, sm.target, false)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		// Simulate the previous RPC finishing after some delay
+		sm.EndRequest()
+		// Simulate a COMMIT call arriving right afterwards
+		_ = sm.StartRequest(ctx, sm.target, true)
+	}()
+
+	// Simulate going to a not serving state and calling unserveCommon that waits on requests.
+	sm.wantState = StateNotServing
+	sm.rw.WaitToBeEmpty()
+}
+
 func verifySubcomponent(t *testing.T, order int64, component any, state testState) {
 	tos := component.(orderState)
 	assert.Equal(t, order, tos.Order())
@@ -709,9 +732,9 @@ func verifySubcomponent(t *testing.T, order int64, component any, state testStat
 
 func newTestStateManager(t *testing.T) *stateManager {
 	order.Store(0)
-	config := tabletenv.NewDefaultConfig()
-	env := tabletenv.NewEnv(config, "StateManagerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	cfg := tabletenv.NewDefaultConfig()
 	parser := sqlparser.NewTestParser()
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "StateManagerTest")
 	sm := &stateManager{
 		statelessql: NewQueryList("stateless", parser),
 		statefulql:  NewQueryList("stateful", parser),
@@ -729,6 +752,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		ddle:        &testOnlineDDLExecutor{},
 		throttler:   &testLagThrottler{},
 		tableGC:     &testTableGC{},
+		rw:          newRequestsWaiter(),
 	}
 	sm.Init(env, &querypb.Target{})
 	sm.hs.InitDBConfig(&querypb.Target{}, dbconfigs.New(fakesqldb.New(t).ConnParams()))

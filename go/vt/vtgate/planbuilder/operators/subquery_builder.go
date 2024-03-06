@@ -169,7 +169,7 @@ func createSubquery(
 	sqc := &SubQueryBuilder{totalID: totalID, subqID: subqID, outerID: outerID}
 
 	predicates, joinCols := sqc.inspectStatement(ctx, subq.Select)
-	correlated := checkForCorrelatedSubqueries(ctx, subq.Select, subqID)
+	correlated := !ctx.SemTable.RecursiveDeps(subq).IsEmpty()
 
 	opInner := translateQueryToOp(ctx, subq.Select)
 
@@ -201,7 +201,7 @@ func (sqb *SubQueryBuilder) inspectWhere(
 		outerID: sqb.outerID,
 	}
 	for _, predicate := range sqlparser.SplitAndExpression(nil, in.Expr) {
-		sqlparser.RemoveKeyspace(predicate)
+		sqlparser.RemoveKeyspaceInCol(predicate)
 		subq := sqb.handleSubquery(ctx, predicate, sqb.totalID)
 		if subq != nil {
 			continue

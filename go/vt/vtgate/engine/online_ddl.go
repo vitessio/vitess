@@ -34,16 +34,15 @@ var _ Primitive = (*OnlineDDL)(nil)
 
 // OnlineDDL represents the instructions to perform an online schema change via vtctld
 type OnlineDDL struct {
+	noTxNeeded
+	noInputs
+
 	Keyspace           *vindexes.Keyspace
 	DDL                sqlparser.DDLStatement
 	SQL                string
 	DDLStrategySetting *schema.DDLStrategySetting
 	// TargetDestination specifies an explicit target destination to send the query to.
 	TargetDestination key.Destination
-
-	noTxNeeded
-
-	noInputs
 }
 
 func (v *OnlineDDL) description() PrimitiveDescription {
@@ -78,7 +77,7 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 			{
 				Name:    "uuid",
 				Type:    sqltypes.VarChar,
-				Charset: uint32(vcursor.CollationEnv().DefaultConnectionCharset()),
+				Charset: uint32(vcursor.ConnCollation()),
 			},
 		},
 		Rows: [][]sqltypes.Value{},
@@ -89,7 +88,7 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		migrationContext = fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID())
 	}
 	onlineDDLs, err := schema.NewOnlineDDLs(v.GetKeyspaceName(), v.SQL, v.DDL,
-		v.DDLStrategySetting, migrationContext, "", vcursor.SQLParser(),
+		v.DDLStrategySetting, migrationContext, "", vcursor.Environment().Parser(),
 	)
 	if err != nil {
 		return result, err

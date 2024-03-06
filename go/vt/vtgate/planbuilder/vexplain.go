@@ -19,9 +19,6 @@ package planbuilder
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -30,27 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
-
-// Builds an explain-plan for the given Primitive
-func buildExplainPlan(ctx context.Context, stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
-	switch explain := stmt.(type) {
-	case *sqlparser.ExplainTab:
-		return explainTabPlan(explain, vschema)
-	case *sqlparser.ExplainStmt:
-		switch explain.Type {
-		case sqlparser.VitessType:
-			vschema.PlannerWarning("EXPLAIN FORMAT = VITESS is deprecated, please use VEXPLAIN PLAN instead.")
-			return buildVExplainVtgatePlan(ctx, explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
-		case sqlparser.VTExplainType:
-			vschema.PlannerWarning("EXPLAIN FORMAT = VTEXPLAIN is deprecated, please use VEXPLAIN QUERIES instead.")
-			return buildVExplainLoggingPlan(ctx, &sqlparser.VExplainStmt{Type: sqlparser.QueriesVExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
-		default:
-			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
-		}
-	}
-	return nil, vterrors.VT13001(fmt.Sprintf("unexpected explain type: %T", stmt))
-}
 
 func buildVExplainPlan(ctx context.Context, vexplainStmt *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch vexplainStmt.Type {
@@ -124,4 +103,53 @@ func buildVExplainLoggingPlan(ctx context.Context, explain *sqlparser.VExplainSt
 	}
 
 	return &planResult{primitive: &engine.VExplain{Input: input.primitive, Type: explain.Type}, tables: input.tables}, nil
+}
+
+// buildExplainStmtPlan takes an EXPLAIN query and if possible sends the whole query to a single shard
+func buildExplainStmtPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+	explain := stmt.(*sqlparser.ExplainStmt)
+	switch explain.Statement.(type) {
+	case sqlparser.SelectStatement, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert:
+		return explainPlan(explain, reservedVars, vschema)
+	default:
+		return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
+	}
+
+}
+
+func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+	ctx, err := plancontext.CreatePlanningContext(explain.Statement, reservedVars, vschema, Gen4)
+	if err != nil {
+		return nil, err
+	}
+
+	ks := ctx.SemTable.SingleKeyspace()
+	if ks == nil {
+		return nil, vterrors.VT03031()
+	}
+
+	if err = queryRewrite(ctx.SemTable, reservedVars, explain.Statement); err != nil {
+		return nil, err
+	}
+
+	// Remove keyspace qualifier from columns and tables.
+	sqlparser.RemoveKeyspace(explain.Statement)
+
+	var tables []string
+	for _, table := range ctx.SemTable.Tables {
+		name, err := table.Name()
+		if err != nil {
+			// this is just for reporting which tables we are touching
+			// it's OK to ignore errors here
+			continue
+		}
+		tables = append(tables, operators.QualifiedString(ks, name.Name.String()))
+	}
+
+	return newPlanResult(&engine.Send{
+		Keyspace:          ks,
+		TargetDestination: key.DestinationAnyShard{},
+		Query:             sqlparser.String(explain),
+		SingleShardOnly:   true,
+	}, tables...), nil
 }

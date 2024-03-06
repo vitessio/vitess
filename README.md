@@ -1,7 +1,7 @@
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.vitess/vitess-jdbc/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.vitess/vitess-jdbc)
-[![codebeat badge](https://codebeat.co/badges/51c9a056-1103-4522-9a9c-dc623821ea87)](https://codebeat.co/projects/github-com-youtube-vitess)
+[![Coverage Status](https://codecov.io/gh/vitessio/vitess/branch/main/graph/badge.svg)](https://app.codecov.io/gh/vitessio/vitess/tree/main)
 [![Go Report Card](https://goreportcard.com/badge/vitess.io/vitess)](https://goreportcard.com/report/vitess.io/vitess)
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fvitessio%2Fvitess.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fvitessio%2Fvitess?ref=badge_shield)
+[![FOSSA Status](https://app.fossa.com/api/projects/custom%2B162%2Fvitess.svg?type=shield&issueType=license)](https://app.fossa.com/projects/custom%2B162%2Fvitess?ref=badge_shield&issueType=license)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1724/badge)](https://bestpractices.coreinfrastructure.org/projects/1724)
 
 # Vitess 
@@ -19,11 +19,10 @@ since 2011, and has grown to encompass tens of thousands of MySQL nodes.
 
 For more about Vitess, please visit [vitess.io](https://vitess.io).
 
-Vitess has a growing community. You can view the list of adopters
-[here](https://github.com/vitessio/vitess/blob/main/ADOPTERS.md).
+Vitess has a growing community. [View the list of adopters](https://github.com/vitessio/vitess/blob/main/ADOPTERS.md).
 
 ## Reporting a Problem, Issue, or Bug
-To report a problem, the best way to get attention is to create a GitHub [issue](.https://github.com/vitessio/vitess/issues ) using proper severity level based on this [guide](https://github.com/vitessio/vitess/blob/main/SEVERITY.md). 
+To report a problem, create a [GitHub issue](https://github.com/vitessio/vitess/issues). 
 
 For topics that are better discussed live, please join the [Vitess Slack](https://vitess.io/slack) workspace.
 You may post any questions on the #general channel or join some of the special-interest channels.
@@ -40,11 +39,11 @@ See [Security](SECURITY.md) for a full outline of the security process.
 
 ### Security Audit
 
-A third party security audit was performed by Cure53. You can see the full report [here](doc/VIT-01-report.pdf).
+A third party security audit was performed by ADA Logics. [Read the full report](doc/VIT-03-report-security-audit.pdf).
 
 ## License
 
 Unless otherwise noted, the Vitess source files are distributed
 under the Apache Version 2.0 license found in the LICENSE file.
 
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fvitessio%2Fvitess.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fvitessio%2Fvitess?ref=badge_large)
+[![FOSSA Status](https://app.fossa.com/api/projects/custom%2B162%2Fvitess.svg?type=large&issueType=license)](https://app.fossa.com/projects/custom%2B162%2Fvitess?ref=badge_large&issueType=license)

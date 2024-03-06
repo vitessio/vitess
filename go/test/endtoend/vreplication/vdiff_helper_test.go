@@ -90,13 +90,14 @@ func doVtctlclientVDiff(t *testing.T, keyspace, workflow, cells string, want *ex
 
 func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cells, uuid string, completedAtMin time.Time) *vdiffInfo {
 	var info *vdiffInfo
+	var jsonStr string
 	first := true
 	previousProgress := vdiff2.ProgressReport{}
 	ch := make(chan bool)
 	go func() {
 		for {
 			time.Sleep(vdiffStatusCheckInterval)
-			_, jsonStr := performVDiff2Action(t, useVtctlclient, ksWorkflow, cells, "show", uuid, false)
+			_, jsonStr = performVDiff2Action(t, useVtctlclient, ksWorkflow, cells, "show", uuid, false)
 			info = getVDiffInfo(jsonStr)
 			require.NotNil(t, info)
 			if info.State == "completed" {
@@ -142,7 +143,7 @@ func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cell
 	case <-ch:
 		return info
 	case <-time.After(vdiffTimeout):
-		log.Errorf("VDiff never completed for UUID %s", uuid)
+		log.Errorf("VDiff never completed for UUID %s. Latest output: %s", uuid, jsonStr)
 		require.FailNow(t, fmt.Sprintf("VDiff never completed for UUID %s", uuid))
 		return nil
 	}

@@ -4,7 +4,11 @@
 
 package mathstats
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestTTest(t *testing.T) {
 	s1 := Sample{Xs: []float64{2, 1, 3, 4}}
@@ -68,4 +72,161 @@ func TestTTest(t *testing.T) {
 		return OneSampleTTest(s1, 2.5, alt)
 	}, 4, 0, 0, 3,
 		0.5, 1, 0.5)
+}
+
+func TestTwoSampleTTestErrors(t *testing.T) {
+	tt := []struct {
+		name string
+		x1   TTestSample
+		x2   TTestSample
+		alt  LocationHypothesis
+		err  error
+	}{
+		{
+			name: "One sample size is 0",
+			x1:   &Sample{Xs: []float64{1, 2, 3}},
+			x2:   &Sample{Xs: []float64{}},
+			alt:  LocationDiffers,
+			err:  ErrSampleSize,
+		},
+		{
+			name: "Both sample sizes are 0",
+			x1:   &Sample{Xs: []float64{}},
+			x2:   &Sample{Xs: []float64{}},
+			alt:  LocationDiffers,
+			err:  ErrSampleSize,
+		},
+		{
+			name: "One sample has zero variance",
+			x1:   &Sample{Xs: []float64{1}},
+			x2:   &Sample{Xs: []float64{1}},
+			alt:  LocationDiffers,
+			err:  ErrZeroVariance,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := TwoSampleTTest(tc.x1, tc.x2, tc.alt)
+			assert.Equal(t, tc.err, err)
+			assert.Nil(t, result)
+		})
+	}
+}
+
+func TestTwoSampleWelchTTestErrors(t *testing.T) {
+	tt := []struct {
+		name string
+		x1   TTestSample
+		x2   TTestSample
+		alt  LocationHypothesis
+		err  error
+	}{
+		{
+			name: "One sample size is 1",
+			x1:   &Sample{Xs: []float64{1}},
+			x2:   &Sample{Xs: []float64{2, 3, 4}},
+			alt:  LocationDiffers,
+			err:  ErrSampleSize,
+		},
+		{
+			name: "Both sample sizes are 1",
+			x1:   &Sample{Xs: []float64{1}},
+			x2:   &Sample{Xs: []float64{2}},
+			alt:  LocationDiffers,
+			err:  ErrSampleSize,
+		},
+		{
+			name: "One sample has zero variance",
+			x1:   &Sample{Xs: []float64{1, 1, 1}},
+			x2:   &Sample{Xs: []float64{2, 2, 2}},
+			alt:  LocationDiffers,
+			err:  ErrZeroVariance,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := TwoSampleWelchTTest(tc.x1, tc.x2, tc.alt)
+			assert.Equal(t, tc.err, err)
+			assert.Nil(t, result)
+		})
+	}
+}
+
+func TestPairedTTestErrors(t *testing.T) {
+	tt := []struct {
+		name string
+		x1   []float64
+		x2   []float64
+		μ0   float64
+		alt  LocationHypothesis
+		err  error
+	}{
+		{
+			name: "Samples have different lengths",
+			x1:   []float64{1, 2, 3},
+			x2:   []float64{4, 5},
+			μ0:   0,
+			alt:  LocationDiffers,
+			err:  ErrMismatchedSamples,
+		},
+		{
+			name: "Samples have length <= 1",
+			x1:   []float64{1},
+			x2:   []float64{2},
+			μ0:   0,
+			alt:  LocationDiffers,
+			err:  ErrSampleSize,
+		},
+		{
+			name: "Samples result in zero standard deviation",
+			x1:   []float64{1, 1, 1},
+			x2:   []float64{1, 1, 1},
+			μ0:   0,
+			alt:  LocationDiffers,
+			err:  ErrZeroVariance,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := PairedTTest(tc.x1, tc.x2, tc.μ0, tc.alt)
+			assert.Equal(t, tc.err, err)
+			assert.Nil(t, result)
+		})
+	}
+}
+
+func TestOneSampleTTestErrors(t *testing.T) {
+	tt := []struct {
+		name string
+		x    TTestSample
+		μ0   float64
+		alt  LocationHypothesis
+		err  error
+	}{
+		{
+			name: "Sample size is 0",
+			x:    &Sample{Xs: []float64{}},
+			μ0:   0,
+			alt:  LocationDiffers,
+			err:  ErrSampleSize,
+		},
+		{
+			name: "Sample has zero variance",
+			x:    &Sample{Xs: []float64{1, 1, 1}},
+			μ0:   0,
+			alt:  LocationDiffers,
+			err:  ErrZeroVariance,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := OneSampleTTest(tc.x, tc.μ0, tc.alt)
+			assert.Equal(t, tc.err, err)
+			assert.Nil(t, result)
+		})
+	}
 }

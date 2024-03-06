@@ -152,6 +152,18 @@ func (bv *BindVariable) format(buf *sqlparser.TrackedBuffer) {
 	}
 }
 
+func (bv *TupleBindVariable) Format(buf *sqlparser.TrackedBuffer) {
+	bv.format(buf)
+}
+
+func (bv *TupleBindVariable) FormatFast(buf *sqlparser.TrackedBuffer) {
+	bv.format(buf)
+}
+
+func (bv *TupleBindVariable) format(buf *sqlparser.TrackedBuffer) {
+	buf.WriteString(fmt.Sprintf("%s:%d", bv.Key, bv.Index))
+}
+
 func (c *Column) Format(buf *sqlparser.TrackedBuffer) {
 	c.format(buf)
 }
@@ -261,7 +273,7 @@ func (c *builtinWeightString) format(buf *sqlparser.TrackedBuffer) {
 	if c.Cast != "" {
 		buf.WriteLiteral(" as ")
 		buf.WriteLiteral(c.Cast)
-		_, _ = fmt.Fprintf(buf, "(%d)", c.Len)
+		_, _ = fmt.Fprintf(buf, "(%d)", *c.Len)
 	}
 	buf.WriteByte(')')
 }
@@ -285,10 +297,10 @@ func (c *ConvertExpr) format(buf *sqlparser.TrackedBuffer) {
 	formatExpr(buf, c, c.Inner, true)
 
 	switch {
-	case c.HasLength && c.HasScale:
-		_, _ = fmt.Fprintf(buf, ", %s(%d,%d)", c.Type, c.Length, c.Scale)
-	case c.HasLength:
-		_, _ = fmt.Fprintf(buf, ", %s(%d)", c.Type, c.Length)
+	case c.Length != nil && c.Scale != nil:
+		_, _ = fmt.Fprintf(buf, ", %s(%d,%d)", c.Type, *c.Length, *c.Scale)
+	case c.Length != nil:
+		_, _ = fmt.Fprintf(buf, ", %s(%d)", c.Type, *c.Length)
 	default:
 		_, _ = fmt.Fprintf(buf, ", %s", c.Type)
 	}

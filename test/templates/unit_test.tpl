@@ -47,7 +47,7 @@ jobs:
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: frouioui/paths-filter@main
+      uses: dorny/paths-filter@v3.0.1
       id: changes
       with:
         token: ''
@@ -69,7 +69,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       uses: actions/setup-go@v4
       with:
-        go-version: 1.21.5
+        go-version: 1.22.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'

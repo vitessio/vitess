@@ -38,6 +38,12 @@ var _ Primitive = (*VindexFunc)(nil)
 
 // VindexFunc is a primitive that performs vindex functions.
 type VindexFunc struct {
+	// VindexFunc does not take inputs
+	noInputs
+
+	// VindexFunc does not need to work inside a tx
+	noTxNeeded
+
 	Opcode VindexOpcode
 	// Fields is the field info for the result.
 	Fields []*querypb.Field
@@ -46,12 +52,6 @@ type VindexFunc struct {
 	// TODO(sougou): add support for MultiColumn.
 	Vindex vindexes.SingleColumn
 	Value  evalengine.Expr
-
-	// VindexFunc does not take inputs
-	noInputs
-
-	// VindexFunc does not need to work inside a tx
-	noTxNeeded
 }
 
 // VindexOpcode is the opcode for a VindexFunc.

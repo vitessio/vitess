@@ -124,41 +124,6 @@ func buildVindexTableForDML(
 	return vindexTable, routing
 }
 
-func generateOwnedVindexQuery(tblExpr sqlparser.TableExpr, del *sqlparser.Delete, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) string {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	for idx, col := range ksidCols {
-		if idx == 0 {
-			buf.Myprintf("select %v", col)
-		} else {
-			buf.Myprintf(", %v", col)
-		}
-	}
-	for _, cv := range table.Owned {
-		for _, column := range cv.Columns {
-			buf.Myprintf(", %v", column)
-		}
-	}
-	sqlparser.RemoveKeyspaceInTables(tblExpr)
-	buf.Myprintf(" from %v%v%v%v for update", tblExpr, del.Where, del.OrderBy, del.Limit)
-	return buf.String()
-}
-
-func getUpdateVindexInformation(
-	ctx *plancontext.PlanningContext,
-	updStmt *sqlparser.Update,
-	vindexTable *vindexes.Table,
-	tableID semantics.TableSet,
-	assignments []SetExpr,
-) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, string, []string) {
-	if !vindexTable.Keyspace.Sharded {
-		return nil, nil, "", nil
-	}
-
-	primaryVindex, vindexAndPredicates := getVindexInformation(tableID, vindexTable)
-	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex := buildChangedVindexesValues(ctx, updStmt, vindexTable, primaryVindex.Columns, assignments)
-	return vindexAndPredicates, changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex
-}
-
 /*
 		The greedy planner will plan a query by finding first finding the best route plan for every table.
 	    Then, iteratively, it finds the cheapest join that can be produced between the remaining plans,
@@ -194,8 +159,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) []Operat
 
 	// we start by seeding the table with the single routes
 	for i, table := range qg.Tables {
-		solves := ctx.SemTable.TableSetFor(table.Alias)
-		plan := createRoute(ctx, table, solves)
+		plan := createRoute(ctx, table)
 		if qg.NoDeps != nil {
 			plan = plan.AddPredicate(ctx, qg.NoDeps)
 		}
@@ -336,12 +300,12 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 			return join, Rewrote("use a hash join because we have LIMIT on the LHS")
 		}
 
-		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
+		join := NewApplyJoin(ctx, Clone(rhs), Clone(lhs), nil, !inner)
 		newOp := pushJoinPredicates(ctx, joinPredicates, join)
 		return newOp, Rewrote("logical join to applyJoin, switching side because LIMIT")
 	}
 
-	join := NewApplyJoin(Clone(lhs), Clone(rhs), nil, !inner)
+	join := NewApplyJoin(ctx, Clone(lhs), Clone(rhs), nil, !inner)
 	newOp := pushJoinPredicates(ctx, joinPredicates, join)
 	return newOp, Rewrote("logical join to applyJoin ")
 }
@@ -569,7 +533,7 @@ func pushJoinPredicates(ctx *plancontext.PlanningContext, exprs []sqlparser.Expr
 	}
 
 	for _, expr := range exprs {
-		AddPredicate(ctx, op, expr, true, newFilter)
+		AddPredicate(ctx, op, expr, true, newFilterSinglePredicate)
 	}
 
 	return op

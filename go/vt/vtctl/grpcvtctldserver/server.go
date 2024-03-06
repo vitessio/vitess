@@ -60,6 +60,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -92,13 +93,13 @@ type VtctldServer struct {
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
-func NewVtctldServer(ts *topo.Server, parser *sqlparser.Parser) *VtctldServer {
+func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(ts, tmc, parser),
+		ws:  workflow.NewServer(env, ts, tmc),
 	}
 }
 
@@ -108,7 +109,7 @@ func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *Vtc
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(ts, tmc, sqlparser.NewTestParser()),
+		ws:  workflow.NewServer(vtenv.NewTestEnv(), ts, tmc),
 	}
 }
 
@@ -221,6 +222,8 @@ func (s *VtctldServer) ApplyShardRoutingRules(ctx context.Context, req *vtctldat
 
 // ApplySchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySchemaRequest) (resp *vtctldatapb.ApplySchemaResponse, err error) {
+	log.Infof("VtctldServer.ApplySchema: keyspace=%s, migrationContext=%v, ddlStrategy=%v, batchSize=%v", req.Keyspace, req.MigrationContext, req.DdlStrategy, req.BatchSize)
+
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplySchema")
 	defer span.Finish()
 
@@ -515,7 +518,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 	Send(resp *vtctldatapb.BackupResponse) error
 }) error {
 	r := &tabletmanagerdatapb.BackupRequest{
-		Concurrency:        int64(req.Concurrency),
+		Concurrency:        req.Concurrency,
 		AllowPrimary:       req.AllowPrimary,
 		IncrementalFromPos: req.IncrementalFromPos,
 		UpgradeSafe:        req.UpgradeSafe,
@@ -1761,6 +1764,43 @@ func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRe
 			Name:     req.ShardName,
 			Shard:    shard.Shard,
 		},
+	}, nil
+}
+
+// GetShardReplication is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetShardReplication(ctx context.Context, req *vtctldatapb.GetShardReplicationRequest) (resp *vtctldatapb.GetShardReplicationResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetShardReplication")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	cells := req.Cells
+	if len(cells) == 0 {
+		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer cancel()
+
+		cells, err = s.ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("cells", strings.Join(cells, ","))
+
+	replicationByCell := make(map[string]*topodatapb.ShardReplication, len(cells))
+	for _, cell := range cells {
+		data, err := s.ts.GetShardReplication(ctx, cell, req.Keyspace, req.Shard)
+		if err != nil {
+			return nil, err
+		}
+
+		replicationByCell[cell] = data.ShardReplication
+	}
+
+	return &vtctldatapb.GetShardReplicationResponse{
+		ShardReplicationByCell: replicationByCell,
 	}, nil
 }
 
@@ -4989,8 +5029,8 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
-func StartServer(s *grpc.Server, ts *topo.Server, parser *sqlparser.Parser) {
-	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts, parser))
+func StartServer(s *grpc.Server, env *vtenv.Environment, ts *topo.Server) {
+	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(env, ts))
 }
 
 // getTopologyCell is a helper method that returns a topology cell given its path.

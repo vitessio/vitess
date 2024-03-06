@@ -34,7 +34,8 @@ func (e ErrorCode) ToString() string {
 // See above reference for more information on each code.
 const (
 	// Vitess specific errors, (100-999)
-	ERNotReplica = ErrorCode(100)
+	ERNotReplica      = ErrorCode(100)
+	ERNonAtomicCommit = ErrorCode(301)
 
 	// unknown
 	ERUnknownError = ErrorCode(1105)

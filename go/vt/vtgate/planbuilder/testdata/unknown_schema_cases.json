@@ -52,7 +52,7 @@
   {
     "comment": "Group by column number, used with non-aliased expression (duplicated code)",
     "query": "select * from user group by 1",
-    "plan": "cannot use column offsets in group statement when using `*`"
+    "plan": "cannot use column offsets in group clause when using `*`"
   },
   {
     "comment": "create view with Cannot auto-resolve for cross-shard joins",
@@ -68,5 +68,15 @@
     "comment": "unsharded insert, no col list with auto-inc",
     "query": "insert into unsharded_auto values(1,1)",
     "plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
+  },
+  {
+    "comment": "We need schema tracking to allow unexpanded columns inside UNION",
+    "query": "select x from (select t.*, 0 as x from user t union select t.*, 1 as x from user_extra t) AS t",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "multi table delete with 1 sharded and 1 reference table",
+    "query": "delete u, r from user u join ref_with_source r on u.col = r.col",
+    "plan": "VT09015: schema tracking required"
   }
 ]

@@ -32,8 +32,8 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/cache/theine"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -61,9 +61,9 @@ func TestStrictMode(t *testing.T) {
 	schematest.AddDefaultQueries(db)
 
 	// Test default behavior.
-	config := tabletenv.NewDefaultConfig()
-	config.DB = newDBConfigs(db)
-	env := tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 	qe.se.InitDBConfig(newDBConfigs(db).DbaWithDB())
@@ -90,7 +90,7 @@ func TestStrictMode(t *testing.T) {
 	qe.Close()
 
 	// Test that we succeed if the enforcement flag is off.
-	config.EnforceStrictTransTables = false
+	cfg.EnforceStrictTransTables = false
 	qe = NewQueryEngine(env, se)
 	if err := qe.Open(); err != nil {
 		t.Fatal(err)
@@ -186,11 +186,27 @@ func TestQueryPlanCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 
+	initialHits := qe.queryCacheHits.Get()
+	initialMisses := qe.queryCacheMisses.Get()
+
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan, "plan should not be nil")
 
 	assertPlanCacheSize(t, qe, 1)
+
+	require.Equal(t, int64(0), qe.queryCacheHits.Get()-initialHits)
+	require.Equal(t, int64(1), qe.queryCacheMisses.Get()-initialMisses)
+
+	secondPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
+	require.NoError(t, err)
+	require.NotNil(t, secondPlan, "plan should not be nil")
+
+	assertPlanCacheSize(t, qe, 1)
+
+	require.Equal(t, int64(1), qe.queryCacheHits.Get()-initialHits)
+	require.Equal(t, int64(1), qe.queryCacheMisses.Get()-initialMisses)
+
 	qe.ClearQueryPlanCache()
 }
 
@@ -351,12 +367,12 @@ func TestStatsURL(t *testing.T) {
 }
 
 func newTestQueryEngine(idleTimeout time.Duration, strict bool, dbcfgs *dbconfigs.DBConfigs) *QueryEngine {
-	config := tabletenv.NewDefaultConfig()
-	config.DB = dbcfgs
-	config.OltpReadPool.IdleTimeout = idleTimeout
-	config.OlapReadPool.IdleTimeout = idleTimeout
-	config.TxPool.IdleTimeout = idleTimeout
-	env := tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbcfgs
+	cfg.OltpReadPool.IdleTimeout = idleTimeout
+	cfg.OlapReadPool.IdleTimeout = idleTimeout
+	cfg.TxPool.IdleTimeout = idleTimeout
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 	// the integration tests that check cache behavior do not expect a doorkeeper; disable it
@@ -453,10 +469,10 @@ func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, par int) {
 	b.Helper()
 
 	dbcfgs := newDBConfigs(db)
-	config := tabletenv.NewDefaultConfig()
-	config.DB = dbcfgs
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbcfgs
 
-	env := tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 
@@ -510,11 +526,11 @@ func TestPlanCachePollution(t *testing.T) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
 	dbcfgs := newDBConfigs(db)
-	config := tabletenv.NewDefaultConfig()
-	config.DB = dbcfgs
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbcfgs
 	// config.LFUQueryCacheSizeBytes = 3 * 1024 * 1024
 
-	env := tabletenv.NewEnv(config, "TabletServerTest", collations.MySQL8(), sqlparser.NewTestParser())
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
 
@@ -536,7 +552,7 @@ func TestPlanCachePollution(t *testing.T) {
 	go func() {
 		cacheMode := "lfu"
 
-		out, err := os.Create(path.Join(plotPath, fmt.Sprintf("cache_plot_%d_%s.dat", config.QueryCacheMemory, cacheMode)))
+		out, err := os.Create(path.Join(plotPath, fmt.Sprintf("cache_plot_%d_%s.dat", cfg.QueryCacheMemory, cacheMode)))
 		require.NoError(t, err)
 		defer out.Close()
 
@@ -827,10 +843,10 @@ func TestAddQueryStats(t *testing.T) {
 	t.Parallel()
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			config := tabletenv.NewDefaultConfig()
-			config.DB = newDBConfigs(fakesqldb.New(t))
-			config.EnablePerWorkloadTableMetrics = testcase.enablePerWorkloadTableMetrics
-			env := tabletenv.NewEnv(config, "TestAddQueryStats_"+testcase.name, collations.MySQL8(), sqlparser.NewTestParser())
+			cfg := tabletenv.NewDefaultConfig()
+			cfg.DB = newDBConfigs(fakesqldb.New(t))
+			cfg.EnablePerWorkloadTableMetrics = testcase.enablePerWorkloadTableMetrics
+			env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TestAddQueryStats_"+testcase.name)
 			se := schema.NewEngine(env)
 			qe := NewQueryEngine(env, se)
 			qe.AddStats(testcase.planType, testcase.tableName, testcase.workload, testcase.tabletType, testcase.queryCount, testcase.duration, testcase.mysqlTime, testcase.rowsAffected, testcase.rowsReturned, testcase.errorCount, testcase.errorCode)
@@ -871,7 +887,7 @@ func TestPlanPoolUnsafe(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			statement, err := sqlparser.NewTestParser().Parse(tcase.query)
 			require.NoError(t, err)
-			plan, err := planbuilder.Build(statement, map[string]*schema.Table{}, "dbName", false, collations.MySQL8())
+			plan, err := planbuilder.Build(vtenv.NewTestEnv(), statement, map[string]*schema.Table{}, "dbName", false)
 			// Plan building will not fail, but it will mark that reserved connection is needed.
 			// checking plan is valid will fail.
 			require.NoError(t, err)

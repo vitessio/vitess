@@ -18,21 +18,39 @@ package bytes2
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBuffer(t *testing.T) {
 	b := NewBuffer(nil)
+
+	// Test Write function
 	b.Write([]byte("ab"))
+	assert.Equal(t, "ab", string(b.Bytes()), "Write()")
+
+	// Test WriteString function
 	b.WriteString("cd")
+	assert.Equal(t, "abcd", string(b.Bytes()), "WriteString()")
+
+	// Test WriteByte function
 	b.WriteByte('e')
-	want := "abcde"
-	if got := string(b.Bytes()); got != want {
-		t.Errorf("b.Bytes(): %s, want %s", got, want)
-	}
-	if got := b.String(); got != want {
-		t.Errorf("b.String(): %s, want %s", got, want)
-	}
-	if got := b.Len(); got != 5 {
-		t.Errorf("b.Len(): %d, want 5", got)
-	}
+	assert.Equal(t, "abcde", string(b.Bytes()), "WriteByte()")
+
+	// Test Bytes function
+	assert.Equal(t, "abcde", string(b.Bytes()))
+
+	// Test String function
+	assert.Equal(t, "abcde", b.String())
+
+	// Test StringUnsafe function
+	assert.Equal(t, "abcde", b.StringUnsafe())
+
+	// Test Len function
+	assert.Equal(t, 5, b.Len())
+
+	// Test Reset function
+	b.Reset()
+	assert.Equal(t, "", string(b.Bytes()))
+	assert.Equal(t, 0, b.Len())
 }

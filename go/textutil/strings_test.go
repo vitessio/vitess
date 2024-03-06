@@ -20,6 +20,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestSplitDelimitedList(t *testing.T) {
@@ -65,6 +68,12 @@ func TestSplitUnescape(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, expected, elems)
 	}
+	{
+		s := "invalid%2"
+		elems, err := SplitUnescape(s, ",")
+		assert.Error(t, err)
+		assert.Equal(t, []string{}, elems)
+	}
 }
 
 func TestSingleWordCamel(t *testing.T) {
@@ -105,6 +114,97 @@ func TestSingleWordCamel(t *testing.T) {
 		t.Run(tc.word, func(t *testing.T) {
 			camel := SingleWordCamel(tc.word)
 			assert.Equal(t, tc.expect, camel)
+		})
+	}
+}
+
+func TestValueIsSimulatedNull(t *testing.T) {
+	tt := []struct {
+		name   string
+		val    interface{}
+		isNull bool
+	}{
+		{
+			name:   "case string false",
+			val:    "test",
+			isNull: false,
+		},
+		{
+			name:   "case string true",
+			val:    SimulatedNullString,
+			isNull: true,
+		},
+		{
+			name:   "case []string true",
+			val:    []string{SimulatedNullString},
+			isNull: true,
+		},
+		{
+			name:   "case []string false",
+			val:    []string{SimulatedNullString, SimulatedNullString},
+			isNull: false,
+		},
+		{
+			name:   "case binlogdatapb.OnDDLAction true",
+			val:    binlogdatapb.OnDDLAction(SimulatedNullInt),
+			isNull: true,
+		},
+		{
+			name:   "case int true",
+			val:    SimulatedNullInt,
+			isNull: true,
+		},
+		{
+			name:   "case int32 true",
+			val:    int32(SimulatedNullInt),
+			isNull: true,
+		},
+		{
+			name:   "case int64 true",
+			val:    int64(SimulatedNullInt),
+			isNull: true,
+		},
+		{
+			name:   "case []topodatapb.TabletType true",
+			val:    []topodatapb.TabletType{topodatapb.TabletType(SimulatedNullInt)},
+			isNull: true,
+		},
+		{
+			name:   "case binlogdatapb.VReplicationWorkflowState true",
+			val:    binlogdatapb.VReplicationWorkflowState(SimulatedNullInt),
+			isNull: true,
+		},
+		{
+			name:   "case default",
+			val:    float64(1),
+			isNull: false,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			isNull := ValueIsSimulatedNull(tc.val)
+			assert.Equal(t, tc.isNull, isNull)
+		})
+	}
+}
+
+func TestTitle(t *testing.T) {
+	tt := []struct {
+		s      string
+		expect string
+	}{
+		{s: "hello world", expect: "Hello World"},
+		{s: "snake_case", expect: "Snake_case"},
+		{s: "TITLE CASE", expect: "TITLE CASE"},
+		{s: "HelLo wOrLd", expect: "HelLo WOrLd"},
+		{s: "", expect: ""},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.s, func(t *testing.T) {
+			title := Title(tc.s)
+			assert.Equal(t, tc.expect, title)
 		})
 	}
 }

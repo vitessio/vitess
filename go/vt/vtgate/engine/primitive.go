@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -87,8 +88,7 @@ type (
 		Session() SessionActions
 
 		ConnCollation() collations.ID
-		CollationEnv() *collations.Environment
-		SQLParser() *sqlparser.Parser
+		Environment() *vtenv.Environment
 		TimeZone() *time.Location
 		SQLMode() string
 

@@ -25,7 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 func TestRemovedForeignKeyNames(t *testing.T) {
@@ -68,7 +68,7 @@ func TestRemovedForeignKeyNames(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.before, func(t *testing.T) {
-			names, err := RemovedForeignKeyNames(sqlparser.NewTestParser(), tcase.before, tcase.after)
+			names, err := RemovedForeignKeyNames(vtenv.NewTestEnv(), tcase.before, tcase.after)
 			assert.NoError(t, err)
 			assert.Equal(t, tcase.names, names)
 		})

@@ -30,14 +30,12 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/cache/theine"
-	"vitess.io/vitess/go/streamlog"
-	"vitess.io/vitess/go/vt/vthash"
-
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
@@ -52,6 +50,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -61,6 +60,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 var (
@@ -93,6 +93,7 @@ func init() {
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
 type Executor struct {
+	env         *vtenv.Environment
 	serv        srvtopo.Server
 	cell        string
 	resolver    *Resolver
@@ -122,9 +123,6 @@ type Executor struct {
 
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
-
-	collEnv *collations.Environment
-	parser  *sqlparser.Parser
 }
 
 var executorOnce sync.Once
@@ -145,6 +143,7 @@ func DefaultPlanCache() *PlanCache {
 // NewExecutor creates a new Executor.
 func NewExecutor(
 	ctx context.Context,
+	env *vtenv.Environment,
 	serv srvtopo.Server,
 	cell string,
 	resolver *Resolver,
@@ -155,10 +154,9 @@ func NewExecutor(
 	noScatter bool,
 	pv plancontext.PlannerVersion,
 	warmingReadsPercent int,
-	collationEnv *collations.Environment,
-	parser *sqlparser.Parser,
 ) *Executor {
 	e := &Executor{
+		env:                 env,
 		serv:                serv,
 		cell:                cell,
 		resolver:            resolver,
@@ -173,8 +171,6 @@ func NewExecutor(
 		plans:               plans,
 		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
-		collEnv:             collationEnv,
-		parser:              parser,
 	}
 
 	vschemaacl.Init()
@@ -184,7 +180,7 @@ func NewExecutor(
 		serv:       serv,
 		cell:       cell,
 		schema:     e.schemaTracker,
-		parser:     parser,
+		parser:     env.Parser(),
 	}
 	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
@@ -231,7 +227,7 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	}
 	if result != nil && len(result.Rows) > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := e.parser.RedactSQLQuery(sql)
+		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -365,7 +361,7 @@ func (e *Executor) StreamExecute(
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.insertID, srr.rowsReturned, err)
 	if srr.rowsReturned > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := e.parser.RedactSQLQuery(sql)
+		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -464,7 +460,11 @@ func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlpars
 			})
 			bindVars[key] = sqltypes.Int64BindVariable(v)
 		case sysvars.TransactionMode.Name:
-			bindVars[key] = sqltypes.StringBindVariable(session.TransactionMode.String())
+			txMode := session.TransactionMode
+			if txMode == vtgatepb.TransactionMode_UNSPECIFIED {
+				txMode = getTxMode()
+			}
+			bindVars[key] = sqltypes.StringBindVariable(txMode.String())
 		case sysvars.Workload.Name:
 			var v string
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
@@ -507,15 +507,15 @@ func (e *Executor) addNeededBindVars(vcursor *vcursorImpl, bindVarNeeds *sqlpars
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		default:
 			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
-				expr, err := e.parser.ParseExpr(value)
+				expr, err := e.env.Parser().ParseExpr(value)
 				if err != nil {
 					return err
 				}
 
 				evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
-					Collation:    vcursor.collation,
-					CollationEnv: e.collEnv,
-					SQLMode:      evalengine.ParseSQLMode(vcursor.SQLMode()),
+					Collation:   vcursor.collation,
+					Environment: e.env,
+					SQLMode:     evalengine.ParseSQLMode(vcursor.SQLMode()),
 				})
 				if err != nil {
 					return err
@@ -929,7 +929,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			tabletHostPort := ts.GetTabletHostPort()
 			throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
 			if err != nil {
-				log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
+				log.Warningf("Could not get throttler status from %s: %v", topoproto.TabletAliasString(ts.Tablet.Alias), err)
 			}
 
 			replSourceHost := ""
@@ -937,7 +937,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			replIOThreadHealth := ""
 			replSQLThreadHealth := ""
 			replLastError := ""
-			replLag := int64(-1)
+			replLag := "-1" // A string to support NULL as a value
 			sql := "show slave status"
 			results, err := e.txConn.tabletGateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
@@ -948,8 +948,25 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				replIOThreadHealth = row["Slave_IO_Running"].ToString()
 				replSQLThreadHealth = row["Slave_SQL_Running"].ToString()
 				replLastError = row["Last_Error"].ToString()
-				if ts.Stats != nil {
-					replLag = int64(ts.Stats.ReplicationLagSeconds)
+				// We cannot check the tablet's tabletenv config from here so
+				// we only use the tablet's stat -- which is managed by the
+				// ReplicationTracker -- if we can tell that it's enabled,
+				// meaning that it has a non-zero value. If it's actually
+				// enabled AND zero (rather than the zeroval), then mysqld
+				// should also return 0 so in this case the value is correct
+				// and equivalent either way. The only reason that we would
+				// want to use the ReplicationTracker based value, when we
+				// can, is because the polling method allows us to get the
+				// estimated lag value when replication is not running (based
+				// on how long we've seen that it's not been running).
+				if ts.Stats != nil && ts.Stats.ReplicationLagSeconds > 0 { // Use the value we get from the ReplicationTracker
+					replLag = fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds)
+				} else { // Use the value from mysqld
+					if row["Seconds_Behind_Master"].IsNull() {
+						replLag = strings.ToUpper(sqltypes.NullStr) // Uppercase to match mysqld's output in SHOW REPLICA STATUS
+					} else {
+						replLag = row["Seconds_Behind_Master"].ToString()
+					}
 				}
 			}
 			replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
@@ -962,7 +979,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 				ts.Tablet.Hostname,
 				fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
 				replicationHealth,
-				fmt.Sprintf("%d", replLag),
+				replLag,
 				throttlerStatus,
 			))
 		}
@@ -1349,7 +1366,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.parser)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -1477,11 +1494,14 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
 }
 
+// getTabletThrottlerStatus uses HTTP to get the throttler status
+// on a tablet. It uses HTTP because the CheckThrottler RPC is a
+// tmclient RPC and you cannot use tmclient outside of a tablet.
 func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
 	client := http.Client{
 		Timeout: 100 * time.Millisecond,
 	}
-	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check?app=vtgate", tabletHostPort))
+	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check-self", tabletHostPort))
 	if err != nil {
 		return "", err
 	}
@@ -1520,7 +1540,7 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *SafeSession) error 
 
 // planPrepareStmt implements the IExecutor interface
 func (e *Executor) planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.parser)
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1554,10 +1574,6 @@ func (e *Executor) Close() {
 	e.plans.Close()
 }
 
-func (e *Executor) collationEnv() *collations.Environment {
-	return e.collEnv
-}
-
-func (e *Executor) sqlparser() *sqlparser.Parser {
-	return e.parser
+func (e *Executor) environment() *vtenv.Environment {
+	return e.env
 }

@@ -74,6 +74,11 @@ func NewGenericHistogram(name, help string, cutoffs []int64, labels []string, co
 	return h
 }
 
+// Adds a hook that will be called every time a new value is added to the histogram
+func (h *Histogram) AddHook(hook func(int64)) {
+	h.hook = hook
+}
+
 // Add adds a new measurement to the Histogram.
 func (h *Histogram) Add(value int64) {
 	for i := range h.labels {
