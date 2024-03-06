@@ -63,9 +63,9 @@ func TestAppendStaticAuth(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.cFile, func(t *testing.T) {
 			defer func() {
+				ResetStaticAuth()
 				credsFile = oldCredsFile
 			}()
 
@@ -84,6 +84,11 @@ func TestAppendStaticAuth(t *testing.T) {
 }
 
 func TestGetStaticAuthCreds(t *testing.T) {
+	oldCredsFile := credsFile
+	defer func() {
+		ResetStaticAuth()
+		credsFile = oldCredsFile
+	}()
 	tmp, err := os.CreateTemp("", t.Name())
 	assert.Nil(t, err)
 	defer os.Remove(tmp.Name())
