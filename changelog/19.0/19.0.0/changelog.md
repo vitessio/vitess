@@ -171,7 +171,8 @@
  * [main] Upgrade the Golang version to `go1.21.4` [#14488](https://github.com/vitessio/vitess/pull/14488)
  * [main] Upgrade the Golang version to `go1.21.5` [#14689](https://github.com/vitessio/vitess/pull/14689)
  * connpool: fix racy test [#14731](https://github.com/vitessio/vitess/pull/14731)
- * [release-19.0] Upgrade the Golang version to `go1.22.0` [#15169](https://github.com/vitessio/vitess/pull/15169) 
+ * [release-19.0] Upgrade the Golang version to `go1.22.0` [#15169](https://github.com/vitessio/vitess/pull/15169)
+ * [release-19.0] Upgrade the Golang version to `go1.22.1` [#15406](https://github.com/vitessio/vitess/pull/15406) 
 #### Online DDL
  * onlineddl_vrepl_stress: fix flakiness caused by timeouts [#14295](https://github.com/vitessio/vitess/pull/14295)
  * OnlineDDL: reduce vrepl_stress workload in forks [#14302](https://github.com/vitessio/vitess/pull/14302)
