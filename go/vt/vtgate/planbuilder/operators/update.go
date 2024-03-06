@@ -269,7 +269,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		Name:   name,
 	}
 
-	_, cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, targetTbl, assignments)
+	cvv, ovq, subQueriesArgOnChangedVindex := getUpdateVindexInformation(ctx, updStmt, targetTbl, assignments)
 
 	updOp := &Update{
 		DMLCommon: &DMLCommon{
@@ -302,14 +302,14 @@ func getUpdateVindexInformation(
 	updStmt *sqlparser.Update,
 	table TargetTable,
 	assignments []SetExpr,
-) ([]*VindexPlusPredicates, map[string]*engine.VindexValues, *sqlparser.Select, []string) {
+) (map[string]*engine.VindexValues, *sqlparser.Select, []string) {
 	if !table.VTable.Keyspace.Sharded {
-		return nil, nil, nil, nil
+		return nil, nil, nil
 	}
 
-	primaryVindex, vindexAndPredicates := getVindexInformation(table.ID, table.VTable)
+	primaryVindex := getVindexInformation(table.ID, table.VTable)
 	changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex := buildChangedVindexesValues(ctx, updStmt, table.VTable, primaryVindex.Columns, assignments)
-	return vindexAndPredicates, changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex
+	return changedVindexValues, ownedVindexQuery, subQueriesArgOnChangedVindex
 }
 
 func buildFkOperator(ctx *plancontext.PlanningContext, updOp Operator, updClone *sqlparser.Update, parentFks []vindexes.ParentFKInfo, childFks []vindexes.ChildFKInfo, updatedTable *vindexes.Table) Operator {
