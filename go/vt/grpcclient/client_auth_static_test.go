@@ -29,6 +29,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+func init() {
+	clientCredsSigChan = make(chan os.Signal, 1)
+}
+
 func TestAppendStaticAuth(t *testing.T) {
 	oldCredsFile := credsFile
 	opts := []grpc.DialOption{
@@ -94,9 +98,7 @@ func TestGetStaticAuthCreds(t *testing.T) {
 	assert.Nil(t, err)
 	defer os.Remove(tmp.Name())
 	credsFile = tmp.Name()
-	clientCredsMu.Lock()
-	clientCredsSigChan = make(chan os.Signal, 1)
-	clientCredsMu.Unlock()
+	ResetStaticAuth()
 
 	// load old creds
 	fmt.Fprint(tmp, `{"Username": "old", "Password": "123456"}`)
