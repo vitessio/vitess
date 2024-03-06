@@ -755,8 +755,14 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 			case <-mysqlCollectTicker.C:
 				if throttler.IsOpen() {
 					// frequent
+					// Always collect self metrics:
+					throttler.collectMySQLMetrics(ctx, tmClient, func(clusterName string) bool {
+						return clusterName == selfStoreName
+					})
 					if !throttler.isDormant() {
-						throttler.collectMySQLMetrics(ctx, tmClient)
+						throttler.collectMySQLMetrics(ctx, tmClient, func(clusterName string) bool {
+							return clusterName != selfStoreName
+						})
 					}
 					//
 					if throttler.recentCheckRateLimiter.Diff() <= 1 { // recently checked
@@ -782,7 +788,9 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				if throttler.IsOpen() {
 					// infrequent
 					if throttler.isDormant() {
-						throttler.collectMySQLMetrics(ctx, tmClient)
+						throttler.collectMySQLMetrics(ctx, tmClient, func(clusterName string) bool {
+							return clusterName != selfStoreName
+						})
 					}
 				}
 			case metric := <-throttler.mysqlThrottleMetricChan:
@@ -846,9 +854,12 @@ func (throttler *Throttler) generateTabletProbeFunction(ctx context.Context, clu
 	}
 }
 
-func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tmclient.TabletManagerClient) error {
+func (throttler *Throttler) collectMySQLMetrics(ctx context.Context, tmClient tmclient.TabletManagerClient, includeCluster func(clusterName string) bool) error {
 	// synchronously, get lists of probes
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
+		if !includeCluster(clusterName) {
+			continue
+		}
 		clusterName := clusterName
 		// probes is known not to change. It can be *replaced*, but not changed.
 		// so it's safe to iterate it
