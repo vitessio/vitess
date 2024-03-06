@@ -41,9 +41,10 @@ const (
 
 var (
 	// channels to coordinate the migration workflow
-	chNotSetup, chNotCreated, chInProgress, chSwitched, chCompleted chan int64
+	chNotSetup, chNotCreated, chInProgress               chan int64
+	chSwitched, chReversed, chSwitchedAgain, chCompleted chan int64
 	// counters to keep track of the number of tenants in each state
-	numSetup, numInProgress, numSwitched, numCompleted atomic.Int64
+	numSetup, numInProgress, numSwitched, numReversed, numSwitchedAgain, numCompleted atomic.Int64
 )
 
 // multiTenantMigration manages the migration of multiple tenants to a single target keyspace.
@@ -128,7 +129,7 @@ func newMultiTenantMigration(t *testing.T) *multiTenantMigration {
 		mtm.setTenantMigrationStatus(int64(i), tenantMigrationStatusNotMigrated)
 	}
 	channelSize := numTenants + 1 // +1 to make sure the channels never block
-	for _, ch := range []*chan int64{&chNotSetup, &chNotCreated, &chInProgress, &chSwitched, &chCompleted} {
+	for _, ch := range []*chan int64{&chNotSetup, &chNotCreated, &chInProgress, &chReversed, &chSwitchedAgain, &chSwitched, &chCompleted} {
 		*ch = make(chan int64, channelSize)
 	}
 	return mtm
@@ -227,12 +228,25 @@ func (mtm *multiTenantMigration) insertSomeData(t *testing.T, tenantId int64, so
 func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 	t := mtm.t
 	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
+	sourceKeyspaceName := getSourceKeyspace(tenantId)
 	mt := mtm.activeMoveTables[tenantId]
 	ksWorkflow := fmt.Sprintf("%s.%s", mtm.targetKeyspace, mt.workflowName)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	// we intentionally insert first into the source alias keyspace and then the source keyspace to test routing rules for both.
 	mtm.insertSomeData(t, tenantId, sourceAliasKeyspace, numAdditionalRowsPerTenant)
 	mt.SwitchReadsAndWrites()
-	mtm.insertSomeData(t, tenantId, sourceAliasKeyspace, numAdditionalRowsPerTenant)
+	mtm.insertSomeData(t, tenantId, sourceKeyspaceName, numAdditionalRowsPerTenant)
+}
+
+func (mtm *multiTenantMigration) reverseTraffic(tenantId int64) {
+	t := mtm.t
+	mt := mtm.activeMoveTables[tenantId]
+	sourceKeyspaceName := getSourceKeyspace(tenantId)
+	reverseKsWorkflow := fmt.Sprintf("%s.%s_reverse", sourceKeyspaceName, mt.workflowName)
+	waitForWorkflowState(t, vc, reverseKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	mtm.insertSomeData(t, tenantId, targetKeyspaceName, numAdditionalRowsPerTenant)
+	mt.ReverseReadsAndWrites()
+	mtm.insertSomeData(t, tenantId, targetKeyspaceName, numAdditionalRowsPerTenant)
 }
 
 func (mtm *multiTenantMigration) complete(tenantId int64) {
@@ -277,7 +291,8 @@ func TestMultiTenant(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	t.Run("Verify all rows have been migrated", func(t *testing.T) {
-		totalRowsInsertedPerTenant := numInitialRowsPerTenant + numAdditionalRowsPerTenant*2
+		numAdditionalInserts := 6 // 2 each for Switch, Reverse, and SwitchAgain
+		totalRowsInsertedPerTenant := numInitialRowsPerTenant + numAdditionalRowsPerTenant*numAdditionalInserts
 		totalRowsInserted := totalRowsInsertedPerTenant * numTenants
 		totalActualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", mtm.targetKeyspace, "t1"))
 		require.Equal(t, totalRowsInserted, totalActualRowsInserted)
@@ -305,7 +320,6 @@ func (mtm *multiTenantMigration) doStuff(name string, chIn, chOut chan int64, co
 }
 
 // run starts the migration process for all tenants. It starts concurrent
-
 func (mtm *multiTenantMigration) run() {
 	go mtm.doStuff("Setup tenant keyspace/schemas", chNotSetup, chNotCreated, &numSetup, mtm.setup)
 	for i := int64(1); i <= numTenants; i++ {
@@ -320,5 +334,7 @@ func (mtm *multiTenantMigration) run() {
 
 	go mtm.doStuff("Start Migrations", chNotCreated, chInProgress, &numInProgress, mtm.start)
 	go mtm.doStuff("Switch Traffic", chInProgress, chSwitched, &numSwitched, mtm.switchTraffic)
-	go mtm.doStuff("Mark Migrations Complete", chSwitched, chCompleted, &numCompleted, mtm.complete)
+	go mtm.doStuff("Reverse Traffic", chSwitched, chReversed, &numReversed, mtm.reverseTraffic)
+	go mtm.doStuff("Switch Traffic Again", chReversed, chSwitchedAgain, &numSwitchedAgain, mtm.switchTraffic)
+	go mtm.doStuff("Mark Migrations Complete", chSwitchedAgain, chCompleted, &numCompleted, mtm.complete)
 }

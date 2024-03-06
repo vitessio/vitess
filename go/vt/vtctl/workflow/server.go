@@ -3166,7 +3166,21 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	if !switchReplica && !switchRdonly {
 		return handleError("invalid tablet types", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
 	}
-	if !ts.isPartialMigration { // shard level traffic switching is all or nothing
+
+	// For partial (shard-by-shard migrations) and if keyspace routing rules are used, traffic for all tablet types
+	// is expected to be switched at once. For other MoveTables migrations where we use table routing rules
+	// replica/rdonly traffic can be switched first and then primary traffic can be switched later.
+	trafficSwitchingIsAllOrNothing := false
+	switch {
+	case !ts.isPartialMigration:
+		// shard level traffic switching is all or nothing
+		trafficSwitchingIsAllOrNothing = true
+	case ts.MigrationType() == binlogdatapb.MigrationType_TABLES && ts.options.UseKeyspaceRoutingRules:
+		// keyspace routing rules are used, traffic is all or nothing per keyspace
+		trafficSwitchingIsAllOrNothing = true
+	}
+
+	if !trafficSwitchingIsAllOrNothing {
 		if direction == DirectionBackward && switchReplica && len(state.ReplicaCellsSwitched) == 0 {
 			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched"))
 		}
