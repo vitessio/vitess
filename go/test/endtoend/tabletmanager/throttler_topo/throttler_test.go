@@ -89,6 +89,7 @@ var (
 	throttledAppsAPIPath = "throttler/throttled-apps"
 	checkAPIPath         = "throttler/check"
 	checkSelfAPIPath     = "throttler/check-self"
+	statusAPIPath        = "throttler/status"
 	getResponseBody      = func(resp *http.Response) string {
 		body, _ := io.ReadAll(resp.Body)
 		return string(body)
@@ -178,6 +179,16 @@ func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*http.
 
 func throttleCheckSelf(tablet *cluster.Vttablet) (*http.Response, error) {
 	return httpClient.Get(fmt.Sprintf("http://localhost:%d/%s?app=%s", tablet.HTTPPort, checkSelfAPIPath, testAppName))
+}
+
+func throttleStatus(t *testing.T, tablet *cluster.Vttablet) string {
+	resp, err := httpClient.Get(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, statusAPIPath))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return string(b)
 }
 
 func warmUpHeartbeat(t *testing.T) (respStatus int) {
@@ -314,17 +325,32 @@ func TestInitialThrottler(t *testing.T) {
 	})
 	t.Run("validating OK response from throttler with low threshold, heartbeats running", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
+		cluster.ValidateReplicationIsHealthy(t, replicaTablet)
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+		if !assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp)) {
+			rs, err := replicaTablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
+			assert.NoError(t, err)
+			t.Logf("Seconds_Behind_Source: %s", rs.Named().Row()["Seconds_Behind_Source"].ToString())
+			t.Logf("throttler primary status: %+v", throttleStatus(t, primaryTablet))
+			t.Logf("throttler replica status: %+v", throttleStatus(t, replicaTablet))
+		}
 	})
+
 	t.Run("validating OK response from throttler with low threshold, heartbeats running still", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
+		cluster.ValidateReplicationIsHealthy(t, replicaTablet)
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
+		if !assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp)) {
+			rs, err := replicaTablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
+			assert.NoError(t, err)
+			t.Logf("Seconds_Behind_Source: %s", rs.Named().Row()["Seconds_Behind_Source"].ToString())
+			t.Logf("throttler primary status: %+v", throttleStatus(t, primaryTablet))
+			t.Logf("throttler replica status: %+v", throttleStatus(t, replicaTablet))
+		}
 	})
 	t.Run("validating pushback response from throttler on low threshold once heartbeats go stale", func(t *testing.T) {
 		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops
