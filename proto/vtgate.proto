@@ -154,6 +154,9 @@ message Session {
   int64 query_timeout = 25;
 
   map<string, PrepareData> prepare_statement = 26;
+
+  // MigrationContext
+  string migration_context = 27;
 }
 
 // PrepareData keeps the prepared statement and other information related for execution of it.

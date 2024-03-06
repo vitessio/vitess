@@ -85,7 +85,7 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
 		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false)
 		if err != nil {
 			return 1
@@ -102,12 +102,12 @@ func TestMain(m *testing.M) {
 		}
 
 		// apply routing rules
-		err = clusterInstance.VtctlclientProcess.ApplyRoutingRules(routingRules)
+		err = clusterInstance.VtctldClientProcess.ApplyRoutingRules(routingRules)
 		if err != nil {
 			return 1
 		}
 
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildVSchemaGraph")
 		if err != nil {
 			return 1
 		}

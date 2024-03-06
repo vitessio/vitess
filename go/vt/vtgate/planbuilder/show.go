@@ -20,18 +20,17 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -46,7 +45,7 @@ const (
 
 func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	if vschema.Destination() != nil {
-		return buildByPassDDLPlan(sql, vschema)
+		return buildByPassPlan(sql, vschema)
 	}
 
 	var prim engine.Primitive
@@ -98,7 +97,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	case sqlparser.StatusGlobal, sqlparser.StatusSession:
 		return buildSendAnywherePlan(show, vschema)
 	case sqlparser.VitessMigrations:
-		return buildShowVMigrationsPlan(show, vschema)
+		return buildShowVitessMigrationsPlan(show, vschema)
 	case sqlparser.VGtidExecGlobal:
 		return buildShowVGtidPlan(show, vschema)
 	case sqlparser.GtidExecGlobal:
@@ -118,6 +117,8 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 		return buildShowTargetPlan(vschema)
 	case sqlparser.VschemaTables:
 		return buildVschemaTablesPlan(vschema)
+	case sqlparser.VschemaKeyspaces:
+		return buildVschemaKeyspacesPlan(vschema)
 	case sqlparser.VschemaVindexes:
 		return buildVschemaVindexesPlan(show, vschema)
 	}
@@ -166,7 +167,7 @@ func buildVariablePlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (
 }
 
 func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
-	if !show.DbName.IsEmpty() {
+	if show.DbName.NotEmpty() {
 		show.Tbl.Qualifier = sqlparser.NewIdentifierCS(show.DbName.String())
 		// Remove Database Name from the query.
 		show.DbName = sqlparser.NewIdentifierCS("")
@@ -176,7 +177,7 @@ func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (e
 	var ks *vindexes.Keyspace
 	var err error
 
-	if !show.Tbl.Qualifier.IsEmpty() && sqlparser.SystemSchema(show.Tbl.Qualifier.String()) {
+	if show.Tbl.Qualifier.NotEmpty() && sqlparser.SystemSchema(show.Tbl.Qualifier.String()) {
 		ks, err = vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
@@ -243,10 +244,9 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine
 	return engine.NewRowsPrimitive(rows, buildVarCharFields("Database")), nil
 }
 
-// buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries.
-// It invokes queries on the sidecar database's schema_migrations table
-// on all PRIMARY tablets in the keyspace's shards.
-func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
+// buildShowVitessMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries.
+// It sends down the SHOW command to the PRIMARY shard tablets (on all shards)
+func buildShowVitessMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
 	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName.String())
 	if err != nil {
 		return nil, err
@@ -263,26 +263,11 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(ks.Name)
-	if err != nil {
-		log.Errorf("Failed to read sidecar database identifier for keyspace %q from the cache: %v", ks.Name, err)
-		return nil, vterrors.VT14005(ks.Name)
-	}
-
-	sql := sqlparser.BuildParsedQuery("SELECT * FROM %s.schema_migrations", sidecarDBID).Query
-
-	if show.Filter != nil {
-		if show.Filter.Filter != nil {
-			sql += fmt.Sprintf(" where %s", sqlparser.String(show.Filter.Filter))
-		} else if show.Filter.Like != "" {
-			lit := sqlparser.String(sqlparser.NewStrLiteral(show.Filter.Like))
-			sql += fmt.Sprintf(" where migration_uuid LIKE %s OR migration_context LIKE %s OR migration_status LIKE %s", lit, lit, lit)
-		}
-	}
 	return &engine.Send{
 		Keyspace:          ks,
 		TargetDestination: dest,
-		Query:             sql,
+		Query:             sqlparser.String(show),
+		IsDML:             false,
 	}, nil
 }
 
@@ -504,7 +489,7 @@ func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema)
 	var ks *vindexes.Keyspace
 	var err error
 
-	if !show.Op.Qualifier.IsEmpty() && sqlparser.SystemSchema(show.Op.Qualifier.String()) {
+	if show.Op.Qualifier.NotEmpty() && sqlparser.SystemSchema(show.Op.Qualifier.String()) {
 		ks, err = vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
@@ -537,7 +522,7 @@ func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema)
 
 func buildCreatePlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema) (engine.Primitive, error) {
 	dbName := ""
-	if !show.Op.Qualifier.IsEmpty() {
+	if show.Op.Qualifier.NotEmpty() {
 		dbName = show.Op.Qualifier.String()
 	}
 
@@ -576,16 +561,17 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	}
 	return &engine.OrderedAggregate{
 		Aggregates: []*engine.AggregateParams{
-			engine.NewAggregateParam(popcode.AggregateGtid, 1, "global vgtid_executed"),
+			engine.NewAggregateParam(popcode.AggregateGtid, 1, "global vgtid_executed", vschema.Environment().CollationEnv()),
 		},
 		TruncateColumnCount: 2,
 		Input:               send,
+		CollationEnv:        vschema.Environment().CollationEnv(),
 	}, nil
 }
 
 func buildShowGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
 	dbName := ""
-	if !show.DbName.IsEmpty() {
+	if show.DbName.NotEmpty() {
 		dbName = show.DbName.String()
 	}
 	dest, ks, _, err := vschema.TargetDestination(dbName)
@@ -657,6 +643,26 @@ func buildEnginesPlan() (engine.Primitive, error) {
 
 	return engine.NewRowsPrimitive(rows,
 		buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints")), nil
+}
+
+func buildVschemaKeyspacesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
+	vs := vschema.GetVSchema()
+	var rows [][]sqltypes.Value
+	for ksName, ks := range vs.Keyspaces {
+		var row []sqltypes.Value
+		row = append(row, sqltypes.NewVarChar(ksName))
+		row = append(row, sqltypes.NewVarChar(strconv.FormatBool(ks.Keyspace.Sharded)))
+		fkMode, _ := vschema.ForeignKeyMode(ksName)
+		row = append(row, sqltypes.NewVarChar(fkMode.String()))
+		ksError := ""
+		if ks.Error != nil {
+			ksError = ks.Error.Error()
+		}
+		row = append(row, sqltypes.NewVarChar(ksError))
+		rows = append(rows, row)
+	}
+
+	return engine.NewRowsPrimitive(rows, buildVarCharFields("Keyspace", "Sharded", "Foreign Key", "Comment")), nil
 }
 
 func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {

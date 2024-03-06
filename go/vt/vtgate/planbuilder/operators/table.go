@@ -19,10 +19,9 @@ package operators
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -43,7 +42,7 @@ type (
 )
 
 // Clone implements the Operator interface
-func (to *Table) Clone([]ops.Operator) ops.Operator {
+func (to *Table) Clone([]Operator) Operator {
 	var columns []*sqlparser.ColName
 	for _, name := range to.Columns {
 		columns = append(columns, sqlparser.CloneRefOfColName(name))
@@ -61,37 +60,45 @@ func (to *Table) introducesTableID() semantics.TableSet {
 }
 
 // AddPredicate implements the PhysicalOperator interface
-func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	return newFilter(to, expr), nil
+func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	return newFilter(to, expr)
 }
 
-func (to *Table) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	if addToGroupBy {
-		return nil, 0, vterrors.VT13001("tried to add group by to a table")
+func (to *Table) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) int {
+	panic(vterrors.VT13001("did not expect this method to be called"))
+}
+
+func (to *Table) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	colToFind, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return -1
 	}
-	offset, err := addColumn(ctx, to, expr.Expr)
-	if err != nil {
-		return nil, 0, err
+
+	for idx, colName := range to.Columns {
+		if colName.Name.Equal(colToFind.Name) {
+			return idx
+		}
 	}
 
-	return to, offset, nil
+	return -1
 }
 
-func (to *Table) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return slices2.Map(to.Columns, colNameToExpr), nil
+func (to *Table) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return slice.Map(to.Columns, colNameToExpr)
 }
 
-func (to *Table) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return transformColumnsToSelectExprs(to)
+func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+	return transformColumnsToSelectExprs(ctx, to)
 }
 
-func (to *Table) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (to *Table) GetOrdering(*plancontext.PlanningContext) []OrderBy {
+	return nil
 }
 
 func (to *Table) GetColNames() []*sqlparser.ColName {
 	return to.Columns
 }
+
 func (to *Table) AddCol(col *sqlparser.ColName) {
 	to.Columns = append(to.Columns, col)
 }
@@ -103,22 +110,32 @@ func (to *Table) TablesUsed() []string {
 	return SingleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
 }
 
-func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) (int, error) {
+func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.Expr) int {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT12001(fmt.Sprintf("cannot add '%s' expression to a table/vindex", sqlparser.String(e)))
+		panic(vterrors.VT09018(fmt.Sprintf("cannot add '%s' expression to a table/vindex", sqlparser.String(e))))
 	}
-	sqlparser.RemoveKeyspaceFromColName(col)
+	sqlparser.RemoveKeyspaceInCol(col)
 	cols := op.GetColNames()
 	colAsExpr := func(c *sqlparser.ColName) sqlparser.Expr { return c }
 	if offset, found := canReuseColumn(ctx, cols, e, colAsExpr); found {
-		return offset, nil
+		return offset
 	}
 	offset := len(cols)
 	op.AddCol(col)
-	return offset, nil
+	return offset
 }
 
 func (to *Table) ShortDescription() string {
-	return to.VTable.String()
+	tbl := to.VTable.String()
+	var alias, where string
+	if to.QTable.Alias.As.NotEmpty() {
+		alias = " AS " + to.QTable.Alias.As.String()
+	}
+
+	if len(to.QTable.Predicates) > 0 {
+		where = " WHERE " + sqlparser.String(sqlparser.AndExpressions(to.QTable.Predicates...))
+	}
+
+	return tbl + alias + where
 }

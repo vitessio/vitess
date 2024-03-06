@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type ResetSuperReadOnlyFunc func() error
@@ -75,7 +76,7 @@ func (mysqld *Mysqld) StartReplication(hookExtraEnv map[string]string) error {
 	}
 	defer conn.Recycle()
 
-	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StartReplicationCommand()}); err != nil {
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StartReplicationCommand()}); err != nil {
 		return err
 	}
 
@@ -92,7 +93,7 @@ func (mysqld *Mysqld) StartReplicationUntilAfter(ctx context.Context, targetPos 
 	}
 	defer conn.Recycle()
 
-	queries := []string{conn.StartReplicationUntilAfterCommand(targetPos)}
+	queries := []string{conn.Conn.StartReplicationUntilAfterCommand(targetPos)}
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
 }
@@ -105,7 +106,7 @@ func (mysqld *Mysqld) StartSQLThreadUntilAfter(ctx context.Context, targetPos re
 	}
 	defer conn.Recycle()
 
-	queries := []string{conn.StartSQLThreadUntilAfterCommand(targetPos)}
+	queries := []string{conn.Conn.StartSQLThreadUntilAfterCommand(targetPos)}
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queries)
 }
@@ -124,7 +125,7 @@ func (mysqld *Mysqld) StopReplication(hookExtraEnv map[string]string) error {
 	}
 	defer conn.Recycle()
 
-	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopReplicationCommand()})
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopReplicationCommand()})
 }
 
 // StopIOThread stops a replica's IO thread only.
@@ -135,7 +136,7 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	}
 	defer conn.Recycle()
 
-	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopIOThreadCommand()})
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()})
 }
 
 // StopSQLThread stops a replica's SQL thread(s) only.
@@ -146,7 +147,7 @@ func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
 	}
 	defer conn.Recycle()
 
-	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSQLThreadCommand()})
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopSQLThreadCommand()})
 }
 
 // RestartReplication stops, resets and starts replication.
@@ -163,7 +164,7 @@ func (mysqld *Mysqld) RestartReplication(hookExtraEnv map[string]string) error {
 	}
 	defer conn.Recycle()
 
-	if err := mysqld.executeSuperQueryListConn(ctx, conn, conn.RestartReplicationCommands()); err != nil {
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, conn.Conn.RestartReplicationCommands()); err != nil {
 		return err
 	}
 
@@ -212,7 +213,7 @@ func (mysqld *Mysqld) GetServerUUID(ctx context.Context) (string, error) {
 	}
 	defer conn.Recycle()
 
-	return conn.GetServerUUID()
+	return conn.Conn.GetServerUUID()
 }
 
 // IsReadOnly return true if the instance is read only
@@ -236,7 +237,8 @@ func (mysqld *Mysqld) IsSuperReadOnly() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if err == nil && len(qr.Rows) == 1 {
+
+	if len(qr.Rows) == 1 {
 		sro := qr.Rows[0][0].ToString()
 		if sro == "1" || sro == "ON" {
 			return true, nil
@@ -315,7 +317,8 @@ func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) 
 	return resetFunc, nil
 }
 
-// WaitSourcePos lets replicas wait to given replication position
+// WaitSourcePos lets replicas wait for the given replication position to
+// be reached.
 func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.Position) error {
 	// Get a connection.
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -324,61 +327,33 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.P
 	}
 	defer conn.Recycle()
 
-	// First check if filePos flavored Position was passed in. If so, we can't defer to the flavor in the connection,
-	// unless that flavor is also filePos.
-	waitCommandName := "WaitUntilPositionCommand"
-	var query string
+	// First check if filePos flavored Position was passed in. If so, we
+	// can't defer to the flavor in the connection, unless that flavor is
+	// also filePos.
 	if targetPos.MatchesFlavor(replication.FilePosFlavorID) {
-		// If we are the primary, WaitUntilFilePositionCommand will fail.
-		// But position is most likely reached. So, check the position
-		// first.
-		mpos, err := conn.PrimaryFilePosition()
+		// If we are the primary, WaitUntilFilePosition will fail. But
+		// position is most likely reached. So, check the position first.
+		mpos, err := conn.Conn.PrimaryFilePosition()
 		if err != nil {
-			return fmt.Errorf("WaitSourcePos: PrimaryFilePosition failed: %v", err)
+			return vterrors.Wrapf(err, "WaitSourcePos: PrimaryFilePosition failed")
 		}
 		if mpos.AtLeast(targetPos) {
 			return nil
 		}
-
-		// Find the query to run, run it.
-		query, err = conn.WaitUntilFilePositionCommand(ctx, targetPos)
-		if err != nil {
-			return err
-		}
-		waitCommandName = "WaitUntilFilePositionCommand"
 	} else {
-		// If we are the primary, WaitUntilPositionCommand will fail.
-		// But position is most likely reached. So, check the position
-		// first.
-		mpos, err := conn.PrimaryPosition()
+		// If we are the primary, WaitUntilPosition will fail. But
+		// position is most likely reached. So, check the position first.
+		mpos, err := conn.Conn.PrimaryPosition()
 		if err != nil {
-			return fmt.Errorf("WaitSourcePos: PrimaryPosition failed: %v", err)
+			return vterrors.Wrapf(err, "WaitSourcePos: PrimaryPosition failed")
 		}
 		if mpos.AtLeast(targetPos) {
 			return nil
 		}
-
-		// Find the query to run, run it.
-		query, err = conn.WaitUntilPositionCommand(ctx, targetPos)
-		if err != nil {
-			return err
-		}
 	}
 
-	qr, err := mysqld.FetchSuperQuery(ctx, query)
-	if err != nil {
-		return fmt.Errorf("%v(%v) failed: %v", waitCommandName, query, err)
-	}
-
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return fmt.Errorf("unexpected result format from %v(%v): %#v", waitCommandName, query, qr)
-	}
-	result := qr.Rows[0][0]
-	if result.IsNull() {
-		return fmt.Errorf("%v(%v) failed: replication is probably stopped", waitCommandName, query)
-	}
-	if result.ToString() == "-1" {
-		return fmt.Errorf("timed out waiting for position %v", targetPos)
+	if err := conn.Conn.WaitUntilPosition(ctx, targetPos); err != nil {
+		return vterrors.Wrapf(err, "WaitSourcePos failed")
 	}
 	return nil
 }
@@ -391,7 +366,7 @@ func (mysqld *Mysqld) ReplicationStatus() (replication.ReplicationStatus, error)
 	}
 	defer conn.Recycle()
 
-	return conn.ShowReplicationStatus()
+	return conn.Conn.ShowReplicationStatus()
 }
 
 // PrimaryStatus returns the primary replication statuses
@@ -402,7 +377,7 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimarySta
 	}
 	defer conn.Recycle()
 
-	return conn.ShowPrimaryStatus()
+	return conn.Conn.ShowPrimaryStatus()
 }
 
 // GetGTIDPurged returns the gtid purged statuses
@@ -413,7 +388,7 @@ func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (replication.Position, 
 	}
 	defer conn.Recycle()
 
-	return conn.GetGTIDPurged()
+	return conn.Conn.GetGTIDPurged()
 }
 
 // PrimaryPosition returns the primary replication position.
@@ -424,7 +399,7 @@ func (mysqld *Mysqld) PrimaryPosition() (replication.Position, error) {
 	}
 	defer conn.Recycle()
 
-	return conn.PrimaryPosition()
+	return conn.Conn.PrimaryPosition()
 }
 
 // SetReplicationPosition sets the replication position at which the replica will resume
@@ -436,7 +411,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replicatio
 	}
 	defer conn.Recycle()
 
-	cmds := conn.SetReplicationPositionCommands(pos)
+	cmds := conn.Conn.SetReplicationPositionCommands(pos)
 	log.Infof("Executing commands to set replication position: %v", cmds)
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
@@ -456,12 +431,12 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 
 	var cmds []string
 	if stopReplicationBefore {
-		cmds = append(cmds, conn.StopReplicationCommand())
+		cmds = append(cmds, conn.Conn.StopReplicationCommand())
 	}
-	smc := conn.SetReplicationSourceCommand(params, host, port, int(replicationConnectRetry.Seconds()))
+	smc := conn.Conn.SetReplicationSourceCommand(params, host, port, int(replicationConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
 	if startReplicationAfter {
-		cmds = append(cmds, conn.StartReplicationCommand())
+		cmds = append(cmds, conn.Conn.StartReplicationCommand())
 	}
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
@@ -474,7 +449,7 @@ func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
 	}
 	defer conn.Recycle()
 
-	cmds := conn.ResetReplicationCommands()
+	cmds := conn.Conn.ResetReplicationCommands()
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
@@ -486,7 +461,7 @@ func (mysqld *Mysqld) ResetReplicationParameters(ctx context.Context) error {
 	}
 	defer conn.Recycle()
 
-	cmds := conn.ResetReplicationParametersCommands()
+	cmds := conn.Conn.ResetReplicationParametersCommands()
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
@@ -582,7 +557,7 @@ func (mysqld *Mysqld) GetGTIDMode(ctx context.Context) (string, error) {
 	}
 	defer conn.Recycle()
 
-	return conn.GetGTIDMode()
+	return conn.Conn.GetGTIDMode()
 }
 
 // FlushBinaryLogs is part of the MysqlDaemon interface.

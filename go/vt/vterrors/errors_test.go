@@ -257,8 +257,8 @@ func TestStackFormat(t *testing.T) {
 	assertContains(t, got, "middle", false)
 	assertContains(t, got, "outer", false)
 
-	logErrStacks = true
-	defer func() { logErrStacks = false }()
+	setLogErrStacks(true)
+	defer func() { setLogErrStacks(false) }()
 	got = fmt.Sprintf("%v", err)
 	assertContains(t, got, "innerMost", true)
 	assertContains(t, got, "middle", true)
@@ -340,9 +340,9 @@ func TestWrapping(t *testing.T) {
 	err3 := Wrapf(err2, "baz")
 	errorWithoutStack := fmt.Sprintf("%v", err3)
 
-	logErrStacks = true
+	setLogErrStacks(true)
 	errorWithStack := fmt.Sprintf("%v", err3)
-	logErrStacks = false
+	setLogErrStacks(false)
 
 	assertEquals(t, err3.Error(), "baz: bar: foo")
 	assertContains(t, errorWithoutStack, "foo", true)

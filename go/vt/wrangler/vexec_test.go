@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"regexp"
 	"sort"
@@ -33,20 +34,31 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtenv"
+)
+
+var (
+	//go:embed testdata/show-all-shards.json
+	want_show_all_shards string
+	//go:embed testdata/show-dash80.json
+	want_show_dash_80 string
+	//go:embed testdata/show-80dash.json
+	want_show_80_dash string
 )
 
 func TestVExec(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	query := "update _vt.vreplication set state = 'Running'"
-	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, time.Now().Unix())
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, time.Now().Unix())
 	defer env.close()
 	var logger = logutil.NewMemoryLogger()
-	wr := New(logger, env.topoServ, env.tmc)
+	wr := New(vtenv.NewTestEnv(), logger, env.topoServ, env.tmc)
 
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
-	err := vx.getPrimaries()
+	err := vx.getPrimaries(nil)
 	require.Nil(t, err)
 	primaries := vx.primaries
 	require.NotNil(t, primaries)
@@ -77,7 +89,7 @@ func TestVExec(t *testing.T) {
 	vx.plannedQuery = plan.parsedQuery.Query
 	vx.exec()
 
-	res, err := wr.getStreams(ctx, workflow, keyspace)
+	res, err := wr.getStreams(ctx, workflow, keyspace, nil)
 	require.NoError(t, err)
 	require.Less(t, res.MaxVReplicationLag, int64(3 /*seconds*/)) // lag should be very small
 
@@ -93,7 +105,7 @@ func TestVExec(t *testing.T) {
 	result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
 		"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
-		"1|keyspace:\"source\" shard:\"0\" filter:{rules:{match:\"t1\"}}||||0|0|0",
+		"1|keyspace:\"source\" shard:\"0\" filter:{rules:{match:\"t1\"} rules:{match:\"t2\"}}||||0|0|0",
 	)
 	testCases = append(testCases, &TestCase{
 		name:   "select",
@@ -162,10 +174,12 @@ func TestVExec(t *testing.T) {
 |        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
+|                      |    | rules:{match:"t2"}}            |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
+|                      |    | rules:{match:"t2"}}            |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+`,
 	}
 	require.Equal(t, strings.Join(dryRunResults, "\n")+"\n\n\n\n\n", logger.String())
@@ -181,143 +195,56 @@ func TestWorkflowStatusUpdate(t *testing.T) {
 }
 
 func TestWorkflowListStreams(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	workflow := "wrWorkflow"
 	keyspace := "target"
-	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 1234)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
-	wr := New(logger, env.topoServ, env.tmc)
+	wr := New(vtenv.NewTestEnv(), logger, env.topoServ, env.tmc)
 
-	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false, nil)
+	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false, nil, nil)
 	require.NoError(t, err)
 
-	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false, nil)
+	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false, nil, nil)
 	require.Errorf(t, err, "node doesn't exist: keyspaces/badks/shards")
 
-	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false, nil)
+	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false, nil, nil)
 	require.Errorf(t, err, "no streams found for workflow badwf in keyspace target")
 	logger.Clear()
-	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false, nil)
-	require.NoError(t, err)
-	want := `{
-	"Workflow": "wrWorkflow",
-	"SourceLocation": {
-		"Keyspace": "source",
-		"Shards": [
-			"0"
-		]
-	},
-	"TargetLocation": {
-		"Keyspace": "target",
-		"Shards": [
-			"-80",
-			"80-"
-		]
-	},
-	"MaxVReplicationLag": 0,
-	"MaxVReplicationTransactionLag": 0,
-	"Frozen": false,
-	"ShardStatuses": {
-		"-80/zone1-0000000200": {
-			"PrimaryReplicationStatuses": [
-				{
-					"Shard": "-80",
-					"Tablet": "zone1-0000000200",
-					"ID": 1,
-					"Bls": {
-						"keyspace": "source",
-						"shard": "0",
-						"filter": {
-							"rules": [
-								{
-									"match": "t1"
-								}
-							]
-						}
-					},
-					"Pos": "14b68925-696a-11ea-aee7-fec597a91f5e:1-3",
-					"StopPos": "",
-					"State": "Copying",
-					"DBName": "vt_target",
-					"TransactionTimestamp": 0,
-					"TimeUpdated": 1234,
-					"TimeHeartbeat": 1234,
-					"TimeThrottled": 0,
-					"ComponentThrottled": "",
-					"Message": "",
-					"Tags": "",
-					"WorkflowType": "Materialize",
-					"WorkflowSubType": "None",
-					"CopyState": [
-						{
-							"Table": "t1",
-							"LastPK": "pk1"
-						}
-					],
-					"RowsCopied": 1000
-				}
-			],
-			"TabletControls": null,
-			"PrimaryIsServing": true
-		},
-		"80-/zone1-0000000210": {
-			"PrimaryReplicationStatuses": [
-				{
-					"Shard": "80-",
-					"Tablet": "zone1-0000000210",
-					"ID": 1,
-					"Bls": {
-						"keyspace": "source",
-						"shard": "0",
-						"filter": {
-							"rules": [
-								{
-									"match": "t1"
-								}
-							]
-						}
-					},
-					"Pos": "14b68925-696a-11ea-aee7-fec597a91f5e:1-3",
-					"StopPos": "",
-					"State": "Copying",
-					"DBName": "vt_target",
-					"TransactionTimestamp": 0,
-					"TimeUpdated": 1234,
-					"TimeHeartbeat": 1234,
-					"TimeThrottled": 0,
-					"ComponentThrottled": "",
-					"Message": "",
-					"Tags": "",
-					"WorkflowType": "Materialize",
-					"WorkflowSubType": "None",
-					"CopyState": [
-						{
-							"Table": "t1",
-							"LastPK": "pk1"
-						}
-					],
-					"RowsCopied": 1000
-				}
-			],
-			"TabletControls": null,
-			"PrimaryIsServing": true
-		}
-	},
-	"SourceTimeZone": "",
-	"TargetTimeZone": ""
-}
+	var testCases = []struct {
+		shards []string
+		want   string
+	}{
+		{[]string{"-80", "80-"}, want_show_all_shards},
+		{[]string{"-80"}, want_show_dash_80},
+		{[]string{"80-"}, want_show_80_dash},
+	}
+	scrub := func(s string) string {
+		s = strings.ReplaceAll(s, "\t", "")
+		s = strings.ReplaceAll(s, "\n", "")
+		s = strings.ReplaceAll(s, " ", "")
+		return s
+	}
+	for _, testCase := range testCases {
+		t.Run(fmt.Sprintf("%v", testCase.shards), func(t *testing.T) {
+			want := scrub(testCase.want)
+			_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false, nil, testCase.shards)
+			require.NoError(t, err)
+			got := scrub(logger.String())
+			// MaxVReplicationLag needs to be reset. This can't be determinable in this kind of a test because
+			// time.Now() is constantly shifting.
+			re := regexp.MustCompile(`"MaxVReplicationLag":\d+`)
+			got = re.ReplaceAllLiteralString(got, `"MaxVReplicationLag":0`)
+			re = regexp.MustCompile(`"MaxVReplicationTransactionLag":\d+`)
+			got = re.ReplaceAllLiteralString(got, `"MaxVReplicationTransactionLag":0`)
+			require.Equal(t, want, got)
+			logger.Clear()
+		})
+	}
 
-`
-	got := logger.String()
-	// MaxVReplicationLag needs to be reset. This can't be determinable in this kind of a test because time.Now() is constantly shifting.
-	re := regexp.MustCompile(`"MaxVReplicationLag": \d+`)
-	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationLag": 0`)
-	re = regexp.MustCompile(`"MaxVReplicationTransactionLag": \d+`)
-	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationTransactionLag": 0`)
-	require.Equal(t, want, got)
-
-	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false, nil)
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false, nil, nil)
 	require.Nil(t, err)
 
 	// convert map to list and sort it for comparison
@@ -331,7 +258,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	require.ElementsMatch(t, wantResults, gotResults)
 
 	logger.Clear()
-	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true, nil)
+	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true, nil, nil)
 	require.Nil(t, err)
 	require.Equal(t, "map[]", fmt.Sprintf("%v", results))
 	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped' where db_name = 'vt_target' and workflow = 'wrWorkflow'
@@ -342,10 +269,12 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 |        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
+|                      |    | rules:{match:"t2"}}            |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 | 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
+|                      |    | filter:{rules:{match:"t1"}     |         |           |                                          |
+|                      |    | rules:{match:"t2"}}            |         |           |                                          |
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
 
 
@@ -356,13 +285,14 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 }
 
 func TestWorkflowListAll(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	keyspace := "target"
 	workflow := "wrWorkflow"
-	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 0)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
-	wr := New(logger, env.topoServ, env.tmc)
+	wr := New(vtenv.NewTestEnv(), logger, env.topoServ, env.tmc)
 
 	workflows, err := wr.ListAllWorkflows(ctx, keyspace, true)
 	require.Nil(t, err)
@@ -375,14 +305,15 @@ func TestWorkflowListAll(t *testing.T) {
 }
 
 func TestVExecValidations(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	workflow := "wf"
 	keyspace := "ks"
 	query := ""
-	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 0)
 	defer env.close()
 
-	wr := New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	wr := New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), env.topoServ, env.tmc)
 
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
@@ -461,13 +392,14 @@ func TestVExecValidations(t *testing.T) {
 // tabletmanager and the behavior is tested
 // there.
 func TestWorkflowUpdate(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	workflow := "wrWorkflow"
 	keyspace := "target"
-	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, nil, 1234)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
-	wr := New(logger, env.topoServ, env.tmc)
+	wr := New(vtenv.NewTestEnv(), logger, env.topoServ, env.tmc)
 	nullSlice := textutil.SimulatedNullStringSlice                   // Used to represent a non-provided value
 	nullOnDDL := binlogdatapb.OnDDLAction(textutil.SimulatedNullInt) // Used to represent a non-provided value
 	tests := []struct {
@@ -523,7 +455,7 @@ func TestWorkflowUpdate(t *testing.T) {
 				OnDdl:       tcase.onDDL,
 			}
 
-			_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, rpcReq)
+			_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, rpcReq, nil)
 			if tcase.wantErr != "" {
 				require.Error(t, err)
 				require.Equal(t, err.Error(), tcase.wantErr)

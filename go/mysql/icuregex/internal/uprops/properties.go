@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/ubidi"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uchar"
+	"vitess.io/vitess/go/mysql/icuregex/internal/uemoji"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ulayout"
 	"vitess.io/vitess/go/mysql/icuregex/internal/unames"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uset"
@@ -74,6 +75,8 @@ func getInclusionsForSource(src propertySource) (*uset.UnicodeSet, error) {
 		ubidi.AddPropertyStarts(u)
 	case srcInpc, srcInsc, srcVo:
 		AddULayoutPropertyStarts(src, u)
+	case srcEmoji:
+		uemoji.AddPropertyStarts(u)
 	default:
 		return nil, errors.ErrUnsupported
 	}
@@ -172,7 +175,7 @@ func ApplyIntPropertyValue(u *uset.UnicodeSet, prop Property, value int32) error
 			return err
 		}
 		u.ApplyFilter(inclusions, func(ch rune) bool {
-			return (uMask(uchar.CharType(ch)) & uint32(value)) != 0
+			return (uchar.Mask(uchar.CharType(ch)) & uint32(value)) != 0
 		})
 	case prop == UCharScriptExtensions:
 		inclusions, err := getInclusionsForProperty(prop)

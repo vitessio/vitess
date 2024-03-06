@@ -27,22 +27,25 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestPerl(t *testing.T) {
 	f, err := os.Open("testdata/re_tests.txt")
-	if err != nil {
-		t.Fatalf("failed to open test data: %v", err)
-	}
+	require.NoError(t, err)
 	defer f.Close()
 
-	flagPat := MustCompileString(`('?)(.*)\1(.*)`, 0)
+	flagPat, err := CompileString(`('?)(.*)\1(.*)`, 0)
+	require.NoError(t, err)
 	flagMat := NewMatcher(flagPat)
 
-	groupsPat := MustCompileString(`\$([+\-])\[(\d+)\]`, 0)
+	groupsPat, err := CompileString(`\$([+\-])\[(\d+)\]`, 0)
+	require.NoError(t, err)
 	groupsMat := NewMatcher(groupsPat)
 
-	cgPat := MustCompileString(`\$(\d+)`, 0)
+	cgPat, err := CompileString(`\$(\d+)`, 0)
+	require.NoError(t, err)
 	cgMat := NewMatcher(cgPat)
 
 	group := func(m *Matcher, idx int) string {
@@ -52,9 +55,7 @@ func TestPerl(t *testing.T) {
 
 	lookingAt := func(m *Matcher) bool {
 		ok, err := m.LookingAt()
-		if err != nil {
-			t.Fatalf("failed to match with LookingAt(): %v", err)
-		}
+		require.NoError(t, err)
 		return ok
 	}
 
@@ -73,9 +74,7 @@ func TestPerl(t *testing.T) {
 
 		flagMat.ResetString(fields[0])
 		ok, _ := flagMat.Matches()
-		if !ok {
-			t.Fatalf("could not match pattern+flags (line %d)", lineno)
-		}
+		require.Truef(t, ok, "could not match pattern+flags (line %d)", lineno)
 
 		pattern, _ := flagMat.Group(2)
 		pattern = replacer.Replace(pattern)
@@ -142,9 +141,7 @@ func TestPerl(t *testing.T) {
 
 			case lookingAt(groupsMat):
 				groupNum, err := strconv.ParseInt(group(groupsMat, 2), 10, 32)
-				if err != nil {
-					t.Fatalf("failed to parse Perl pattern: %v", err)
-				}
+				require.NoError(t, err)
 
 				var matchPosition int
 				if group(groupsMat, 1) == "+" {
@@ -160,9 +157,7 @@ func TestPerl(t *testing.T) {
 
 			case lookingAt(cgMat):
 				groupNum, err := strconv.ParseInt(group(cgMat, 1), 10, 32)
-				if err != nil {
-					t.Fatalf("failed to parse Perl pattern: %v", err)
-				}
+				require.NoError(t, err)
 				result = append(result, group(testMat, int(groupNum))...)
 				perlExpr = perlExpr[cgMat.EndForGroup(0):]
 

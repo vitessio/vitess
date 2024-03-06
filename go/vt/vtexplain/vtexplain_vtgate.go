@@ -22,26 +22,24 @@ package vtexplain
 import (
 	"context"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/logstats"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
+	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -50,14 +48,14 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
-func (vte *VTExplain) initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
+func (vte *VTExplain) initVtgateExecutor(ctx context.Context, ts *topo.Server, vSchemaStr, ksShardMapStr string, opts *Options, srvTopoCounts *stats.CountersWithSingleLabel) error {
 	vte.explainTopo = &ExplainTopo{NumShards: opts.NumShards}
-	vte.explainTopo.TopoServer = memorytopo.NewServer(vtexplainCell)
+	vte.explainTopo.TopoServer = ts
 	vte.healthCheck = discovery.NewFakeHealthCheck(nil)
 
-	resolver := vte.newFakeResolver(opts, vte.explainTopo, vtexplainCell)
+	resolver := vte.newFakeResolver(ctx, opts, vte.explainTopo, Cell)
 
-	err := vte.buildTopology(opts, vSchemaStr, ksShardMapStr, opts.NumShards)
+	err := vte.buildTopology(ctx, ts, opts, vSchemaStr, ksShardMapStr, opts.NumShards, srvTopoCounts)
 	if err != nil {
 		return err
 	}
@@ -73,18 +71,17 @@ func (vte *VTExplain) initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts 
 
 	streamSize := 10
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
-	vte.vtgateExecutor = vtgate.NewExecutor(context.Background(), vte.explainTopo, vtexplainCell, resolver, opts.Normalize, false, streamSize, cache.DefaultConfig, schemaTracker, false, opts.PlannerVersion)
-
 	queryLogBufferSize := 10
-	vtgate.SetQueryLogger(streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
+	plans := theine.NewStore[vtgate.PlanCacheKey, *engine.Plan](4*1024*1024, false)
+	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.env, vte.explainTopo, Cell, resolver, opts.Normalize, false, streamSize, plans, schemaTracker, false, opts.PlannerVersion, 0)
+	vte.vtgateExecutor.SetQueryLogger(streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
 
 	return nil
 }
 
-func (vte *VTExplain) newFakeResolver(opts *Options, serv srvtopo.Server, cell string) *vtgate.Resolver {
-	ctx := context.Background()
+func (vte *VTExplain) newFakeResolver(ctx context.Context, opts *Options, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	gw := vtgate.NewTabletGateway(ctx, vte.healthCheck, serv, cell)
-	_ = gw.WaitForTablets([]topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+	_ = gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
 	txMode := vtgatepb.TransactionMode_MULTI
 	if opts.ExecutionMode == ModeTwoPC {
@@ -96,7 +93,7 @@ func (vte *VTExplain) newFakeResolver(opts *Options, serv srvtopo.Server, cell s
 	return vtgate.NewResolver(srvResolver, serv, cell, sc)
 }
 
-func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMapStr string, numShardsPerKeyspace int) error {
+func (vte *VTExplain) buildTopology(ctx context.Context, ts *topo.Server, opts *Options, vschemaStr string, ksShardMapStr string, numShardsPerKeyspace int, srvTopoCounts *stats.CountersWithSingleLabel) error {
 	vte.explainTopo.Lock.Lock()
 	defer vte.explainTopo.Lock.Unlock()
 
@@ -108,7 +105,7 @@ func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMap
 	if err != nil {
 		return err
 	}
-	schema := vindexes.BuildVSchema(&srvVSchema)
+	schema := vindexes.BuildVSchema(&srvVSchema, vte.env.Parser())
 	for ks, ksSchema := range schema.Keyspaces {
 		if ksSchema.Error != nil {
 			return vterrors.Wrapf(ksSchema.Error, "vschema failed to load on keyspace [%s]", ks)
@@ -121,6 +118,10 @@ func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMap
 		return err
 	}
 
+	conn, err := ts.ConnForCell(ctx, Cell)
+	if err != nil {
+		return err
+	}
 	vte.explainTopo.TabletConns = make(map[string]*explainTablet)
 	vte.explainTopo.KeyspaceShards = make(map[string]map[string]*topodatapb.ShardReference)
 	for ks, vschema := range vte.explainTopo.Keyspaces {
@@ -130,6 +131,32 @@ func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMap
 		}
 
 		vte.explainTopo.KeyspaceShards[ks] = make(map[string]*topodatapb.ShardReference)
+
+		srvPath := path.Join(topo.KeyspacesPath, ks, topo.SrvKeyspaceFile)
+		srvKeyspace := &topodatapb.SrvKeyspace{
+			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+				{
+					ServedType:      topodatapb.TabletType_PRIMARY,
+					ShardReferences: shards,
+				},
+				{
+					ServedType:      topodatapb.TabletType_REPLICA,
+					ShardReferences: shards,
+				},
+				{
+					ServedType:      topodatapb.TabletType_RDONLY,
+					ShardReferences: shards,
+				},
+			},
+		}
+		data, err := srvKeyspace.MarshalVT()
+		if err != nil {
+			return err
+		}
+		_, err = conn.Update(ctx, srvPath, data, nil)
+		if err != nil {
+			return err
+		}
 
 		for _, shard := range shards {
 			// If the topology is in the middle of a reshard, there can be two shards covering the same key range (e.g.
@@ -143,14 +170,13 @@ func (vte *VTExplain) buildTopology(opts *Options, vschemaStr string, ksShardMap
 			hostname := fmt.Sprintf("%s/%s", ks, shard.Name)
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard.Name)
 
-			tablet := vte.healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard.Name, topodatapb.TabletType_PRIMARY, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
-				return vte.newTablet(opts, t)
+			tablet := vte.healthCheck.AddFakeTablet(Cell, hostname, 1, ks, shard.Name, topodatapb.TabletType_PRIMARY, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
+				return vte.newTablet(ctx, vte.env, opts, t, ts, srvTopoCounts)
 			})
 			vte.explainTopo.TabletConns[hostname] = tablet.(*explainTablet)
 			vte.explainTopo.KeyspaceShards[ks][shard.Name] = shard
 		}
 	}
-
 	return err
 }
 
@@ -209,29 +235,27 @@ func (vte *VTExplain) vtgateExecute(sql string) ([]*engine.Plan, map[string]*Tab
 	// This will ensure that the commit/rollback order is predictable.
 	vte.sortShardSession()
 
-	// use the plan cache to get the set of plans used for this query, then
-	// clear afterwards for the next run
-	planCache := vte.vtgateExecutor.Plans()
-
 	_, err := vte.vtgateExecutor.Execute(context.Background(), nil, "VtexplainExecute", vtgate.NewSafeSession(vte.vtgateSession), sql, nil)
 	if err != nil {
 		for _, tc := range vte.explainTopo.TabletConns {
 			tc.tabletQueries = nil
 			tc.mysqlQueries = nil
 		}
-		planCache.Clear()
-
+		vte.vtgateExecutor.ClearPlans()
 		return nil, nil, vterrors.Wrapf(err, "vtexplain execute error in '%s'", sql)
 	}
 
 	var plans []*engine.Plan
-	planCache.ForEach(func(value any) bool {
-		plan := value.(*engine.Plan)
+
+	// use the plan cache to get the set of plans used for this query, then
+	// clear afterwards for the next run
+	vte.vtgateExecutor.ForEachPlan(func(plan *engine.Plan) bool {
 		plan.ExecTime = 0
 		plans = append(plans, plan)
 		return true
 	})
-	planCache.Clear()
+
+	vte.vtgateExecutor.ClearPlans()
 
 	tabletActions := make(map[string]*TabletActions)
 	for shard, tc := range vte.explainTopo.TabletConns {

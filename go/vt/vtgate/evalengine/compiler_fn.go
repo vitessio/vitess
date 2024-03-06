@@ -20,7 +20,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-func (c *compiler) compileFn_rounding(arg0 Expr, asm_ins_f, asm_ins_d func()) (ctype, error) {
+func (c *compiler) compileFn_rounding(arg0 IR, asm_ins_f, asm_ins_d func()) (ctype, error) {
 	arg, err := arg0.compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -52,7 +52,7 @@ func (c *compiler) compileFn_rounding(arg0 Expr, asm_ins_f, asm_ins_d func()) (c
 	return convt, nil
 }
 
-func (c *compiler) compileFn_math1(arg0 Expr, asm_ins func(), nullable typeFlag) (ctype, error) {
+func (c *compiler) compileFn_math1(arg0 IR, asm_ins func(), nullable typeFlag) (ctype, error) {
 	arg, err := arg0.compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -65,7 +65,7 @@ func (c *compiler) compileFn_math1(arg0 Expr, asm_ins func(), nullable typeFlag)
 	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag | nullable}, nil
 }
 
-func (c *compiler) compileFn_length(arg Expr, asm_ins func()) (ctype, error) {
+func (c *compiler) compileFn_length(arg IR, asm_ins func()) (ctype, error) {
 	str, err := arg.compile(c)
 	if err != nil {
 		return ctype{}, err
@@ -76,7 +76,7 @@ func (c *compiler) compileFn_length(arg Expr, asm_ins func()) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
 	}
 
 	asm_ins()

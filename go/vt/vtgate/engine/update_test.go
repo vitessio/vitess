@@ -21,7 +21,7 @@ import (
 	"errors"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -94,7 +94,7 @@ func TestUpdateEqual(t *testing.T) {
 	})
 
 	// Failure case
-	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", sqltypes.Unknown, collations.Unknown)}
+	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", evalengine.Type{})}
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `query arguments missing for aa`)
 }
@@ -256,14 +256,14 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c1": evalengine.NewLiteralInt(1),
 					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
@@ -400,7 +400,7 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"lkp_rg": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"colc": evalengine.NewLiteralInt(5),
 				},
 				Offset: 3,
@@ -520,14 +520,14 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c1": evalengine.NewLiteralInt(1),
 					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
@@ -715,14 +715,14 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c1": evalengine.NewLiteralInt(1),
 					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
@@ -845,7 +845,7 @@ func TestUpdateInChangedVindexMultiCol(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"lkp_rg": {
-				PvMap: map[string]evalengine.Expr{
+				EvalExprMap: map[string]evalengine.Expr{
 					"colc": evalengine.NewLiteralInt(5),
 				},
 				Offset: 3,
@@ -1024,7 +1024,7 @@ func buildTestVSchema() *vindexes.VSchema {
 			},
 		},
 	}
-	vs := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
 	return vs
 }
 

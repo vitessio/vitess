@@ -47,6 +47,8 @@ type Stats struct {
 	UserActiveReservedCount *stats.CountersWithSingleLabel // Per CallerID active reserved connection counts
 	UserReservedCount       *stats.CountersWithSingleLabel // Per CallerID reserved connection counts
 	UserReservedTimesNs     *stats.CountersWithSingleLabel // Per CallerID reserved connection duration
+
+	QueryTimingsByTabletType *servenv.TimingsWrapper // Query timings split by current tablet type
 }
 
 // NewStats instantiates a new set of stats scoped by exporter.
@@ -94,7 +96,13 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		UserActiveReservedCount: exporter.NewCountersWithSingleLabel("UserActiveReservedCount", "active reserved connection for each CallerID", "CallerID"),
 		UserReservedCount:       exporter.NewCountersWithSingleLabel("UserReservedCount", "reserved connection received for each CallerID", "CallerID"),
 		UserReservedTimesNs:     exporter.NewCountersWithSingleLabel("UserReservedTimesNs", "Total reserved connection latency for each CallerID", "CallerID"),
+
+		QueryTimingsByTabletType: exporter.NewTimings("QueryTimingsByTabletType", "Query timings broken down by active tablet type", "TabletType"),
 	}
 	stats.QPSRates = exporter.NewRates("QPS", stats.QueryTimings, 15*60/5, 5*time.Second)
 	return stats
+}
+
+func (st *Stats) Stop() {
+	st.QPSRates.Stop()
 }

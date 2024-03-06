@@ -17,8 +17,10 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -27,7 +29,10 @@ import (
 	"syscall"
 	"time"
 
+	clientv3 "go.etcd.io/etcd/client/v3"
+
 	"vitess.io/vitess/go/vt/log"
+	vtopo "vitess.io/vitess/go/vt/topo"
 )
 
 // TopoProcess is a generic handle for a running Topo service .
@@ -37,6 +42,7 @@ type TopoProcess struct {
 	Binary             string
 	DataDirectory      string
 	LogDirectory       string
+	ErrorLog           string
 	ListenClientURL    string
 	AdvertiseClientURL string
 	Port               int
@@ -44,6 +50,7 @@ type TopoProcess struct {
 	VerifyURL          string
 	PeerURL            string
 	ZKPorts            string
+	Client             interface{}
 
 	proc *exec.Cmd
 	exit chan error
@@ -57,10 +64,9 @@ func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) 
 	case "consul":
 		return topo.SetupConsul(cluster)
 	default:
-		// We still rely on the etcd v2 API for things like mkdir.
-		// If this ENV var is not set then some tests may fail with etcd 3.4+
-		// where the v2 API is disabled by default in both the client and server.
-		os.Setenv("ETCDCTL_API", "2")
+		// Override any inherited ETCDCTL_API env value to
+		// ensure that we use the v3 API and storage.
+		os.Setenv("ETCDCTL_API", "3")
 		return topo.SetupEtcd()
 	}
 }
@@ -77,7 +83,6 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		"--initial-advertise-peer-urls", topo.PeerURL,
 		"--listen-peer-urls", topo.PeerURL,
 		"--initial-cluster", fmt.Sprintf("%s=%s", topo.Name, topo.PeerURL),
-		"--enable-v2=true",
 	)
 
 	err = createDirectory(topo.DataDirectory, 0700)
@@ -90,8 +95,10 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 	}
 
 	topo.proc.Stderr = errFile
+	topo.ErrorLog = errFile.Name()
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
+	topo.proc.Env = append(topo.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
 
@@ -109,10 +116,24 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
 		if topo.IsHealthy() {
+			cli, cerr := clientv3.New(clientv3.Config{
+				Endpoints:   []string{net.JoinHostPort(topo.Host, fmt.Sprintf("%d", topo.Port))},
+				DialTimeout: 5 * time.Second,
+			})
+			if cerr != nil {
+				return err
+			}
+			topo.Client = cli
 			return
 		}
 		select {
 		case err := <-topo.exit:
+			errBytes, ferr := os.ReadFile(topo.ErrorLog)
+			if ferr == nil {
+				log.Errorf("%s error log contents:\n%s", topo.Binary, string(errBytes))
+			} else {
+				log.Errorf("Failed to read the %s error log file %q: %v", topo.Binary, topo.ErrorLog, ferr)
+			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", topo.Binary, err)
 		default:
 			time.Sleep(300 * time.Millisecond)
@@ -124,11 +145,10 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 
 // SetupZookeeper spawns a new zookeeper topo service and initializes it with the defaults.
 // The service is kept running in the background until TearDown() is called.
-func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error) {
-
+func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) error {
 	host, err := os.Hostname()
 	if err != nil {
-		return
+		return err
 	}
 
 	topo.ZKPorts = fmt.Sprintf("%d:%d:%d", cluster.GetAndReservePort(), cluster.GetAndReservePort(), topo.Port)
@@ -140,16 +160,21 @@ func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error
 		"init",
 	)
 
-	errFile, _ := os.Create(path.Join(topo.DataDirectory, "topo-stderr.txt"))
+	err = os.MkdirAll(topo.LogDirectory, 0755)
+	if err != nil {
+		log.Errorf("Failed to create log directory for zookeeper: %v", err)
+		return err
+	}
+	errFile, err := os.Create(path.Join(topo.LogDirectory, "topo-stderr.txt"))
+	if err != nil {
+		log.Errorf("Failed to create file for zookeeper stderr: %v", err)
+		return err
+	}
 	topo.proc.Stderr = errFile
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
 	log.Infof("Starting zookeeper with args %v", strings.Join(topo.proc.Args, " "))
-	err = topo.proc.Run()
-	if err != nil {
-		return
-	}
-	return
+	return topo.proc.Run()
 }
 
 // ConsulConfigs are the configurations that are added the config files which are used by consul
@@ -171,16 +196,27 @@ type PortsInfo struct {
 // SetupConsul spawns a new consul service and initializes it with the defaults.
 // The service is kept running in the background until TearDown() is called.
 func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
-
 	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v1/kv/?keys", topo.Host, topo.Port)
 
-	_ = os.MkdirAll(topo.LogDirectory, os.ModePerm)
-	_ = os.MkdirAll(topo.DataDirectory, os.ModePerm)
+	err = os.MkdirAll(topo.LogDirectory, os.ModePerm)
+	if err != nil {
+		log.Errorf("Failed to create directory for consul logs: %v", err)
+		return
+	}
+	err = os.MkdirAll(topo.DataDirectory, os.ModePerm)
+	if err != nil {
+		log.Errorf("Failed to create directory for consul data: %v", err)
+		return
+	}
 
 	configFile := path.Join(os.Getenv("VTDATAROOT"), "consul.json")
 
 	logFile := path.Join(topo.LogDirectory, "/consul.log")
-	_, _ = os.Create(logFile)
+	_, err = os.Create(logFile)
+	if err != nil {
+		log.Errorf("Failed to create file for consul logs: %v", err)
+		return
+	}
 
 	var config []byte
 	configs := ConsulConfigs{
@@ -214,7 +250,11 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 		"-config-file", configFile,
 	)
 
-	errFile, _ := os.Create(path.Join(topo.DataDirectory, "topo-stderr.txt"))
+	errFile, err := os.Create(path.Join(topo.LogDirectory, "topo-stderr.txt"))
+	if err != nil {
+		log.Errorf("Failed to create file for consul stderr: %v", err)
+		return
+	}
 	topo.proc.Stderr = errFile
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
@@ -247,8 +287,16 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", topo.Binary, <-topo.exit)
 }
 
-// TearDown shutdowns the running topo service
+// TearDown shutdowns the running topo service.
 func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoot string, keepdata bool, topoFlavor string) error {
+	if topo.Client != nil {
+		switch cli := topo.Client.(type) {
+		case *clientv3.Client:
+			_ = cli.Close()
+		default:
+			log.Errorf("Unknown topo client type %T", cli)
+		}
+	}
 
 	if topoFlavor == "zk2" {
 		cmd := "shutdown"
@@ -324,6 +372,9 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 	url := topo.VerifyURL + directory
 	payload := strings.NewReader(`{"dir":"true"}`)
 	if command == "mkdir" {
+		if *topoFlavor == "etcd2" { // No need to create the empty prefix keys in v3
+			return nil
+		}
 		req, _ := http.NewRequest("PUT", url, payload)
 		req.Header.Add("content-type", "application/json")
 		resp, err := http.DefaultClient.Do(req)
@@ -332,6 +383,22 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 		}
 		return err
 	} else if command == "rmdir" {
+		if *topoFlavor == "etcd2" {
+			if topo.Client == nil {
+				return fmt.Errorf("etcd client is not initialized")
+			}
+			cli, ok := topo.Client.(*clientv3.Client)
+			if !ok {
+				return fmt.Errorf("etcd client is invalid")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), vtopo.RemoteOperationTimeout)
+			defer cancel()
+			_, err = cli.Delete(ctx, directory, clientv3.WithPrefix())
+			if err != nil {
+				return err
+			}
+			return nil
+		}
 		req, _ := http.NewRequest("DELETE", url+"?dir=true", payload)
 		resp, err := http.DefaultClient.Do(req)
 		if err == nil {
@@ -366,7 +433,7 @@ func TopoProcessInstance(port int, peerPort int, hostname string, flavor string,
 	topo.ListenClientURL = fmt.Sprintf("http://%s:%d", topo.Host, topo.Port)
 	topo.DataDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port))
 	topo.LogDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port), "logs")
-	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v2/keys", topo.Host, topo.Port)
+	topo.VerifyURL = fmt.Sprintf("http://%s:%d/health", topo.Host, topo.Port)
 	topo.PeerURL = fmt.Sprintf("http://%s:%d", hostname, peerPort)
 	return topo
 }

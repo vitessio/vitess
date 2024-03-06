@@ -70,6 +70,7 @@ type Engine struct {
 	streamIdx       int
 	streamers       map[int]*uvstreamer
 	rowStreamers    map[int]*rowStreamer
+	tableStreamers  map[int]*tableStreamer
 	resultStreamers map[int]*resultStreamer
 
 	// watcherOnce is used for initializing vschema
@@ -99,6 +100,7 @@ type Engine struct {
 	vstreamersCreated                      *stats.Counter
 	vstreamersEndedWithErrors              *stats.Counter
 	vstreamerFlushedBinlogs                *stats.Counter
+	tableStreamerNumTables                 *stats.Counter
 
 	throttlerClient *throttle.Client
 }
@@ -116,6 +118,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 
 		streamers:       make(map[int]*uvstreamer),
 		rowStreamers:    make(map[int]*rowStreamer),
+		tableStreamers:  make(map[int]*tableStreamer),
 		resultStreamers: make(map[int]*resultStreamer),
 
 		lvschema: &localVSchema{vschema: &vindexes.VSchema{}},
@@ -135,6 +138,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		rowStreamerNumRows:                     env.Exporter().NewCounter("RowStreamerNumRows", "Number of rows sent in row streamer"),
 		rowStreamerWaits:                       env.Exporter().NewTimings("RowStreamerWaits", "Total counts and time we've waited when streaming rows in the vstream copy phase", "copy-phase-waits"),
 		vstreamersCreated:                      env.Exporter().NewCounter("VStreamersCreated", "Count of vstreamers created"),
+		tableStreamerNumTables:                 env.Exporter().NewCounter("TableStreamerNumTables", "Number of tables streamed by the table streamer"),
 		vstreamersEndedWithErrors:              env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
 		errorCounts:                            env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
 		vstreamerFlushedBinlogs:                env.Exporter().NewCounter("VStreamerFlushedBinlogs", "Number of times we've successfully executed a FLUSH BINARY LOGS statement when starting a vstream"),
@@ -283,7 +287,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 
-		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse)
+		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse, RowStreamerModeSingleTable, nil)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++
@@ -306,6 +310,47 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 
 	// No lock is held while streaming, but wg is incremented.
 	return rowStreamer.Stream()
+}
+
+// StreamTables streams all tables.
+func (vse *Engine) StreamTables(ctx context.Context, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	// Ensure vschema is initialized and the watcher is started.
+	// Starting of the watcher is delayed till the first call to StreamTables
+	// so that this overhead is incurred only if someone uses this feature.
+	vse.watcherOnce.Do(vse.setWatch)
+	log.Infof("Streaming all tables")
+
+	// Create stream and add it to the map.
+	tableStreamer, idx, err := func() (*tableStreamer, int, error) {
+		if atomic.LoadInt32(&vse.isOpen) == 0 {
+			return nil, 0, errors.New("VStreamer is not open")
+		}
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
+
+		tableStreamer := newTableStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, vse.lvschema, send, vse)
+		idx := vse.streamIdx
+		vse.tableStreamers[idx] = tableStreamer
+		vse.streamIdx++
+		// Now that we've added the stream, increment wg.
+		// This must be done before releasing the lock.
+		vse.wg.Add(1)
+		return tableStreamer, idx, nil
+	}()
+	if err != nil {
+		return err
+	}
+
+	// Remove stream from map and decrement wg when it ends.
+	defer func() {
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
+		delete(vse.tableStreamers, idx)
+		vse.wg.Done()
+	}()
+
+	// No lock is held while streaming, but wg is incremented.
+	return tableStreamer.Stream()
 }
 
 // StreamResults streams results of the query with the gtid.
@@ -387,7 +432,7 @@ func (vse *Engine) setWatch() {
 		}
 		var vschema *vindexes.VSchema
 		if v != nil {
-			vschema = vindexes.BuildVSchema(v)
+			vschema = vindexes.BuildVSchema(v, vse.env.Environment().Parser())
 			if err != nil {
 				log.Errorf("Error building vschema: %v", err)
 				vse.vschemaErrors.Add(1)
@@ -545,11 +590,18 @@ func (vse *Engine) getMySQLEndpoint(ctx context.Context, db dbconfigs.Connector)
 
 // mapPKEquivalentCols gets a PK equivalent from mysqld for the table
 // and maps the column names to field indexes in the MinimalTable struct.
-func (vse *Engine) mapPKEquivalentCols(ctx context.Context, table *binlogdatapb.MinimalTable) ([]int, error) {
-	mysqld := mysqlctl.NewMysqld(vse.env.Config().DB)
-	pkeColNames, err := mysqld.GetPrimaryKeyEquivalentColumns(ctx, vse.env.Config().DB.DBName, table.Name)
+func (vse *Engine) mapPKEquivalentCols(ctx context.Context, db dbconfigs.Connector, table *binlogdatapb.MinimalTable) ([]int, error) {
+	conn, err := db.Connect(ctx)
 	if err != nil {
 		return nil, err
+	}
+	defer conn.Close()
+	pkeColNames, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, vse.env.Config().DB.DBName, table.Name)
+	if err != nil {
+		return nil, err
+	}
+	if len(pkeColNames) > 0 && indexName != "" {
+		table.PKIndexName = indexName
 	}
 	pkeCols := make([]int, len(pkeColNames))
 	matches := 0

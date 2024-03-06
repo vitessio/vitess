@@ -114,8 +114,8 @@ func (s SQLCalcFoundRows) NeedsTransaction() bool {
 }
 
 // Inputs implements the Primitive interface
-func (s SQLCalcFoundRows) Inputs() []Primitive {
-	return []Primitive{s.LimitPrimitive, s.CountPrimitive}
+func (s SQLCalcFoundRows) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{s.LimitPrimitive, s.CountPrimitive}, nil
 }
 
 func (s SQLCalcFoundRows) description() PrimitiveDescription {

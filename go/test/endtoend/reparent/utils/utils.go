@@ -34,7 +34,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -63,7 +62,7 @@ var (
 	replicationWaitTimeout = time.Duration(15 * time.Second)
 )
 
-//region cluster setup/teardown
+// region cluster setup/teardown
 
 // SetupReparentCluster is used to setup the reparent cluster
 func SetupReparentCluster(t *testing.T, durability string) *cluster.LocalProcessCluster {
@@ -75,9 +74,25 @@ func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalPro
 	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, "semi_sync")
 }
 
-// TeardownCluster is used to teardown the reparent cluster
+// TeardownCluster is used to teardown the reparent cluster. When
+// run in a CI environment -- which is considered true when the
+// "CI" env variable is set to "true" -- the teardown also removes
+// the VTDATAROOT directory that was used for the test/cluster.
 func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
+	usedRoot := clusterInstance.CurrentVTDATAROOT
 	clusterInstance.Teardown()
+	// This is always set to "true" on GitHub Actions runners:
+	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
+	ci, ok := os.LookupEnv("CI")
+	if !ok || strings.ToLower(ci) != "true" {
+		// Leave the directory in place to support local debugging.
+		return
+	}
+	// We're running in the CI, so free up disk space for any
+	// subsequent tests.
+	if err := os.RemoveAll(usedRoot); err != nil {
+		log.Errorf("Failed to remove previously used VTDATAROOT (%s): %v", usedRoot, err)
+	}
 }
 
 func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int, durability string) *cluster.LocalProcessCluster {
@@ -121,19 +136,13 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// In this case, the close method and initSchema method of the onlineDDL executor race.
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
-		"--queryserver_enable_online_ddl=false",
-		// disabling active reparents on the tablet since we don't want the replication manager
-		// to fix replication if it is stopped. Some tests deliberately do that. Also, we don't want
-		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
-		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
-		// setting up the replication correctly.
-		"--disable-replication-manager")
+		"--queryserver_enable_online_ddl=false")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err, "Cannot launch cluster")
 
-	//Start MySql
+	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
@@ -175,7 +184,7 @@ func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.Loca
 	}
 
 	// Initialize shard
-	err := clusterInstance.VtctlclientProcess.InitializeShard(KeyspaceName, shardName, tablets[0].Cell, tablets[0].TabletUID)
+	err := clusterInstance.VtctldClientProcess.InitializeShard(KeyspaceName, shardName, tablets[0].Cell, tablets[0].TabletUID)
 	require.NoError(t, err)
 
 	ValidateTopology(t, clusterInstance, true)
@@ -236,7 +245,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 	return tablet
 }
 
-//endregion
+// endregion
 
 // region database queries
 func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
@@ -246,6 +255,21 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
 	}
 	return connParams
+}
+
+// RunSQLs is used to run SQL commands directly on the MySQL instance of a vttablet. All commands are
+// run in a single connection.
+func RunSQLs(ctx context.Context, t *testing.T, sqls []string, tablet *cluster.Vttablet) (results []*sqltypes.Result) {
+	tabletParams := getMysqlConnParam(tablet)
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	for _, sql := range sqls {
+		result := execute(t, conn, sql)
+		results = append(results, result)
+	}
+	return results
 }
 
 // RunSQL is used to run a SQL command directly on the MySQL instance of a vttablet
@@ -264,7 +288,7 @@ func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	return qr
 }
 
-//endregion
+// endregion
 
 // region ers, prs
 
@@ -281,21 +305,21 @@ func PrsAvoid(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *c
 // PrsWithTimeout runs PRS
 func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, avoid bool, actionTimeout, waitTimeout string) (string, error) {
 	args := []string{
-		"PlannedReparentShard", "--",
-		"--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
 	if actionTimeout != "" {
 		args = append(args, "--action_timeout", actionTimeout)
 	}
 	if waitTimeout != "" {
-		args = append(args, "--wait_replicas_timeout", waitTimeout)
+		args = append(args, "--wait-replicas-timeout", waitTimeout)
 	}
 	if avoid {
-		args = append(args, "--avoid_tablet")
+		args = append(args, "--avoid-primary")
 	} else {
-		args = append(args, "--new_primary")
+		args = append(args, "--new-primary")
 	}
 	args = append(args, tab.Alias)
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
 	return out, err
 }
 
@@ -310,15 +334,15 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 	if timeout != "" {
 		args = append(args, "--action_timeout", timeout)
 	}
-	args = append(args, "EmergencyReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
+	args = append(args, "EmergencyReparentShard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
 	if tab != nil {
-		args = append(args, "--new_primary", tab.Alias)
+		args = append(args, "--new-primary", tab.Alias)
 	}
 	if waitReplicasTimeout != "" {
-		args = append(args, "--wait_replicas_timeout", waitReplicasTimeout)
+		args = append(args, "--wait-replicas-timeout", waitReplicasTimeout)
 	}
 	if preventCrossCellPromotion {
-		args = append(args, "--prevent_cross_cell_promotion=true")
+		args = append(args, "--prevent-cross-cell-promotion")
 	}
 	if len(tabletsToIgnore) != 0 {
 		tabsString := ""
@@ -329,9 +353,9 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 				tabsString = tabsString + "," + vttablet.Alias
 			}
 		}
-		args = append(args, "--ignore_replicas", tabsString)
+		args = append(args, "--ignore-replicas", tabsString)
 	}
-	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
+	return clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
 }
 
 // ErsWithVtctl runs ERS via vtctl binary
@@ -349,10 +373,10 @@ func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 	args := []string{"Validate"}
 
 	if pingTablets {
-		args = append(args, "--", "--ping-tablets=true")
+		args = append(args, "--ping-tablets")
 	}
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
-	require.Empty(t, out)
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
+	require.Contains(t, out, "no issues found")
 	require.NoError(t, err)
 }
 
@@ -373,17 +397,14 @@ func ConfirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 
 // ConfirmOldPrimaryIsHangingAround confirms that the old primary is hanging around
 func ConfirmOldPrimaryIsHangingAround(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Validate")
 	require.Error(t, err)
 	require.Contains(t, out, "already has primary")
 }
 
 // CheckPrimaryTablet makes sure the tablet type is primary, and its health check agrees.
 func CheckPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) {
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
-	require.NoError(t, err)
-	var tabletInfo topodatapb.Tablet
-	err = json2.Unmarshal([]byte(result), &tabletInfo)
+	tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tabletInfo.GetType())
 
@@ -399,10 +420,7 @@ func CheckPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessClust
 
 // isHealthyPrimaryTablet will return if tablet is primary AND healthy.
 func isHealthyPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) bool {
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
-	require.Nil(t, err)
-	var tabletInfo topodatapb.Tablet
-	err = json2.Unmarshal([]byte(result), &tabletInfo)
+	tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.Nil(t, err)
 	if tabletInfo.GetType() != topodatapb.TabletType_PRIMARY {
 		return false
@@ -516,9 +534,9 @@ func ResurrectTablet(ctx context.Context, t *testing.T, clusterInstance *cluster
 
 // DeleteTablet is used to delete the given tablet
 func DeleteTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) {
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"DeleteTablet", "--",
-		"--allow_primary",
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand(
+		"DeleteTablets",
+		"--allow-primary",
 		tab.Alias)
 	require.NoError(t, err)
 }
@@ -604,7 +622,7 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 
 	// make sure the primary health stream says it's the primary too
 	// (health check is disabled on these servers, force it first)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
 	require.NoError(t, err)
 
 	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
@@ -685,7 +703,7 @@ func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
 
 // CheckReplicationStatus checks that the replication for sql and io threads is setup as expected
 func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sqlThreadRunning bool, ioThreadRunning bool) {
-	res := RunSQL(ctx, t, "show slave status;", tablet)
+	res := RunSQL(ctx, t, "show slave status", tablet)
 	if ioThreadRunning {
 		require.Equal(t, "Yes", res.Rows[0][10].ToString())
 	} else {

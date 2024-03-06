@@ -19,8 +19,13 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -68,7 +73,7 @@ func TestConcatenate_NoErrors(t *testing.T) {
 			r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
 			r("id|col3|col4", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
 		},
-		expectedError: "merging field of different types is not supported",
+		expectedResult: r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2", "1|a1|b1", "2|a2|b2", "1|a1|b1", "2|a2|b2"),
 	}, {
 		testName: "ignored field types - ignored",
 		inputs: []*sqltypes.Result{
@@ -95,35 +100,42 @@ func TestConcatenate_NoErrors(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
-		var sources []Primitive
-		for _, input := range tc.inputs {
-			// input is added twice, since the first one is used by execute and the next by stream execute
-			sources = append(sources, &fakePrimitive{results: []*sqltypes.Result{input, input}})
+		for _, tx := range []bool{false, true} {
+			var sources []Primitive
+			for _, input := range tc.inputs {
+				// input is added twice, since the first one is used by execute and the next by stream execute
+				sources = append(sources, &fakePrimitive{results: []*sqltypes.Result{input, input}})
+			}
+
+			concatenate := NewConcatenate(sources, tc.ignoreTypes)
+			vcursor := &noopVCursor{inTx: tx}
+			txStr := "InTx"
+			if !tx {
+				txStr = "NotInTx"
+			}
+			t.Run(fmt.Sprintf("%s-%s-Exec", txStr, tc.testName), func(t *testing.T) {
+				qr, err := concatenate.TryExecute(context.Background(), vcursor, nil, true)
+				if tc.expectedError == "" {
+					require.NoError(t, err)
+					utils.MustMatch(t, tc.expectedResult.Fields, qr.Fields, "fields")
+					utils.MustMatch(t, tc.expectedResult.Rows, qr.Rows)
+				} else {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), tc.expectedError)
+				}
+			})
+
+			t.Run(fmt.Sprintf("%s-%s-StreamExec", txStr, tc.testName), func(t *testing.T) {
+				qr, err := wrapStreamExecute(concatenate, vcursor, nil, true)
+				if tc.expectedError == "" {
+					require.NoError(t, err)
+					require.NoError(t, sqltypes.RowsEquals(tc.expectedResult.Rows, qr.Rows))
+				} else {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), tc.expectedError)
+				}
+			})
 		}
-
-		concatenate := NewConcatenate(sources, tc.ignoreTypes)
-
-		t.Run(tc.testName+"-Execute", func(t *testing.T) {
-			qr, err := concatenate.TryExecute(context.Background(), &noopVCursor{}, nil, true)
-			if tc.expectedError == "" {
-				require.NoError(t, err)
-				require.Equal(t, tc.expectedResult, qr)
-			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.expectedError)
-			}
-		})
-
-		t.Run(tc.testName+"-StreamExecute", func(t *testing.T) {
-			qr, err := wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
-			if tc.expectedError == "" {
-				require.NoError(t, err)
-				require.NoError(t, sqltypes.RowsEquals(tc.expectedResult.Rows, qr.Rows))
-			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.expectedError)
-			}
-		})
 	}
 }
 
@@ -155,4 +167,37 @@ func TestConcatenate_WithErrors(t *testing.T) {
 	require.EqualError(t, err, strFailed)
 	_, err = wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
 	require.EqualError(t, err, strFailed)
+}
+
+func TestConcatenateTypes(t *testing.T) {
+	tests := []struct {
+		t1, t2, expected string
+	}{
+		{t1: "int32", t2: "int64", expected: "int64"},
+		{t1: "int32", t2: "int32", expected: "int32"},
+		{t1: "int32", t2: "varchar", expected: "varchar"},
+		{t1: "int32", t2: "decimal", expected: "decimal"},
+		{t1: "hexval", t2: "uint64", expected: "varchar"},
+		{t1: "varchar", t2: "varbinary", expected: "varbinary"},
+	}
+
+	for _, test := range tests {
+		name := fmt.Sprintf("%s - %s", test.t1, test.t2)
+		t.Run(name, func(t *testing.T) {
+			in1 := r("id", test.t1, "1")
+			in2 := r("id", test.t2, "1")
+			concatenate := NewConcatenate(
+				[]Primitive{
+					&fakePrimitive{results: []*sqltypes.Result{in1}},
+					&fakePrimitive{results: []*sqltypes.Result{in2}},
+				}, nil,
+			)
+
+			res, err := concatenate.GetFields(context.Background(), &noopVCursor{}, nil)
+			require.NoError(t, err)
+
+			expected := fmt.Sprintf(`[name:"id" type:%s]`, test.expected)
+			assert.Equal(t, expected, strings.ToLower(fmt.Sprintf("%v", res.Fields)))
+		})
+	}
 }

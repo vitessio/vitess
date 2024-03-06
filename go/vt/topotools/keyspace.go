@@ -118,22 +118,18 @@ func UpdateShardRecords(
 	if err := ts.UpdateDisableQueryService(ctx, keyspace, shards, servedType, cells, disableQueryService); err != nil {
 		return err
 	}
-
 	for i, si := range shards {
 		updatedShard, err := ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
 			if clearSourceShards {
 				si.SourceShards = nil
 			}
-
 			return nil
 		})
 
 		if err != nil {
 			return err
 		}
-
 		shards[i] = updatedShard
-
 		// For 'to' shards, refresh to make them serve. The 'from' shards will
 		// be refreshed after traffic has migrated.
 		if !isFrom {
@@ -142,31 +138,24 @@ func UpdateShardRecords(
 			}
 		}
 	}
-
 	return nil
 }
 
-// KeyspaceEquality returns true iff two KeyspaceInformations are identical for testing purposes
+// KeyspaceEquality returns true iff two Keyspace fields are identical for testing purposes.
 func KeyspaceEquality(left, right *topodatapb.Keyspace) bool {
 	if left.KeyspaceType != right.KeyspaceType {
 		return false
 	}
-	if len(left.ServedFroms) != len(right.ServedFroms) {
-		return false
-	}
-	for i := range left.ServedFroms {
-		if left.ServedFroms[i] != right.ServedFroms[i] {
-			return false
-		}
-	}
-	if left.KeyspaceType != right.KeyspaceType {
-		return false
-	}
+
 	if left.BaseKeyspace != right.BaseKeyspace {
 		return false
 	}
 
 	if left.SnapshotTime != right.SnapshotTime {
+		return false
+	}
+
+	if left.SidecarDbName != right.SidecarDbName {
 		return false
 	}
 

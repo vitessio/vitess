@@ -27,10 +27,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 
@@ -370,7 +370,7 @@ func TestLag(t *testing.T) {
 	defer clusterInstance.EnableVTOrcRecoveries(t)
 
 	t.Run("stopping replication", func(t *testing.T) {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
+		err := clusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
 		assert.NoError(t, err)
 	})
 	t.Run("accumulating lag, expecting throttler push back", func(t *testing.T) {
@@ -397,7 +397,7 @@ func TestLag(t *testing.T) {
 	t.Run("exempting test app", func(t *testing.T) {
 		appRule := &topodatapb.ThrottledAppRule{
 			Name:      testAppName,
-			ExpiresAt: logutil.TimeToProto(time.Now().Add(time.Hour)),
+			ExpiresAt: protoutil.TimeToProto(time.Now().Add(time.Hour)),
 			Exempt:    true,
 		}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
@@ -407,7 +407,7 @@ func TestLag(t *testing.T) {
 	t.Run("unexempting test app", func(t *testing.T) {
 		appRule := &topodatapb.ThrottledAppRule{
 			Name:      testAppName,
-			ExpiresAt: logutil.TimeToProto(time.Now()),
+			ExpiresAt: protoutil.TimeToProto(time.Now()),
 		}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, false, false, throttler.DefaultThreshold.Seconds(), useDefaultQuery, appRule)
 		assert.NoError(t, err)
@@ -415,7 +415,7 @@ func TestLag(t *testing.T) {
 	})
 
 	t.Run("starting replication", func(t *testing.T) {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", replicaTablet.Alias)
+		err := clusterInstance.VtctldClientProcess.ExecuteCommand("StartReplication", replicaTablet.Alias)
 		assert.NoError(t, err)
 	})
 	t.Run("expecting replication to catch up and throttler check to return OK", func(t *testing.T) {
@@ -439,7 +439,7 @@ func TestLag(t *testing.T) {
 func TestNoReplicas(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	t.Run("changing replica to RDONLY", func(t *testing.T) {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
+		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
 		assert.NoError(t, err)
 
 		// This makes no REPLICA servers available. We expect something like:
@@ -447,7 +447,7 @@ func TestNoReplicas(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("restoring to REPLICA", func(t *testing.T) {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
+		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
 		assert.NoError(t, err)
 
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)

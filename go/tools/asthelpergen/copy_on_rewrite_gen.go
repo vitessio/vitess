@@ -132,22 +132,6 @@ func (c *cowGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSPI)
 	return nil
 }
 
-func (c *cowGen) copySliceElement(t types.Type, elType types.Type, spi generatorSPI) jen.Code {
-	if !isNamed(t) && isBasic(elType) {
-		//	copy(res, n)
-		return jen.Id("copy").Call(jen.Id("res"), jen.Id("n"))
-	}
-
-	// for i := range n {
-	//  res[i] = CloneAST(x)
-	// }
-	spi.addType(elType)
-
-	return jen.For(jen.List(jen.Id("i"), jen.Id("x"))).Op(":=").Range().Id("n").Block(
-		jen.Id("res").Index(jen.Id("i")).Op("=").Add(c.readValueOfType(elType, jen.Id("x"), spi)),
-	)
-}
-
 func ifNotNil(id string, stmts ...jen.Code) *jen.Statement {
 	return jen.If(jen.Id(id).Op("!=").Nil()).Block(stmts...)
 }

@@ -53,6 +53,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterView(in)
 	case *AlterVschema:
 		return CloneRefOfAlterVschema(in)
+	case *Analyze:
+		return CloneRefOfAnalyze(in)
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
 	case *AnyValue:
@@ -165,8 +167,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfExtractFuncExpr(in)
 	case *ExtractValueExpr:
 		return CloneRefOfExtractValueExpr(in)
-	case *ExtractedSubquery:
-		return CloneRefOfExtractedSubquery(in)
 	case *FirstOrLastValueExpr:
 		return CloneRefOfFirstOrLastValueExpr(in)
 	case *Flush:
@@ -361,8 +361,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfOrderByOption(in)
 	case *OtherAdmin:
 		return CloneRefOfOtherAdmin(in)
-	case *OtherRead:
-		return CloneRefOfOtherRead(in)
 	case *OverClause:
 		return CloneRefOfOverClause(in)
 	case *ParenTableExpr:
@@ -722,6 +720,16 @@ func CloneRefOfAlterVschema(n *AlterVschema) *AlterVschema {
 	return &out
 }
 
+// CloneRefOfAnalyze creates a deep clone of the input.
+func CloneRefOfAnalyze(n *Analyze) *Analyze {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Table = CloneTableName(n.Table)
+	return &out
+}
+
 // CloneRefOfAndExpr creates a deep clone of the input.
 func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	if n == nil {
@@ -960,8 +968,8 @@ func CloneRefOfColumnType(n *ColumnType) *ColumnType {
 	}
 	out := *n
 	out.Options = CloneRefOfColumnTypeOptions(n.Options)
-	out.Length = CloneRefOfLiteral(n.Length)
-	out.Scale = CloneRefOfLiteral(n.Scale)
+	out.Length = CloneRefOfInt(n.Length)
+	out.Scale = CloneRefOfInt(n.Scale)
 	out.Charset = CloneColumnCharset(n.Charset)
 	out.EnumValues = CloneSliceOfString(n.EnumValues)
 	return &out
@@ -1050,8 +1058,8 @@ func CloneRefOfConvertType(n *ConvertType) *ConvertType {
 		return nil
 	}
 	out := *n
-	out.Length = CloneRefOfLiteral(n.Length)
-	out.Scale = CloneRefOfLiteral(n.Scale)
+	out.Length = CloneRefOfInt(n.Length)
+	out.Scale = CloneRefOfInt(n.Scale)
 	out.Charset = CloneColumnCharset(n.Charset)
 	return &out
 }
@@ -1173,8 +1181,8 @@ func CloneRefOfDelete(n *Delete) *Delete {
 	out := *n
 	out.With = CloneRefOfWith(n.With)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
+	out.TableExprs = CloneSliceOfTableExpr(n.TableExprs)
 	out.Targets = CloneTableNames(n.Targets)
-	out.TableExprs = CloneTableExprs(n.TableExprs)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
@@ -1321,19 +1329,6 @@ func CloneRefOfExtractValueExpr(n *ExtractValueExpr) *ExtractValueExpr {
 	return &out
 }
 
-// CloneRefOfExtractedSubquery creates a deep clone of the input.
-func CloneRefOfExtractedSubquery(n *ExtractedSubquery) *ExtractedSubquery {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Original = CloneExpr(n.Original)
-	out.Subquery = CloneRefOfSubquery(n.Subquery)
-	out.OtherSide = CloneExpr(n.OtherSide)
-	out.alternative = CloneExpr(n.alternative)
-	return &out
-}
-
 // CloneRefOfFirstOrLastValueExpr creates a deep clone of the input.
 func CloneRefOfFirstOrLastValueExpr(n *FirstOrLastValueExpr) *FirstOrLastValueExpr {
 	if n == nil {
@@ -1416,7 +1411,7 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	out := *n
 	out.Qualifier = CloneIdentifierCS(n.Qualifier)
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Exprs = CloneSelectExprs(n.Exprs)
+	out.Exprs = CloneExprs(n.Exprs)
 	return &out
 }
 
@@ -2364,15 +2359,6 @@ func CloneRefOfOtherAdmin(n *OtherAdmin) *OtherAdmin {
 	return &out
 }
 
-// CloneRefOfOtherRead creates a deep clone of the input.
-func CloneRefOfOtherRead(n *OtherRead) *OtherRead {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
 // CloneRefOfOverClause creates a deep clone of the input.
 func CloneRefOfOverClause(n *OverClause) *OverClause {
 	if n == nil {
@@ -2733,11 +2719,11 @@ func CloneRefOfSelect(n *Select) *Select {
 	}
 	out := *n
 	out.Cache = CloneRefOfBool(n.Cache)
+	out.With = CloneRefOfWith(n.With)
 	out.From = CloneSliceOfTableExpr(n.From)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
-	out.With = CloneRefOfWith(n.With)
 	out.GroupBy = CloneGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
 	out.Windows = CloneNamedWindows(n.Windows)
@@ -3144,10 +3130,10 @@ func CloneRefOfUnion(n *Union) *Union {
 		return nil
 	}
 	out := *n
+	out.With = CloneRefOfWith(n.With)
 	out.Left = CloneSelectStatement(n.Left)
 	out.Right = CloneSelectStatement(n.Right)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
-	out.With = CloneRefOfWith(n.With)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
 	return &out
@@ -3170,7 +3156,7 @@ func CloneRefOfUpdate(n *Update) *Update {
 	out := *n
 	out.With = CloneRefOfWith(n.With)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.TableExprs = CloneTableExprs(n.TableExprs)
+	out.TableExprs = CloneSliceOfTableExpr(n.TableExprs)
 	out.Exprs = CloneUpdateExprs(n.Exprs)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
@@ -3425,7 +3411,7 @@ func CloneRefOfWith(n *With) *With {
 		return nil
 	}
 	out := *n
-	out.ctes = CloneSliceOfRefOfCommonTableExpr(n.ctes)
+	out.CTEs = CloneSliceOfRefOfCommonTableExpr(n.CTEs)
 	return &out
 }
 
@@ -3868,8 +3854,6 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfExtractFuncExpr(in)
 	case *ExtractValueExpr:
 		return CloneRefOfExtractValueExpr(in)
-	case *ExtractedSubquery:
-		return CloneRefOfExtractedSubquery(in)
 	case *FirstOrLastValueExpr:
 		return CloneRefOfFirstOrLastValueExpr(in)
 	case *FuncExpr:
@@ -4154,6 +4138,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfAlterView(in)
 	case *AlterVschema:
 		return CloneRefOfAlterVschema(in)
+	case *Analyze:
+		return CloneRefOfAnalyze(in)
 	case *Begin:
 		return CloneRefOfBegin(in)
 	case *CallProc:
@@ -4196,8 +4182,6 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfLockTables(in)
 	case *OtherAdmin:
 		return CloneRefOfOtherAdmin(in)
-	case *OtherRead:
-		return CloneRefOfOtherRead(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
 	case *PurgeBinaryLogs:
@@ -4366,6 +4350,15 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	return &out
 }
 
+// CloneRefOfInt creates a deep clone of the input.
+func CloneRefOfInt(n *int) *int {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneColumnCharset creates a deep clone of the input.
 func CloneColumnCharset(n ColumnCharset) ColumnCharset {
 	return *CloneRefOfColumnCharset(&n)
@@ -4378,6 +4371,18 @@ func CloneSliceOfString(n []string) []string {
 	}
 	res := make([]string, len(n))
 	copy(res, n)
+	return res
+}
+
+// CloneSliceOfTableExpr creates a deep clone of the input.
+func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
+	if n == nil {
+		return nil
+	}
+	res := make([]TableExpr, len(n))
+	for i, x := range n {
+		res[i] = CloneTableExpr(x)
+	}
 	return res
 }
 
@@ -4542,15 +4547,6 @@ func CloneComments(n Comments) Comments {
 	return res
 }
 
-// CloneRefOfInt creates a deep clone of the input.
-func CloneRefOfInt(n *int) *int {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
 // CloneSliceOfRefOfPartitionDefinition creates a deep clone of the input.
 func CloneSliceOfRefOfPartitionDefinition(n []*PartitionDefinition) []*PartitionDefinition {
 	if n == nil {
@@ -4583,18 +4579,6 @@ func CloneRefOfRootNode(n *RootNode) *RootNode {
 	out := *n
 	out.SQLNode = CloneSQLNode(n.SQLNode)
 	return &out
-}
-
-// CloneSliceOfTableExpr creates a deep clone of the input.
-func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
-	if n == nil {
-		return nil
-	}
-	res := make([]TableExpr, len(n))
-	for i, x := range n {
-		res[i] = CloneTableExpr(x)
-	}
-	return res
 }
 
 // CloneRefOfTableName creates a deep clone of the input.
@@ -4698,7 +4682,7 @@ func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	}
 	out := *n
 	out.Column = CloneIdentifierCI(n.Column)
-	out.Length = CloneRefOfLiteral(n.Length)
+	out.Length = CloneRefOfInt(n.Length)
 	out.Expression = CloneExpr(n.Expression)
 	return &out
 }

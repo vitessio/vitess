@@ -1,0 +1,82 @@
+[
+  {
+    "comment": "unexpanded expressions invalid also inside subqueries",
+    "query": "select * from user where id in (select * from user union select * from user_extra)",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "union operations in subqueries (expressions)",
+    "query": "select col from user u where id in (select bar from user where user.x = u.z union select * from user_extra)",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "scatter order by with * expression",
+    "query": "select * from user order by id",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "join with USING construct",
+    "query": "select * from user join user_extra using(id)",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "join with USING construct with 3 tables",
+    "query": "select user.id from user join user_extra using(id) join music using(id2)",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "* expresson not allowed for cross-shard joins",
+    "query": "select * from user join user_extra",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "ORDER BY on select t.*",
+    "query": "select t.*, t.col from user t order by t.col",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "ORDER BY on select *",
+    "query": "select *, col from user order by col",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "ORDER BY on select multi t.*",
+    "query": "select t.*, t.name, t.*, t.col from user t order by t.col",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "ORDER BY on select multi *",
+    "query": "select *, name, *, col from user order by col",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "Group by column number, used with non-aliased expression (duplicated code)",
+    "query": "select * from user group by 1",
+    "plan": "cannot use column offsets in group clause when using `*`"
+  },
+  {
+    "comment": "create view with Cannot auto-resolve for cross-shard joins",
+    "query": "create view user.view_a as select col from user join user_extra",
+    "plan": "Column 'col' in field list is ambiguous"
+  },
+  {
+    "comment": "unsharded insert, unqualified names and auto-inc combined",
+    "query": "insert into unsharded_auto select col from unsharded",
+    "plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
+  },
+  {
+    "comment": "unsharded insert, no col list with auto-inc",
+    "query": "insert into unsharded_auto values(1,1)",
+    "plan": "VT09004: INSERT should contain column list or the table should have authoritative columns in vschema"
+  },
+  {
+    "comment": "We need schema tracking to allow unexpanded columns inside UNION",
+    "query": "select x from (select t.*, 0 as x from user t union select t.*, 1 as x from user_extra t) AS t",
+    "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "multi table delete with 1 sharded and 1 reference table",
+    "query": "delete u, r from user u join ref_with_source r on u.col = r.col",
+    "plan": "VT09015: schema tracking required"
+  }
+]

@@ -23,7 +23,7 @@ import (
 )
 
 func TestMultiTimingsCounterFor(t *testing.T) {
-	clear()
+	clearStats()
 	mtm := NewMultiTimings("multitimings3", "help", []string{"dim1", "dim2"})
 
 	mtm.Add([]string{"tag1a", "tag1b"}, 500*time.Microsecond)

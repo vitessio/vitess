@@ -30,10 +30,12 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/mysql/collations/testutil"
+
 	"vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
-	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
 func wikiRequest(lang testutil.Lang, args map[string]string, output any) error {
@@ -165,18 +167,18 @@ func main() {
 	fs := pflag.NewFlagSet("maketestdata", pflag.ExitOnError)
 	flag.Parse(fs)
 
-	var defaults = collations.Local()
-	var collationsForLanguage = make(map[testutil.Lang][]collations.Collation)
-	var allcollations = defaults.AllCollations()
+	var defaults = collations.MySQL8()
+	var collationsForLanguage = make(map[testutil.Lang][]collations.ID)
+	var allcollations = colldata.All(defaults)
 	for lang := range testutil.KnownLanguages {
 		for _, coll := range allcollations {
 			if lang.MatchesCollation(coll.Name()) {
-				collationsForLanguage[lang] = append(collationsForLanguage[lang], coll)
+				collationsForLanguage[lang] = append(collationsForLanguage[lang], coll.ID())
 			}
 		}
 	}
 
-	var rootCollations = []collations.Collation{
+	var rootCollations = []collations.ID{
 		defaults.LookupByName("utf8mb4_0900_as_cs"),
 		defaults.LookupByName("utf8mb4_0900_as_ci"),
 		defaults.LookupByName("utf8mb4_0900_ai_ci"),
@@ -211,21 +213,22 @@ func main() {
 
 		var total int
 		var collationNames []string
-		var interestingCollations []collations.Collation
+		var interestingCollations []collations.ID
 		interestingCollations = append(interestingCollations, rootCollations...)
 		interestingCollations = append(interestingCollations, collationsForLanguage[lang]...)
 
 		for _, collation := range interestingCollations {
-			transcoded, err := charset.ConvertFromUTF8(nil, collation.Charset(), []byte(snippet))
+			transcoded, err := charset.ConvertFromUTF8(nil, colldata.Lookup(collation).Charset(), []byte(snippet))
 			if err != nil {
-				log.Printf("[%s] skip collation %s", lang, collation.Name())
+				log.Printf("[%s] skip collation %s", lang, defaults.LookupName(collation))
 				continue
 			}
 
-			weights := colldump(collation.Name(), transcoded)
-			gcase.Weights[collation.Name()] = weights
+			colName := defaults.LookupName(collation)
+			weights := colldump(colName, transcoded)
+			gcase.Weights[colName] = weights
 			total += len(weights)
-			collationNames = append(collationNames, collation.Name())
+			collationNames = append(collationNames, colName)
 		}
 
 		log.Printf("[%s] written samples for %d collations (%.02fkb): %s",

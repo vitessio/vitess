@@ -19,9 +19,8 @@ package framework
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
-
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -40,6 +39,7 @@ type QueryClient struct {
 	target              *querypb.Target
 	server              *tabletserver.TabletServer
 	transactionID       int64
+	reservedIDMu        sync.Mutex
 	reservedID          int64
 	sessionStateChanges string
 }
@@ -57,9 +57,22 @@ func NewClient() *QueryClient {
 	}
 }
 
+// NewClientWithServer creates a new client for a given server.
+func NewClientWithServer(server *tabletserver.TabletServer) *QueryClient {
+	return &QueryClient{
+		ctx: callerid.NewContext(
+			context.Background(),
+			&vtrpcpb.CallerID{},
+			&querypb.VTGateCallerID{Username: "dev"},
+		),
+		target: Target,
+		server: server,
+	}
+}
+
 // NewClientWithTabletType creates a new client for Server with the provided tablet type.
 func NewClientWithTabletType(tabletType topodatapb.TabletType) *QueryClient {
-	targetCopy := proto.Clone(Target).(*querypb.Target)
+	targetCopy := Target.CloneVT()
 	targetCopy.TabletType = tabletType
 	return &QueryClient{
 		ctx: callerid.NewContext(
@@ -114,6 +127,8 @@ func (client *QueryClient) Commit() error {
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
 	rID, err := client.server.Rollback(client.ctx, client.target, client.transactionID)
+	client.reservedIDMu.Lock()
+	defer client.reservedIDMu.Unlock()
 	client.reservedID = rID
 	if err != nil {
 		return err
@@ -132,7 +147,7 @@ func (client *QueryClient) CommitPrepared(dtid string) error {
 	return client.server.CommitPrepared(client.ctx, client.target, dtid)
 }
 
-// RollbackPrepared rollsback a prepared transaction.
+// RollbackPrepared rolls back a prepared transaction.
 func (client *QueryClient) RollbackPrepared(dtid string, originalID int64) error {
 	return client.server.RollbackPrepared(client.ctx, client.target, dtid, originalID)
 }
@@ -293,6 +308,8 @@ func (client *QueryClient) MessageAck(name string, ids []string) (int64, error) 
 
 // ReserveExecute performs a ReserveExecute.
 func (client *QueryClient) ReserveExecute(query string, preQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	client.reservedIDMu.Lock()
+	defer client.reservedIDMu.Unlock()
 	if client.reservedID != 0 {
 		return nil, errors.New("already reserved a connection")
 	}

@@ -1,3 +1,5 @@
+//go:build !windows
+
 /*
 Copyright 2019 The Vitess Authors.
 
@@ -7,7 +9,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -23,6 +25,8 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/event"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type TestEvent struct {
@@ -68,10 +72,8 @@ func TestSyslog(t *testing.T) {
 
 	ev := new(TestEvent)
 	event.Dispatch(ev)
+	assert.True(t, ev.triggered)
 
-	if !ev.triggered {
-		t.Errorf("Syslog() was not called on event that implements Syslogger")
-	}
 }
 
 // TestBadWriter verifies we are still triggering (to normal logs) if
@@ -85,50 +87,40 @@ func TestBadWriter(t *testing.T) {
 	wantLevel := "ERROR"
 	ev := &TestEvent{priority: syslog.LOG_ALERT, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().msg, wantMsg) {
-		t.Errorf("error log msg [%s], want msg [%s]", tl.getLog().msg, wantMsg)
-	}
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().msg, wantMsg))
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+
 	ev = &TestEvent{priority: syslog.LOG_CRIT, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+
 	ev = &TestEvent{priority: syslog.LOG_ERR, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+
+	ev = &TestEvent{priority: syslog.LOG_EMERG, message: wantMsg}
+	event.Dispatch(ev)
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
 
 	wantLevel = "WARNING"
 	ev = &TestEvent{priority: syslog.LOG_WARNING, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
 
 	wantLevel = "INFO"
 	ev = &TestEvent{priority: syslog.LOG_INFO, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+
 	ev = &TestEvent{priority: syslog.LOG_NOTICE, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+
 	ev = &TestEvent{priority: syslog.LOG_DEBUG, message: wantMsg}
 	event.Dispatch(ev)
-	if !strings.Contains(tl.getLog().level, wantLevel) {
-		t.Errorf("error log level [%s], want level [%s]", tl.getLog().level, wantLevel)
-	}
+	assert.True(t, strings.Contains(tl.getLog().level, wantLevel))
+	assert.True(t, ev.triggered)
 
-	if !ev.triggered {
-		t.Errorf("passed nil writer to client")
-	}
 }
 
 // TestWriteError checks that we don't panic on a write error.
@@ -143,10 +135,8 @@ func TestInvalidSeverity(t *testing.T) {
 	writer = fw
 
 	event.Dispatch(&TestEvent{priority: syslog.Priority(123), message: "log me"})
+	assert.NotEqual(t, "log me", fw.message)
 
-	if fw.message == "log me" {
-		t.Errorf("message was logged despite invalid severity")
-	}
 }
 
 func testSeverity(sev syslog.Priority, t *testing.T) {
@@ -154,13 +144,9 @@ func testSeverity(sev syslog.Priority, t *testing.T) {
 	writer = fw
 
 	event.Dispatch(&TestEvent{priority: sev, message: "log me"})
+	assert.Equal(t, sev, fw.priority)
+	assert.Equal(t, "log me", fw.message)
 
-	if fw.priority != sev {
-		t.Errorf("wrong priority: got %v, want %v", fw.priority, sev)
-	}
-	if fw.message != "log me" {
-		t.Errorf(`wrong message: got "%v", want "%v"`, fw.message, "log me")
-	}
 }
 
 func TestEmerg(t *testing.T) {

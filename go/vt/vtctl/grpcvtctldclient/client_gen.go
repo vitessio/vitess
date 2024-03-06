@@ -101,6 +101,15 @@ func (client *gRPCVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb
 	return client.c.BackupShard(ctx, in, opts...)
 }
 
+// CancelSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CancelSchemaMigration(ctx context.Context, in *vtctldatapb.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CancelSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CancelSchemaMigration(ctx, in, opts...)
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	if client.c == nil {
@@ -108,6 +117,24 @@ func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctld
 	}
 
 	return client.c.ChangeTabletType(ctx, in, opts...)
+}
+
+// CleanupSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CleanupSchemaMigration(ctx context.Context, in *vtctldatapb.CleanupSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CleanupSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CleanupSchemaMigration(ctx, in, opts...)
+}
+
+// CompleteSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldatapb.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CompleteSchemaMigration(ctx, in, opts...)
 }
 
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
@@ -227,6 +254,15 @@ func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in 
 	return client.c.FindAllShardsInKeyspace(ctx, in, opts...)
 }
 
+// ForceCutOverSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ForceCutOverSchemaMigration(ctx context.Context, in *vtctldatapb.ForceCutOverSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.ForceCutOverSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ForceCutOverSchemaMigration(ctx, in, opts...)
+}
+
 // GetBackups is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetBackups(ctx context.Context, in *vtctldatapb.GetBackupsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetBackupsResponse, error) {
 	if client.c == nil {
@@ -317,6 +353,15 @@ func (client *gRPCVtctldClient) GetSchema(ctx context.Context, in *vtctldatapb.G
 	return client.c.GetSchema(ctx, in, opts...)
 }
 
+// GetSchemaMigrations is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetSchemaMigrations(ctx context.Context, in *vtctldatapb.GetSchemaMigrationsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaMigrationsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetSchemaMigrations(ctx, in, opts...)
+}
+
 // GetShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.GetShardRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardResponse, error) {
 	if client.c == nil {
@@ -324,6 +369,15 @@ func (client *gRPCVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.Ge
 	}
 
 	return client.c.GetShard(ctx, in, opts...)
+}
+
+// GetShardReplication is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetShardReplication(ctx context.Context, in *vtctldatapb.GetShardReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardReplicationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetShardReplication(ctx, in, opts...)
 }
 
 // GetShardRoutingRules is part of the vtctlservicepb.VtctldClient interface.
@@ -432,6 +486,87 @@ func (client *gRPCVtctldClient) InitShardPrimary(ctx context.Context, in *vtctld
 	}
 
 	return client.c.InitShardPrimary(ctx, in, opts...)
+}
+
+// LaunchSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) LaunchSchemaMigration(ctx context.Context, in *vtctldatapb.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.LaunchSchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.LaunchSchemaMigration(ctx, in, opts...)
+}
+
+// LookupVindexCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) LookupVindexCreate(ctx context.Context, in *vtctldatapb.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexCreateResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.LookupVindexCreate(ctx, in, opts...)
+}
+
+// LookupVindexExternalize is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) LookupVindexExternalize(ctx context.Context, in *vtctldatapb.LookupVindexExternalizeRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexExternalizeResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.LookupVindexExternalize(ctx, in, opts...)
+}
+
+// MaterializeCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) MaterializeCreate(ctx context.Context, in *vtctldatapb.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeCreateResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.MaterializeCreate(ctx, in, opts...)
+}
+
+// MigrateCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) MigrateCreate(ctx context.Context, in *vtctldatapb.MigrateCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.MigrateCreate(ctx, in, opts...)
+}
+
+// MountList is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) MountList(ctx context.Context, in *vtctldatapb.MountListRequest, opts ...grpc.CallOption) (*vtctldatapb.MountListResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.MountList(ctx, in, opts...)
+}
+
+// MountRegister is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) MountRegister(ctx context.Context, in *vtctldatapb.MountRegisterRequest, opts ...grpc.CallOption) (*vtctldatapb.MountRegisterResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.MountRegister(ctx, in, opts...)
+}
+
+// MountShow is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) MountShow(ctx context.Context, in *vtctldatapb.MountShowRequest, opts ...grpc.CallOption) (*vtctldatapb.MountShowResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.MountShow(ctx, in, opts...)
+}
+
+// MountUnregister is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) MountUnregister(ctx context.Context, in *vtctldatapb.MountUnregisterRequest, opts ...grpc.CallOption) (*vtctldatapb.MountUnregisterResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.MountUnregister(ctx, in, opts...)
 }
 
 // MoveTablesComplete is part of the vtctlservicepb.VtctldClient interface.
@@ -569,6 +704,15 @@ func (client *gRPCVtctldClient) ReparentTablet(ctx context.Context, in *vtctldat
 	return client.c.ReparentTablet(ctx, in, opts...)
 }
 
+// ReshardCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ReshardCreate(ctx context.Context, in *vtctldatapb.ReshardCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowStatusResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ReshardCreate(ctx, in, opts...)
+}
+
 // RestoreFromBackup is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_RestoreFromBackupClient, error) {
 	if client.c == nil {
@@ -576,6 +720,15 @@ func (client *gRPCVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctl
 	}
 
 	return client.c.RestoreFromBackup(ctx, in, opts...)
+}
+
+// RetrySchemaMigration is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RetrySchemaMigration(ctx context.Context, in *vtctldatapb.RetrySchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.RetrySchemaMigrationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RetrySchemaMigration(ctx, in, opts...)
 }
 
 // RunHealthCheck is part of the vtctlservicepb.VtctldClient interface.
@@ -738,6 +891,51 @@ func (client *gRPCVtctldClient) UpdateThrottlerConfig(ctx context.Context, in *v
 	}
 
 	return client.c.UpdateThrottlerConfig(ctx, in, opts...)
+}
+
+// VDiffCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VDiffCreate(ctx context.Context, in *vtctldatapb.VDiffCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffCreateResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VDiffCreate(ctx, in, opts...)
+}
+
+// VDiffDelete is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VDiffDelete(ctx context.Context, in *vtctldatapb.VDiffDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffDeleteResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VDiffDelete(ctx, in, opts...)
+}
+
+// VDiffResume is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VDiffResume(ctx context.Context, in *vtctldatapb.VDiffResumeRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffResumeResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VDiffResume(ctx, in, opts...)
+}
+
+// VDiffShow is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VDiffShow(ctx context.Context, in *vtctldatapb.VDiffShowRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffShowResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VDiffShow(ctx, in, opts...)
+}
+
+// VDiffStop is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VDiffStop(ctx context.Context, in *vtctldatapb.VDiffStopRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffStopResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VDiffStop(ctx, in, opts...)
 }
 
 // Validate is part of the vtctlservicepb.VtctldClient interface.

@@ -19,9 +19,12 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
+
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -222,7 +225,7 @@ func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *workflow.StreamMi
 }
 
 func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *workflow.StreamMigrator) {
-	dr.drLog.Log("Cancel stream migrations as requested")
+	dr.drLog.Log("Cancel migration as requested")
 }
 
 func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) (context.Context, func(*error), error) {
@@ -327,6 +330,18 @@ func (dr *switcherDryRun) dropSourceDeniedTables(ctx context.Context) error {
 	return nil
 }
 
+func (dr *switcherDryRun) dropTargetDeniedTables(ctx context.Context) error {
+	logs := make([]string, 0)
+	for _, si := range dr.ts.TargetShards() {
+		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Tablet %d", si.Keyspace(), si.ShardName(), si.PrimaryAlias.Uid))
+	}
+	if len(logs) > 0 {
+		dr.drLog.Log(fmt.Sprintf("Denied tables [%s] will be removed from:", strings.Join(dr.ts.Tables(), ",")))
+		dr.drLog.LogSlice(logs)
+	}
+	return nil
+}
+
 func (dr *switcherDryRun) logs() *[]string {
 	return &dr.drLog.logs
 }
@@ -381,5 +396,13 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 		return nil
 	}
 	dr.drLog.Log("The sequence caches will be reset on the source since sequence tables are being moved")
+	return nil
+}
+
+func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
+	slices.Sort(sortedBackingTableNames)
+	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
+		strings.Join(sortedBackingTableNames, ",")))
 	return nil
 }

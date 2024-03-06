@@ -27,16 +27,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
@@ -132,12 +131,10 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
 	mysqlPort := int32(3300 + uid)
-	hostname, err := netutil.FullyQualifiedHostname()
-	require.NoError(t, err)
 	tablet := &topodatapb.Tablet{
 		Alias:         &topodatapb.TabletAlias{Cell: cell, Uid: uid},
-		Hostname:      hostname,
-		MysqlHostname: hostname,
+		Hostname:      "127.0.0.1",
+		MysqlHostname: "127.0.0.1",
 		PortMap: map[string]int32{
 			"vt":   int32(8100 + uid),
 			"grpc": int32(8200 + uid),
@@ -180,7 +177,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 	// Listen on a random port for gRPC.
 	var err error
-	ft.Listener, err = net.Listen("tcp", ":0")
+	ft.Listener, err = net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
@@ -189,7 +186,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	// If needed, listen on a random port for HTTP.
 	vtPort := ft.Tablet.PortMap["vt"]
 	if ft.StartHTTPServer {
-		ft.HTTPListener, err = net.Listen("tcp", ":0")
+		ft.HTTPListener, err = net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("Cannot listen on http port: %v", err)
 		}
@@ -202,6 +199,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	}
 	ft.Tablet.PortMap["vt"] = vtPort
 	ft.Tablet.PortMap["grpc"] = gRPCPort
+	ft.Tablet.Hostname = "127.0.0.1"
 
 	// Create a test tm on that port, and re-read the record
 	// (it has new ports and IP).
@@ -212,8 +210,9 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 		VREngine:            vreplication.NewTestEngine(wr.TopoServer(), ft.Tablet.Alias.Cell, ft.FakeMysqlDaemon, binlogplayer.NewFakeDBClient, binlogplayer.NewFakeDBClient, topoproto.TabletDbName(ft.Tablet), nil),
+		Env:                 vtenv.NewTestEnv(),
 	}
-	if err := ft.TM.Start(ft.Tablet, 0); err != nil {
+	if err := ft.TM.Start(ft.Tablet, nil); err != nil {
 		t.Fatalf("Error in tablet - %v, err - %v", topoproto.TabletAliasString(ft.Tablet.Alias), err.Error())
 	}
 	ft.Tablet = ft.TM.Tablet()

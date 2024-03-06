@@ -20,6 +20,7 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/sqltypes"
@@ -33,8 +34,8 @@ type HashCode = uint64
 
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
-func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type) (HashCode, error) {
-	e, err := valueToEvalCast(v, coerceType, collation)
+func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type, sqlmode SQLMode) (HashCode, error) {
+	e, err := valueToEvalCast(v, coerceType, collation, sqlmode)
 	if err != nil {
 		return 0, err
 	}
@@ -45,7 +46,7 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqlt
 	h := vthash.New()
 	switch e := e.(type) {
 	case *evalBytes:
-		if !collation.Valid() {
+		if collation == collations.Unknown {
 			return 0, UnsupportedCollationHashError
 		}
 		e.col.Collation = collation
@@ -74,7 +75,7 @@ var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "
 // for two values that are considered equal by `NullsafeCompare`.
 // This can be used to avoid having to do comparison checks after a hash,
 // since we consider the 128 bits of entropy enough to guarantee uniqueness.
-func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type) error {
+func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode) error {
 	switch {
 	case v.IsNull(), sqltypes.IsNull(coerceTo):
 		hash.Write16(hashPrefixNil)
@@ -96,7 +97,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		case v.IsText(), v.IsBinary():
 			f, _ = fastparse.ParseFloat64(v.RawStr())
 		default:
-			return nullsafeHashcode128Default(hash, v, collation, coerceTo)
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode)
 		}
 		if err != nil {
 			return err
@@ -136,7 +137,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			}
 			neg = i < 0
 		default:
-			return nullsafeHashcode128Default(hash, v, collation, coerceTo)
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode)
 		}
 		if err != nil {
 			return err
@@ -179,7 +180,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 				u, err = uint64(fval), nil
 			}
 		default:
-			return nullsafeHashcode128Default(hash, v, collation, coerceTo)
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode)
 		}
 		if err != nil {
 			return err
@@ -193,10 +194,10 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 
 	case sqltypes.IsBinary(coerceTo):
 		hash.Write16(hashPrefixBytes)
-		collations.Binary.Hash(hash, v.Raw(), 0)
+		colldata.Lookup(collations.CollationBinaryID).Hash(hash, v.Raw(), 0)
 
 	case sqltypes.IsText(coerceTo):
-		coll := collation.Get()
+		coll := colldata.Lookup(collation)
 		if coll == nil {
 			panic("cannot hash unsupported collation")
 		}
@@ -222,20 +223,20 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
-			return nullsafeHashcode128Default(hash, v, collation, coerceTo)
+			return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode)
 		}
 		hash.Write16(hashPrefixDecimal)
 		dec.Hash(hash)
 	default:
-		return nullsafeHashcode128Default(hash, v, collation, coerceTo)
+		return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode)
 	}
 	return nil
 }
 
-func nullsafeHashcode128Default(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type) error {
+func nullsafeHashcode128Default(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode) error {
 	// Slow path to handle all other types. This uses the generic
 	// logic for value casting to ensure we match MySQL here.
-	e, err := valueToEvalCast(v, coerceTo, collation)
+	e, err := valueToEvalCast(v, coerceTo, collation, sqlmode)
 	if err != nil {
 		return err
 	}

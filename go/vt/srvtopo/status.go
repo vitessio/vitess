@@ -133,12 +133,6 @@ var partitions = template.Must(template.New("partitions").Parse(`
 {{ end }}
 <br>
 {{ end }}
-{{if .ServedFrom }}
-<b>ServedFrom:</b><br>
-{{ range .ServedFrom }}
-&nbsp;<b>{{ .TabletType }}:</b>&nbsp;{{ .Keyspace}}</b><br>
-{{ end }}
-{{ end }}
 `))
 
 // StatusAsHTML returns an HTML version of our status.

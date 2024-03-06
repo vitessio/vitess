@@ -97,13 +97,20 @@ func (c *Config) Parse(args []string) error {
 			"a Username and Password. Templates are given the context of the vtsql.Config, and primarily "+
 			"interoplate the cluster name and ID variables.")
 	effectiveUser := fs.String("effective-user", "", "username to send queries on behalf of")
-
+	credentialsUsername := fs.String("credentials-username", "",
+		"A string specifying the Username to use for authenticating with vtgate. "+
+			"Used with credentials-password in place of credentials-path-tmpl, in cases where providing a static file cannot be done.")
+	credentialsPassword := fs.String("credentials-password", "",
+		"A string specifying a Password to use for authenticating with vtgate. "+
+			"Used with credentials-username in place of credentials-path-tmpl, in cases where providing a static file cannot be done.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	var creds *grpcclient.StaticAuthClientCreds
+	var username, password string
 
+	// First load credentials from credentials-path-tmpl, if provided
+	var tmplStrCreds *grpcclient.StaticAuthClientCreds
 	if *credentialsTmplStr != "" {
 		_creds, path, err := credentials.LoadFromTemplate(*credentialsTmplStr, c)
 		if err != nil {
@@ -111,20 +118,34 @@ func (c *Config) Parse(args []string) error {
 		}
 
 		c.CredentialsPath = path
-		creds = _creds
+		tmplStrCreds = _creds
+	}
+	if tmplStrCreds != nil {
+		username = tmplStrCreds.Username
+		password = tmplStrCreds.Password
 	}
 
-	if creds != nil {
-		// If we did not receive an effective user, but loaded credentials, then the
-		// immediate user is the effective user.
-		if *effectiveUser == "" {
-			*effectiveUser = creds.Username
-		}
+	// If credentials-username and credentials-password are provided, use those credentials instead
+	if *credentialsUsername != "" {
+		username = *credentialsUsername
+	}
+	if *credentialsPassword != "" {
+		password = *credentialsPassword
+	}
 
-		c.Credentials = &StaticAuthCredentials{
-			EffectiveUser:         *effectiveUser,
-			StaticAuthClientCreds: creds,
-		}
+	// If we did not receive an effective user, but loaded user credentials, then the
+	// immediate user is the effective user.
+	if *effectiveUser == "" {
+		*effectiveUser = username
+	}
+
+	// Set credentials to values potentially supplied by credentials-password and credentials-username
+	c.Credentials = &StaticAuthCredentials{
+		EffectiveUser: *effectiveUser,
+		StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
+			Username: username,
+			Password: password,
+		},
 	}
 
 	return nil

@@ -27,7 +27,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -43,26 +42,21 @@ import (
 //   - We ensure that this works through active reparents and doesn't miss any events
 //   - We stream only from the primary and while streaming we reparent to a replica and then back to the original primary
 func testVStreamWithFailover(t *testing.T, failover bool) {
-	defaultCellName := "zone1"
-	cells := []string{"zone1"}
-	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestVStreamWithFailover", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 
 	require.NotNil(t, vc)
 	defaultReplicas = 2
 	defaultRdonly = 0
-	defer vc.TearDown(t)
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 3, 30*time.Second)
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
-
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
+	vtgate := defaultCell.Vtgates[0]
+	t.Run("VStreamFrom", func(t *testing.T) {
+		testVStreamFrom(t, vtgate, "product", 2)
+	})
 	ctx := context.Background()
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	if err != nil {
@@ -89,6 +83,9 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	var insertMu sync.Mutex
 	stopInserting := false
 	id := 0
+
+	vtgateConn := vc.GetVTGateConn(t)
+	defer vtgateConn.Close()
 
 	// first goroutine that keeps inserting rows into table being streamed until some time elapses after second PRS
 	go func() {
@@ -217,7 +214,12 @@ const vschemaSharded = `
 `
 
 func insertRow(keyspace, table string, id int) {
-	vtgateConn.ExecuteFetch(fmt.Sprintf("use %s;", keyspace), 1000, false)
+	vtgateConn := getConnectionNoError(vc.t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	// Due to race conditions this call is sometimes made after vtgates have shutdown. In that case just return.
+	if vtgateConn == nil {
+		return
+	}
+	vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", keyspace), 1000, false)
 	vtgateConn.ExecuteFetch("begin", 1000, false)
 	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s (name) values ('%s%d')", table, table, id), 1000, false)
 	if err != nil {
@@ -228,33 +230,25 @@ func insertRow(keyspace, table string, id int) {
 
 type numEvents struct {
 	numRowEvents, numJournalEvents                            int64
-	numLessThan80Events, numGreaterThan80Events               int64
-	numLessThan40Events, numGreaterThan40Events               int64
+	numDash80Events, num80DashEvents                          int64
+	numDash40Events, num40DashEvents                          int64
 	numShard0BeforeReshardEvents, numShard0AfterReshardEvents int64
 }
 
 // tests the StopOnReshard flag
 func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID int) *numEvents {
 	defaultCellName := "zone1"
-	allCells := []string{"zone1"}
-	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestVStreamStopOnReshard", allCells, mainClusterConfig)
+	vc = NewVitessCluster(t, nil)
 
 	require.NotNil(t, vc)
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func() { defaultReplicas = 1 }()
 
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "unsharded", "0", vschemaUnsharded, schemaUnsharded, defaultReplicas, defaultRdonly, baseTabletID+100, nil)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, "unsharded", "0")
-	require.NoError(t, err)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
 	// some initial data
@@ -325,13 +319,13 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 						shard := ev.RowEvent.Shard
 						switch shard {
 						case "-80":
-							ne.numLessThan80Events++
+							ne.numDash80Events++
 						case "80-":
-							ne.numGreaterThan80Events++
+							ne.num80DashEvents++
 						case "-40":
-							ne.numLessThan40Events++
+							ne.numDash40Events++
 						case "40-":
-							ne.numGreaterThan40Events++
+							ne.num40DashEvents++
 						}
 						ne.numRowEvents++
 					case binlogdatapb.VEventType_JOURNAL:
@@ -385,25 +379,17 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 // Validate that we can continue streaming from multiple keyspaces after first copying some tables and then resharding one of the keyspaces
 // Ensure that there are no missing row events during the resharding process.
 func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEvents {
-	defaultCellName := "zone1"
-	allCellNames = defaultCellName
-	allCells := []string{allCellNames}
-	vc = NewVitessCluster(t, "VStreamCopyMultiKeyspaceReshard", allCells, mainClusterConfig)
-
-	require.NotNil(t, vc)
+	vc = NewVitessCluster(t, nil)
 	ogdr := defaultReplicas
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func(dr int) { defaultReplicas = dr }(ogdr)
 
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "unsharded", "0", vschemaUnsharded, schemaUnsharded, defaultReplicas, defaultRdonly, baseTabletID+100, nil)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "unsharded", "0"), 1, 30*time.Second)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
@@ -468,13 +454,13 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 								ne.numShard0BeforeReshardEvents++
 							}
 						case "-80":
-							ne.numLessThan80Events++
+							ne.numDash80Events++
 						case "80-":
-							ne.numGreaterThan80Events++
+							ne.num80DashEvents++
 						case "-40":
-							ne.numLessThan40Events++
+							ne.numDash40Events++
 						case "40-":
-							ne.numGreaterThan40Events++
+							ne.num40DashEvents++
 						}
 						ne.numRowEvents++
 					case binlogdatapb.VEventType_JOURNAL:
@@ -522,7 +508,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	customerResult := execVtgateQuery(t, vtgateConn, "sharded", "select count(*) from customer")
 	insertedCustomerRows, err := customerResult.Rows[0][0].ToCastInt64()
 	require.NoError(t, err)
-	require.Equal(t, insertedCustomerRows, ne.numLessThan80Events+ne.numGreaterThan80Events+ne.numLessThan40Events+ne.numGreaterThan40Events)
+	require.Equal(t, insertedCustomerRows, ne.numDash80Events+ne.num80DashEvents+ne.numDash40Events+ne.num40DashEvents)
 	return ne
 }
 
@@ -534,20 +520,20 @@ func TestVStreamStopOnReshardTrue(t *testing.T) {
 	ne := testVStreamStopOnReshardFlag(t, true, 1000)
 	require.Greater(t, ne.numJournalEvents, int64(0))
 	require.NotZero(t, ne.numRowEvents)
-	require.NotZero(t, ne.numLessThan80Events)
-	require.NotZero(t, ne.numGreaterThan80Events)
-	require.Zero(t, ne.numLessThan40Events)
-	require.Zero(t, ne.numGreaterThan40Events)
+	require.NotZero(t, ne.numDash80Events)
+	require.NotZero(t, ne.num80DashEvents)
+	require.Zero(t, ne.numDash40Events)
+	require.Zero(t, ne.num40DashEvents)
 }
 
 func TestVStreamStopOnReshardFalse(t *testing.T) {
 	ne := testVStreamStopOnReshardFlag(t, false, 2000)
 	require.Equal(t, int64(0), ne.numJournalEvents)
 	require.NotZero(t, ne.numRowEvents)
-	require.NotZero(t, ne.numLessThan80Events)
-	require.NotZero(t, ne.numGreaterThan80Events)
-	require.NotZero(t, ne.numLessThan40Events)
-	require.NotZero(t, ne.numGreaterThan40Events)
+	require.NotZero(t, ne.numDash80Events)
+	require.NotZero(t, ne.num80DashEvents)
+	require.NotZero(t, ne.numDash40Events)
+	require.NotZero(t, ne.num40DashEvents)
 }
 
 func TestVStreamWithKeyspacesToWatch(t *testing.T) {
@@ -564,8 +550,8 @@ func TestVStreamCopyMultiKeyspaceReshard(t *testing.T) {
 	require.NotZero(t, ne.numRowEvents)
 	require.NotZero(t, ne.numShard0BeforeReshardEvents)
 	require.NotZero(t, ne.numShard0AfterReshardEvents)
-	require.NotZero(t, ne.numLessThan80Events)
-	require.NotZero(t, ne.numGreaterThan80Events)
-	require.NotZero(t, ne.numLessThan40Events)
-	require.NotZero(t, ne.numGreaterThan40Events)
+	require.NotZero(t, ne.numDash80Events)
+	require.NotZero(t, ne.num80DashEvents)
+	require.NotZero(t, ne.numDash40Events)
+	require.NotZero(t, ne.num40DashEvents)
 }

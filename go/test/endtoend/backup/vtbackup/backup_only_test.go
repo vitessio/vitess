@@ -19,7 +19,9 @@ package vtbackup
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -30,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats/opentsdb"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -59,8 +62,9 @@ func TestTabletInitialBackup(t *testing.T) {
 
 	waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
 
-	vtBackup(t, true, false, false)
+	dataPointReader := vtBackup(t, true, false, false)
 	verifyBackupCount(t, shardKsName, 1)
+	verifyBackupStats(t, dataPointReader, true /* initialBackup */)
 
 	// Initialize the tablets
 	initTablets(t, false, false)
@@ -79,10 +83,10 @@ func TestTabletInitialBackup(t *testing.T) {
 	restore(t, primary, "replica", "NOT_SERVING")
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
-	err = localCluster.VtctlclientProcess.ExecuteCommand(
-		"SetReadWrite", primary.Alias)
+	err = localCluster.VtctldClientProcess.ExecuteCommand(
+		"SetWritable", primary.Alias, "true")
 	require.Nil(t, err)
-	err = localCluster.VtctlclientProcess.ExecuteCommand(
+	err = localCluster.VtctldClientProcess.ExecuteCommand(
 		"TabletExternallyReparented", primary.Alias)
 	require.Nil(t, err)
 	restore(t, replica1, "replica", "SERVING")
@@ -144,11 +148,13 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 	// backup the replica
 	log.Infof("taking backup %s", time.Now())
-	vtBackup(t, false, true, true)
+	dataPointReader := vtBackup(t, false, true, true)
 	log.Infof("done taking backup %s", time.Now())
 
 	// check that the backup shows up in the listing
 	verifyBackupCount(t, shardKsName, len(backups)+1)
+	// check that backup stats are what we expect
+	verifyBackupStats(t, dataPointReader, false /* initialBackup */)
 
 	// insert more data on the primary
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
@@ -173,16 +179,24 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	verifyBackupCount(t, shardKsName, 0)
 }
 
-func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool) {
+func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool) *opentsdb.DataPointReader {
 	mysqlSocket, err := os.CreateTemp("", "vtbackup_test_mysql.sock")
 	require.Nil(t, err)
 	defer os.Remove(mysqlSocket.Name())
+
+	// Prepare opentsdb stats file path.
+	statsPath := path.Join(t.TempDir(), fmt.Sprintf("opentsdb.%s.txt", t.Name()))
 
 	// Take the back using vtbackup executable
 	extraArgs := []string{
 		"--allow_first_backup",
 		"--db-credentials-file", dbCredentialFile,
 		"--mysql_socket", mysqlSocket.Name(),
+
+		// Use opentsdb for stats.
+		"--stats_backend", "opentsdb",
+		// Write stats to file for reading afterwards.
+		"--opentsdb_uri", fmt.Sprintf("file://%s", statsPath),
 	}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
@@ -201,6 +215,10 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 	log.Infof("starting backup tablet %s", time.Now())
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	require.Nil(t, err)
+
+	f, err := os.OpenFile(statsPath, os.O_RDONLY, 0)
+	require.NoError(t, err)
+	return opentsdb.NewDataPointReader(f)
 }
 
 func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
@@ -259,7 +277,7 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 
 	if initShardPrimary {
 		// choose primary and start replication
-		err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
+		err := localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
 		require.Nil(t, err)
 	}
 }
@@ -282,11 +300,12 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 	tablet.MysqlctlProcess.ExtraArgs = extraArgs
 
-	// Shutdown Mysql
-	err := tablet.MysqlctlProcess.Stop()
-	require.Nil(t, err)
 	// Teardown Tablet
-	err = tablet.VttabletProcess.TearDown()
+	err := tablet.VttabletProcess.TearDown()
+	require.Nil(t, err)
+
+	// Shutdown Mysql
+	err = tablet.MysqlctlProcess.Stop()
 	require.Nil(t, err)
 
 	// Clear out the previous data
@@ -308,25 +327,19 @@ func tearDown(t *testing.T, initMysql bool) {
 	}
 	caughtUp := waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
 	require.True(t, caughtUp, "Timed out waiting for all replicas to catch up")
-	promoteCommands := "STOP SLAVE; RESET SLAVE ALL; RESET MASTER;"
-	disableSemiSyncCommands := "SET GLOBAL rpl_semi_sync_master_enabled = false; SET GLOBAL rpl_semi_sync_slave_enabled = false"
+	promoteCommands := []string{"STOP SLAVE", "RESET SLAVE ALL", "RESET MASTER"}
+	disableSemiSyncCommands := []string{"SET GLOBAL rpl_semi_sync_master_enabled = false", " SET GLOBAL rpl_semi_sync_slave_enabled = false"}
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-		_, err := tablet.VttabletProcess.QueryTablet(promoteCommands, keyspaceName, true)
+		err := tablet.VttabletProcess.QueryTabletMultiple(promoteCommands, keyspaceName, true)
 		require.Nil(t, err)
-		_, err = tablet.VttabletProcess.QueryTablet(disableSemiSyncCommands, keyspaceName, true)
+		err = tablet.VttabletProcess.QueryTabletMultiple(disableSemiSyncCommands, keyspaceName, true)
 		require.Nil(t, err)
 	}
 
-	// TODO: Ideally we should not be resetting the mysql.
-	// So in below code we will have to uncomment the commented code and remove resetTabletDirectory
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-		//Tear down Tablet
-		//err := tablet.VttabletProcess.TearDown()
-		//require.Nil(t, err)
-
 		resetTabletDirectory(t, tablet, initMysql)
 		// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
-		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
+		err := localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", tablet.Alias)
 		require.Nil(t, err)
 	}
 }
@@ -412,4 +425,74 @@ func waitForReplicationToCatchup(tablets []cluster.Vttablet) bool {
 			time.Sleep(time.Second * 1)
 		}
 	}
+}
+
+func verifyBackupStats(t *testing.T, dataPointReader *opentsdb.DataPointReader, initialBackup bool) {
+	// During execution, the following phases will become active, in order.
+	var expectActivePhases []string
+	if initialBackup {
+		expectActivePhases = []string{
+			"initialbackup",
+		}
+	} else {
+		expectActivePhases = []string{
+			"restorelastbackup",
+			"catchupreplication",
+			"takenewbackup",
+		}
+	}
+
+	// Sequence of phase activity.
+	activePhases := make([]string, 0)
+
+	// Last seen phase values.
+	phaseValues := make(map[string]int64)
+
+	// Scan for phase activity until all we're out of stats to scan.
+	for dataPoint, err := dataPointReader.Read(); !errors.Is(err, io.EOF); dataPoint, err = dataPointReader.Read() {
+		// We're only interested in "vtbackup.phase" metrics in this test.
+		if dataPoint.Metric != "vtbackup.phase" {
+			continue
+		}
+
+		phase := dataPoint.Tags["phase"]
+		value := int64(dataPoint.Value)
+		lastValue, ok := phaseValues[phase]
+
+		// The value should always be 0 or 1.
+		require.True(t, int64(0) == value || int64(1) == value)
+
+		// The first time the phase is reported, it should be 0.
+		if !ok {
+			require.Equal(t, int64(0), value)
+		}
+
+		// Eventually the phase should go active. The next time it reports,
+		// it should go inactive.
+		if lastValue == 1 {
+			require.Equal(t, int64(0), value)
+		}
+
+		// Record current value.
+		phaseValues[phase] = value
+
+		// Add phase to sequence once it goes from active to inactive.
+		if lastValue == 1 && value == 0 {
+			activePhases = append(activePhases, phase)
+		}
+
+		// Verify at most one phase is active.
+		activeCount := 0
+		for _, value := range phaseValues {
+			if value == int64(0) {
+				continue
+			}
+
+			activeCount++
+			require.LessOrEqual(t, activeCount, 1)
+		}
+	}
+
+	// Verify phase sequences.
+	require.Equal(t, expectActivePhases, activePhases)
 }

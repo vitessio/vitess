@@ -21,7 +21,9 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,11 +43,14 @@ import (
 )
 
 func TestInitShardPrimary(t *testing.T) {
-	ts := memorytopo.NewServer("cell1")
+	ctx := utils.LeakCheckContext(t)
+	ts := memorytopo.NewServer(ctx, "cell1")
 	tmc := tmclient.NewTabletManagerClient()
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
+	defer tmc.Close()
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmc)
 
 	primaryDb := fakesqldb.New(t)
+	defer primaryDb.Close()
 	primaryDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, primaryDb)
@@ -89,7 +94,7 @@ func TestInitShardPrimary(t *testing.T) {
 		tablet.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 	}
 
-	vtctld := grpcvtctldserver.NewVtctldServer(ts)
+	vtctld := grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	resp, err := vtctld.InitShardPrimary(context.Background(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
 		Shard:                   tablet1.Tablet.Shard,
@@ -101,11 +106,14 @@ func TestInitShardPrimary(t *testing.T) {
 }
 
 func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
-	ts := memorytopo.NewServer("cell1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
 	tmc := tmclient.NewTabletManagerClient()
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
+	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmc)
 
 	primaryDb := fakesqldb.New(t)
+	defer primaryDb.Close()
 	primaryDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_REPLICA, primaryDb)
@@ -141,7 +149,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 		tablet.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 	}
 
-	vtctld := grpcvtctldserver.NewVtctldServer(ts)
+	vtctld := grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	_, err := vtctld.InitShardPrimary(context.Background(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
 		Shard:                   tablet1.Tablet.Shard,

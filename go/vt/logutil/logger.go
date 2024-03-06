@@ -17,7 +17,6 @@ limitations under the License.
 package logutil
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"runtime"
@@ -25,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/protoutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 
@@ -56,7 +56,7 @@ type Logger interface {
 
 // EventToBuffer formats an individual Event into a buffer, without the
 // final '\n'
-func EventToBuffer(event *logutilpb.Event, buf *bytes.Buffer) {
+func EventToBuffer(event *logutilpb.Event, buf *strings.Builder) {
 	// Avoid Fprintf, for speed. The format is so simple that we
 	// can do it quickly by hand.  It's worth about 3X. Fprintf is hard.
 
@@ -73,7 +73,7 @@ func EventToBuffer(event *logutilpb.Event, buf *bytes.Buffer) {
 		return
 	}
 
-	t := ProtoToTime(event.Time)
+	t := protoutil.TimeFromProto(event.Time).UTC()
 	_, month, day := t.Date()
 	hour, minute, second := t.Clock()
 	twoDigits(buf, int(month))
@@ -97,8 +97,8 @@ func EventToBuffer(event *logutilpb.Event, buf *bytes.Buffer) {
 
 // EventString returns the line in one string
 func EventString(event *logutilpb.Event) string {
-	buf := new(bytes.Buffer)
-	EventToBuffer(event, buf)
+	var buf strings.Builder
+	EventToBuffer(event, &buf)
 	return buf.String()
 }
 
@@ -137,7 +137,7 @@ func NewCallbackLogger(f func(*logutilpb.Event)) *CallbackLogger {
 func (cl *CallbackLogger) InfoDepth(depth int, s string) {
 	file, line := fileAndLine(2 + depth)
 	cl.f(&logutilpb.Event{
-		Time:  TimeToProto(time.Now()),
+		Time:  protoutil.TimeToProto(time.Now()),
 		Level: logutilpb.Level_INFO,
 		File:  file,
 		Line:  line,
@@ -149,7 +149,7 @@ func (cl *CallbackLogger) InfoDepth(depth int, s string) {
 func (cl *CallbackLogger) WarningDepth(depth int, s string) {
 	file, line := fileAndLine(2 + depth)
 	cl.f(&logutilpb.Event{
-		Time:  TimeToProto(time.Now()),
+		Time:  protoutil.TimeToProto(time.Now()),
 		Level: logutilpb.Level_WARNING,
 		File:  file,
 		Line:  line,
@@ -161,7 +161,7 @@ func (cl *CallbackLogger) WarningDepth(depth int, s string) {
 func (cl *CallbackLogger) ErrorDepth(depth int, s string) {
 	file, line := fileAndLine(2 + depth)
 	cl.f(&logutilpb.Event{
-		Time:  TimeToProto(time.Now()),
+		Time:  protoutil.TimeToProto(time.Now()),
 		Level: logutilpb.Level_ERROR,
 		File:  file,
 		Line:  line,
@@ -198,33 +198,12 @@ func (cl *CallbackLogger) Error(err error) {
 func (cl *CallbackLogger) Printf(format string, v ...any) {
 	file, line := fileAndLine(2)
 	cl.f(&logutilpb.Event{
-		Time:  TimeToProto(time.Now()),
+		Time:  protoutil.TimeToProto(time.Now()),
 		Level: logutilpb.Level_CONSOLE,
 		File:  file,
 		Line:  line,
 		Value: fmt.Sprintf(format, v...),
 	})
-}
-
-// ChannelLogger is a Logger that sends the logging events through a channel for
-// consumption.
-type ChannelLogger struct {
-	CallbackLogger
-	C chan *logutilpb.Event
-}
-
-// NewChannelLogger returns a CallbackLogger which will write the data
-// on a channel
-func NewChannelLogger(size int) *ChannelLogger {
-	c := make(chan *logutilpb.Event, size)
-	return &ChannelLogger{
-		CallbackLogger: CallbackLogger{
-			f: func(e *logutilpb.Event) {
-				c <- e
-			},
-		},
-		C: c,
-	}
 }
 
 // MemoryLogger keeps the logging events in memory.
@@ -250,11 +229,11 @@ func NewMemoryLogger() *MemoryLogger {
 
 // String returns all the lines in one String, separated by '\n'
 func (ml *MemoryLogger) String() string {
-	buf := new(bytes.Buffer)
+	var buf strings.Builder
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
 	for _, event := range ml.Events {
-		EventToBuffer(event, buf)
+		EventToBuffer(event, &buf)
 		buf.WriteByte('\n')
 	}
 	return buf.String()
@@ -354,7 +333,7 @@ func (tl *TeeLogger) Printf(format string, v ...any) {
 const digits = "0123456789"
 
 // twoDigits adds a zero-prefixed two-digit integer to buf
-func twoDigits(buf *bytes.Buffer, value int) {
+func twoDigits(buf *strings.Builder, value int) {
 	buf.WriteByte(digits[value/10])
 	buf.WriteByte(digits[value%10])
 }
@@ -362,7 +341,7 @@ func twoDigits(buf *bytes.Buffer, value int) {
 // nDigits adds an n-digit integer d to buf
 // padding with pad on the left.
 // It assumes d >= 0.
-func nDigits(buf *bytes.Buffer, n, d int, pad byte) {
+func nDigits(buf *strings.Builder, n, d int, pad byte) {
 	tmp := make([]byte, n)
 	j := n - 1
 	for ; j >= 0 && d > 0; j-- {
@@ -376,7 +355,7 @@ func nDigits(buf *bytes.Buffer, n, d int, pad byte) {
 }
 
 // someDigits adds a zero-prefixed variable-width integer to buf
-func someDigits(buf *bytes.Buffer, d int64) {
+func someDigits(buf *strings.Builder, d int64) {
 	// Print into the top, then copy down.
 	tmp := make([]byte, 10)
 	j := 10

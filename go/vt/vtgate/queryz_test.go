@@ -27,6 +27,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
@@ -34,34 +36,35 @@ import (
 )
 
 func TestQueryzHandler(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
 
-	executor, _, _, _ := createExecutorEnv()
-
+	session := &vtgatepb.Session{TargetString: "@primary"}
 	// single shard query
 	sql := "select id from user where id = 1"
-	_, err := executorExec(executor, sql, nil)
+	_, err := executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
-	executor.plans.Wait()
+	time.Sleep(100 * time.Millisecond)
 	plan1 := assertCacheContains(t, executor, nil, "select id from `user` where id = 1")
 	plan1.ExecTime = uint64(1 * time.Millisecond)
 
 	// scatter
 	sql = "select id from user"
-	_, err = executorExec(executor, sql, nil)
+	_, err = executorExec(ctx, executor, session, sql, nil)
 	require.NoError(t, err)
-	executor.plans.Wait()
+	time.Sleep(100 * time.Millisecond)
 	plan2 := assertCacheContains(t, executor, nil, "select id from `user`")
 	plan2.ExecTime = uint64(1 * time.Second)
 
 	sql = "insert into user (id, name) values (:id, :name)"
-	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
+	_, err = executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{
 		"id":   sqltypes.Uint64BindVariable(1),
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})
 	require.NoError(t, err)
-	executor.plans.Wait()
+	time.Sleep(100 * time.Millisecond)
 	plan3 := assertCacheContains(t, executor, nil, "insert into `user`(id, `name`) values (:id, :name)")
 
 	// vindex insert from above execution
@@ -69,7 +72,7 @@ func TestQueryzHandler(t *testing.T) {
 
 	// same query again should add query counts to existing plans
 	sql = "insert into user (id, name) values (:id, :name)"
-	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
+	_, err = executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{
 		"id":   sqltypes.Uint64BindVariable(1),
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})

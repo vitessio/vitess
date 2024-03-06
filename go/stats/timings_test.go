@@ -26,7 +26,7 @@ import (
 )
 
 func TestTimings(t *testing.T) {
-	clear()
+	clearStats()
 	tm := NewTimings("timings1", "help", "category")
 	tm.Add("tag1", 500*time.Microsecond)
 	tm.Add("tag1", 1*time.Millisecond)
@@ -38,7 +38,7 @@ func TestTimings(t *testing.T) {
 }
 
 func TestMultiTimings(t *testing.T) {
-	clear()
+	clearStats()
 	mtm := NewMultiTimings("maptimings1", "help", []string{"dim1", "dim2"})
 	mtm.Add([]string{"tag1a", "tag1b"}, 500*time.Microsecond)
 	mtm.Add([]string{"tag1a", "tag1b"}, 1*time.Millisecond)
@@ -50,7 +50,7 @@ func TestMultiTimings(t *testing.T) {
 }
 
 func TestMultiTimingsDot(t *testing.T) {
-	clear()
+	clearStats()
 	mtm := NewMultiTimings("maptimings2", "help", []string{"label"})
 	mtm.Add([]string{"value.dot"}, 500*time.Microsecond)
 	safe := safeLabel("value.dot")
@@ -64,7 +64,7 @@ func TestMultiTimingsDot(t *testing.T) {
 func TestTimingsHook(t *testing.T) {
 	var gotname string
 	var gotv *Timings
-	clear()
+	clearStats()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Timings)
@@ -81,7 +81,7 @@ func TestTimingsHook(t *testing.T) {
 }
 
 func TestTimingsCombineDimension(t *testing.T) {
-	clear()
+	clearStats()
 	combineDimensions = "a,c"
 
 	t1 := NewTimings("timing_combine_dim1", "help", "label")

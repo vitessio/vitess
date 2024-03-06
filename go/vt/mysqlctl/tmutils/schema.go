@@ -40,31 +40,6 @@ const (
 	TableView = "VIEW"
 )
 
-// TableDefinitionGetColumn returns the index of a column inside a
-// TableDefinition.
-func TableDefinitionGetColumn(td *tabletmanagerdatapb.TableDefinition, name string) (index int, ok bool) {
-	lowered := strings.ToLower(name)
-	for i, n := range td.Columns {
-		if lowered == strings.ToLower(n) {
-			return i, true
-		}
-	}
-	return -1, false
-}
-
-// TableDefinitions is a list of TableDefinition, for sorting
-type TableDefinitions []*tabletmanagerdatapb.TableDefinition
-
-// Len returns TableDefinitions length.
-func (tds TableDefinitions) Len() int {
-	return len(tds)
-}
-
-// Swap used for sorting TableDefinitions.
-func (tds TableDefinitions) Swap(i, j int) {
-	tds[i], tds[j] = tds[j], tds[i]
-}
-
 // TableFilter is a filter for table names and types.
 type TableFilter struct {
 	includeViews bool
@@ -177,7 +152,7 @@ func (f *TableFilter) Includes(tableName string, tableType string) bool {
 // (tables), no denied tables (excludeTables) and optionally
 // views (includeViews).
 func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	copy := proto.Clone(sd).(*tabletmanagerdatapb.SchemaDefinition)
+	copy := sd.CloneVT()
 	copy.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(sd.TableDefinitions))
 
 	f, err := NewTableFilter(tables, excludeTables, includeViews)

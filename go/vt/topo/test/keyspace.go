@@ -17,9 +17,8 @@ limitations under the License.
 package test
 
 import (
-	"testing"
-
 	"context"
+	"testing"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -27,8 +26,7 @@ import (
 )
 
 // checkKeyspace tests the keyspace part of the API
-func checkKeyspace(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+func checkKeyspace(t *testing.T, ctx context.Context, ts *topo.Server) {
 	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {
 		t.Errorf("GetKeyspaces(empty): %v", err)
@@ -63,20 +61,7 @@ func checkKeyspace(t *testing.T, ts *topo.Server) {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace"}, keyspaces)
 	}
 
-	k := &topodatapb.Keyspace{
-		ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-			{
-				TabletType: topodatapb.TabletType_REPLICA,
-				Cells:      []string{"c1", "c2"},
-				Keyspace:   "test_keyspace3",
-			},
-			{
-				TabletType: topodatapb.TabletType_PRIMARY,
-				Cells:      nil,
-				Keyspace:   "test_keyspace3",
-			},
-		},
-	}
+	k := &topodatapb.Keyspace{}
 	if err := ts.CreateKeyspace(ctx, "test_keyspace2", k); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)
 	}

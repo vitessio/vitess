@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -35,7 +34,7 @@ type builtinCeil struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinCeil)(nil)
+var _ IR = (*builtinCeil)(nil)
 
 func (call *builtinCeil) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -63,19 +62,6 @@ func (call *builtinCeil) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinCeil) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	t, f := call.Arguments[0].typeof(env, fields)
-	if sqltypes.IsSigned(t) {
-		return sqltypes.Int64, f
-	} else if sqltypes.IsUnsigned(t) {
-		return sqltypes.Uint64, f
-	} else if sqltypes.Decimal == t {
-		return sqltypes.Int64, f | flagAmbiguousType
-	} else {
-		return sqltypes.Float64, f
-	}
-}
-
 func (call *builtinCeil) compile(c *compiler) (ctype, error) {
 	return c.compileFn_rounding(call.Arguments[0], c.asm.Fn_CEIL_f, c.asm.Fn_CEIL_d)
 }
@@ -84,7 +70,7 @@ type builtinFloor struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinFloor)(nil)
+var _ IR = (*builtinFloor)(nil)
 
 func (call *builtinFloor) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -112,19 +98,6 @@ func (call *builtinFloor) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinFloor) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	t, f := call.Arguments[0].typeof(env, fields)
-	if sqltypes.IsSigned(t) {
-		return sqltypes.Int64, f
-	} else if sqltypes.IsUnsigned(t) {
-		return sqltypes.Uint64, f
-	} else if sqltypes.Decimal == t {
-		return sqltypes.Int64, f | flagAmbiguousType
-	} else {
-		return sqltypes.Float64, f
-	}
-}
-
 func (call *builtinFloor) compile(c *compiler) (ctype, error) {
 	return c.compileFn_rounding(call.Arguments[0], c.asm.Fn_FLOOR_f, c.asm.Fn_FLOOR_d)
 }
@@ -133,7 +106,7 @@ type builtinAbs struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinAbs)(nil)
+var _ IR = (*builtinAbs)(nil)
 
 func (call *builtinAbs) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -163,15 +136,6 @@ func (call *builtinAbs) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinAbs) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	t, f := call.Arguments[0].typeof(env, fields)
-	if sqltypes.IsNumber(t) {
-		return t, f
-	} else {
-		return sqltypes.Float64, f
-	}
-}
-
 func (expr *builtinAbs) compile(c *compiler) (ctype, error) {
 	arg, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -185,7 +149,7 @@ func (expr *builtinAbs) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(arg)
 
-	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
+	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}
 	switch arg.Type {
 	case sqltypes.Int64:
 		c.asm.Fn_ABS_i()
@@ -209,14 +173,10 @@ type builtinPi struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinPi)(nil)
+var _ IR = (*builtinPi)(nil)
 
 func (call *builtinPi) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Pi), nil
-}
-
-func (call *builtinPi) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.Float64, 0
 }
 
 func (*builtinPi) compile(c *compiler) (ctype, error) {
@@ -235,7 +195,7 @@ type builtinAcos struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinAcos)(nil)
+var _ IR = (*builtinAcos)(nil)
 
 func (call *builtinAcos) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -253,11 +213,6 @@ func (call *builtinAcos) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Acos(f.f)), nil
 }
 
-func (call *builtinAcos) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f | flagNullable
-}
-
 func (call *builtinAcos) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_ACOS, flagNullable)
 }
@@ -266,7 +221,7 @@ type builtinAsin struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinAsin)(nil)
+var _ IR = (*builtinAsin)(nil)
 
 func (call *builtinAsin) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -284,11 +239,6 @@ func (call *builtinAsin) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Asin(f.f)), nil
 }
 
-func (call *builtinAsin) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f | flagNullable
-}
-
 func (call *builtinAsin) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_ASIN, flagNullable)
 }
@@ -297,7 +247,7 @@ type builtinAtan struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinAtan)(nil)
+var _ IR = (*builtinAtan)(nil)
 
 func (call *builtinAtan) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -312,11 +262,6 @@ func (call *builtinAtan) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Atan(f.f)), nil
 }
 
-func (call *builtinAtan) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f
-}
-
 func (call *builtinAtan) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_ATAN, 0)
 }
@@ -325,7 +270,7 @@ type builtinAtan2 struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinAtan2)(nil)
+var _ IR = (*builtinAtan2)(nil)
 
 func (call *builtinAtan2) eval(env *ExpressionEnv) (eval, error) {
 	arg1, arg2, err := call.arg2(env)
@@ -357,19 +302,14 @@ func (expr *builtinAtan2) compile(c *compiler) (ctype, error) {
 	c.compileToFloat(arg2, 1)
 	c.asm.Fn_ATAN2()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg1.Flag | arg2.Flag}, nil
-}
-
-func (call *builtinAtan2) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag | arg2.Flag)}, nil
 }
 
 type builtinCos struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinCos)(nil)
+var _ IR = (*builtinCos)(nil)
 
 func (call *builtinCos) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -384,11 +324,6 @@ func (call *builtinCos) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Cos(f.f)), nil
 }
 
-func (call *builtinCos) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f
-}
-
 func (call *builtinCos) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_COS, 0)
 }
@@ -397,7 +332,7 @@ type builtinCot struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinCot)(nil)
+var _ IR = (*builtinCot)(nil)
 
 func (call *builtinCot) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -412,11 +347,6 @@ func (call *builtinCot) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(1.0 / math.Tan(f.f)), nil
 }
 
-func (call *builtinCot) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f
-}
-
 func (call *builtinCot) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_COT, 0)
 }
@@ -425,7 +355,7 @@ type builtinSin struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinSin)(nil)
+var _ IR = (*builtinSin)(nil)
 
 func (call *builtinSin) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -440,11 +370,6 @@ func (call *builtinSin) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Sin(f.f)), nil
 }
 
-func (call *builtinSin) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f
-}
-
 func (call *builtinSin) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_SIN, 0)
 }
@@ -453,7 +378,7 @@ type builtinTan struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinTan)(nil)
+var _ IR = (*builtinTan)(nil)
 
 func (call *builtinTan) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -468,11 +393,6 @@ func (call *builtinTan) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Tan(f.f)), nil
 }
 
-func (call *builtinTan) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f
-}
-
 func (call *builtinTan) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_TAN, 0)
 }
@@ -481,7 +401,7 @@ type builtinDegrees struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinDegrees)(nil)
+var _ IR = (*builtinDegrees)(nil)
 
 func (call *builtinDegrees) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -496,11 +416,6 @@ func (call *builtinDegrees) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(f.f * (180 / math.Pi)), nil
 }
 
-func (call *builtinDegrees) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f
-}
-
 func (call *builtinDegrees) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_DEGREES, 0)
 }
@@ -509,7 +424,7 @@ type builtinRadians struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinRadians)(nil)
+var _ IR = (*builtinRadians)(nil)
 
 func (call *builtinRadians) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -524,11 +439,6 @@ func (call *builtinRadians) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(f.f * (math.Pi / 180)), nil
 }
 
-func (call *builtinRadians) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f
-}
-
 func (call *builtinRadians) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_RADIANS, 0)
 }
@@ -537,7 +447,7 @@ type builtinExp struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinExp)(nil)
+var _ IR = (*builtinExp)(nil)
 
 func (call *builtinExp) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -556,11 +466,6 @@ func (call *builtinExp) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(a), nil
 }
 
-func (call *builtinExp) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f | flagNullable
-}
-
 func (call *builtinExp) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_EXP, flagNullable)
 }
@@ -569,7 +474,7 @@ type builtinLn struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinLn)(nil)
+var _ IR = (*builtinLn)(nil)
 
 func (call *builtinLn) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -588,11 +493,6 @@ func (call *builtinLn) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(a), nil
 }
 
-func (call *builtinLn) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f | flagNullable
-}
-
 func (call *builtinLn) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_LN, flagNullable)
 }
@@ -601,7 +501,7 @@ type builtinLog struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinLog)(nil)
+var _ IR = (*builtinLog)(nil)
 
 func (call *builtinLog) eval(env *ExpressionEnv) (eval, error) {
 	arg1, arg2, err := call.arg2(env)
@@ -622,11 +522,6 @@ func (call *builtinLog) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(a), nil
 }
 
-func (call *builtinLog) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f | flagNullable
-}
-
 func (expr *builtinLog) compile(c *compiler) (ctype, error) {
 	arg1, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -643,14 +538,14 @@ func (expr *builtinLog) compile(c *compiler) (ctype, error) {
 	c.compileToFloat(arg2, 1)
 	c.asm.Fn_LOG()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg1.Flag | arg2.Flag}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag | arg2.Flag)}, nil
 }
 
 type builtinLog10 struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinLog10)(nil)
+var _ IR = (*builtinLog10)(nil)
 
 func (call *builtinLog10) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -670,11 +565,6 @@ func (call *builtinLog10) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(a), nil
 }
 
-func (call *builtinLog10) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f | flagNullable
-}
-
 func (call *builtinLog10) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_LOG10, flagNullable)
 }
@@ -683,7 +573,7 @@ type builtinLog2 struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinLog2)(nil)
+var _ IR = (*builtinLog2)(nil)
 
 func (call *builtinLog2) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -702,11 +592,6 @@ func (call *builtinLog2) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(a), nil
 }
 
-func (call *builtinLog2) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f | flagNullable
-}
-
 func (call *builtinLog2) compile(c *compiler) (ctype, error) {
 	return c.compileFn_math1(call.Arguments[0], c.asm.Fn_LOG2, flagNullable)
 }
@@ -715,7 +600,7 @@ type builtinPow struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinPow)(nil)
+var _ IR = (*builtinPow)(nil)
 
 func (call *builtinPow) eval(env *ExpressionEnv) (eval, error) {
 	arg1, arg2, err := call.arg2(env)
@@ -737,11 +622,6 @@ func (call *builtinPow) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(a), nil
 }
 
-func (call *builtinPow) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, f | flagNullable
-}
-
 func (expr *builtinPow) compile(c *compiler) (ctype, error) {
 	arg1, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -758,14 +638,14 @@ func (expr *builtinPow) compile(c *compiler) (ctype, error) {
 	c.compileToFloat(arg2, 1)
 	c.asm.Fn_POW()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg1.Flag | arg2.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag | arg2.Flag)}, nil
 }
 
 type builtinSign struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinSign)(nil)
+var _ IR = (*builtinSign)(nil)
 
 func (call *builtinSign) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -813,11 +693,6 @@ func (call *builtinSign) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinSign) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, t := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Int64, t
-}
-
 func (expr *builtinSign) compile(c *compiler) (ctype, error) {
 	arg, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -843,14 +718,14 @@ func (expr *builtinSign) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 }
 
 type builtinSqrt struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinSqrt)(nil)
+var _ IR = (*builtinSqrt)(nil)
 
 func (call *builtinSqrt) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -868,11 +743,6 @@ func (call *builtinSqrt) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	return newEvalFloat(a), nil
-}
-
-func (call *builtinSqrt) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, t := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Float64, t | flagNullable
 }
 
 func (call *builtinSqrt) compile(c *compiler) (ctype, error) {
@@ -960,7 +830,7 @@ type builtinRound struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinRound)(nil)
+var _ IR = (*builtinRound)(nil)
 
 func clampRounding(round int64) int64 {
 	// Use some reasonable lower limit to avoid too slow
@@ -1122,19 +992,6 @@ func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinRound) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	t, f := call.Arguments[0].typeof(env, fields)
-	if sqltypes.IsSigned(t) {
-		return sqltypes.Int64, f
-	} else if sqltypes.IsUnsigned(t) {
-		return sqltypes.Uint64, f
-	} else if sqltypes.Decimal == t {
-		return sqltypes.Decimal, f
-	} else {
-		return sqltypes.Float64, f
-	}
-}
-
 func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 	arg, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -1203,7 +1060,7 @@ type builtinTruncate struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinRound)(nil)
+var _ IR = (*builtinRound)(nil)
 
 func truncateSigned(v int64, round int64) int64 {
 	if round >= 0 {
@@ -1334,19 +1191,6 @@ func (call *builtinTruncate) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinTruncate) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	t, f := call.Arguments[0].typeof(env, fields)
-	if sqltypes.IsSigned(t) {
-		return sqltypes.Int64, f
-	} else if sqltypes.IsUnsigned(t) {
-		return sqltypes.Uint64, f
-	} else if sqltypes.Decimal == t {
-		return sqltypes.Decimal, f
-	} else {
-		return sqltypes.Float64, f
-	}
-}
-
 func (expr *builtinTruncate) compile(c *compiler) (ctype, error) {
 	arg, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -1396,7 +1240,7 @@ type builtinCrc32 struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinCrc32)(nil)
+var _ IR = (*builtinCrc32)(nil)
 
 func (call *builtinCrc32) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -1412,11 +1256,6 @@ func (call *builtinCrc32) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalUint64(uint64(hash)), nil
 }
 
-func (call *builtinCrc32) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.Uint64, f
-}
-
 func (expr *builtinCrc32) compile(c *compiler) (ctype, error) {
 	arg, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -1428,7 +1267,7 @@ func (expr *builtinCrc32) compile(c *compiler) (ctype, error) {
 	switch {
 	case arg.isTextual():
 	default:
-		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
+		c.asm.Convert_xb(1, sqltypes.Binary, nil)
 	}
 
 	c.asm.Fn_CRC32()
@@ -1441,7 +1280,7 @@ type builtinConv struct {
 	collate collations.ID
 }
 
-var _ Expr = (*builtinConv)(nil)
+var _ IR = (*builtinConv)(nil)
 
 func upcaseASCII(b []byte) []byte {
 	for i, c := range b {
@@ -1493,7 +1332,7 @@ func (call *builtinConv) eval(env *ExpressionEnv) (eval, error) {
 		i, err := fastparse.ParseInt64(nStr.string(), int(fromBase))
 		u = uint64(i)
 		if errors.Is(err, fastparse.ErrOverflow) {
-			u, _ = fastparse.ParseUint64(nStr.string(), int(fromBase))
+			u, _ = fastparse.ParseUint64WithNeg(nStr.string(), int(fromBase))
 		}
 	}
 
@@ -1503,12 +1342,7 @@ func (call *builtinConv) eval(env *ExpressionEnv) (eval, error) {
 	} else {
 		out = strconv.AppendUint(out, u, int(toBase))
 	}
-	return newEvalText(upcaseASCII(out), defaultCoercionCollation(call.collate)), nil
-}
-
-func (call *builtinConv) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env, fields)
-	return sqltypes.VarChar, f | flagNullable
+	return newEvalText(upcaseASCII(out), typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (expr *builtinConv) compile(c *compiler) (ctype, error) {
@@ -1540,7 +1374,7 @@ func (expr *builtinConv) compile(c *compiler) (ctype, error) {
 	switch {
 	case n.isTextual():
 	default:
-		c.asm.Convert_xb(3, t, 0, false)
+		c.asm.Convert_xb(3, t, nil)
 	}
 
 	if n.isHexOrBitLiteral() {
@@ -1549,7 +1383,7 @@ func (expr *builtinConv) compile(c *compiler) (ctype, error) {
 		c.asm.Fn_CONV_bu(3, 2)
 	}
 
-	col := defaultCoercionCollation(n.Col.Collation)
+	col := typedCoercionCollation(t, expr.collate)
 	c.asm.Fn_CONV_uc(t, col)
 	c.asm.jumpDestination(skip)
 

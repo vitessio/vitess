@@ -31,8 +31,7 @@ import (
 
 // checkTryLock checks if we can lock / unlock as expected. It's using a keyspace
 // as the lock target.
-func checkTryLock(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+func checkTryLock(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		require.Fail(t, "CreateKeyspace fail", err.Error())
 	}
@@ -139,7 +138,7 @@ func checkTryLockTimeout(ctx context.Context, t *testing.T, conn topo.Conn) {
 
 	// test we can't unlock again
 	if err := lockDescriptor.Unlock(ctx); err == nil {
-		require.Fail(t, "Unlock failed", err.Error())
+		require.Fail(t, "Unlock succeeded but should not have")
 	}
 }
 

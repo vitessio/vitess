@@ -20,8 +20,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 const smSchema = `
@@ -62,37 +60,27 @@ const smMaterializeSpec = `{"workflow": "wf1", "source_keyspace": "ks1", "target
 const initDataQuery = `insert into ks1.tx(id, typ, val) values (1, 1, 'abc'), (2, 1, 'def'), (3, 2, 'def'), (4, 2, 'abc'), (5, 3, 'def'), (6, 3, 'abc')`
 
 // testShardedMaterialize tests a materialize workflow for a sharded cluster (single shard) using comparison filters
-func testShardedMaterialize(t *testing.T) {
-	defaultCellName := "zone1"
-	allCells := []string{"zone1"}
-	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestShardedMaterialize", allCells, mainClusterConfig)
+func testShardedMaterialize(t *testing.T, useVtctldClient bool) {
+	var err error
+	vc = NewVitessCluster(t, nil)
 	ks1 := "ks1"
 	ks2 := "ks2"
-	shard := "0"
 	require.NotNil(t, vc)
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func() { defaultReplicas = 1 }()
 
-	defer vc.TearDown(t)
-
-	defaultCell = vc.Cells[defaultCellName]
+	defer vc.TearDown()
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks1, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 100, nil)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, ks1, shard)
-	require.NoError(t, err)
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks2, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 200, nil)
-	err = cluster.WaitForHealthyShard(vc.VtctldClient, ks2, shard)
-	require.NoError(t, err)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	_, err = vtgateConn.ExecuteFetch(initDataQuery, 0, false)
 	require.NoError(t, err)
-	materialize(t, smMaterializeSpec)
+	materialize(t, smMaterializeSpec, useVtctldClient)
 	tab := vc.getPrimaryTablet(t, ks2, "0")
 	catchup(t, tab, "wf1", "Materialize")
 
@@ -181,11 +169,9 @@ DETERMINISTIC
 RETURN id * length(val);
 `
 
-func testMaterialize(t *testing.T) {
-	defaultCellName := "zone1"
-	allCells := []string{"zone1"}
-	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestMaterialize", allCells, mainClusterConfig)
+func testMaterialize(t *testing.T, useVtctldClient bool) {
+	var err error
+	vc = NewVitessCluster(t, nil)
 	sourceKs := "source"
 	targetKs := "target"
 	shard := "0"
@@ -193,20 +179,14 @@ func testMaterialize(t *testing.T) {
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func() { defaultReplicas = 1 }()
 
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", smMaterializeVSchemaSource, smMaterializeSchemaSource, defaultReplicas, defaultRdonly, 300, nil)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard)
-	require.NoError(t, err)
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "0", smMaterializeVSchemaTarget, smMaterializeSchemaTarget, defaultReplicas, defaultRdonly, 400, nil)
-	err = cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard)
-	require.NoError(t, err)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
@@ -217,7 +197,7 @@ func testMaterialize(t *testing.T) {
 	_, err = ks2Primary.QueryTablet(customFunc, targetKs, true)
 	require.NoError(t, err)
 
-	materialize(t, smMaterializeSpec2)
+	materialize(t, smMaterializeSpec2, useVtctldClient)
 	catchup(t, ks2Primary, "wf1", "Materialize")
 
 	// validate data after the copy phase
@@ -234,12 +214,23 @@ func testMaterialize(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, "select id, val, ts, day, month, x from mat2", want)
 }
 
-// TestMaterialize runs all the individual materialize tests defined above
+// TestMaterialize runs all the individual materialize tests defined above.
 func TestMaterialize(t *testing.T) {
 	t.Run("Materialize", func(t *testing.T) {
-		testMaterialize(t)
+		testMaterialize(t, false)
 	})
 	t.Run("ShardedMaterialize", func(t *testing.T) {
-		testShardedMaterialize(t)
+		testShardedMaterialize(t, false)
+	})
+}
+
+// TestMaterializeVtctldClient runs all the individual materialize tests
+// defined above using vtctldclient instead of vtctlclient.
+func TestMaterializeVtctldClient(t *testing.T) {
+	t.Run("Materialize", func(t *testing.T) {
+		testMaterialize(t, true)
+	})
+	t.Run("ShardedMaterialize", func(t *testing.T) {
+		testShardedMaterialize(t, true)
 	})
 }

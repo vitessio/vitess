@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -41,14 +40,6 @@ func newDistinct(source logicalPlan, checkCols []engine.CheckCol, truncateColumn
 	}
 }
 
-func newDistinctGen4Legacy(source logicalPlan, checkCols []engine.CheckCol, needToTruncate bool) logicalPlan {
-	return &distinct{
-		logicalPlanCommon: newBuilderCommon(source),
-		checkCols:         checkCols,
-		needToTruncate:    needToTruncate,
-	}
-}
-
 func (d *distinct) Primitive() engine.Primitive {
 	truncate := d.truncateColumn
 	if d.needToTruncate {
@@ -68,18 +59,4 @@ func (d *distinct) Primitive() engine.Primitive {
 		CheckCols: d.checkCols,
 		Truncate:  truncate,
 	}
-}
-
-// Rewrite implements the logicalPlan interface
-func (d *distinct) Rewrite(inputs ...logicalPlan) error {
-	if len(inputs) != 1 {
-		return vterrors.VT13001("distinct: wrong number of inputs")
-	}
-	d.input = inputs[0]
-	return nil
-}
-
-// Inputs implements the logicalPlan interface
-func (d *distinct) Inputs() []logicalPlan {
-	return []logicalPlan{d.input}
 }

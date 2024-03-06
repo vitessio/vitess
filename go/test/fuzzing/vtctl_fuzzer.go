@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -180,7 +181,7 @@ func Fuzz(data []byte) int {
 		// Add params to the command
 		commandSlice = append(commandSlice, args...)
 
-		_ = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), commandSlice)
+		_ = vtctl.RunCommand(ctx, wrangler.New(vtenv.NewTestEnv(), logger, topo, tmc), commandSlice)
 		command++
 	}
 
@@ -189,6 +190,6 @@ func Fuzz(data []byte) int {
 }
 
 func createTopo(ctx context.Context) (*topo.Server, error) {
-	ts := memorytopo.NewServer("zone1", "zone2", "zone3")
+	ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
 	return ts, nil
 }

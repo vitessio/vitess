@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/schema"
-	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -45,7 +44,6 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
-	httpClient      = throttlebase.SetupHTTPClient(time.Second)
 
 	normalMigrationWait   = 45 * time.Second
 	extendedMigrationWait = 60 * time.Second
@@ -460,7 +458,7 @@ func TestSchemaChange(t *testing.T) {
 		time.Sleep(10 * time.Second)
 		onlineddl.CheckCancelAllMigrations(t, &vtParams, 0)
 		// Validate that invoking CANCEL ALL via vtctl works
-		onlineddl.CheckCancelAllMigrationsViaVtctl(t, &clusterInstance.VtctlclientProcess, keyspaceName)
+		onlineddl.CheckCancelAllMigrationsViaVtctld(t, &clusterInstance.VtctldClientProcess, keyspaceName)
 	})
 	t.Run("cancel all migrations: some migrations to cancel", func(t *testing.T) {
 		// Use VTGate for throttling, issue a `ALTER VITESS_MIGRATION THROTTLE ALL ...`
@@ -499,7 +497,7 @@ func TestSchemaChange(t *testing.T) {
 		}
 		wg.Wait()
 		// cancelling via vtctl does not return values. We CANCEL ALL via vtctl, then validate via VTGate that nothing remains to be cancelled.
-		onlineddl.CheckCancelAllMigrationsViaVtctl(t, &clusterInstance.VtctlclientProcess, keyspaceName)
+		onlineddl.CheckCancelAllMigrationsViaVtctld(t, &clusterInstance.VtctldClientProcess, keyspaceName)
 		onlineddl.CheckCancelAllMigrations(t, &vtParams, 0)
 	})
 
@@ -557,7 +555,7 @@ func TestSchemaChange(t *testing.T) {
 			})
 			t.Run("PRS shard -80", func(t *testing.T) {
 				// migration has started and is throttled. We now run PRS
-				err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", keyspaceName+"/-80", "--new_primary", reparentTablet.Alias)
+				err := clusterInstance.VtctldClientProcess.ExecuteCommand("PlannedReparentShard", keyspaceName+"/-80", "--new-primary", reparentTablet.Alias)
 				require.NoError(t, err, "failed PRS: %v", err)
 				rs := onlineddl.VtgateExecQuery(t, &vtParams, "show vitess_tablets", "")
 				onlineddl.PrintQueryResult(os.Stdout, rs)
@@ -652,7 +650,7 @@ func TestSchemaChange(t *testing.T) {
 			})
 			t.Run("PRS shard -80", func(t *testing.T) {
 				// migration has started and completion is postponed. We now PRS
-				err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", keyspaceName+"/-80", "--new_primary", reparentTablet.Alias)
+				err := clusterInstance.VtctldClientProcess.ExecuteCommand("PlannedReparentShard", keyspaceName+"/-80", "--new-primary", reparentTablet.Alias)
 				require.NoError(t, err, "failed PRS: %v", err)
 				rs := onlineddl.VtgateExecQuery(t, &vtParams, "show vitess_tablets", "")
 				onlineddl.PrintQueryResult(os.Stdout, rs)
@@ -852,6 +850,9 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
 		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
 	})
+	t.Run("summary: validate completed_timestamp", func(t *testing.T) {
+		onlineddl.ValidateCompletedTimestamp(t, &vtParams)
+	})
 }
 
 func insertRow(t *testing.T) {
@@ -904,7 +905,7 @@ func testWithInitialSchema(t *testing.T) {
 	var sqlQuery = "" //nolint
 	for i := 0; i < totalTableCount; i++ {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_onlineddl_test_%02d", i))
-		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
+		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)
 	}
 
@@ -922,8 +923,8 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 			uuid = row.AsString("uuid", "")
 		}
 	} else {
-		params := cluster.VtctlClientParams{DDLStrategy: ddlStrategy, UUIDList: providedUUIDList, MigrationContext: providedMigrationContext}
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, params)
+		params := cluster.ApplySchemaParams{DDLStrategy: ddlStrategy, UUIDs: providedUUIDList, MigrationContext: providedMigrationContext}
+		output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, params)
 		if expectError == "" {
 			assert.NoError(t, err)
 			uuid = output

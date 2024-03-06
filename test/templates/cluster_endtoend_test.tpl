@@ -14,7 +14,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: ubuntu-22.04
+    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1{{else}}gh-hosted-runners-4cores-1{{end}}
 
     steps:
     - name: Skip CI
@@ -34,19 +34,41 @@ jobs:
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
+        PR_DATA=$(curl \
+          -H "{{"Authorization: token ${{ secrets.GITHUB_TOKEN }}"}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "{{"https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}"}}")
+        draft=$(echo "$PR_DATA" | jq .draft -r)
+        echo "is_draft=${draft}" >> $GITHUB_OUTPUT
+
+    {{if .MemoryCheck}}
+
+    - name: Check Memory
+      run: |
+        totalMem=$(free -g | awk 'NR==2 {print $2}')
+        echo "total memory $totalMem GB"
+        if [[ "$totalMem" -lt 15 ]]; then 
+          echo "Less memory than required"
+          exit 1
+        fi
+
+    {{end}}
+
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v3
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: frouioui/paths-filter@main
+      uses: dorny/paths-filter@v3.0.1
       id: changes
       with:
         token: ''
         filters: |
           end_to_end:
             - 'go/**/*.go'
+            - 'go/vt/sidecardb/**/*.sql'
+            - 'go/test/endtoend/onlineddl/vrepl_suite/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'
@@ -65,7 +87,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v4
       with:
-        go-version: 1.20.5
+        go-version: 1.22.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -100,9 +122,9 @@ jobs:
         {{else}}
 
         # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
         # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.24-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
@@ -122,7 +144,7 @@ jobs:
 
         {{if .InstallXtraBackup}}
 
-        sudo apt-get install percona-xtrabackup-80 lz4
+        sudo apt-get install -y percona-xtrabackup-80 lz4
 
         {{end}}
 
@@ -136,7 +158,7 @@ jobs:
     {{end}}
 
     - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
+      if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -187,11 +209,13 @@ jobs:
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
-    - name: Print test output and Record test result in launchable
+    - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
       run: |
-        # send recorded tests to launchable
-        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+        if [[ "{{"${{steps.skip-workflow.outputs.is_draft}}"}}" ==  "false" ]]; then
+          # send recorded tests to launchable
+          launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+        fi
 
         # print test output
         cat output.txt

@@ -36,6 +36,7 @@ const (
 	NoUpdateNeeded
 	NoImplementation
 	NoReadOnlyImplementation
+	ResourceExhausted
 )
 
 // Error represents a topo error.
@@ -68,6 +69,8 @@ func NewError(code ErrorCode, node string) error {
 		message = fmt.Sprintf("no such topology implementation %s", node)
 	case NoReadOnlyImplementation:
 		message = fmt.Sprintf("no read-only topology implementation %s", node)
+	case ResourceExhausted:
+		message = fmt.Sprintf("server resource exhausted: %s", node)
 	default:
 		message = fmt.Sprintf("unknown code: %s", node)
 	}

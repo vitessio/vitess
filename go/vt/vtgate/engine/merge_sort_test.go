@@ -21,6 +21,8 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
@@ -58,7 +60,7 @@ func TestMergeSortNormal(t *testing.T) {
 			"8|h",
 		),
 	}}
-	orderBy := []OrderByParams{{
+	orderBy := []evalengine.OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -116,7 +118,7 @@ func TestMergeSortWeightString(t *testing.T) {
 			"8|h",
 		),
 	}}
-	orderBy := []OrderByParams{{
+	orderBy := []evalengine.OrderByParams{{
 		WeightStringCol: 0,
 		Col:             1,
 	}}
@@ -177,11 +179,10 @@ func TestMergeSortCollation(t *testing.T) {
 		),
 	}}
 
-	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
-	orderBy := []OrderByParams{{
-		Col:         0,
-		Type:        sqltypes.VarChar,
-		CollationID: collationID,
+	collationID, _ := collations.MySQL8().LookupID("utf8mb4_hu_0900_ai_ci")
+	orderBy := []evalengine.OrderByParams{{
+		Col:  0,
+		Type: evalengine.NewType(sqltypes.VarChar, collationID),
 	}}
 
 	var results []*sqltypes.Result
@@ -239,7 +240,7 @@ func TestMergeSortDescending(t *testing.T) {
 			"4|d",
 		),
 	}}
-	orderBy := []OrderByParams{{
+	orderBy := []evalengine.OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 		Desc:            true,
@@ -290,7 +291,7 @@ func TestMergeSortEmptyResults(t *testing.T) {
 	}, {
 		results: sqltypes.MakeTestStreamingResults(idColFields),
 	}}
-	orderBy := []OrderByParams{{
+	orderBy := []evalengine.OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -318,7 +319,7 @@ func TestMergeSortEmptyResults(t *testing.T) {
 // TestMergeSortResultFailures tests failures at various
 // stages of result return.
 func TestMergeSortResultFailures(t *testing.T) {
-	orderBy := []OrderByParams{{
+	orderBy := []evalengine.OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -364,7 +365,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 			"2.1|b",
 		),
 	}}
-	orderBy := []OrderByParams{{
+	orderBy := []evalengine.OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -390,7 +391,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 	require.EqualError(t, err, want)
 }
 
-func testMergeSort(shardResults []*shardResult, orderBy []OrderByParams, callback func(qr *sqltypes.Result) error) error {
+func testMergeSort(shardResults []*shardResult, orderBy []evalengine.OrderByParams, callback func(qr *sqltypes.Result) error) error {
 	prims := make([]StreamExecutor, 0, len(shardResults))
 	for _, sr := range shardResults {
 		prims = append(prims, sr)

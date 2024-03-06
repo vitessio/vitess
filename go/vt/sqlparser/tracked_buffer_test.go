@@ -104,6 +104,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"create table a (v varchar(32)) engine=InnoDB",
 			"CREATE TABLE `a` (\n\t`v` varchar(32)\n) ENGINE InnoDB",
 		},
+		{ // tablespace names are case-sensitive: https://dev.mysql.com/doc/refman/en/general-tablespaces.html
+			"create table a (v varchar(32)) engine=InnoDB tablespace innodb_system",
+			"CREATE TABLE `a` (\n\t`v` varchar(32)\n) ENGINE InnoDB,\n  TABLESPACE innodb_system",
+		},
 		{
 			"create table a (id int not null primary key) engine InnoDB, charset utf8mb4, collate utf8mb4_0900_ai_ci partition by range (`id`) (partition `p10` values less than(10) engine InnoDB tablespace foo)",
 			"CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci\nPARTITION BY RANGE (`id`)\n(PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB TABLESPACE foo)",
@@ -266,7 +270,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned array))))",
-			"CREATE TABLE `t` (\n\t`id` int,\n\t`info` JSON,\n\tINDEX `zips` ((CAST(`info` -> '$.field' AS unsigned array)))\n)",
+			"CREATE TABLE `t` (\n\t`id` int,\n\t`info` JSON,\n\tKEY `zips` ((CAST(`info` -> '$.field' AS unsigned array)))\n)",
 		},
 		{
 			"select 1 from t1 into outfile 'test/t1.txt'",
@@ -274,16 +278,17 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 	}
 
+	parser := NewTestParser()
 	for _, tc := range testcases {
 		t.Run(tc.input, func(t *testing.T) {
-			tree, err := Parse(tc.input)
+			tree, err := parser.Parse(tc.input)
 			require.NoError(t, err, tc.input)
 
 			out := CanonicalString(tree)
 			require.Equal(t, tc.canonical, out, "bad serialization")
 
 			// Make sure we've generated a valid query!
-			rereadStmt, err := Parse(out)
+			rereadStmt, err := parser.Parse(out)
 			require.NoError(t, err, out)
 			out = CanonicalString(rereadStmt)
 			require.Equal(t, tc.canonical, out, "bad serialization")

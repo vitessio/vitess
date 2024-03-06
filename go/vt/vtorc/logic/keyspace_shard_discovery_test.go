@@ -66,18 +66,20 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 		db.ClearVTOrcDatabase()
 	}()
 
-	ts = memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts = memorytopo.NewServer(ctx, "zone1")
 	keyspaceNames := []string{"ks1", "ks2", "ks3", "ks4"}
 	keyspaces := []*topodatapb.Keyspace{keyspaceDurabilityNone, keyspaceDurabilitySemiSync, keyspaceSnapshot, keyspaceDurabilityTest}
 
 	// Create 4 keyspaces
 	for i, keyspace := range keyspaces {
-		err := ts.CreateKeyspace(context.Background(), keyspaceNames[i], keyspace)
+		err := ts.CreateKeyspace(ctx, keyspaceNames[i], keyspace)
 		require.NoError(t, err)
 		for idx, shardName := range []string{"-80", "80-"} {
-			err = ts.CreateShard(context.Background(), keyspaceNames[i], shardName)
+			err = ts.CreateShard(ctx, keyspaceNames[i], shardName)
 			require.NoError(t, err)
-			_, err = ts.UpdateShardFields(context.Background(), keyspaceNames[i], shardName, func(si *topo.ShardInfo) error {
+			_, err = ts.UpdateShardFields(ctx, keyspaceNames[i], shardName, func(si *topo.ShardInfo) error {
 				si.PrimaryAlias = &topodatapb.TabletAlias{
 					Cell: fmt.Sprintf("zone_%v", keyspaceNames[i]),
 					Uid:  uint32(100 + idx),
@@ -105,7 +107,7 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	// Set clusters to watch to watch all keyspaces
 	clustersToWatch = nil
 	// Change the durability policy of ks1
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "ks1", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks1", "semi_sync")
 	RefreshAllKeyspacesAndShards()
 
 	// Verify that all the keyspaces are correctly reloaded
@@ -135,14 +137,12 @@ func TestRefreshKeyspace(t *testing.T) {
 		name           string
 		keyspaceName   string
 		keyspace       *topodatapb.Keyspace
-		ts             *topo.Server
 		keyspaceWanted *topodatapb.Keyspace
 		err            string
 	}{
 		{
 			name:         "Success with keyspaceType and durability",
 			keyspaceName: "ks1",
-			ts:           memorytopo.NewServer("zone1"),
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: "semi_sync",
@@ -152,7 +152,6 @@ func TestRefreshKeyspace(t *testing.T) {
 		}, {
 			name:         "Success with keyspaceType and no durability",
 			keyspaceName: "ks2",
-			ts:           memorytopo.NewServer("zone1"),
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
 			},
@@ -161,7 +160,6 @@ func TestRefreshKeyspace(t *testing.T) {
 		}, {
 			name:         "Success with snapshot keyspaceType",
 			keyspaceName: "ks3",
-			ts:           memorytopo.NewServer("zone1"),
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
 			},
@@ -170,7 +168,6 @@ func TestRefreshKeyspace(t *testing.T) {
 		}, {
 			name:         "Success with fields that are not stored",
 			keyspaceName: "ks4",
-			ts:           memorytopo.NewServer("zone1"),
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: "none",
@@ -184,7 +181,6 @@ func TestRefreshKeyspace(t *testing.T) {
 		}, {
 			name:           "No keyspace found",
 			keyspaceName:   "ks5",
-			ts:             memorytopo.NewServer("zone1"),
 			keyspace:       nil,
 			keyspaceWanted: nil,
 			err:            "node doesn't exist: keyspaces/ks5/Keyspace",
@@ -196,7 +192,10 @@ func TestRefreshKeyspace(t *testing.T) {
 				tt.keyspaceWanted = tt.keyspace
 			}
 
-			ts = tt.ts
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ts = memorytopo.NewServer(ctx, "zone1")
 			if tt.keyspace != nil {
 				err := ts.CreateKeyspace(context.Background(), tt.keyspaceName, tt.keyspace)
 				require.NoError(t, err)
@@ -243,7 +242,6 @@ func TestRefreshShard(t *testing.T) {
 		keyspaceName       string
 		shardName          string
 		shard              *topodatapb.Shard
-		ts                 *topo.Server
 		primaryAliasWanted string
 		err                string
 	}{
@@ -251,7 +249,6 @@ func TestRefreshShard(t *testing.T) {
 			name:         "Success with primaryAlias",
 			keyspaceName: "ks1",
 			shardName:    "0",
-			ts:           memorytopo.NewServer("zone1"),
 			shard: &topodatapb.Shard{
 				PrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -264,7 +261,6 @@ func TestRefreshShard(t *testing.T) {
 			name:               "Success with empty primaryAlias",
 			keyspaceName:       "ks1",
 			shardName:          "-80",
-			ts:                 memorytopo.NewServer("zone1"),
 			shard:              &topodatapb.Shard{},
 			primaryAliasWanted: "",
 			err:                "",
@@ -272,13 +268,15 @@ func TestRefreshShard(t *testing.T) {
 			name:         "No shard found",
 			keyspaceName: "ks2",
 			shardName:    "-",
-			ts:           memorytopo.NewServer("zone1"),
 			err:          "node doesn't exist: keyspaces/ks2/shards/-/Shard",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ts = tt.ts
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			ts = memorytopo.NewServer(ctx, "zone1")
 			if tt.shard != nil {
 				_, err := ts.GetOrCreateShard(context.Background(), tt.keyspaceName, tt.shardName)
 				require.NoError(t, err)

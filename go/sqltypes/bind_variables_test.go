@@ -18,28 +18,54 @@ package sqltypes
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// TestProtoConversions checks coverting to and fro between querypb.Value and sqltypes.Value.
 func TestProtoConversions(t *testing.T) {
-	v := TestValue(Int64, "1")
-	got := ValueToProto(v)
-	want := &querypb.Value{Type: Int64, Value: []byte("1")}
-	if !proto.Equal(got, want) {
-		t.Errorf("ValueToProto: %v, want %v", got, want)
+	tcases := []struct {
+		name     string
+		val      Value
+		protoVal *querypb.Value
+	}{
+		{
+			name:     "integer value",
+			val:      TestValue(Int64, "1"),
+			protoVal: &querypb.Value{Type: Int64, Value: []byte("1")},
+		}, {
+			name: "tuple value",
+			val:  TestTuple(TestValue(VarChar, "1"), TestValue(Int64, "3")),
+		}, {
+			name: "tuple of tuple as a value",
+			val: TestTuple(
+				TestTuple(
+					TestValue(VarChar, "1"),
+					TestValue(Int64, "3"),
+				),
+				TestValue(Int64, "5"),
+			),
+		},
 	}
-	gotback := ProtoToValue(got)
-	if !reflect.DeepEqual(gotback, v) {
-		t.Errorf("ProtoToValue: %v, want %v", gotback, v)
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			got := ValueToProto(tcase.val)
+			// If we have an expected protoVal, check that serialization matches.
+			// For nested tuples, we do not attempt to generate a protoVal, as it is binary data.
+			// We simply check that the roundtrip is correct.
+			if tcase.protoVal != nil {
+				require.True(t, proto.Equal(got, tcase.protoVal), "ValueToProto: %v, want %v", got, tcase.protoVal)
+			}
+			gotback := ProtoToValue(got)
+			require.EqualValues(t, tcase.val, gotback)
+		})
 	}
 }
 

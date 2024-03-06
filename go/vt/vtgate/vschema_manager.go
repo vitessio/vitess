@@ -20,14 +20,14 @@ import (
 	"context"
 	"sync"
 
+	"vitess.io/vitess/go/vt/graph"
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
-
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -45,6 +45,7 @@ type VSchemaManager struct {
 	cell              string
 	subscriber        func(vschema *vindexes.VSchema, stats *VSchemaStats)
 	schema            SchemaInfo
+	parser            *sqlparser.Parser
 }
 
 // SchemaInfo is an interface to schema tracker.
@@ -58,7 +59,7 @@ type SchemaInfo interface {
 func (vm *VSchemaManager) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
-	return proto.Clone(vm.currentSrvVschema).(*vschemapb.SrvVSchema)
+	return vm.currentSrvVschema.CloneVT()
 }
 
 // UpdateVSchema propagates the updated vschema to the topo. The entry for
@@ -72,7 +73,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 
 	ks := vschema.Keyspaces[ksName]
 
-	_, err = vindexes.BuildKeyspace(ks)
+	_, err = vindexes.BuildKeyspace(ks, vm.parser)
 	if err != nil {
 		return err
 	}
@@ -133,7 +134,7 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) bool
 	if v == nil {
 		// We encountered an error, build an empty vschema.
 		if vm.currentVschema == nil {
-			vschema = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+			vschema = vindexes.BuildVSchema(&vschemapb.SrvVSchema{}, vm.parser)
 		}
 	} else {
 		vschema = vm.buildAndEnhanceVSchema(v)
@@ -188,9 +189,12 @@ func (vm *VSchemaManager) Rebuild() {
 
 // buildAndEnhanceVSchema builds a new VSchema and uses information from the schema tracker to update it
 func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vindexes.VSchema {
-	vschema := vindexes.BuildVSchema(v)
+	vschema := vindexes.BuildVSchema(v, vm.parser)
 	if vm.schema != nil {
 		vm.updateFromSchema(vschema)
+		// We mark the keyspaces that have foreign key management in Vitess and have cyclic foreign keys
+		// to have an error. This makes all queries against them to fail.
+		markErrorIfCyclesInFk(vschema)
 	}
 	return vschema
 }
@@ -198,22 +202,51 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 	for ksName, ks := range vschema.Keyspaces {
 		m := vm.schema.Tables(ksName)
-
+		// Before we add the foreign key definitions in the tables, we need to make sure that all the tables
+		// are created in the Vschema, so that later when we try to find the routed tables, we don't end up
+		// getting dummy tables.
 		for tblName, tblInfo := range m {
-			vTbl := setColumns(ks, tblName, tblInfo.Columns)
+			setColumns(ks, tblName, tblInfo.Columns)
+		}
+
+		// Now that we have ensured that all the tables are created, we can start populating the foreign keys
+		// in the tables.
+		for tblName, tblInfo := range m {
+			rTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
+			if err != nil {
+				log.Errorf("error finding routed table %s: %v", tblName, err)
+				continue
+			}
 			for _, fkDef := range tblInfo.ForeignKeys {
+				// Ignore internal tables as part of foreign key references.
+				if schema.IsInternalOperationTableName(fkDef.ReferenceDefinition.ReferencedTable.Name.String()) {
+					continue
+				}
 				parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
 				if err != nil {
 					log.Errorf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err)
 					continue
 				}
-				childTbl, err := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
-				if err != nil {
-					log.Errorf("error finding child table %s: %v", tblName, err)
-					continue
+				rTbl.ParentForeignKeys = append(rTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
+				parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(rTbl, fkDef))
+			}
+			for _, idxDef := range tblInfo.Indexes {
+				switch idxDef.Info.Type {
+				case sqlparser.IndexTypePrimary:
+					for _, idxCol := range idxDef.Columns {
+						rTbl.PrimaryKey = append(rTbl.PrimaryKey, idxCol.Column)
+					}
+				case sqlparser.IndexTypeUnique:
+					var uniqueKey sqlparser.Exprs
+					for _, idxCol := range idxDef.Columns {
+						if idxCol.Expression == nil {
+							uniqueKey = append(uniqueKey, sqlparser.NewColName(idxCol.Column.String()))
+						} else {
+							uniqueKey = append(uniqueKey, idxCol.Expression)
+						}
+					}
+					rTbl.UniqueKeys = append(rTbl.UniqueKeys, uniqueKey)
 				}
-				vTbl.ParentForeignKeys = append(vTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))
-				parentTbl.ChildForeignKeys = append(parentTbl.ChildForeignKeys, vindexes.NewChildFkInfo(childTbl, fkDef))
 			}
 		}
 
@@ -223,6 +256,47 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 			for name, def := range views {
 				ks.Views[name] = sqlparser.CloneSelectStatement(def)
 			}
+		}
+	}
+}
+
+type tableCol struct {
+	tableName sqlparser.TableName
+	colNames  sqlparser.Columns
+}
+
+var tableColHash = func(tc tableCol) string {
+	res := sqlparser.String(tc.tableName)
+	for _, colName := range tc.colNames {
+		res += "|" + sqlparser.String(colName)
+	}
+	return res
+}
+
+func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
+	for ksName, ks := range vschema.Keyspaces {
+		// Only check cyclic foreign keys for keyspaces that have
+		// foreign keys managed in Vitess.
+		if ks.ForeignKeyMode != vschemapb.Keyspace_managed {
+			continue
+		}
+		g := graph.NewGraph[string]()
+		for _, table := range ks.Tables {
+			for _, cfk := range table.ChildForeignKeys {
+				childTable := cfk.Table
+				parentVertex := tableCol{
+					tableName: table.GetTableName(),
+					colNames:  cfk.ParentColumns,
+				}
+				childVertex := tableCol{
+					tableName: childTable.GetTableName(),
+					colNames:  cfk.ChildColumns,
+				}
+				g.AddEdge(tableColHash(parentVertex), tableColHash(childVertex))
+			}
+		}
+		if g.HasCycles() {
+			ks.Error = vterrors.VT09019(ksName)
 		}
 	}
 }

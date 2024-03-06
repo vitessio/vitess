@@ -78,20 +78,6 @@ func (cc *mockClientConn) assertUpdateWithin(t testing.TB, timeout time.Duration
 	}
 }
 
-func (cc *mockClientConn) assertErrorReportedWithin(t testing.TB, timeout time.Duration, msgAndArgs ...any) bool {
-	t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	select {
-	case <-ctx.Done():
-		return assert.Fail(t, "failed to receive reported error", "did not receive reported error within %v: %s", timeout, ctx.Err())
-	case actual := <-cc.errors:
-		return assert.Error(t, actual, msgAndArgs...)
-	}
-}
-
 func (cc *mockClientConn) UpdateState(state grpcresolver.State) error {
 	select {
 	case <-cc.ctx.Done():
@@ -305,7 +291,6 @@ func TestBuild(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

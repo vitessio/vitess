@@ -59,7 +59,7 @@ type Timer struct {
 
 	// state management
 	mu      sync.Mutex
-	running bool
+	running atomic.Bool
 
 	// msg is used for out-of-band messages
 	msg chan typeAction
@@ -78,10 +78,10 @@ func NewTimer(interval time.Duration) *Timer {
 func (tm *Timer) Start(keephouse func()) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	if tm.running {
+	isRunning := tm.running.Swap(true)
+	if isRunning {
 		return
 	}
-	tm.running = true
 	go tm.run(keephouse)
 }
 
@@ -118,7 +118,7 @@ func (tm *Timer) SetInterval(ns time.Duration) {
 	tm.interval.Store(ns.Nanoseconds())
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	if tm.running {
+	if tm.running.Load() {
 		tm.msg <- timerReset
 	}
 }
@@ -128,7 +128,7 @@ func (tm *Timer) SetInterval(ns time.Duration) {
 func (tm *Timer) Trigger() {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	if tm.running {
+	if tm.running.Load() {
 		tm.msg <- timerTrigger
 	}
 }
@@ -146,9 +146,9 @@ func (tm *Timer) TriggerAfter(duration time.Duration) {
 func (tm *Timer) Stop() {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	if tm.running {
+	isRunning := tm.running.Swap(false)
+	if isRunning {
 		tm.msg <- timerStop
-		tm.running = false
 	}
 }
 
@@ -158,7 +158,5 @@ func (tm *Timer) Interval() time.Duration {
 }
 
 func (tm *Timer) Running() bool {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	return tm.running
+	return tm.running.Load()
 }

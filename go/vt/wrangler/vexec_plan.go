@@ -21,12 +21,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/olekukonko/tablewriter"
+
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"github.com/olekukonko/tablewriter"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // vexecPlan contains the final query to be sent to the tablets
@@ -77,13 +78,13 @@ func (p vreplicationPlanner) exec(
 	if err != nil {
 		return nil, err
 	}
-	if qr.RowsAffected == 0 {
+	if qr.RowsAffected == 0 && len(qr.Rows) == 0 {
 		log.Infof("no matching streams found for workflow %s, tablet %s, query %s", p.vx.workflow, primaryAlias, query)
 	}
 	return qr, nil
 }
 func (p vreplicationPlanner) dryRun(ctx context.Context) error {
-	rsr, err := p.vx.wr.getStreams(p.vx.ctx, p.vx.workflow, p.vx.keyspace)
+	rsr, err := p.vx.wr.getStreams(p.vx.ctx, p.vx.workflow, p.vx.keyspace, nil)
 	if err != nil {
 		return err
 	}
@@ -119,9 +120,9 @@ const (
 func extractTableName(stmt sqlparser.Statement) (string, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Update:
-		return sqlparser.String(stmt.TableExprs), nil
+		return sqlparser.ToString(stmt.TableExprs), nil
 	case *sqlparser.Delete:
-		return sqlparser.String(stmt.TableExprs), nil
+		return sqlparser.ToString(stmt.TableExprs), nil
 	case *sqlparser.Insert:
 		return sqlparser.String(stmt.Table), nil
 	case *sqlparser.Select:
@@ -259,7 +260,7 @@ func (vx *vexec) buildUpdatePlan(ctx context.Context, planner vexecPlanner, upd 
 		}
 	}
 	if templates := plannerParams.updateTemplates; len(templates) > 0 {
-		match, err := sqlparser.QueryMatchesTemplates(vx.query, templates)
+		match, err := vx.wr.env.Parser().QueryMatchesTemplates(vx.query, templates)
 		if err != nil {
 			return nil, err
 		}
@@ -311,7 +312,7 @@ func (vx *vexec) buildInsertPlan(ctx context.Context, planner vexecPlanner, ins 
 		return nil, fmt.Errorf("query not supported by vexec: %s", sqlparser.String(ins))
 	}
 	if len(templates) > 0 {
-		match, err := sqlparser.QueryMatchesTemplates(vx.query, templates)
+		match, err := vx.wr.env.Parser().QueryMatchesTemplates(vx.query, templates)
 		if err != nil {
 			return nil, err
 		}

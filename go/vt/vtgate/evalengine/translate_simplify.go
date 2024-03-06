@@ -16,11 +16,17 @@ limitations under the License.
 
 package evalengine
 
+import "vitess.io/vitess/go/mysql/collations/colldata"
+
 func (expr *Literal) constant() bool {
 	return true
 }
 
 func (expr *BindVariable) constant() bool {
+	return false
+}
+
+func (expr *TupleBindVariable) constant() bool {
 	return false
 }
 
@@ -32,8 +38,8 @@ func (expr *BinaryExpr) constant() bool {
 	return expr.Left.constant() && expr.Right.constant()
 }
 
-func (expr TupleExpr) constant() bool {
-	for _, subexpr := range expr {
+func (tuple TupleExpr) constant() bool {
+	for _, subexpr := range tuple {
 		if !subexpr.constant() {
 			return false
 		}
@@ -50,6 +56,10 @@ func (expr *Literal) simplify(_ *ExpressionEnv) error {
 }
 
 func (expr *BindVariable) simplify(_ *ExpressionEnv) error {
+	return nil
+}
+
+func (expr *TupleBindVariable) simplify(_ *ExpressionEnv) error {
 	return nil
 }
 
@@ -78,7 +88,7 @@ func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
 	if lit, ok := expr.Right.(*Literal); ok {
 		if b, ok := lit.inner.(*evalBytes); ok && (b.isVarChar() || b.isBinary()) {
 			expr.MatchCollation = b.col.Collation
-			coll := expr.MatchCollation.Get()
+			coll := colldata.Lookup(expr.MatchCollation)
 			expr.Match = coll.Wildcard(b.bytes, 0, 0, 0)
 		}
 	}
@@ -97,10 +107,10 @@ func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 	return nil
 }
 
-func (expr TupleExpr) simplify(env *ExpressionEnv) error {
+func (tuple TupleExpr) simplify(env *ExpressionEnv) error {
 	var err error
-	for i, subexpr := range expr {
-		expr[i], err = simplifyExpr(env, subexpr)
+	for i, subexpr := range tuple {
+		tuple[i], err = simplifyExpr(env, subexpr)
 		if err != nil {
 			return err
 		}
@@ -122,23 +132,13 @@ func (c *CallExpr) simplify(env *ExpressionEnv) error {
 	return c.Arguments.simplify(env)
 }
 
-func (c *builtinWeightString) constant() bool {
-	return c.Expr.constant()
-}
-
-func (c *builtinWeightString) simplify(env *ExpressionEnv) error {
-	var err error
-	c.Expr, err = simplifyExpr(env, c.Expr)
-	return err
-}
-
-func simplifyExpr(env *ExpressionEnv, e Expr) (Expr, error) {
+func simplifyExpr(env *ExpressionEnv, e IR) (IR, error) {
 	if e.constant() {
-		res, err := env.Evaluate(e)
+		simplified, err := e.eval(env)
 		if err != nil {
 			return nil, err
 		}
-		return &Literal{inner: res.v}, nil
+		return &Literal{inner: simplified}, nil
 	}
 	if err := e.simplify(env); err != nil {
 		return nil, err

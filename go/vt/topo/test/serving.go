@@ -17,11 +17,10 @@ limitations under the License.
 package test
 
 import (
+	"context"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -30,9 +29,7 @@ import (
 )
 
 // checkSrvKeyspace tests the SrvKeyspace methods (other than watch).
-func checkSrvKeyspace(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
-
+func checkSrvKeyspace(t *testing.T, ctx context.Context, ts *topo.Server) {
 	// Test GetSrvKeyspaceNames returns an empty list correctly.
 	if names, err := ts.GetSrvKeyspaceNames(ctx, LocalCellName); err != nil || len(names) != 0 {
 		t.Errorf("GetSrvKeyspace(not there): %v %v", names, err)
@@ -51,12 +48,6 @@ func checkSrvKeyspace(t *testing.T, ts *topo.Server) {
 						},
 					},
 				},
-			},
-		},
-		ServedFrom: []*topodatapb.SrvKeyspace_ServedFrom{
-			{
-				TabletType: topodatapb.TabletType_REPLICA,
-				Keyspace:   "other_keyspace",
 			},
 		},
 	}
@@ -91,9 +82,7 @@ func checkSrvKeyspace(t *testing.T, ts *topo.Server) {
 }
 
 // checkSrvVSchema tests the SrvVSchema methods (other than watch).
-func checkSrvVSchema(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
-
+func checkSrvVSchema(t *testing.T, ctx context.Context, ts *topo.Server) {
 	// check GetSrvVSchema returns topo.ErrNoNode if no SrvVSchema
 	if _, err := ts.GetSrvVSchema(ctx, LocalCellName); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetSrvVSchema(not set): %v", err)

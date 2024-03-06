@@ -32,6 +32,9 @@ var _ Primitive = (*DDL)(nil)
 
 // DDL represents a DDL statement, either normal or online DDL
 type DDL struct {
+	noTxNeeded
+	noInputs
+
 	Keyspace *vindexes.Keyspace
 	SQL      string
 	DDL      sqlparser.DDLStatement
@@ -43,10 +46,6 @@ type DDL struct {
 	OnlineDDLEnabled bool
 
 	CreateTempTable bool
-
-	noTxNeeded
-
-	noInputs
 }
 
 func (ddl *DDL) description() PrimitiveDescription {
@@ -93,6 +92,11 @@ func (ddl *DDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 		vcursor.Session().HasCreatedTempTable()
 		vcursor.Session().NeedsReservedConn()
 		return vcursor.ExecutePrimitive(ctx, ddl.NormalDDL, bindVars, wantfields)
+	}
+
+	// Commit any open transaction before executing the ddl query.
+	if err = vcursor.Session().Commit(ctx); err != nil {
+		return nil, err
 	}
 
 	ddlStrategySetting, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())

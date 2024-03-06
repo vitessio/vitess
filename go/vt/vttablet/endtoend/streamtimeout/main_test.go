@@ -20,6 +20,7 @@ All tests in this package come with toxiproxy in front of the MySQL server
 package streamtimeout
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -64,7 +65,7 @@ func TestMain(m *testing.M) {
 			Charset:   "utf8mb4_general_ci",
 		}
 
-		env, err := vttest.NewLocalTestEnv("", 0)
+		env, err := vttest.NewLocalTestEnv(0)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -83,10 +84,13 @@ func TestMain(m *testing.M) {
 		connParams := cluster.MySQLConnParams()
 		connAppDebugParams := cluster.MySQLAppDebugConnParams()
 		config = tabletenv.NewDefaultConfig()
-		_ = config.SchemaReloadIntervalSeconds.Set("2100ms")
+		config.SchemaReloadInterval = (2 * time.Second) + (100 * time.Millisecond)
 		config.SchemaChangeReloadTimeout = 10 * time.Second
 		config.SignalWhenSchemaChange = true
-		err = framework.StartCustomServer(connParams, connAppDebugParams, cluster.DbName(), config)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		err = framework.StartCustomServer(ctx, connParams, connAppDebugParams, cluster.DbName(), config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1

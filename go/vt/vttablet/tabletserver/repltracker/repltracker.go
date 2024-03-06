@@ -23,10 +23,11 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -66,7 +67,7 @@ type ReplTracker struct {
 func NewReplTracker(env tabletenv.Env, alias *topodatapb.TabletAlias) *ReplTracker {
 	return &ReplTracker{
 		mode:           env.Config().ReplicationTracker.Mode,
-		forceHeartbeat: env.Config().ReplicationTracker.HeartbeatOnDemandSeconds.Get() > 0,
+		forceHeartbeat: env.Config().ReplicationTracker.HeartbeatOnDemand > 0,
 		hw:             newHeartbeatWriter(env, alias),
 		hr:             newHeartbeatReader(env),
 		poller:         &poller{},

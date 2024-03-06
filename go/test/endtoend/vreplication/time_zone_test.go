@@ -32,31 +32,21 @@ import (
 
 // TestMoveTablesTZ tests the conversion of datetime based on the source timezone passed to the MoveTables workflow
 func TestMoveTablesTZ(t *testing.T) {
-	allCellNames = "zone1"
-	defaultCellName := "zone1"
 	workflow := "tz"
 	sourceKs := "product"
 	targetKs := "customer"
-	shard := "0"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	ksReverseWorkflow := fmt.Sprintf("%s.%s_reverse", sourceKs, workflow)
 
-	vc = NewVitessCluster(t, "TestCellAliasVreplicationWorkflow", []string{"zone1"}, mainClusterConfig)
-	require.NotNil(t, vc)
-	defaultCell = vc.Cells[defaultCellName]
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	cells := []*Cell{defaultCell}
-
-	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
 	vc.AddKeyspace(t, []*Cell{cell1}, sourceKs, "0", initialProductVSchema, initialProductSchema, 0, 0, 100, sourceKsOpts)
 
-	vtgate = cell1.Vtgates[0]
-	require.NotNil(t, vtgate)
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard)
-	require.NoError(t, err)
-
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
@@ -66,7 +56,7 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	// it seems to take some time for the mysql server to load time zone info after the tables in mysql db have been populated
 	loadTimeZoneInfo := func(tab *cluster.VttabletProcess, sql, timezone string) {
-		_, err := tab.QueryTabletWithDB(timeZoneSQL, "mysql")
+		err := tab.MultiQueryTabletWithDB(timeZoneSQL, "mysql")
 		require.NoError(t, err)
 		timer := time.NewTimer(1 * time.Minute)
 		for {
@@ -90,10 +80,6 @@ func TestMoveTablesTZ(t *testing.T) {
 	if _, err := vc.AddKeyspace(t, cells, targetKs, "0", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, targetKsOpts); err != nil {
 		t.Fatal(err)
 	}
-	err = cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard)
-	require.NoError(t, err)
-
-	defaultCell := vc.Cells["zone1"]
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[targetKs]
 	customerTab := custKs.Shards["0"].Tablets["zone1-200"].Vttablet
 
@@ -119,7 +105,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch("insert into datze(id, dt2) values (12, '2022-04-01 5:06:07')", 1, false) // dst
 	require.NoError(t, err)
 
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 
 	// update to test date conversions in replication (vplayer) mode (update statements)
 	_, err = vtgateConn.ExecuteFetch("update datze set dt2 = '2022-04-01 5:06:07' where id = 11", 1, false) // dst
@@ -127,7 +113,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch("update datze set dt2 = '2022-01-01 10:20:30' where id = 12", 1, false) // standard time
 	require.NoError(t, err)
 
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 
 	query := "select * from datze"
 	qrSourceUSPacific, err := productTab.QueryTablet(query, sourceKs, true)
@@ -154,7 +140,7 @@ func TestMoveTablesTZ(t *testing.T) {
 		require.NotEqual(t, row.AsString("ts1", ""), qrTargetUTC.Named().Rows[i].AsString("ts1", ""))
 
 		dtLayout := "2006-01-02 15:04:05"
-		// now compare times b/w source and target (actual). VDiff has already compared, but we want to validate that vdiff1 is right too!
+		// now compare times b/w source and target (actual). VDiff has already compared, but we want to validate that vdiffSideBySide is right too!
 		dt2a, err := time.Parse(dtLayout, qrTargetUTC.Named().Rows[i].AsString("dt2", ""))
 		require.NoError(t, err)
 		targetUTCTUnix := dt2a.Unix()
@@ -206,5 +192,5 @@ func TestMoveTablesTZ(t *testing.T) {
 	// inserts to test date conversions in reverse replication
 	execVtgateQuery(t, vtgateConn, "customer", "insert into datze(id, dt2) values (13, '2022-01-01 18:20:30')")
 	execVtgateQuery(t, vtgateConn, "customer", "insert into datze(id, dt2) values (14, '2022-04-01 12:06:07')")
-	vdiff1(t, ksReverseWorkflow, "")
+	vdiffSideBySide(t, ksReverseWorkflow, "")
 }

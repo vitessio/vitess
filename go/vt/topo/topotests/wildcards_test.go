@@ -49,10 +49,12 @@ func (l *topoLayout) initTopo(t *testing.T, ts *topo.Server) {
 }
 
 func validateKeyspaceWildcard(t *testing.T, l *topoLayout, param string, expected []string) {
-	ts := memorytopo.NewServer()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx)
+	defer ts.Close()
 	l.initTopo(t, ts)
 
-	ctx := context.Background()
 	r, err := ts.ResolveKeyspaceWildcard(ctx, param)
 	if err != nil {
 		if expected != nil {
@@ -85,10 +87,12 @@ func TestResolveKeyspaceWildcard(t *testing.T) {
 }
 
 func validateShardWildcard(t *testing.T, l *topoLayout, param string, expected []topo.KeyspaceShard) {
-	ts := memorytopo.NewServer()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx)
+	defer ts.Close()
 	l.initTopo(t, ts)
 
-	ctx := context.Background()
 	r, err := ts.ResolveShardWildcard(ctx, param)
 	if err != nil {
 		if expected != nil {
@@ -181,10 +185,12 @@ func TestResolveShardWildcard(t *testing.T) {
 }
 
 func validateWildcards(t *testing.T, l *topoLayout, param string, expected []string) {
-	ts := memorytopo.NewServer()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx)
+	defer ts.Close()
 	l.initTopo(t, ts)
 
-	ctx := context.Background()
 	r, err := ts.ResolveWildcards(ctx, topo.GlobalCell, []string{param})
 	if err != nil {
 		if expected != nil {

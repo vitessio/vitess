@@ -19,6 +19,7 @@ package planbuilder
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -27,18 +28,12 @@ import (
 )
 
 func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStmt *sqlparser.Insert, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	ksName := ""
-	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
-		ksName = ks.Name
-	}
-	semTable, err := semantics.Analyze(insStmt, ksName, vschema)
+	ctx, err := plancontext.CreatePlanningContext(insStmt, reservedVars, vschema, version)
 	if err != nil {
 		return nil, err
 	}
-	// record any warning as planner warning.
-	vschema.PlannerWarning(semTable.Warning)
 
-	err = rewriteRoutedTables(insStmt, vschema)
+	err = queryRewrite(ctx.SemTable, reservedVars, insStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -48,94 +43,78 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 
 	// Check single unsharded. Even if the table is for single unsharded but sequence table is used.
 	// We cannot shortcut here as sequence column needs additional planning.
-	ks, tables := semTable.SingleUnshardedKeyspace()
-	if ks != nil && tables[0].AutoIncrement == nil {
-		plan := insertUnshardedShortcut(insStmt, ks, tables)
-		plan = pushCommentDirectivesOnPlan(plan, insStmt)
-		return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
-	}
-
-	tblInfo, err := semTable.TableInfoFor(semTable.TableSetFor(insStmt.Table))
+	ks, tables := ctx.SemTable.SingleUnshardedKeyspace()
+	// Remove all the foreign keys that don't require any handling.
+	err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.UpdateAction)
 	if err != nil {
 		return nil, err
 	}
-	if tblInfo.GetVindexTable().Keyspace.Sharded && semTable.NotUnshardedErr != nil {
-		return nil, semTable.NotUnshardedErr
+	if ks != nil {
+		if tables[0].AutoIncrement == nil && !ctx.SemTable.ForeignKeysPresent() {
+			plan := insertUnshardedShortcut(insStmt, ks, tables)
+			setCommentDirectivesOnPlan(plan, insStmt)
+			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
+		}
 	}
 
-	err = queryRewrite(semTable, reservedVars, insStmt)
+	tblInfo, err := ctx.SemTable.TableInfoFor(ctx.SemTable.TableSetFor(insStmt.Table))
 	if err != nil {
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	if _, isVindex := tblInfo.(*semantics.VindexTable); isVindex {
+		return nil, vterrors.VT09014()
+	}
+
+	if err = errOutIfPlanCannotBeConstructed(ctx, tblInfo.GetVindexTable()); err != nil {
+		return nil, err
+	}
 
 	op, err := operators.PlanQuery(ctx, insStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op, true)
+	plan, err := transformToLogicalPlan(ctx, op)
 	if err != nil {
-		return nil, err
-	}
-
-	plan = pushCommentDirectivesOnPlan(plan, insStmt)
-
-	setLockOnAllSelect(plan)
-
-	if err := plan.Wireup(ctx); err != nil {
 		return nil, err
 	}
 
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
+func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vindexes.Table) error {
+	if !vTbl.Keyspace.Sharded {
+		return nil
+	}
+	return ctx.SemTable.NotUnshardedErr
+}
+
 func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) logicalPlan {
-	eIns := &engine.Insert{}
-	eIns.Keyspace = ks
-	eIns.TableName = tables[0].Name.String()
-	eIns.Opcode = engine.InsertUnsharded
+	eIns := &engine.Insert{
+		InsertCommon: engine.InsertCommon{
+			Opcode:    engine.InsertUnsharded,
+			Keyspace:  ks,
+			TableName: tables[0].Name.String(),
+		},
+	}
 	eIns.Query = generateQuery(stmt)
 	return &insert{eInsert: eIns}
 }
 
 type insert struct {
-	eInsert *engine.Insert
-	source  logicalPlan
+	eInsert       *engine.Insert
+	eInsertSelect *engine.InsertSelect
+	source        logicalPlan
 }
 
 var _ logicalPlan = (*insert)(nil)
 
-func (i *insert) Wireup(ctx *plancontext.PlanningContext) error {
-	if i.source == nil {
-		return nil
-	}
-	return i.source.Wireup(ctx)
-}
-
 func (i *insert) Primitive() engine.Primitive {
-	if i.source != nil {
-		i.eInsert.Input = i.source.Primitive()
-	}
-	return i.eInsert
-}
-
-func (i *insert) Inputs() []logicalPlan {
 	if i.source == nil {
-		return nil
+		return i.eInsert
 	}
-	return []logicalPlan{i.source}
-}
-
-func (i *insert) Rewrite(inputs ...logicalPlan) error {
-	panic("does not expect insert to get rewrite call")
-}
-
-func (i *insert) ContainsTables() semantics.TableSet {
-	panic("does not expect insert to get contains tables call")
-}
-
-func (i *insert) OutputColumns() []sqlparser.SelectExpr {
-	panic("does not expect insert to get output columns call")
+	input := i.source.Primitive()
+	i.eInsertSelect.Input = input
+	return i.eInsertSelect
 }

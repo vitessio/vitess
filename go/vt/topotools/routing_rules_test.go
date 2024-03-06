@@ -28,8 +28,10 @@ import (
 )
 
 func TestRoutingRulesRoundTrip(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
 
 	rules := map[string][]string{
 		"t1": {"t2", "t3"},
@@ -46,8 +48,10 @@ func TestRoutingRulesRoundTrip(t *testing.T) {
 }
 
 func TestRoutingRulesErrors(t *testing.T) {
-	ctx := context.Background()
-	ts, factory := memorytopo.NewServerAndFactory("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	defer ts.Close()
 	factory.SetError(errors.New("topo failure for testing"))
 
 	t.Run("GetRoutingRules error", func(t *testing.T) {
@@ -68,8 +72,10 @@ func TestRoutingRulesErrors(t *testing.T) {
 }
 
 func TestShardRoutingRulesRoundTrip(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("zone1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
 
 	srr := map[string]string{
 		"ks1.shard1": "ks2",

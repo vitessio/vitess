@@ -69,7 +69,7 @@ func (tl *ThrottledLogger) log(logF logFunc, format string, v ...any) {
 	// to log and reset skippedCount
 	if tl.skippedCount == 0 {
 		go func(d time.Duration) {
-			time.Sleep(d)
+			<-time.After(d)
 			tl.mu.Lock()
 			defer tl.mu.Unlock()
 			// Because of the go func(), we lose the stack trace,

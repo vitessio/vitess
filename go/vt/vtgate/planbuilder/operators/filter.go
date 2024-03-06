@@ -17,51 +17,55 @@ limitations under the License.
 package operators
 
 import (
+	"slices"
 	"strings"
-
-	"golang.org/x/exp/slices"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Filter struct {
-	Source     ops.Operator
+	Source     Operator
 	Predicates []sqlparser.Expr
 
-	// FinalPredicate is the evalengine expression that will finally be used.
+	// PredicateWithOffsets is the evalengine expression that will finally be used.
 	// It contains the ANDed predicates in Predicates, with ColName:s replaced by Offset:s
-	FinalPredicate evalengine.Expr
+	PredicateWithOffsets evalengine.Expr
+
+	Truncate int
 }
 
-func newFilter(op ops.Operator, expr sqlparser.Expr) ops.Operator {
+func newFilterSinglePredicate(op Operator, expr sqlparser.Expr) Operator {
+	return newFilter(op, expr)
+}
+
+func newFilter(op Operator, expr ...sqlparser.Expr) Operator {
 	return &Filter{
-		Source: op, Predicates: []sqlparser.Expr{expr},
+		Source: op, Predicates: expr,
 	}
 }
 
 // Clone implements the Operator interface
-func (f *Filter) Clone(inputs []ops.Operator) ops.Operator {
+func (f *Filter) Clone(inputs []Operator) Operator {
 	return &Filter{
-		Source:         inputs[0],
-		Predicates:     slices.Clone(f.Predicates),
-		FinalPredicate: f.FinalPredicate,
+		Source:               inputs[0],
+		Predicates:           slices.Clone(f.Predicates),
+		PredicateWithOffsets: f.PredicateWithOffsets,
+		Truncate:             f.Truncate,
 	}
 }
 
 // Inputs implements the Operator interface
-func (f *Filter) Inputs() []ops.Operator {
-	return []ops.Operator{f.Source}
+func (f *Filter) Inputs() []Operator {
+	return []Operator{f.Source}
 }
 
 // SetInputs implements the Operator interface
-func (f *Filter) SetInputs(ops []ops.Operator) {
+func (f *Filter) SetInputs(ops []Operator) {
 	f.Source = ops[0]
 }
 
@@ -78,73 +82,70 @@ func (f *Filter) UnsolvedPredicates(st *semantics.SemTable) []sqlparser.Expr {
 	return result
 }
 
-func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := f.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	f.Source = newSrc
-	return f, nil
+func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	f.Source = f.Source.AddPredicate(ctx, expr)
+	return f
 }
 
-func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	newSrc, offset, err := f.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
-	}
-	f.Source = newSrc
-	return f, offset, nil
+func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
+	return f.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (f *Filter) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return f.Source.GetColumns()
+func (f *Filter) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	return f.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (f *Filter) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return f.Source.GetSelectExprs()
+func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return f.Source.GetColumns(ctx)
 }
 
-func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
-	return f.Source.GetOrdering()
+func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+	return f.Source.GetSelectExprs(ctx)
 }
 
-func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+func (f *Filter) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
+	return f.Source.GetOrdering(ctx)
+}
+
+func (f *Filter) Compact(*plancontext.PlanningContext) (Operator, *ApplyResult) {
 	if len(f.Predicates) == 0 {
-		return f.Source, rewrite.NewTree("filter with no predicates removed", f), nil
+		return f.Source, Rewrote("filter with no predicates removed")
 	}
 
 	other, isFilter := f.Source.(*Filter)
 	if !isFilter {
-		return f, rewrite.SameTree, nil
+		return f, NoRewrite
 	}
 	f.Source = other.Source
 	f.Predicates = append(f.Predicates, other.Predicates...)
-	return f, rewrite.NewTree("two filters merged into one", f), nil
+	return f, Rewrote("two filters merged into one")
 }
 
-func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) error {
+func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	cfg := &evalengine.Config{
 		ResolveType: ctx.SemTable.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
+		Environment: ctx.VSchema.Environment(),
 	}
 
 	predicate := sqlparser.AndExpressions(f.Predicates...)
-	rewritten, err := useOffsets(ctx, predicate, f)
-	if err != nil {
-		return err
-	}
+	rewritten := useOffsets(ctx, predicate, f)
 	eexpr, err := evalengine.Translate(rewritten, cfg)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), evalengine.ErrTranslateExprNotSupported) {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", evalengine.ErrTranslateExprNotSupported, sqlparser.String(predicate))
+			panic(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", evalengine.ErrTranslateExprNotSupported, sqlparser.String(predicate)))
 		}
-		return err
+		panic(err)
 	}
 
-	f.FinalPredicate = eexpr
+	f.PredicateWithOffsets = eexpr
 	return nil
 }
 
 func (f *Filter) ShortDescription() string {
 	return sqlparser.String(sqlparser.AndExpressions(f.Predicates...))
+}
+
+func (f *Filter) setTruncateColumnCount(offset int) {
+	f.Truncate = offset
 }

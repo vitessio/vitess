@@ -68,12 +68,12 @@ func init() {
 //----------------------------------------------
 // testVTCtlEnv
 
-func newTestVTCtlEnv() *testVTCtlEnv {
+func newTestVTCtlEnv(ctx context.Context) *testVTCtlEnv {
 	tabletconntest.SetProtocol("go.vt.vtctl.vtctl_env_test", "VTCtlTest")
 	cellName := "cell1"
 	env := &testVTCtlEnv{
 		tablets:    make(map[int]*testVTCtlTablet),
-		topoServ:   memorytopo.NewServer(cellName),
+		topoServ:   memorytopo.NewServer(ctx, cellName),
 		cell:       cellName,
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestVTCtlTMClient(),

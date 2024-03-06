@@ -1,16 +1,40 @@
-Usage of vtctld:
+vtctld provides web and gRPC interfaces to manage a single Vitess cluster.
+It is usually the first Vitess component to be started after a valid global topology service has been created.
+
+For the last several releases, vtctld has been transitioning to a newer gRPC service for well-typed cluster management requests.
+This is **required** to use programs such as vtadmin and vtctldclient, and The old API and service are deprecated and will be removed in a future release.
+To enable this newer service, include "grpc-vtctld" in the --service_map argument.
+This is demonstrated in the example usage below.
+
+Usage:
+  vtctld [flags]
+
+Examples:
+vtctld \
+	--topo_implementation etcd2 \
+	--topo_global_server_address localhost:2379 \
+	--topo_global_root /vitess/ \
+	--service_map 'grpc-vtctl,grpc-vtctld' \
+	--backup_storage_implementation file \
+	--file_backup_storage_root $VTDATAROOT/backups \
+	--port 15000 \
+	--grpc_port 15999
+
+Flags:
       --action_timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
       --alsologtostderr                                                  log to standard error as well as files
       --azblob_backup_account_key_file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
       --azblob_backup_account_name string                                Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
+      --azblob_backup_buffer_size int                                    The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service. (default 104857600)
       --azblob_backup_container_name string                              Azure Blob Container Name.
-      --azblob_backup_parallelism int                                    Azure Blob operation parallelism (requires extra memory when increased). (default 1)
+      --azblob_backup_parallelism int                                    Azure Blob operation parallelism (requires extra memory when increased -- a multiple of azblob_backup_buffer_size). (default 1)
       --azblob_backup_storage_root string                                Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').
       --backup_engine_implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
       --backup_storage_block_size int                                    if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
       --backup_storage_compress                                          if set, the backup files will be compressed. (default true)
       --backup_storage_implementation string                             Which backup storage implementation to use for creating and restoring backups.
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
+      --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
@@ -36,6 +60,7 @@ Usage of vtctld:
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_client_creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
+      --grpc_bind_address string                                         Bind address for gRPC calls. If empty, listen on all addresses.
       --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
       --grpc_cert string                                                 server certificate to use for gRPC connections, requires grpc_key, enables TLS
       --grpc_compression string                                          Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
@@ -57,29 +82,32 @@ Usage of vtctld:
       --grpc_server_initial_window_size int                              gRPC server initial window size
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
-  -h, --help                                                             display usage and exit
+      --grpc_server_keepalive_time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
+      --grpc_server_keepalive_timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
+      --healthcheck-dial-concurrency int                                 Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000. (default 1024)
+  -h, --help                                                             help for vtctld
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock-timeout duration                                            Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
-      --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
+      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
       --log_dir string                                                   If non-empty, write log files in this directory
       --log_err_stacks                                                   log stack traces for errors
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
+      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.30-Vitess")
       --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb_uri string                                              URI of opentsdb /api/put method
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
+      --pprof-http                                                       enable pprof http endpoints
       --proxy_tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
-      --s2a_enable_appengine_dialer                                      If true, opportunistically use AppEngine-specific dialer to call S2A.
-      --s2a_timeout duration                                             Timeout enforced on the connection to the S2A service for handshake. (default 3s)
       --s3_backup_aws_endpoint string                                    endpoint of the S3 backend (region must be provided).
       --s3_backup_aws_region string                                      AWS region to use. (default "us-east-1")
       --s3_backup_aws_retries int                                        AWS request retries. (default -1)
@@ -103,7 +131,7 @@ Usage of vtctld:
       --stats_common_tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats_drop_variables string                                      Variables to be dropped from the list of exported variables.
       --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
-      --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
+      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet_dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
       --tablet_grpc_ca string                                            the server ca to use to validate servers when connecting
@@ -114,7 +142,7 @@ Usage of vtctld:
       --tablet_health_keep_alive duration                                close streaming tablet health connection if there are no requests for this long (default 5m0s)
       --tablet_manager_grpc_ca string                                    the server ca to use to validate servers when connecting
       --tablet_manager_grpc_cert string                                  the cert to use to connect
-      --tablet_manager_grpc_concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,AllPrivs,App}) (default 8)
+      --tablet_manager_grpc_concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus) (default 8)
       --tablet_manager_grpc_connpool_size int                            number of tablets to keep tmclient connections open to (default 100)
       --tablet_manager_grpc_crl string                                   the server crl to use to validate server certificates when connecting
       --tablet_manager_grpc_key string                                   the key to use to connect
@@ -148,5 +176,5 @@ Usage of vtctld:
       --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
-      --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
+      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vtctld_sanitize_log_messages                                     When true, vtctld sanitizes logging.

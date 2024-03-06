@@ -17,7 +17,10 @@ limitations under the License.
 package utils
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -151,6 +154,15 @@ func Exec(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
 	return qr
 }
 
+// ExecMulti executes the given (potential multi) queries using the given connection.
+// The test fails if any of the queries produces an error
+func ExecMulti(t testing.TB, conn *mysql.Conn, query string) error {
+	t.Helper()
+	err := conn.ExecuteFetchMultiDrain(query)
+	require.NoError(t, err, "for query: "+query)
+	return err
+}
+
 // ExecCompareMySQL executes the given query against both Vitess and MySQL and compares
 // the two result set. If there is a mismatch, the difference will be printed and the
 // test will fail. If the query produces an error in either Vitess or MySQL, the test
@@ -169,7 +181,7 @@ func ExecCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string)
 
 // ExecAllowError executes the given query without failing the test if it produces
 // an error. The error is returned to the client, along with the result set.
-func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
+func ExecAllowError(t testing.TB, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
 }
@@ -191,8 +203,8 @@ func SkipIfBinaryIsBelowVersion(t *testing.T, majorVersion int, binary string) {
 	}
 }
 
-// BinaryIsAtVersion returns true if this binary is at or above the required version
-func BinaryIsAtVersion(majorVersion int, binary string) bool {
+// BinaryIsAtLeastAtVersion returns true if this binary is at or above the required version
+func BinaryIsAtLeastAtVersion(majorVersion int, binary string) bool {
 	version, err := cluster.GetMajorVersion(binary)
 	if err != nil {
 		return false
@@ -227,22 +239,23 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 
 // WaitForAuthoritative waits for a table to become authoritative
 func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*interface{}, error)) error {
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:
 			return fmt.Errorf("schema tracking didn't mark table t2 as authoritative until timeout")
 		default:
-			time.Sleep(1 * time.Second)
 			res, err := readVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]
 			if !fieldPresent {
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 			authoritativeBool, isBool := authoritative.(bool)
 			if !isBool || !authoritativeBool {
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 			return nil
@@ -250,33 +263,80 @@ func WaitForAuthoritative(t *testing.T, ks, tbl string, readVSchema func() (*int
 	}
 }
 
+// WaitForKsError waits for the ks error field to be populated and returns it.
+func WaitForKsError(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string) string {
+	var errString string
+	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]interface{}) bool {
+		ksErr, fieldPresent := keyspace["error"]
+		if !fieldPresent {
+			return false
+		}
+		var ok bool
+		errString, ok = ksErr.(string)
+		return ok
+	})
+	return errString
+}
+
+// WaitForVschemaCondition waits for the condition to be true
+func WaitForVschemaCondition(t *testing.T, vtgateProcess cluster.VtgateProcess, ks string, conditionMet func(t *testing.T, keyspace map[string]interface{}) bool) {
+	timeout := time.After(60 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("schema tracking did not met the condition within the time for keyspace: %s", ks)
+		default:
+			res, err := vtgateProcess.ReadVSchema()
+			require.NoError(t, err, res)
+			kss := convertToMap(*res)["keyspaces"]
+			ksMap := convertToMap(convertToMap(kss)[ks])
+			if conditionMet(t, ksMap) {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+// WaitForTableDeletions waits for a table to be deleted
+func WaitForTableDeletions(ctx context.Context, t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) {
+	WaitForVschemaCondition(t, vtgateProcess, ks, func(t *testing.T, keyspace map[string]interface{}) bool {
+		tablesMap := keyspace["tables"]
+		_, isPresent := convertToMap(tablesMap)[tbl]
+		return !isPresent
+	})
+}
+
 // WaitForColumn waits for a table's column to be present
-func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
-	timeout := time.After(10 * time.Second)
+func WaitForColumn(t testing.TB, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
+	timeout := time.After(60 * time.Second)
 	for {
 		select {
 		case <-timeout:
 			return fmt.Errorf("schema tracking did not find column '%s' in table '%s'", col, tbl)
 		default:
-			time.Sleep(1 * time.Second)
 			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]
 			if !fieldPresent {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			authoritativeBool, isBool := authoritative.(bool)
 			if !isBool || !authoritativeBool {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			colMap, exists := t2Map["columns"]
 			if !exists {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			colList, isSlice := colMap.([]interface{})
 			if !isSlice {
-				break
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			for _, c := range colList {
 				colDef, isMap := c.(map[string]interface{})
@@ -287,6 +347,7 @@ func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, c
 					return nil
 				}
 			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
@@ -300,7 +361,10 @@ func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
 }
 
 func convertToMap(input interface{}) map[string]interface{} {
-	output := input.(map[string]interface{})
+	output, ok := input.(map[string]interface{})
+	if !ok {
+		return make(map[string]interface{})
+	}
 	return output
 }
 
@@ -339,4 +403,60 @@ func TimeoutAction(t *testing.T, timeout time.Duration, errMsg string, action fu
 			ok = action()
 		}
 	}
+}
+
+// RunSQLs is used to run a list of SQL statements on the given tablet
+func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) error {
+	// Get Connection
+	tabletParams := getMysqlConnParam(tablet, db)
+	var timeoutDuration = time.Duration(5 * len(sqls))
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	// Run SQLs
+	for _, sql := range sqls {
+		if _, err := execute(t, conn, sql); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RunSQL is used to run a SQL statement on the given tablet
+func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sqltypes.Result, error) {
+	// Get Connection
+	tabletParams := getMysqlConnParam(tablet, db)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	// RunSQL
+	return execute(t, conn, sql)
+}
+
+// GetMySQLConn gets a MySQL connection for the given tablet
+func GetMySQLConn(tablet *cluster.Vttablet, db string) (*mysql.Conn, error) {
+	tabletParams := getMysqlConnParam(tablet, db)
+	return mysql.Connect(context.Background(), &tabletParams)
+}
+
+func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
+	t.Helper()
+	return conn.ExecuteFetch(query, 1000, true)
+}
+
+func getMysqlConnParam(tablet *cluster.Vttablet, db string) mysql.ConnParams {
+	connParams := mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
+	}
+	if db != "" {
+		connParams.DbName = db
+	}
+	return connParams
 }

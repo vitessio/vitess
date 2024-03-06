@@ -23,10 +23,9 @@ package icuregex
 
 import (
 	"math"
+	"slices"
 	"strings"
 	"unicode/utf8"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/pattern"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"
@@ -186,7 +185,7 @@ func (c *compiler) nextChar(ch *reChar) {
 			//
 			// We are in free-spacing and comments mode.
 			//  Scan through any white space and comments, until we
-			//  reach a significant character or the end of inut.
+			//  reach a significant character or the end of input.
 			for {
 				if ch.char == -1 {
 					break // End of Input
@@ -2050,7 +2049,7 @@ func (c *compiler) matchStartType() {
 			currentLen = safeIncrement(currentLen, 1)
 			atStart = false
 
-		case urxBackslashX, // Grahpeme Cluster.  Minimum is 1, max unbounded.
+		case urxBackslashX, // Grapheme Cluster.  Minimum is 1, max unbounded.
 			urxDotanyAll, // . matches one or two.
 			urxDotany,
 			urxDotanyUnix:
@@ -2699,7 +2698,7 @@ func (c *compiler) compileInterval(init opcode, loop opcode) {
 	//   Goes at end of the block being looped over, so just append to the code so far.
 	c.appendOp(loop, topOfBlock)
 
-	if (c.intervalLow&0xff000000) != 0 || (c.intervalUpper > 0 && (c.intervalUpper&0xff000000) != 0) {
+	if c.intervalLow > 0x00ffffff || (c.intervalUpper > 0 && c.intervalUpper > 0x00ffffff) {
 		c.error(NumberTooBig)
 	}
 
@@ -2894,7 +2893,7 @@ func (c *compiler) minMatchLength(start, end int) int32 {
 			urxBackslashR,
 			urxBackslashV,
 			urcOnecharI,
-			urxBackslashX, // Grahpeme Cluster.  Minimum is 1, max unbounded.
+			urxBackslashX, // Grapheme Cluster.  Minimum is 1, max unbounded.
 			urxDotanyAll,  // . matches one or two.
 			urxDotany,
 			urxDotanyUnix:
@@ -2984,7 +2983,7 @@ func (c *compiler) minMatchLength(start, end int) int32 {
 				loc++
 				op = c.out.compiledPat[loc]
 				if op.typ() == urxLaStart {
-					// The boilerplate for look-ahead includes two LA_END insturctions,
+					// The boilerplate for look-ahead includes two LA_END instructions,
 					//    Depth will be decremented by each one when it is seen.
 					depth += 2
 				}
@@ -3087,7 +3086,7 @@ func (c *compiler) maxMatchLength(start, end int) int32 {
 		//   Call the max length unbounded, and stop further checking.
 		case urxBackref, // BackRef.  Must assume that it might be a zero length match
 			urxBackrefI,
-			urxBackslashX: // Grahpeme Cluster.  Minimum is 1, max unbounded.
+			urxBackslashX: // Grapheme Cluster.  Minimum is 1, max unbounded.
 			currentLen = math.MaxInt32
 
 			// Ops that match a max of one character (possibly two 16 bit code units.)
@@ -3196,7 +3195,7 @@ func (c *compiler) maxMatchLength(start, end int) int32 {
 			}
 
 			blockLen := c.maxMatchLength(loc+4, loopEndLoc-1) // Recursive call.
-			updatedLen := int(currentLen) + int(blockLen)*maxLoopCount
+			updatedLen := int64(currentLen) + int64(blockLen)*int64(maxLoopCount)
 			if updatedLen >= math.MaxInt32 {
 				currentLen = math.MaxInt32
 				break

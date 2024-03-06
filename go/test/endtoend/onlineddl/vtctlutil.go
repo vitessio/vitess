@@ -18,19 +18,16 @@ package onlineddl
 
 import (
 	"testing"
-	"time"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/assert"
 )
 
-var throttlerConfigTimeout = 90 * time.Second
-
 // CheckCancelAllMigrations cancels all pending migrations. There is no validation for affected migrations.
-func CheckCancelAllMigrationsViaVtctl(t *testing.T, vtctlclient *cluster.VtctlClientProcess, keyspace string) {
+func CheckCancelAllMigrationsViaVtctld(t *testing.T, vtctldclient *cluster.VtctldClientProcess, keyspace string) {
 	cancelQuery := "alter vitess_migration cancel all"
 
-	_, err := vtctlclient.ApplySchemaWithOutput(keyspace, cancelQuery, cluster.VtctlClientParams{})
+	_, err := vtctldclient.ApplySchemaWithOutput(keyspace, cancelQuery, cluster.ApplySchemaParams{})
 	assert.NoError(t, err)
 }

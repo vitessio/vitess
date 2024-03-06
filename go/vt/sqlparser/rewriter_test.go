@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,8 +26,8 @@ import (
 )
 
 func BenchmarkVisitLargeExpression(b *testing.B) {
-	gen := NewGenerator(1, 5)
-	exp := gen.Expression()
+	gen := NewGenerator(rand.New(rand.NewSource(1)), 5)
+	exp := gen.Expression(ExprGeneratorConfig{})
 
 	depth := 0
 	for i := 0; i < b.N; i++ {
@@ -42,7 +43,8 @@ func BenchmarkVisitLargeExpression(b *testing.B) {
 
 func TestReplaceWorksInLaterCalls(t *testing.T) {
 	q := "select * from tbl1"
-	stmt, err := Parse(q)
+	parser := NewTestParser()
+	stmt, err := parser.Parse(q)
 	require.NoError(t, err)
 	count := 0
 	Rewrite(stmt, func(cursor *Cursor) bool {
@@ -66,7 +68,8 @@ func TestReplaceWorksInLaterCalls(t *testing.T) {
 
 func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {
 	q := "select * from tbl1"
-	stmt, err := Parse(q)
+	parser := NewTestParser()
+	stmt, err := parser.Parse(q)
 	require.NoError(t, err)
 	count := 0
 	Rewrite(stmt, func(cursor *Cursor) bool {
@@ -93,7 +96,8 @@ func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {
 }
 
 func TestChangeValueTypeGivesError(t *testing.T) {
-	parse, err := Parse("select * from a join b on a.id = b.id")
+	parser := NewTestParser()
+	parse, err := parser.Parse("select * from a join b on a.id = b.id")
 	require.NoError(t, err)
 
 	defer func() {

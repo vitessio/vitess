@@ -20,14 +20,14 @@ source ../common/env.sh
 vtctldclient ApplyVSchema --vschema-file main_vschema_sharded.json main || fail "Failed to apply vschema for the sharded main keyspace"
 
 # optional: create the schema needed for lookup vindex
-#vtctlclient ApplySchema --sql-file create_lookup_schema.sql main
+#vtctldclient ApplySchema --sql-file create_lookup_schema.sql main
 
 # create the lookup vindex
-vtctlclient CreateLookupVindex -- --tablet_types=PRIMARY main "$(cat lookup_vindex.json)" || fail "Failed to create lookup vindex in main keyspace"
+vtctldclient LookupVindex --name customer_region_lookup --table-keyspace main create --keyspace main --type consistent_lookup_unique --table-owner customer --table-owner-columns=id --tablet-types=PRIMARY || fail "Failed to create lookup vindex in main keyspace"
 
 # we have to wait for replication to catch up
 # Can see on vttablet status page Vreplication that copy is complete
 sleep 5
 
 # externalize vindex
-vtctlclient ExternalizeVindex main.customer_region_lookup || fail "Failed to externalize customer_region_lookup vindex in the main keyspace"
+vtctldclient LookupVindex --name customer_region_lookup --table-keyspace main externalize --keyspace main || fail "Failed to externalize customer_region_lookup vindex in the main keyspace"

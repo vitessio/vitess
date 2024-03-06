@@ -19,9 +19,9 @@ package servenv
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"math"
 	"net"
+	"strconv"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -72,6 +72,9 @@ var (
 	// gRPCPort is the port to listen on for gRPC. If zero, don't listen.
 	gRPCPort int
 
+	// gRPCBindAddress is the address to bind to for gRPC. If empty, bind to all addresses.
+	gRPCBindAddress string
+
 	// gRPCMaxConnectionAge is the maximum age of a client connection, before GoAway is sent.
 	// This is useful for L4 loadbalancing to ensure rebalancing after scaling.
 	gRPCMaxConnectionAge = time.Duration(math.MaxInt64)
@@ -96,6 +99,9 @@ var (
 	// even when there are no active streams (RPCs). If false, and client sends ping when
 	// there are no active streams, server will send GOAWAY and close the connection.
 	gRPCKeepAliveEnforcementPolicyPermitWithoutStream bool
+
+	gRPCKeepaliveTime    = 10 * time.Second
+	gRPCKeepaliveTimeout = 10 * time.Second
 )
 
 // TLS variables.
@@ -124,6 +130,7 @@ var (
 func RegisterGRPCServerFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
 		fs.IntVar(&gRPCPort, "grpc_port", gRPCPort, "Port to listen on for gRPC calls. If zero, do not listen.")
+		fs.StringVar(&gRPCBindAddress, "grpc_bind_address", gRPCBindAddress, "Bind address for gRPC calls. If empty, listen on all addresses.")
 		fs.DurationVar(&gRPCMaxConnectionAge, "grpc_max_connection_age", gRPCMaxConnectionAge, "Maximum age of a client connection before GoAway is sent.")
 		fs.DurationVar(&gRPCMaxConnectionAgeGrace, "grpc_max_connection_age_grace", gRPCMaxConnectionAgeGrace, "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
 		fs.IntVar(&gRPCInitialConnWindowSize, "grpc_server_initial_conn_window_size", gRPCInitialConnWindowSize, "gRPC server initial connection window size")
@@ -137,6 +144,8 @@ func RegisterGRPCServerFlags() {
 		fs.StringVar(&gRPCCRL, "grpc_crl", gRPCCRL, "path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake")
 		fs.BoolVar(&gRPCEnableOptionalTLS, "grpc_enable_optional_tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
 		fs.StringVar(&gRPCServerCA, "grpc_server_ca", gRPCServerCA, "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
+		fs.DurationVar(&gRPCKeepaliveTime, "grpc_server_keepalive_time", gRPCKeepaliveTime, "After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive.")
+		fs.DurationVar(&gRPCKeepaliveTimeout, "grpc_server_keepalive_timeout", gRPCKeepaliveTimeout, "After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
 	})
 }
 
@@ -229,6 +238,8 @@ func createGRPCServer() {
 	ka := keepalive.ServerParameters{
 		MaxConnectionAge:      gRPCMaxConnectionAge,
 		MaxConnectionAgeGrace: gRPCMaxConnectionAgeGrace,
+		Time:                  gRPCKeepaliveTime,
+		Timeout:               gRPCKeepaliveTimeout,
 	}
 	opts = append(opts, grpc.KeepaliveParams(ka))
 
@@ -284,7 +295,7 @@ func serveGRPC() {
 
 	// listen on the port
 	log.Infof("Listening for gRPC calls on port %v", gRPCPort)
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", gRPCPort))
+	listener, err := net.Listen("tcp", net.JoinHostPort(gRPCBindAddress, strconv.Itoa(gRPCPort)))
 	if err != nil {
 		log.Exitf("Cannot listen on port %v for gRPC: %v", gRPCPort, err)
 	}

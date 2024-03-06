@@ -8,21 +8,18 @@ import (
 	"strings"
 	"testing"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	"vitess.io/vitess/go/vt/proto/vschema"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo"
-
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"github.com/stretchr/testify/require"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 var _ VSchemaOperator = (*fakeVSchemaOperator)(nil)
@@ -31,11 +28,11 @@ type fakeVSchemaOperator struct {
 	vschema *vindexes.VSchema
 }
 
-func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschema.SrvVSchema {
+func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 	panic("implement me")
 }
 
-func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschema.SrvVSchema) error {
+func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
 	panic("implement me")
 }
 
@@ -187,9 +184,10 @@ func TestDestinationKeyspace(t *testing.T) {
 		expectedError: errNoKeyspace.Error(),
 	}}
 
+	r, _, _, _, _ := createExecutorEnv(t)
 	for i, tc := range tests {
 		t.Run(strconv.Itoa(i)+tc.targetString, func(t *testing.T) {
-			impl, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false, querypb.ExecuteOptions_Gen4)
+			impl, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false, querypb.ExecuteOptions_Gen4)
 			impl.vschema = tc.vschema
 			dest, keyspace, tabletType, err := impl.TargetDestination(tc.qualifier)
 			if tc.expectedError == "" {
@@ -245,9 +243,10 @@ func TestSetTarget(t *testing.T) {
 		expectedError: "can't execute the given command because you have an active transaction",
 	}}
 
+	r, _, _, _, _ := createExecutorEnv(t)
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
-			vc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false, querypb.ExecuteOptions_Gen4)
+			vc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false, querypb.ExecuteOptions_Gen4)
 			vc.vschema = tc.vschema
 			err := vc.SetTarget(tc.targetString)
 			if tc.expectedError == "" {
@@ -283,13 +282,22 @@ func TestKeyForPlan(t *testing.T) {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1[deadbeef]",
 		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+KsIDsResolved:80-+Query:SELECT 1",
+	}, {
+		vschema:               vschemaWith1KS,
+		targetString:          "",
+		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
+	}, {
+		vschema:               vschemaWith1KS,
+		targetString:          "ks1@replica",
+		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
 	}}
 
+	r, _, _, _, _ := createExecutorEnv(t)
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
 			ss := NewSafeSession(&vtgatepb.Session{InTransaction: false})
 			ss.SetTargetString(tc.targetString)
-			vc, err := newVCursorImpl(ss, sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
+			vc, err := newVCursorImpl(ss, sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
 			require.NoError(t, err)
 			vc.vschema = tc.vschema
 
@@ -311,7 +319,8 @@ func TestFirstSortedKeyspace(t *testing.T) {
 			ks3Schema.Keyspace.Name: ks3Schema,
 		}}
 
-	vc, err := newVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
+	r, _, _, _, _ := createExecutorEnv(t)
+	vc, err := newVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
 	require.NoError(t, err)
 	ks, err := vc.FirstSortedKeyspace()
 	require.NoError(t, err)

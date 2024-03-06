@@ -22,7 +22,10 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/logutil"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestFindReplicationPosition(t *testing.T) {
@@ -114,4 +117,11 @@ func TestStripeRoundTrip(t *testing.T) {
 	test(1000, 30)
 	// Test block size and stripe count that don't evenly divide data size.
 	test(6000, 7)
+}
+
+func TestShouldDrainForBackupXtrabackup(t *testing.T) {
+	be := &XtrabackupEngine{}
+
+	assert.False(t, be.ShouldDrainForBackup(nil))
+	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
 }

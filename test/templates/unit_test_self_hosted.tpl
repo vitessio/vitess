@@ -34,7 +34,7 @@ jobs:
 
       - name: Check for changes in relevant files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: frouioui/paths-filter@main
+        uses: dorny/paths-filter@v3.0.1
         id: changes
         with:
           token: ''
@@ -59,7 +59,13 @@ jobs:
       - name: Run test
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
         timeout-minutes: 30
-        run: docker run --name "{{.ImageName}}_$GITHUB_SHA" {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'NOVTADMINBUILD=1 make unit_test'
+        run: |
+          set -exo pipefail
+          # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+          # which musn't be more than 107 characters long.
+          export VTDATAROOT="/tmp/"
+
+          docker run --name "{{.ImageName}}_$GITHUB_SHA" {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'NOVTADMINBUILD=1 make unit_test'
 
       - name: Print Volume Used
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'

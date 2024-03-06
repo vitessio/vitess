@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 
 	"github.com/buger/jsonparser"
@@ -127,7 +128,7 @@ func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expecte
 }
 
 // PanicHandler handles the panic in the testcase.
-func PanicHandler(t *testing.T) {
+func PanicHandler(t testing.TB) {
 	err := recover()
 	if t == nil {
 		return
@@ -137,7 +138,7 @@ func PanicHandler(t *testing.T) {
 
 // ListBackups Lists back preset in shard
 func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, error) {
-	output, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("ListBackups", shardKsName)
+	output, err := cluster.VtctldClientProcess.ExecuteCommandWithOutput("GetBackups", shardKsName)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +165,7 @@ func (cluster LocalProcessCluster) RemoveAllBackups(t *testing.T, shardKsName st
 	backups, err := cluster.ListBackups(shardKsName)
 	require.Nil(t, err)
 	for _, backup := range backups {
-		cluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
+		cluster.VtctldClientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
 	}
 }
 
@@ -223,26 +224,53 @@ func filterResultWhenRunsForCoverage(input string) string {
 	return result
 }
 
-// WaitForReplicationPos will wait for replication position to catch-up
-func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, hostname string, timeout float64) {
-	replicationPosA, _ := GetPrimaryPosition(t, *tabletA, hostname)
-	for {
-		replicationPosB, _ := GetPrimaryPosition(t, *tabletB, hostname)
-		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
-			break
-		}
-		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
-		waitStep(t, msg, timeout, 0.01)
-	}
+func ValidateReplicationIsHealthy(t *testing.T, tablet *Vttablet) bool {
+	query := "show replica status"
+	rs, err := tablet.VttabletProcess.QueryTablet(query, "", true)
+	assert.NoError(t, err)
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+
+	ioRunning := row.AsString("Replica_IO_Running", "")
+	require.NotEmpty(t, ioRunning)
+	ioHealthy := assert.Equalf(t, "Yes", ioRunning, "Replication is broken. Replication status: %v", row)
+	sqlRunning := row.AsString("Replica_SQL_Running", "")
+	require.NotEmpty(t, sqlRunning)
+	sqlHealthy := assert.Equalf(t, "Yes", sqlRunning, "Replication is broken. Replication status: %v", row)
+
+	return ioHealthy && sqlHealthy
 }
 
-func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) float64 {
-	timeout = timeout - sleepTime
-	if timeout < 0.0 {
-		t.Errorf("timeout waiting for condition '%s'", msg)
+// WaitForReplicationPos will wait for replication position to catch-up
+func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, validateReplication bool, timeout time.Duration) {
+	hostname := "localhost"
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	replicationPosA, _ := GetPrimaryPosition(t, *tabletA, hostname)
+	for {
+		if validateReplication {
+			if !ValidateReplicationIsHealthy(t, tabletB) {
+				assert.FailNowf(t, "Replication broken on tablet %v. Will not wait for position", tabletB.Alias)
+			}
+			if t.Failed() {
+				return
+			}
+		}
+		replicationPosB, _ := GetPrimaryPosition(t, *tabletB, hostname)
+		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
+			return
+		}
+		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
+		select {
+		case <-ctx.Done():
+			assert.FailNowf(t, "Timeout waiting for condition '%s'", msg)
+			return
+		case <-ticker.C:
+		}
 	}
-	time.Sleep(time.Duration(sleepTime) * time.Second)
-	return timeout
 }
 
 func positionAtLeast(t *testing.T, tablet *Vttablet, a string, b string) bool {
@@ -470,4 +498,48 @@ func DialVTGate(ctx context.Context, name, addr, username, password string) (*vt
 	dialerName := name
 	vtgateconn.RegisterDialer(dialerName, dialerFunc)
 	return vtgateconn.DialProtocol(ctx, dialerName, addr)
+}
+
+// PrintFiles prints the files that are asked for. If no file is specified, all the files are printed.
+func PrintFiles(t *testing.T, dir string, files ...string) {
+	var directories []string
+	directories = append(directories, dir)
+
+	// Go over the remaining directories to check
+	for len(directories) > 0 {
+		// Get one of the directories, and read its contents.
+		dir = directories[0]
+		directories = directories[1:]
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			log.Errorf("Couldn't read directory - %v", dir)
+			continue
+		}
+		for _, entry := range entries {
+			name := path.Join(dir, entry.Name())
+			// For a directory, we add it to our list of directories to check.
+			if entry.IsDir() {
+				directories = append(directories, name)
+				continue
+			}
+			// Check if this file should be printed or not.
+			if len(files) != 0 {
+				fileFound := false
+				for _, file := range files {
+					if strings.EqualFold(entry.Name(), file) {
+						fileFound = true
+						break
+					}
+				}
+				if !fileFound {
+					continue
+				}
+			}
+			// Read and print the file.
+			res, err := os.ReadFile(name)
+			require.NoError(t, err)
+			log.Errorf("READING FILE - %v", name)
+			log.Errorf("%v", string(res))
+		}
+	}
 }

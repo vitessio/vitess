@@ -17,20 +17,16 @@ limitations under the License.
 package operators
 
 import (
+	"maps"
+	"slices"
 	"strings"
 
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
-
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -44,15 +40,16 @@ type InfoSchemaRouting struct {
 	Table               *QueryTable
 }
 
-func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.SysTableTableSchema = nil
 	for _, expr := range isr.SysTableTableSchema {
 		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
 			Collation:     collations.SystemCollation.Collation,
 			ResolveColumn: NotImplementedSchemaInfoResolver,
+			Environment:   ctx.VSchema.Environment(),
 		})
 		if err != nil {
-			return err
+			panic(err)
 		}
 		rp.SysTableTableSchema = append(rp.SysTableTableSchema, eexpr)
 	}
@@ -62,14 +59,14 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext
 		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
 			Collation:     collations.SystemCollation.Collation,
 			ResolveColumn: NotImplementedSchemaInfoResolver,
+			Environment:   ctx.VSchema.Environment(),
 		})
 		if err != nil {
-			return err
+			panic(err)
 		}
 
 		rp.SysTableTableName[k] = eexpr
 	}
-	return nil
 }
 
 func (isr *InfoSchemaRouting) Clone() Routing {
@@ -80,10 +77,10 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 	}
 }
 
-func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
-	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(expr, ctx.ReservedVars)
+func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
+	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(ctx, expr)
 	if out == nil {
-		return isr, nil
+		return isr
 	}
 
 	if isr.SysTableTableName == nil {
@@ -95,14 +92,14 @@ func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContex
 			if sqlparser.Equals.Expr(out, s) {
 				// we already have this expression in the list
 				// stating it again does not add value
-				return isr, nil
+				return isr
 			}
 		}
 		isr.SysTableTableSchema = append(isr.SysTableTableSchema, out)
 	} else {
 		isr.SysTableTableName[bvName] = out
 	}
-	return isr, nil
+	return isr
 }
 
 func (isr *InfoSchemaRouting) Cost() int {
@@ -119,13 +116,13 @@ func (isr *InfoSchemaRouting) Keyspace() *vindexes.Keyspace {
 	return nil
 }
 
-func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, sqlparser.Expr) {
+func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlparser.Expr) (bool, string, sqlparser.Expr) {
 	cmp, ok := in.(*sqlparser.ComparisonExpr)
 	if !ok || cmp.Operator != sqlparser.EqualOp {
 		return false, "", nil
 	}
 
-	isSchemaName, col := isTableOrSchemaRoutable(cmp)
+	isSchemaName, col := isTableOrSchemaRoutable(cmp, ctx.VSchema.Environment().MySQLVersion())
 	rhs := cmp.Right
 	if col == nil || !shouldRewrite(rhs) {
 		return false, "", nil
@@ -136,6 +133,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 	_, err := evalengine.Translate(rhs, &evalengine.Config{
 		Collation:     collations.SystemCollation.Collation,
 		ResolveColumn: NotImplementedSchemaInfoResolver,
+		Environment:   ctx.VSchema.Environment(),
 	})
 	if err != nil {
 		// if we can't translate this to an evalengine expression,
@@ -147,7 +145,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 	if isSchemaName {
 		name = sqltypes.BvSchemaName
 	} else {
-		name = reservedVars.ReserveColName(col)
+		name = ctx.GetReservedArgumentFor(col)
 	}
 	cmp.Right = sqlparser.NewTypedArgument(name, sqltypes.VarChar)
 	return isSchemaName, name, rhs
@@ -156,14 +154,14 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 // isTableOrSchemaRoutable searches for a comparison where one side is a table or schema name column.
 // if it finds the correct column name being used,
 // it also makes sure that the LHS of the comparison contains the column, and the RHS the value sought after
-func isTableOrSchemaRoutable(cmp *sqlparser.ComparisonExpr) (
+func isTableOrSchemaRoutable(cmp *sqlparser.ComparisonExpr, version string) (
 	isSchema bool, // tells if we are dealing with a table or a schema name comparator
 	col *sqlparser.ColName, // which is the colName we are comparing against
 ) {
-	if col, schema, table := IsTableSchemaOrName(cmp.Left); schema || table {
+	if col, schema, table := IsTableSchemaOrName(cmp.Left, version); schema || table {
 		return schema, col
 	}
-	if col, schema, table := IsTableSchemaOrName(cmp.Right); schema || table {
+	if col, schema, table := IsTableSchemaOrName(cmp.Right, version); schema || table {
 		// to make the rest of the code easier, we shuffle these around so the ColName is always on the LHS
 		cmp.Right, cmp.Left = cmp.Left, cmp.Right
 		return schema, col
@@ -172,7 +170,7 @@ func isTableOrSchemaRoutable(cmp *sqlparser.ComparisonExpr) (
 	return false, nil
 }
 
-func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (ops.Operator, error) {
+func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) *Route {
 	// we have already checked type earlier, so this should always be safe
 	isrA := routingA.(*InfoSchemaRouting)
 	isrB := routingB.(*InfoSchemaRouting)
@@ -182,33 +180,32 @@ func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, 
 	switch {
 	// if either side has no predicates to help us route, we can merge them
 	case emptyA:
-		return m.merge(lhsRoute, rhsRoute, isrB)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrB)
 	case emptyB:
-		return m.merge(lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// if we have no schema predicates on either side, we can merge if the table info is the same
 	case len(isrA.SysTableTableSchema) == 0 && len(isrB.SysTableTableSchema) == 0:
 		for k, expr := range isrB.SysTableTableName {
 			if e, found := isrA.SysTableTableName[k]; found && !sqlparser.Equals.Expr(expr, e) {
 				// schema names are the same, but we have contradicting table names, so we give up
-				return nil, nil
+				return nil
 			}
 			isrA.SysTableTableName[k] = expr
 		}
-		return m.merge(lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// if both sides have the same schema predicate, we can safely merge them
 	case sqlparser.Equals.Exprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
 		for k, expr := range isrB.SysTableTableName {
 			isrA.SysTableTableName[k] = expr
 		}
-		return m.merge(lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// give up
 	default:
-		return nil, nil
+		return nil
 	}
-
 }
 
 var (
@@ -290,16 +287,15 @@ func shouldRewrite(e sqlparser.Expr) bool {
 	return true
 }
 
-func IsTableSchemaOrName(e sqlparser.Expr) (col *sqlparser.ColName, isTableSchema bool, isTableName bool) {
+func IsTableSchemaOrName(e sqlparser.Expr, version string) (col *sqlparser.ColName, isTableSchema bool, isTableName bool) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
 		return nil, false, false
 	}
-	return col, isDbNameCol(col), isTableNameCol(col)
+	return col, isDbNameCol(col, version), isTableNameCol(col)
 }
 
-func isDbNameCol(col *sqlparser.ColName) bool {
-	version := servenv.MySQLServerVersion()
+func isDbNameCol(col *sqlparser.ColName, version string) bool {
 	var schemaColumns map[string]any
 	if strings.HasPrefix(version, "5.7") {
 		schemaColumns = schemaColumns57

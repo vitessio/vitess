@@ -28,6 +28,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+const inputName = "InputName"
+
 // PrimitiveDescription is used to create a serializable representation of the Primitive tree
 // Using this structure, all primitives can share json marshalling code, which gives us an uniform output
 type PrimitiveDescription struct {
@@ -41,7 +43,9 @@ type PrimitiveDescription struct {
 	// this is only used in conjunction with TargetDestination
 	TargetTabletType topodatapb.TabletType
 	Other            map[string]any
-	Inputs           []PrimitiveDescription
+
+	InputName string
+	Inputs    []PrimitiveDescription
 }
 
 // MarshalJSON serializes the PlanDescription into a JSON representation.
@@ -51,16 +55,24 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	buf := &bytes.Buffer{}
 	buf.WriteString("{")
 
-	if err := marshalAdd("", buf, "OperatorType", pd.OperatorType); err != nil {
+	prepend := ""
+	if pd.InputName != "" {
+		if err := marshalAdd(prepend, buf, "InputName", pd.InputName); err != nil {
+			return nil, err
+		}
+		prepend = ","
+	}
+	if err := marshalAdd(prepend, buf, "OperatorType", pd.OperatorType); err != nil {
 		return nil, err
 	}
+	prepend = ","
 	if pd.Variant != "" {
-		if err := marshalAdd(",", buf, "Variant", pd.Variant); err != nil {
+		if err := marshalAdd(prepend, buf, "Variant", pd.Variant); err != nil {
 			return nil, err
 		}
 	}
 	if pd.Keyspace != nil {
-		if err := marshalAdd(",", buf, "Keyspace", pd.Keyspace); err != nil {
+		if err := marshalAdd(prepend, buf, "Keyspace", pd.Keyspace); err != nil {
 			return nil, err
 		}
 	}
@@ -68,12 +80,12 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 		s := pd.TargetDestination.String()
 		dest := s[11:] // TODO: All these start with Destination. We should fix that instead if trimming it out here
 
-		if err := marshalAdd(",", buf, "TargetDestination", dest); err != nil {
+		if err := marshalAdd(prepend, buf, "TargetDestination", dest); err != nil {
 			return nil, err
 		}
 	}
 	if pd.TargetTabletType != topodatapb.TabletType_UNKNOWN {
-		if err := marshalAdd(",", buf, "TargetTabletType", pd.TargetTabletType.String()); err != nil {
+		if err := marshalAdd(prepend, buf, "TargetTabletType", pd.TargetTabletType.String()); err != nil {
 			return nil, err
 		}
 	}
@@ -83,7 +95,7 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	}
 
 	if len(pd.Inputs) > 0 {
-		if err := marshalAdd(",", buf, "Inputs", pd.Inputs); err != nil {
+		if err := marshalAdd(prepend, buf, "Inputs", pd.Inputs); err != nil {
 			return nil, err
 		}
 	}
@@ -172,11 +184,25 @@ func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj any) error {
 func PrimitiveToPlanDescription(in Primitive) PrimitiveDescription {
 	this := in.description()
 
-	for _, input := range in.Inputs() {
-		this.Inputs = append(this.Inputs, PrimitiveToPlanDescription(input))
+	inputs, infos := in.Inputs()
+	for idx, input := range inputs {
+		pd := PrimitiveToPlanDescription(input)
+		if infos != nil {
+			for k, v := range infos[idx] {
+				if k == inputName {
+					pd.InputName = v.(string)
+					continue
+				}
+				if pd.Other == nil {
+					pd.Other = map[string]any{}
+				}
+				pd.Other[k] = v
+			}
+		}
+		this.Inputs = append(this.Inputs, pd)
 	}
 
-	if len(in.Inputs()) == 0 {
+	if len(inputs) == 0 {
 		this.Inputs = []PrimitiveDescription{}
 	}
 

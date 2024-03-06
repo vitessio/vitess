@@ -23,10 +23,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/spf13/pflag"
 
@@ -63,16 +61,8 @@ func SetRedactDebugUIQueries(newRedactDebugUIQueries bool) {
 	redactDebugUIQueries = newRedactDebugUIQueries
 }
 
-func GetQueryLogFilterTag() string {
-	return queryLogFilterTag
-}
-
 func SetQueryLogFilterTag(newQueryLogFilterTag string) {
 	queryLogFilterTag = newQueryLogFilterTag
-}
-
-func GetQueryLogRowThreshold() uint64 {
-	return queryLogRowThreshold
 }
 
 func SetQueryLogRowThreshold(newQueryLogRowThreshold uint64) {
@@ -215,7 +205,7 @@ func (logger *StreamLogger[T]) ServeLogs(url string, logf LogFormatter) {
 // it.
 func (logger *StreamLogger[T]) LogToFile(path string, logf LogFormatter) (chan T, error) {
 	rotateChan := make(chan os.Signal, 1)
-	signal.Notify(rotateChan, syscall.SIGUSR2)
+	setupRotate(rotateChan)
 
 	logChan := logger.Subscribe("FileLog")
 	formatParams := map[string][]string{"full": {}}
@@ -262,18 +252,11 @@ func GetFormatter[T any](logger *StreamLogger[T]) LogFormatter {
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
 func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64) bool {
-	if queryLogRowThreshold > maxUint64(rowsAffected, rowsReturned) && queryLogFilterTag == "" {
+	if queryLogRowThreshold > max(rowsAffected, rowsReturned) && queryLogFilterTag == "" {
 		return false
 	}
 	if queryLogFilterTag != "" {
 		return strings.Contains(sql, queryLogFilterTag)
 	}
 	return true
-}
-
-func maxUint64(a, b uint64) uint64 {
-	if a < b {
-		return b
-	}
-	return a
 }

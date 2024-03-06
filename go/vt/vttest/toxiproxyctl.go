@@ -63,22 +63,16 @@ func NewToxiproxyctl(binary string, apiPort, mysqlPort int, mysqlctl *Mysqlctl, 
 
 	// The original initFile does not have any users who can access through TCP/IP connection.
 	// Here we update the init file to create the user.
-	// We're using IPv6 localhost because that's what toxiproxy uses by default.
-	initDb, _ := os.ReadFile(mysqlctl.InitFile)
 	createUserCmd := fmt.Sprintf(`
 		# Admin user for TCP/IP connection with all privileges.
-		CREATE USER '%s'@'::1';
-		GRANT ALL ON *.* TO '%s'@'::1';
-		GRANT GRANT OPTION ON *.* TO '%s'@'::1';
+		CREATE USER '%s'@'127.0.0.1';
+		GRANT ALL ON *.* TO '%s'@'127.0.0.1';
+		GRANT GRANT OPTION ON *.* TO '%s'@'127.0.0.1';
 	`, dbaUser, dbaUser, dbaUser)
-	sql, err := getInitDBSQL(string(initDb), createUserCmd)
+	newInitFile := path.Join(mysqlctl.Directory, "init_db_toxiproxyctl.sql")
+	err := WriteInitDBFile(mysqlctl.InitFile, createUserCmd, newInitFile)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to get a modified init db sql")
-	}
-	newInitFile := path.Join(mysqlctl.Directory, "init_db_toxiproxyctl.sql")
-	err = os.WriteFile(newInitFile, []byte(sql), 0600)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "failed to write a modified init db file")
 	}
 	mysqlctl.InitFile = newInitFile
 
@@ -143,11 +137,11 @@ func (ctl *Toxiproxyctl) run() error {
 		// Wait for toxiproxy to start
 		time.Sleep(1 * time.Second)
 
-		toxiClient := toxiproxy.NewClient("localhost:" + fmt.Sprintf("%d", ctl.apiPort))
+		toxiClient := toxiproxy.NewClient("127.0.0.1:" + fmt.Sprintf("%d", ctl.apiPort))
 		proxy, err := toxiClient.CreateProxy(
 			"mysql",
-			"localhost:"+fmt.Sprintf("%d", ctl.port),
-			"localhost:"+fmt.Sprintf("%d", ctl.mysqlctl.Port),
+			"127.0.0.1:"+fmt.Sprintf("%d", ctl.port),
+			"127.0.0.1:"+fmt.Sprintf("%d", ctl.mysqlctl.Port),
 		)
 		if err == nil {
 			ctl.proxy = proxy
@@ -206,7 +200,7 @@ func (ctl *Toxiproxyctl) Params(dbname string) mysql.ConnParams {
 	params := ctl.mysqlctl.Params(dbname)
 
 	params.UnixSocket = ""
-	params.Host = "localhost"
+	params.Host = "127.0.0.1"
 	params.Port = ctl.port
 	params.Uname = dbaUser
 	return params
@@ -234,6 +228,20 @@ func (ctl *Toxiproxyctl) UpdateTimeoutToxicity(toxicity float32) error {
 func (ctl *Toxiproxyctl) RemoveTimeoutToxic() error {
 	log.Info("Removing timeout toxic")
 	return ctl.proxy.RemoveToxic("my-timeout")
+}
+
+// WriteInitDBFile is a helper function that writes a modified init_db.sql file with custom SQL statements.
+func WriteInitDBFile(initFile, customSQL, newInitFile string) error {
+	initDb, _ := os.ReadFile(initFile)
+	sql, err := getInitDBSQL(string(initDb), customSQL)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to get a modified init db sql")
+	}
+	err = os.WriteFile(newInitFile, []byte(sql), 0600)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to write a modified init db file")
+	}
+	return nil
 }
 
 // getInitDBSQL is a helper function that retrieves the modified contents of the init_db.sql file with custom SQL statements.

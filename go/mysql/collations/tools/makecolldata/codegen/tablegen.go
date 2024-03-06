@@ -24,7 +24,6 @@ import (
 	"log"
 	"math/bits"
 	"os"
-	"reflect"
 
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
@@ -91,7 +90,6 @@ func (pg *EmbedPageGenerator) WritePage16(g *Generator, varname string, values [
 
 func (pg *EmbedPageGenerator) WriteTrailer(g *Generator, embedfile string) {
 	unsafe := Package("unsafe")
-	reflect := Package("reflect")
 	g.UsePackage("embed")
 
 	g.P()
@@ -99,7 +97,7 @@ func (pg *EmbedPageGenerator) WriteTrailer(g *Generator, embedfile string) {
 	g.P("var weightsUCA_embed_data string")
 	g.P()
 	g.P("func weightsUCA_embed(pos, length int) []uint16 {")
-	g.P("return (*[0x7fff0000]uint16)(", unsafe, ".Pointer((*", reflect, ".StringHeader)(", unsafe, ".Pointer(&weightsUCA_embed_data)).Data))[pos:pos+length]")
+	g.P("return (*[0x7fff0000]uint16)(", unsafe, ".Pointer(", unsafe, ".StringData(weightsUCA_embed_data)))[pos:pos+length]")
 	g.P("}")
 }
 
@@ -126,21 +124,10 @@ type entry struct {
 	weights []uint16
 }
 
-func (e *entry) adjustHangulWeights(tb *TableGenerator, jamos []rune) {
-	for _, jamo := range jamos {
-		_, entry := tb.entryForCodepoint(jamo)
-		e.weights = append(e.weights, entry.weights[0], entry.weights[1], entry.weights[2]+1)
-	}
-}
-
 type page struct {
 	n          int
 	entryCount int
 	entries    [uca.CodepointsPerPage]entry
-}
-
-func (p *page) equals(other *page) bool {
-	return reflect.DeepEqual(p, other)
 }
 
 func (p *page) name(uca string) string {
@@ -237,20 +224,6 @@ func (tg *TableGenerator) entryForCodepoint(codepoint rune) (*page, *entry) {
 	return page, entry
 }
 
-func (tg *TableGenerator) Add900(codepoint rune, rhs [][3]uint16) {
-	page, entry := tg.entryForCodepoint(codepoint)
-	page.entryCount++
-
-	for i, weights := range rhs {
-		if i >= uca.MaxCollationElementsPerCodepoint {
-			break
-		}
-		for _, we := range weights {
-			entry.weights = append(entry.weights, we)
-		}
-	}
-}
-
 func (tg *TableGenerator) Add(codepoint rune, weights []uint16) {
 	page, entry := tg.entryForCodepoint(codepoint)
 	page.entryCount++
@@ -259,22 +232,6 @@ func (tg *TableGenerator) Add(codepoint rune, weights []uint16) {
 		panic("duplicate codepoint inserted")
 	}
 	entry.weights = append(entry.weights, weights...)
-}
-
-func (tg *TableGenerator) AddFromAllkeys(lhs []rune, rhs [][]int, vars []int) {
-	if len(lhs) > 1 || lhs[0] > tg.maxChar {
-		// TODO: support contractions
-		return
-	}
-
-	var weights [][3]uint16
-	for _, we := range rhs {
-		if len(we) != 3 {
-			panic("non-triplet weight in allkeys.txt")
-		}
-		weights = append(weights, [3]uint16{uint16(we[0]), uint16(we[1]), uint16(we[2])})
-	}
-	tg.Add900(lhs[0], weights)
 }
 
 func (tg *TableGenerator) writePage(g *Generator, p *page, layout uca.Layout) string {

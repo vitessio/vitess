@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -152,16 +153,28 @@ func (dc *fakeDBClient) Rollback() error {
 func (dc *fakeDBClient) Close() {
 }
 
-func (dc *fakeDBClient) id() string {
-	return fmt.Sprintf("FakeDBClient(%s)", dc.name)
-}
-
 // ExecuteFetch is part of the DBClient interface
 func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
 	qr, err := dc.executeFetch(query, maxrows)
 	return qr, err
+}
+
+func (dc *fakeDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(query)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*sqltypes.Result, 0, len(queries))
+	for _, query := range queries {
+		qr, err := dc.executeFetch(query, maxrows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, qr)
+	}
+	return results, nil
 }
 
 // ExecuteFetch is part of the DBClient interface

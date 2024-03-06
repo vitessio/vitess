@@ -41,9 +41,10 @@ func TestRates(t *testing.T) {
 		return now
 	}
 
-	clear()
+	clearStats()
 	c := NewCountersWithSingleLabel("rcounter1", "rcounter help", "label")
 	r := NewRates("rates1", c, 3, -1*time.Second)
+	defer r.Stop()
 	r.snapshot()
 	now = now.Add(epsilon)
 	c.Add("tag1", 0)
@@ -89,9 +90,10 @@ func TestRatesConsistency(t *testing.T) {
 	// This tests the following invariant: in the time window
 	// covered by rates, the sum of the rates reported must be
 	// equal to the count reported by the counter.
-	clear()
+	clearStats()
 	c := NewCountersWithSingleLabel("rcounter4", "rcounter4 help", "label")
 	r := NewRates("rates4", c, 100, -1*time.Second)
+	defer r.Stop()
 	r.snapshot()
 
 	now = now.Add(epsilon)
@@ -122,17 +124,18 @@ func TestRatesConsistency(t *testing.T) {
 }
 
 func TestRatesHook(t *testing.T) {
-	clear()
+	clearStats()
 	c := NewCountersWithSingleLabel("rcounter2", "rcounter2 help", "label")
 	var gotname string
 	var gotv *Rates
-	clear()
+	clearStats()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Rates)
 	})
 
 	v := NewRates("rates2", c, 2, 10*time.Second)
+	defer v.Stop()
 	if gotname != "rates2" {
 		t.Errorf("want rates2, got %s", gotname)
 	}

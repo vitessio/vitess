@@ -34,7 +34,6 @@ var ucaseOnce sync.Once
 var ucase struct {
 	trie       *utrie.UTrie2
 	exceptions []uint16
-	unfold     []uint16
 }
 
 func trie() *utrie.UTrie2 {
@@ -45,11 +44,6 @@ func trie() *utrie.UTrie2 {
 func exceptions() []uint16 {
 	loadUCase()
 	return ucase.exceptions
-}
-
-func unfold() []uint16 {
-	loadUCase()
-	return ucase.unfold
 }
 
 func loadUCase() {
@@ -101,9 +95,6 @@ func readData(bytes *udata.Bytes) error {
 
 	if n := indexes[ixExcLength]; n > 0 {
 		ucase.exceptions = bytes.Uint16Slice(n)
-	}
-	if n := indexes[ixUnfoldLength]; n > 0 {
-		ucase.unfold = bytes.Uint16Slice(n)
 	}
 
 	return nil

@@ -55,11 +55,12 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table vdiff_order (order_id varchar(50) collate utf8mb4_unicode_ci not null, primary key (order_id), key (order_id)) charset=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
-create table json_tbl (id int, j1 json, j2 json, primary key(id));
+create table json_tbl (id int, j1 json, j2 json, j3 json not null, primary key(id));
 create table geom_tbl (id int, g geometry, p point, ls linestring, pg polygon, mp multipoint, mls multilinestring, mpg multipolygon, gc geometrycollection, primary key(id));
 create table  ` + "`blüb_tbl`" + ` (id int, val1 varchar(20), ` + "`blöb1`" + ` blob, val2 varbinary(20), ` + "`bl@b2`" + ` longblob, txt1 text, blb3 tinyblob, txt2 longtext, blb4 mediumblob, primary key(id));
 create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
 create table loadtest (id int, name varchar(256), primary key(id), key(name));
+create table nopk (name varchar(128), age int unsigned);
 `
 	// These should always be ignored in vreplication
 	internalSchema = `
@@ -74,32 +75,34 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	initialProductVSchema = `
 {
   "tables": {
-	"product": {},
-	"merchant": {},
-	"orders": {},
+    "product": {},
+    "merchant": {},
+    "orders": {},
     "loadtest": {},
-	"customer": {},
-	"customer_seq": {
-		"type": "sequence"
-	},
-	"customer2": {},
-	"customer_seq2": {
-		"type": "sequence"
-	},
-	"order_seq": {
-		"type": "sequence"
-	},
-	"Lead": {},
-	"Lead-1": {},
-	"db_order_test": {},
-	"vdiff_order": {},
-	"datze": {},
-	"reftable": {
-		"type": "reference"
-	}
+    "customer": {},
+    "customer_seq": {
+      "type": "sequence"
+    },
+    "customer2": {},
+    "customer_seq2": {
+      "type": "sequence"
+    },
+    "order_seq": {
+      "type": "sequence"
+    },
+    "Lead": {},
+    "Lead-1": {},
+    "db_order_test": {},
+    "vdiff_order": {},
+    "datze": {},
+    "nopk": {},
+    "reftable": {
+      "type": "reference"
+    }
   }
 }
 `
+
 	customerSchema  = ""
 	customerVSchema = `
 {
@@ -212,6 +215,14 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
         {
           "column": "id",
           "name": "reverse_bits"
+        }
+      ]
+    },
+    "nopk": {
+      "column_vindexes": [
+        {
+          "columns": ["name"],
+          "name": "unicode_loose_md5"
         }
       ]
     },
@@ -380,11 +391,11 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	materializeProductSpec = `
 	{
 	"workflow": "cproduct",
-	"sourceKeyspace": "product",
-	"targetKeyspace": "customer",
-	"tableSettings": [{
-		"targetTable": "cproduct",
-		"sourceExpression": "select * from product",
+	"source_keyspace": "product",
+	"target_keyspace": "customer",
+	"table_settings": [{
+		"target_table": "cproduct",
+		"source_expression": "select * from product",
 		"create_ddl": "create table cproduct(pid bigint, description varchar(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4"
 	}]
 }
@@ -435,11 +446,11 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	materializeMerchantOrdersSpec = `
 {
   "workflow": "morders",
-  "sourceKeyspace": "customer",
-  "targetKeyspace": "merchant-type",
-  "tableSettings": [{
-    "targetTable": "morders",
-    "sourceExpression": "select oid, cid, mname, pid, price, qty, total from orders",
+  "source_keyspace": "customer",
+  "target_keyspace": "merchant-type",
+  "table_settings": [{
+    "target_table": "morders",
+    "source_expression": "select oid, cid, mname, pid, price, qty, total from orders",
     "create_ddl": "create table morders(oid int, cid int, mname varchar(128), pid int, price int, qty int, total int, total2 int as (10 * total), primary key(oid)) CHARSET=utf8"
   }]
 }
@@ -448,11 +459,11 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	materializeMerchantSalesSpec = `
 {
   "workflow": "msales",
-  "sourceKeyspace": "customer",
-  "targetKeyspace": "merchant-type",
-  "tableSettings": [{
-    "targetTable": "msales",
-	"sourceExpression": "select mname as merchant_name, count(*) as kount, sum(price) as amount from orders group by merchant_name",
+  "source_keyspace": "customer",
+  "target_keyspace": "merchant-type",
+  "table_settings": [{
+    "target_table": "msales",
+	"source_expression": "select mname as merchant_name, count(*) as kount, sum(price) as amount from orders group by merchant_name",
     "create_ddl": "create table msales(merchant_name varchar(128), kount int, amount int, primary key(merchant_name)) CHARSET=utf8"
   }]
 }
@@ -475,11 +486,11 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	materializeSalesSpec = `
 {
   "workflow": "sales",
-  "sourceKeyspace": "customer",
-  "targetKeyspace": "product",
-  "tableSettings": [{
-    "targetTable": "sales",
-    "sourceExpression": "select pid, count(*) as kount, sum(price) as amount from orders group by pid",
+  "source_keyspace": "customer",
+  "target_keyspace": "product",
+  "table_settings": [{
+    "target_Table": "sales",
+    "source_expression": "select pid, count(*) as kount, sum(price) as amount from orders group by pid",
     "create_ddl": "create table sales(pid int, kount int, amount int, primary key(pid)) CHARSET=utf8"
   }]
 }
@@ -487,11 +498,11 @@ create table loadtest (id int, name varchar(256), primary key(id), key(name));
 	materializeRollupSpec = `
 {
   "workflow": "rollup",
-  "sourceKeyspace": "product",
-  "targetKeyspace": "product",
-  "tableSettings": [{
-    "targetTable": "rollup",
-    "sourceExpression": "select 'total' as rollupname, count(*) as kount from product group by rollupname",
+  "source_keyspace": "product",
+  "target_keyspace": "product",
+  "table_settings": [{
+    "target_table": "rollup",
+    "source_expression": "select 'total' as rollupname, count(*) as kount from product group by rollupname",
     "create_ddl": "create table rollup(rollupname varchar(100), kount int, primary key (rollupname)) CHARSET=utf8mb4"
   }]
 }

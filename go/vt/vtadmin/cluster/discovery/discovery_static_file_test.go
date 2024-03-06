@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/proto/vtadmin"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
@@ -54,7 +53,7 @@ func TestDiscoverVTGate(t *testing.T) {
 					}]
 				}
 			`),
-			expected: &vtadmin.VTGate{
+			expected: &vtadminpb.VTGate{
 				Hostname: "127.0.0.1:12345",
 			},
 		},
@@ -94,8 +93,6 @@ func TestDiscoverVTGate(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -239,8 +236,6 @@ func TestDiscoverVTGates(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -292,7 +287,7 @@ func TestDiscoverVtctld(t *testing.T) {
 					}]
 				}
 			`),
-			expected: &vtadmin.Vtctld{
+			expected: &vtadminpb.Vtctld{
 				Hostname: "127.0.0.1:12345",
 			},
 		},
@@ -332,8 +327,6 @@ func TestDiscoverVtctld(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -477,8 +470,6 @@ func TestDiscoverVtctlds(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

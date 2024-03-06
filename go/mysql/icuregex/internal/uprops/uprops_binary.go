@@ -22,23 +22,19 @@ limitations under the License.
 package uprops
 
 import (
-	"golang.org/x/exp/constraints"
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/icuregex/internal/normalizer"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ubidi"
 	"vitess.io/vitess/go/mysql/icuregex/internal/ucase"
 	"vitess.io/vitess/go/mysql/icuregex/internal/uchar"
+	"vitess.io/vitess/go/mysql/icuregex/internal/uemoji"
 )
 
 type binaryProperty struct {
 	column   propertySource
 	mask     uint32
 	contains func(prop *binaryProperty, c rune, which Property) bool
-}
-
-func uMask[T constraints.Integer](x T) uint32 {
-	return 1 << x
 }
 
 func defaultContains(prop *binaryProperty, c rune, _ Property) bool {
@@ -56,50 +52,50 @@ var binProps = [uCharBinaryLimit]*binaryProperty{
 	 *
 	 * See also https://unicode-org.github.io/icu/userguide/strings/properties.html
 	 */
-	{1, uMask(pAlphabetic), defaultContains},
-	{1, uMask(pASCIIHexDigit), defaultContains},
+	{1, uchar.Mask(pAlphabetic), defaultContains},
+	{1, uchar.Mask(pASCIIHexDigit), defaultContains},
 	{srcBidi, 0, isBidiControl},
 	{srcBidi, 0, isMirrored},
-	{1, uMask(pDash), defaultContains},
-	{1, uMask(pDefaultIgnorableCodePoint), defaultContains},
-	{1, uMask(pDeprecated), defaultContains},
-	{1, uMask(pDiacritic), defaultContains},
-	{1, uMask(pExtender), defaultContains},
+	{1, uchar.Mask(pDash), defaultContains},
+	{1, uchar.Mask(pDefaultIgnorableCodePoint), defaultContains},
+	{1, uchar.Mask(pDeprecated), defaultContains},
+	{1, uchar.Mask(pDiacritic), defaultContains},
+	{1, uchar.Mask(pExtender), defaultContains},
 	{srcNfc, 0, hasFullCompositionExclusion},
-	{1, uMask(pGraphemeBase), defaultContains},
-	{1, uMask(pGraphemeExtend), defaultContains},
-	{1, uMask(pGraphemeLink), defaultContains},
-	{1, uMask(pHexDigit), defaultContains},
-	{1, uMask(pHyphen), defaultContains},
-	{1, uMask(pIDContinue), defaultContains},
-	{1, uMask(pIDStart), defaultContains},
-	{1, uMask(pIdeographic), defaultContains},
-	{1, uMask(pIdsBinaryOperator), defaultContains},
-	{1, uMask(pIdsTrinaryOperator), defaultContains},
+	{1, uchar.Mask(pGraphemeBase), defaultContains},
+	{1, uchar.Mask(pGraphemeExtend), defaultContains},
+	{1, uchar.Mask(pGraphemeLink), defaultContains},
+	{1, uchar.Mask(pHexDigit), defaultContains},
+	{1, uchar.Mask(pHyphen), defaultContains},
+	{1, uchar.Mask(pIDContinue), defaultContains},
+	{1, uchar.Mask(pIDStart), defaultContains},
+	{1, uchar.Mask(pIdeographic), defaultContains},
+	{1, uchar.Mask(pIdsBinaryOperator), defaultContains},
+	{1, uchar.Mask(pIdsTrinaryOperator), defaultContains},
 	{srcBidi, 0, isJoinControl},
-	{1, uMask(pLogicalOrderException), defaultContains},
+	{1, uchar.Mask(pLogicalOrderException), defaultContains},
 	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_LOWERCASE
-	{1, uMask(pMath), defaultContains},
-	{1, uMask(pNoncharacterCodePoint), defaultContains},
-	{1, uMask(pQuotationMark), defaultContains},
-	{1, uMask(pRadical), defaultContains},
+	{1, uchar.Mask(pMath), defaultContains},
+	{1, uchar.Mask(pNoncharacterCodePoint), defaultContains},
+	{1, uchar.Mask(pQuotationMark), defaultContains},
+	{1, uchar.Mask(pRadical), defaultContains},
 	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_SOFT_DOTTED
-	{1, uMask(pTerminalPunctuation), defaultContains},
-	{1, uMask(pUnifiedIdeograph), defaultContains},
+	{1, uchar.Mask(pTerminalPunctuation), defaultContains},
+	{1, uchar.Mask(pUnifiedIdeograph), defaultContains},
 	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_UPPERCASE
-	{1, uMask(pWhiteSpace), defaultContains},
-	{1, uMask(pXidContinue), defaultContains},
-	{1, uMask(pXidStart), defaultContains},
+	{1, uchar.Mask(pWhiteSpace), defaultContains},
+	{1, uchar.Mask(pXidContinue), defaultContains},
+	{1, uchar.Mask(pXidStart), defaultContains},
 	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_CASE_SENSITIVE
-	{1, uMask(pSTerm), defaultContains},
-	{1, uMask(pVariationSelector), defaultContains},
+	{1, uchar.Mask(pSTerm), defaultContains},
+	{1, uchar.Mask(pVariationSelector), defaultContains},
 	{srcNfc, 0, isNormInert},  // UCHAR_NFD_INERT
 	{srcNfkc, 0, isNormInert}, // UCHAR_NFKD_INERT
 	{srcNfc, 0, isNormInert},  // UCHAR_NFC_INERT
 	{srcNfkc, 0, isNormInert}, // UCHAR_NFKC_INERT
 	{srcNfcCanonIter, 0, nil}, // Segment_Starter is currently unsupported
-	{1, uMask(pPatternSyntax), defaultContains},
-	{1, uMask(pPatternWhiteSpace), defaultContains},
+	{1, uchar.Mask(pPatternSyntax), defaultContains},
+	{1, uchar.Mask(pPatternWhiteSpace), defaultContains},
 	{srcCharAndPropsvec, 0, isPOSIXAlnum},
 	{srcChar, 0, isPOSIXBlank},
 	{srcChar, 0, isPOSIXGraph},
@@ -113,14 +109,21 @@ var binProps = [uCharBinaryLimit]*binaryProperty{
 	{srcCaseAndNorm, 0, changesWhenCasefolded},
 	{srcCase, 0, caseBinaryPropertyContains}, // UCHAR_CHANGES_WHEN_CASEMAPPED
 	{srcNfkcCf, 0, nil},                      // Changes_When_NFKC_Casefolded is currently unsupported
-	{2, uMask(p2Emoji), defaultContains},
-	{2, uMask(p2EmojiPresentation), defaultContains},
-	{2, uMask(p2EmojiModifier), defaultContains},
-	{2, uMask(p2EmojiModifierBase), defaultContains},
-	{2, uMask(p2EmojiComponent), defaultContains},
+	{srcEmoji, 0, hasEmojiProperty},          // UCHAR_EMOJI
+	{srcEmoji, 0, hasEmojiProperty},          // UCHAR_EMOJI_PRESENTATION
+	{srcEmoji, 0, hasEmojiProperty},          // UCHAR_EMOJI_MODIFIER
+	{srcEmoji, 0, hasEmojiProperty},          // UCHAR_EMOJI_MODIFIER_BASE
+	{srcEmoji, 0, hasEmojiProperty},          // UCHAR_EMOJI_COMPONENT
 	{2, 0, isRegionalIndicator},
-	{1, uMask(pPrependedConcatenationMark), defaultContains},
-	{2, uMask(p2ExtendedPictographic), defaultContains},
+	{1, uchar.Mask(pPrependedConcatenationMark), defaultContains},
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_EXTENDED_PICTOGRAPHIC
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_BASIC_EMOJI
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_EMOJI_KEYCAP_SEQUENCE
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_RGI_EMOJI_MODIFIER_SEQUENCE
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_RGI_EMOJI_FLAG_SEQUENCE
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_RGI_EMOJI_TAG_SEQUENCE
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_RGI_EMOJI_ZWJ_SEQUENCE
+	{srcEmoji, 0, hasEmojiProperty}, // UCHAR_RGI_EMOJI
 }
 
 func isBidiControl(_ *binaryProperty, c rune, _ Property) bool {
@@ -165,7 +168,7 @@ func isPOSIXBlank(_ *binaryProperty, c rune, _ Property) bool {
 }
 
 func isPOSIXAlnum(_ *binaryProperty, c rune, _ Property) bool {
-	return (uchar.GetUnicodeProperties(c, 1)&uMask(pAlphabetic)) != 0 || uchar.IsDigit(c)
+	return (uchar.GetUnicodeProperties(c, 1)&uchar.Mask(pAlphabetic)) != 0 || uchar.IsDigit(c)
 }
 
 func isJoinControl(_ *binaryProperty, c rune, _ Property) bool {
@@ -236,4 +239,11 @@ func HasBinaryProperty(c rune, which Property) bool {
 		return false
 	}
 	return prop.contains(prop, c, which)
+}
+
+func hasEmojiProperty(_ *binaryProperty, c rune, which Property) bool {
+	if which < UCharEmoji || UCharRgiEmoji < which {
+		return false
+	}
+	return uemoji.HasBinaryProperty(c, int(which-UCharEmoji))
 }

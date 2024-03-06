@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 
@@ -31,20 +33,20 @@ import (
 )
 
 // newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns
-func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compareColInfo) *engine.MergeSort {
+func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compareColInfo, collationEnv *collations.Environment) *engine.MergeSort {
 	prims := make([]engine.StreamExecutor, 0, len(participants))
 	for _, participant := range participants {
 		prims = append(prims, participant)
 	}
-	ob := make([]engine.OrderByParams, len(comparePKs))
+	ob := make([]evalengine.OrderByParams, len(comparePKs))
 	for i, cpk := range comparePKs {
 		weightStringCol := -1
 		// if the collation is nil or unknown, use binary collation to compare as bytes
-		if cpk.collation == nil {
-			ob[i] = engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: collations.CollationBinaryID}
-		} else {
-			ob[i] = engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: sqltypes.Unknown, CollationID: cpk.collation.ID()}
+		var collation collations.ID = collations.CollationBinaryID
+		if cpk.collation != collations.Unknown {
+			collation = cpk.collation
 		}
+		ob[i] = evalengine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, Type: evalengine.NewType(sqltypes.Unknown, collation), CollationEnv: collationEnv}
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
@@ -52,7 +54,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	}
 }
 
-//-----------------------------------------------------------------
+// -----------------------------------------------------------------
 // Utility functions
 
 func encodeString(in string) string {
@@ -61,10 +63,10 @@ func encodeString(in string) string {
 	return buf.String()
 }
 
-func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
+func pkColsToGroupByParams(pkCols []int, collationEnv *collations.Environment) []*engine.GroupByParams {
 	var res []*engine.GroupByParams
 	for _, col := range pkCols {
-		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, Type: sqltypes.Unknown})
+		res = append(res, &engine.GroupByParams{KeyCol: col, WeightStringCol: -1, CollationEnv: collationEnv})
 	}
 	return res
 }

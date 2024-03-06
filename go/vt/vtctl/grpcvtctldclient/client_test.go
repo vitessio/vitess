@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -36,10 +37,12 @@ import (
 )
 
 func TestFindAllShardsInKeyspace(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
@@ -80,11 +83,13 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspace(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
+	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
@@ -107,11 +112,13 @@ func TestGetKeyspace(t *testing.T) {
 }
 
 func TestGetKeyspaces(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	ts := memorytopo.NewServer("cell1")
+	ts := memorytopo.NewServer(ctx, "cell1")
+	defer ts.Close()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {

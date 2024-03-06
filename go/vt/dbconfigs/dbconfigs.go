@@ -26,15 +26,13 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttls"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttls"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -125,7 +123,7 @@ func RegisterFlags(userKeys ...string) {
 	servenv.OnParse(func(fs *pflag.FlagSet) {
 		registerBaseFlags(fs)
 		for _, userKey := range userKeys {
-			uc, cp := GlobalDBConfigs.getParams(userKey, &GlobalDBConfigs)
+			uc, cp := GlobalDBConfigs.getParams(userKey)
 			registerPerUserFlags(fs, userKey, uc, cp)
 		}
 	})
@@ -320,9 +318,9 @@ func (dbcfgs *DBConfigs) Clone() *DBConfigs {
 // parameters. This is only for legacy support.
 // If no per-user parameters are supplied, then the defaultSocketFile
 // is used to initialize the per-user conn params.
-func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
+func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string, collationEnv *collations.Environment) {
 	for _, userKey := range All {
-		uc, cp := dbcfgs.getParams(userKey, dbcfgs)
+		uc, cp := dbcfgs.getParams(userKey)
 		// TODO @rafael: For ExternalRepl we need to respect the provided host / port
 		// At the moment this is an snowflake user connection type that it used by
 		// vreplication to connect to external mysql hosts that are not part of a vitess
@@ -340,8 +338,13 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 
 		// If the connection params has a charset defined, it will not be overridden by the
 		// global configuration.
-		if dbcfgs.Charset != "" && cp.Charset == "" {
-			cp.Charset = dbcfgs.Charset
+		if dbcfgs.Charset != "" && cp.Charset == collations.Unknown {
+			ch, err := collationEnv.ParseConnectionCharset(dbcfgs.Charset)
+			if err != nil {
+				log.Warningf("Error parsing charset %s: %v", dbcfgs.Charset, err)
+				ch = collationEnv.DefaultConnectionCharset()
+			}
+			cp.Charset = ch
 		}
 
 		if dbcfgs.Flags != 0 {
@@ -369,7 +372,7 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 	log.Infof("DBConfigs: %v\n", dbcfgs.String())
 }
 
-func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig, *mysql.ConnParams) {
+func (dbcfgs *DBConfigs) getParams(userKey string) (*UserConfig, *mysql.ConnParams) {
 	var uc *UserConfig
 	var cp *mysql.ConnParams
 	switch userKey {
@@ -418,6 +421,6 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string)
 		replParams:         genParams,
 		externalReplParams: genParams,
 		DBName:             dbname,
-		Charset:            collations.Default().Get().Name(),
+		Charset:            "",
 	}
 }

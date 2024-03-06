@@ -27,10 +27,10 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -89,7 +89,7 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 	return &tmState{
 		tm: tm,
 		displayState: displayState{
-			tablet: proto.Clone(tablet).(*topodatapb.Tablet),
+			tablet: tablet.CloneVT(),
 		},
 		tablet: tablet,
 		ctx:    ctx,
@@ -186,7 +186,7 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 	log.Infof("Changing Tablet Type: %v for %s", tabletType, ts.tablet.Alias.String())
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		PrimaryTermStartTime := logutil.TimeToProto(time.Now())
+		PrimaryTermStartTime := protoutil.TimeToProto(time.Now())
 
 		// Update the tablet record first.
 		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, PrimaryTermStartTime)
@@ -264,7 +264,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		return nil
 	}
 
-	ptsTime := logutil.ProtoToTime(ts.tablet.PrimaryTermStartTime)
+	ptsTime := protoutil.TimeFromProto(ts.tablet.PrimaryTermStartTime).UTC()
 
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
@@ -459,15 +459,14 @@ type displayState struct {
 func (ts *tmState) publishForDisplay() {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
-
-	ts.displayState.tablet = proto.Clone(ts.tablet).(*topodatapb.Tablet)
+	ts.displayState.tablet = ts.tablet.CloneVT()
 	ts.displayState.deniedTables = ts.deniedTables[ts.tablet.Type]
 }
 
 func (ts *tmState) Tablet() *topodatapb.Tablet {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
-	return proto.Clone(ts.displayState.tablet).(*topodatapb.Tablet)
+	return ts.displayState.tablet.CloneVT()
 }
 
 func (ts *tmState) DeniedTables() []string {

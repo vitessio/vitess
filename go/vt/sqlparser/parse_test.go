@@ -18,7 +18,6 @@ package sqlparser
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -29,12 +28,11 @@ import (
 	"sync"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 var (
@@ -44,6 +42,8 @@ var (
 		partialDDL           bool
 		ignoreNormalizerTest bool
 	}{{
+		input: "select * from foo limit 5 + 5",
+	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
 	}, {
@@ -506,6 +506,9 @@ var (
 		input:  "WITH topsales2003 AS (SELECT salesRepEmployeeNumber employeeNumber, SUM(quantityOrdered * priceEach) sales FROM orders INNER JOIN orderdetails USING (orderNumber) INNER JOIN customers USING (customerNumber) WHERE YEAR(shippedDate) = 2003 AND status = 'Shipped' GROUP BY salesRepEmployeeNumber ORDER BY sales DESC LIMIT 5)SELECT employeeNumber, firstName, lastName, sales FROM employees JOIN topsales2003 USING (employeeNumber)",
 		output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, sum(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
 	}, {
+		input:  "WITH count_a AS (SELECT COUNT(`id`) AS `num` FROM `tbl_a`), count_b AS (SELECT COUNT(`id`) AS `num` FROM tbl_b) SELECT 'a', `num` FROM `count_a` UNION SELECT 'b', `num` FROM `count_b`",
+		output: "with count_a as (select count(id) as num from tbl_a) , count_b as (select count(id) as num from tbl_b) select 'a', num from count_a union select 'b', num from count_b",
+	}, {
 		input: "select 1 from t",
 	}, {
 		input:  "select * from (select 1) as x(user)",
@@ -525,7 +528,7 @@ var (
 		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",
 	}, {
 		input:  "select 0b010, 0b0111, b'0111', b'011'",
-		output: "select B'010', B'0111', B'0111', B'011' from dual",
+		output: "select 0b010, 0b0111, 0b0111, 0b011 from dual",
 	}, {
 		input:  "select 0x010, 0x0111, x'0111'",
 		output: "select 0x010, 0x0111, X'0111' from dual",
@@ -692,7 +695,17 @@ var (
 	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
 	}, {
+		input: "select /* for share */ 1 from t for share",
+	}, {
+		input: "select /* for share */ 1 from t for share nowait",
+	}, {
+		input: "select /* for share */ 1 from t for share skip locked",
+	}, {
 		input: "select /* for update */ 1 from t for update",
+	}, {
+		input: "select /* for update */ 1 from t for update nowait",
+	}, {
+		input: "select /* for update */ 1 from t for update skip locked",
 	}, {
 		input: "select /* lock in share mode */ 1 from t lock in share mode",
 	}, {
@@ -1118,9 +1131,10 @@ var (
 		input: "select /* hex caps */ X'F0a1' from t",
 	}, {
 		input:  "select /* bit literal */ b'0101' from t",
-		output: "select /* bit literal */ B'0101' from t",
+		output: "select /* bit literal */ 0b0101 from t",
 	}, {
-		input: "select /* bit literal caps */ B'010011011010' from t",
+		input:  "select /* bit literal caps */ B'010011011010' from t",
+		output: "select /* bit literal caps */ 0b010011011010 from t",
 	}, {
 		input: "select /* 0x */ 0xf0 from t",
 	}, {
@@ -1348,7 +1362,7 @@ var (
 		input: "delete /* limit */ from a limit b",
 	}, {
 		input:  "delete /* alias where */ t.* from a as t where t.id = 2",
-		output: "delete /* alias where */ t from a as t where t.id = 2",
+		output: "delete /* alias where */ from a as t where t.id = 2",
 	}, {
 		input:  "delete t.* from t, t1",
 		output: "delete t from t, t1",
@@ -1525,13 +1539,17 @@ var (
 	}, {
 		input: "alter table a alter index x visible, alter index x2 invisible",
 	}, {
-		input: "alter table a add spatial key foo (column1)",
+		input:  "alter table a add spatial key foo (column1)",
+		output: "alter table a add spatial key foo (column1)",
 	}, {
-		input: "alter table a add fulltext key foo (column1), order by a, b, c",
+		input:  "alter table a add fulltext key foo (column1), order by a, b, c",
+		output: "alter table a add fulltext key foo (column1), order by a, b, c",
 	}, {
-		input: "alter table a add unique key foo (column1)",
+		input:  "alter table a add unique key foo (column1)",
+		output: "alter table a add unique key foo (column1)",
 	}, {
-		input: "alter /*vt+ strategy=online */ table a add unique key foo (column1)",
+		input:  "alter /*vt+ strategy=online */ table a add unique key foo (column1)",
+		output: "alter /*vt+ strategy=online */ table a add unique key foo (column1)",
 	}, {
 		input: "alter table a change column s foo int default 1 after x",
 	}, {
@@ -1653,13 +1671,13 @@ var (
 	}, {
 		input: "alter table a add column (id int, id2 char(23))",
 	}, {
-		input: "alter table a add index idx (id)",
+		input: "alter table a add key idx (id)",
 	}, {
-		input: "alter table a add fulltext index idx (id)",
+		input: "alter table a add fulltext key idx (id)",
 	}, {
-		input: "alter table a add spatial index idx (id)",
+		input: "alter table a add spatial key idx (id)",
 	}, {
-		input: "alter table a add fulltext index idx (id)",
+		input: "alter table a add fulltext key idx (id)",
 	}, {
 		input: "alter table a add foreign key (id) references f (id)",
 	}, {
@@ -1671,7 +1689,8 @@ var (
 	}, {
 		input: "alter table a add constraint b primary key (id)",
 	}, {
-		input: "alter table a add constraint b unique key (id)",
+		input:  "alter table a add constraint b unique key (id)",
+		output: "alter table a add constraint b unique key (id)",
 	}, {
 		input:  "alter table t add column iii int signed not null",
 		output: "alter table t add column iii int not null",
@@ -1826,7 +1845,7 @@ var (
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 	}, {
 		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null references b (a) on delete restrict, KEY b2_idx(b))",
-		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null references b (a) on delete restrict,\n\tKEY b2_idx (b)\n)",
+		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null references b (a) on delete restrict,\n\tkey b2_idx (b)\n)",
 	}, {
 		input: "create temporary table a (\n\tid bigint\n)",
 	}, {
@@ -1998,28 +2017,28 @@ var (
 		ignoreNormalizerTest: true,
 	}, {
 		input:  "create index a on b (col1)",
-		output: "alter table b add index a (col1)",
+		output: "alter table b add key a (col1)",
 	}, {
 		input:  "create unique index a on b (col1)",
-		output: "alter table b add unique index a (col1)",
+		output: "alter table b add unique key a (col1)",
 	}, {
 		input:  "create unique index a using foo on b (col1 desc)",
-		output: "alter table b add unique index a (col1 desc) using foo",
+		output: "alter table b add unique key a (col1 desc) using foo",
 	}, {
 		input:  "create fulltext index a on b (col1) with parser a",
-		output: "alter table b add fulltext index a (col1) with parser a",
+		output: "alter table b add fulltext key a (col1) with parser a",
 	}, {
 		input:  "create spatial index a on b (col1)",
-		output: "alter table b add spatial index a (col1)",
+		output: "alter table b add spatial key a (col1)",
 	}, {
 		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
-		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
+		output: "alter table b add fulltext key a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
 	}, {
 		input:  "create index a on b ((col1 + col2), (col1*col2))",
-		output: "alter table b add index a ((col1 + col2), (col1 * col2))",
+		output: "alter table b add key a ((col1 + col2), (col1 * col2))",
 	}, {
 		input:  "create fulltext index b using btree on A (col1 desc, col2) algorithm = inplace lock = none",
-		output: "alter table A add fulltext index b (col1 desc, col2) using btree, algorithm = inplace, lock none",
+		output: "alter table A add fulltext key b (col1 desc, col2) using btree, algorithm = inplace, lock none",
 	}, {
 		input: "create algorithm = merge sql security definer view a as select * from e",
 	}, {
@@ -2109,8 +2128,12 @@ var (
 		input:  "drop index `PRIMARY` on a lock none",
 		output: "alter table a drop primary key, lock none",
 	}, {
-		input:  "analyze table a",
-		output: "otherread",
+		input: "analyze table a",
+	}, {
+		input:  "analyze NO_WRITE_TO_BINLOG table a",
+		output: "analyze local table a",
+	}, {
+		input: "analyze local table a",
 	}, {
 		input: "flush tables",
 	}, {
@@ -2358,6 +2381,8 @@ var (
 	}, {
 		input: "show vschema tables",
 	}, {
+		input: "show vschema keyspaces",
+	}, {
 		input: "show vschema vindexes",
 	}, {
 		input: "show vschema vindexes from t",
@@ -2399,6 +2424,13 @@ var (
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 	}, {
+		input: "alter vitess_migration force_cutover all",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
+	}, {
+		input:  "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' FORCE_CUTOVER",
+		output: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
+	}, {
 		input: "alter vitess_migration cancel all",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle",
@@ -2435,6 +2467,10 @@ var (
 	}, {
 		input:  "show foobar like select * from table where syntax is 'ignored'",
 		output: "show foobar",
+	}, {
+		// Making sure "force_cutover" is not a keyword
+		input:  "select force_cutover from t",
+		output: "select `force_cutover` from t",
 	}, {
 		input:  "use db",
 		output: "use db",
@@ -2490,16 +2526,6 @@ var (
 		input: "explain format = tree select * from t",
 	}, {
 		input: "explain format = json select * from t",
-	}, {
-		input: "explain format = vtexplain select * from t",
-	}, {
-		input: "explain format = vitess select * from t",
-	}, {
-		input:  "describe format = vitess select * from t",
-		output: "explain format = vitess select * from t",
-	}, {
-		input:  "describe format = vtexplain select * from t",
-		output: "explain format = vtexplain select * from t",
 	}, {
 		input: "explain delete from t",
 	}, {
@@ -2636,6 +2662,20 @@ var (
 	}, {
 		input:  "SELECT id FROM blog_posts USE INDEX (PRIMARY) WHERE id = 10",
 		output: "select id from blog_posts use index (`PRIMARY`) where id = 10",
+	}, {
+		input: "select * from payment_pulls ignore vindex (lookup_vindex_name) where customer_id in (1, 10) and payment_id = 5",
+	}, {
+		input:  "select * from payment_pulls ignore vindex (lookup_vindex_name, x, t) order by id",
+		output: "select * from payment_pulls ignore vindex (lookup_vindex_name, x, t) order by id asc",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name) where customer_id in (1, 10) and payment_id = 5",
+	}, {
+		input:  "select * from payment_pulls use vindex (lookup_vindex_name, x, t) order by id",
+		output: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) order by id asc",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) ignore vindex (x, t)",
+	}, {
+		input: "select * from payment_pulls use vindex (lookup_vindex_name, x, t) ignore vindex (x, t) join tab ignore vindex (y)",
 	}, {
 		input:  "select name, group_concat(score) from t group by name",
 		output: "select `name`, group_concat(score) from t group by `name`",
@@ -3657,6 +3697,21 @@ var (
 		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 	}, {
+		input:  "select 1 from dual where 'bac' = 'b' 'a' 'c'",
+		output: "select 1 from dual where 'bac' = 'bac'",
+	}, {
+		input:  "select 'b' 'a' 'c'",
+		output: "select 'bac' from dual",
+	}, {
+		input:  "select 1 where 'bac' = N'b' 'a' 'c'",
+		output: "select 1 from dual where 'bac' = N'bac'",
+		/*We need to ignore this test because, after the normalizer, we change the produced NChar
+		string into an introducer expression, so the vttablet will never see a NChar string */
+		ignoreNormalizerTest: true,
+	}, {
+		input:  "select _ascii 'b' 'a' 'c'",
+		output: "select _ascii 'bac' from dual",
+	}, {
 		input:  "SELECT time, subject, AVG(val) OVER (PARTITION BY time, subject) AS window_result FROM observations GROUP BY time, subject;",
 		output: "select `time`, subject, avg(val) over ( partition by `time`, subject) as window_result from observations group by `time`, subject",
 	}, {
@@ -3715,12 +3770,13 @@ var (
 )
 
 func TestValid(t *testing.T) {
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
 			}
-			tree, err := Parse(tcase.input)
+			tree, err := parser.Parse(tcase.input)
 			require.NoError(t, err, tcase.input)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
@@ -3752,6 +3808,7 @@ func TestParallelValid(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(parallelism)
+	parser := NewTestParser()
 	for i := 0; i < parallelism; i++ {
 		go func() {
 			defer wg.Done()
@@ -3760,7 +3817,7 @@ func TestParallelValid(t *testing.T) {
 				if tcase.output == "" {
 					tcase.output = tcase.input
 				}
-				tree, err := Parse(tcase.input)
+				tree, err := parser.Parse(tcase.input)
 				if err != nil {
 					t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
 					continue
@@ -3959,9 +4016,10 @@ func TestInvalid(t *testing.T) {
 	},
 	}
 
+	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := Parse(tcase.input)
+			_, err := parser.Parse(tcase.input)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tcase.err)
 		})
@@ -4099,12 +4157,13 @@ func TestIntroducers(t *testing.T) {
 		input:  "select _utf8mb3 'x'",
 		output: "select _utf8mb3 'x' from dual",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
 			}
-			tree, err := Parse(tcase.input)
+			tree, err := parser.Parse(tcase.input)
 			assert.NoError(t, err)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
@@ -4121,7 +4180,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "create table A (\n\tB int\n)",
 	}, {
 		input:  "create index b on A (col1 desc)",
-		output: "alter table A add index b (col1 desc)",
+		output: "alter table A add key b (col1 desc)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",
@@ -4193,11 +4252,12 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "select /* use */ 1 from t1 use index (A) where b = 1",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4292,11 +4352,12 @@ func TestKeywords(t *testing.T) {
 		output: "select current_user(), current_user() from dual",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4369,11 +4430,12 @@ func TestConvert(t *testing.T) {
 		input: "select cast(json_keys(c) as char(64) array) from t",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4417,7 +4479,7 @@ func TestConvert(t *testing.T) {
 	}}
 
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
+		_, err := parser.Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
 		}
@@ -4455,12 +4517,13 @@ func TestSelectInto(t *testing.T) {
 		output: "alter vschema create vindex my_vdx using `hash`",
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
 				tcase.output = tcase.input
 			}
-			tree, err := Parse(tcase.input)
+			tree, err := parser.Parse(tcase.input)
 			require.NoError(t, err)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
@@ -4479,7 +4542,7 @@ func TestSelectInto(t *testing.T) {
 	}}
 
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
+		_, err := parser.Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
 		}
@@ -4516,8 +4579,9 @@ func TestPositionedErr(t *testing.T) {
 		output: PositionedErr{"syntax error", 34, ""},
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
-		tkn := NewStringTokenizer(tcase.input)
+		tkn := parser.NewStringTokenizer(tcase.input)
 		_, err := ParseNext(tkn)
 
 		if posErr, ok := err.(PositionedErr); !ok {
@@ -4566,11 +4630,12 @@ func TestSubStr(t *testing.T) {
 		output: `select substr(substr('foo', 1), 2) from t`,
 	}}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4590,8 +4655,9 @@ func TestLoadData(t *testing.T) {
 		"load data infile 'x.txt' into table 'c'",
 		"load data from s3 'x.txt' into table x"}
 
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
-		_, err := Parse(tcase)
+		_, err := parser.Parse(tcase)
 		require.NoError(t, err)
 	}
 }
@@ -4700,8 +4766,24 @@ func TestCreateTable(t *testing.T) {
 	fulltext key fts (full_name),
 	unique key by_username (username),
 	unique key by_username2 (username),
-	unique index by_username3 (username),
+	unique key by_username3 (username),
 	index by_status (status_nonkeyword),
+	key by_full_name (full_name)
+)`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	email varchar,
+	full_name varchar,
+	geom point not null,
+	status_nonkeyword varchar,
+	primary key (id),
+	spatial key geom (geom),
+	fulltext key fts (full_name),
+	unique key by_username (username),
+	unique key by_username2 (username),
+	unique key by_username3 (username),
+	key by_status (status_nonkeyword),
 	key by_full_name (full_name)
 )`,
 		},
@@ -4712,7 +4794,14 @@ func TestCreateTable(t *testing.T) {
 	username varchar,
 	unique key by_username (username) visible,
 	unique key by_username2 (username) invisible,
-	unique index by_username3 (username)
+	unique key by_username3 (username)
+)`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique key by_username (username) visible,
+	unique key by_username2 (username) invisible,
+	unique key by_username3 (username)
 )`,
 		},
 		// test adding engine attributes
@@ -4721,7 +4810,13 @@ func TestCreateTable(t *testing.T) {
 	id int auto_increment,
 	username varchar,
 	unique key by_username (username) engine_attribute '{}' secondary_engine_attribute '{}',
-	unique index by_username3 (username)
+	unique key by_username3 (username)
+)`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique key by_username (username) engine_attribute '{}' secondary_engine_attribute '{}',
+	unique key by_username3 (username)
 )`,
 		},
 		// test defining SRID
@@ -4764,8 +4859,8 @@ func TestCreateTable(t *testing.T) {
 	primary key (id) using BTREE,
 	unique key by_username (username) using HASH,
 	unique key by_username2 (username) using OTHER,
-	unique index by_username3 (username) using XYZ,
-	index by_status (status_nonkeyword) using PDQ,
+	unique key by_username3 (username) using XYZ,
+	key by_status (status_nonkeyword) using PDQ,
 	key by_full_name (full_name) using OTHER
 )`,
 		},
@@ -4777,8 +4872,8 @@ func TestCreateTable(t *testing.T) {
 	email varchar,
 	primary key (id) comment 'hi',
 	unique key by_username (username) key_block_size 8,
-	unique index by_username4 (username) comment 'hi' using BTREE,
-	unique index by_username4 (username) using BTREE key_block_size 4 comment 'hi'
+	unique key by_username4 (username) comment 'hi' using BTREE,
+	unique key by_username4 (username) using BTREE key_block_size 4 comment 'hi'
 )`,
 		},
 		{
@@ -4802,11 +4897,25 @@ func TestCreateTable(t *testing.T) {
 )`,
 		},
 		{
-			input: "create table t2 (\n\tid int not null,\n\textra tinyint(1) as (id = 1) stored,\n\tPRIMARY KEY (id)\n)",
+			input:  "create table t2 (\n\tid int not null,\n\textra tinyint(1) as (id = 1) stored,\n\tPRIMARY KEY (id)\n)",
+			output: "create table t2 (\n\tid int not null,\n\textra tinyint(1) as (id = 1) stored,\n\tprimary key (id)\n)",
 		},
 		// multi-column indexes
 		{
 			input: `create table t (
+	id int auto_increment,
+	username varchar,
+	email varchar,
+	full_name varchar,
+	a int,
+	b int,
+	c int,
+	primary key (id, username),
+	unique key by_abc (a, b, c),
+	unique key (a, b, c),
+	key by_email (email(10), username)
+)`,
+			output: `create table t (
 	id int auto_increment,
 	username varchar,
 	email varchar,
@@ -4998,7 +5107,7 @@ func TestCreateTable(t *testing.T) {
 	` + "`" + `s3` + "`" + ` varchar default null,
 	s4 timestamp default current_timestamp(),
 	s41 timestamp default now(),
-	s5 bit(1) default B'0'
+	s5 bit(1) default 0b0
 )`,
 		}, {
 			// test non_reserved word in column name
@@ -5592,6 +5701,14 @@ partition by list (val)
 	primary key (id),
 	key email_idx (email, (if(username = '', nickname, username)))
 )`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar(64),
+	nickname varchar(64),
+	email varchar(64),
+	primary key (id),
+	key email_idx (email, (if(username = '', nickname, username)))
+)`,
 		},
 		{
 			input: `create table entries (
@@ -5603,10 +5720,10 @@ partition by list (val)
 	labels json default null,
 	spec json default null,
 	salaryInfo json default null,
-	PRIMARY KEY (namespace, uid),
-	UNIQUE KEY namespaced_name (namespace, place),
-	UNIQUE KEY unique_uid (uid),
-	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt')))
+	primary key (namespace, uid),
+	unique key namespaced_name (namespace, place),
+	unique key unique_uid (uid),
+	key entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt')))
 ) ENGINE InnoDB,
   CHARSET utf8mb4,
   COLLATE utf8mb4_bin`,
@@ -5618,7 +5735,7 @@ partition by list (val)
 )`,
 			output: `create table t1 (
 	j JSON,
-	INDEX i1 ((json_value(j, '$.id' returning UNSIGNED)))
+	key i1 ((json_value(j, '$.id' returning UNSIGNED)))
 )`,
 		}, {
 			input: `CREATE TABLE entries (
@@ -5644,10 +5761,10 @@ partition by list (val)
 	labels json default null,
 	spec json default null,
 	salaryInfo json default null,
-	PRIMARY KEY (namespace, uid),
-	UNIQUE KEY namespaced_employee (namespace, employee),
-	UNIQUE KEY unique_uid (uid),
-	KEY entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt' returning datetime)))
+	primary key (namespace, uid),
+	unique key namespaced_employee (namespace, employee),
+	unique key unique_uid (uid),
+	key entries_spec_updatedAt ((json_value(spec, _utf8mb4 '$.updatedAt' returning datetime)))
 ) ENGINE InnoDB,
   CHARSET utf8mb4,
   COLLATE utf8mb4_bin`,
@@ -5714,13 +5831,14 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		},
 		{
 			input:  "create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned ARRAY))))",
-			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tINDEX zips ((cast(info -> '$.field' as unsigned array)))\n)",
+			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tkey zips ((cast(info -> '$.field' as unsigned array)))\n)",
 		},
 	}
+	parser := NewTestParser()
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)
 		t.Run(sql, func(t *testing.T) {
-			tree, err := ParseStrictDDL(sql)
+			tree, err := parser.ParseStrictDDL(sql)
 			require.NoError(t, err)
 			got := String(tree)
 			expected := test.output
@@ -5743,7 +5861,8 @@ func TestOne(t *testing.T) {
 		return
 	}
 	sql := strings.TrimSpace(testOne.input)
-	tree, err := Parse(sql)
+	parser := NewTestParser()
+	tree, err := parser.Parse(sql)
 	require.NoError(t, err)
 	got := String(tree)
 	expected := testOne.output
@@ -5772,8 +5891,9 @@ func TestCreateTableLike(t *testing.T) {
 			"create table ks.a like unsharded_ks.b",
 		},
 	}
+	parser := NewTestParser()
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -5802,8 +5922,9 @@ func TestCreateTableEscaped(t *testing.T) {
 			"\tprimary key (`delete`)\n" +
 			")",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -5948,9 +6069,10 @@ var (
 )
 
 func TestErrors(t *testing.T) {
+	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := ParseStrictDDL(tcase.input)
+			_, err := parser.ParseStrictDDL(tcase.input)
 			require.Error(t, err, tcase.output)
 			require.Equal(t, tcase.output, err.Error())
 		})
@@ -5983,8 +6105,9 @@ func TestSkipToEnd(t *testing.T) {
 		input:  "create table a bb 'a;'; select * from t",
 		output: "extra characters encountered after end of DDL: 'select'",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range testcases {
-		_, err := Parse(tcase.input)
+		_, err := parser.Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
 		}
@@ -6016,8 +6139,9 @@ func loadQueries(t testing.TB, filename string) (queries []string) {
 }
 
 func TestParseDjangoQueries(t *testing.T) {
+	parser := NewTestParser()
 	for _, query := range loadQueries(t, "django_queries.txt") {
-		_, err := Parse(query)
+		_, err := parser.Parse(query)
 		if err != nil {
 			t.Errorf("failed to parse %q: %v", query, err)
 		}
@@ -6025,8 +6149,9 @@ func TestParseDjangoQueries(t *testing.T) {
 }
 
 func TestParseLobstersQueries(t *testing.T) {
+	parser := NewTestParser()
 	for _, query := range loadQueries(t, "lobsters.sql.gz") {
-		_, err := Parse(query)
+		_, err := parser.Parse(query)
 		if err != nil {
 			t.Errorf("failed to parse %q: %v", query, err)
 		}
@@ -6041,14 +6166,14 @@ func TestParseVersionedComments(t *testing.T) {
 	}{
 		{
 			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
-			mysqlVersion: "50401",
+			mysqlVersion: "5.4.1",
 			output: `create table table1 (
 	id int
 ) ENGINE InnoDB,
   CHARSET utf8mb4`,
 		}, {
 			input:        `CREATE TABLE table1 (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*!50900 PARTITION BY RANGE (id) (PARTITION x VALUES LESS THAN (5) ENGINE = InnoDB, PARTITION t VALUES LESS THAN (20) ENGINE = InnoDB) */`,
-			mysqlVersion: "80001",
+			mysqlVersion: "8.0.1",
 			output: `create table table1 (
 	id int
 ) ENGINE InnoDB,
@@ -6061,10 +6186,9 @@ partition by range (id)
 
 	for _, testcase := range testcases {
 		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
-			oldMySQLVersion := mySQLParserVersion
-			defer func() { mySQLParserVersion = oldMySQLVersion }()
-			mySQLParserVersion = testcase.mysqlVersion
-			tree, err := Parse(testcase.input)
+			parser, err := New(Options{MySQLServerVersion: testcase.mysqlVersion})
+			require.NoError(t, err)
+			tree, err := parser.Parse(testcase.input)
 			require.NoError(t, err, testcase.input)
 			out := String(tree)
 			require.Equal(t, testcase.output, out)
@@ -6073,6 +6197,7 @@ partition by range (id)
 }
 
 func BenchmarkParseTraces(b *testing.B) {
+	parser := NewTestParser()
 	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
 		b.Run(trace, func(b *testing.B) {
 			queries := loadQueries(b, trace)
@@ -6084,7 +6209,7 @@ func BenchmarkParseTraces(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				for _, query := range queries {
-					_, err := Parse(query)
+					_, err := parser.Parse(query)
 					if err != nil {
 						b.Fatal(err)
 					}
@@ -6101,16 +6226,17 @@ func BenchmarkParseStress(b *testing.B) {
 		sql2 = "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
 	)
 
+	parser := NewTestParser()
 	for i, sql := range []string{sql1, sql2} {
 		b.Run(fmt.Sprintf("sql%d", i), func(b *testing.B) {
-			var buf bytes.Buffer
+			var buf strings.Builder
 			buf.WriteString(sql)
 			querySQL := buf.String()
 			b.ReportAllocs()
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				_, err := Parse(querySQL)
+				_, err := parser.Parse(querySQL)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -6128,7 +6254,7 @@ func BenchmarkParse3(b *testing.B) {
 
 		// Size of value is 1/10 size of query. Then we add
 		// 10 such values to the where clause.
-		var baseval bytes.Buffer
+		var baseval strings.Builder
 		for i := 0; i < benchQuerySize/100; i++ {
 			// Add an escape character: This will force the upcoming
 			// tokenizer improvement to still create a copy of the string.
@@ -6140,7 +6266,7 @@ func BenchmarkParse3(b *testing.B) {
 			}
 		}
 
-		var buf bytes.Buffer
+		var buf strings.Builder
 		buf.WriteString("select a from t1 where v = 1")
 		for i := 0; i < 10; i++ {
 			fmt.Fprintf(&buf, " and v%d = \"%d%s\"", i, i, baseval.String())
@@ -6149,8 +6275,9 @@ func BenchmarkParse3(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
+		parser := NewTestParser()
 		for i := 0; i < b.N; i++ {
-			if _, err := Parse(benchQuery); err != nil {
+			if _, err := parser.Parse(benchQuery); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -6201,6 +6328,7 @@ func escapeNewLines(in string) string {
 }
 
 func testFile(t *testing.T, filename, tempDir string) {
+	parser := NewTestParser()
 	t.Run(filename, func(t *testing.T) {
 		fail := false
 		expected := strings.Builder{}
@@ -6210,7 +6338,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 					tcase.output = tcase.input
 				}
 				expected.WriteString(fmt.Sprintf("%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input)))
-				tree, err := Parse(tcase.input)
+				tree, err := parser.Parse(tcase.input)
 				if tcase.errStr != "" {
 					errPresent := ""
 					if err != nil {
@@ -6241,7 +6369,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 		if fail && tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
 			_ = os.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
-			fmt.Println(fmt.Sprintf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
+			fmt.Printf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations\n", tempDir)
 		}
 	})
 }
@@ -6313,7 +6441,7 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 		if returnTypeNumber != -1 {
 			break
 		}
-		panic(fmt.Errorf("error reading file %s: line %d: %s - Expected keyword", fileName, lineno, err.Error()))
+		panic(fmt.Errorf("error reading file %s: line %d: Expected keyword", fileName, lineno))
 	}
 	input := ""
 	for {

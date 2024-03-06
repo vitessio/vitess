@@ -55,8 +55,9 @@ func TestTabletExecutorOpen(t *testing.T) {
 }
 
 func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
-	ctx := context.Background()
-	ts := memorytopo.NewServer("test_cell")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "test_cell")
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",
@@ -71,7 +72,7 @@ func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
 	if err := ts.InitTablet(ctx, tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
-	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyPrimaryAlias", ts, newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
+	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyPrimaryAlias", ts, newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a primary") {
 		t.Fatalf("executor.Open() = '%v', want error", err)
 	}
@@ -104,7 +105,7 @@ func TestTabletExecutorValidate(t *testing.T) {
 		},
 	})
 
-	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
+	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 	ctx := context.Background()
 
 	sqls := []string{
@@ -178,7 +179,7 @@ func TestTabletExecutorDML(t *testing.T) {
 		},
 	})
 
-	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
+	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 	ctx := context.Background()
 
 	executor.Open(ctx, "unsharded_keyspace")
@@ -268,12 +269,13 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		},
 	}
 
+	parser := sqlparser.NewTestParser()
 	for _, ts := range tt {
 		e := &TabletExecutor{}
 		err := e.SetDDLStrategy(ts.ddlStrategy)
 		assert.NoError(t, err)
 
-		stmt, err := sqlparser.Parse(ts.query)
+		stmt, err := parser.Parse(ts.query)
 		assert.NoError(t, err)
 
 		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
@@ -401,7 +403,42 @@ func TestAllSQLsAreCreateQueries(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			result, err := allSQLsAreCreateQueries(tcase.sqls)
+			result, err := allSQLsAreCreateQueries(tcase.sqls, sqlparser.NewTestParser())
+			assert.NoError(t, err)
+			assert.Equal(t, tcase.expect, result)
+		})
+	}
+}
+
+func TestApplyAllowZeroInDate(t *testing.T) {
+	tcases := []struct {
+		sql    string
+		expect string
+	}{
+		{
+			"create table t1(id int primary key); ",
+			"create /*vt+ allowZeroInDate=true */ table t1 (\n\tid int primary key\n)",
+		},
+		{
+			"create table t1(id int primary key)",
+			"create /*vt+ allowZeroInDate=true */ table t1 (\n\tid int primary key\n)",
+		},
+		{
+			"create table t1(id int primary key);select 1 from dual",
+			"create /*vt+ allowZeroInDate=true */ table t1 (\n\tid int primary key\n);select 1 from dual",
+		},
+		{
+			"create table t1(id int primary key); alter table t2 add column id2 int",
+			"create /*vt+ allowZeroInDate=true */ table t1 (\n\tid int primary key\n);alter /*vt+ allowZeroInDate=true */ table t2 add column id2 int",
+		},
+		{
+			"  ; ; ;;; create table t1(id int primary key); ;; alter table t2 add column id2 int ;;",
+			"create /*vt+ allowZeroInDate=true */ table t1 (\n\tid int primary key\n);alter /*vt+ allowZeroInDate=true */ table t2 add column id2 int",
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			result, err := applyAllowZeroInDate(tcase.sql, sqlparser.NewTestParser())
 			assert.NoError(t, err)
 			assert.Equal(t, tcase.expect, result)
 		})

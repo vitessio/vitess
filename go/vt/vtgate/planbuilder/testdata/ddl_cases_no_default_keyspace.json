@@ -144,7 +144,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "create view view_a as select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id"
+        "Query": "create view view_a as select a.user_id, a.col1, a.col2, b.user_id, b.col1, b.col2 from authoritative as a join authoritative as b on a.user_id = b.user_id"
       },
       "TablesUsed": [
         "user.view_a"
@@ -163,7 +163,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "create view view_a as select a.user_id, a.col1, a.col2 from authoritative as a"
+        "Query": "create view view_a as select user_id, col1, col2 from authoritative as a"
       },
       "TablesUsed": [
         "user.view_a"
@@ -201,7 +201,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "create view view_a as select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
+        "Query": "create view view_a as select `user`.id, a.user_id, a.col1, a.col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
       },
       "TablesUsed": [
         "user.view_a"
@@ -472,7 +472,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc"
+        "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col desc"
       },
       "TablesUsed": [
         "user.view_a"
@@ -567,7 +567,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "alter table `user` add index a (id)"
+        "Query": "alter table `user` add key a (id)"
       },
       "TablesUsed": [
         "user.user"
@@ -638,11 +638,6 @@
     }
   },
   {
-    "comment": "drop table with incompatible tables",
-    "query": "drop table user, unsharded_a",
-    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
-  },
-  {
     "comment": "drop table with unknown table",
     "query": "drop table unknown",
     "plan": "VT03007: keyspace not specified"
@@ -666,11 +661,6 @@
         "user.user_extra"
       ]
     }
-  },
-  {
-    "comment": "drop view with incompatible views",
-    "query": "drop view user, unsharded_a",
-    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
   },
   {
     "comment": "drop view with unknown view",
@@ -715,11 +705,6 @@
         "user.user_extra"
       ]
     }
-  },
-  {
-    "comment": "Rename table with different keyspace tables",
-    "query": "rename table user_extra to b, main.a to b",
-    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
   },
   {
     "comment": "Rename table with change in keyspace name",

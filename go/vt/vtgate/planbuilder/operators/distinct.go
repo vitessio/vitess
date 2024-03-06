@@ -17,113 +17,105 @@ limitations under the License.
 package operators
 
 import (
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
 	Distinct struct {
-		Source ops.Operator
+		Source Operator
 		QP     *QueryProjection
-		Pushed bool
 
-		// When offset planning, we'll fill in this field
+		// When we go from AST to operator, we place DISTINCT ops in the required places in the op tree
+		// These are marked as `Required`, because they are semantically important to the results of the query.
+		// During planning, when we can't push down the DISTINCT op any further, we sometimes create and push down
+		// additional DISTINCT ops that are not strictly required, but that limit the number of incoming rows so less
+		// work has to be done. When we have pushed down these performance DISTINCTs, we set the `PushedPerformance`
+		// field to true on the originating op
+		Required          bool
+		PushedPerformance bool
+
+		// This is only filled in during offset planning
 		Columns []engine.CheckCol
 
 		Truncate int
 	}
 )
 
-func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
-	columns, err := d.GetColumns()
-	if err != nil {
-		return err
-	}
-	d.Columns = nil
-	var exprs []sqlparser.Expr
-	for _, col := range columns {
-		newSrc, offset, err := d.Source.AddColumn(ctx, col, true, false)
-		if err != nil {
-			return err
+func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	columns := d.GetColumns(ctx)
+	for idx, col := range columns {
+		e := col.Expr
+		var wsCol *int
+		typ, _ := ctx.SemTable.TypeForExpr(e)
+
+		if ctx.SemTable.NeedsWeightString(e) {
+			offset := d.Source.AddColumn(ctx, true, false, aeWrap(weightStringFor(e)))
+			wsCol = &offset
 		}
-		d.Source = newSrc
-		e := d.QP.GetSimplifiedExpr(col.Expr)
-		exprs = append(exprs, e)
-		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
+
 		d.Columns = append(d.Columns, engine.CheckCol{
-			Col:       offset,
-			Type:      typ,
-			Collation: coll,
+			Col:          idx,
+			WsCol:        wsCol,
+			Type:         typ,
+			CollationEnv: ctx.VSchema.Environment().CollationEnv(),
 		})
-	}
-	for i, e := range exprs {
-		if !ctx.SemTable.NeedsWeightString(e) {
-			continue
-		}
-		newSrc, offset, err := d.Source.AddColumn(ctx, aeWrap(weightStringFor(e)), true, false)
-		if err != nil {
-			return err
-		}
-		d.Source = newSrc
-		d.Columns[i].WsCol = &offset
 	}
 	return nil
 }
 
-func (d *Distinct) Clone(inputs []ops.Operator) ops.Operator {
+func (d *Distinct) Clone(inputs []Operator) Operator {
 	return &Distinct{
-		Source:   inputs[0],
-		Columns:  slices.Clone(d.Columns),
-		QP:       d.QP,
-		Pushed:   d.Pushed,
-		Truncate: d.Truncate,
+		Required:          d.Required,
+		Source:            inputs[0],
+		Columns:           slices.Clone(d.Columns),
+		QP:                d.QP,
+		PushedPerformance: d.PushedPerformance,
+		Truncate:          d.Truncate,
 	}
 }
 
-func (d *Distinct) Inputs() []ops.Operator {
-	return []ops.Operator{d.Source}
+func (d *Distinct) Inputs() []Operator {
+	return []Operator{d.Source}
 }
 
-func (d *Distinct) SetInputs(operators []ops.Operator) {
+func (d *Distinct) SetInputs(operators []Operator) {
 	d.Source = operators[0]
 }
 
-func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := d.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	d.Source = newSrc
-	return d, nil
+func (d *Distinct) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	d.Source = d.Source.AddPredicate(ctx, expr)
+	return d
 }
 
-func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	newSrc, offset, err := d.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
-	}
-	d.Source = newSrc
-	return d, offset, nil
+func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
+	return d.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (d *Distinct) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return d.Source.GetColumns()
+func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	return d.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (d *Distinct) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return d.Source.GetSelectExprs()
+func (d *Distinct) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return d.Source.GetColumns(ctx)
+}
+
+func (d *Distinct) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+	return d.Source.GetSelectExprs(ctx)
 }
 
 func (d *Distinct) ShortDescription() string {
-	return ""
+	if d.Required {
+		return "Required"
+	}
+	return "Performance"
 }
 
-func (d *Distinct) GetOrdering() ([]ops.OrderBy, error) {
-	return d.Source.GetOrdering()
+func (d *Distinct) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
+	return d.Source.GetOrdering(ctx)
 }
 
 func (d *Distinct) setTruncateColumnCount(offset int) {

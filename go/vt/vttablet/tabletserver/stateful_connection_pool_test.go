@@ -25,19 +25,21 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
-var ctx = context.Background()
-
 func TestActivePoolClientRowsFound(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("begin", &sqltypes.Result{})
 
 	pool := newActivePool()
-	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	pool.Open(params, params, params)
 
 	startNormalSize := pool.conns.Available()
 	startFoundRowsSize := pool.foundRowsPool.Available()
@@ -58,10 +60,13 @@ func TestActivePoolClientRowsFound(t *testing.T) {
 }
 
 func TestActivePoolForAllTxProps(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
-	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	pool.Open(params, params, params)
 	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn1.txProps = &tx.Properties{}
@@ -84,10 +89,13 @@ func TestActivePoolForAllTxProps(t *testing.T) {
 }
 
 func TestStatefulPoolShutdownNonTx(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
-	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	pool.Open(params, params, params)
 
 	// conn1 non-tx, not in use.
 	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
@@ -122,10 +130,13 @@ func TestStatefulPoolShutdownNonTx(t *testing.T) {
 }
 
 func TestStatefulPoolShutdownAll(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
-	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	pool.Open(params, params, params)
 
 	// conn1 not in use
 	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
@@ -151,17 +162,19 @@ func TestActivePoolGetConnNonExistentTransaction(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
-	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	pool.Open(params, params, params)
 	_, err := pool.GetAndLock(12345, "for query")
 	require.EqualError(t, err, "not found")
 }
 
 func TestExecWithAbortedCtx(t *testing.T) {
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
-	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	pool.Open(params, params, params)
 	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	cancel()
@@ -170,10 +183,13 @@ func TestExecWithAbortedCtx(t *testing.T) {
 }
 
 func TestExecWithDbconnClosed(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
-	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	pool.Open(params, params, params)
 	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn.Close()
@@ -183,10 +199,13 @@ func TestExecWithDbconnClosed(t *testing.T) {
 }
 
 func TestExecWithDbconnClosedHavingTx(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
-	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	pool.Open(params, params, params)
 	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	conn.txProps = &tx.Properties{Conclusion: "foobar"}
@@ -197,10 +216,13 @@ func TestExecWithDbconnClosedHavingTx(t *testing.T) {
 }
 
 func TestFailOnConnectionRegistering(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
 	pool := newActivePool()
-	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	pool.Open(params, params, params)
 	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	defer conn.Close()

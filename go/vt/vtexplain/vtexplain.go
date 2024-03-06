@@ -20,13 +20,17 @@ limitations under the License.
 package vtexplain
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/servenv"
@@ -42,9 +46,7 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
-var (
-	batchInterval = 10 * time.Millisecond
-)
+var batchInterval = 10 * time.Millisecond
 
 func init() {
 	servenv.OnParseFor("vtexplain", func(fs *pflag.FlagSet) {
@@ -53,7 +55,7 @@ func init() {
 }
 
 const (
-	vtexplainCell = "explainCell"
+	Cell = "explainCell"
 
 	// ModeMulti is the default mode with autocommit implemented at vtgate
 	ModeMulti = "multi"
@@ -146,6 +148,8 @@ type (
 		// time simulator
 		batchTime       *sync2.Batcher
 		globalTabletEnv *tabletEnv
+
+		env *vtenv.Environment
 	}
 )
 
@@ -153,10 +157,11 @@ type (
 func (tq *TabletQuery) MarshalJSON() ([]byte, error) {
 	// Convert Bindvars to strings for nicer output
 	bindVars := make(map[string]string)
+	var buf strings.Builder
 	for k, v := range tq.BindVars {
-		var b strings.Builder
-		sqlparser.EncodeValue(&b, v)
-		bindVars[k] = b.String()
+		buf.Reset()
+		sqlparser.EncodeValue(&buf, v)
+		bindVars[k] = buf.String()
 	}
 
 	return jsonutil.MarshalNoEscape(&struct {
@@ -180,27 +185,30 @@ type TabletActions struct {
 }
 
 // Init sets up the fake execution environment
-func Init(vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) (*VTExplain, error) {
+func Init(ctx context.Context, env *vtenv.Environment, ts *topo.Server, vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options, srvTopoCounts *stats.CountersWithSingleLabel) (*VTExplain, error) {
 	// Verify options
 	if opts.ReplicationMode != "ROW" && opts.ReplicationMode != "STATEMENT" {
 		return nil, fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
 	}
 
-	parsedDDLs, err := parseSchema(sqlSchema, opts)
+	parsedDDLs, err := parseSchema(sqlSchema, opts, env.Parser())
 	if err != nil {
 		return nil, fmt.Errorf("parseSchema: %v", err)
 	}
 
-	tabletEnv, err := newTabletEnvironment(parsedDDLs, opts)
+	tabletEnv, err := newTabletEnvironment(parsedDDLs, opts, env.CollationEnv())
 	if err != nil {
 		return nil, fmt.Errorf("initTabletEnvironment: %v", err)
 	}
-	vte := &VTExplain{vtgateSession: &vtgatepb.Session{
-		TargetString: "",
-		Autocommit:   true,
-	}}
+	vte := &VTExplain{
+		vtgateSession: &vtgatepb.Session{
+			TargetString: "",
+			Autocommit:   true,
+		},
+		env: env,
+	}
 	vte.setGlobalTabletEnv(tabletEnv)
-	err = vte.initVtgateExecutor(vSchemaStr, ksShardMapStr, opts)
+	err = vte.initVtgateExecutor(ctx, ts, vSchemaStr, ksShardMapStr, opts, srvTopoCounts)
 	if err != nil {
 		return nil, fmt.Errorf("initVtgateExecutor: %v", err.Error())
 	}
@@ -210,10 +218,15 @@ func Init(vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) (*VTExplai
 
 // Stop and cleans up fake execution environment
 func (vte *VTExplain) Stop() {
+	if vte.vtgateExecutor != nil {
+		vte.vtgateExecutor.Close()
+	}
+
 	// Cleanup all created fake dbs.
 	if vte.explainTopo != nil {
 		for _, conn := range vte.explainTopo.TabletConns {
 			conn.tsv.StopService()
+			conn.tsv.Close(context.Background())
 		}
 		for _, conn := range vte.explainTopo.TabletConns {
 			conn.db.Close()
@@ -221,10 +234,10 @@ func (vte *VTExplain) Stop() {
 	}
 }
 
-func parseSchema(sqlSchema string, opts *Options) ([]sqlparser.DDLStatement, error) {
+func parseSchema(sqlSchema string, opts *Options, parser *sqlparser.Parser) ([]sqlparser.DDLStatement, error) {
 	parsedDDLs := make([]sqlparser.DDLStatement, 0, 16)
 	for {
-		sql, rem, err := sqlparser.SplitStatement(sqlSchema)
+		sql, rem, err := parser.SplitStatement(sqlSchema)
 		sqlSchema = rem
 		if err != nil {
 			return nil, err
@@ -239,12 +252,12 @@ func parseSchema(sqlSchema string, opts *Options) ([]sqlparser.DDLStatement, err
 
 		var stmt sqlparser.Statement
 		if opts.StrictDDL {
-			stmt, err = sqlparser.ParseStrictDDL(sql)
+			stmt, err = parser.ParseStrictDDL(sql)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			stmt, err = sqlparser.Parse(sql)
+			stmt, err = parser.Parse(sql)
 			if err != nil {
 				log.Errorf("ERROR: failed to parse sql: %s, got error: %v", sql, err)
 				continue
@@ -288,7 +301,7 @@ func (vte *VTExplain) Run(sql string) ([]*Explain, error) {
 			sql = s
 		}
 
-		sql, rem, err = sqlparser.SplitStatement(sql)
+		sql, rem, err = vte.env.Parser().SplitStatement(sql)
 		if err != nil {
 			return nil, err
 		}
@@ -331,7 +344,7 @@ func (vte *VTExplain) explain(sql string) (*Explain, error) {
 // ExplainsAsText returns a text representation of the explains in logical time
 // order
 func (vte *VTExplain) ExplainsAsText(explains []*Explain) (string, error) {
-	var b bytes.Buffer
+	var b strings.Builder
 	for _, explain := range explains {
 		fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
 		fmt.Fprintf(&b, "%s\n\n", explain.SQL)
@@ -375,7 +388,7 @@ func (vte *VTExplain) specialHandlingOfSavepoints(q *MysqlQuery) error {
 		return nil
 	}
 
-	stmt, err := sqlparser.Parse(q.SQL)
+	stmt, err := vte.env.Parser().Parse(q.SQL)
 	if err != nil {
 		return err
 	}

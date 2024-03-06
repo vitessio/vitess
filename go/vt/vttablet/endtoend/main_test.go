@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -84,7 +85,9 @@ func TestMain(m *testing.M) {
 
 		connParams = cluster.MySQLConnParams()
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
-		err = framework.StartServer(connParams, connAppDebugParams, cluster.DbName())
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		err = framework.StartServer(ctx, connParams, connAppDebugParams, cluster.DbName())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -311,7 +314,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess_healthstream",
-      "table_names_or_prefixes": ["vitess_sc1", "vitess_sc2"],
+      "table_names_or_prefixes": ["vitess_sc1", "vitess_sc2", "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]

@@ -121,9 +121,10 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 			UpdateTableStats:      *updateTableStats,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			OnlyPks:    *onlyPks,
-			DebugQuery: *debugQuery,
-			Format:     format,
+			OnlyPks:       *onlyPks,
+			DebugQuery:    *debugQuery,
+			Format:        format,
+			MaxSampleRows: 10,
 		},
 	}
 
@@ -165,9 +166,6 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 		return fmt.Errorf("invalid action '%s'; %s", action, usage)
 	}
 
-	type ErrorResponse struct {
-		Error string
-	}
 	output, err := wr.VDiff2(ctx, keyspace, workflowName, action, actionArg, vdiffUUID.String(), options)
 	if err != nil {
 		log.Errorf("vdiff2 returning with error: %v", err)

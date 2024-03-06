@@ -31,10 +31,11 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -65,21 +66,15 @@ func (mysqld *Mysqld) executeSchemaCommands(ctx context.Context, sql string) err
 	return mysqld.executeMysqlScript(ctx, params, sql)
 }
 
-func encodeEntityName(name string) string {
-	var buf strings.Builder
-	sqltypes.NewVarChar(name).EncodeSQL(&buf)
-	return buf.String()
-}
-
 // tableListSQL returns an IN clause "('t1', 't2'...) for a list of tables."
 func tableListSQL(tables []string) (string, error) {
 	if len(tables) == 0 {
-		return "", vterrors.New(vtrpc.Code_INTERNAL, "no tables for tableListSQL")
+		return "", vterrors.New(vtrpcpb.Code_INTERNAL, "no tables for tableListSQL")
 	}
 
 	encodedTables := make([]string, len(tables))
 	for i, tableName := range tables {
-		encodedTables[i] = encodeEntityName(tableName)
+		encodedTables[i] = sqltypes.EncodeStringSQL(tableName)
 	}
 
 	return "(" + strings.Join(encodedTables, ", ") + ")", nil
@@ -306,9 +301,13 @@ func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sql
 	if dbName == "" {
 		dbName2 = "database()"
 	} else {
-		dbName2 = encodeEntityName(dbName)
+		dbName2 = sqltypes.EncodeStringSQL(dbName)
 	}
-	query := fmt.Sprintf(GetColumnNamesQuery, dbName2, encodeEntityName(sqlescape.UnescapeID(tableName)))
+	sanitizedTableName, err := sqlescape.UnescapeID(tableName)
+	if err != nil {
+		return "", err
+	}
+	query := fmt.Sprintf(GetColumnNamesQuery, dbName2, sqltypes.EncodeStringSQL(sanitizedTableName))
 	qr, err := exec(query, -1, true)
 	if err != nil {
 		return "", err
@@ -341,9 +340,16 @@ func GetColumns(dbName, table string, exec func(string, int, bool) (*sqltypes.Re
 	if selectColumns == "" {
 		selectColumns = "*"
 	}
-	tableSpec := sqlescape.EscapeID(sqlescape.UnescapeID(table))
+	tableSpec, err := sqlescape.EnsureEscaped(table)
+	if err != nil {
+		return nil, nil, err
+	}
 	if dbName != "" {
-		tableSpec = fmt.Sprintf("%s.%s", sqlescape.EscapeID(sqlescape.UnescapeID(dbName)), tableSpec)
+		dbName, err := sqlescape.EnsureEscaped(dbName)
+		if err != nil {
+			return nil, nil, err
+		}
+		tableSpec = fmt.Sprintf("%s.%s", dbName, tableSpec)
 	}
 	query := fmt.Sprintf(GetFieldsQuery, selectColumns, tableSpec)
 	qr, err := exec(query, 0, true)
@@ -365,7 +371,7 @@ func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*
 		return nil, nil, err
 	}
 	defer conn.Recycle()
-	return GetColumns(dbName, table, conn.ExecuteFetch)
+	return GetColumns(dbName, table, conn.Conn.ExecuteFetch)
 }
 
 // GetPrimaryKeyColumns returns the primary key columns of table.
@@ -395,8 +401,8 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
             FROM information_schema.STATISTICS
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN %s AND LOWER(INDEX_NAME) = 'primary'
             ORDER BY table_name, SEQ_IN_INDEX`
-	sql = fmt.Sprintf(sql, encodeEntityName(dbName), tableList)
-	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
+	sql = fmt.Sprintf(sql, sqltypes.EncodeStringSQL(dbName), tableList)
+	qr, err := conn.Conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
 		return nil, err
 	}
@@ -566,10 +572,11 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 // GetPrimaryKeyEquivalentColumns can be used if the table has
 // no defined PRIMARY KEY. It will return the columns in a
 // viable PRIMARY KEY equivalent (PKE) -- a NON-NULL UNIQUE
-// KEY -- in the specified table. When multiple PKE indexes
-// are available it will attempt to choose the most efficient
-// one based on the column data types and the number of columns
-// in the index. See here for the data type storage sizes:
+// KEY -- along with that index's name in the specified table.
+// When multiple PKE indexes are available it will attempt to
+// choose the most efficient one based on the column data types
+// and the number of columns in the index. See here for the data
+// type storage sizes:
 //
 //	https://dev.mysql.com/doc/refman/en/storage-requirements.html
 //
@@ -577,16 +584,10 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 // defined PRIMARY KEY then it may return the columns for
 // that index if it is likely the most efficient one amongst
 // the available PKE indexes on the table.
-func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error) {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Recycle()
-
+func GetPrimaryKeyEquivalentColumns(ctx context.Context, exec func(string, int, bool) (*sqltypes.Result, error), dbName, table string) ([]string, string, error) {
 	// We use column name aliases to guarantee lower case for our named results.
 	sql := `
-            SELECT COLUMN_NAME AS column_name FROM information_schema.STATISTICS AS index_cols INNER JOIN
+            SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS AS index_cols INNER JOIN
             (
                 SELECT stats.INDEX_NAME, SUM(
                                               CASE LOWER(cols.DATA_TYPE)
@@ -624,20 +625,33 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
             ) AS pke ON index_cols.INDEX_NAME = pke.INDEX_NAME
             WHERE index_cols.TABLE_SCHEMA = %s AND index_cols.TABLE_NAME = %s AND NON_UNIQUE = 0 AND NULLABLE != 'YES'
             ORDER BY SEQ_IN_INDEX ASC`
-	encodedDbName := encodeEntityName(dbName)
-	encodedTable := encodeEntityName(table)
+	encodedDbName := sqltypes.EncodeStringSQL(dbName)
+	encodedTable := sqltypes.EncodeStringSQL(table)
 	sql = fmt.Sprintf(sql, encodedDbName, encodedTable, encodedDbName, encodedTable, encodedDbName, encodedTable)
-	qr, err := conn.ExecuteFetch(sql, 1000, true)
+	qr, err := exec(sql, 1000, true)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	named := qr.Named()
 	cols := make([]string, len(qr.Rows))
+	indexName := ""
 	for i, row := range named.Rows {
 		cols[i] = row.AsString("column_name", "")
+		in := row.AsString("index_name", "")
+		if in == "" { // This should never happen
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "PKE column (%s) returned with an empty index name",
+				cols[i])
+		}
+		switch {
+		case i == 0:
+			indexName = in
+		case i > 0 && indexName != in: // This should never happen
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "PKE columns (%s) returned for more than one index: %s, %s",
+				strings.Join(cols, ","), indexName, in)
+		}
 	}
-	return cols, err
+	return cols, indexName, err
 }
 
 // tableDefinitions is a sortable collection of table definitions

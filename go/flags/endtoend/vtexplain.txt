@@ -1,4 +1,43 @@
-Usage of vtexplain:
+vtexplain is a command line tool which provides information on how Vitess plans to execute a particular query.
+		
+It can be used to validate queries for compatibility with Vitess.
+
+For a user guide that describes how to use the vtexplain tool to explain how Vitess executes a particular SQL statement, see Analyzing a SQL statement.
+
+## Limitations
+
+### The VSchema must use a keyspace name.
+
+VTExplain requires a keyspace name for each keyspace in an input VSchema:
+```
+"keyspace_name": {
+    "_comment": "Keyspace definition goes here."
+}
+```
+
+If no keyspace name is present, VTExplain will return the following error:
+```
+ERROR: initVtgateExecutor: json: cannot unmarshal bool into Go value of type map[string]json.RawMessage
+```
+
+Usage:
+  vtexplain [flags]
+
+Examples:
+Explain how Vitess will execute the query `SELECT * FROM users` using the VSchema contained in `vschemas.json` and the database schema `schema.sql`:
+
+```
+vtexplain --vschema-file vschema.json --schema-file schema.sql --sql "SELECT * FROM users"
+```
+
+Explain how the example will execute on 128 shards using Row-based replication:
+
+```
+vtexplain -- -shards 128 --vschema-file vschema.json --schema-file schema.sql --replication-mode "ROW" --output-mode text --sql "INSERT INTO users (user_id, name) VALUES(1, 'john')"
+```
+
+
+Flags:
       --alsologtostderr                                             log to standard error as well as files
       --batch-interval duration                                     Interval between logical time slots. (default 10ms)
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -10,12 +49,12 @@ Usage of vtexplain:
       --dbname string                                               Optional database target to override normal routing
       --default_tablet_type topodatapb.TabletType                   The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --execution-mode string                                       The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")
-  -h, --help                                                        display usage and exit
+  -h, --help                                                        help for vtexplain
       --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --ks-shard-map string                                         JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace
       --ks-shard-map-file string                                    File containing json blob of keyspace name -> shard name -> ShardReference object
-      --log_backtrace_at traceLocation                              when logging hits line file:N, emit a stack trace (default :0)
+      --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
       --log_dir string                                              If non-empty, write log files in this directory
       --log_err_stacks                                              log stack traces for errors
       --log_rotate_max_size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
@@ -25,6 +64,7 @@ Usage of vtexplain:
       --output-mode string                                          Output in human-friendly text or json (default "text")
       --planner-version string                                      Sets the default planner to use. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right
       --pprof strings                                               enable profiling
+      --pprof-http                                                  enable pprof http endpoints
       --purge_logs_interval duration                                how often try to remove old logs (default 1h0m0s)
       --replication-mode string                                     The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")
       --schema string                                               The SQL table schema
@@ -35,9 +75,9 @@ Usage of vtexplain:
       --sql-file string                                             Identifies the file that contains the SQL commands to analyze
       --sql-max-length-errors int                                   truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                       truncate queries in debug UIs to the given length (default 512) (default 512)
-      --stderrthreshold severity                                    logs at or above this threshold go to stderr (default 1)
+      --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
-      --vmodule moduleSpec                                          comma-separated list of pattern=N settings for file-filtered logging
+      --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging
       --vschema string                                              Identifies the VTGate routing schema
       --vschema-file string                                         Identifies the VTGate routing schema file

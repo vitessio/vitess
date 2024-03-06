@@ -24,7 +24,9 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -39,6 +41,8 @@ import (
 )
 
 func TestTxPoolExecuteCommit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db, txPool, _, closer := setup(t)
 	defer closer()
 
@@ -73,6 +77,9 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 }
 
 func TestTxPoolExecuteRollback(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	db, txPool, _, closer := setup(t)
 	defer closer()
 
@@ -91,6 +98,9 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 }
 
 func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	db, txPool, _, closer := setup(t)
 	defer closer()
 
@@ -108,6 +118,9 @@ func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
 }
 
 func TestTxPoolRollbackNonBusy(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	db, txPool, _, closer := setup(t)
 	defer closer()
 
@@ -135,6 +148,9 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 }
 
 func TestTxPoolTransactionIsolation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	db, txPool, _, closer := setup(t)
 	defer closer()
 
@@ -146,6 +162,9 @@ func TestTxPoolTransactionIsolation(t *testing.T) {
 }
 
 func TestTxPoolAutocommit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	db, txPool, _, closer := setup(t)
 	defer closer()
 
@@ -173,7 +192,10 @@ func TestTxPoolAutocommit(t *testing.T) {
 // db connection. DBConn.Exec() is going to reconnect and retry automatically
 // due to this connection error and the BEGIN will succeed.
 func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
-	db, txPool := primeTxPoolWithConnection(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	db, txPool := primeTxPoolWithConnection(t, ctx)
 	defer db.Close()
 	defer txPool.Close()
 
@@ -189,13 +211,14 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
 
 // primeTxPoolWithConnection is a helper function. It reconstructs the
 // scenario where future transactions are going to reuse an open db connection.
-func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool) {
+func primeTxPoolWithConnection(t *testing.T, ctx context.Context) (*fakesqldb.DB, *TxPool) {
 	t.Helper()
 	db := fakesqldb.New(t)
 	txPool, _ := newTxPool()
 	// Set the capacity to 1 to ensure that the db connection is reused.
 	txPool.scp.conns.SetCapacity(1)
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	txPool.Open(params, params, params)
 
 	// Run a query to trigger a database connection. That connection will be
 	// reused by subsequent transactions.
@@ -209,6 +232,9 @@ func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool) {
 }
 
 func TestTxPoolBeginWithError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	db, txPool, limiter, closer := setup(t)
 	defer closer()
 	db.AddRejectedQuery("begin", errRejected)
@@ -244,6 +270,9 @@ func TestTxPoolBeginWithError(t *testing.T) {
 }
 
 func TestTxPoolBeginWithPreQueryError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	db, txPool, _, closer := setup(t)
 	defer closer()
 	db.AddRejectedQuery("pre_query", errRejected)
@@ -257,7 +286,7 @@ func TestTxPoolCancelledContextError(t *testing.T) {
 	// given
 	db, txPool, _, closer := setup(t)
 	defer closer()
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	// when
@@ -271,10 +300,12 @@ func TestTxPoolCancelledContextError(t *testing.T) {
 }
 
 func TestTxPoolWaitTimeoutError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().TxPool.TimeoutSeconds.Set("1s")
+	env.Config().TxPool.Timeout = time.Second
 	// given
 	db, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
@@ -297,6 +328,9 @@ func TestTxPoolWaitTimeoutError(t *testing.T) {
 }
 
 func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	sql := "alter table test_table add test_column int"
 	db, txPool, _, closer := setup(t)
 	defer closer()
@@ -317,6 +351,9 @@ func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
 }
 
 func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	db, txPool, _, _ := setup(t)
 	defer db.Close()
 	conn1, _, _, _ := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
@@ -339,7 +376,8 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	assertErrorMatch(id, "pool closed")
 
 	txPool, _ = newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	txPool.Open(params, params, params)
 
 	conn1, _, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	id = conn1.ReservedID()
@@ -354,7 +392,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLTP)
 	env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLAP)
 	txPool, _ = newTxPoolWithEnv(env)
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	txPool.Open(params, params, params)
 	defer txPool.Close()
 
 	conn1, _, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
@@ -384,10 +422,12 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutKillsTransactions(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
+	env.Config().Oltp.TxTimeout = time.Second
 	_, txPool, limiter, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
@@ -430,10 +470,12 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutDoesNotKillShortLivedTransactions(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
+	env.Config().Oltp.TxTimeout = time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
@@ -460,11 +502,13 @@ func TestTxTimeoutDoesNotKillShortLivedTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutKillsOlapTransactions(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
-	_ = env.Config().Olap.TxTimeoutSeconds.Set("2s")
+	env.Config().Oltp.TxTimeout = time.Second
+	env.Config().Olap.TxTimeout = 2 * time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
@@ -495,11 +539,13 @@ func TestTxTimeoutKillsOlapTransactions(t *testing.T) {
 }
 
 func TestTxTimeoutNotEnforcedForZeroLengthTimeouts(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 2
-	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("0s")
-	_ = env.Config().Olap.TxTimeoutSeconds.Set("0s")
+	env.Config().Oltp.TxTimeout = 0
+	env.Config().Olap.TxTimeout = 0
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
@@ -535,11 +581,13 @@ func TestTxTimeoutNotEnforcedForZeroLengthTimeouts(t *testing.T) {
 }
 
 func TestTxTimeoutReservedConn(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
-	_ = env.Config().Olap.TxTimeoutSeconds.Set("2s")
+	env.Config().Oltp.TxTimeout = time.Second
+	env.Config().Olap.TxTimeout = 2 * time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingRcKills := txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]
@@ -575,11 +623,13 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 }
 
 func TestTxTimeoutReusedReservedConn(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
-	env.Config().TxPool.MaxWaiters = 0
-	_ = env.Config().Oltp.TxTimeoutSeconds.Set("1s")
-	_ = env.Config().Olap.TxTimeoutSeconds.Set("2s")
+	env.Config().Oltp.TxTimeout = time.Second
+	env.Config().Olap.TxTimeout = 2 * time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 	startingRcKills := txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]
@@ -728,6 +778,9 @@ func TestTxPoolBeginStatements(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("%v:%v:readOnly:%v", tc.txIsolationLevel, tc.txAccessModes, tc.readOnly), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			options := &querypb.ExecuteOptions{
 				TransactionIsolation:  tc.txIsolationLevel,
 				TransactionAccessMode: tc.txAccessModes,
@@ -756,15 +809,14 @@ func newTxPoolWithEnv(env tabletenv.Env) (*TxPool, *fakeLimiter) {
 }
 
 func newEnv(exporterName string) tabletenv.Env {
-	config := tabletenv.NewDefaultConfig()
-	config.TxPool.Size = 300
-	_ = config.Oltp.TxTimeoutSeconds.Set("30s")
-	_ = config.TxPool.TimeoutSeconds.Set("40s")
-	config.TxPool.MaxWaiters = 500000
-	_ = config.OltpReadPool.IdleTimeoutSeconds.Set("30s")
-	_ = config.OlapReadPool.IdleTimeoutSeconds.Set("30s")
-	_ = config.TxPool.IdleTimeoutSeconds.Set("30s")
-	env := tabletenv.NewEnv(config, exporterName)
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.TxPool.Size = 300
+	cfg.Oltp.TxTimeout = 30 * time.Second
+	cfg.TxPool.Timeout = 40 * time.Second
+	cfg.OltpReadPool.IdleTimeout = 30 * time.Second
+	cfg.OlapReadPool.IdleTimeout = 30 * time.Second
+	cfg.TxPool.IdleTimeout = 30 * time.Second
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, exporterName)
 	return env
 }
 
@@ -813,7 +865,8 @@ func setup(t *testing.T) (*fakesqldb.DB, *TxPool, *fakeLimiter, func()) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
 	txPool, limiter := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	txPool.Open(params, params, params)
 
 	return db, txPool, limiter, func() {
 		txPool.Close()
@@ -826,7 +879,8 @@ func setupWithEnv(t *testing.T, env tabletenv.Env) (*fakesqldb.DB, *TxPool, *fak
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
 	txPool, limiter := newTxPoolWithEnv(env)
-	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	params := dbconfigs.New(db.ConnParams())
+	txPool.Open(params, params, params)
 
 	return db, txPool, limiter, func() {
 		txPool.Close()

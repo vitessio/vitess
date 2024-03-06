@@ -60,6 +60,9 @@ func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
 // GetCellInfo reads a CellInfo from the global Conn.
 func (ts *Server) GetCellInfo(ctx context.Context, cell string, strongRead bool) (*topodatapb.CellInfo, error) {
 	conn := ts.globalCell
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if !strongRead {
 		conn = ts.globalReadOnlyCell
 	}

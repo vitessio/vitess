@@ -86,13 +86,6 @@ func enumSameValue(value uint32) uint32 {
 	return value
 }
 
-func min(a, b rune) rune {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func (t *UTrie2) enumEitherTrie(start, limit rune, enumValue EnumValue, enumRange EnumRange) {
 	if enumRange == nil {
 		return

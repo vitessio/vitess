@@ -18,47 +18,33 @@ package cache
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type CacheValue struct {
 	size int64
 }
 
-func cacheValueSize(val any) int64 {
-	return val.(*CacheValue).size
-}
-
 func TestInitialState(t *testing.T) {
-	cache := NewLRUCache(5, cacheValueSize)
+	cache := NewLRUCache[*CacheValue](5)
 	l, sz, c, e, h, m := cache.Len(), cache.UsedCapacity(), cache.MaxCapacity(), cache.Evictions(), cache.Hits(), cache.Misses()
-	if l != 0 {
-		t.Errorf("length = %v, want 0", l)
-	}
-	if sz != 0 {
-		t.Errorf("size = %v, want 0", sz)
-	}
-	if c != 5 {
-		t.Errorf("capacity = %v, want 5", c)
-	}
-	if e != 0 {
-		t.Errorf("evictions = %v, want 0", c)
-	}
-	if h != 0 {
-		t.Errorf("hits = %v, want 0", c)
-	}
-	if m != 0 {
-		t.Errorf("misses = %v, want 0", c)
-	}
+	assert.Zero(t, l)
+	assert.EqualValues(t, 0, sz)
+	assert.EqualValues(t, 5, c)
+	assert.EqualValues(t, 0, e)
+	assert.EqualValues(t, 0, h)
+	assert.EqualValues(t, 0, m)
 }
 
 func TestSetInsertsValue(t *testing.T) {
-	cache := NewLRUCache(100, cacheValueSize)
+	cache := NewLRUCache[*CacheValue](100)
 	data := &CacheValue{0}
 	key := "key"
 	cache.Set(key, data)
 
 	v, ok := cache.Get(key)
-	if !ok || v.(*CacheValue) != data {
+	if !ok || v != data {
 		t.Errorf("Cache has incorrect value: %v != %v", data, v)
 	}
 
@@ -69,40 +55,24 @@ func TestSetInsertsValue(t *testing.T) {
 }
 
 func TestGetValueWithMultipleTypes(t *testing.T) {
-	cache := NewLRUCache(100, cacheValueSize)
+	cache := NewLRUCache[*CacheValue](100)
 	data := &CacheValue{0}
 	key := "key"
 	cache.Set(key, data)
 
 	v, ok := cache.Get("key")
-	if !ok || v.(*CacheValue) != data {
+	if !ok || v != data {
 		t.Errorf("Cache has incorrect value for \"key\": %v != %v", data, v)
 	}
 
 	v, ok = cache.Get(string([]byte{'k', 'e', 'y'}))
-	if !ok || v.(*CacheValue) != data {
+	if !ok || v != data {
 		t.Errorf("Cache has incorrect value for []byte {'k','e','y'}: %v != %v", data, v)
 	}
 }
 
-func TestSetUpdatesSize(t *testing.T) {
-	cache := NewLRUCache(100, cacheValueSize)
-	emptyValue := &CacheValue{0}
-	key := "key1"
-	cache.Set(key, emptyValue)
-	if sz := cache.UsedCapacity(); sz != 0 {
-		t.Errorf("cache.UsedCapacity() = %v, expected 0", sz)
-	}
-	someValue := &CacheValue{20}
-	key = "key2"
-	cache.Set(key, someValue)
-	if sz := cache.UsedCapacity(); sz != 20 {
-		t.Errorf("cache.UsedCapacity() = %v, expected 20", sz)
-	}
-}
-
 func TestSetWithOldKeyUpdatesValue(t *testing.T) {
-	cache := NewLRUCache(100, cacheValueSize)
+	cache := NewLRUCache[*CacheValue](100)
 	emptyValue := &CacheValue{0}
 	key := "key1"
 	cache.Set(key, emptyValue)
@@ -110,31 +80,13 @@ func TestSetWithOldKeyUpdatesValue(t *testing.T) {
 	cache.Set(key, someValue)
 
 	v, ok := cache.Get(key)
-	if !ok || v.(*CacheValue) != someValue {
+	if !ok || v != someValue {
 		t.Errorf("Cache has incorrect value: %v != %v", someValue, v)
 	}
 }
 
-func TestSetWithOldKeyUpdatesSize(t *testing.T) {
-	cache := NewLRUCache(100, cacheValueSize)
-	emptyValue := &CacheValue{0}
-	key := "key1"
-	cache.Set(key, emptyValue)
-
-	if sz := cache.UsedCapacity(); sz != 0 {
-		t.Errorf("cache.UsedCapacity() = %v, expected %v", sz, 0)
-	}
-
-	someValue := &CacheValue{20}
-	cache.Set(key, someValue)
-	expected := int64(someValue.size)
-	if sz := cache.UsedCapacity(); sz != expected {
-		t.Errorf("cache.UsedCapacity() = %v, expected %v", sz, expected)
-	}
-}
-
 func TestGetNonExistent(t *testing.T) {
-	cache := NewLRUCache(100, cacheValueSize)
+	cache := NewLRUCache[*CacheValue](100)
 
 	if _, ok := cache.Get("notthere"); ok {
 		t.Error("Cache returned a notthere value after no inserts.")
@@ -142,7 +94,7 @@ func TestGetNonExistent(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	cache := NewLRUCache(100, cacheValueSize)
+	cache := NewLRUCache[*CacheValue](100)
 	value := &CacheValue{1}
 	key := "key"
 
@@ -159,22 +111,9 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-func TestClear(t *testing.T) {
-	cache := NewLRUCache(100, cacheValueSize)
-	value := &CacheValue{1}
-	key := "key"
-
-	cache.Set(key, value)
-	cache.Clear()
-
-	if sz := cache.UsedCapacity(); sz != 0 {
-		t.Errorf("cache.UsedCapacity() = %v, expected 0 after Clear()", sz)
-	}
-}
-
 func TestCapacityIsObeyed(t *testing.T) {
 	size := int64(3)
-	cache := NewLRUCache(100, cacheValueSize)
+	cache := NewLRUCache[*CacheValue](100)
 	cache.SetCapacity(size)
 	value := &CacheValue{1}
 
@@ -188,12 +127,8 @@ func TestCapacityIsObeyed(t *testing.T) {
 	// Insert one more; something should be evicted to make room.
 	cache.Set("key4", value)
 	sz, evictions := cache.UsedCapacity(), cache.Evictions()
-	if sz != size {
-		t.Errorf("post-evict cache.UsedCapacity() = %v, expected %v", sz, size)
-	}
-	if evictions != 1 {
-		t.Errorf("post-evict cache.Evictions() = %v, expected 1", evictions)
-	}
+	assert.Equal(t, size, sz)
+	assert.EqualValues(t, 1, evictions)
 
 	// Check various other stats
 	if l := cache.Len(); int64(l) != size {
@@ -215,7 +150,7 @@ func TestCapacityIsObeyed(t *testing.T) {
 
 func TestLRUIsEvicted(t *testing.T) {
 	size := int64(3)
-	cache := NewLRUCache(size, cacheValueSize)
+	cache := NewLRUCache[*CacheValue](size)
 
 	cache.Set("key1", &CacheValue{1})
 	cache.Set("key2", &CacheValue{1})

@@ -23,8 +23,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestReplicationStress(t *testing.T) {
@@ -45,28 +43,16 @@ create table largebin(pid int, maindata varbinary(4096), primary key(pid));
 create table customer(cid int, name varbinary(128), meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),ts timestamp not null default current_timestamp, primary key(cid))  CHARSET=utf8mb4;
 `
 
-	const defaultCellName = "zone1"
-
 	const sourceKs = "stress_src"
 	const targetKs = "stress_tgt"
 
-	allCells := []string{defaultCellName}
-	allCellNames = defaultCellName
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
 
-	vc = NewVitessCluster(t, "TestReplicationStress", allCells, mainClusterConfig)
-	require.NotNil(t, vc)
-
-	defer vc.TearDown(t)
-
-	defaultCell = vc.Cells[defaultCellName]
+	defaultCell := vc.Cells[vc.CellNames[0]]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 100, nil)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
 
-	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
-	require.NoError(t, err)
-
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 
 	verifyClusterHealth(t, vc)

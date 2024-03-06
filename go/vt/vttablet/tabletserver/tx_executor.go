@@ -235,7 +235,7 @@ func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	})
 }
 
-// ReadTransaction returns the metadata for the sepcified dtid.
+// ReadTransaction returns the metadata for the specified dtid.
 func (txe *TxExecutor) ReadTransaction(dtid string) (*querypb.TransactionMetadata, error) {
 	if !txe.te.twopcEnabled {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")

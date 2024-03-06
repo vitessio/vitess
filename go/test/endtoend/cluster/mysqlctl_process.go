@@ -30,6 +30,7 @@ import (
 	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/syscallutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/tlstest"
@@ -47,6 +48,7 @@ type MysqlctlProcess struct {
 	ExtraArgs       []string
 	InitMysql       bool
 	SecureTransport bool
+	MajorVersion    int
 }
 
 // InitDb executes mysqlctl command to add cell info
@@ -54,8 +56,13 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	args := []string{"--log_dir", mysqlctl.LogDirectory,
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
-		"init", "--",
-		"--init_db_sql_file", mysqlctl.InitDBFile}
+		"init",
+	}
+	if mysqlctl.MajorVersion < 18 {
+		args = append(args, "--")
+	}
+
+	args = append(args, "--init_db_sql_file", mysqlctl.InitDBFile)
 	if *isCoverage {
 		args = append([]string{"--test.coverprofile=" + getCoveragePath("mysql-initdb.out"), "--test.v"}, args...)
 	}
@@ -143,16 +150,26 @@ ssl_key={{.ServerKey}}
 		}
 
 		if init {
-			tmpProcess.Args = append(tmpProcess.Args, "init", "--",
-				"--init_db_sql_file", mysqlctl.InitDBFile)
+			tmpProcess.Args = append(tmpProcess.Args, "init")
+			if mysqlctl.MajorVersion < 18 {
+				tmpProcess.Args = append(tmpProcess.Args, "--")
+			}
+
+			tmpProcess.Args = append(tmpProcess.Args, "--init_db_sql_file", mysqlctl.InitDBFile)
+		} else {
+			tmpProcess.Args = append(tmpProcess.Args, "start")
 		}
+	} else {
+		tmpProcess.Args = append(tmpProcess.Args, "start")
 	}
-	tmpProcess.Args = append(tmpProcess.Args, "start")
+	tmpProcess.Env = append(tmpProcess.Env, os.Environ()...)
+	tmpProcess.Env = append(tmpProcess.Env, DefaultVttestEnv)
 	log.Infof("Starting mysqlctl with command: %v", tmpProcess.Args)
 	return tmpProcess, tmpProcess.Start()
 }
 
-// Stop executes mysqlctl command to stop mysql instance and kills the mysql instance if it doesn't shutdown in 30 seconds.
+// Stop executes mysqlctl command to stop mysql instance and kills the mysql instance
+// if it doesn't shutdown in 30 seconds.
 func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	log.Infof("Shutting down MySQL: %d", mysqlctl.TabletUID)
 	defer log.Infof("MySQL shutdown complete: %d", mysqlctl.TabletUID)
@@ -188,7 +205,22 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	if err != nil {
 		return err
 	}
-	return syscall.Kill(pid, syscall.SIGKILL)
+	// We first need to try and kill any associated mysqld_safe process or
+	// else it will immediately restart the mysqld process when we kill it.
+	mspidb, err := exec.Command("sh", "-c",
+		fmt.Sprintf("ps auxww | grep -E 'mysqld_safe|mariadbd-safe' | grep vt_%010d | awk '{print $2}'", mysqlctl.TabletUID)).Output()
+	if err != nil {
+		return err
+	}
+	mysqldSafePID, err := strconv.Atoi(strings.TrimSpace(string(mspidb)))
+	// If we found a valid associated mysqld_safe process then let's kill
+	// it first.
+	if err == nil && mysqldSafePID > 0 {
+		if err = syscallutil.Kill(mysqldSafePID, syscall.SIGKILL); err != nil {
+			return err
+		}
+	}
+	return syscallutil.Kill(pid, syscall.SIGKILL)
 }
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
@@ -221,16 +253,6 @@ func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)))
 }
 
-// Connect returns a new connection to the underlying MySQL server
-func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (*mysql.Conn, error) {
-	params := mysql.ConnParams{
-		Uname:      username,
-		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctl.TabletUID), "/mysql.sock"),
-	}
-
-	return mysql.Connect(ctx, &params)
-}
-
 // MysqlCtlProcessInstanceOptionalInit returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
 func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) (*MysqlctlProcess, error) {
@@ -238,11 +260,17 @@ func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirect
 	if err != nil {
 		return nil, err
 	}
+
+	version, err := GetMajorVersion("mysqlctl")
+	if err != nil {
+		log.Warningf("failed to get major mysqlctl version; backwards-compatibility for CLI changes may not work: %s", err)
+	}
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
 		Binary:       "mysqlctl",
 		LogDirectory: tmpDirectory,
 		InitDBFile:   initFile,
+		MajorVersion: version,
 	}
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID

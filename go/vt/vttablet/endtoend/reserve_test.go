@@ -28,8 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
-//TODO: Add Counter checks in all the tests.
-
 func TestMultipleReserveHaveDifferentConnection(t *testing.T) {
 	framework.Server.Config().EnableSettingsPool = false
 	defer func() {
@@ -777,9 +775,9 @@ func TestReserveBeginExecuteWithPreQueriesAndCheckConnectionState(t *testing.T) 
 	require.NoError(t, err)
 
 	assert.NotEqual(t, qr1.Rows, qr2.Rows)
-	// As the transaction is read commited it is not able to see #5.
+	// As the transaction is read committed it is not able to see #5.
 	assert.Equal(t, `[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(4)]]`, fmt.Sprintf("%v", qr1.Rows))
-	// As the transaction is read uncommited it is able to see #4.
+	// As the transaction is read uncommitted it is able to see #4.
 	assert.Equal(t, `[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(4)] [INT32(5)]]`, fmt.Sprintf("%v", qr2.Rows))
 
 	err = rucClient.Commit()
@@ -804,7 +802,7 @@ func TestReserveBeginExecuteWithPreQueriesAndCheckConnectionState(t *testing.T) 
 	qr2, err = rucClient.Execute(selQuery, nil)
 	require.NoError(t, err)
 
-	// As the transaction on read committed client got rollbacked back, table will forget #4.
+	// As the transaction on read committed client got rolled back, table will forget #4.
 	assert.Equal(t, qr1.Rows, qr2.Rows)
 	assert.Equal(t, `[[INT32(1)] [INT32(2)] [INT32(3)] [INT32(5)]]`, fmt.Sprintf("%v", qr2.Rows))
 
@@ -1187,6 +1185,26 @@ func TestReserveQueryTimeout(t *testing.T) {
 
 	_, err = client.ReserveStreamExecute("select sleep(19)", []string{"set sql_mode = ''"}, nil)
 	assert.NoError(t, err)
+	assert.NoError(t,
+		client.Release())
+}
+
+// TestReserveFlushTables checks that `flush table with read lock` works only with reserve api.
+func TestReserveFlushTables(t *testing.T) {
+	client := framework.NewClient()
+
+	_, err := client.Execute("flush tables with read lock", nil)
+	assert.ErrorContains(t, err, "Flush not allowed without reserved connection")
+
+	_, err = client.Execute("unlock tables", nil)
+	assert.ErrorContains(t, err, "unlock tables should be executed with an existing connection")
+
+	_, err = client.ReserveExecute("flush tables with read lock", nil, nil)
+	assert.NoError(t, err)
+
+	_, err = client.Execute("unlock tables", nil)
+	assert.NoError(t, err)
+
 	assert.NoError(t,
 		client.Release())
 }

@@ -17,13 +17,14 @@ limitations under the License.
 package operators
 
 import (
+	"strconv"
+
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type Limit struct {
-	Source ops.Operator
+	Source Operator
 	AST    *sqlparser.Limit
 
 	// Pushed marks whether the limit has been pushed down to the inputs but still need to keep the operator around.
@@ -32,51 +33,47 @@ type Limit struct {
 	Pushed bool
 }
 
-func (l *Limit) Clone(inputs []ops.Operator) ops.Operator {
+func (l *Limit) Clone(inputs []Operator) Operator {
 	return &Limit{
 		Source: inputs[0],
 		AST:    sqlparser.CloneRefOfLimit(l.AST),
+		Pushed: l.Pushed,
 	}
 }
 
-func (l *Limit) Inputs() []ops.Operator {
-	return []ops.Operator{l.Source}
+func (l *Limit) Inputs() []Operator {
+	return []Operator{l.Source}
 }
 
-func (l *Limit) SetInputs(operators []ops.Operator) {
+func (l *Limit) SetInputs(operators []Operator) {
 	l.Source = operators[0]
 }
 
-func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := l.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	l.Source = newSrc
-	return l, nil
+func (l *Limit) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	l.Source = l.Source.AddPredicate(ctx, expr)
+	return l
 }
 
-func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	newSrc, offset, err := l.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
-	}
-	l.Source = newSrc
-	return l, offset, nil
+func (l *Limit) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
+	return l.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (l *Limit) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return l.Source.GetColumns()
+func (l *Limit) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	return l.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (l *Limit) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return l.Source.GetSelectExprs()
+func (l *Limit) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return l.Source.GetColumns(ctx)
 }
 
-func (l *Limit) GetOrdering() ([]ops.OrderBy, error) {
-	return l.Source.GetOrdering()
+func (l *Limit) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+	return l.Source.GetSelectExprs(ctx)
+}
+
+func (l *Limit) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
+	return l.Source.GetOrdering(ctx)
 }
 
 func (l *Limit) ShortDescription() string {
-	return sqlparser.String(l.AST)
+	return sqlparser.String(l.AST) + " Pushed:" + strconv.FormatBool(l.Pushed)
 }

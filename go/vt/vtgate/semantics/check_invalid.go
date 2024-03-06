@@ -24,12 +24,12 @@ import (
 
 func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
-	case *sqlparser.Update:
-		return checkUpdate(node)
 	case *sqlparser.Select:
 		return a.checkSelect(cursor, node)
 	case *sqlparser.Nextval:
 		return a.checkNextVal()
+	case *sqlparser.AliasedTableExpr:
+		return checkAliasedTableExpr(node)
 	case *sqlparser.JoinTableExpr:
 		return a.checkJoin(node)
 	case *sqlparser.LockingFunc:
@@ -42,12 +42,51 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		return checkDerived(node)
 	case *sqlparser.AssignmentExpr:
 		return vterrors.VT12001("Assignment expression")
+	case *sqlparser.Subquery:
+		return a.checkSubqueryColumns(cursor.Parent(), node)
+	case *sqlparser.With:
+		if node.Recursive {
+			return vterrors.VT12001("recursive common table expression")
+		}
 	case *sqlparser.Insert:
 		if node.Action == sqlparser.ReplaceAct {
 			return ShardedError{Inner: &UnsupportedConstruct{errString: "REPLACE INTO with sharded keyspace"}}
 		}
 	}
 
+	return nil
+}
+
+// checkSubqueryColumns checks that subqueries used in comparisons have the correct number of columns
+func (a *analyzer) checkSubqueryColumns(parent sqlparser.SQLNode, subq *sqlparser.Subquery) error {
+	cmp, ok := parent.(*sqlparser.ComparisonExpr)
+	if !ok {
+		return nil
+	}
+	var otherSide sqlparser.Expr
+	if cmp.Left == subq {
+		otherSide = cmp.Right
+	} else {
+		otherSide = cmp.Left
+	}
+
+	cols := 1
+	if tuple, ok := otherSide.(sqlparser.ValTuple); ok {
+		cols = len(tuple)
+	}
+	columns := subq.Select.GetColumns()
+	for _, expr := range columns {
+		_, ok := expr.(*sqlparser.StarExpr)
+		if ok {
+			// we can't check these queries properly. if we are able to push it down to mysql,
+			// it will be checked there. if not, we'll fail because we are missing the column
+			// information when we get to offset planning
+			return nil
+		}
+	}
+	if len(columns) != cols {
+		return &SubqueryColumnCountError{Expected: cols}
+	}
 	return nil
 }
 
@@ -132,20 +171,31 @@ func (a *analyzer) checkSelect(cursor *sqlparser.Cursor, node *sqlparser.Select)
 	if a.scoper.currentScope().parent != nil {
 		return &CantUseOptionHereError{Msg: errMsg}
 	}
+	if node.Into != nil {
+		return ShardedError{Inner: &UnsupportedConstruct{errString: "INTO on sharded keyspace"}}
+	}
 	return nil
 }
 
-func checkUpdate(node *sqlparser.Update) error {
-	if len(node.TableExprs) != 1 {
-		return ShardedError{Inner: &UnsupportedMultiTablesInUpdateError{ExprCount: len(node.TableExprs)}}
+// checkAliasedTableExpr checks the validity of AliasedTableExpr.
+func checkAliasedTableExpr(node *sqlparser.AliasedTableExpr) error {
+	if len(node.Hints) == 0 {
+		return nil
 	}
-	alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !isAlias {
-		return ShardedError{Inner: &UnsupportedMultiTablesInUpdateError{NotAlias: true}}
-	}
-	_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
-	if isDerived {
-		return &TableNotUpdatableError{Table: alias.As.String()}
+	alreadySeenVindexHint := false
+	for _, hint := range node.Hints {
+		if hint.Type.IsVindexHint() {
+			if alreadySeenVindexHint {
+				// TableName is safe to call, because only TableExpr can have hints.
+				// And we already checked for hints being empty.
+				tableName, err := node.TableName()
+				if err != nil {
+					return err
+				}
+				return &CantUseMultipleVindexHints{Table: sqlparser.String(tableName)}
+			}
+			alreadySeenVindexHint = true
+		}
 	}
 	return nil
 }

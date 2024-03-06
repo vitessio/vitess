@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/process"
 )
 
 var (
@@ -111,7 +112,10 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 	}()
 
 	// Create a memory topo-server and create the keyspace and shard records
-	ts = memorytopo.NewServer(cell1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, cell1)
 	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
 	require.NoError(t, err)
 
@@ -243,7 +247,9 @@ func TestShardPrimary(t *testing.T) {
 			}()
 
 			// Create a memory topo-server and create the keyspace and shard records
-			ts = memorytopo.NewServer(cell1)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts = memorytopo.NewServer(ctx, cell1)
 			_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
 			require.NoError(t, err)
 
@@ -336,4 +342,25 @@ func TestGetLockAction(t *testing.T) {
 			require.Equal(t, tt.want, getLockAction(tt.analysedInstance, tt.code))
 		})
 	}
+}
+
+// TestProcessHealth tests that the health of the process reflects that we have run the first discovery once correctly.
+func TestProcessHealth(t *testing.T) {
+	require.False(t, process.FirstDiscoveryCycleComplete.Load())
+	originalTs := ts
+	defer func() {
+		ts = originalTs
+		process.FirstDiscoveryCycleComplete.Store(false)
+	}()
+	// Verify in the beginning, we have the first DiscoveredOnce field false.
+	health, err := process.HealthTest()
+	require.NoError(t, err)
+	require.False(t, health.DiscoveredOnce)
+	ts = memorytopo.NewServer(context.Background(), cell1)
+	populateAllInformation()
+	require.True(t, process.FirstDiscoveryCycleComplete.Load())
+	// Verify after we populate all information, we have the first DiscoveredOnce field true.
+	health, err = process.HealthTest()
+	require.NoError(t, err)
+	require.True(t, health.DiscoveredOnce)
 }

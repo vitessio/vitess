@@ -23,6 +23,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
@@ -36,7 +37,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 const (
@@ -46,10 +46,10 @@ const (
 	sqlReadVReplicationWorkflow = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from %s.vreplication where workflow = %a and db_name = %a"
 	// Delete VReplication records for the given workflow.
 	sqlDeleteVReplicationWorkflow = "delete from %s.vreplication where workflow = %a and db_name = %a"
-	// Retrieve the current configuration values for a workflow's vreplication stream.
+	// Retrieve the current configuration values for a workflow's vreplication stream(s).
 	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
-	sqlUpdateVReplicationWorkflowConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
+	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
 )
 
 func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
@@ -58,6 +58,7 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 	}
 	res := &sqltypes.Result{}
 	for _, bls := range req.BinlogSource {
+		protoutil.SortBinlogSourceTables(bls)
 		source, err := prototext.Marshal(bls)
 		if err != nil {
 			return nil, err
@@ -67,7 +68,7 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 			req.Cells = append(req.Cells, tm.Tablet().Alias.Cell)
 		}
 		wfState := binlogdatapb.VReplicationWorkflowState_Stopped.String()
-		tabletTypesStr := topoprotopb.MakeStringTypeCSV(req.TabletTypes)
+		tabletTypesStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
 		if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
 			tabletTypesStr = discovery.InOrderHint + tabletTypesStr
 		}
@@ -229,8 +230,8 @@ func (tm *TabletManager) ReadVReplicationWorkflow(ctx context.Context, req *tabl
 }
 
 // UpdateVReplicationWorkflow updates the sidecar databases's vreplication
-// record for this tablet's vreplication workflow stream(s). If there
-// is no stream for the given workflow on the tablet then a nil result
+// record(s) for this tablet's vreplication workflow stream(s). If there
+// are no streams for the given workflow on the tablet then a nil result
 // is returned as this is expected e.g. on source tablets of a
 // Reshard workflow (source and target are the same keyspace). The
 // caller can consider this case an error if they choose to.
@@ -258,74 +259,79 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil}, nil
 	}
 
-	row := res.Named().Row()
-	id := row.AsInt64("id", 0)
-	cells := strings.Split(row.AsString("cell", ""), ",")
-	tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(row.AsString("tablet_types", ""))
-	if err != nil {
-		return nil, err
+	for _, row := range res.Named().Rows {
+		id := row.AsInt64("id", 0)
+		cells := strings.Split(row.AsString("cell", ""), ",")
+		tabletTypes, inorder, err := discovery.ParseTabletTypesAndOrder(row.AsString("tablet_types", ""))
+		if err != nil {
+			return nil, err
+		}
+		bls := &binlogdatapb.BinlogSource{}
+		source := row.AsBytes("source", []byte{})
+		state := row.AsString("state", "")
+		message := row.AsString("message", "")
+		if req.State == binlogdatapb.VReplicationWorkflowState_Running && strings.ToUpper(message) == workflow.Frozen {
+			return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil},
+				vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot start a workflow when it is frozen")
+		}
+		// For the string based values, we use NULL to differentiate
+		// from an empty string. The NULL value indicates that we
+		// should keep the existing value.
+		if !textutil.ValueIsSimulatedNull(req.Cells) {
+			cells = req.Cells
+		}
+		if !textutil.ValueIsSimulatedNull(req.TabletTypes) {
+			tabletTypes = req.TabletTypes
+		}
+		tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
+		if inorder && req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN ||
+			req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
+			tabletTypesStr = discovery.InOrderHint + tabletTypesStr
+		}
+		if err = prototext.Unmarshal(source, bls); err != nil {
+			return nil, err
+		}
+		// If we don't want to update the existing value then pass
+		// the simulated NULL value of -1.
+		if !textutil.ValueIsSimulatedNull(req.OnDdl) {
+			bls.OnDdl = req.OnDdl
+		}
+		source, err = prototext.Marshal(bls)
+		if err != nil {
+			return nil, err
+		}
+		if !textutil.ValueIsSimulatedNull(req.State) {
+			state = binlogdatapb.VReplicationWorkflowState_name[int32(req.State)]
+		}
+		bindVars = map[string]*querypb.BindVariable{
+			"st": sqltypes.StringBindVariable(state),
+			"sc": sqltypes.StringBindVariable(string(source)),
+			"cl": sqltypes.StringBindVariable(strings.Join(cells, ",")),
+			"tt": sqltypes.StringBindVariable(tabletTypesStr),
+			"id": sqltypes.Int64BindVariable(id),
+		}
+		parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowStreamConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
+		stmt, err = parsed.GenerateQuery(bindVars, nil)
+		if err != nil {
+			return nil, err
+		}
+		res, err = tm.VREngine.Exec(stmt)
+		if err != nil {
+			return nil, err
+		}
 	}
-	bls := &binlogdatapb.BinlogSource{}
-	source := row.AsBytes("source", []byte{})
-	state := row.AsString("state", "")
-	message := row.AsString("message", "")
-	if req.State == binlogdatapb.VReplicationWorkflowState_Running && strings.ToUpper(message) == workflow.Frozen {
-		return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: nil},
-			vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "cannot start a workflow when it is frozen")
-	}
-	// For the string based values, we use NULL to differentiate
-	// from an empty string. The NULL value indicates that we
-	// should keep the existing value.
-	if !textutil.ValueIsSimulatedNull(req.Cells) {
-		cells = req.Cells
-	}
-	if !textutil.ValueIsSimulatedNull(req.TabletTypes) {
-		tabletTypes = req.TabletTypes
-	}
-	tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
-	if inorder && req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_UNKNOWN ||
-		req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
-		tabletTypesStr = discovery.InOrderHint + tabletTypesStr
-	}
-	if err = prototext.Unmarshal(source, bls); err != nil {
-		return nil, err
-	}
-	// If we don't want to update the existing value then pass
-	// the simulated NULL value of -1.
-	if !textutil.ValueIsSimulatedNull(req.OnDdl) {
-		bls.OnDdl = req.OnDdl
-	}
-	source, err = prototext.Marshal(bls)
-	if err != nil {
-		return nil, err
-	}
-	if !textutil.ValueIsSimulatedNull(req.State) {
-		state = binlogdatapb.VReplicationWorkflowState_name[int32(req.State)]
-	}
-	bindVars = map[string]*querypb.BindVariable{
-		"st": sqltypes.StringBindVariable(state),
-		"sc": sqltypes.StringBindVariable(string(source)),
-		"cl": sqltypes.StringBindVariable(strings.Join(cells, ",")),
-		"tt": sqltypes.StringBindVariable(tabletTypesStr),
-		"id": sqltypes.Int64BindVariable(id),
-	}
-	parsed = sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowConfig, sidecar.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
-	stmt, err = parsed.GenerateQuery(bindVars, nil)
-	if err != nil {
-		return nil, err
-	}
-	res, err = tm.VREngine.Exec(stmt)
 
-	if err != nil {
-		return nil, err
-	}
-	return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
+	return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{
+		Result: &querypb.QueryResult{
+			RowsAffected: uint64(len(res.Rows)),
+		},
+	}, nil
 }
 
 // VReplicationExec executes a vreplication command.
 func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
-	// Replace any provided sidecar databsae qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
+	// Replace any provided sidecar database qualifiers with the correct one.
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}

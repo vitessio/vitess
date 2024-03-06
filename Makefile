@@ -61,6 +61,10 @@ ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
+ifdef VT_EXTRA_BUILD_LDFLAGS
+export EXTRA_BUILD_LDFLAGS := $(VT_EXTRA_BUILD_LDFLAGS)
+endif
+
 # This should be the root of the vitess Git directory.
 ifndef VTROOT
 export VTROOT=${PWD}
@@ -76,7 +80,7 @@ ifndef NOBANNER
 endif
 	bash ./build.env
 	go build -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		-ldflags "$(shell tools/build_version_flags.sh)"  \
+		-ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)"  \
 		-o ${VTROOTBIN} ./go/...
 
 # build the vitess binaries statically
@@ -89,7 +93,7 @@ endif
 	# Binaries will be placed in ${VTROOTBIN}.
 	CGO_ENABLED=0 go build \
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
 ifndef NOVTADMINBUILD
 	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"
@@ -111,7 +115,7 @@ endif
 	mkdir -p ${VTROOTBIN}/${GOOS}_${GOARCH}
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build         \
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN}/${GOOS}_${GOARCH} ./go/...
 
 	@if [ ! -x "${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet" ]; then \
@@ -125,7 +129,7 @@ endif
 	bash ./build.env
 	go build -trimpath \
 		$(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		-ldflags "$(shell tools/build_version_flags.sh)"  \
+		-ldflags "$(EXTRA_BUILD_LDFLAGS) $(shell tools/build_version_flags.sh)"  \
 		-gcflags -'N -l' \
 		-o ${VTROOTBIN} ./go/...
 
@@ -174,7 +178,7 @@ demo:
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
 		--in ./go/... \
-		--gen vitess.io/vitess/go/pools.Setting \
+		--gen vitess.io/vitess/go/pools/smartconnpool.Setting \
 		--gen vitess.io/vitess/go/vt/schema.DDLStrategySetting \
 		--gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
 		--gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
@@ -210,10 +214,14 @@ e2e_test: build
 	go test $(VT_GO_PARALLEL) ./go/.../endtoend/...
 
 # Run the code coverage tools, compute aggregate.
-# If you want to improve in a directory, run:
-#   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
-unit_test_cover: build
-	go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
+unit_test_cover: build dependency_check demo
+	source build.env
+	go test $(VT_GO_PARALLEL) -count=1 -failfast -covermode=atomic -coverpkg=vitess.io/vitess/go/... -coverprofile=coverage.out ./go/...
+	# Handle go tool cover failures due to not handling `//line` directives, which
+	# the goyacc compiler adds to the generated parser in sql.go. See:
+	# https://github.com/golang/go/issues/41222
+	sed -i'' -e '/^vitess.io\/vitess\/go\/vt\/sqlparser\/yaccpar/d' coverage.out
+	go tool $(VT_GO_PARALLEL) cover -html=coverage.out
 
 unit_test_race: build dependency_check
 	tools/unit_test_race.sh
@@ -260,9 +268,10 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 		--go_out=. --plugin protoc-gen-go="${VTROOTBIN}/protoc-gen-go" \
 		--go-grpc_out=. --plugin protoc-gen-go-grpc="${VTROOTBIN}/protoc-gen-go-grpc" \
 		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${VTROOTBIN}/protoc-gen-go-vtproto" \
-		--go-vtproto_opt=features=marshal+unmarshal+size+pool \
+		--go-vtproto_opt=features=marshal+unmarshal+size+pool+clone \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamRowsResponse \
+		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamTablesResponse \
 		-I${PWD}/dist/vt-protoc-21.3/include:proto $(PROTO_SRCS)
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/
@@ -273,7 +282,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=19
+BOOTSTRAP_VERSION=29
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -327,6 +336,9 @@ DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
 $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
 
+docker_lite_push:
+	for i in $(DOCKER_LITE_SUFFIX); do echo "pushing lite image: $$i"; docker push vitess/lite:$$i || exit 1; done
+
 docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
 
 docker_local:
@@ -376,6 +388,9 @@ back_to_dev_mode:
 tools:
 	echo $$(date): Installing dependencies
 	./bootstrap.sh
+
+clean_tools:
+	./tools/remove_dependencies.sh
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies

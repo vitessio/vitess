@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
-	vtstats "vitess.io/vitess/go/stats"
 )
 
 // Stats is a reporting interface meant to be shared among backup and restore
@@ -52,9 +51,9 @@ type Stats interface {
 type noStats struct{}
 
 type scopedStats struct {
-	bytes       *vtstats.CountersWithMultiLabels
-	count       *vtstats.CountersWithMultiLabels
-	durationNs  *vtstats.CountersWithMultiLabels
+	bytes       *stats.CountersWithMultiLabels
+	count       *stats.CountersWithMultiLabels
+	durationNs  *stats.CountersWithMultiLabels
 	labelValues []string
 }
 

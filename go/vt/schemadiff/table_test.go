@@ -28,24 +28,24 @@ import (
 
 func TestCreateTableDiff(t *testing.T) {
 	tt := []struct {
-		name       string
-		from       string
-		to         string
-		fromName   string
-		toName     string
-		diff       string
-		diffs      []string
-		cdiff      string
-		cdiffs     []string
-		isError    bool
-		errorMsg   string
-		autoinc    int
-		rotation   int
-		fulltext   int
-		colrename  int
-		constraint int
-		charset    int
-		algorithm  int
+		name        string
+		from        string
+		to          string
+		fromName    string
+		toName      string
+		diff        string
+		diffs       []string
+		cdiff       string
+		cdiffs      []string
+		errorMsg    string
+		autoinc     int
+		rotation    int
+		fulltext    int
+		colrename   int
+		constraint  int
+		charset     int
+		algorithm   int
+		enumreorder int
 	}{
 		{
 			name: "identical",
@@ -300,6 +300,80 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:  "alter table t1 modify column c int after a, add column x int after c, add column y int",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int AFTER `a`, ADD COLUMN `x` int AFTER `c`, ADD COLUMN `y` int",
 		},
+		// enum
+		{
+			name:  "expand enum",
+			from:  "create table t1 (id int primary key, e enum('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e enum('a', 'b', 'c', 'd'))",
+			diff:  "alter table t1 modify column e enum('a', 'b', 'c', 'd')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` enum('a', 'b', 'c', 'd')",
+		},
+		{
+			name:  "truncate enum",
+			from:  "create table t1 (id int primary key, e enum('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e enum('a', 'b'))",
+			diff:  "alter table t1 modify column e enum('a', 'b')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` enum('a', 'b')",
+		},
+		{
+			name:  "rename enum value",
+			from:  "create table t1 (id int primary key, e enum('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e enum('a', 'b', 'd'))",
+			diff:  "alter table t1 modify column e enum('a', 'b', 'd')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` enum('a', 'b', 'd')",
+		},
+		{
+			name:        "reorder enum, fail",
+			from:        "create table t1 (id int primary key, e enum('a', 'b', 'c'))",
+			to:          "create table t2 (id int primary key, e enum('b', 'a', 'c'))",
+			enumreorder: EnumReorderStrategyReject,
+			errorMsg:    (&EnumValueOrdinalChangedError{Table: "t1", Column: "e", Value: "'a'", Ordinal: 0, NewOrdinal: 1}).Error(),
+		},
+		{
+			name:        "reorder enum, allow",
+			from:        "create table t1 (id int primary key, e enum('a', 'b', 'c'))",
+			to:          "create table t2 (id int primary key, e enum('b', 'a', 'c'))",
+			diff:        "alter table t1 modify column e enum('b', 'a', 'c')",
+			cdiff:       "ALTER TABLE `t1` MODIFY COLUMN `e` enum('b', 'a', 'c')",
+			enumreorder: EnumReorderStrategyAllow,
+		},
+		{
+			name:  "expand set",
+			from:  "create table t1 (id int primary key, e set('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e set('a', 'b', 'c', 'd'))",
+			diff:  "alter table t1 modify column e set('a', 'b', 'c', 'd')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` set('a', 'b', 'c', 'd')",
+		},
+		{
+			name:  "truncate set",
+			from:  "create table t1 (id int primary key, e set('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e set('a', 'b'))",
+			diff:  "alter table t1 modify column e set('a', 'b')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` set('a', 'b')",
+		},
+		{
+			name:  "rename set value",
+			from:  "create table t1 (id int primary key, e set('a', 'b', 'c'))",
+			to:    "create table t2 (id int primary key, e set('a', 'b', 'd'))",
+			diff:  "alter table t1 modify column e set('a', 'b', 'd')",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `e` set('a', 'b', 'd')",
+		},
+		{
+			name:        "reorder set, fail",
+			from:        "create table t1 (id int primary key, e set('a', 'b', 'c'))",
+			to:          "create table t2 (id int primary key, e set('b', 'a', 'c'))",
+			enumreorder: EnumReorderStrategyReject,
+			errorMsg:    (&EnumValueOrdinalChangedError{Table: "t1", Column: "e", Value: "'a'", Ordinal: 0, NewOrdinal: 1}).Error(),
+		},
+		{
+			name:        "reorder set, allow",
+			from:        "create table t1 (id int primary key, e set('a', 'b', 'c'))",
+			to:          "create table t2 (id int primary key, e set('b', 'a', 'c'))",
+			diff:        "alter table t1 modify column e set('b', 'a', 'c')",
+			cdiff:       "ALTER TABLE `t1` MODIFY COLUMN `e` set('b', 'a', 'c')",
+			enumreorder: EnumReorderStrategyAllow,
+		},
+
 		// keys
 		{
 			name:  "added key",
@@ -608,6 +682,14 @@ func TestCreateTableDiff(t *testing.T) {
 			constraint: ConstraintNamesIgnoreAll,
 		},
 		{
+			name:       "check constraints, remove duplicate",
+			from:       "create table t1 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` > 2)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			to:         "create table t2 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `chk_789def` CHECK ((`i` < 5)))",
+			diff:       "alter table t1 drop check check3",
+			cdiff:      "ALTER TABLE `t1` DROP CHECK `check3`",
+			constraint: ConstraintNamesIgnoreAll,
+		},
+		{
 			name:       "check constraints, remove, ignore vitess, no match",
 			from:       "create table t1 (id int primary key, i int, constraint `chk_123abc` CHECK ((`i` > 2)), constraint `check3` CHECK ((`i` != 3)), constraint `chk_789def` CHECK ((`i` < 5)))",
 			to:         "create table t2 (id int primary key, i int, constraint `check1` CHECK ((`i` < 5)), constraint `check2` CHECK ((`i` > 2)))",
@@ -657,6 +739,50 @@ func TestCreateTableDiff(t *testing.T) {
 			name: "identical foreign key",
 			from: "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
 			to:   "create table t2 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
+		},
+		{
+			name:  "similar foreign key under different name",
+			from:  "create table t1 (id int primary key, i int, key ix(i), constraint f1 foreign key (i) references parent(id) on delete cascade)",
+			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f2 foreign key (i) references parent(id) on delete cascade)",
+			diff:  "alter table t1 drop foreign key f1, add constraint f2 foreign key (i) references parent (id) on delete cascade",
+			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f1`, ADD CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE CASCADE",
+		},
+		{
+			name:       "similar foreign key under different name, ignore names",
+			from:       "create table t1 (id int primary key, i int, key ix(i), constraint f1 foreign key (i) references parent(id) on delete cascade)",
+			to:         "create table t2 (id int primary key, i int, key ix(i), constraint f2 foreign key (i) references parent(id) on delete cascade)",
+			constraint: ConstraintNamesIgnoreAll,
+		},
+		{
+			name:  "two identical foreign keys, dropping one",
+			from:  "create table t1 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id), constraint f2 foreign key (i) references parent(id))",
+			to:    "create table t2 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id))",
+			diff:  "alter table t1 drop foreign key f2",
+			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f2`",
+		},
+		{
+			name:       "two identical foreign keys, dropping one, ignore vitess names",
+			from:       "create table t1 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id), constraint f2 foreign key (i) references parent(id))",
+			to:         "create table t2 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id))",
+			diff:       "alter table t1 drop foreign key f2",
+			cdiff:      "ALTER TABLE `t1` DROP FOREIGN KEY `f2`",
+			constraint: ConstraintNamesIgnoreVitess,
+		},
+		{
+			name:       "two identical foreign keys, dropping one, ignore all names",
+			from:       "create table t1 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id), constraint f2 foreign key (i) references parent(id))",
+			to:         "create table t2 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id))",
+			diff:       "alter table t1 drop foreign key f2",
+			cdiff:      "ALTER TABLE `t1` DROP FOREIGN KEY `f2`",
+			constraint: ConstraintNamesIgnoreAll,
+		},
+		{
+			name:       "add two identical foreign key constraints, ignore all names",
+			from:       "create table t1 (id int primary key, i int, key i_idex (i))",
+			to:         "create table t2 (id int primary key, i int, key i_idex (i), constraint f1 foreign key (i) references parent(id), constraint f2 foreign key (i) references parent(id))",
+			diff:       "alter table t1 add constraint f1 foreign key (i) references parent (id), add constraint f2 foreign key (i) references parent (id)",
+			cdiff:      "ALTER TABLE `t1` ADD CONSTRAINT `f1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`), ADD CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			constraint: ConstraintNamesIgnoreAll,
 		},
 		{
 			name: "implicit foreign key indexes",
@@ -1098,6 +1224,27 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff: "ALTER TABLE `t` MODIFY COLUMN `t1` varchar(128) NOT NULL, MODIFY COLUMN `t2` varchar(128) NOT NULL, MODIFY COLUMN `t3` tinytext, CHARSET utf8mb4",
 		},
 		{
+			name:  "change table collation",
+			from:  "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_ai_ci",
+			to:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_bin",
+			diff:  "alter table t collate utf8mb4_0900_bin",
+			cdiff: "ALTER TABLE `t` COLLATE utf8mb4_0900_bin",
+		},
+		{
+			name:  "change table collation with textual column",
+			from:  "create table t (id int, t varchar(192) not null) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_ai_ci",
+			to:    "create table t (id int, t varchar(192) not null) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_bin",
+			diff:  "alter table t modify column t varchar(192) not null, collate utf8mb4_0900_bin",
+			cdiff: "ALTER TABLE `t` MODIFY COLUMN `t` varchar(192) NOT NULL, COLLATE utf8mb4_0900_bin",
+		},
+		{
+			name:  "change table collation with textual column that has collation",
+			from:  "create table t (id int, t varchar(192) not null collate utf8mb4_0900_bin) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_ai_ci",
+			to:    "create table t (id int, t varchar(192) not null collate utf8mb4_0900_bin) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_bin",
+			diff:  "alter table t collate utf8mb4_0900_bin",
+			cdiff: "ALTER TABLE `t` COLLATE utf8mb4_0900_bin",
+		},
+		{
 			name:  "normalized unsigned attribute",
 			from:  "create table t1 (id int primary key)",
 			to:    "create table t1 (id int unsigned primary key)",
@@ -1213,21 +1360,22 @@ func TestCreateTableDiff(t *testing.T) {
 		},
 	}
 	standardHints := DiffHints{}
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
+			fromStmt, err := env.Parser().ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := fromStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			toStmt, err := sqlparser.ParseStrictDDL(ts.to)
+			toStmt, err := env.Parser().ParseStrictDDL(ts.to)
 			require.NoError(t, err)
 			toCreateTable, ok := toStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			c, err := NewCreateTableEntity(fromCreateTable)
+			c, err := NewCreateTableEntity(env, fromCreateTable)
 			require.NoError(t, err)
-			other, err := NewCreateTableEntity(toCreateTable)
+			other, err := NewCreateTableEntity(env, toCreateTable)
 			require.NoError(t, err)
 
 			hints := standardHints
@@ -1238,6 +1386,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.FullTextKeyStrategy = ts.fulltext
 			hints.TableCharsetCollateStrategy = ts.charset
 			hints.AlterTableAlgorithmStrategy = ts.algorithm
+			hints.EnumReorderStrategy = ts.enumreorder
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))
@@ -1245,13 +1394,20 @@ func TestCreateTableDiff(t *testing.T) {
 				ts.diff = ts.diffs[0]
 				ts.cdiff = ts.cdiffs[0]
 			}
-			switch {
-			case ts.isError:
-				require.Error(t, err)
-				if ts.errorMsg != "" {
-					assert.Contains(t, err.Error(), ts.errorMsg)
-				}
-			case ts.diff == "":
+
+			if ts.diff != "" {
+				_, err := env.Parser().ParseStrictDDL(ts.diff)
+				require.NoError(t, err)
+			}
+			if ts.cdiff != "" {
+				_, err := env.Parser().ParseStrictDDL(ts.cdiff)
+				require.NoError(t, err)
+			}
+			if ts.errorMsg != "" {
+				require.ErrorContains(t, err, ts.errorMsg)
+				return
+			}
+			if ts.diff == "" {
 				assert.NoError(t, err)
 				assert.True(t, alter.IsEmpty(), "expected empty diff, found changes")
 				if !alter.IsEmpty() {
@@ -1260,60 +1416,61 @@ func TestCreateTableDiff(t *testing.T) {
 					t.Logf("c: %v", sqlparser.CanonicalString(c.CreateTable))
 					t.Logf("other: %v", sqlparser.CanonicalString(other.CreateTable))
 				}
-			default:
+				return
+			}
+
+			// Expecting diff
+			assert.NoError(t, err)
+			require.NotNil(t, alter)
+			assert.False(t, alter.IsEmpty(), "expected changes, found empty diff")
+
+			{
+				diff := alter.StatementString()
+				assert.Equal(t, ts.diff, diff)
+
+				if len(ts.diffs) > 0 {
+
+					allSubsequentDiffs := AllSubsequent(alter)
+					require.Equal(t, len(ts.diffs), len(allSubsequentDiffs))
+					require.Equal(t, len(ts.cdiffs), len(allSubsequentDiffs))
+					for i := range ts.diffs {
+						assert.Equal(t, ts.diffs[i], allSubsequentDiffs[i].StatementString())
+						assert.Equal(t, ts.cdiffs[i], allSubsequentDiffs[i].CanonicalStatementString())
+					}
+				}
+				// validate we can parse back the statement
+				_, err := env.Parser().ParseStrictDDL(diff)
 				assert.NoError(t, err)
-				require.NotNil(t, alter)
-				assert.False(t, alter.IsEmpty(), "expected changes, found empty diff")
 
-				{
-					diff := alter.StatementString()
-					assert.Equal(t, ts.diff, diff)
-
-					if len(ts.diffs) > 0 {
-
-						allSubsequentDiffs := AllSubsequent(alter)
-						require.Equal(t, len(ts.diffs), len(allSubsequentDiffs))
-						require.Equal(t, len(ts.cdiffs), len(allSubsequentDiffs))
-						for i := range ts.diffs {
-							assert.Equal(t, ts.diffs[i], allSubsequentDiffs[i].StatementString())
-							assert.Equal(t, ts.cdiffs[i], allSubsequentDiffs[i].CanonicalStatementString())
-						}
-					}
-					// validate we can parse back the statement
-					_, err := sqlparser.ParseStrictDDL(diff)
-					assert.NoError(t, err)
-
-					// Validate "from/to" entities
-					eFrom, eTo := alter.Entities()
-					if ts.fromName != "" {
-						assert.Equal(t, ts.fromName, eFrom.Name())
-					}
-					if ts.toName != "" {
-						assert.Equal(t, ts.toName, eTo.Name())
-					}
-
-					{ // Validate "apply()" on "from" converges with "to"
-						applied, err := c.Apply(alter)
-						assert.NoError(t, err)
-						require.NotNil(t, applied)
-						appliedDiff, err := eTo.Diff(applied, &hints)
-						require.NoError(t, err)
-						assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v.\nc=%v\n,alter=%v\n,eTo=%v\napplied=%v\n",
-							appliedDiff.CanonicalStatementString(),
-							c.Create().CanonicalStatementString(),
-							alter.CanonicalStatementString(),
-							eTo.Create().CanonicalStatementString(),
-							applied.Create().CanonicalStatementString(),
-						)
-					}
+				// Validate "from/to" entities
+				eFrom, eTo := alter.Entities()
+				if ts.fromName != "" {
+					assert.Equal(t, ts.fromName, eFrom.Name())
 				}
-				{
-					cdiff := alter.CanonicalStatementString()
-					assert.Equal(t, ts.cdiff, cdiff)
-					_, err := sqlparser.ParseStrictDDL(cdiff)
-					assert.NoError(t, err)
+				if ts.toName != "" {
+					assert.Equal(t, ts.toName, eTo.Name())
 				}
 
+				{ // Validate "apply()" on "from" converges with "to"
+					applied, err := c.Apply(alter)
+					assert.NoError(t, err)
+					require.NotNil(t, applied)
+					appliedDiff, err := eTo.Diff(applied, &hints)
+					require.NoError(t, err)
+					assert.True(t, appliedDiff.IsEmpty(), "expected empty diff, found changes: %v.\nc=%v\n,alter=%v\n,eTo=%v\napplied=%v\n",
+						appliedDiff.CanonicalStatementString(),
+						c.Create().CanonicalStatementString(),
+						alter.CanonicalStatementString(),
+						eTo.Create().CanonicalStatementString(),
+						applied.Create().CanonicalStatementString(),
+					)
+				}
+			}
+			{
+				cdiff := alter.CanonicalStatementString()
+				assert.Equal(t, ts.cdiff, cdiff)
+				_, err := env.Parser().ParseStrictDDL(cdiff)
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -1805,19 +1962,20 @@ func TestValidate(t *testing.T) {
 		},
 	}
 	hints := DiffHints{}
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(ts.from)
+			stmt, err := env.Parser().ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = sqlparser.ParseStrictDDL(ts.alter)
+			stmt, err = env.Parser().ParseStrictDDL(ts.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
 
-			from, err := NewCreateTableEntity(fromCreateTable)
+			from, err := NewCreateTableEntity(env, fromCreateTable)
 			require.NoError(t, err)
 			a := &AlterTableEntityDiff{from: from, alterTable: alterTable}
 			applied, err := from.Apply(a)
@@ -1836,12 +1994,12 @@ func TestValidate(t *testing.T) {
 				require.True(t, ok)
 				applied = c.normalize()
 
-				stmt, err := sqlparser.ParseStrictDDL(ts.to)
+				stmt, err := env.Parser().ParseStrictDDL(ts.to)
 				require.NoError(t, err)
 				toCreateTable, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
 
-				to, err := NewCreateTableEntity(toCreateTable)
+				to, err := NewCreateTableEntity(env, toCreateTable)
 				require.NoError(t, err)
 				diff, err := applied.Diff(to, &hints)
 				require.NoError(t, err)
@@ -2118,14 +2276,15 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t` (\n\t`id` tinyint(1),\n\t`b` tinyint(1),\n\tPRIMARY KEY (`id`)\n)",
 		},
 	}
+	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := sqlparser.ParseStrictDDL(ts.from)
+			stmt, err := env.Parser().ParseStrictDDL(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			from, err := NewCreateTableEntity(fromCreateTable)
+			from, err := NewCreateTableEntity(env, fromCreateTable)
 			require.NoError(t, err)
 			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
 		})
@@ -2209,11 +2368,12 @@ func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
 		},
 	}
 
-	stmt, err := sqlparser.ParseStrictDDL(sql)
+	env := NewTestEnv()
+	stmt, err := env.Parser().ParseStrictDDL(sql)
 	require.NoError(t, err)
 	createTable, ok := stmt.(*sqlparser.CreateTable)
 	require.True(t, ok)
-	c, err := NewCreateTableEntity(createTable)
+	c, err := NewCreateTableEntity(env, createTable)
 	require.NoError(t, err)
 	tableColumns := map[string]sqlparser.IdentifierCI{}
 	for _, col := range c.CreateTable.TableSpec.Columns {

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -37,6 +38,12 @@ var _ Primitive = (*VindexFunc)(nil)
 
 // VindexFunc is a primitive that performs vindex functions.
 type VindexFunc struct {
+	// VindexFunc does not take inputs
+	noInputs
+
+	// VindexFunc does not need to work inside a tx
+	noTxNeeded
+
 	Opcode VindexOpcode
 	// Fields is the field info for the result.
 	Fields []*querypb.Field
@@ -45,12 +52,6 @@ type VindexFunc struct {
 	// TODO(sougou): add support for MultiColumn.
 	Vindex vindexes.SingleColumn
 	Value  evalengine.Expr
-
-	// VindexFunc does not take inputs
-	noInputs
-
-	// VindexFunc does not need to work inside a tx
-	noTxNeeded
 }
 
 // VindexOpcode is the opcode for a VindexFunc.
@@ -245,7 +246,7 @@ func (vf *VindexFunc) description() PrimitiveDescription {
 	other := map[string]any{
 		"Fields":  fields,
 		"Columns": vf.Cols,
-		"Value":   evalengine.FormatExpr(vf.Value),
+		"Value":   sqlparser.String(vf.Value),
 	}
 	if vf.Vindex != nil {
 		other["Vindex"] = vf.Vindex.String()

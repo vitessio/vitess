@@ -89,6 +89,10 @@ func IsText(t querypb.Type) bool {
 	return int(t)&flagIsText == flagIsText
 }
 
+func IsTextOrBinary(t querypb.Type) bool {
+	return int(t)&flagIsText == flagIsText || int(t)&flagIsBinary == flagIsBinary
+}
+
 // IsBinary returns true if querypb.Type is a binary.
 // If you have a Value object, use its member function.
 func IsBinary(t querypb.Type) bool {
@@ -136,7 +140,7 @@ func IsNull(t querypb.Type) bool {
 // switch statements for those who want to cover types
 // by their category.
 const (
-	Unknown    = -1
+	Unknown    = querypb.Type(-1)
 	Null       = querypb.Type_NULL_TYPE
 	Int8       = querypb.Type_INT8
 	Uint8      = querypb.Type_UINT8
@@ -185,7 +189,7 @@ const (
 
 // If you add to this map, make sure you add a test case
 // in tabletserver/endtoend.
-var mysqlToType = map[int64]querypb.Type{
+var mysqlToType = map[byte]querypb.Type{
 	0:   Decimal,
 	1:   Int8,
 	2:   Int16,
@@ -271,7 +275,7 @@ func modifyType(typ querypb.Type, flags int64) querypb.Type {
 }
 
 // MySQLToType computes the vitess type from mysql type and flags.
-func MySQLToType(mysqlType, flags int64) (typ querypb.Type, err error) {
+func MySQLToType(mysqlType byte, flags int64) (typ querypb.Type, err error) {
 	result, ok := mysqlToType[mysqlType]
 	if !ok {
 		return 0, fmt.Errorf("unsupported type: %d", mysqlType)
@@ -299,7 +303,7 @@ func AreTypesEquivalent(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type) b
 
 // typeToMySQL is the reverse of mysqlToType.
 var typeToMySQL = map[querypb.Type]struct {
-	typ   int64
+	typ   byte
 	flags int64
 }{
 	Int8:      {typ: 1},
@@ -338,7 +342,7 @@ var typeToMySQL = map[querypb.Type]struct {
 }
 
 // TypeToMySQL returns the equivalent mysql type and flag for a vitess type.
-func TypeToMySQL(typ querypb.Type) (mysqlType, flags int64) {
+func TypeToMySQL(typ querypb.Type) (mysqlType byte, flags int64) {
 	val := typeToMySQL[typ]
 	return val.typ, val.flags
 }

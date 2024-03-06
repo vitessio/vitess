@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -26,9 +27,10 @@ import (
 )
 
 func TestGetSchema(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	topo := memorytopo.NewServer("zone1", "zone2", "zone3")
+	topo := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
 
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -160,7 +162,7 @@ func TestGetSchema(t *testing.T) {
 
 	logger := logutil.NewMemoryLogger()
 
-	err := vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc), []string{
+	err := vtctl.RunCommand(ctx, wrangler.New(vtenv.NewTestEnv(), logger, topo, &tmc), []string{
 		"GetSchema",
 		topoproto.TabletAliasString(tablet.Alias),
 	})
@@ -200,7 +202,7 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	err = vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc), []string{
+	err = vtctl.RunCommand(ctx, wrangler.New(vtenv.NewTestEnv(), logger, topo, &tmc), []string{
 		"GetSchema",
 		"--table_sizes_only",
 		topoproto.TabletAliasString(tablet.Alias),

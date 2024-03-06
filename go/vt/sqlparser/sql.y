@@ -16,6 +16,8 @@ limitations under the License.
 %{
 package sqlparser
 
+import "vitess.io/vitess/go/ptr"
+
 func setParseTree(yylex yyLexer, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
@@ -191,6 +193,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   partitionByType PartitionByType
   definer 	*Definer
   integer 	int
+  intPtr *int
 
   JSONTableExpr	*JSONTableExpr
   jtColumnDefinition *JtColumnDefinition
@@ -202,6 +205,15 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 // These precedence rules are there to handle shift-reduce conflicts.
 %nonassoc <str> MEMBER
+// MULTIPLE_TEXT_LITERAL is used to resolve shift-reduce conflicts occuring due to multiple STRING symbols occuring one after the other.
+// According to the ANSI standard, these strings should be concatenated together.
+// The shift-reduce conflict occurrs because after seeing a STRING, if we see another one, then we can either shift to concatenate them or
+// reduce the STRING into a text_literal, eventually into a simple_expr and use the coming string as an alias.
+// The way to fix this conflict is to give shifting higher precedence than reducing.
+// Adding no precedence also works, since shifting is the default, but it reports a conflict which we can avoid by adding this precedence rule.
+// In order to ensure lower precedence of reduction, this rule has to come before the precedence declaration of STRING.
+// This precedence should not be used anywhere else other than with rules where text_literal is being reduced.
+%nonassoc <str> MULTIPLE_TEXT_LITERAL
 // FUNCTION_CALL_NON_KEYWORD is used to resolve shift-reduce conflicts occuring due to function_call_generic symbol and
 // having special parsing for functions whose names are non-reserved keywords. The shift-reduce conflict occurrs because
 // after seeing a non-reserved keyword, if we see '(', then we can either shift to use the special parsing grammar rule or
@@ -303,7 +315,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
+%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE FORCE_CUTOVER EXPIRE RATIO
 // Throttler tokens
 %token <str> VITESS_THROTTLER
 
@@ -343,7 +355,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> SQL_TSI_DAY SQL_TSI_WEEK SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_MICROSECOND SQL_TSI_YEAR
 %token <str> REPLACE
 %token <str> CONVERT CAST
-%token <str> SUBSTR SUBSTRING
+%token <str> SUBSTR SUBSTRING MID
 %token <str> SEPARATOR
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
@@ -458,14 +470,14 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
-%type <selectExprs> select_expression_list select_expression_list_opt
+%type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
-%type <strs> select_options flush_option_list
+%type <strs> select_options select_options_opt flush_option_list
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
 %type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
-%type <expr> simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
+%type <expr> simple_expr literal NUM_literal text_start text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -538,7 +550,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <boolean> array_opt
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt partition_comment partition_data_directory partition_index_directory
+%type <literal> partition_comment partition_data_directory partition_index_directory
+%type <intPtr> length_opt
 %type <integer> func_datetime_precision
 %type <columnCharset> charset_opt
 %type <str> collate_opt
@@ -704,11 +717,11 @@ load_statement:
 with_clause:
   WITH with_list
   {
-	$$ = &With{ctes: $2, Recursive: false}
+	$$ = &With{CTEs: $2, Recursive: false}
   }
 | WITH RECURSIVE with_list
   {
-	$$ = &With{ctes: $3, Recursive: true}
+	$$ = &With{CTEs: $3, Recursive: true}
   }
 
 with_clause_opt:
@@ -898,11 +911,11 @@ vstream_statement:
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
 query_primary:
 //  1         2            3              4                    5             6                7           8            9           10
-  SELECT comment_opt select_options select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
+  SELECT comment_opt select_options_opt select_expression_list into_clause from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
     $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*into*/, $6/*from*/, NewWhere(WhereClause, $7), GroupBy($8), NewWhere(HavingClause, $9), $10)
   }
-| SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
+| SELECT comment_opt select_options_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
     $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8), $9)
   }
@@ -1249,22 +1262,22 @@ alter_table_prefix:
 create_index_prefix:
   CREATE comment_opt INDEX ci_identifier using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($3)}, Options:$5}}}}
+    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4}, Options:$5}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt FULLTEXT INDEX ci_identifier using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Fulltext:true}, Options:$6}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeFullText}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt SPATIAL INDEX ci_identifier using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Spatial:true}, Options:$6}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeSpatial}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt UNIQUE INDEX ci_identifier using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Unique:true}, Options:$6}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeUnique}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 
@@ -1465,14 +1478,12 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt NULL
   {
-    val := true
-    $1.Null = &val
+    $1.Null = ptr.Of(true)
     $$ = $1
   }
 | column_attribute_list_opt NOT NULL
   {
-    val := false
-    $1.Null = &val
+    $1.Null = ptr.Of(false)
     $$ = $1
   }
 | column_attribute_list_opt DEFAULT openb expression closeb
@@ -1526,14 +1537,12 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt VISIBLE
   {
-    val := false
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(false)
     $$ = $1
   }
 | column_attribute_list_opt INVISIBLE
   {
-    val := true
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(true)
     $$ = $1
   }
 | column_attribute_list_opt ENGINE_ATTRIBUTE equal_opt STRING
@@ -1580,14 +1589,12 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt NULL
   {
-    val := true
-    $1.Null = &val
+    $1.Null = ptr.Of(true)
     $$ = $1
   }
 | generated_column_attribute_list_opt NOT NULL
   {
-    val := false
-    $1.Null = &val
+    $1.Null = ptr.Of(false)
     $$ = $1
   }
 | generated_column_attribute_list_opt COMMENT_KEYWORD STRING
@@ -1602,14 +1609,12 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt VISIBLE
   {
-    val := false
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(false)
     $$ = $1
   }
 | generated_column_attribute_list_opt INVISIBLE
   {
-    val := true
-    $1.Invisible = &val
+    $1.Invisible = ptr.Of(true)
     $$ = $1
   }
 
@@ -1668,7 +1673,7 @@ NULL
    }
 
 literal:
-text_literal
+text_literal %prec MULTIPLE_TEXT_LITERAL
   {
    $$= $1
   }
@@ -1690,11 +1695,11 @@ text_literal
   }
 | BITNUM
   {
-  	$$ = NewBitLiteral($1[2:])
+  	$$ = NewBitLiteral($1)
   }
 | BIT_LITERAL
   {
-	$$ = NewBitLiteral($1)
+	$$ = NewBitLiteral("0b" + $1)
   }
 | VALUE_ARG
   {
@@ -1702,7 +1707,7 @@ text_literal
   }
 | underscore_charsets BIT_LITERAL %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral("0b" + $2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
@@ -1710,7 +1715,7 @@ text_literal
   }
 | underscore_charsets BITNUM %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2[2:])}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
   }
 | underscore_charsets HEX %prec UNARY
   {
@@ -1927,6 +1932,16 @@ INTEGRAL
   }
 
 text_literal:
+text_start
+  {
+  	$$ = $1
+  }
+| text_literal STRING
+  {
+  	$$ = AppendString($1, $2)
+  }
+
+text_start:
 STRING
   {
 	$$ = NewStrLiteral($1)
@@ -1941,7 +1956,7 @@ STRING
    }
 
 text_literal_or_arg:
-  text_literal
+  text_literal %prec MULTIPLE_TEXT_LITERAL
   {
     $$ = $1
   }
@@ -2214,7 +2229,7 @@ length_opt:
   }
 | '(' INTEGRAL ')'
   {
-    $$ = NewIntLiteral($2)
+    $$ = ptr.Of(convertStringToInt($2))
   }
 
 double_length_opt:
@@ -2224,8 +2239,8 @@ double_length_opt:
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
-        Scale: NewIntLiteral($4),
+        Length: ptr.Of(convertStringToInt($2)),
+        Scale: ptr.Of(convertStringToInt($4)),
     }
   }
 
@@ -2237,7 +2252,7 @@ double_length_opt
 | '(' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
+        Length: ptr.Of(convertStringToInt($2)),
     }
   }
 
@@ -2248,14 +2263,14 @@ decimal_length_opt:
 | '(' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
+        Length: ptr.Of(convertStringToInt($2)),
     }
   }
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
-        Scale: NewIntLiteral($4),
+        Length: ptr.Of(convertStringToInt($2)),
+        Scale: ptr.Of(convertStringToInt($4)),
     }
   }
 
@@ -2418,23 +2433,23 @@ equal_opt:
 index_info:
   constraint_name_opt PRIMARY KEY name_opt
   {
-    $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewIdentifierCI($1), Name: NewIdentifierCI("PRIMARY"), Primary: true, Unique: true}
+    $$ = &IndexInfo{Type: IndexTypePrimary, ConstraintName: NewIdentifierCI($1), Name: NewIdentifierCI("PRIMARY")}
   }
 | SPATIAL index_or_key_opt name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewIdentifierCI($3), Spatial: true, Unique: false}
+    $$ = &IndexInfo{Type: IndexTypeSpatial, Name: NewIdentifierCI($3)}
   }
 | FULLTEXT index_or_key_opt name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewIdentifierCI($3), Fulltext: true, Unique: false}
+    $$ = &IndexInfo{Type: IndexTypeFullText, Name: NewIdentifierCI($3)}
   }
 | constraint_name_opt UNIQUE index_or_key_opt name_opt
   {
-    $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewIdentifierCI($1), Name: NewIdentifierCI($4), Unique: true}
+    $$ = &IndexInfo{Type: IndexTypeUnique, ConstraintName: NewIdentifierCI($1), Name: NewIdentifierCI($4)}
   }
 | index_or_key name_opt
   {
-    $$ = &IndexInfo{Type: string($1), Name: NewIdentifierCI($2), Unique: false}
+    $$ = &IndexInfo{Type: IndexTypeDefault, Name: NewIdentifierCI($2)}
   }
 
 constraint_name_opt:
@@ -2472,7 +2487,7 @@ from_or_in:
 
 index_or_key_opt:
   {
-    $$ = "key"
+    $$ = ""
   }
 | index_or_key
   {
@@ -2828,7 +2843,7 @@ table_option:
   }
 | TABLESPACE equal_opt sql_id storage_opt
   {
-    $$ = &TableOption{Name:string($1), String: ($3.String() + $4)}
+    $$ = &TableOption{Name:string($1), String: ($3.String() + $4), CaseSensitive: true}
   }
 | UNION equal_opt '(' table_name_list ')'
   {
@@ -3003,13 +3018,11 @@ alter_option:
   }
 | ALTER column_opt column_name SET VISIBLE
   {
-    val := false
-    $$ = &AlterColumn{Column: $3, Invisible:&val}
+    $$ = &AlterColumn{Column: $3, Invisible: ptr.Of(false)}
   }
 | ALTER column_opt column_name SET INVISIBLE
   {
-    val := true
-    $$ = &AlterColumn{Column: $3, Invisible:&val}
+    $$ = &AlterColumn{Column: $3, Invisible: ptr.Of(true)}
   }
 | ALTER CHECK ci_identifier enforced
   {
@@ -3253,6 +3266,10 @@ alter_statement:
   {
     $$ = &AlterVschema{Action: AddSequenceDDLAction, Table: $6}
   }
+| ALTER comment_opt VSCHEMA DROP SEQUENCE table_name
+  {
+    $$ = &AlterVschema{Action: DropSequenceDDLAction, Table: $6}
+  }
 | ALTER comment_opt VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
   {
     $$ = &AlterVschema{
@@ -3262,6 +3279,13 @@ alter_statement:
             Column: $8,
             Sequence: $10,
         },
+    }
+  }
+| ALTER comment_opt VSCHEMA ON table_name DROP AUTO_INCREMENT
+  {
+    $$ = &AlterVschema{
+        Action: DropAutoIncDDLAction,
+        Table: $5,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING RETRY
@@ -3353,6 +3377,19 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: UnthrottleAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING FORCE_CUTOVER
+  {
+    $$ = &AlterMigration{
+      Type: ForceCutOverMigrationType,
+      UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION FORCE_CUTOVER ALL
+  {
+    $$ = &AlterMigration{
+      Type: ForceCutOverAllMigrationType,
     }
   }
 
@@ -3730,14 +3767,12 @@ partition_definition_attribute_list_opt:
   }
 | partition_definition_attribute_list_opt partition_max_rows
   {
-    val := $2
-    $1.MaxRows = &val
+    $1.MaxRows = ptr.Of($2)
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_min_rows
   {
-    val := $2
-    $1.MinRows = &val
+    $1.MinRows = ptr.Of($2)
     $$ = $1
   }
 | partition_definition_attribute_list_opt partition_tablespace_name
@@ -3798,14 +3833,12 @@ subpartition_definition_attribute_list_opt:
   }
 | subpartition_definition_attribute_list_opt partition_max_rows
   {
-    val := $2
-    $1.MaxRows = &val
+    $1.MaxRows = ptr.Of($2)
     $$ = $1
   }
 | subpartition_definition_attribute_list_opt partition_min_rows
   {
-    val := $2
-    $1.MinRows = &val
+    $1.MinRows = ptr.Of($2)
     $$ = $1
   }
 | subpartition_definition_attribute_list_opt partition_tablespace_name
@@ -3954,9 +3987,9 @@ truncate_statement:
   }
 
 analyze_statement:
-  ANALYZE TABLE table_name
+  ANALYZE local_opt TABLE table_name
   {
-    $$ = &OtherRead{}
+    $$ = &Analyze{IsLocal: $2, Table: $4}
   }
 
 purge_statement:
@@ -4117,6 +4150,10 @@ show_statement:
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowBasic{Command: VschemaTables}}
+  }
+| SHOW VSCHEMA KEYSPACES
+  {
+    $$ = &Show{&ShowBasic{Command: VschemaKeyspaces}}
   }
 | SHOW VSCHEMA VINDEXES
   {
@@ -4401,14 +4438,6 @@ explain_format_opt:
 | FORMAT '=' TREE
   {
     $$ = TreeType
-  }
-| FORMAT '=' VITESS
-  {
-    $$ = VitessType
-  }
-| FORMAT '=' VTEXPLAIN
-  {
-    $$ = VTExplainType
   }
 | FORMAT '=' TRADITIONAL
   {
@@ -4765,34 +4794,23 @@ deallocate_statement:
     $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name: $4}
   }
 
-select_expression_list_opt:
+select_options_opt:
   {
     $$ = nil
   }
-| select_expression_list
+| select_options
   {
     $$ = $1
   }
 
 select_options:
-  {
-    $$ = nil
-  }
-| select_option
+select_option
   {
     $$ = []string{$1}
   }
-| select_option select_option // TODO: figure out a way to do this recursively instead.
-  {                           // TODO: This is a hack since I couldn't get it to work in a nicer way. I got 'conflicts: 8 shift/reduce'
-    $$ = []string{$1, $2}
-  }
-| select_option select_option select_option
+| select_options select_option
   {
-    $$ = []string{$1, $2, $3}
-  }
-| select_option select_option select_option select_option
-  {
-    $$ = []string{$1, $2, $3, $4}
+    $$ = append($1, $2)
   }
 
 select_option:
@@ -5187,6 +5205,14 @@ index_hint:
 | FORCE index_or_key index_hint_for_opt openb index_list closeb
   {
     $$ = &IndexHint{Type: ForceOp, ForType: $3, Indexes: $5}
+  }
+| USE VINDEX openb index_list closeb
+  {
+    $$ = &IndexHint{Type: UseVindexOp, Indexes: $4 }
+  }
+| IGNORE VINDEX openb index_list closeb
+  {
+    $$ = &IndexHint{Type: IgnoreVindexOp, Indexes: $4}
   }
 
 index_hint_for_opt:
@@ -5837,11 +5863,11 @@ expression_list:
   introduce side effects due to being a simple identifier
 */
 function_call_generic:
-  sql_id openb select_expression_list_opt closeb
+  sql_id openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
-| table_id '.' reserved_sql_id openb select_expression_list_opt closeb
+| table_id '.' reserved_sql_id openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
   }
@@ -5851,15 +5877,19 @@ function_call_generic:
   as a result
 */
 function_call_keyword:
-  LEFT openb select_expression_list closeb
+  LEFT openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: $3}
   }
-| RIGHT openb select_expression_list closeb
+| RIGHT openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: $3}
   }
 | SUBSTRING openb expression ',' expression ',' expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
+  }
+| MID openb expression ',' expression ',' expression closeb
   {
     $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
   }
@@ -6993,23 +7023,23 @@ func_datetime_precision:
   the names are non-reserved, they need a dedicated rule so as not to conflict
 */
 function_call_conflict:
-  IF openb select_expression_list closeb
+  IF openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: $3}
   }
-| DATABASE openb select_expression_list_opt closeb
+| DATABASE openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: $3}
   }
-| SCHEMA openb select_expression_list_opt closeb
+| SCHEMA openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: $3}
   }
-| MOD openb select_expression_list closeb
+| MOD openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: $3}
   }
-| REPLACE openb select_expression_list closeb
+| REPLACE openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3}
   }
@@ -7057,11 +7087,11 @@ convert_type_weight_string:
   }
 | AS BINARY '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+    $$ = &ConvertType{Type: string($2), Length: ptr.Of(convertStringToInt($4))}
   }
 | AS CHAR '(' INTEGRAL ')'
   {
-    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+    $$ = &ConvertType{Type: string($2), Length: ptr.Of(convertStringToInt($4))}
   }
 
 convert_type:
@@ -7507,6 +7537,26 @@ locking_clause:
 FOR UPDATE
   {
     $$ = ForUpdateLock
+  }
+| FOR UPDATE NOWAIT
+  {
+    $$ = ForUpdateLockNoWait
+  }
+| FOR UPDATE SKIP LOCKED
+  {
+    $$ = ForUpdateLockSkipLocked
+  }
+| FOR SHARE
+  {
+    $$ = ForShareLock
+  }
+| FOR SHARE NOWAIT
+  {
+    $$ = ForShareLockNoWait
+  }
+| FOR SHARE SKIP LOCKED
+  {
+    $$ = ForShareLockSkipLocked
   }
 | LOCK IN SHARE MODE
   {
@@ -8181,6 +8231,7 @@ non_reserved_keyword:
 | FIXED
 | FLUSH
 | FOLLOWING
+| FORCE_CUTOVER
 | FORMAT
 | FORMAT_BYTES %prec FUNCTION_CALL_NON_KEYWORD
 | FORMAT_PICO_TIME %prec FUNCTION_CALL_NON_KEYWORD
@@ -8277,6 +8328,7 @@ non_reserved_keyword:
 | MEMORY
 | MEMBER
 | MERGE
+| MID %prec FUNCTION_CALL_NON_KEYWORD
 | MIN %prec FUNCTION_CALL_NON_KEYWORD
 | MIN_ROWS
 | MODE

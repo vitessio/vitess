@@ -23,22 +23,27 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+)
 
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+// counters for Planned Reparent Shard
+var (
+	prsCounter = stats.NewCountersWithMultiLabels("planned_reparent_counts", "Number of times Planned Reparent Shard has been run",
+		[]string{"Keyspace", "Shard", "Result"},
+	)
 )
 
 // PlannedReparenter performs PlannedReparentShard operations.
@@ -55,6 +60,7 @@ type PlannedReparentOptions struct {
 	NewPrimaryAlias     *topodatapb.TabletAlias
 	AvoidPrimaryAlias   *topodatapb.TabletAlias
 	WaitReplicasTimeout time.Duration
+	TolerableReplLag    time.Duration
 
 	// Private options managed internally. We use value-passing semantics to
 	// set these options inside a PlannedReparent without leaking these details
@@ -90,11 +96,14 @@ func NewPlannedReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, log
 // both the current and desired primary are reachable and in a good state.
 func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string, shard string, opts PlannedReparentOptions) (*events.Reparent, error) {
 	var err error
+	statsLabels := []string{keyspace, shard}
+
 	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		var unlock func(*error)
 		opts.lockAction = pr.getLockAction(opts)
 		ctx, unlock, err = pr.ts.LockShard(ctx, keyspace, shard, opts.lockAction)
 		if err != nil {
+			prsCounter.Add(append(statsLabels, failureResult), 1)
 			return nil, err
 		}
 		defer unlock(&err)
@@ -103,18 +112,23 @@ func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string,
 	if opts.NewPrimaryAlias == nil && opts.AvoidPrimaryAlias == nil {
 		shardInfo, err := pr.ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
+			prsCounter.Add(append(statsLabels, failureResult), 1)
 			return nil, err
 		}
 
 		opts.AvoidPrimaryAlias = shardInfo.PrimaryAlias
 	}
 
+	startTime := time.Now()
 	ev := &events.Reparent{}
 	defer func() {
+		reparentShardOpTimings.Add("PlannedReparentShard", time.Since(startTime))
 		switch err {
 		case nil:
+			prsCounter.Add(append(statsLabels, successResult), 1)
 			event.DispatchUpdate(ev, "finished PlannedReparentShard")
 		default:
+			prsCounter.Add(append(statsLabels, failureResult), 1)
 			event.DispatchUpdate(ev, "failed PlannedReparentShard: "+err.Error())
 		}
 	}()
@@ -138,7 +152,7 @@ func (pr *PlannedReparenter) getLockAction(opts PlannedReparentOptions) string {
 // primary), as well as an error.
 //
 // It will also set the NewPrimaryAlias option if the caller did not specify
-// one, provided it can choose a new primary candidate. See ChooseNewPrimary()
+// one, provided it can choose a new primary candidate. See ElectNewPrimary()
 // for details on primary candidate selection.
 func (pr *PlannedReparenter) preflightChecks(
 	ctx context.Context,
@@ -163,21 +177,16 @@ func (pr *PlannedReparenter) preflightChecks(
 			event.DispatchUpdate(ev, "current primary is different than tablet to avoid, nothing to do")
 			return true, nil
 		}
-
-		event.DispatchUpdate(ev, "searching for primary candidate")
-
-		opts.NewPrimaryAlias, err = ChooseNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.durability, pr.logger)
-		if err != nil {
-			return true, err
-		}
-
-		if opts.NewPrimaryAlias == nil {
-			return true, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to in the same cell as the current primary")
-		}
-
-		pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
-		event.DispatchUpdate(ev, "elected new primary candidate")
 	}
+
+	event.DispatchUpdate(ev, "electing a primary candidate")
+	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.NewPrimaryAlias, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.TolerableReplLag, opts.durability, pr.logger)
+	if err != nil {
+		return true, err
+	}
+
+	pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+	event.DispatchUpdate(ev, "elected new primary candidate")
 
 	primaryElectAliasStr := topoproto.TabletAliasString(opts.NewPrimaryAlias)
 
@@ -200,9 +209,7 @@ func (pr *PlannedReparenter) preflightChecks(
 	if !canEstablishForTablet(opts.durability, newPrimaryTabletInfo.Tablet, tabletsReachable) {
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v won't be able to make forward progress on promotion", primaryElectAliasStr)
 	}
-
-	ev.NewPrimary = proto.Clone(newPrimaryTabletInfo.Tablet).(*topodatapb.Tablet)
-
+	ev.NewPrimary = newPrimaryTabletInfo.Tablet.CloneVT()
 	return false, nil
 }
 
@@ -217,7 +224,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	opts PlannedReparentOptions,
 ) error {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
-	ev.OldPrimary = proto.Clone(currentPrimary.Tablet).(*topodatapb.Tablet)
+	ev.OldPrimary = currentPrimary.Tablet.CloneVT()
 
 	// Before demoting the old primary, we're going to ensure that replication
 	// is working from the old primary to the primary-elect. If replication is

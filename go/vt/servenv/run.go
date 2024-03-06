@@ -17,11 +17,11 @@ limitations under the License.
 package servenv
 
 import (
-	"fmt"
 	"net"
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -37,14 +37,14 @@ var (
 
 // Run starts listening for RPC and HTTP requests,
 // and blocks until it the process gets a signal.
-func Run(port int) {
+func Run(bindAddress string, port int) {
 	populateListeningURL(int32(port))
 	createGRPCServer()
 	onRunHooks.Fire()
 	serveGRPC()
 	serveSocketFile()
 
-	l, err := net.Listen("tcp", fmt.Sprintf(":%v", port))
+	l, err := net.Listen("tcp", net.JoinHostPort(bindAddress, strconv.Itoa(port)))
 	if err != nil {
 		log.Exit(err)
 	}
@@ -74,11 +74,6 @@ func Run(port int) {
 
 	log.Info("Shutting down gracefully")
 	fireOnCloseHooks(onCloseTimeout)
-}
-
-// Close runs any registered exit hooks in parallel.
-func Close() {
-	onCloseHooks.Fire()
 	ListeningURL = url.URL{}
 }
 

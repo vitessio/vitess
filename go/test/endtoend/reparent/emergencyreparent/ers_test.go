@@ -233,10 +233,10 @@ func TestERSPromoteRdonly(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[2].Alias, "rdonly")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[2].Alias, "rdonly")
 	require.NoError(t, err)
 
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
@@ -248,7 +248,7 @@ func TestERSPromoteRdonly(t *testing.T) {
 	out, err := utils.ErsIgnoreTablet(clusterInstance, nil, "30s", "30s", []*cluster.Vttablet{tablets[3]}, false)
 	require.NotNil(t, err, out)
 
-	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", utils.KeyspaceShard)
+	out, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetShard", utils.KeyspaceShard)
 	require.NoError(t, err)
 	require.Contains(t, out, `"uid": 101`, "the primary should still be 101 in the shard info")
 }
@@ -288,16 +288,16 @@ func TestPullFromRdonly(t *testing.T) {
 	// make tablets[1] a rdonly tablet.
 	// rename tablet so that the test is not confusing
 	rdonly := tablets[1]
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly.Alias, "rdonly")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonly.Alias, "rdonly")
 	require.NoError(t, err)
 
 	// confirm that all the tablets can replicate successfully right now
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{rdonly, tablets[2], tablets[3]})
 
 	// stop replication on the other two tablets
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", tablets[2].Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", tablets[2].Alias)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", tablets[3].Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", tablets[3].Alias)
 	require.NoError(t, err)
 
 	// stop semi-sync on the primary so that any transaction now added does not require an ack
@@ -311,9 +311,9 @@ func TestPullFromRdonly(t *testing.T) {
 	utils.StopTablet(t, tablets[0], true)
 
 	// start the replication back on the two tablets
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", tablets[2].Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StartReplication", tablets[2].Alias)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", tablets[3].Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StartReplication", tablets[3].Alias)
 	require.NoError(t, err)
 
 	// check that tablets[2] and tablets[3] still only has 1 value
@@ -349,9 +349,12 @@ func TestNoReplicationStatusAndIOThreadStopped(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE; RESET SLAVE ALL`)
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[1].Alias, `STOP SLAVE`)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[3].Alias, `STOP SLAVE IO_THREAD;`)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[1].Alias, `RESET SLAVE ALL`)
+	require.NoError(t, err)
+	//
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[3].Alias, `STOP SLAVE IO_THREAD;`)
 	require.NoError(t, err)
 	// Run an additional command in the current primary which will only be acked by tablets[2] and be in its relay log.
 	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
@@ -447,7 +450,7 @@ func TestRecoverWithMultipleFailures(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// make tablets[1] a rdonly tablet.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
 	require.NoError(t, err)
 
 	// Confirm that replication is still working as intended
@@ -475,7 +478,7 @@ func TestERSFailFast(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// make tablets[1] a rdonly tablet.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
 	require.NoError(t, err)
 
 	// Confirm that replication is still working as intended
@@ -514,9 +517,9 @@ func TestReplicationStopped(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE SQL_THREAD;`)
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[1].Alias, `STOP SLAVE SQL_THREAD;`)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[2].Alias, `STOP SLAVE;`)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[2].Alias, `STOP SLAVE;`)
 	require.NoError(t, err)
 	// Run an additional command in the current primary which will only be acked by tablets[3] and be in its relay log.
 	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
@@ -525,7 +528,7 @@ func TestReplicationStopped(t *testing.T) {
 	require.Error(t, err, "ERS should fail with 2 replicas having replication stopped")
 
 	// Start replication back on tablet[1]
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `START SLAVE;`)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[1].Alias, `START SLAVE;`)
 	require.NoError(t, err)
 	// Failover to tablets[3] again. This time it should succeed
 	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")

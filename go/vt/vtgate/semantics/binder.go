@@ -20,7 +20,8 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // binder is responsible for finding all the column references in
@@ -28,14 +29,13 @@ import (
 // While doing this, it will also find the types for columns and
 // store these in the typer:s expression map
 type binder struct {
-	recursive   ExprDependencies
-	direct      ExprDependencies
-	scoper      *scoper
-	tc          *tableCollector
-	org         originable
-	typer       *typer
-	subqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
-	subqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
+	recursive ExprDependencies
+	direct    ExprDependencies
+	targets   map[sqlparser.IdentifierCS]TableSet
+	scoper    *scoper
+	tc        *tableCollector
+	org       originable
+	typer     *typer
 
 	// every table will have an entry in the outer map. it will point to a map with all the columns
 	// that this map is joined with using USING.
@@ -47,53 +47,34 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 	return &binder{
 		recursive:     map[sqlparser.Expr]TableSet{},
 		direct:        map[sqlparser.Expr]TableSet{},
+		targets:       map[sqlparser.IdentifierCS]TableSet{},
 		scoper:        scoper,
 		org:           org,
 		tc:            tc,
 		typer:         typer,
-		subqueryMap:   map[sqlparser.Statement][]*sqlparser.ExtractedSubquery{},
-		subqueryRef:   map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
 		usingJoinInfo: map[TableSet]map[string]TableSet{},
 	}
 }
 
 func (b *binder) up(cursor *sqlparser.Cursor) error {
-	switch node := cursor.Node().(type) {
+	node := cursor.Node()
+	switch node := node.(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
-		// do not extract subquery in insert statement.
-		if _, isInsert := currScope.stmt.(*sqlparser.Insert); isInsert {
-			return nil
-		}
-		sq, err := b.createExtractedSubquery(cursor, currScope, node)
-		if err != nil {
-			return err
-		}
-
-		b.subqueryMap[currScope.stmt] = append(b.subqueryMap[currScope.stmt], sq)
-		b.subqueryRef[node] = sq
-
 		b.setSubQueryDependencies(node, currScope)
 	case *sqlparser.JoinCondition:
 		currScope := b.scoper.currentScope()
 		for _, ident := range node.Using {
 			name := sqlparser.NewColName(ident.String())
-			deps, err := b.resolveColumn(name, currScope, true)
+			deps, err := b.resolveColumn(name, currScope, true, true)
 			if err != nil {
 				return err
 			}
 			currScope.joinUsing[ident.Lowered()] = deps.direct
 		}
-		if len(node.Using) > 0 {
-			err := rewriteJoinUsing(currScope, node.Using, b.org)
-			if err != nil {
-				return err
-			}
-			node.Using = nil
-		}
 	case *sqlparser.ColName:
 		currentScope := b.scoper.currentScope()
-		deps, err := b.resolveColumn(node, currentScope, false)
+		deps, err := b.resolveColumn(node, currentScope, false, true)
 		if err != nil {
 			if deps.direct.IsEmpty() ||
 				!strings.HasSuffix(err.Error(), "is ambiguous") ||
@@ -111,13 +92,64 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		}
 		b.recursive[node] = deps.recursive
 		b.direct[node] = deps.direct
-		if deps.typ != nil {
-			b.typer.setTypeFor(node, *deps.typ)
+		if deps.typ.Valid() {
+			b.typer.setTypeFor(node, deps.typ)
 		}
 	case *sqlparser.CountStar:
 		b.bindCountStar(node)
+	case *sqlparser.Union:
+		info := b.tc.unionInfo[node]
+		// TODO: this check can be removed and available type information should be used.
+		if !info.isAuthoritative {
+			return nil
+		}
+
+		for i, expr := range info.exprs {
+			ae := expr.(*sqlparser.AliasedExpr)
+			b.recursive[ae.Expr] = info.recursive[i]
+			if t := info.types[i]; t.Valid() {
+				b.typer.m[ae.Expr] = t
+			}
+		}
+	case sqlparser.TableNames:
+		_, isDelete := cursor.Parent().(*sqlparser.Delete)
+		if !isDelete {
+			return nil
+		}
+		current := b.scoper.currentScope()
+		for _, target := range node {
+			finalDep, err := b.findDependentTableSet(current, target)
+			if err != nil {
+				return err
+			}
+			b.targets[target.Name] = finalDep.direct
+		}
 	}
 	return nil
+}
+
+func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableName) (dependency, error) {
+	var deps dependencies = &nothing{}
+	for _, table := range current.tables {
+		tblName, err := table.Name()
+		if err != nil {
+			continue
+		}
+		if tblName.Name.String() != target.Name.String() {
+			continue
+		}
+		ts := b.org.tableSetFor(table.GetAliasedTableExpr())
+		c := createCertain(ts, ts, evalengine.Type{})
+		deps = deps.merge(c, false)
+	}
+	finalDep, err := deps.get()
+	if err != nil {
+		return dependency{}, err
+	}
+	if finalDep.direct != finalDep.recursive {
+		return dependency{}, vterrors.VT03004(target.Name.String())
+	}
+	return finalDep, nil
 }
 
 func (b *binder) bindCountStar(node *sqlparser.CountStar) {
@@ -132,11 +164,7 @@ func (b *binder) bindCountStar(node *sqlparser.CountStar) {
 				}
 			}
 		default:
-			expr := tbl.GetExpr()
-			if expr != nil {
-				setFor := b.tc.tableSetFor(expr)
-				ts = ts.Merge(setFor)
-			}
+			ts = ts.Merge(tbl.getTableSet(b.org))
 		}
 	}
 	b.recursive[node] = ts
@@ -153,19 +181,12 @@ func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColNam
 	if err != nil {
 		return dependency{}, err
 	}
-	alias := infoFor.GetExpr().As
-	if alias.IsEmpty() {
-		name, err := infoFor.Name()
-		if err != nil {
-			return dependency{}, err
-		}
-		node.Qualifier = name
-	} else {
-		node.Qualifier = sqlparser.TableName{
-			Name: sqlparser.NewIdentifierCS(alias.String()),
-		}
+	name, err := infoFor.Name()
+	if err != nil {
+		return dependency{}, err
 	}
-	deps, err = b.resolveColumn(node, currentScope, false)
+	node.Qualifier = name
+	deps, err = b.resolveColumn(node, currentScope, false, true)
 	if err != nil {
 		return dependency{}, err
 	}
@@ -206,62 +227,33 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 	b.direct[subq] = subqDirectDeps.KeepOnly(tablesToKeep)
 }
 
-func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *scope, subq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
-	if currScope.stmt == nil {
-		return nil, &BuggyError{Msg: "unable to bind subquery to select statement"}
+func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti, singleTableFallBack bool) (dependency, error) {
+	if !current.stmtScope && current.inGroupBy {
+		return b.resolveColInGroupBy(colName, current, allowMulti, singleTableFallBack)
+	}
+	if !current.stmtScope && current.inHaving && !current.inHavingAggr {
+		return b.resolveColumnInHaving(colName, current, allowMulti)
 	}
 
-	sq := &sqlparser.ExtractedSubquery{
-		Subquery: subq,
-		Original: subq,
-		OpCode:   int(opcode.PulloutValue),
-	}
-
-	switch par := cursor.Parent().(type) {
-	case *sqlparser.ComparisonExpr:
-		switch par.Operator {
-		case sqlparser.InOp:
-			sq.OpCode = int(opcode.PulloutIn)
-		case sqlparser.NotInOp:
-			sq.OpCode = int(opcode.PulloutNotIn)
-		}
-		subq, exp := GetSubqueryAndOtherSide(par)
-		sq.Original = &sqlparser.ComparisonExpr{
-			Left:     exp,
-			Operator: par.Operator,
-			Right:    subq,
-		}
-		sq.OtherSide = exp
-	case *sqlparser.ExistsExpr:
-		sq.OpCode = int(opcode.PulloutExists)
-		sq.Original = par
-	}
-	return sq, nil
-}
-
-func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
 	var thisDeps dependencies
 	first := true
 	var tableName *sqlparser.TableName
+
 	for current != nil {
 		var err error
 		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
 		if err != nil {
-			err = makeAmbiguousError(colName, err)
-			if thisDeps == nil {
-				return dependency{}, err
-			}
+			return dependency{}, makeAmbiguousError(colName, err)
 		}
 		if !thisDeps.empty() {
-			deps, thisErr := thisDeps.get()
-			if thisErr != nil {
-				err = makeAmbiguousError(colName, thisErr)
-			}
-			return deps, err
-		} else if err != nil {
-			return dependency{}, err
+			deps, err := thisDeps.get()
+			return deps, makeAmbiguousError(colName, err)
 		}
-		if current.parent == nil && len(current.tables) == 1 && first && colName.Qualifier.IsEmpty() {
+		if current.parent == nil &&
+			len(current.tables) == 1 &&
+			first &&
+			colName.Qualifier.IsEmpty() &&
+			singleTableFallBack {
 			// if this is the top scope, and we still haven't been able to find a match, we know we are about to fail
 			// we can check this last scope and see if there is a single table. if there is just one table in the scope
 			// we assume that the column is meant to come from this table.
@@ -276,13 +268,153 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		first = false
 		current = current.parent
 	}
-	return dependency{}, ShardedError{&ColumnNotFoundError{Column: colName, Table: tableName}}
+	return dependency{}, ShardedError{ColumnNotFoundError{Column: colName, Table: tableName}}
+}
+
+func isColumnNotFound(err error) bool {
+	switch err := err.(type) {
+	case ColumnNotFoundError:
+		return true
+	case ShardedError:
+		return isColumnNotFound(err.Inner)
+	default:
+		return false
+	}
+}
+
+func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
+	if current.inHavingAggr {
+		// when inside an aggregation, we'll search the FROM clause before the SELECT expressions
+		deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
+		if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
+			return deps, err
+		}
+	}
+
+	// Here we are searching among the SELECT expressions for a match
+	thisDeps, err := b.resolveColumnInScope(current, colName, allowMulti)
+	if err != nil {
+		return dependency{}, makeAmbiguousError(colName, err)
+	}
+
+	if !thisDeps.empty() {
+		// we found something! let's return it
+		deps, err := thisDeps.get()
+		if err != nil {
+			err = makeAmbiguousError(colName, err)
+		}
+		return deps, err
+	}
+
+	notFoundErr := &ColumnNotFoundClauseError{Column: colName.Name.String(), Clause: "having clause"}
+	if current.inHavingAggr {
+		// if we are inside an aggregation, we've already looked everywhere. now it's time to give up
+		return dependency{}, notFoundErr
+	}
+
+	// Now we'll search the FROM clause, but with a twist. If we find it in the FROM clause, the column must also
+	// exist as a standalone expression in the SELECT list
+	deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
+	if deps.direct.IsEmpty() {
+		return dependency{}, notFoundErr
+	}
+
+	sel := current.stmt.(*sqlparser.Select) // we can be sure of this, since HAVING doesn't exist on UNION
+	if selDeps := b.searchInSelectExpressions(colName, deps, sel); selDeps.direct.NotEmpty() {
+		return selDeps, nil
+	}
+
+	if !current.inHavingAggr && len(sel.GroupBy) == 0 {
+		// if we are not inside an aggregation, and there is no GROUP BY, we consider the FROM clause before failing
+		if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
+			return deps, err
+		}
+	}
+
+	return dependency{}, notFoundErr
+}
+
+// searchInSelectExpressions searches for the ColName among the SELECT and GROUP BY expressions
+// It used dependency information to match the columns
+func (b *binder) searchInSelectExpressions(colName *sqlparser.ColName, deps dependency, stmt *sqlparser.Select) dependency {
+	for _, selectExpr := range stmt.SelectExprs {
+		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+		selectCol, ok := ae.Expr.(*sqlparser.ColName)
+		if !ok || !selectCol.Name.Equal(colName.Name) {
+			continue
+		}
+
+		_, direct, _ := b.org.depsForExpr(selectCol)
+		if deps.direct == direct {
+			// we have found the ColName in the SELECT expressions, so it's safe to use here
+			direct, recursive, typ := b.org.depsForExpr(ae.Expr)
+			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
+		}
+	}
+
+	for _, gb := range stmt.GroupBy {
+		selectCol, ok := gb.(*sqlparser.ColName)
+		if !ok || !selectCol.Name.Equal(colName.Name) {
+			continue
+		}
+
+		_, direct, _ := b.org.depsForExpr(selectCol)
+		if deps.direct == direct {
+			// we have found the ColName in the GROUP BY expressions, so it's safe to use here
+			direct, recursive, typ := b.org.depsForExpr(gb)
+			return dependency{certain: true, direct: direct, recursive: recursive, typ: typ}
+		}
+	}
+	return dependency{}
+}
+
+// resolveColInGroupBy handles the special rules we have when binding on the GROUP BY column
+func (b *binder) resolveColInGroupBy(
+	colName *sqlparser.ColName,
+	current *scope,
+	allowMulti bool,
+	singleTableFallBack bool,
+) (dependency, error) {
+	if current.parent == nil {
+		return dependency{}, vterrors.VT13001("did not expect this to be the last scope")
+	}
+	// if we are in GROUP BY, we have to search the FROM clause before we search the SELECT expressions
+	deps, firstErr := b.resolveColumn(colName, current.parent, allowMulti, false)
+	if firstErr == nil {
+		return deps, nil
+	}
+
+	// either we didn't find the column on a table, or it was ambiguous.
+	// in either case, next step is to search the SELECT expressions
+	if colName.Qualifier.NonEmpty() {
+		// if the col name has a qualifier, none of the SELECT expressions are going to match
+		return dependency{}, nil
+	}
+	vtbl, ok := current.tables[0].(*vTableInfo)
+	if !ok {
+		return dependency{}, vterrors.VT13001("expected the table info to be a *vTableInfo")
+	}
+
+	dependencies, err := vtbl.dependenciesInGroupBy(colName.Name.String(), b.org)
+	if err != nil {
+		return dependency{}, err
+	}
+	if dependencies.empty() {
+		if isColumnNotFound(firstErr) {
+			return dependency{}, &ColumnNotFoundClauseError{Column: colName.Name.String(), Clause: "group statement"}
+		}
+		return deps, firstErr
+	}
+	return dependencies.get()
 }
 
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	for _, table := range current.tables {
-		if !expr.Qualifier.IsEmpty() && !table.matches(expr.Qualifier) {
+		if !expr.Qualifier.IsEmpty() && !table.matches(expr.Qualifier) && !current.isUnion {
 			continue
 		}
 		thisDeps, err := table.dependencies(expr.Name.String(), b.org)

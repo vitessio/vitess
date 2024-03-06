@@ -24,16 +24,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,9 +53,14 @@ import (
 
 const (
 	defaultTick          = 1 * time.Second
-	defaultTimeout       = 30 * time.Second
+	defaultTimeout       = 60 * time.Second
 	workflowStateTimeout = 90 * time.Second
 )
+
+func setSidecarDBName(dbName string) {
+	sidecarDBName = dbName
+	sidecarDBIdentifier = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
+}
 
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
 	queries := strings.Split(lines, "\n")
@@ -67,10 +71,50 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 		execVtgateQuery(t, conn, database, string(query))
 	}
 }
+
+func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout time.Duration) *sqltypes.Result {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+
+	var qr *sqltypes.Result
+	var err error
+	for {
+		qr, err = conn.ExecuteFetch(query, 1000, false)
+		if err == nil {
+			return qr
+		}
+		select {
+		case <-ctx.Done():
+			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
+				query, timeout, qr.Rows))
+		case <-ticker.C:
+			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
+		}
+	}
+}
+
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, false)
+	if err != nil {
+		log.Errorf("Error executing query: %s: %v", query, err)
+	}
 	require.NoError(t, err)
 	return qr
+}
+func getConnectionNoError(t *testing.T, hostname string, port int) *mysql.Conn {
+	vtParams := mysql.ConnParams{
+		Host:  hostname,
+		Port:  port,
+		Uname: "vt_dba",
+	}
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		return nil
+	}
+	return conn
 }
 
 func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
@@ -81,7 +125,7 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	}
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.NoErrorf(t, err, "error connecting to vtgate on %s:%d", hostname, port)
 	return conn
 }
 
@@ -94,6 +138,19 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 	}
 	execQuery(t, conn, "begin")
 	qr := execQuery(t, conn, query)
+	execQuery(t, conn, "commit")
+	return qr
+}
+
+func execVtgateQueryWithRetry(t *testing.T, conn *mysql.Conn, database string, query string, timeout time.Duration) *sqltypes.Result {
+	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	if database != "" {
+		execQuery(t, conn, "use `"+database+"`;")
+	}
+	execQuery(t, conn, "begin")
+	qr := execQueryWithRetry(t, conn, query, timeout)
 	execQuery(t, conn, "commit")
 	return qr
 }
@@ -160,10 +217,13 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "--", ksWorkflow, "show")
+		// We don't need log records for this so pass --include-logs=false.
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", keyspace, "show", "--workflow", worfklow, "--include-logs=false")
 		require.NoError(t, err)
-		lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
-		require.NoError(t, err)
+		// Confirm that we got no log records back.
+		require.NotEmpty(t, len(gjson.Get(output, "workflows.0.shard_streams.*.streams.0").String()), "workflow %q had no streams listed in the output: %s", ksWorkflow, output)
+		require.Equal(t, 0, len(gjson.Get(output, "workflows.0.shard_streams.*.streams.0.logs").Array()), "workflow %q returned log records when we expected none", ksWorkflow)
+		lag = gjson.Get(output, "workflows.0.max_v_replication_lag").Int()
 		if lag == 0 {
 			return
 		}
@@ -232,12 +292,57 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 	}
 }
 
-func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) bool {
-	count := getQueryCount(tablet.QueryzURL, matchQuery)
+// waitForSequenceValue queries the provided sequence name in the
+// provided database using the provided vtgate connection until
+// we get a next value from it. This allows us to move forward
+// with queries that rely on the sequence working as expected.
+// The read next value is also returned so that the caller can
+// use it if they want.
+// Note: you specify the number of values that you want to reserve
+// and you get back the max value reserved.
+func waitForSequenceValue(t *testing.T, conn *mysql.Conn, database, sequence string, numVals int) int64 {
+	query := fmt.Sprintf("select next %d values from %s.%s", numVals, database, sequence)
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for {
+		qr, err := conn.ExecuteFetch(query, 1, false)
+		if err == nil && qr != nil && len(qr.Rows) == 1 { // We got a value back
+			val, err := qr.Rows[0][0].ToInt64()
+			require.NoError(t, err, "invalid sequence value: %v", qr.Rows[0][0])
+			return val
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("sequence %q did not provide a next value before the timeout of %s; last seen result: %+v, error: %v",
+				sequence, defaultTimeout, qr, err))
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
+func executeOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) (int, []byte, int, []byte) {
+	queryStatsURL := fmt.Sprintf("http://%s:%d/debug/query_stats", tablet.TabletHostname, tablet.Port)
+
+	count0, body0 := getQueryCount(t, queryStatsURL, matchQuery)
+
 	qr := execVtgateQuery(t, conn, ksName, query)
 	require.NotNil(t, qr)
-	newCount := getQueryCount(tablet.QueryzURL, matchQuery)
-	return newCount == count+1
+
+	count1, body1 := getQueryCount(t, queryStatsURL, matchQuery)
+	return count0, body0, count1, body1
+}
+
+func assertQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
+	t.Helper()
+	count0, body0, count1, body1 := executeOnTablet(t, conn, tablet, ksName, query, matchQuery)
+	assert.Equalf(t, count0+1, count1, "query %q did not execute in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
+}
+
+func assertQueryDoesNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
+	t.Helper()
+	count0, body0, count1, body1 := executeOnTablet(t, conn, tablet, ksName, query, matchQuery)
+	assert.Equalf(t, count0, count1, "query %q executed in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
 }
 
 // waitForWorkflowState waits for all of the given workflow's
@@ -336,14 +441,14 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 			require.NotNil(t, res)
 			row := res.Named().Row()
 			tableSchema := row["Create Table"].ToString()
-			parsedDDL, err := sqlparser.ParseStrictDDL(tableSchema)
+			parsedDDL, err := sqlparser.NewTestParser().ParseStrictDDL(tableSchema)
 			require.NoError(t, err)
 			createTable, ok := parsedDDL.(*sqlparser.CreateTable)
 			require.True(t, ok)
 			require.NotNil(t, createTable)
 			require.NotNil(t, createTable.GetTableSpec())
 			for _, index := range createTable.GetTableSpec().Indexes {
-				if !index.Info.Primary {
+				if index.Info.Type != sqlparser.IndexTypePrimary {
 					secondaryKeys++
 				}
 			}
@@ -352,77 +457,36 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 	}
 }
 
-func getHTTPBody(url string) string {
+func getHTTPBody(t *testing.T, url string) []byte {
 	resp, err := http.Get(url)
-	if err != nil {
-		log.Infof("http Get returns %+v", err)
-		return ""
-	}
-	if resp.StatusCode != 200 {
-		log.Infof("http Get returns status %d", resp.StatusCode)
-		return ""
-	}
-	respByte, _ := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
 	defer resp.Body.Close()
-	body := string(respByte)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	return body
 }
 
-func getQueryCount(url string, query string) int {
-	var headings, row []string
-	var rows [][]string
-	body := getHTTPBody(url)
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(body))
-	if err != nil {
-		log.Infof("goquery parsing returns %+v\n", err)
-		return 0
+func getQueryCount(t *testing.T, url string, query string) (int, []byte) {
+	body := getHTTPBody(t, url)
+
+	var queryStats []struct {
+		Query      string
+		QueryCount uint64
 	}
 
-	var queryIndex, countIndex, count int
-	queryIndex = -1
-	countIndex = -1
+	err := json.Unmarshal(body, &queryStats)
+	require.NoError(t, err)
 
-	doc.Find("table").Each(func(index int, tablehtml *goquery.Selection) {
-		tablehtml.Find("tr").Each(func(indextr int, rowhtml *goquery.Selection) {
-			rowhtml.Find("th").Each(func(indexth int, tableheading *goquery.Selection) {
-				heading := tableheading.Text()
-				if heading == "Query" {
-					queryIndex = indexth
-				}
-				if heading == "Count" {
-					countIndex = indexth
-				}
-				headings = append(headings, heading)
-			})
-			rowhtml.Find("td").Each(func(indexth int, tablecell *goquery.Selection) {
-				row = append(row, tablecell.Text())
-			})
-			rows = append(rows, row)
-			row = nil
-		})
-	})
-	if queryIndex == -1 || countIndex == -1 {
-		log.Infof("Queryz response is incorrect")
-		return 0
-	}
-	for _, row := range rows {
-		if len(row) != len(headings) {
-			continue
-		}
-		filterChars := []string{"_", "`"}
-		//Queries seem to include non-printable characters at times and hence equality fails unless these are removed
-		re := regexp.MustCompile("[[:^ascii:]]")
-		foundQuery := re.ReplaceAllLiteralString(row[queryIndex], "")
-		cleanQuery := re.ReplaceAllLiteralString(query, "")
-		for _, filterChar := range filterChars {
-			foundQuery = strings.ReplaceAll(foundQuery, filterChar, "")
-			cleanQuery = strings.ReplaceAll(cleanQuery, filterChar, "")
-		}
-		if foundQuery == cleanQuery || strings.Contains(foundQuery, cleanQuery) {
-			count, _ = strconv.Atoi(row[countIndex])
+	for _, q := range queryStats {
+		if strings.Contains(q.Query, query) {
+			return int(q.QueryCount), body
 		}
 	}
-	return count
+
+	return 0, body
 }
 
 func validateDryRunResults(t *testing.T, output string, want []string) {
@@ -478,7 +542,17 @@ func checkIfTableExists(t *testing.T, vc *VitessCluster, tabletAlias string, tab
 	return found, nil
 }
 
-func checkIfDenyListExists(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
+func validateTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table string, mustExist bool) {
+	found, err := isTableInDenyList(t, vc, ksShard, table)
+	require.NoError(t, err)
+	if mustExist {
+		require.True(t, found, "Table %s not found in deny list", table)
+	} else {
+		require.False(t, found, "Table %s found in deny list", table)
+	}
+}
+
+func isTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
 	var output string
 	var err error
 	found := false
@@ -531,21 +605,10 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	var err error
 	url := fmt.Sprintf("http://localhost:%d/debug/vars", port)
 	log.Infof("url: %s, varPath: %s", url, strings.Join(varPath, ":"))
-	body := getHTTPBody(url)
-	val, _, _, err = jsonparser.Get([]byte(body), varPath...)
+	body := getHTTPBody(t, url)
+	val, _, _, err = jsonparser.Get(body, varPath...)
 	require.NoError(t, err)
 	return string(val), nil
-}
-
-func getDebugVars(t *testing.T, port int) map[string]any {
-	out := map[string]any{}
-	response, err := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", port))
-	if err != nil {
-		return out
-	}
-	defer response.Body.Close()
-	_ = json.NewDecoder(response.Body).Decode(&out)
-	return out
 }
 
 func confirmWorkflowHasCopiedNoData(t *testing.T, targetKS, workflow string) {
@@ -699,6 +762,13 @@ func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool 
 	return mode == "noblob"
 }
 
+func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) int {
+	query := fmt.Sprintf("select count(*) from %s", table)
+	qr := execVtgateQuery(t, vtgateConn, "", query)
+	numRows, _ := qr.Rows[0][0].ToInt()
+	return numRows
+}
+
 const (
 	loadTestBufferingWindowDurationStr = "30s"
 	loadTestPostBufferingInsertWindow  = 60 * time.Second // should be greater than loadTestBufferingWindowDurationStr
@@ -725,8 +795,6 @@ func (lg *loadGenerator) stop() {
 	log.Infof("Canceling load")
 	lg.cancel()
 	time.Sleep(loadTestWaitForCancel) // wait for cancel to take effect
-	log.Flush()
-
 }
 
 func (lg *loadGenerator) start() {
@@ -815,4 +883,52 @@ func (lg *loadGenerator) waitForCount(want int64) {
 			time.Sleep(defaultTick)
 		}
 	}
+}
+
+// appendToQueryLog is useful when debugging tests.
+func appendToQueryLog(msg string) {
+	file, err := os.OpenFile(queryLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Errorf("Error opening query log file: %v", err)
+		return
+	}
+	defer file.Close()
+	if _, err := file.WriteString(msg + "\n"); err != nil {
+		log.Errorf("Error writing to query log file: %v", err)
+	}
+}
+
+func waitForCondition(name string, condition func() bool, timeout time.Duration) error {
+	if condition() {
+		return nil
+	}
+
+	ticker := time.NewTicker(tickInterval)
+	defer ticker.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	for {
+		select {
+		case <-ticker.C:
+			if condition() {
+				return nil
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("%s: waiting for %s", ctx.Err(), name)
+		}
+	}
+}
+
+func getCellNames(cells []*Cell) string {
+	var cellNames []string
+	if cells == nil {
+		cells = []*Cell{}
+		for _, cell := range vc.Cells {
+			cells = append(cells, cell)
+		}
+	}
+	for _, cell := range cells {
+		cellNames = append(cellNames, cell.Name)
+	}
+	return strings.Join(cellNames, ",")
 }

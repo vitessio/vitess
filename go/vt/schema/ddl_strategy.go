@@ -20,14 +20,17 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/shlex"
 )
 
 var (
-	strategyParserRegexp       = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
-	cutOverThresholdFlagRegexp = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, cutOverThresholdFlag))
+	strategyParserRegexp        = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
+	cutOverThresholdFlagRegexp  = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, cutOverThresholdFlag))
+	forceCutOverAfterFlagRegexp = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, forceCutOverAfterFlag))
+	retainArtifactsFlagRegexp   = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, retainArtifactsFlag))
 )
 
 const (
@@ -43,6 +46,8 @@ const (
 	preferInstantDDL       = "prefer-instant-ddl"
 	fastRangeRotationFlag  = "fast-range-rotation"
 	cutOverThresholdFlag   = "cut-over-threshold"
+	forceCutOverAfterFlag  = "force-cut-over-after"
+	retainArtifactsFlag    = "retain-artifacts"
 	vreplicationTestSuite  = "vreplication-test-suite"
 	allowForeignKeysFlag   = "unsafe-allow-foreign-keys"
 	analyzeTableFlag       = "analyze-table"
@@ -110,6 +115,28 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 	if _, err := setting.CutOverThreshold(); err != nil {
 		return nil, err
 	}
+	if _, err := setting.RetainArtifactsDuration(); err != nil {
+		return nil, err
+	}
+	cutoverAfter, err := setting.ForceCutOverAfter()
+	if err != nil {
+		return nil, err
+	}
+	switch setting.Strategy {
+	case DDLStrategyVitess, DDLStrategyOnline:
+	default:
+		if cutoverAfter != 0 {
+			return nil, fmt.Errorf("--force-cut-over-after is only valid in 'vitess' strategy. Found %v value in '%v' strategy", cutoverAfter, setting.Strategy)
+		}
+	}
+
+	switch setting.Strategy {
+	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyMySQL, DDLStrategyDirect:
+		if opts := setting.RuntimeOptions(); len(opts) > 0 {
+			return nil, fmt.Errorf("invalid flags for %v strategy: %s", setting.Strategy, strings.Join(opts, " "))
+		}
+	}
+
 	return setting, nil
 }
 
@@ -194,12 +221,66 @@ func isCutOverThresholdFlag(opt string) (string, bool) {
 	return submatch[1], true
 }
 
-// CutOverThreshold returns a list of shards specified in '--shards=...', or an empty slice if unspecified
+// isForceCutOverFlag returns true when given option denotes a `--force-cut-over-after=[...]` flag
+func isForceCutOverFlag(opt string) (string, bool) {
+	submatch := forceCutOverAfterFlagRegexp.FindStringSubmatch(opt)
+	if len(submatch) == 0 {
+		return "", false
+	}
+	return submatch[1], true
+}
+
+// isRetainArtifactsFlag returns true when given option denotes a `--retain-artifacts=[...]` flag
+func isRetainArtifactsFlag(opt string) (string, bool) {
+	submatch := retainArtifactsFlagRegexp.FindStringSubmatch(opt)
+	if len(submatch) == 0 {
+		return "", false
+	}
+	return submatch[1], true
+}
+
+// CutOverThreshold returns a the duration threshold indicated by --cut-over-threshold
 func (setting *DDLStrategySetting) CutOverThreshold() (d time.Duration, err error) {
 	// We do some ugly manual parsing of --cut-over-threshold value
 	opts, _ := shlex.Split(setting.Options)
 	for _, opt := range opts {
 		if val, isCutOver := isCutOverThresholdFlag(opt); isCutOver {
+			// value is possibly quoted
+			if s, err := strconv.Unquote(val); err == nil {
+				val = s
+			}
+			if val != "" {
+				d, err = time.ParseDuration(val)
+			}
+		}
+	}
+	return d, err
+}
+
+// ForceCutOverAfter returns a the duration threshold indicated by --force-cut-over-after
+func (setting *DDLStrategySetting) ForceCutOverAfter() (d time.Duration, err error) {
+	// We do some ugly manual parsing of --cut-over-threshold value
+	opts, _ := shlex.Split(setting.Options)
+	for _, opt := range opts {
+		if val, isCutOver := isForceCutOverFlag(opt); isCutOver {
+			// value is possibly quoted
+			if s, err := strconv.Unquote(val); err == nil {
+				val = s
+			}
+			if val != "" {
+				d, err = time.ParseDuration(val)
+			}
+		}
+	}
+	return d, err
+}
+
+// RetainArtifactsDuration returns a the duration indicated by --retain-artifacts
+func (setting *DDLStrategySetting) RetainArtifactsDuration() (d time.Duration, err error) {
+	// We do some ugly manual parsing of --retain-artifacts
+	opts, _ := shlex.Split(setting.Options)
+	for _, opt := range opts {
+		if val, isRetainArtifacts := isRetainArtifactsFlag(opt); isRetainArtifacts {
 			// value is possibly quoted
 			if s, err := strconv.Unquote(val); err == nil {
 				val = s
@@ -233,6 +314,12 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	validOpts := []string{}
 	for _, opt := range opts {
 		if _, ok := isCutOverThresholdFlag(opt); ok {
+			continue
+		}
+		if _, ok := isForceCutOverFlag(opt); ok {
+			continue
+		}
+		if _, ok := isRetainArtifactsFlag(opt); ok {
 			continue
 		}
 		switch {

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -60,15 +61,15 @@ type testWranglerEnv struct {
 //----------------------------------------------
 // testWranglerEnv
 
-func newWranglerTestEnv(t testing.TB, sourceShards, targetShards []string, query string, positions map[string]string, timeUpdated int64) *testWranglerEnv {
+func newWranglerTestEnv(t testing.TB, ctx context.Context, sourceShards, targetShards []string, positions map[string]string, timeUpdated int64) *testWranglerEnv {
 	env := &testWranglerEnv{
 		workflow:   "wrWorkflow",
-		topoServ:   memorytopo.NewServer("zone1"),
+		topoServ:   memorytopo.NewServer(ctx, "zone1"),
 		cell:       "zone1",
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestWranglerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	env.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), env.topoServ, env.tmc)
 	env.tmc.tablets = make(map[int]*testWranglerTablet)
 
 	// Generate a unique dialer name.
@@ -106,10 +107,16 @@ func newWranglerTestEnv(t testing.TB, sourceShards, targetShards []string, query
 				Keyspace: "source",
 				Shard:    sourceShard,
 				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: query,
-					}},
+					Rules: []*binlogdatapb.Rule{
+						{
+							Match:  "t1",
+							Filter: "",
+						},
+						{
+							Match:  "t2",
+							Filter: "",
+						},
+					},
 				},
 			}
 			rows = append(rows, fmt.Sprintf("%d|%v||||0|0|0", j+1, bls))
@@ -163,13 +170,13 @@ func newWranglerTestEnv(t testing.TB, sourceShards, targetShards []string, query
 		)
 		env.tmc.setVRResults(primary.tablet, "select distinct workflow from _vt.vreplication where state != 'Stopped' and db_name = 'vt_target'", result)
 
-		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"table|lastpk",
-			"varchar|varchar"),
-			"t1|pk1",
+		result = sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("vrepl_id|table|lastpk", "int64|varchar|varchar"),
+			"1|t1|pk1",
+			"1|t2|pk2",
 		)
 
-		env.tmc.setVRResults(primary.tablet, "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)", result)
+		env.tmc.setVRResults(primary.tablet, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", result)
 
 		env.tmc.setVRResults(primary.tablet, "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags from _vt.vreplication where db_name = 'vt_target' and workflow = 'bad'", &sqltypes.Result{})
 

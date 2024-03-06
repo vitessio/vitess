@@ -20,6 +20,15 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+type InstantDDLCapability int
+
+const (
+	InstantDDLCapabilityUnknown InstantDDLCapability = iota
+	InstantDDLCapabilityIrrelevant
+	InstantDDLCapabilityImpossible
+	InstantDDLCapabilityPossible
+)
+
 // Entity stands for a database object we can diff:
 // - A table
 // - A view
@@ -55,6 +64,8 @@ type EntityDiff interface {
 	SubsequentDiff() EntityDiff
 	// SetSubsequentDiff updates the existing subsequent diff to the given one
 	SetSubsequentDiff(EntityDiff)
+	// InstantDDLCapability returns the ability of this diff to run with ALGORITHM=INSTANT
+	InstantDDLCapability() InstantDDLCapability
 }
 
 const (
@@ -108,6 +119,11 @@ const (
 	AlterTableAlgorithmStrategyCopy
 )
 
+const (
+	EnumReorderStrategyAllow int = iota
+	EnumReorderStrategyReject
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering         bool
@@ -120,6 +136,7 @@ type DiffHints struct {
 	TableCharsetCollateStrategy int
 	TableQualifierHint          int
 	AlterTableAlgorithmStrategy int
+	EnumReorderStrategy         int
 }
 
 const (

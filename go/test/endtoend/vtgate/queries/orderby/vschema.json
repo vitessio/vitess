@@ -66,6 +66,14 @@
           "name": "unicode_loose_md5"
         }
       ]
+    },
+    "user": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
     }
   }
 }

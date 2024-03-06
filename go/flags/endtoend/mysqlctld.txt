@@ -1,7 +1,28 @@
-Usage of mysqlctld:
+`mysqlctld` is a gRPC server that can be used instead of the `mysqlctl` client tool.
+If the target directories are empty when it is invoked, it automatically performs initialization operations to bootstrap the `mysqld` instance before starting it.
+The `mysqlctld` process can subsequently receive gRPC commands from a `vttablet` to perform housekeeping operations like shutting down and restarting the `mysqld` instance as needed.
+
+{{ "{{< warning >}}" }}
+`mysqld_safe` is not used so the `mysqld` process will not be automatically restarted in case of a failure.
+{{ "{{</ warning>}}" }}
+
+To enable communication with a `vttablet`, the server must be configured to receive gRPC messages on a unix domain socket.
+
+Usage:
+  mysqlctld [flags]
+
+Examples:
+mysqlctld \
+	--log_dir=${VTDATAROOT}/logs \
+	--tablet_uid=100 \
+	--mysql_port=17100 \
+	--socket_file=/path/to/socket_file
+
+Flags:
       --alsologtostderr                                                  log to standard error as well as files
       --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
       --app_pool_size int                                                Size of the connection pool for app connections (default 40)
+      --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
@@ -44,6 +65,7 @@ Usage of mysqlctld:
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_client_creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
+      --grpc_bind_address string                                         Bind address for gRPC calls. If empty, listen on all addresses.
       --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
       --grpc_cert string                                                 server certificate to use for gRPC connections, requires grpc_key, enables TLS
       --grpc_compression string                                          Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
@@ -62,12 +84,14 @@ Usage of mysqlctld:
       --grpc_server_initial_window_size int                              gRPC server initial window size
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
-  -h, --help                                                             display usage and exit
+      --grpc_server_keepalive_time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
+      --grpc_server_keepalive_timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
+  -h, --help                                                             help for mysqlctld
       --init_db_sql_file string                                          Path to .sql file to run after mysqld initialization
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
-      --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
+      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
       --log_dir string                                                   If non-empty, write log files in this directory
       --log_err_stacks                                                   log stack traces for errors
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
@@ -84,16 +108,18 @@ Usage of mysqlctld:
       --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
+      --pprof-http                                                       enable pprof http endpoints
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --replication_connect_retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
+      --shutdown-wait-time duration                                      How long to wait for mysqld shutdown (default 5m0s)
       --socket_file string                                               Local unix socket file to listen on
-      --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
+      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet_dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
       --tablet_uid uint32                                                Tablet UID (default 41983)
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
-      --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
-      --wait_time duration                                               How long to wait for mysqld startup or shutdown (default 5m0s)
+      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
+      --wait_time duration                                               How long to wait for mysqld startup (default 5m0s)

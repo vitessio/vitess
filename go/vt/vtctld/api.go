@@ -48,9 +48,8 @@ import (
 )
 
 var (
-	localCell        string
-	proxyTablets     bool
-	showTopologyCRUD = true
+	localCell    string
+	proxyTablets bool
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -86,8 +85,6 @@ func init() {
 func registerVtctldAPIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&localCell, "cell", localCell, "cell to use")
 	fs.BoolVar(&proxyTablets, "proxy_tablets", proxyTablets, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
-	fs.BoolVar(&showTopologyCRUD, "vtctld_show_topology_crud", showTopologyCRUD, "Controls the display of the CRUD topology actions in the vtctld UI.")
-	fs.MarkDeprecated("vtctld_show_topology_crud", "It is no longer applicable because vtctld no longer provides a UI.")
 }
 
 func newTabletWithURL(t *topodatapb.Tablet) *TabletWithURL {
@@ -490,7 +487,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 
 		logstream := logutil.NewMemoryLogger()
 
-		wr := wrangler.New(logstream, ts, tmClient)
+		wr := wrangler.New(actions.env, logstream, ts, tmClient)
 		err := vtctl.RunCommand(r.Context(), wr, args)
 		if err != nil {
 			resp.Error = err.Error()
@@ -526,7 +523,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 		logger := logutil.NewCallbackLogger(func(ev *logutilpb.Event) {
 			w.Write([]byte(logutil.EventString(ev)))
 		})
-		wr := wrangler.New(logger, ts, tmClient)
+		wr := wrangler.New(actions.env, logger, ts, tmClient)
 
 		apiCallUUID, err := schema.CreateUUID()
 		if err != nil {
@@ -534,7 +531,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 		}
 
 		requestContext := fmt.Sprintf("vtctld/api:%s", apiCallUUID)
-		executor := schemamanager.NewTabletExecutor(requestContext, wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), time.Duration(req.ReplicaTimeoutSeconds)*time.Second, 0)
+		executor := schemamanager.NewTabletExecutor(requestContext, wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), time.Duration(req.ReplicaTimeoutSeconds)*time.Second, 0, actions.env.Parser())
 		if err := executor.SetDDLStrategy(req.DDLStrategy); err != nil {
 			return fmt.Errorf("error setting DDL strategy: %v", err)
 		}

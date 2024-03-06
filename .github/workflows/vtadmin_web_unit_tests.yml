@@ -16,7 +16,7 @@ permissions: read-all
 
 jobs:
   unit-tests:
-    runs-on: ubuntu-22.04
+    runs-on: gh-hosted-runners-4cores-1
     steps:
       - name: Skip CI
         run: |

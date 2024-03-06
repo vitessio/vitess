@@ -23,6 +23,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/vtenv"
+
 	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/acl"
@@ -34,7 +36,6 @@ import (
 )
 
 var (
-	durabilityPolicy    = "none"
 	sanitizeLogMessages = false
 )
 
@@ -45,14 +46,12 @@ func init() {
 }
 
 func registerVtctldFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&durabilityPolicy, "durability_policy", durabilityPolicy, "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
-	fs.MarkDeprecated("durability_policy", "Set the correct durability policy in the keyspace information instead.")
 	fs.BoolVar(&sanitizeLogMessages, "vtctld_sanitize_log_messages", sanitizeLogMessages, "When true, vtctld sanitizes logging.")
 }
 
 // InitVtctld initializes all the vtctld functionality.
-func InitVtctld(ts *topo.Server) error {
-	actionRepo := NewActionRepository(ts)
+func InitVtctld(env *vtenv.Environment, ts *topo.Server) error {
+	actionRepo := NewActionRepository(env, ts)
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",

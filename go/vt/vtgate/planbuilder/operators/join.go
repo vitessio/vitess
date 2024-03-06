@@ -18,24 +18,23 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
 type Join struct {
-	LHS, RHS  ops.Operator
+	LHS, RHS  Operator
 	Predicate sqlparser.Expr
 	LeftJoin  bool
 
 	noColumns
 }
 
-var _ ops.Operator = (*Join)(nil)
+var _ Operator = (*Join)(nil)
 
 // Clone implements the Operator interface
-func (j *Join) Clone(inputs []ops.Operator) ops.Operator {
+func (j *Join) Clone(inputs []Operator) Operator {
 	clone := *j
 	clone.LHS = inputs[0]
 	clone.RHS = inputs[1]
@@ -47,30 +46,30 @@ func (j *Join) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
-func (j *Join) GetOrdering() ([]ops.OrderBy, error) {
-	return nil, nil
+func (j *Join) GetOrdering(*plancontext.PlanningContext) []OrderBy {
+	return nil
 }
 
 // Inputs implements the Operator interface
-func (j *Join) Inputs() []ops.Operator {
-	return []ops.Operator{j.LHS, j.RHS}
+func (j *Join) Inputs() []Operator {
+	return []Operator{j.LHS, j.RHS}
 }
 
 // SetInputs implements the Operator interface
-func (j *Join) SetInputs(ops []ops.Operator) {
+func (j *Join) SetInputs(ops []Operator) {
 	j.LHS, j.RHS = ops[0], ops[1]
 }
 
-func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {
+func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult) {
 	if j.LeftJoin {
 		// we can't merge outer joins into a single QG
-		return j, rewrite.SameTree, nil
+		return j, NoRewrite
 	}
 
 	lqg, lok := j.LHS.(*QueryGraph)
 	rqg, rok := j.RHS.(*QueryGraph)
 	if !lok || !rok {
-		return j, rewrite.SameTree, nil
+		return j, NoRewrite
 	}
 
 	newOp := &QueryGraph{
@@ -79,24 +78,25 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *rewrite
 		NoDeps:     ctx.SemTable.AndExpressions(lqg.NoDeps, rqg.NoDeps),
 	}
 	if j.Predicate != nil {
-		err := newOp.collectPredicate(ctx, j.Predicate)
-		if err != nil {
-			return nil, rewrite.SameTree, err
-		}
+		newOp.collectPredicate(ctx, j.Predicate)
 	}
-	return newOp, rewrite.NewTree("merge querygraphs into a single one", newOp), nil
+	return newOp, Rewrote("merge querygraphs into a single one")
 }
 
-func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
+func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
 	if tableExpr.Join == sqlparser.RightJoinType {
 		lhs, rhs = rhs, lhs
 	}
+	subq, _ := getSubQuery(tableExpr.Condition.On)
+	if subq != nil {
+		panic(vterrors.VT12001("subquery in outer join predicate"))
+	}
 	predicate := tableExpr.Condition.On
-	sqlparser.RemoveKeyspaceFromColName(predicate)
-	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: predicate}, nil
+	sqlparser.RemoveKeyspaceInCol(predicate)
+	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: predicate}
 }
 
-func createJoin(ctx *plancontext.PlanningContext, LHS, RHS ops.Operator) ops.Operator {
+func createJoin(ctx *plancontext.PlanningContext, LHS, RHS Operator) Operator {
 	lqg, lok := LHS.(*QueryGraph)
 	rqg, rok := RHS.(*QueryGraph)
 	if lok && rok {
@@ -110,39 +110,42 @@ func createJoin(ctx *plancontext.PlanningContext, LHS, RHS ops.Operator) ops.Ope
 	return &Join{LHS: LHS, RHS: RHS}
 }
 
-func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
+func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
 	op := createJoin(ctx, lhs, rhs)
-	pred := tableExpr.Condition.On
-	if pred != nil {
-		var err error
-		sqlparser.RemoveKeyspaceFromColName(pred)
-		op, err = op.AddPredicate(ctx, pred)
-		if err != nil {
-			return nil, err
+	sqc := &SubQueryBuilder{}
+	outerID := TableID(op)
+	joinPredicate := tableExpr.Condition.On
+	sqlparser.RemoveKeyspaceInCol(joinPredicate)
+	exprs := sqlparser.SplitAndExpression(nil, joinPredicate)
+	for _, pred := range exprs {
+		subq := sqc.handleSubquery(ctx, pred, outerID)
+		if subq != nil {
+			continue
 		}
+		op = op.AddPredicate(ctx, pred)
 	}
-	return op, nil
+	return sqc.getRootOperator(op, nil)
 }
 
-func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	return AddPredicate(ctx, j, expr, false, newFilter)
+func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	return AddPredicate(ctx, j, expr, false, newFilterSinglePredicate)
 }
 
 var _ JoinOp = (*Join)(nil)
 
-func (j *Join) GetLHS() ops.Operator {
+func (j *Join) GetLHS() Operator {
 	return j.LHS
 }
 
-func (j *Join) GetRHS() ops.Operator {
+func (j *Join) GetRHS() Operator {
 	return j.RHS
 }
 
-func (j *Join) SetLHS(operator ops.Operator) {
+func (j *Join) SetLHS(operator Operator) {
 	j.LHS = operator
 }
 
-func (j *Join) SetRHS(operator ops.Operator) {
+func (j *Join) SetRHS(operator Operator) {
 	j.RHS = operator
 }
 
@@ -154,9 +157,8 @@ func (j *Join) IsInner() bool {
 	return !j.LeftJoin
 }
 
-func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	j.Predicate = ctx.SemTable.AndExpressions(j.Predicate, expr)
-	return nil
 }
 
 func (j *Join) ShortDescription() string {

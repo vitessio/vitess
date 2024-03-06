@@ -26,6 +26,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/vtenv"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -114,9 +116,9 @@ type replica struct {
 	wg       sync.WaitGroup
 }
 
-func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Duration, ts *topo.Server) *replica {
+func newReplica(env *vtenv.Environment, lagUpdateInterval, degrationInterval, degrationDuration time.Duration, ts *topo.Server) *replica {
 	t := &testing.T{}
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	fakeTablet := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topodatapb.TabletType_REPLICA, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	fakeTablet.StartActionLoop(t, wr)
@@ -231,13 +233,13 @@ type client struct {
 	healthcheckCh chan *discovery.TabletHealth
 }
 
-func newClient(primary *primary, replica *replica, ts *topo.Server) *client {
+func newClient(ctx context.Context, primary *primary, replica *replica, ts *topo.Server) *client {
 	t, err := throttler.NewThrottler("client", "TPS", 1, throttler.MaxRateModuleDisabled, 5 /* seconds */)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	healthCheck := discovery.NewHealthCheck(context.Background(), 5*time.Second, 1*time.Minute, ts, "cell1", "")
+	healthCheck := discovery.NewHealthCheck(ctx, 5*time.Second, 1*time.Minute, ts, "cell1", "")
 	c := &client{
 		primary:     primary,
 		healthCheck: healthCheck,
@@ -307,10 +309,18 @@ func main() {
 	})
 
 	log.Infof("start rate set to: %v", rate)
-	ts := memorytopo.NewServer("cell1")
-	replica := newReplica(lagUpdateInterval, replicaDegrationInterval, replicaDegrationDuration, ts)
+	ts := memorytopo.NewServer(context.Background(), "cell1")
+	env, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	replica := newReplica(env, lagUpdateInterval, replicaDegrationInterval, replicaDegrationDuration, ts)
 	primary := &primary{replica: replica}
-	client := newClient(primary, replica, ts)
+	client := newClient(context.Background(), primary, replica, ts)
 	client.run()
 
 	time.Sleep(duration)

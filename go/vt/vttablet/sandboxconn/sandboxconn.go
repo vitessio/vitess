@@ -82,6 +82,8 @@ type SandboxConn struct {
 	ReleaseCount             atomic.Int64
 	GetSchemaCount           atomic.Int64
 
+	queriesRequireLocking bool
+	queriesMu             sync.Mutex
 	// Queries stores the non-batch requests received.
 	Queries []*querypb.BoundQuery
 
@@ -114,7 +116,7 @@ type SandboxConn struct {
 	// reserve id generator
 	ReserveID atomic.Int64
 
-	mapMu     sync.Mutex //protects the map txIDToRID
+	mapMu     sync.Mutex // protects the map txIDToRID
 	txIDToRID map[int64]int64
 
 	sExecMu sync.Mutex
@@ -126,6 +128,8 @@ type SandboxConn struct {
 	NotServing bool
 
 	getSchemaResult []map[string]string
+
+	parser *sqlparser.Parser
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -137,7 +141,41 @@ func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 		MustFailCodes:   make(map[vtrpcpb.Code]int),
 		MustFailExecute: make(map[sqlparser.StatementType]int),
 		txIDToRID:       make(map[int64]int64),
+		parser:          sqlparser.NewTestParser(),
 	}
+}
+
+// RequireQueriesLocking sets the sandboxconn to require locking the access of Queries field.
+func (sbc *SandboxConn) RequireQueriesLocking() {
+	sbc.queriesRequireLocking = true
+	sbc.queriesMu = sync.Mutex{}
+}
+
+// GetQueries gets the Queries from sandboxconn.
+func (sbc *SandboxConn) GetQueries() []*querypb.BoundQuery {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	return sbc.Queries
+}
+
+// ClearQueries clears the Queries in sandboxconn.
+func (sbc *SandboxConn) ClearQueries() {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	sbc.Queries = nil
+}
+
+// appendToQueries appends to the Queries in sandboxconn.
+func (sbc *SandboxConn) appendToQueries(q *querypb.BoundQuery) {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
+	sbc.Queries = append(sbc.Queries, q)
 }
 
 func (sbc *SandboxConn) getError() error {
@@ -181,7 +219,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.Queries = append(sbc.Queries, &querypb.BoundQuery{
+	sbc.appendToQueries(&querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
 	})
@@ -190,7 +228,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 		return nil, err
 	}
 
-	stmt, _ := sqlparser.Parse(query) // knowingly ignoring the error
+	stmt, _ := sbc.parser.Parse(query) // knowingly ignoring the error
 	if sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] > 0 {
 		sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] = sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] - 1
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed query: %v", query)
@@ -206,7 +244,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.Queries = append(sbc.Queries, &querypb.BoundQuery{
+	sbc.appendToQueries(&querypb.BoundQuery{
 		Sql:           query,
 		BindVariables: bv,
 	})
@@ -216,7 +254,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		sbc.sExecMu.Unlock()
 		return err
 	}
-	parse, _ := sqlparser.Parse(query)
+	parse, _ := sbc.parser.Parse(query)
 
 	if sbc.results == nil {
 		nextRs := sbc.getNextResult(parse)
@@ -356,7 +394,7 @@ func (sbc *SandboxConn) ConcludeTransaction(ctx context.Context, target *querypb
 	return sbc.getError()
 }
 
-// ReadTransaction returns the metadata for the sepcified dtid.
+// ReadTransaction returns the metadata for the specified dtid.
 func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	sbc.ReadTransactionCount.Add(1)
 	if err := sbc.getError(); err != nil {
@@ -503,6 +541,11 @@ func (sbc *SandboxConn) VStreamRows(ctx context.Context, request *binlogdatapb.V
 	return fmt.Errorf("not implemented in test")
 }
 
+// VStreamTables is part of the QueryService interface.
+func (sbc *SandboxConn) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(response *binlogdatapb.VStreamTablesResponse) error) error {
+	return fmt.Errorf("not implemented in test")
+}
+
 // VStreamResults is part of the QueryService interface.
 func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	return fmt.Errorf("not implemented in test")
@@ -640,7 +683,7 @@ func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result
 		*sqlparser.Union,
 		*sqlparser.Show,
 		sqlparser.Explain,
-		*sqlparser.OtherRead:
+		*sqlparser.Analyze:
 		return getSingleRowResult()
 	case *sqlparser.Set,
 		sqlparser.DDLStatement,
@@ -668,6 +711,10 @@ func (sbc *SandboxConn) getTxReservedID(txID int64) int64 {
 
 // StringQueries returns the queries executed as a slice of strings
 func (sbc *SandboxConn) StringQueries() []string {
+	if sbc.queriesRequireLocking {
+		sbc.queriesMu.Lock()
+		defer sbc.queriesMu.Unlock()
+	}
 	result := make([]string, len(sbc.Queries))
 	for i, query := range sbc.Queries {
 		result[i] = query.Sql

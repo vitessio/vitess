@@ -132,6 +132,13 @@
     	},
 		"cfc": {
 			"type": "cfc"
+		},
+		"multicol_vdx": {
+			"type": "multicol",
+			"params": {
+				"column_count": "2",
+				"column_vindex": "xxhash,binary"
+			}
 		}
 	},
 	"tables": {
@@ -346,6 +353,14 @@
 		"zip_detail": {
 			"type": "reference",
 			"source": "TestUnsharded.zip_detail"
-		}
-	}
+		},
+        "multicol_tbl": {
+            "column_vindexes": [
+                {
+                    "columns": ["cola", "colb"],
+                    "name": "multicol_vdx"
+                }
+            ]
+       }
+    }
 }

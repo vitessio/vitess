@@ -18,15 +18,13 @@ package operators
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
-	"golang.org/x/exp/slices"
-
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -36,7 +34,7 @@ type (
 	// Both all aggregations and no grouping, and the inverse
 	// of all grouping and no aggregations are valid configurations of this operator
 	Aggregator struct {
-		Source  ops.Operator
+		Source  Operator
 		Columns []*sqlparser.AliasedExpr
 
 		Grouping     []GroupBy
@@ -56,13 +54,12 @@ type (
 		ResultColumns int
 
 		QP *QueryProjection
-		// TableID will be non-nil for derived tables
-		TableID *semantics.TableSet
-		Alias   string
+
+		DT *DerivedTable
 	}
 )
 
-func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
+func (a *Aggregator) Clone(inputs []Operator) Operator {
 	kopy := *a
 	kopy.Source = inputs[0]
 	kopy.Columns = slices.Clone(a.Columns)
@@ -71,32 +68,27 @@ func (a *Aggregator) Clone(inputs []ops.Operator) ops.Operator {
 	return &kopy
 }
 
-func (a *Aggregator) Inputs() []ops.Operator {
-	return []ops.Operator{a.Source}
+func (a *Aggregator) Inputs() []Operator {
+	return []Operator{a.Source}
 }
 
-func (a *Aggregator) SetInputs(operators []ops.Operator) {
+func (a *Aggregator) SetInputs(operators []Operator) {
 	if len(operators) != 1 {
 		panic(fmt.Sprintf("unexpected number of operators as input in aggregator: %d", len(operators)))
 	}
 	a.Source = operators[0]
 }
 
-func (a *Aggregator) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newOp, err := a.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	a.Source = newOp
-	return a, nil
+func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	return newFilter(a, expr)
 }
 
-func (a *Aggregator) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
+func (a *Aggregator) addColumnWithoutPushing(_ *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	offset := len(a.Columns)
 	a.Columns = append(a.Columns, expr)
 
 	if addToGroupBy {
-		groupBy := NewGroupBy(expr.Expr, expr.Expr, expr)
+		groupBy := NewGroupBy(expr.Expr)
 		groupBy.ColOffset = offset
 		a.Grouping = append(a.Grouping, groupBy)
 	} else {
@@ -113,128 +105,134 @@ func (a *Aggregator) addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToG
 	return offset
 }
 
+func (a *Aggregator) addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, groupby []bool, exprs []*sqlparser.AliasedExpr) (offsets []int) {
+	for i, ae := range exprs {
+		offset := a.addColumnWithoutPushing(ctx, ae, groupby[i])
+		offsets = append(offsets, offset)
+	}
+	return
+}
+
 func (a *Aggregator) isDerived() bool {
-	return a.TableID != nil
+	return a.DT != nil
 }
 
-func (a *Aggregator) findCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	if a.isDerived() {
-		derivedTBL, err := ctx.SemTable.TableInfoFor(*a.TableID)
-		if err != nil {
-			return 0, err
-		}
-		expr = semantics.RewriteDerivedTableExpression(expr, derivedTBL)
+func (a *Aggregator) derivedName() string {
+	if a.DT == nil {
+		return ""
 	}
+
+	return a.DT.Alias
+}
+
+func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr, underRoute bool) int {
+	if underRoute && a.isDerived() {
+		// We don't want to use columns on this operator if it's a derived table under a route.
+		// In this case, we need to add a Projection on top of this operator to make the column available
+		return -1
+	}
+
+	expr := a.DT.RewriteExpression(ctx, in)
 	if offset, found := canReuseColumn(ctx, a.Columns, expr, extractExpr); found {
-		return offset, nil
+		return offset
 	}
-	return -1, nil
+	return -1
 }
 
-func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, _, addToGroupBy bool) (ops.Operator, int, error) {
-	offset, err := a.findCol(ctx, expr.Expr)
-	if err != nil {
-		return nil, 0, err
+func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) int {
+	rewritten := a.DT.RewriteExpression(ctx, ae.Expr)
+
+	ae = &sqlparser.AliasedExpr{
+		Expr: rewritten,
+		As:   ae.As,
 	}
-	if offset >= 0 {
-		return a, offset, nil
-	}
-	if a.isDerived() {
-		derivedTBL, err := ctx.SemTable.TableInfoFor(*a.TableID)
-		if err != nil {
-			return nil, 0, err
+
+	if reuse {
+		offset := a.findColInternal(ctx, ae, groupBy)
+		if offset >= 0 {
+			return offset
 		}
-		expr.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, derivedTBL)
+	}
+
+	// Upon receiving a weight string function from an upstream operator, check for an existing grouping on the argument expression.
+	// If a grouping is found, continue to push the function down, marking it with 'addToGroupBy' to ensure it's correctly treated as a grouping column.
+	// This process also sets the weight string column offset, eliminating the need for a later addition in the aggregator operator's planOffset.
+	if wsExpr, isWS := rewritten.(*sqlparser.WeightStringFuncExpr); isWS {
+		idx := slices.IndexFunc(a.Grouping, func(by GroupBy) bool {
+			return ctx.SemTable.EqualsExprWithDeps(wsExpr.Expr, by.Inner)
+		})
+		if idx >= 0 {
+			a.Grouping[idx].WSOffset = len(a.Columns)
+			groupBy = true
+		}
+	}
+
+	if !groupBy {
+		aggr := NewAggr(opcode.AggregateAnyValue, nil, ae, ae.As.String())
+		aggr.ColOffset = len(a.Columns)
+		a.Aggregations = append(a.Aggregations, aggr)
+	}
+
+	offset := len(a.Columns)
+	a.Columns = append(a.Columns, ae)
+	incomingOffset := a.Source.AddColumn(ctx, false, groupBy, ae)
+
+	if offset != incomingOffset {
+		panic(errFailedToPlan(ae))
+	}
+
+	return offset
+}
+
+func (a *Aggregator) findColInternal(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr, addToGroupBy bool) int {
+	expr := ae.Expr
+	offset := a.FindCol(ctx, expr, false)
+	if offset >= 0 {
+		return offset
 	}
 
 	// Aggregator is little special and cannot work if the input offset are not matched with the aggregation columns.
 	// So, before pushing anything from above the aggregator offset planning needs to be completed.
-	err = a.planOffsets(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	if offset, found := canReuseColumn(ctx, a.Columns, expr.Expr, extractExpr); found {
-		return a, offset, nil
-	}
-	colName, isColName := expr.Expr.(*sqlparser.ColName)
-	for i, col := range a.Columns {
-		if isColName && colName.Name.EqualString(col.As.String()) {
-			return a, i, nil
-		}
+	a.planOffsets(ctx)
+	if offset, found := canReuseColumn(ctx, a.Columns, expr, extractExpr); found {
+		return offset
 	}
 
 	if addToGroupBy {
-		return nil, 0, vterrors.VT13001("did not expect to add group by here")
+		panic(vterrors.VT13001(fmt.Sprintf("did not expect to add group by here: %s", sqlparser.String(expr))))
 	}
 
-	// If weight string function is received from above operator. Then check if we have a group on the expression used.
-	// If it is found, then continue to push it down but with addToGroupBy true so that is the added to group by sql down in the AddColumn.
-	// This also set the weight string column offset so that we would not need to add it later in aggregator operator planOffset.
-
-	// If the expression is a WeightStringFuncExpr, it checks if a GroupBy
-	// already exists on the argument of the expression.
-	// If it is found, the column offset for the WeightStringFuncExpr is set,
-	// and the column is marked to be added to the GroupBy in the recursive AddColumn call.
-	if wsExpr, isWS := expr.Expr.(*sqlparser.WeightStringFuncExpr); isWS {
-		idx := slices.IndexFunc(a.Grouping, func(by GroupBy) bool {
-			return ctx.SemTable.EqualsExprWithDeps(wsExpr.Expr, by.SimplifiedExpr)
-		})
-		if idx >= 0 {
-			a.Grouping[idx].WSOffset = len(a.Columns)
-			addToGroupBy = true
-		}
-	}
-
-	if !addToGroupBy {
-		aggr := NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
-		aggr.ColOffset = len(a.Columns)
-		a.Aggregations = append(a.Aggregations, aggr)
-	}
-	a.Columns = append(a.Columns, expr)
-	expectedOffset := len(a.Columns) - 1
-	newSrc, offset, err := a.Source.AddColumn(ctx, expr, false, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
-	}
-	if offset != expectedOffset {
-		return nil, 0, vterrors.VT13001("the offset needs to be aligned here")
-	}
-	a.Source = newSrc
-	return a, offset, nil
+	return -1
 }
 
-func (a *Aggregator) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	if _, isSourceDerived := a.Source.(*Horizon); isSourceDerived {
-		return a.Columns, nil
+		return a.Columns
 	}
 
 	// we update the incoming columns, so we know about any new columns that have been added
 	// in the optimization phase, other operators could be pushed down resulting in additional columns for aggregator.
 	// Aggregator should be made aware of these to truncate them in final result.
-	columns, err := a.Source.GetColumns()
-	if err != nil {
-		return nil, err
-	}
+	columns := a.Source.GetColumns(ctx)
 
 	// if this operator is producing more columns than expected, we want to know about it
 	if len(columns) > len(a.Columns) {
 		a.Columns = append(a.Columns, columns[len(a.Columns):]...)
 	}
 
-	return a.Columns, nil
+	return a.Columns
 }
 
-func (a *Aggregator) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return transformColumnsToSelectExprs(a)
+func (a *Aggregator) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+	return transformColumnsToSelectExprs(ctx, a)
 }
 
 func (a *Aggregator) ShortDescription() string {
-	columns := slices2.Map(a.Columns, func(from *sqlparser.AliasedExpr) string {
+	columns := slice.Map(a.Columns, func(from *sqlparser.AliasedExpr) string {
 		return sqlparser.String(from)
 	})
-	if a.Alias != "" {
-		columns = append([]string{"derived[" + a.Alias + "]"}, columns...)
+	if a.DT != nil {
+		columns = append([]string{a.DT.String()}, columns...)
 	}
 
 	org := ""
@@ -248,17 +246,17 @@ func (a *Aggregator) ShortDescription() string {
 
 	var grouping []string
 	for _, gb := range a.Grouping {
-		grouping = append(grouping, sqlparser.String(gb.SimplifiedExpr))
+		grouping = append(grouping, sqlparser.String(gb.Inner))
 	}
 
 	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columns, ", "), strings.Join(grouping, ","))
 }
 
-func (a *Aggregator) GetOrdering() ([]ops.OrderBy, error) {
-	return a.Source.GetOrdering()
+func (a *Aggregator) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
+	return a.Source.GetOrdering(ctx)
 }
 
-func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
+func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	if a.offsetPlanned {
 		return nil
 	}
@@ -266,25 +264,20 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 		a.offsetPlanned = true
 	}()
 	if !a.Pushed {
-		return a.planOffsetsNotPushed(ctx)
+		a.planOffsetsNotPushed(ctx)
+		return nil
 	}
 
 	for idx, gb := range a.Grouping {
 		if gb.ColOffset == -1 {
-			offset, err := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
-			if err != nil {
-				return err
-			}
+			offset := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
 			a.Grouping[idx].ColOffset = offset
 		}
-		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
+		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
 			continue
 		}
 
-		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.SimplifiedExpr)), true)
-		if err != nil {
-			return err
-		}
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.Inner)), true)
 		a.Grouping[idx].WSOffset = offset
 	}
 
@@ -292,17 +285,14 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) error {
 		if !aggr.NeedsWeightString(ctx) {
 			continue
 		}
-		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), true)
-		if err != nil {
-			return err
-		}
+		arg := aggr.getPushColumn()
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(arg)), true)
 		a.Aggregations[idx].WSOffset = offset
 	}
-
 	return nil
 }
 
-func (aggr Aggr) getPushDownColumn() sqlparser.Expr {
+func (aggr Aggr) getPushColumn() sqlparser.Expr {
 	switch aggr.OpCode {
 	case opcode.AggregateAnyValue:
 		return aggr.Original.Expr
@@ -310,102 +300,87 @@ func (aggr Aggr) getPushDownColumn() sqlparser.Expr {
 		return sqlparser.NewIntLiteral("1")
 	case opcode.AggregateGroupConcat:
 		if len(aggr.Func.GetArgs()) > 1 {
-			panic("more than 1 column")
+			panic(vterrors.VT12001("group_concat with more than 1 column"))
 		}
-		fallthrough
+		return aggr.Func.GetArg()
 	default:
+		if len(aggr.Func.GetArgs()) > 1 {
+			panic(vterrors.VT03001(sqlparser.String(aggr.Func)))
+		}
 		return aggr.Func.GetArg()
 	}
 }
 
-func (a *Aggregator) planOffsetsNotPushed(ctx *plancontext.PlanningContext) error {
+func (a *Aggregator) planOffsetsNotPushed(ctx *plancontext.PlanningContext) {
+	a.Source = newAliasedProjection(a.Source)
 	// we need to keep things in the column order, so we can't iterate over the aggregations or groupings
 	for colIdx := range a.Columns {
-		idx, err := a.addIfGroupingColumn(ctx, colIdx)
-		if err != nil {
-			return err
-		}
+		idx := a.addIfGroupingColumn(ctx, colIdx)
 		if idx >= 0 {
 			continue
 		}
 
-		idx, err = a.addIfAggregationColumn(ctx, colIdx)
-		if err != nil {
-			return err
-		}
+		idx = a.addIfAggregationColumn(ctx, colIdx)
 
 		if idx < 0 {
-			return vterrors.VT13001("failed to find the corresponding column")
+			panic(vterrors.VT13001("failed to find the corresponding column"))
 		}
 	}
 
-	return a.pushRemainingGroupingColumnsAndWeightStrings(ctx)
+	a.pushRemainingGroupingColumnsAndWeightStrings(ctx)
 }
 
-func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, colIdx int) (int, error) {
+func (a *Aggregator) addIfAggregationColumn(ctx *plancontext.PlanningContext, colIdx int) int {
 	for _, aggr := range a.Aggregations {
 		if aggr.ColOffset != colIdx {
 			continue
 		}
 
-		newSrc, offset, err := a.Source.AddColumn(ctx, aeWrap(aggr.getPushDownColumn()), false, false)
-		if err != nil {
-			return 0, err
-		}
+		wrap := aeWrap(aggr.getPushColumn())
+		offset := a.Source.AddColumn(ctx, false, false, wrap)
 		if aggr.ColOffset != offset {
-			if _, srcIsAlsoAggr := a.Source.(*Aggregator); srcIsAlsoAggr {
-				return 0, vterrors.VT12001("aggregation on top of aggregation not supported")
-			}
-			return -1, vterrors.VT12001(fmt.Sprintf("failed to plan aggregation on: %s", sqlparser.String(aggr.Original)))
+			panic(errFailedToPlan(aggr.Original))
 		}
 
-		a.Source = newSrc
-		return offset, nil
+		return offset
 	}
-	return -1, nil
+	return -1
 }
 
-func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, colIdx int) (int, error) {
+func errFailedToPlan(original *sqlparser.AliasedExpr) *vterrors.VitessError {
+	return vterrors.VT12001(fmt.Sprintf("failed to plan aggregation on: %s", sqlparser.String(original)))
+}
+
+func (a *Aggregator) addIfGroupingColumn(ctx *plancontext.PlanningContext, colIdx int) int {
 	for _, gb := range a.Grouping {
 		if gb.ColOffset != colIdx {
 			continue
 		}
 
-		newSrc, offset, err := a.Source.AddColumn(ctx, a.Columns[colIdx], false, true)
-		if err != nil {
-			return -1, err
-		}
-
+		expr := a.Columns[colIdx]
+		offset := a.Source.AddColumn(ctx, false, true, expr)
 		if gb.ColOffset != offset {
-			return -1, vterrors.VT13001(fmt.Sprintf("grouping column on wrong index: want: %d, got: %d", colIdx, offset))
+			panic(errFailedToPlan(expr))
 		}
 
-		a.Source = newSrc
-
-		return offset, nil
+		return offset
 	}
-	return -1, nil
+	return -1
 }
 
 // pushRemainingGroupingColumnsAndWeightStrings pushes any grouping column that is not part of the columns list and weight strings needed for performing grouping aggregations.
-func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *plancontext.PlanningContext) error {
+func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *plancontext.PlanningContext) {
 	for idx, gb := range a.Grouping {
 		if gb.ColOffset == -1 {
-			offset, err := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
-			if err != nil {
-				return err
-			}
+			offset := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
 			a.Grouping[idx].ColOffset = offset
 		}
 
-		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.SimplifiedExpr) {
+		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
 			continue
 		}
 
-		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.SimplifiedExpr)), false)
-		if err != nil {
-			return err
-		}
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.Inner)), false)
 		a.Grouping[idx].WSOffset = offset
 	}
 	for idx, aggr := range a.Aggregations {
@@ -413,49 +388,56 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			continue
 		}
 
-		offset, err := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), false)
-		if err != nil {
-			return err
-		}
+		arg := aggr.getPushColumn()
+		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(arg)), false)
 		a.Aggregations[idx].WSOffset = offset
 	}
-	return nil
 }
 
 func (a *Aggregator) setTruncateColumnCount(offset int) {
 	a.ResultColumns = offset
 }
 
-func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	newSrc, offset, err := a.Source.AddColumn(ctx, aliasedExpr, true, addToGroupBy)
-	if err != nil {
-		return 0, err
-	}
-	a.Source = newSrc
+func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) int {
+	offset := a.Source.AddColumn(ctx, true, addToGroupBy, aliasedExpr)
+
 	if offset == len(a.Columns) {
 		// if we get an offset at the end of our current column list, it means we added a new column
 		a.Columns = append(a.Columns, aliasedExpr)
 	}
-	return offset, nil
+	return offset
 }
 
 // SplitAggregatorBelowRoute returns the aggregator that will live under the Route.
 // This is used when we are splitting the aggregation so one part is done
 // at the mysql level and one part at the vtgate level
-func (a *Aggregator) SplitAggregatorBelowRoute(input []ops.Operator) *Aggregator {
+func (a *Aggregator) SplitAggregatorBelowRoute(input []Operator) *Aggregator {
 	newOp := a.Clone(input).(*Aggregator)
 	newOp.Pushed = false
 	newOp.Original = false
-	newOp.Alias = ""
-	newOp.TableID = nil
+	newOp.DT = nil
 	return newOp
 }
 
 func (a *Aggregator) introducesTableID() semantics.TableSet {
-	if a.TableID == nil {
-		return semantics.EmptyTableSet()
-	}
-	return *a.TableID
+	return a.DT.introducesTableID()
 }
 
-var _ ops.Operator = (*Aggregator)(nil)
+func (a *Aggregator) checkForInvalidAggregations() {
+	for _, aggr := range a.Aggregations {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			aggrFunc, isAggregate := node.(sqlparser.AggrFunc)
+			if !isAggregate {
+				return true, nil
+			}
+			args := aggrFunc.GetArgs()
+			if args != nil && len(args) != 1 {
+				panic(vterrors.VT03001(sqlparser.String(node)))
+			}
+			return true, nil
+
+		}, aggr.Original.Expr)
+	}
+}
+
+var _ Operator = (*Aggregator)(nil)

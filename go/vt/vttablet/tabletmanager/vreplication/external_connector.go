@@ -17,9 +17,8 @@ limitations under the License.
 package vreplication
 
 import (
-	"sync"
-
 	"context"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -28,6 +27,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -52,16 +52,21 @@ type VStreamerClient interface {
 
 	// VStreamRows streams rows of a table from the specified starting point.
 	VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error
+
+	// VStreamTables streams rows of a table from the specified starting point.
+	VStreamTables(ctx context.Context, send func(*binlogdatapb.VStreamTablesResponse) error) error
 }
 
 type externalConnector struct {
+	env        *vtenv.Environment
 	mu         sync.Mutex
 	dbconfigs  map[string]*dbconfigs.DBConfigs
 	connectors map[string]*mysqlConnector
 }
 
-func newExternalConnector(dbcfgs map[string]*dbconfigs.DBConfigs) *externalConnector {
+func newExternalConnector(env *vtenv.Environment, dbcfgs map[string]*dbconfigs.DBConfigs) *externalConnector {
 	return &externalConnector{
+		env:        env,
 		dbconfigs:  dbcfgs,
 		connectors: make(map[string]*mysqlConnector),
 	}
@@ -88,7 +93,7 @@ func (ec *externalConnector) Get(name string) (*mysqlConnector, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "external mysqlConnector %v not found", name)
 	}
 	c := &mysqlConnector{}
-	c.env = tabletenv.NewEnv(config, name)
+	c.env = tabletenv.NewEnv(ec.env, config, name)
 	c.se = schema.NewEngine(c.env)
 	c.vstreamer = vstreamer.NewEngine(c.env, nil, c.se, nil, "")
 	c.vstreamer.InitDBConfig("", "")
@@ -142,6 +147,10 @@ func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *
 	return c.vstreamer.StreamRows(ctx, query, row, send)
 }
 
+func (c *mysqlConnector) VStreamTables(ctx context.Context, send func(response *binlogdatapb.VStreamTablesResponse) error) error {
+	return c.vstreamer.StreamTables(ctx, send)
+}
+
 //-----------------------------------------------------------
 
 type tabletConnector struct {
@@ -179,4 +188,9 @@ func (tc *tabletConnector) VStream(ctx context.Context, startPos string, tablePK
 func (tc *tabletConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	req := &binlogdatapb.VStreamRowsRequest{Target: tc.target, Query: query, Lastpk: lastpk}
 	return tc.qs.VStreamRows(ctx, req, send)
+}
+
+func (tc *tabletConnector) VStreamTables(ctx context.Context, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	req := &binlogdatapb.VStreamTablesRequest{Target: tc.target}
+	return tc.qs.VStreamTables(ctx, req, send)
 }

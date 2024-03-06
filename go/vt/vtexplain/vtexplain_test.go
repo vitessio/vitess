@@ -17,6 +17,7 @@ limitations under the License.
 package vtexplain
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -27,12 +28,16 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
+
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func defaultTestOpts() *Options {
@@ -48,7 +53,7 @@ type testopts struct {
 	shardmap map[string]map[string]*topo.ShardInfo
 }
 
-func initTest(mode string, opts *Options, topts *testopts, t *testing.T) *VTExplain {
+func initTest(ctx context.Context, ts *topo.Server, mode string, opts *Options, topts *testopts, t *testing.T) *VTExplain {
 	schema, err := os.ReadFile("testdata/test-schema.sql")
 	require.NoError(t, err)
 
@@ -64,7 +69,8 @@ func initTest(mode string, opts *Options, topts *testopts, t *testing.T) *VTExpl
 	}
 
 	opts.ExecutionMode = mode
-	vte, err := Init(string(vSchema), string(schema), shardmap, opts)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	vte, err := Init(ctx, vtenv.NewTestEnv(), ts, string(vSchema), string(schema), shardmap, opts, srvTopoCounts)
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 	return vte
 }
@@ -85,7 +91,11 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 
 func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testing.T) {
 	t.Run(testcase, func(t *testing.T) {
-		vte := initTest(mode, opts, topts, t)
+		ctx := utils.LeakCheckContext(t)
+
+		ts := memorytopo.NewServer(ctx, Cell)
+		vte := initTest(ctx, ts, mode, opts, topts, t)
+		defer vte.Stop()
 
 		sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
 		sql, err := os.ReadFile(sqlFile)
@@ -141,28 +151,6 @@ func TestExplain(t *testing.T) {
 	}
 	tests := []test{
 		{"unsharded", defaultTestOpts()},
-		{"selectsharded", defaultTestOpts()},
-		{"insertsharded", defaultTestOpts()},
-		{"updatesharded", defaultTestOpts()},
-		{"deletesharded", defaultTestOpts()},
-		{"comments", defaultTestOpts()},
-		{"options", &Options{
-			ReplicationMode: "STATEMENT",
-			NumShards:       4,
-			Normalize:       false,
-		}},
-		{"target", &Options{
-			ReplicationMode: "ROW",
-			NumShards:       4,
-			Normalize:       false,
-			Target:          "ks_sharded/40-80",
-		}},
-		{"gen4", &Options{
-			ReplicationMode: "ROW",
-			NumShards:       4,
-			Normalize:       true,
-			PlannerVersion:  querypb.ExecuteOptions_Gen4,
-		}},
 	}
 
 	for _, tst := range tests {
@@ -171,7 +159,10 @@ func TestExplain(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ctx := utils.LeakCheckContext(t)
+	ts := memorytopo.NewServer(ctx, Cell)
+	vte := initTest(ctx, ts, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	defer vte.Stop()
 
 	tests := []struct {
 		SQL string
@@ -208,7 +199,10 @@ func TestErrors(t *testing.T) {
 }
 
 func TestJSONOutput(t *testing.T) {
-	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
+	ctx := utils.LeakCheckContext(t)
+	ts := memorytopo.NewServer(ctx, Cell)
+	vte := initTest(ctx, ts, ModeMulti, defaultTestOpts(), &testopts{}, t)
+	defer vte.Stop()
 	sql := "select 1 from user where id = 1"
 	explains, err := vte.Run(sql)
 	require.NoError(t, err, "vtexplain error")
@@ -344,6 +338,9 @@ func TestUsingKeyspaceShardMap(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	vschema := `{
   "ks1": {
     "sharded": true,
@@ -353,7 +350,9 @@ func TestInit(t *testing.T) {
   }
 }`
 	schema := "create table table_missing_primary_vindex (id int primary key)"
-	_, err := Init(vschema, schema, "", defaultTestOpts())
+	ts := memorytopo.NewServer(ctx, Cell)
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	_, err := Init(ctx, vtenv.NewTestEnv(), ts, vschema, schema, "", defaultTestOpts(), srvTopoCounts)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing primary col vindex")
 }

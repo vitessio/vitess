@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
@@ -60,7 +59,7 @@ func (wr *Wrangler) InitShardPrimary(ctx context.Context, keyspace, shard string
 	ev := &events.Reparent{}
 
 	// do the work
-	err = grpcvtctldserver.NewVtctldServer(wr.ts).InitShardPrimaryLocked(ctx, ev, &vtctldatapb.InitShardPrimaryRequest{
+	err = grpcvtctldserver.NewVtctldServer(wr.env, wr.ts).InitShardPrimaryLocked(ctx, ev, &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                keyspace,
 		Shard:                   shard,
 		PrimaryElectTabletAlias: primaryElectTabletAlias,
@@ -76,16 +75,16 @@ func (wr *Wrangler) InitShardPrimary(ctx context.Context, keyspace, shard string
 
 // PlannedReparentShard will make the provided tablet the primary for the shard,
 // when both the current and new primary are reachable and in good shape.
-func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, primaryElectTabletAlias, avoidTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) (err error) {
+func (wr *Wrangler) PlannedReparentShard(
+	ctx context.Context,
+	keyspace, shard string,
+	opts reparentutil.PlannedReparentOptions,
+) (err error) {
 	_, err = reparentutil.NewPlannedReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
 		ctx,
 		keyspace,
 		shard,
-		reparentutil.PlannedReparentOptions{
-			AvoidPrimaryAlias:   avoidTabletAlias,
-			NewPrimaryAlias:     primaryElectTabletAlias,
-			WaitReplicasTimeout: waitReplicasTimeout,
-		},
+		opts,
 	)
 
 	return err
@@ -93,18 +92,12 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 
 // EmergencyReparentShard will make the provided tablet the primary for
 // the shard, when the old primary is completely unreachable.
-func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, primaryElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, ignoredTablets sets.Set[string], preventCrossCellPromotion bool, waitForAllTablets bool) (err error) {
+func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, opts reparentutil.EmergencyReparentOptions) (err error) {
 	_, err = reparentutil.NewEmergencyReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
 		ctx,
 		keyspace,
 		shard,
-		reparentutil.EmergencyReparentOptions{
-			NewPrimaryAlias:           primaryElectTabletAlias,
-			WaitReplicasTimeout:       waitReplicasTimeout,
-			IgnoreReplicas:            ignoredTablets,
-			PreventCrossCellPromotion: preventCrossCellPromotion,
-			WaitAllTablets:            waitForAllTablets,
-		},
+		opts,
 	)
 
 	return err

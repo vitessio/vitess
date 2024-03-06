@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -44,6 +45,7 @@ type (
 		InTransactionAndIsDML() bool
 		LookupRowLockShardSession() vtgatepb.CommitOrder
 		ConnCollation() collations.ID
+		Environment() *vtenv.Environment
 	}
 
 	// Vindex defines the interface required to register a vindex.

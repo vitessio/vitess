@@ -35,13 +35,15 @@ jobs:
 
       - name: Check for changes in relevant files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: frouioui/paths-filter@main
+        uses: dorny/paths-filter@v3.0.1
         id: changes
         with:
           token: ''
           filters: |
             end_to_end:
               - 'go/**/*.go'
+              - 'go/vt/sidecardb/**/*.sql'
+              - 'go/test/endtoend/onlineddl/vrepl_suite/**'
               - 'test.go'
               - 'Makefile'
               - 'build.env'
@@ -61,7 +63,12 @@ jobs:
       - name: Run test
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 30
-        run: docker run --name "{{.ImageName}}_$GITHUB_SHA" {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard {{.Shard}} -- -- --keep-data=true'
+        run: |
+          # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+          # which musn't be more than 107 characters long.
+          export VTDATAROOT="/tmp/"
+
+          docker run --name "{{.ImageName}}_$GITHUB_SHA" {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard {{.Shard}} -- -- --keep-data=true'
 
       - name: Print Volume Used
         if: always() && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

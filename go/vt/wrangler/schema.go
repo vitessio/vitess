@@ -17,9 +17,9 @@ limitations under the License.
 package wrangler
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"text/template"
 	"time"
@@ -37,11 +37,6 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-)
-
-const (
-	// DefaultWaitReplicasTimeout is the default value for waitReplicasTimeout, which is used when calling method CopySchemaShardFromShard.
-	DefaultWaitReplicasTimeout = 10 * time.Second
 )
 
 // helper method to asynchronously diff a schema
@@ -267,7 +262,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		}
 	}
 
-	// Notify Replicass to reload schema. This is best-effort.
+	// Notify Replicas to reload schema. This is best-effort.
 	reloadCtx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer cancel()
 	resp, err := wr.VtctldServer().ReloadSchemaShard(reloadCtx, &vtctldatapb.ReloadSchemaShardRequest{
@@ -312,8 +307,8 @@ func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletIn
 // fillStringTemplate returns the string template filled
 func fillStringTemplate(tmpl string, vars any) (string, error) {
 	myTemplate := template.Must(template.New("").Parse(tmpl))
-	data := new(bytes.Buffer)
-	if err := myTemplate.Execute(data, vars); err != nil {
+	var data strings.Builder
+	if err := myTemplate.Execute(&data, vars); err != nil {
 		return "", err
 	}
 	return data.String(), nil

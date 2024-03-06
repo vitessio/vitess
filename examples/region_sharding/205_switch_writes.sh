@@ -18,7 +18,7 @@
 
 source ../common/env.sh
 
-vtctlclient Reshard -- --tablet_types=primary SwitchTraffic main.main2regions
+vtctldclient reshard --workflow main2regions --target-keyspace main SwitchTraffic --tablet-types=primary
 
 # to go back to unsharded
 # call Reshard ReverseTraffic with all tablet types

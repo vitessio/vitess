@@ -45,7 +45,10 @@ func (c *TimeoutCloser) Close() error {
 
 	go func() {
 		defer close(done)
-		done <- c.closer.Close()
+		select {
+		case done <- c.closer.Close():
+		case <-ctx.Done():
+		}
 	}()
 	select {
 	case err := <-done:

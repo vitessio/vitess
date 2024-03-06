@@ -20,7 +20,7 @@
 source ../common/env.sh
 
 for tablet in 100 200 300; do
-  if vtctlclient --action_timeout 1s --server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
+  if vtctldclient --action_timeout 1s --server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
     # The zero tablet is up. Try to shutdown 0-2 tablet + mysqlctl
     for i in 0 1 2; do
       uid=$(($tablet + $i))
@@ -29,8 +29,26 @@ for tablet in 100 200 300; do
       echo "Shutting down mysql zone1-$uid"
       CELL=zone1 TABLET_UID=$uid ../common/scripts/mysqlctl-down.sh
       echo "Removing tablet directory zone1-$uid"
-      vtctlclient DeleteTablet -- --allow_primary=true zone1-$uid
-      rm -Rf $VTDATAROOT/vt_0000000$uid
+      vtctldclient DeleteTablets --allow-primary zone1-$uid
+
+      for ((i=0; i<30; i++)); do
+          # Redirect stderr to a temporary file
+          temp_file=$(mktemp)
+          rm -Rf $VTDATAROOT/vt_0000000$uid 2>"$temp_file"
+
+          if grep -q 'Directory not empty' "$temp_file"; then
+              echo "Directory not empty, retrying..."
+          elif [ ! -s "$temp_file" ]; then
+              echo "Deletion succeeded."
+              rm -f "$temp_file"
+              break
+          else
+              echo "An error occurred."
+              cat "$temp_file"
+          fi
+          rm -f "$temp_file"
+          sleep 1
+      done
     done
   fi
 done

@@ -62,7 +62,7 @@ func (c *counters) set(name string, value int64) {
 func (c *counters) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.counts = make(map[string]int64)
+	clear(c.counts)
 }
 
 // ZeroAll zeroes out all values
@@ -323,6 +323,29 @@ func (g *GaugesWithSingleLabel) Set(name string, value int64) {
 	g.counters.set(name, value)
 }
 
+// SyncGaugesWithSingleLabel is a GaugesWithSingleLabel that proactively pushes
+// stats to push-based backends when Set is called.
+type SyncGaugesWithSingleLabel struct {
+	GaugesWithSingleLabel
+	name string
+}
+
+// NewSyncGaugesWithSingleLabel creates a new SyncGaugesWithSingleLabel.
+func NewSyncGaugesWithSingleLabel(name, help, label string, tags ...string) *SyncGaugesWithSingleLabel {
+	return &SyncGaugesWithSingleLabel{
+		GaugesWithSingleLabel: *NewGaugesWithSingleLabel(name, help, label, tags...),
+		name:                  name,
+	}
+}
+
+// Set sets the value of a named gauge.
+func (sg *SyncGaugesWithSingleLabel) Set(name string, value int64) {
+	sg.GaugesWithSingleLabel.Set(name, value)
+	if sg.name != "" {
+		_ = pushOne(sg.name, &sg.GaugesWithSingleLabel)
+	}
+}
+
 // GaugesWithMultiLabels is a CountersWithMultiLabels implementation where
 // the values can go up and down.
 type GaugesWithMultiLabels struct {
@@ -347,6 +370,11 @@ func NewGaugesWithMultiLabels(name, help string, labels []string) *GaugesWithMul
 	return t
 }
 
+// GetLabelName returns a label name using the provided values.
+func (mg *GaugesWithMultiLabels) GetLabelName(names ...string) string {
+	return safeJoinLabels(names, nil)
+}
+
 // Set sets the value of a named counter.
 // len(names) must be equal to len(Labels).
 func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
@@ -354,6 +382,17 @@ func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
 		panic("GaugesWithMultiLabels: wrong number of values in Set")
 	}
 	mg.counters.set(safeJoinLabels(names, nil), value)
+}
+
+// ResetKey resets a specific key.
+//
+// It is the equivalent of `Reset(names)` except that it expects the key to
+// be obtained from the internal counters map.
+//
+// This is useful when you range over all internal counts and you want to reset
+// specific keys.
+func (mg *GaugesWithMultiLabels) ResetKey(key string) {
+	mg.counters.set(key, 0)
 }
 
 // GaugesFuncWithMultiLabels is a wrapper around CountersFuncWithMultiLabels

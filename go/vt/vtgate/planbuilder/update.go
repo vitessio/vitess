@@ -19,11 +19,11 @@ package planbuilder
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -37,54 +37,47 @@ func gen4UpdateStmtPlanner(
 		return nil, vterrors.VT12001("WITH expression in UPDATE statement")
 	}
 
-	ksName := ""
-	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
-		ksName = ks.Name
-	}
-	semTable, err := semantics.Analyze(updStmt, ksName, vschema)
-	if err != nil {
-		return nil, err
-	}
-	// record any warning as planner warning.
-	vschema.PlannerWarning(semTable.Warning)
-
-	err = rewriteRoutedTables(updStmt, vschema)
+	ctx, err := plancontext.CreatePlanningContext(updStmt, reservedVars, vschema, version)
 	if err != nil {
 		return nil, err
 	}
 
-	if ks, tables := semTable.SingleUnshardedKeyspace(); ks != nil {
-		plan := updateUnshardedShortcut(updStmt, ks, tables)
-		plan = pushCommentDirectivesOnPlan(plan, updStmt)
-		return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
-	}
-
-	if semTable.NotUnshardedErr != nil {
-		return nil, semTable.NotUnshardedErr
-	}
-
-	err = queryRewrite(semTable, reservedVars, updStmt)
+	err = queryRewrite(ctx.SemTable, reservedVars, updStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+	// If there are non-literal foreign key updates, we have to run the query with foreign key checks off.
+	if ctx.SemTable.HasNonLiteralForeignKeyUpdate(updStmt.Exprs) {
+		// Since we are running the query with foreign key checks off, we have to verify all the foreign keys validity on vtgate.
+		ctx.VerifyAllFKs = true
+		updStmt.SetComments(updStmt.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, "OFF"))
+	}
+
+	// Remove all the foreign keys that don't require any handling.
+	err = ctx.SemTable.RemoveNonRequiredForeignKeys(ctx.VerifyAllFKs, vindexes.UpdateAction)
+	if err != nil {
+		return nil, err
+	}
+	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
+		if !ctx.SemTable.ForeignKeysPresent() {
+			plan := updateUnshardedShortcut(updStmt, ks, tables)
+			setCommentDirectivesOnPlan(plan, updStmt)
+			return newPlanResult(plan.Primitive(), operators.QualifiedTables(ks, tables)...), nil
+		}
+	}
+
+	if ctx.SemTable.NotUnshardedErr != nil {
+		return nil, ctx.SemTable.NotUnshardedErr
+	}
 
 	op, err := operators.PlanQuery(ctx, updStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, op, true)
+	plan, err := transformToLogicalPlan(ctx, op)
 	if err != nil {
-		return nil, err
-	}
-
-	plan = pushCommentDirectivesOnPlan(plan, updStmt)
-
-	setLockOnAllSelect(plan)
-
-	if err := plan.Wireup(ctx); err != nil {
 		return nil, err
 	}
 

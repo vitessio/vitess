@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -31,8 +30,7 @@ import (
 )
 
 // checkShard verifies the Shard operations work correctly
-func checkShard(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+func checkShard(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
@@ -83,13 +81,23 @@ func checkShard(t *testing.T, ts *topo.Server) {
 		t.Fatalf("shard.PrimaryAlias = %v, want %v", si.Shard.PrimaryAlias, other)
 	}
 
+	// Test FindAllShardsInKeyspace.
+	require.NoError(t, err)
+	_, err = ts.FindAllShardsInKeyspace(ctx, "test_keyspace", nil)
+	require.NoError(t, err)
+
+	// Test GetServingShards.
+	require.NoError(t, err)
+	_, err = ts.GetServingShards(ctx, "test_keyspace")
+	require.NoError(t, err)
+
 	// test GetShardNames
-	shards, err := ts.GetShardNames(ctx, "test_keyspace")
+	shardNames, err := ts.GetShardNames(ctx, "test_keyspace")
 	if err != nil {
 		t.Errorf("GetShardNames: %v", err)
 	}
-	if len(shards) != 1 || shards[0] != "b0-c0" {
-		t.Errorf(`GetShardNames: want [ "b0-c0" ], got %v`, shards)
+	if len(shardNames) != 1 || shardNames[0] != "b0-c0" {
+		t.Errorf(`GetShardNames: want [ "b0-c0" ], got %v`, shardNames)
 	}
 
 	if _, err := ts.GetShardNames(ctx, "test_keyspace666"); !topo.IsErrType(err, topo.NoNode) {
@@ -100,8 +108,7 @@ func checkShard(t *testing.T, ts *topo.Server) {
 // checkShardWithLock verifies that `TryLockShard` will keep failing with `NodeExists` error if there is
 // a lock already taken for given shard. Once we unlock that shard, then subsequent call to `TryLockShard`
 // should succeed.
-func checkShardWithLock(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+func checkShardWithLock(t *testing.T, ctx context.Context, ts *topo.Server) {
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}

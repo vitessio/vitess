@@ -27,8 +27,8 @@ var _ Primitive = (*ReplaceVariables)(nil)
 
 // ReplaceVariables is used in SHOW VARIABLES statements so that it replaces the values for vitess-aware variables
 type ReplaceVariables struct {
-	Input Primitive
 	noTxNeeded
+	Input Primitive
 }
 
 // NewReplaceVariables is used to create a new ReplaceVariables primitive
@@ -77,8 +77,8 @@ func (r *ReplaceVariables) GetFields(ctx context.Context, vcursor VCursor, bindV
 }
 
 // Inputs implements the Primitive interface
-func (r *ReplaceVariables) Inputs() []Primitive {
-	return []Primitive{r.Input}
+func (r *ReplaceVariables) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{r.Input}, nil
 }
 
 // description implements the Primitive interface

@@ -15,7 +15,8 @@
               "Sharded": false
             },
             "TargetDestination": "AllShards()",
-            "Query": "flush local tables unsharded_a with read lock"
+            "Query": "flush local tables unsharded_a with read lock",
+            "ReservedConnectionNeeded": true
           },
           {
             "OperatorType": "Send",
@@ -24,7 +25,8 @@
               "Sharded": true
             },
             "TargetDestination": "AllShards()",
-            "Query": "flush local tables `user`, user_extra with read lock"
+            "Query": "flush local tables `user`, user_extra with read lock",
+            "ReservedConnectionNeeded": true
           }
         ]
       },
@@ -105,7 +107,8 @@
           "Sharded": false
         },
         "TargetDestination": "AllShards()",
-        "Query": "flush tables a with read lock"
+        "Query": "flush tables a with read lock",
+        "ReservedConnectionNeeded": true
       },
       "TablesUsed": [
         "main.a"
@@ -128,7 +131,8 @@
               "Sharded": false
             },
             "TargetDestination": "AllShards()",
-            "Query": "flush local tables unsharded_a with read lock"
+            "Query": "flush local tables unsharded_a with read lock",
+            "ReservedConnectionNeeded": true
           },
           {
             "OperatorType": "Send",
@@ -137,7 +141,8 @@
               "Sharded": false
             },
             "TargetDestination": "AllShards()",
-            "Query": "flush local tables unsharded_tab with read lock"
+            "Query": "flush local tables unsharded_tab with read lock",
+            "ReservedConnectionNeeded": true
           },
           {
             "OperatorType": "Send",
@@ -146,7 +151,8 @@
               "Sharded": true
             },
             "TargetDestination": "AllShards()",
-            "Query": "flush local tables `user`, user_extra with read lock"
+            "Query": "flush local tables `user`, user_extra with read lock",
+            "ReservedConnectionNeeded": true
           }
         ]
       },

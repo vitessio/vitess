@@ -6,7 +6,7 @@ permissions: read-all
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: ubuntu-22.04
+    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1{{else}}gh-hosted-runners-4cores-1{{end}}
 
     steps:
     - name: Skip CI
@@ -32,13 +32,15 @@ jobs:
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: frouioui/paths-filter@main
+      uses: dorny/paths-filter@v3.0.1
       id: changes
       with:
         token: ''
         filters: |
           end_to_end:
             - 'go/**/*.go'
+            - 'go/vt/sidecardb/**/*.sql'
+            - 'go/test/endtoend/onlineddl/vrepl_suite/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'
@@ -54,7 +56,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v4
       with:
-        go-version: 1.20.5
+        go-version: 1.22.1
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -65,4 +67,8 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
+        # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+        # which musn't be more than 107 characters long.
+        export VTDATAROOT="/tmp/"
+
         go run test.go -docker=true --follow -shard {{.Shard}}

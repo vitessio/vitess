@@ -20,26 +20,17 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/constants/sidecar"
-
+	vtschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/vt/dbconfigs"
-
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-
-	"google.golang.org/protobuf/proto"
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/vt/log"
@@ -48,12 +39,13 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (
-	// blpFunc is a legaacy feature.
-	// TODO(sougou): remove after legacy resharding worflows are removed.
+	// blpFunc is a legacy feature.
+	// TODO(sougou): remove after legacy resharding workflows are removed.
 	blpFunc = vreplication.StatusSummary
 
 	errUnintialized = "tabletserver uninitialized"
@@ -100,13 +92,13 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 	if env.Config().SignalWhenSchemaChange {
 		// We need one connection for the reloader.
 		pool = connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:               1,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+			Size:        1,
+			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		})
 	}
 	hs := &healthStreamer{
 		stats:             env.Stats(),
-		degradedThreshold: env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
+		degradedThreshold: env.Config().Healthcheck.DegradedThreshold,
 		clients:           make(map[chan *querypb.StreamHealthResponse]struct{}),
 
 		state: &querypb.StreamHealthResponse{
@@ -124,12 +116,12 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias, engine 
 		viewsEnabled:           env.Config().EnableViews,
 		se:                     engine,
 	}
-	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
+	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThreshold.Nanoseconds())
 	return hs
 }
 
 func (hs *healthStreamer) InitDBConfig(target *querypb.Target, cp dbconfigs.Connector) {
-	hs.state.Target = proto.Clone(target).(*querypb.Target)
+	hs.state.Target = target.CloneVT()
 	hs.dbConfig = cp
 }
 
@@ -155,6 +147,10 @@ func (hs *healthStreamer) Close() {
 		hs.se.UnregisterNotifier("healthStreamer")
 		hs.cancel()
 		hs.cancel = nil
+	}
+	if hs.conns != nil {
+		hs.conns.Close()
+		hs.conns = nil
 	}
 }
 
@@ -197,7 +193,7 @@ func (hs *healthStreamer) register() (chan *querypb.StreamHealthResponse, contex
 	hs.clients[ch] = struct{}{}
 
 	// Send the current state immediately.
-	ch <- proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	ch <- hs.state.CloneVT()
 	return ch, hs.ctx
 }
 
@@ -228,9 +224,7 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, ptsTimes
 
 	hs.state.RealtimeStats.FilteredReplicationLagSeconds, hs.state.RealtimeStats.BinlogPlayersCount = blpFunc()
 	hs.state.RealtimeStats.Qps = hs.stats.QPSRates.TotalRate()
-
-	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
-
+	shr := hs.state.CloneVT()
 	hs.broadCastToClients(shr)
 	hs.history.Add(&historyRecord{
 		Time:       time.Now(),
@@ -297,7 +291,7 @@ func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 
 func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 	hs.unhealthyThreshold.Store(v.Nanoseconds())
-	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	shr := hs.state.CloneVT()
 	for ch := range hs.clients {
 		select {
 		case ch <- shr:
@@ -361,19 +355,14 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 	// Range over the tables that are created/altered and split them up based on their type.
 	for _, table := range append(append(dropped, created...), altered...) {
 		tableName := table.Name.String()
+		if vtschema.IsInternalOperationTableName(tableName) {
+			continue
+		}
 		if table.Type == schema.View && hs.viewsEnabled {
 			views = append(views, tableName)
 		} else {
 			tables = append(tables, tableName)
 		}
-	}
-
-	// Reload the tables and views.
-	// This stores the data that is used by VTGates upto v17. So, we can remove this reload of
-	// tables and views in v19.
-	err = hs.reloadTables(ctx, conn, tables)
-	if err != nil {
-		return err
 	}
 
 	// no change detected
@@ -383,48 +372,10 @@ func (hs *healthStreamer) reload(full map[string]*schema.Table, created, altered
 
 	hs.state.RealtimeStats.TableSchemaChanged = tables
 	hs.state.RealtimeStats.ViewSchemaChanged = views
-	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	shr := hs.state.CloneVT()
 	hs.broadCastToClients(shr)
 	hs.state.RealtimeStats.TableSchemaChanged = nil
 	hs.state.RealtimeStats.ViewSchemaChanged = nil
 
-	return nil
-}
-
-func (hs *healthStreamer) reloadTables(ctx context.Context, conn *connpool.DBConn, tableNames []string) error {
-	if len(tableNames) == 0 {
-		return nil
-	}
-	var escapedTableNames []string
-	for _, tableName := range tableNames {
-		escapedTblName := sqlparser.String(sqlparser.NewStrLiteral(tableName))
-		escapedTableNames = append(escapedTableNames, escapedTblName)
-	}
-
-	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(escapedTableNames, ", "))
-	del := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecar.GetIdentifier()).Query, tableNamePredicate)
-	upd := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecar.GetIdentifier()).Query, tableNamePredicate)
-
-	// Reload the schema in a transaction.
-	_, err := conn.Exec(ctx, "begin", 1, false)
-	if err != nil {
-		return err
-	}
-	defer conn.Exec(ctx, "rollback", 1, false)
-
-	_, err = conn.Exec(ctx, del, 1, false)
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Exec(ctx, upd, 1, false)
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Exec(ctx, "commit", 1, false)
-	if err != nil {
-		return err
-	}
 	return nil
 }

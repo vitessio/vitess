@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/assert"
@@ -43,12 +44,12 @@ func TestTxEngineClose(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	ctx := context.Background()
-	config := tabletenv.NewDefaultConfig()
-	config.DB = newDBConfigs(db)
-	config.TxPool.Size = 10
-	_ = config.Oltp.TxTimeoutSeconds.Set("100ms")
-	_ = config.GracePeriods.ShutdownSeconds.Set("0s")
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	cfg.TxPool.Size = 10
+	cfg.Oltp.TxTimeout = 100 * time.Millisecond
+	cfg.GracePeriods.Shutdown = 0
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 
 	// Normal close.
 	te.AcceptReadWrite()
@@ -144,12 +145,14 @@ func TestTxEngineClose(t *testing.T) {
 }
 
 func TestTxEngineBegin(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern(".*", &sqltypes.Result{})
-	config := tabletenv.NewDefaultConfig()
-	config.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 
 	for _, exec := range []func() (int64, string, error){
 		func() (int64, string, error) {
@@ -188,12 +191,14 @@ func TestTxEngineBegin(t *testing.T) {
 }
 
 func TestTxEngineRenewFails(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern(".*", &sqltypes.Result{})
-	config := tabletenv.NewDefaultConfig()
-	config.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	te.AcceptReadOnly()
 	options := &querypb.ExecuteOptions{}
 	connID, _, err := te.ReserveBegin(ctx, options, nil, nil)
@@ -214,7 +219,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	_, _, err = te.Commit(ctx, connID)
 	require.Error(t, err)
 	assert.True(t, conn.IsClosed(), "connection was not closed")
-	assert.True(t, dbConn.IsClosed(), "underlying connection was not closed")
+	assert.True(t, dbConn.Conn.IsClosed(), "underlying connection was not closed")
 }
 
 type TxType int
@@ -526,12 +531,12 @@ func TestWithInnerTests(outerT *testing.T) {
 }
 
 func setupTxEngine(db *fakesqldb.DB) *TxEngine {
-	config := tabletenv.NewDefaultConfig()
-	config.DB = newDBConfigs(db)
-	config.TxPool.Size = 10
-	config.Oltp.TxTimeoutSeconds.Set("100ms")
-	_ = config.GracePeriods.ShutdownSeconds.Set("0s")
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	cfg.TxPool.Size = 10
+	cfg.Oltp.TxTimeout = 100 * time.Millisecond
+	cfg.GracePeriods.Shutdown = 0
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	return te
 }
 
@@ -556,12 +561,14 @@ func startTx(te *TxEngine, writeTransaction bool) error {
 }
 
 func TestTxEngineFailReserve(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern(".*", &sqltypes.Result{})
-	config := tabletenv.NewDefaultConfig()
-	config.DB = newDBConfigs(db)
-	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 
 	options := &querypb.ExecuteOptions{}
 	_, err := te.Reserve(ctx, options, 0, nil)

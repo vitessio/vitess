@@ -23,9 +23,14 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -70,7 +75,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 		input string
 		// passThrough specifies if planbuilder.PassthroughDML must be set.
 		passThrough bool
-		// dbResponses specifes the list of queries and responses to add to the fake db.
+		// dbResponses specifies the list of queries and responses to add to the fake db.
 		dbResponses []dbResponse
 		// resultWant is the result we want.
 		resultWant *sqltypes.Result
@@ -207,13 +212,13 @@ func TestQueryExecutorPlans(t *testing.T) {
 	}, {
 		input: "create index a on user(id)",
 		dbResponses: []dbResponse{{
-			query:  "alter table `user` add index a (id)",
+			query:  "alter table `user` add key a (id)",
 			result: emptyResult,
 		}},
 		resultWant: emptyResult,
 		planWant:   "DDL",
-		logWant:    "alter table `user` add index a (id)",
-		inTxWant:   "alter table `user` add index a (id)",
+		logWant:    "alter table `user` add key a (id)",
+		inTxWant:   "alter table `user` add key a (id)",
 	}, {
 		input: "create index a on user(id1 + id2)",
 		dbResponses: []dbResponse{{
@@ -319,7 +324,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 				assert.True(t, vterrors.Equals(err, tcase.errorWant))
 			}
 			// Wait for the existing query to be processed by the cache
-			tsv.QueryPlanCacheWait()
+			time.Sleep(100 * time.Millisecond)
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
@@ -412,7 +417,7 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
 			// Wait for the existing query to be processed by the cache
-			tsv.QueryPlanCacheWait()
+			time.Sleep(100 * time.Millisecond)
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
@@ -788,6 +793,8 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 }
 
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
@@ -817,7 +824,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	callerID := &querypb.VTGateCallerID{
 		Username: "u1",
 	}
-	ctx := callerid.NewContext(context.Background(), nil, callerID)
+	ctx = callerid.NewContext(ctx, nil, callerID)
 	qre := &QueryExecutor{
 		ctx:      ctx,
 		query:    "stream from msg",
@@ -1431,6 +1438,44 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 	}
 }
 
+func TestGetConnectionLogStats(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	input := "select * from test_table limit 1"
+
+	// getConn() happy path
+	qre := newTestQueryExecutor(ctx, tsv, input, 0)
+	conn, err := qre.getConn()
+	assert.NoError(t, err)
+	assert.NotNil(t, conn)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+
+	// getStreamConn() happy path
+	qre = newTestQueryExecutor(ctx, tsv, input, 0)
+	conn, err = qre.getStreamConn()
+	assert.NoError(t, err)
+	assert.NotNil(t, conn)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+
+	// Close the db connection to induce connection errors
+	db.Close()
+
+	// getConn() error path
+	qre = newTestQueryExecutor(ctx, tsv, input, 0)
+	_, err = qre.getConn()
+	assert.Error(t, err)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+
+	// getStreamConn() error path
+	qre = newTestQueryExecutor(ctx, tsv, input, 0)
+	_, err = qre.getStreamConn()
+	assert.Error(t, err)
+	assert.True(t, qre.logStats.WaitingForConnection > 0)
+}
+
 type executorFlags int64
 
 const (
@@ -1446,48 +1491,49 @@ const (
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
-	config := tabletenv.NewDefaultConfig()
-	config.OltpReadPool.Size = 100
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.OltpReadPool.Size = 100
 	if flags&smallTxPool > 0 {
-		config.TxPool.Size = 3
+		cfg.TxPool.Size = 3
 	} else {
-		config.TxPool.Size = 100
+		cfg.TxPool.Size = 100
 	}
 	if flags&enableStrictTableACL > 0 {
-		config.StrictTableACL = true
+		cfg.StrictTableACL = true
 	} else {
-		config.StrictTableACL = false
+		cfg.StrictTableACL = false
 	}
 	if flags&noTwopc > 0 {
-		config.TwoPCEnable = false
+		cfg.TwoPCEnable = false
 	} else {
-		config.TwoPCEnable = true
+		cfg.TwoPCEnable = true
 	}
 	if flags&disableOnlineDDL > 0 {
-		config.EnableOnlineDDL = false
+		cfg.EnableOnlineDDL = false
 	} else {
-		config.EnableOnlineDDL = true
+		cfg.EnableOnlineDDL = true
 	}
-	config.TwoPCCoordinatorAddress = "fake"
+	cfg.TwoPCCoordinatorAddress = "fake"
 	if flags&shortTwopcAge > 0 {
-		config.TwoPCAbandonAge = 0.5
+		cfg.TwoPCAbandonAge = 0.5
 	} else {
-		config.TwoPCAbandonAge = 10
+		cfg.TwoPCAbandonAge = 10
 	}
 	if flags&smallResultSize > 0 {
-		config.Oltp.MaxRows = 2
+		cfg.Oltp.MaxRows = 2
 	}
 	if flags&enableConsolidator > 0 {
-		config.Consolidator = tabletenv.Enable
+		cfg.Consolidator = tabletenv.Enable
 	} else {
-		config.Consolidator = tabletenv.Disable
+		cfg.Consolidator = tabletenv.Disable
 	}
 	dbconfigs := newDBConfigs(db)
-	config.DB = dbconfigs
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+	cfg.DB = dbconfigs
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
-	if config.TwoPCEnable {
+	if cfg.TwoPCEnable {
 		tsv.TwoPCEngineWait()
 	}
 	if err != nil {
@@ -1524,7 +1570,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 
 func newTestQueryExecutorStreaming(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutorStreaming")
-	plan, err := tsv.qe.GetStreamPlan(sql)
+	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, sql, false)
 	if err != nil {
 		panic(err)
 	}
@@ -1562,7 +1608,7 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 		"varchar|int64"),
 		"Innodb_rows_read|0",
 	))
-	sidecardb.AddSchemaInitQueries(db, true)
+	sidecardb.AddSchemaInitQueries(db, true, sqlparser.NewTestParser())
 }
 
 func getTestTableFields() []*querypb.Field {
@@ -1655,7 +1701,7 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
 
-	sidecardb.AddSchemaInitQueries(db, true)
+	sidecardb.AddSchemaInitQueries(db, true, sqlparser.NewTestParser())
 	for query, result := range queryResultMap {
 		db.AddQuery(query, result)
 	}
@@ -1726,7 +1772,7 @@ func TestQueryExecSchemaReloadCount(t *testing.T) {
 	testcases := []struct {
 		// input is the input query.
 		input string
-		// dbResponses specifes the list of queries and responses to add to the fake db.
+		// dbResponses specifies the list of queries and responses to add to the fake db.
 		dbResponses       []dbResponse
 		schemaReloadCount int
 	}{{

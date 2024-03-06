@@ -86,7 +86,7 @@ func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 // validateNewWorkflow ensures that the specified workflow doesn't already exist
 // in the keyspace.
 func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace, workflow string) error {
-	allshards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	allshards, err := ts.FindAllShardsInKeyspace(ctx, keyspace, nil)
 	if err != nil {
 		return err
 	}
@@ -111,11 +111,11 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 				msg   string
 			}{{
 				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(primary.DbName()), encodeString(workflow)),
-				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %d", workflow, keyspace, primary.Alias.Uid),
+				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias),
 			}, {
 				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN' and workflow_sub_type != %d", encodeString(primary.DbName()), binlogdatapb.VReplicationWorkflowSubType_Partial),
-				fmt.Sprintf("found previous frozen workflow on tablet %d, please review and delete it first before creating a new workflow",
-					primary.Alias.Uid),
+				fmt.Sprintf("found previous frozen workflow on tablet %v, please review and delete it first before creating a new workflow",
+					primary.Alias),
 			}}
 			for _, validation := range validations {
 				p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, validation.query)
@@ -167,8 +167,8 @@ func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.Materia
 	return nil
 }
 
-func stripTableConstraints(ddl string) (string, error) {
-	ast, err := sqlparser.ParseStrictDDL(ddl)
+func stripTableConstraints(ddl string, parser *sqlparser.Parser) (string, error) {
+	ast, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}
@@ -189,8 +189,8 @@ func stripTableConstraints(ddl string) (string, error) {
 	return newDDL, nil
 }
 
-func stripTableForeignKeys(ddl string) (string, error) {
-	ast, err := sqlparser.ParseStrictDDL(ddl)
+func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error) {
+	ast, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}
@@ -326,7 +326,7 @@ func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error)
 //
 // It returns ErrNoStreams if there are no targets found for the workflow.
 func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
-	targetShards, err := ts.GetShardNames(ctx, targetKeyspace)
+	targetShards, err := ts.FindAllShardsInKeyspace(ctx, targetKeyspace, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -344,18 +344,13 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 	// stream. For example, if we're splitting -80 to [-40,40-80], only those
 	// two target shards will have vreplication streams, and the other shards in
 	// the target keyspace will not.
-	for _, targetShard := range targetShards {
-		si, err := ts.GetShard(ctx, targetKeyspace, targetShard)
-		if err != nil {
-			return nil, err
-		}
-
-		if si.PrimaryAlias == nil {
+	for targetShardName, targetShard := range targetShards {
+		if targetShard.PrimaryAlias == nil {
 			// This can happen if bad inputs are given.
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "shard %v/%v doesn't have a primary set", targetKeyspace, targetShard)
 		}
 
-		primary, err := ts.GetTablet(ctx, si.PrimaryAlias)
+		primary, err := ts.GetTablet(ctx, targetShard.PrimaryAlias)
 		if err != nil {
 			return nil, err
 		}
@@ -372,7 +367,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		}
 
 		target := &MigrationTarget{
-			si:      si,
+			si:      targetShard,
 			primary: primary,
 			Sources: make(map[int32]*binlogdatapb.BinlogSource),
 		}
@@ -389,7 +384,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			target.Sources[stream.Id] = stream.Bls
 		}
 
-		targets[targetShard] = target
+		targets[targetShardName] = target
 	}
 
 	if len(targets) == 0 {
@@ -657,11 +652,8 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 // New callers should instead use the new BuildTargets function.
 //
 // It returns ErrNoStreams if there are no targets found for the workflow.
-func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
-	targetShards, err := ts.GetShardNames(ctx, targetKeyspace)
-	if err != nil {
-		return nil, err
-	}
+func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string,
+	targetShards []string) (*TargetInfo, error) {
 
 	var (
 		frozen          bool

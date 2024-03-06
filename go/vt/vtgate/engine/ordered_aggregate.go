@@ -28,13 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-var (
-	// Some predefined values
-	countZero = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
-	countOne  = sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))
-	sumZero   = sqltypes.MakeTrusted(sqltypes.Decimal, []byte("0"))
-)
-
 var _ Primitive = (*OrderedAggregate)(nil)
 
 // OrderedAggregate is a primitive that expects the underlying primitive
@@ -58,6 +51,8 @@ type OrderedAggregate struct {
 
 	// Input is the primitive that will feed into this Primitive.
 	Input Primitive
+
+	CollationEnv *collations.Environment
 }
 
 // GroupByParams specify the grouping key to be used.
@@ -66,8 +61,8 @@ type GroupByParams struct {
 	WeightStringCol int
 	Expr            sqlparser.Expr
 	FromGroupBy     bool
-	Type            sqltypes.Type
-	CollationID     collations.ID
+	Type            evalengine.Type
+	CollationEnv    *collations.Environment
 }
 
 // String returns a string. Used for plan descriptions
@@ -79,9 +74,8 @@ func (gbp GroupByParams) String() string {
 		out = fmt.Sprintf("(%d|%d)", gbp.KeyCol, gbp.WeightStringCol)
 	}
 
-	if sqltypes.IsText(gbp.Type) && gbp.CollationID != collations.Unknown {
-		collation := gbp.CollationID.Get()
-		out += " COLLATE " + collation.Name()
+	if sqltypes.IsText(gbp.Type.Type()) && gbp.Type.Collation() != collations.Unknown {
+		out += " COLLATE " + gbp.CollationEnv.LookupName(gbp.Type.Collation())
 	}
 
 	return out
@@ -116,6 +110,35 @@ func (oa *OrderedAggregate) TryExecute(ctx context.Context, vcursor VCursor, bin
 	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
+func (oa *OrderedAggregate) executeGroupBy(result *sqltypes.Result) (*sqltypes.Result, error) {
+	if len(result.Rows) < 1 {
+		return result, nil
+	}
+
+	out := &sqltypes.Result{
+		Fields: result.Fields,
+		Rows:   result.Rows[:0],
+	}
+
+	var currentKey []sqltypes.Value
+	var lastRow sqltypes.Row
+	var err error
+	for _, row := range result.Rows {
+		var nextGroup bool
+
+		currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
+		if err != nil {
+			return nil, err
+		}
+		if nextGroup {
+			out.Rows = append(out.Rows, lastRow)
+		}
+		lastRow = row
+	}
+	out.Rows = append(out.Rows, lastRow)
+	return out, nil
+}
+
 func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	result, err := vcursor.ExecutePrimitive(
 		ctx,
@@ -126,114 +149,157 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 	if err != nil {
 		return nil, err
 	}
-	fields := convertFields(result.Fields, oa.Aggregates)
+	if len(oa.Aggregates) == 0 {
+		return oa.executeGroupBy(result)
+	}
+
+	agg, fields, err := newAggregation(result.Fields, oa.Aggregates)
+	if err != nil {
+		return nil, err
+	}
+
 	out := &sqltypes.Result{
 		Fields: fields,
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
 	}
 
-	// This code is similar to the one in StreamExecute.
-	var current []sqltypes.Value
-	var curDistincts []sqltypes.Value
+	var currentKey []sqltypes.Value
 	for _, row := range result.Rows {
-		// this is the first row. set up everything
-		if current == nil {
-			current, curDistincts = convertRow(fields, row, oa.Aggregates)
-			continue
-		}
+		var nextGroup bool
 
-		// not the first row. are we still in the old group, or is this a new grouping?=
-		equal, err := oa.keysEqual(current, row)
+		currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
 		if err != nil {
 			return nil, err
 		}
 
-		if equal {
-			// we are continuing to add values to the current grouping
-			current, curDistincts, err = merge(fields, current, row, curDistincts, oa.Aggregates)
-			if err != nil {
-				return nil, err
-			}
-			continue
+		if nextGroup {
+			out.Rows = append(out.Rows, agg.finish())
+			agg.reset()
 		}
 
-		// this is a new grouping. let's yield the old one, and start a new
-		out.Rows = append(out.Rows, current)
-		current, curDistincts = convertRow(fields, row, oa.Aggregates)
-		continue
-	}
-
-	if current != nil {
-		final, err := convertFinal(current, oa.Aggregates)
-		if err != nil {
+		if err := agg.add(row); err != nil {
 			return nil, err
 		}
-		out.Rows = append(out.Rows, final)
 	}
+
+	if currentKey != nil {
+		out.Rows = append(out.Rows, agg.finish())
+	}
+
 	return out, nil
+}
+
+func (oa *OrderedAggregate) executeStreamGroupBy(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+	cb := func(qr *sqltypes.Result) error {
+		return callback(qr.Truncate(oa.TruncateColumnCount))
+	}
+
+	var fields []*querypb.Field
+	var currentKey []sqltypes.Value
+	var lastRow sqltypes.Row
+
+	visitor := func(qr *sqltypes.Result) error {
+		var err error
+		if fields == nil && len(qr.Fields) > 0 {
+			fields = qr.Fields
+			if err = cb(&sqltypes.Result{Fields: fields}); err != nil {
+				return err
+			}
+		}
+		for _, row := range qr.Rows {
+			var nextGroup bool
+
+			currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
+			if err != nil {
+				return err
+			}
+
+			if nextGroup {
+				// this is a new grouping. let's yield the old one, and start a new
+				if err := cb(&sqltypes.Result{Rows: []sqltypes.Row{lastRow}}); err != nil {
+					return err
+				}
+			}
+
+			lastRow = row
+		}
+		return nil
+	}
+
+	/* we need the input fields types to correctly calculate the output types */
+	err := vcursor.StreamExecutePrimitive(ctx, oa.Input, bindVars, true, visitor)
+	if err != nil {
+		return err
+	}
+
+	if lastRow != nil {
+		if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{lastRow}}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // TryStreamExecute is a Primitive function.
 func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
-	var current []sqltypes.Value
-	var curDistincts []sqltypes.Value
-	var fields []*querypb.Field
+	if len(oa.Aggregates) == 0 {
+		return oa.executeStreamGroupBy(ctx, vcursor, bindVars, callback)
+	}
 
 	cb := func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(oa.TruncateColumnCount))
 	}
 
+	var agg aggregationState
+	var fields []*querypb.Field
+	var currentKey []sqltypes.Value
+
 	visitor := func(qr *sqltypes.Result) error {
-		if len(qr.Fields) != 0 {
-			fields = convertFields(qr.Fields, oa.Aggregates)
-			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
+		var err error
+
+		if agg == nil && len(qr.Fields) != 0 {
+			agg, fields, err = newAggregation(qr.Fields, oa.Aggregates)
+			if err != nil {
+				return err
+			}
+			if err = cb(&sqltypes.Result{Fields: fields}); err != nil {
 				return err
 			}
 		}
+
 		// This code is similar to the one in Execute.
 		for _, row := range qr.Rows {
-			// this is the first row. set up everything
-			if current == nil {
-				current, curDistincts = convertRow(fields, row, oa.Aggregates)
-				continue
-			}
+			var nextGroup bool
 
-			// not the first row. are we still in the old group, or is this a new grouping?
-			equal, err := oa.keysEqual(current, row)
+			currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
 			if err != nil {
 				return err
 			}
 
-			if equal {
-				// we are continuing to add values to the current grouping
-				current, curDistincts, err = merge(fields, current, row, curDistincts, oa.Aggregates)
-				if err != nil {
+			if nextGroup {
+				// this is a new grouping. let's yield the old one, and start a new
+				if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{agg.finish()}}); err != nil {
 					return err
 				}
-				continue
+
+				agg.reset()
 			}
 
-			// this is a new grouping. let's yield the old one, and start a new
-			if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
+			if err := agg.add(row); err != nil {
 				return err
 			}
-			current, curDistincts = convertRow(fields, row, oa.Aggregates)
-			continue
 		}
 		return nil
 	}
 
-	err := vcursor.StreamExecutePrimitive(ctx,
-		oa.Input,
-		bindVars,
-		true, /* we need the input fields types to correctly calculate the output types */
-		visitor)
+	/* we need the input fields types to correctly calculate the output types */
+	err := vcursor.StreamExecutePrimitive(ctx, oa.Input, bindVars, true, visitor)
 	if err != nil {
 		return err
 	}
 
-	if current != nil {
-		if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
+	if currentKey != nil {
+		if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{agg.finish()}}); err != nil {
 			return err
 		}
 	}
@@ -246,13 +312,19 @@ func (oa *OrderedAggregate) GetFields(ctx context.Context, vcursor VCursor, bind
 	if err != nil {
 		return nil, err
 	}
-	qr = &sqltypes.Result{Fields: convertFields(qr.Fields, oa.Aggregates)}
+
+	_, fields, err := newAggregation(qr.Fields, oa.Aggregates)
+	if err != nil {
+		return nil, err
+	}
+
+	qr = &sqltypes.Result{Fields: fields}
 	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
 // Inputs returns the Primitive input for this aggregation
-func (oa *OrderedAggregate) Inputs() []Primitive {
-	return []Primitive{oa.Input}
+func (oa *OrderedAggregate) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{oa.Input}, nil
 }
 
 // NeedsTransaction implements the Primitive interface
@@ -260,26 +332,35 @@ func (oa *OrderedAggregate) NeedsTransaction() bool {
 	return oa.Input.NeedsTransaction()
 }
 
-func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error) {
+func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (nextKey []sqltypes.Value, nextGroup bool, err error) {
+	if currentKey == nil {
+		return nextRow, false, nil
+	}
+
 	for _, gb := range oa.GroupByKeys {
-		cmp, err := evalengine.NullsafeCompare(row1[gb.KeyCol], row2[gb.KeyCol], gb.CollationID)
+		v1 := currentKey[gb.KeyCol]
+		v2 := nextRow[gb.KeyCol]
+		if v1.TinyWeightCmp(v2) != 0 {
+			return nextRow, true, nil
+		}
+
+		cmp, err := evalengine.NullsafeCompare(v1, v2, oa.CollationEnv, gb.Type.Collation())
 		if err != nil {
-			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
 			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
-			if !isComparisonErr && !isCollationErr || gb.WeightStringCol == -1 {
-				return false, err
+			if !isCollationErr || gb.WeightStringCol == -1 {
+				return nil, false, err
 			}
 			gb.KeyCol = gb.WeightStringCol
-			cmp, err = evalengine.NullsafeCompare(row1[gb.WeightStringCol], row2[gb.WeightStringCol], gb.CollationID)
+			cmp, err = evalengine.NullsafeCompare(currentKey[gb.WeightStringCol], nextRow[gb.WeightStringCol], oa.CollationEnv, gb.Type.Collation())
 			if err != nil {
-				return false, err
+				return nil, false, err
 			}
 		}
 		if cmp != 0 {
-			return false, nil
+			return nextRow, true, nil
 		}
 	}
-	return true, nil
+	return currentKey, false, nil
 }
 func aggregateParamsToString(in any) string {
 	return in.(*AggregateParams).String()

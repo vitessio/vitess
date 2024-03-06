@@ -1,6 +1,7 @@
 insert into customer(cid, name, typ, sport, meta) values(1, 'Jøhn "❤️" Rizzolo',1,'football,baseball','{}');
 insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4));
-insert into customer(cid, name, typ, sport, blb) values(3, 'ringo','enterprise','','blob data');
+-- We use a high cid value here to test the target sequence initialization.
+insert into customer(cid, name, typ, sport, blb) values(999999, 'ringo','enterprise','','blob data');
 insert into merchant(mname, category) values('Monoprice', 'eléctronics');
 insert into merchant(mname, category) values('newegg', 'elec†ronics');
 insert into product(pid, description) values(1, 'keyböard ⌨️');

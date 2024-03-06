@@ -315,6 +315,56 @@ const (
 	 */
 	UCharExtendedPictographic Property = 64
 
+	/**
+	 * Binary property of strings Basic_Emoji.
+	 * See https://www.unicode.org/reports/tr51/#Emoji_Sets
+	 *
+	 * @stable ICU 70
+	 */
+	UCharBasicEmoji Property = 65
+	/**
+	 * Binary property of strings Emoji_Keycap_Sequence.
+	 * See https://www.unicode.org/reports/tr51/#Emoji_Sets
+	 *
+	 * @stable ICU 70
+	 */
+	UCharEmojiKeycapSequence Property = 66
+	/**
+	 * Binary property of strings RGI_Emoji_Modifier_Sequence.
+	 * See https://www.unicode.org/reports/tr51/#Emoji_Sets
+	 *
+	 * @stable ICU 70
+	 */
+	UCharRgiEmojiModifierSequence Property = 67
+	/**
+	 * Binary property of strings RGI_Emoji_Flag_Sequence.
+	 * See https://www.unicode.org/reports/tr51/#Emoji_Sets
+	 *
+	 * @stable ICU 70
+	 */
+	UCharRgiEmojiFlagSequence Property = 68
+	/**
+	 * Binary property of strings RGI_Emoji_Tag_Sequence.
+	 * See https://www.unicode.org/reports/tr51/#Emoji_Sets
+	 *
+	 * @stable ICU 70
+	 */
+	UCharRgiEmojiTagSequence Property = 69
+	/**
+	 * Binary property of strings RGI_Emoji_ZWJ_Sequence.
+	 * See https://www.unicode.org/reports/tr51/#Emoji_Sets
+	 *
+	 * @stable ICU 70
+	 */
+	UCharRgiEmojiZwjSequence Property = 70
+	/**
+	 * Binary property of strings RGI_Emoji.
+	 * See https://www.unicode.org/reports/tr51/#Emoji_Sets
+	 *
+	 * @stable ICU 70
+	 */
+	UCharRgiEmoji Property = 71
+
 	/** Enumerated property Bidi_Class.
 	  Same as u_charDirection, returns UCharDirection values. @stable ICU 2.2 */
 	UCharBidiClass Property = 0x1000
@@ -492,7 +542,7 @@ const (
 )
 
 const (
-	uCharBinaryLimit = 65
+	uCharBinaryLimit = 72
 	uCharIntLimit    = 0x1019
 	uCharMaskLimit   = 0x2001
 	uCharStringLimit = 0x400E
@@ -595,6 +645,7 @@ const (
 	srcInpc
 	srcInsc
 	srcVo
+	srcEmoji
 )
 
 const (

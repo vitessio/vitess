@@ -20,14 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
-
-	"golang.org/x/exp/slices"
 
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -41,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -65,14 +65,22 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
 // channel for polling.
 func OpenTabletDiscovery() <-chan time.Time {
-	// TODO(sougou): If there's a shutdown signal, we have to close the topo.
 	ts = topo.Open()
-	tmc = tmclient.NewTabletManagerClient()
+	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
 	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
 		log.Error(err)
 	}
+	// We refresh all information from the topo once before we start the ticks to do it on a timer.
+	populateAllInformation()
 	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
+}
+
+// populateAllInformation initializes all the information for VTOrc to function.
+func populateAllInformation() {
+	refreshAllInformation()
+	// We have completed one full discovery cycle. We should update the process health.
+	process.FirstDiscoveryCycleComplete.Store(true)
 }
 
 // refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
@@ -287,6 +295,16 @@ func tabletUndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, sem
 // setReadOnly calls the said RPC for the given tablet
 func setReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return tmc.SetReadOnly(ctx, tablet)
+}
+
+// changeTabletType calls the said RPC for the given tablet with the given parameters.
+func changeTabletType(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, semiSync bool) error {
+	return tmc.ChangeType(ctx, tablet, tabletType, semiSync)
+}
+
+// resetReplicationParameters resets the replication parameters on the given tablet.
+func resetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return tmc.ResetReplicationParameters(ctx, tablet)
 }
 
 // setReplicationSource calls the said RPC with the parameters provided

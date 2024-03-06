@@ -24,6 +24,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -35,8 +36,7 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
-
-	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 var (
@@ -139,7 +139,15 @@ func run(cmd *cobra.Command, args []string) {
 	}
 	cache.SetCacheRefreshKey(cacheRefreshKey)
 
-	s := vtadmin.NewAPI(clusters, vtadmin.Options{
+	env, err := vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	s := vtadmin.NewAPI(env, clusters, vtadmin.Options{
 		GRPCOpts:              opts,
 		HTTPOpts:              httpOpts,
 		RBAC:                  rbacConfig,
@@ -208,11 +216,11 @@ func main() {
 	rootCmd.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
 	rootCmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
 
+	servenv.RegisterMySQLServerFlags(rootCmd.Flags())
+
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
-
-	log.Flush()
 }
 
 type noopCloser struct{}

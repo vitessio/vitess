@@ -29,9 +29,9 @@ import (
 	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/constants/sidecar"
-
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
@@ -101,14 +101,14 @@ type Engine struct {
 
 // NewEngine creates a new Engine.
 func NewEngine(env tabletenv.Env) *Engine {
-	reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
+	reloadTime := env.Config().SchemaReloadInterval
 	se := &Engine{
 		env: env,
 		// We need three connections: one for the reloader, one for
 		// the historian, and one for the tracker.
 		conns: connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:               3,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+			Size:        3,
+			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
 		ticks: timer.NewTimer(reloadTime),
 	}
@@ -162,7 +162,7 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 		}
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
-	if err := sidecardb.Init(ctx, exec); err != nil {
+	if err := sidecardb.Init(ctx, se.env.Environment(), exec); err != nil {
 		log.Errorf("Error in sidecardb.Init: %+v", err)
 		if se.env.Config().DB.HasGlobalSettings() {
 			log.Warning("Ignoring sidecardb.Init error for unmanaged tablets")
@@ -416,12 +416,12 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	defer conn.Recycle()
 
 	// curTime will be saved into lastChange after schema is loaded.
-	curTime, err := se.mysqlTime(ctx, conn)
+	curTime, err := se.mysqlTime(ctx, conn.Conn)
 	if err != nil {
 		return err
 	}
 
-	tableData, err := getTableData(ctx, conn, includeStats)
+	tableData, err := getTableData(ctx, conn.Conn, includeStats)
 	if err != nil {
 		return vterrors.Wrapf(err, "in Engine.reload(), reading tables")
 	}
@@ -430,19 +430,19 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	// changedViews are the views that have changed. We can't use the same createTime logic for views because, MySQL
 	// doesn't update the create_time field for views when they are altered. This is annoying, but something we have to work around.
-	changedViews, err := getChangedViewNames(ctx, conn, shouldUseDatabase)
+	changedViews, err := getChangedViewNames(ctx, conn.Conn, shouldUseDatabase)
 	if err != nil {
 		return err
 	}
 	// mismatchTables stores the tables whose createTime in our cache doesn't match the createTime stored in the database.
 	// This can happen if a primary crashed right after a DML succeeded, before it could reload its state. If all the replicas
 	// are able to reload their cache before one of them is promoted, then the database information would be out of sync.
-	mismatchTables, err := se.getMismatchedTableNames(ctx, conn, shouldUseDatabase)
+	mismatchTables, err := se.getMismatchedTableNames(ctx, conn.Conn, shouldUseDatabase)
 	if err != nil {
 		return err
 	}
 
-	err = se.updateInnoDBRowsRead(ctx, conn)
+	err = se.updateInnoDBRowsRead(ctx, conn.Conn)
 	if err != nil {
 		return err
 	}
@@ -499,7 +499,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		tableType := row[1].String()
-		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString())
+		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv())
 		if err != nil {
 			if isView := strings.Contains(tableType, tmutils.TableView); isView {
 				log.Warningf("Failed reading schema for the view: %s, error: %v", tableName, err)
@@ -528,7 +528,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	dropped := se.getDroppedTables(curTables, changedViews, mismatchTables)
 
 	// Populate PKColumns for changed tables.
-	if err := se.populatePrimaryKeys(ctx, conn, changedTables); err != nil {
+	if err := se.populatePrimaryKeys(ctx, conn.Conn, changedTables); err != nil {
 		return err
 	}
 
@@ -536,7 +536,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	if shouldUseDatabase {
 		// If reloadDataInDB succeeds, then we don't want to prevent sending the broadcast notification.
 		// So, we do this step in the end when we can receive no more errors that fail the reload operation.
-		err = reloadDataInDB(ctx, conn, altered, created, dropped)
+		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped, se.env.Environment().Parser())
 		if err != nil {
 			log.Errorf("error in updating schema information in Engine.reload() - %v", err)
 		}
@@ -591,7 +591,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 	return maps.Values(dropped)
 }
 
-func getTableData(ctx context.Context, conn *connpool.DBConn, includeStats bool) (*sqltypes.Result, error) {
+func getTableData(ctx context.Context, conn *connpool.Conn, includeStats bool) (*sqltypes.Result, error) {
 	var showTablesQuery string
 	if includeStats {
 		showTablesQuery = conn.BaseShowTablesWithSizes()
@@ -601,7 +601,7 @@ func getTableData(ctx context.Context, conn *connpool.DBConn, includeStats bool)
 	return conn.Exec(ctx, showTablesQuery, maxTableCount, false)
 }
 
-func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.DBConn) error {
+func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Conn) error {
 	readRowsData, err := conn.Exec(ctx, mysql.ShowRowsRead, 10, false)
 	if err != nil {
 		return err
@@ -620,7 +620,7 @@ func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.DBCon
 	return nil
 }
 
-func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
+func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.Conn) (int64, error) {
 	// Keep `SELECT UNIX_TIMESTAMP` is in uppercase because binlog server queries are case sensitive and expect it to be so.
 	tm, err := conn.Exec(ctx, "SELECT UNIX_TIMESTAMP()", 1, false)
 	if err != nil {
@@ -637,7 +637,7 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, 
 }
 
 // populatePrimaryKeys populates the PKColumns for the specified tables.
-func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.DBConn, tables map[string]*Table) error {
+func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.Conn, tables map[string]*Table) error {
 	pkData, err := conn.Exec(ctx, mysql.BaseShowPrimary, maxTableCount, false)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table primary key info: %v", err)
@@ -708,7 +708,8 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 		created = append(created, table)
 	}
 	if runNotifier {
-		f(se.tables, created, nil, nil)
+		s := maps.Clone(se.tables)
+		f(s, created, nil, nil)
 	}
 }
 
@@ -736,10 +737,7 @@ func (se *Engine) broadcast(created, altered, dropped []*Table) {
 
 	se.notifierMu.Lock()
 	defer se.notifierMu.Unlock()
-	s := make(map[string]*Table, len(se.tables))
-	for k, v := range se.tables {
-		s[k] = v
-	}
+	s := maps.Clone(se.tables)
 	for _, f := range se.notifiers {
 		f(s, created, altered, dropped)
 	}
@@ -757,10 +755,7 @@ func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 func (se *Engine) GetSchema() map[string]*Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	tables := make(map[string]*Table, len(se.tables))
-	for k, v := range se.tables {
-		tables[k] = v
-	}
+	tables := maps.Clone(se.tables)
 	return tables
 }
 
@@ -791,7 +786,7 @@ func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {
 }
 
 // GetConnection returns a connection from the pool
-func (se *Engine) GetConnection(ctx context.Context) (*connpool.DBConn, error) {
+func (se *Engine) GetConnection(ctx context.Context) (*connpool.PooledConn, error) {
 	return se.conns.Get(ctx, nil)
 }
 
@@ -833,6 +828,7 @@ func NewEngineForTests() *Engine {
 		isOpen:    true,
 		tables:    make(map[string]*Table),
 		historian: newHistorian(false, 0, nil),
+		env:       tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "SchemaEngineForTests"),
 	}
 	return se
 }
@@ -846,6 +842,10 @@ func (se *Engine) SetTableForTests(table *Table) {
 
 func (se *Engine) GetDBConnector() dbconfigs.Connector {
 	return se.cp
+}
+
+func (se *Engine) Environment() *vtenv.Environment {
+	return se.env.Environment()
 }
 
 func extractNamesFromTablesList(tables []*Table) []string {

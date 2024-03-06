@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -56,8 +56,10 @@ func waitForInitialShard(t *testing.T, ts *topo.Server, keyspace, shard string) 
 func TestWatchShardNoNode(t *testing.T) {
 	keyspace := "ks1"
 	shard := "0"
-	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	defer ts.Close()
 
 	// No Shard -> ErrNoNode
 	_, _, err := ts.WatchShard(ctx, keyspace, shard)
@@ -70,8 +72,10 @@ func TestWatchShard(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "0"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell)
+	defer ts.Close()
 
 	// Create keyspace
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
@@ -205,8 +209,10 @@ func TestWatchShardCancel(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "0"
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cell)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cell)
+	defer ts.Close()
 
 	// No Shard -> ErrNoNode
 	_, _, err := ts.WatchShard(ctx, keyspace, shard)

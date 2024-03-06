@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/tlstest"
@@ -45,7 +46,7 @@ func TestClearTextClientAuth(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
@@ -77,6 +78,7 @@ func TestClearTextClientAuth(t *testing.T) {
 
 	defer conn.Close()
 
+	assert.Equal(t, collations.ID(collations.CollationUtf8mb4ID), conn.CharacterSet)
 	// Run a 'select rows' command with results.
 	result, err := conn.ExecuteFetch("select rows", 10000, true)
 	require.NoError(t, err, "ExecuteFetch failed: %v", err)
@@ -99,7 +101,7 @@ func TestSSLConnection(t *testing.T) {
 	defer authServer.close()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
@@ -176,6 +178,7 @@ func testSSLConnectionBasics(t *testing.T, params *ConnParams) {
 
 	defer conn.Close()
 	assert.Equal(t, "user1", conn.User, "Invalid conn.User, got %v was expecting user1", conn.User)
+	assert.Equal(t, collations.ID(collations.CollationUtf8mb4ID), conn.CharacterSet)
 
 	// Run a 'select rows' command with results.
 	result, err := conn.ExecuteFetch("select rows", 10000, true)

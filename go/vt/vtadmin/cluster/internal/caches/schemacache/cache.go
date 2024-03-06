@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
@@ -178,8 +176,7 @@ func LoadOne(c *schemaCache, key Key, opts LoadOptions) (schema *vtadminpb.Schem
 }
 
 func loadSchema(cachedSchema *vtadminpb.Schema, opts LoadOptions) *vtadminpb.Schema {
-	schema := proto.Clone(cachedSchema).(*vtadminpb.Schema)
-
+	schema := cachedSchema.CloneVT()
 	if !opts.AggregateSizes {
 		schema.TableSizes = nil
 	}

@@ -21,7 +21,6 @@ import (
 	"vitess.io/vitess/go/mysql/hex"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type builtinHex struct {
@@ -29,7 +28,7 @@ type builtinHex struct {
 	collate collations.ID
 }
 
-var _ Expr = (*builtinHex)(nil)
+var _ IR = (*builtinHex)(nil)
 
 func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -50,17 +49,9 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 		encoded = hex.EncodeBytes(arg.ToRawBytes())
 	}
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, defaultCoercionCollation(call.collate)), nil
+		return newEvalRaw(sqltypes.Text, encoded, typedCoercionCollation(sqltypes.Text, call.collate)), nil
 	}
-	return newEvalText(encoded, defaultCoercionCollation(call.collate)), nil
-}
-
-func (call *builtinHex) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt, f := call.Arguments[0].typeof(env, fields)
-	if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
-		return sqltypes.Text, f
-	}
-	return sqltypes.VarChar, f
+	return newEvalText(encoded, typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinHex) compile(c *compiler) (ctype, error) {
@@ -70,11 +61,11 @@ func (call *builtinHex) compile(c *compiler) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck1(str)
-	col := defaultCoercionCollation(c.cfg.Collation)
 	t := sqltypes.VarChar
 	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
 		t = sqltypes.Text
 	}
+	col := typedCoercionCollation(t, c.collation)
 
 	switch {
 	case sqltypes.IsNumber(str.Type):
@@ -82,20 +73,20 @@ func (call *builtinHex) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		c.asm.Fn_HEX_c(t, col)
 	default:
-		c.asm.Convert_xc(1, t, c.cfg.Collation, 0, false)
+		c.asm.Convert_xc(1, t, c.collation, nil)
 		c.asm.Fn_HEX_c(t, col)
 	}
 
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: t, Col: col}, nil
+	return ctype{Type: t, Flag: nullableFlags(str.Flag), Col: col}, nil
 }
 
 type builtinUnhex struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinUnhex)(nil)
+var _ IR = (*builtinUnhex)(nil)
 
 func hexDecodeJSON(j *evalJSON) ([]byte, bool) {
 	switch j.Type() {
@@ -176,14 +167,6 @@ func (call *builtinUnhex) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBinary(decoded), nil
 }
 
-func (call *builtinUnhex) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	tt, f := call.Arguments[0].typeof(env, fields)
-	if tt == sqltypes.Text || tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
-		return sqltypes.Blob, f
-	}
-	return sqltypes.VarBinary, f | flagNullable
-}
-
 func (call *builtinUnhex) compile(c *compiler) (ctype, error) {
 	str, err := call.Arguments[0].compile(c)
 	if err != nil {
@@ -208,7 +191,7 @@ func (call *builtinUnhex) compile(c *compiler) (ctype, error) {
 	case str.Type == sqltypes.TypeJSON:
 		c.asm.Fn_UNHEX_j(t)
 	default:
-		c.asm.Convert_xb(1, t, 0, false)
+		c.asm.Convert_xb(1, t, nil)
 		c.asm.Fn_UNHEX_b(t)
 	}
 

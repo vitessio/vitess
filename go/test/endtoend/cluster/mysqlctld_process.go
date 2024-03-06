@@ -35,6 +35,7 @@ type MysqlctldProcess struct {
 	Name               string
 	Binary             string
 	LogDirectory       string
+	ErrorLog           string
 	Password           string
 	TabletUID          int
 	MySQLPort          int
@@ -91,16 +92,26 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 			"--init_db_sql_file", mysqlctld.InitDBFile)
 	}
 
-	errFile, _ := os.Create(path.Join(mysqlctld.LogDirectory, "mysqlctld-stderr.txt"))
+	err := os.MkdirAll(mysqlctld.LogDirectory, 0755)
+	if err != nil {
+		log.Errorf("Failed to create directory for mysqlctld logs: %v", err)
+		return err
+	}
+	errFile, err := os.Create(path.Join(mysqlctld.LogDirectory, "mysqlctld-stderr.txt"))
+	if err != nil {
+		log.Errorf("Failed to create directory for mysqlctld stderr: %v", err)
+	}
 	tempProcess.Stderr = errFile
 
 	tempProcess.Env = append(tempProcess.Env, os.Environ()...)
+	tempProcess.Env = append(tempProcess.Env, DefaultVttestEnv)
 	tempProcess.Stdout = os.Stdout
 	tempProcess.Stderr = os.Stderr
+	mysqlctld.ErrorLog = errFile.Name()
 
 	log.Infof("%v", strings.Join(tempProcess.Args, " "))
 
-	err := tempProcess.Start()
+	err = tempProcess.Start()
 	if err != nil {
 		return err
 	}
@@ -111,6 +122,12 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	go func(mysqlctld *MysqlctldProcess) {
 		err := mysqlctld.process.Wait()
 		if !mysqlctld.exitSignalReceived {
+			errBytes, ferr := os.ReadFile(mysqlctld.ErrorLog)
+			if ferr == nil {
+				log.Errorf("mysqlctld error log contents:\n%s", string(errBytes))
+			} else {
+				log.Errorf("Failed to read the mysqlctld error log file %q: %v", mysqlctld.ErrorLog, ferr)
+			}
 			fmt.Printf("mysqlctld stopped unexpectedly, tabletUID %v, mysql port %v, PID %v\n", mysqlctld.TabletUID, mysqlctld.MySQLPort, mysqlctld.process.Process.Pid)
 		}
 		mysqlctld.process = nil

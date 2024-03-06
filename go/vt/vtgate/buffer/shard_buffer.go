@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -95,14 +96,6 @@ type shardBuffer struct {
 	state bufferState
 	// queue is the list of buffered requests (ordered by arrival).
 	queue []*entry
-	// externallyReparented is the maximum value of all seen
-	// "StreamHealthResponse.TabletexternallyReparentedTimestamp" values across
-	// all PRIMARY tablets of this shard.
-	// In practice, it is a) the last time the shard was reparented or b) the last
-	// time the TabletExternallyReparented RPC was called on the tablet to confirm
-	// that the tablet is the current PRIMARY.
-	// We assume the value is a Unix timestamp in seconds.
-	externallyReparented int64
 	// lastStart is the last time we saw the start of a failover.
 	lastStart time.Time
 	// lastEnd is the last time we saw the end of a failover.
@@ -513,37 +506,6 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 	sb.stopBufferingLocked(reason, msg)
 }
 
-func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64, alias *topodatapb.TabletAlias) {
-	// Fast path (read lock): Check if new timestamp is higher.
-	sb.mu.RLock()
-	if timestamp <= sb.externallyReparented {
-		// Do nothing. Equal values are reported if the primary has not changed.
-		// Smaller values can be reported during the failover by the old primary
-		// after the new primary already took over.
-		sb.mu.RUnlock()
-		return
-	}
-	sb.mu.RUnlock()
-
-	// New timestamp is higher. Stop buffering if running.
-	sb.mu.Lock()
-	defer sb.mu.Unlock()
-
-	// Re-check value after acquiring write lock.
-	if timestamp <= sb.externallyReparented {
-		return
-	}
-
-	sb.externallyReparented = timestamp
-	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
-		if sb.currentPrimary != nil {
-			sb.lastReparent = sb.timeNow()
-		}
-		sb.currentPrimary = alias
-	}
-	sb.stopBufferingLocked(stopFailoverEndDetected, "failover end detected")
-}
-
 func (sb *shardBuffer) stopBufferingDueToMaxDuration() {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
@@ -600,6 +562,18 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	go sb.drain(q, clientEntryError)
 }
 
+// parallelRangeIndex uses counter to return a unique idx value up to the
+// passed max and ok will be set to false if the counter exceeds the max
+func parallelRangeIndex(counter *atomic.Int64, max int) (idx int, ok bool) {
+	next := counter.Add(1)
+	if next-1 > int64(max) {
+		return -1, false
+	}
+	// if this is a 32-bit platform, max won't exceed the 32-bit integer limit
+	// so a cast from a too-large 64-bit int to a 32-bit int will never happen
+	return int(next) - 1, true
+}
+
 func (sb *shardBuffer) drain(q []*entry, err error) {
 	defer sb.wg.Done()
 
@@ -608,10 +582,32 @@ func (sb *shardBuffer) drain(q []*entry, err error) {
 	sb.timeoutThread.stop()
 
 	start := sb.timeNow()
-	// TODO(mberlin): Parallelize the drain by pumping the data through a channel.
-	for _, e := range q {
-		sb.unblockAndWait(e, err, true /* releaseSlot */, true /* blockingWait */)
+
+	entryCount := len(q)
+	parallelism := min(sb.buf.config.DrainConcurrency, entryCount)
+
+	var wg sync.WaitGroup
+	var rangeCounter atomic.Int64
+
+	wg.Add(parallelism)
+	for i := 0; i < parallelism; i++ {
+		go func() {
+			defer wg.Done()
+			for {
+				idx, ok := parallelRangeIndex(&rangeCounter, entryCount-1)
+				if !ok {
+					break
+				}
+				// Shared access to the q slice is concurrency-safe because each goroutine receives
+				// a unique set of slice indices from parallelRangeIndex above and the slice remains
+				// immutable for the lifetime of this operation.
+				sb.unblockAndWait(q[idx], err, true /* releaseSlot */, true /* blockingWait */)
+			}
+		}()
 	}
+
+	wg.Wait()
+
 	d := sb.timeNow().Sub(start)
 	log.Infof("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q))
 	requestsDrained.Add(sb.statsKey, int64(len(q)))

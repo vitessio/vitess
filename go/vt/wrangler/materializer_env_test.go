@@ -19,7 +19,6 @@ package wrangler
 import (
 	"context"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -27,14 +26,15 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -55,23 +55,20 @@ type testMaterializerEnv struct {
 //----------------------------------------------
 // testMaterializerEnv
 
-func TestMain(m *testing.M) {
-	_flag.ParseFlagsForTest()
-	os.Exit(m.Run())
-}
-
-func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, sources, targets []string) *testMaterializerEnv {
+func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, sources, targets []string) (*testMaterializerEnv, context.Context) {
 	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
 	env := &testMaterializerEnv{
 		ms:       ms,
 		sources:  sources,
 		targets:  targets,
 		tablets:  make(map[int]*topodatapb.Tablet),
-		topoServ: memorytopo.NewServer("cell"),
+		topoServ: memorytopo.NewServer(ctx, "cell"),
 		cell:     "cell",
 		tmc:      newTestMaterializerTMClient(),
 	}
-	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	parser := sqlparser.NewTestParser()
+	env.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), env.topoServ, env.tmc)
 	tabletID := 100
 	for _, shard := range sources {
 		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
@@ -87,7 +84,7 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 
 	for _, ts := range ms.TableSettings {
 		tableName := ts.TargetTable
-		table, err := sqlparser.TableFromStatement(ts.SourceExpression)
+		table, err := parser.TableFromStatement(ts.SourceExpression)
 		if err == nil {
 			tableName = table.Name.String()
 		}
@@ -107,7 +104,12 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 	if ms.Workflow != "" {
 		env.expectValidation()
 	}
-	return env
+	t.Cleanup(func() {
+		defer utils.EnsureNoLeaks(t)
+		env.close()
+		cancel()
+	})
+	return env, ctx
 }
 
 func (env *testMaterializerEnv) expectValidation() {
@@ -142,12 +144,13 @@ func (env *testMaterializerEnv) addTablet(id int, keyspace, shard string, tablet
 		},
 	}
 	env.tablets[id] = tablet
-	if err := env.wr.TopoServer().InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := env.wr.ts.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		_, err := env.wr.ts.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
 			si.PrimaryAlias = tablet.Alias
+			si.IsPrimaryServing = true
 			return nil
 		})
 		if err != nil {

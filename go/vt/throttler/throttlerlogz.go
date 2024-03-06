@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/safehtml/template"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/logz"
 	"vitess.io/vitess/go/vt/servenv"

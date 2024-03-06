@@ -17,18 +17,10 @@ limitations under the License.
 package server
 
 import (
-	"github.com/spf13/pflag"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 	"vitess.io/vitess/go/vt/vtorc/process"
 )
-
-// RegisterFlags registers the flags required by VTOrc
-func RegisterFlags(fs *pflag.FlagSet) {
-	fs.String("orc_web_dir", "", "")
-	fs.MarkDeprecated("orc_web_dir", "Web directory is no longer needed by VTOrc, please specify the --port flag to gain access to the debug pages and API of VTOrc")
-}
 
 // StartVTOrcDiscovery starts VTOrc discovery serving
 func StartVTOrcDiscovery() {

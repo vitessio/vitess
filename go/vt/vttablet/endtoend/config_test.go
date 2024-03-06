@@ -73,14 +73,6 @@ func TestStreamPoolSize(t *testing.T) {
 	verifyIntValue(t, vstart, "StreamConnPoolCapacity", 1)
 }
 
-func TestQueryCacheCapacity(t *testing.T) {
-	revert := changeVar(t, "QueryCacheCapacity", "1")
-	defer revert()
-
-	vstart := framework.DebugVars()
-	verifyIntValue(t, vstart, "QueryCacheCapacity", 1)
-}
-
 func TestDisableConsolidator(t *testing.T) {
 	totalConsolidationsTag := "Waits/Histograms/Consolidations/Count"
 	initial := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
@@ -116,64 +108,88 @@ func TestDisableConsolidator(t *testing.T) {
 }
 
 func TestConsolidatorReplicasOnly(t *testing.T) {
-	totalConsolidationsTag := "Waits/Histograms/Consolidations/Count"
-	initial := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
-		wg.Done()
-	}()
-	go func() {
-		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
-		wg.Done()
-	}()
-	wg.Wait()
-	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
-	assert.Equal(t, initial+1, afterOne, "expected one consolidation")
+	type executeFn func(
+		query string, bindvars map[string]*querypb.BindVariable,
+	) (*sqltypes.Result, error)
 
-	revert := changeVar(t, "Consolidator", tabletenv.NotOnPrimary)
-	defer revert()
+	testCases := []struct {
+		name                   string
+		getExecuteFn           func(qc *framework.QueryClient) executeFn
+		totalConsolidationsTag string
+	}{
+		{
+			name:                   "Execute",
+			getExecuteFn:           func(qc *framework.QueryClient) executeFn { return qc.Execute },
+			totalConsolidationsTag: "Waits/Histograms/Consolidations/Count",
+		},
+		{
+			name:                   "StreamExecute",
+			getExecuteFn:           func(qc *framework.QueryClient) executeFn { return qc.StreamExecute },
+			totalConsolidationsTag: "Waits/Histograms/StreamConsolidations/Count",
+		},
+	}
 
-	// primary should not do query consolidation
-	var wg2 sync.WaitGroup
-	wg2.Add(2)
-	go func() {
-		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
-		wg2.Done()
-	}()
-	go func() {
-		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
-		wg2.Done()
-	}()
-	wg2.Wait()
-	noNewConsolidations := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
-	assert.Equal(t, afterOne, noNewConsolidations, "expected no new consolidations")
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			initial := framework.FetchInt(framework.DebugVars(), testCase.totalConsolidationsTag)
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go func() {
+				testCase.getExecuteFn(framework.NewClient())("select sleep(0.5) from dual", nil)
+				wg.Done()
+			}()
+			go func() {
+				testCase.getExecuteFn(framework.NewClient())("select sleep(0.5) from dual", nil)
+				wg.Done()
+			}()
+			wg.Wait()
+			afterOne := framework.FetchInt(framework.DebugVars(), testCase.totalConsolidationsTag)
+			assert.Equal(t, initial+1, afterOne, "expected one consolidation")
 
-	// become a replica, where query consolidation should happen
-	client := framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
+			revert := changeVar(t, "Consolidator", tabletenv.NotOnPrimary)
+			defer revert()
 
-	err := client.SetServingType(topodatapb.TabletType_REPLICA)
-	require.NoError(t, err)
-	defer func() {
-		err = client.SetServingType(topodatapb.TabletType_PRIMARY)
-		require.NoError(t, err)
-	}()
+			// primary should not do query consolidation
+			var wg2 sync.WaitGroup
+			wg2.Add(2)
+			go func() {
+				testCase.getExecuteFn(framework.NewClient())("select sleep(0.5) from dual", nil)
+				wg2.Done()
+			}()
+			go func() {
+				testCase.getExecuteFn(framework.NewClient())("select sleep(0.5) from dual", nil)
+				wg2.Done()
+			}()
+			wg2.Wait()
+			noNewConsolidations := framework.FetchInt(framework.DebugVars(), testCase.totalConsolidationsTag)
+			assert.Equal(t, afterOne, noNewConsolidations, "expected no new consolidations")
 
-	initial = framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
-	var wg3 sync.WaitGroup
-	wg3.Add(2)
-	go func() {
-		client.Execute("select sleep(0.5) from dual", nil)
-		wg3.Done()
-	}()
-	go func() {
-		client.Execute("select sleep(0.5) from dual", nil)
-		wg3.Done()
-	}()
-	wg3.Wait()
-	afterOne = framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
-	assert.Equal(t, initial+1, afterOne, "expected another consolidation")
+			// become a replica, where query consolidation should happen
+			client := framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
+
+			err := client.SetServingType(topodatapb.TabletType_REPLICA)
+			require.NoError(t, err)
+			defer func() {
+				err = client.SetServingType(topodatapb.TabletType_PRIMARY)
+				require.NoError(t, err)
+			}()
+
+			initial = framework.FetchInt(framework.DebugVars(), testCase.totalConsolidationsTag)
+			var wg3 sync.WaitGroup
+			wg3.Add(2)
+			go func() {
+				testCase.getExecuteFn(client)("select sleep(0.5) from dual", nil)
+				wg3.Done()
+			}()
+			go func() {
+				testCase.getExecuteFn(client)("select sleep(0.5) from dual", nil)
+				wg3.Done()
+			}()
+			wg3.Wait()
+			afterOne = framework.FetchInt(framework.DebugVars(), testCase.totalConsolidationsTag)
+			assert.Equal(t, initial+1, afterOne, "expected another consolidation")
+		})
+	}
 }
 
 func TestQueryPlanCache(t *testing.T) {
@@ -181,8 +197,6 @@ func TestQueryPlanCache(t *testing.T) {
 
 	//sleep to avoid race between SchemaChanged event clearing out the plans cache which breaks this test
 	framework.Server.WaitForSchemaReset(2 * time.Second)
-
-	defer framework.Server.SetQueryPlanCacheCap(framework.Server.QueryPlanCacheCap())
 
 	bindVars := map[string]*querypb.BindVariable{
 		"ival1": sqltypes.Int64BindVariable(1),
@@ -197,21 +211,18 @@ func TestQueryPlanCache(t *testing.T) {
 	assert.Equal(t, 1, framework.Server.QueryPlanCacheLen())
 
 	vend := framework.DebugVars()
-	assert.Equal(t, 1, framework.FetchInt(vend, "QueryCacheLength"))
 	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryCacheSize"), cachedPlanSize)
 
 	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
 	require.Equal(t, 2, framework.Server.QueryPlanCacheLen())
 
 	vend = framework.DebugVars()
-	assert.Equal(t, 2, framework.FetchInt(vend, "QueryCacheLength"))
 	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryCacheSize"), 2*cachedPlanSize)
 
 	_, _ = client.Execute("select * from vitess_test where intval=1", bindVars)
 	require.Equal(t, 3, framework.Server.QueryPlanCacheLen())
 
 	vend = framework.DebugVars()
-	assert.Equal(t, 3, framework.FetchInt(vend, "QueryCacheLength"))
 	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryCacheSize"), 3*cachedPlanSize)
 }
 

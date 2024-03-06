@@ -89,8 +89,6 @@ var (
 		}
 	}`
 	commonTabletArg = []string{
-		"--vreplication_healthcheck_topology_refresh", "1s",
-		"--vreplication_healthcheck_retry_delay", "1s",
 		"--vreplication_retry_delay", "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
@@ -143,7 +141,7 @@ func TestPITRRecovery(t *testing.T) {
 	cluster.VerifyRowsInTabletForTable(t, replica1, keyspaceName, 2, "product")
 
 	// backup the replica
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.NoError(t, err)
 
 	// check that the backup shows up in the listing
@@ -183,10 +181,10 @@ func TestPITRRecovery(t *testing.T) {
 	cluster.VerifyRowsInTabletForTable(t, shard1Replica1, keyspaceName, 4, "product")
 
 	// take the backup (to simulate the regular backup)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", shard0Replica1.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Backup", shard0Replica1.Alias)
 	require.NoError(t, err)
 	// take the backup (to simulate the regular backup)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", shard1Replica1.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Backup", shard1Replica1.Alias)
 	require.NoError(t, err)
 
 	backups, err := clusterInstance.ListBackups(keyspaceName + "/-80")
@@ -297,10 +295,10 @@ func TestPITRRecovery(t *testing.T) {
 }
 
 func performResharding(t *testing.T) {
-	err := clusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema)
+	err := clusterInstance.VtctldClientProcess.ApplyVSchema(keyspaceName, vSchema)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--source_shards=0", "--target_shards=-80,80-", "Create", "ks.reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "create", "--source-shards=0", "--target-shards=-80,80-", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
 
 	waitTimeout := 30 * time.Second
@@ -309,32 +307,32 @@ func performResharding(t *testing.T) {
 
 	waitForNoWorkflowLag(t, clusterInstance, "ks.reshardWorkflow")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--tablet_types=rdonly", "SwitchTraffic", "ks.reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "SwitchTraffic", "--tablet-types=rdonly", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--tablet_types=replica", "SwitchTraffic", "ks.reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "SwitchTraffic", "--tablet-types=replica", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
 
 	// then serve primary from the split shards
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--tablet_types=primary", "SwitchTraffic", "ks.reshardWorkflow")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "SwitchTraffic", "--tablet-types=primary", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
 
 	// remove the original tablets in the original shard
 	removeTablets(t, []*cluster.Vttablet{primary, replica1, replica2})
 
 	for _, tablet := range []*cluster.Vttablet{replica1, replica2} {
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets", tablet.Alias)
 		require.NoError(t, err)
 	}
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", primary.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", primary.Alias)
 	require.NoError(t, err)
 
 	// rebuild the serving graph, all mentions of the old shards should be gone
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "ks")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "ks")
 	require.NoError(t, err)
 
 	// delete the original shard
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteShard", "ks/0")
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteShards", "ks/0")
 	require.NoError(t, err)
 
 	// Restart vtgate process
@@ -462,13 +460,13 @@ func initializeCluster(t *testing.T) {
 		}
 	}
 
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
+	err = clusterInstance.VtctldClientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard0.Name, cell, shard0Primary.TabletUID)
+	err = clusterInstance.VtctldClientProcess.InitShardPrimary(keyspaceName, shard0.Name, cell, shard0Primary.TabletUID)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard1.Name, cell, shard1Primary.TabletUID)
+	err = clusterInstance.VtctldClientProcess.InitShardPrimary(keyspaceName, shard1.Name, cell, shard1Primary.TabletUID)
 	require.NoError(t, err)
 
 	err = clusterInstance.StartVTOrc(keyspaceName)
@@ -499,9 +497,9 @@ func insertRow(t *testing.T, id int, productName string, isSlow bool) {
 }
 
 func createRestoreKeyspace(t *testing.T, timeToRecover, restoreKeyspaceName string) {
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CreateKeyspace", "--",
-		"--keyspace_type=SNAPSHOT", "--base_keyspace="+keyspaceName,
-		"--snapshot_time", timeToRecover, restoreKeyspaceName)
+	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace",
+		"--type=SNAPSHOT", "--base-keyspace="+keyspaceName,
+		"--snapshot-timestamp", timeToRecover, restoreKeyspaceName)
 	log.Info(output)
 	require.NoError(t, err)
 }
@@ -558,9 +556,6 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 		"--binlog_user", binlogServer.username,
 		"--binlog_password", binlogServer.password,
 		"--pitr_gtid_lookup_timeout", lookupTimeout,
-		"--vreplication_healthcheck_topology_refresh", "1s",
-		"--vreplication_healthcheck_retry_delay", "1s",
-		"--vreplication_tablet_type", "replica",
 		"--vreplication_retry_delay", "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",

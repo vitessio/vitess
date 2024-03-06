@@ -17,84 +17,20 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+	"io"
+
+	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
-	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semantics.TableSet) (ops.Operator, *rewrite.ApplyResult, error) {
-	var unmerged []*SubQueryOp
-
-	// first loop over the subqueries and try to merge them into the outer plan
-	outer := op.Outer
-	for _, inner := range op.Inner {
-		innerOp := inner.Inner
-
-		var preds []sqlparser.Expr
-		preds, innerOp = unresolvedAndSource(ctx, innerOp)
-
-		newInner := &SubQueryInner{
-			Inner:             inner.Inner,
-			ExtractedSubquery: inner.ExtractedSubquery,
-		}
-		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, newSubQueryMerge(ctx, newInner), ts)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if merged != nil {
-			outer = merged
-			continue
-		}
-
-		if len(preds) == 0 {
-			// uncorrelated queries
-			sq := &SubQueryOp{
-				Extracted: inner.ExtractedSubquery,
-				Inner:     innerOp,
-			}
-			unmerged = append(unmerged, sq)
-			continue
-		}
-
-		if inner.ExtractedSubquery.OpCode == int(popcode.PulloutExists) {
-			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
-			if err != nil {
-				return nil, nil, err
-			}
-			outer = correlatedTree
-			continue
-		}
-
-		return nil, nil, vterrors.VT12001("cross-shard correlated subquery")
-	}
-
-	for _, tree := range unmerged {
-		tree.Outer = outer
-		outer = tree
-	}
-	return outer, rewrite.NewTree("merged subqueries", outer), nil
-}
-
-func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]sqlparser.Expr, ops.Operator) {
-	preds := UnresolvedPredicates(op, ctx.SemTable)
-	if filter, ok := op.(*Filter); ok {
-		if ctx.SemTable.ASTEquals().Exprs(preds, filter.Predicates) {
-			// if we are seeing a single filter with only these predicates,
-			// we can throw away the filter and just use the source
-			return preds, filter.Source
-		}
-	}
-
-	return preds, op
-}
-
-func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op ops.Operator) bool {
+func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op Operator) bool {
 	validVindex := func(expr sqlparser.Expr) bool {
 		sc := findColumnVindex(ctx, op, expr)
 		return sc != nil && sc.IsUnique()
@@ -104,339 +40,672 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStateme
 		return false
 	}
 
-	sel, ok := query.(*sqlparser.Select)
-	if !ok {
-		return false
-	}
-
-	if len(sel.GroupBy) > 0 {
-		// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
-		// by checking that one of the grouping expressions used is a unique single column vindex.
-		// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
-		for _, gb := range sel.GroupBy {
-			if validVindex(gb) {
-				return true
-			}
-		}
-		return false
-	}
-
-	// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
-	// but if we don't have groupings, we need to check if there are aggregations that will mess with us
-	if sqlparser.ContainsAggregation(sel.SelectExprs) {
-		return false
-	}
-
-	if sqlparser.ContainsAggregation(sel.Having) {
-		return false
-	}
-
-	return true
-}
-
-func tryMergeSubQueryOp(
-	ctx *plancontext.PlanningContext,
-	outer, subq ops.Operator,
-	subQueryInner *SubQueryInner,
-	joinPredicates []sqlparser.Expr,
-	merger merger,
-	lhs semantics.TableSet, // these are the tables made available because we are on the RHS of a join
-) (ops.Operator, error) {
-	switch outerOp := outer.(type) {
-	case *Filter:
-		op, err := tryMergeSubQueryOp(ctx, outerOp.Source, subq, subQueryInner, joinPredicates, merger, lhs)
-		if err != nil || op == nil {
-			return nil, err
-		}
-		outerOp.Source = op
-		return outerOp, nil
-	case *Route:
-		return tryMergeSubqueryWithRoute(ctx, subq, outerOp, joinPredicates, merger, subQueryInner, lhs)
-	case *ApplyJoin:
-		return tryMergeSubqueryWithJoin(ctx, subq, outerOp, joinPredicates, merger, subQueryInner, lhs)
-	default:
-		return nil, nil
-	}
-}
-
-func tryMergeSubqueryWithRoute(
-	ctx *plancontext.PlanningContext,
-	subq ops.Operator,
-	outerOp *Route,
-	joinPredicates []sqlparser.Expr,
-	merger merger,
-	subQueryInner *SubQueryInner,
-	lhs semantics.TableSet, // these are the tables made available because we are on the RHS of a join
-) (ops.Operator, error) {
-	subqueryRoute, isRoute := subq.(*Route)
-	if !isRoute {
-		return nil, nil
-	}
-
-	if outerOp.Routing.OpCode() == engine.Reference && !subqueryRoute.IsSingleShard() {
-		return nil, nil
-	}
-
-	deps := ctx.SemTable.DirectDeps(subQueryInner.ExtractedSubquery.Subquery)
-	outer := lhs.Merge(TableID(outerOp))
-	if !deps.IsSolvedBy(outer) {
-		return nil, nil
-	}
-
-	merged, err := Merge(ctx, outerOp, subq, joinPredicates, merger)
-	if err != nil {
-		return nil, err
-	}
-
-	// If the subqueries could be merged here, we're done
-	if merged != nil {
-		return merged, err
-	}
-
-	if !isMergeable(ctx, subQueryInner.ExtractedSubquery.Subquery.Select, subq) {
-		return nil, nil
-	}
-
-	// Inner subqueries can be merged with the outer subquery as long as
-	// the inner query is a single column selection, and that single column has a matching
-	// vindex on the outer query's operand.
-	if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
-		// TODO: clean up. All this casting is not pretty
-		outerRouting, ok := outerOp.Routing.(*ShardedRouting)
-		if !ok {
-			return nil, nil
-		}
-		innerRouting := subqueryRoute.Routing.(*ShardedRouting)
-		if !ok {
-			return nil, nil
-		}
-		merged, err := merger.mergeTables(outerRouting, innerRouting, outerOp, subqueryRoute)
-		mergedRouting := merged.Routing.(*ShardedRouting)
-		mergedRouting.PickBestAvailableVindex()
-		return merged, err
-	}
-	return nil, nil
-}
-
-func tryMergeSubqueryWithJoin(
-	ctx *plancontext.PlanningContext,
-	subq ops.Operator,
-	outerOp *ApplyJoin,
-	joinPredicates []sqlparser.Expr,
-	merger merger,
-	subQueryInner *SubQueryInner,
-	lhs semantics.TableSet, // these are the tables made available because we are on the RHS of a join
-) (ops.Operator, error) {
-	// Trying to merge the subquery with the left-hand or right-hand side of the join
-
-	if outerOp.LeftJoin {
-		return nil, nil
-	}
-	newMergefunc := &mergeDecorator{
-		inner: merger,
-		f: func() error {
-			var err error
-			outerOp.RHS, err = rewriteColumnsInSubqueryOpForJoin(ctx, outerOp.RHS, outerOp, subQueryInner)
-			return err
-		},
-	}
-	merged, err := tryMergeSubQueryOp(ctx, outerOp.LHS, subq, subQueryInner, joinPredicates, newMergefunc, lhs)
-	if err != nil {
-		return nil, err
-	}
-	if merged != nil {
-		outerOp.LHS = merged
-		return outerOp, nil
-	}
-
-	newMergefunc.f = func() error {
-		var err error
-		outerOp.RHS, err = rewriteColumnsInSubqueryOpForJoin(ctx, outerOp.LHS, outerOp, subQueryInner)
-		return err
-	}
-
-	merged, err = tryMergeSubQueryOp(ctx, outerOp.RHS, subq, subQueryInner, joinPredicates, newMergefunc, lhs.Merge(TableID(outerOp.LHS)))
-	if err != nil {
-		return nil, err
-	}
-	if merged != nil {
-		outerOp.RHS = merged
-		return outerOp, nil
-	}
-	return nil, nil
-}
-
-// rewriteColumnsInSubqueryOpForJoin rewrites the columns that appear from the other side
-// of the join. For example, let's say we merged a subquery on the right side of a join tree
-// If it was using any columns from the left side then they need to be replaced by bind variables supplied
-// from that side.
-// outerTree is the joinTree within whose children the subquery lives in
-// the child of joinTree which does not contain the subquery is the otherTree
-func rewriteColumnsInSubqueryOpForJoin(
-	ctx *plancontext.PlanningContext,
-	innerOp ops.Operator,
-	outerTree *ApplyJoin,
-	subQueryInner *SubQueryInner,
-) (ops.Operator, error) {
-	resultInnerOp := innerOp
-	var rewriteError error
-	// go over the entire expression in the subquery
-	sqlparser.SafeRewrite(subQueryInner.ExtractedSubquery.Original, nil, func(cursor *sqlparser.Cursor) bool {
-		node, ok := cursor.Node().(*sqlparser.ColName)
-		if !ok {
-			return true
-		}
-
-		// check whether the column name belongs to the other side of the join tree
-		if !ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultInnerOp)) {
-			return true
-		}
-
-		// get the bindVariable for that column name and replace it in the subquery
-		typ, _, _ := ctx.SemTable.TypeForExpr(node)
-		bindVar := ctx.GetArgumentFor(node, func() string {
-			return ctx.ReservedVars.ReserveColName(node)
-		})
-		cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
-		// check whether the bindVariable already exists in the joinVars of the other tree
-		_, alreadyExists := outerTree.Vars[bindVar]
-		if alreadyExists {
-			return true
-		}
-		// if it does not exist, then push this as an output column there and add it to the joinVars
-		newInnerOp, offset, err := resultInnerOp.AddColumn(ctx, aeWrap(node), true, false)
-		if err != nil {
-			rewriteError = err
-			return false
-		}
-		resultInnerOp = newInnerOp
-		outerTree.Vars[bindVar] = offset
-		return true
-	})
-
-	// update the dependencies for the subquery by removing the dependencies from the innerOp
-	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
-	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
-	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
-	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
-
-	// return any error while rewriting
-	return resultInnerOp, rewriteError
-}
-
-func createCorrelatedSubqueryOp(
-	ctx *plancontext.PlanningContext,
-	innerOp, outerOp ops.Operator,
-	preds []sqlparser.Expr,
-	extractedSubquery *sqlparser.ExtractedSubquery,
-) (*CorrelatedSubQueryOp, error) {
-	newOuter, err := RemovePredicate(ctx, extractedSubquery, outerOp)
-	if err != nil {
-		return nil, vterrors.VT12001("EXISTS sub-queries are only supported with AND clause")
-	}
-
-	resultOuterOp := newOuter
-	vars := map[string]int{}
-	bindVars := map[*sqlparser.ColName]string{}
-	var lhsCols []*sqlparser.ColName
-	for _, pred := range preds {
-		var rewriteError error
-		sqlparser.SafeRewrite(pred, nil, func(cursor *sqlparser.Cursor) bool {
-			node, ok := cursor.Node().(*sqlparser.ColName)
-			if !ok {
-				return true
-			}
-
-			nodeDeps := ctx.SemTable.RecursiveDeps(node)
-			if !nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
-				return true
-			}
-
-			// check whether the bindVariable already exists in the map
-			// we do so by checking that the column names are the same and their recursive dependencies are the same
-			// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
-			for colName, bindVar := range bindVars {
-				if ctx.SemTable.EqualsExprWithDeps(node, colName) {
-					cursor.Replace(sqlparser.NewArgument(bindVar))
+	switch node := query.(type) {
+	case *sqlparser.Select:
+		if len(node.GroupBy) > 0 {
+			// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
+			// by checking that one of the grouping expressions used is a unique single column vindex.
+			// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
+			for _, gb := range node.GroupBy {
+				if validVindex(gb) {
 					return true
 				}
 			}
+			return false
+		}
 
-			// get the bindVariable for that column name and replace it in the predicate
-			typ, _, _ := ctx.SemTable.TypeForExpr(node)
-			bindVar := ctx.ReservedVars.ReserveColName(node)
-			cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
-			// store it in the map for future comparisons
-			bindVars[node] = bindVar
+		// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
+		// but if we don't have groupings, we need to check if there are aggregations that will mess with us
+		if sqlparser.ContainsAggregation(node.SelectExprs) {
+			return false
+		}
 
-			// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-			newOuterOp, offset, err := resultOuterOp.AddColumn(ctx, aeWrap(node), true, false)
+		if sqlparser.ContainsAggregation(node.Having) {
+			return false
+		}
+
+		return true
+	case *sqlparser.Union:
+		return isMergeable(ctx, node.Left, op) && isMergeable(ctx, node.Right, op)
+	default:
+		panic(vterrors.VT13001(fmt.Sprintf("Unknown SelectStatement type - %T", node)))
+	}
+}
+
+func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
+	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+		switch op := op.(type) {
+		case *SubQueryContainer:
+			outer := op.Outer
+			for _, subq := range op.Inner {
+				subq.Outer = subq.settle(ctx, outer)
+				outer = subq
+			}
+			return outer, Rewrote("extracted subqueries from subquery container")
+		case *Projection:
+			ap, err := op.GetAliasedProjections()
 			if err != nil {
-				rewriteError = err
+				panic(err)
+			}
+
+			for _, pe := range ap {
+				mergeSubqueryExpr(ctx, pe)
+			}
+		case *Update:
+			for _, setExpr := range op.Assignments {
+				mergeSubqueryExpr(ctx, setExpr.Expr)
+			}
+		case *Aggregator:
+			for _, aggr := range op.Aggregations {
+				newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, aggr.SubQueryExpression, aggr.Original.Expr)
+				if rewritten {
+					aggr.Original.Expr = newExpr
+				}
+			}
+		}
+		return op, NoRewrite
+	}
+
+	return BottomUp(op, TableID, visit, nil)
+}
+
+func mergeSubqueryExpr(ctx *plancontext.PlanningContext, pe *ProjExpr) {
+	se, ok := pe.Info.(SubQueryExpression)
+	if !ok {
+		return
+	}
+	newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, se, pe.EvalExpr)
+	if rewritten {
+		pe.EvalExpr = newExpr
+	}
+}
+
+func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpression, expr sqlparser.Expr) (sqlparser.Expr, bool) {
+	rewritten := false
+	for _, sq := range se {
+		for _, sq2 := range ctx.MergedSubqueries {
+			if sq.originalSubquery == sq2 {
+				expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+					switch expr := cursor.Node().(type) {
+					case *sqlparser.ColName:
+						if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
+							return true
+						}
+					case *sqlparser.Argument:
+						if expr.Name != sq.ArgName {
+							return true
+						}
+					default:
+						return true
+					}
+					rewritten = true
+					if sq.FilterType == opcode.PulloutExists {
+						cursor.Replace(&sqlparser.ExistsExpr{Subquery: sq.originalSubquery})
+					} else {
+						cursor.Replace(sq.originalSubquery)
+					}
+					return false
+				}).(sqlparser.Expr)
+			}
+		}
+	}
+	return expr, rewritten
+}
+
+// tryPushSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
+/*
+For this query:
+
+    select 1 from user u1, user u2 where exists (
+        select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col
+    )
+
+We can use a very simplified tree where the subquery starts at the top, like this:
+┌──────────────────────────────────────────────────────────────────────┐
+│SQ WHERE ue.col = u1.col and ue.col = u2.col, JoinVars: u1.col. u2.col│
+└──┬────────────────────────────────────────────────────┬──────────────┘
+ inner                                                outer
+┌──▼──┐                                 ┌───────────────▼──────────────┐
+│R(ue)│                                 │JOIN WHERE true JoinVars <nil>│
+└─────┘                                 └──┬───────────────────────┬───┘
+                                        ┌──▼──┐                  ┌─▼───┐
+                                        │R(u1)│                  │R(u2)│
+                                        └─────┘                  └─────┘
+
+We transform it to:
+    ┌────────────────────────────────┐
+    │JOIN WHERE true JoinVars: u1.col│
+    ├─────────────────────────────┬──┘
+┌───▼─┐ ┌─────────────────────────▼────────────────────────────────────┐
+│R(u1)│ │SQ WHERE ue.col = :u1_col and ue.col = u2.col JoinVars: u2.col│
+└─────┘ └──┬───────────────────────────────────────────────────────┬───┘
+         inner                                                   outer
+        ┌──▼──┐                                                 ┌──▼──┐
+        │R(ue)│                                                 │R(u2)│
+        └─────┘                                                 └─────┘
+We are rewriting all expressions in the subquery to use arguments any columns
+coming from the LHS. The join predicate is not affected, but we are adding
+any new columns needed by the inner subquery to the JoinVars that the join
+will handle.
+*/
+func tryPushSubQueryInJoin(
+	ctx *plancontext.PlanningContext,
+	inner *SubQuery,
+	outer *ApplyJoin,
+) (Operator, *ApplyResult) {
+	lhs := TableID(outer.LHS)
+	rhs := TableID(outer.RHS)
+	joinID := TableID(outer)
+	innerID := TableID(inner.Subquery)
+
+	// Deps are the dependencies of the merge predicates -
+	// we want to push the subquery as close to its needs
+	// as possible, so that we can potentially merge them together
+	// TODO: we need to check dependencies and break apart all expressions in the subquery, not just the merge predicates
+	deps := semantics.EmptyTableSet()
+	for _, predicate := range inner.GetMergePredicates() {
+		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))
+	}
+	deps = deps.Remove(innerID)
+
+	// in general, we don't want to push down uncorrelated subqueries into the RHS of a join,
+	// since this side is executed once per row from the LHS, so we would unnecessarily execute
+	// the subquery multiple times. The exception is if we can merge the subquery with the RHS of the join.
+	merged, result := tryMergeWithRHS(ctx, inner, outer)
+	if merged != nil {
+		return merged, result
+	}
+
+	_, ok := inner.Subquery.(*Projection)
+	if ok {
+		// This is a little hacky, but I could not find a better solution for it.
+		// Projections are easy to push down, so if this is still at the top,
+		// it means we have not tried pushing it yet.
+		// Let's give it a chance to push down before we push it on the left
+		return nil, NoRewrite
+	}
+
+	if deps.IsSolvedBy(lhs) {
+		// we can safely push down the subquery on the LHS
+		outer.LHS = addSubQuery(outer.LHS, inner)
+		return outer, Rewrote("push subquery into LHS of join")
+	}
+
+	if outer.LeftJoin || len(inner.Predicates) == 0 {
+		// we can't push any filters on the RHS of an outer join, and
+		// we don't want to push uncorrelated subqueries to the RHS of a join
+		return nil, NoRewrite
+	}
+
+	if deps.IsSolvedBy(rhs) {
+		// we can push down the subquery filter on RHS of the join
+		outer.RHS = addSubQuery(outer.RHS, inner)
+		return outer, Rewrote("push subquery into RHS of join")
+	}
+
+	if deps.IsSolvedBy(joinID) {
+		// we can rewrite the predicate to not use the values from the lhs,
+		// and instead use arguments for these dependencies.
+		// this way we can push the subquery into the RHS of this join
+		inner.mapExpr(extractLHSExpr(ctx, outer, lhs))
+		outer.RHS = addSubQuery(outer.RHS, inner)
+		return outer, Rewrote("push subquery into RHS of join rewriting predicates")
+	}
+
+	return nil, NoRewrite
+}
+
+// extractLHSExpr will return a function that extracts any ColName coming from the LHS table,
+// adding them to the ExtraLHSVars on the join if they are not already known
+func extractLHSExpr(
+	ctx *plancontext.PlanningContext,
+	outer *ApplyJoin,
+	lhs semantics.TableSet,
+) func(expr sqlparser.Expr) sqlparser.Expr {
+	return func(expr sqlparser.Expr) sqlparser.Expr {
+		col := breakExpressionInLHSandRHSForApplyJoin(ctx, expr, lhs)
+		if col.IsPureLeft() {
+			panic(vterrors.VT13001("did not expect to find any predicates that do not need data from the inner here"))
+		}
+		for _, bve := range col.LHSExprs {
+			if !outer.isColNameMovedFromL2R(bve.Name) {
+				outer.ExtraLHSVars = append(outer.ExtraLHSVars, bve)
+			}
+		}
+		return col.RHSExpr
+	}
+}
+
+// tryMergeWithRHS attempts to merge a subquery with the RHS of a join
+func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *ApplyJoin) (Operator, *ApplyResult) {
+	if outer.LeftJoin {
+		return nil, nil
+	}
+	// both sides need to be routes
+	outerRoute, ok := outer.RHS.(*Route)
+	if !ok {
+		return nil, nil
+	}
+	innerRoute, ok := inner.Subquery.(*Route)
+	if !ok {
+		return nil, nil
+	}
+
+	newExpr := rewriteOriginalPushedToRHS(ctx, inner.Original, outer)
+	sqm := &subqueryRouteMerger{
+		outer:    outerRoute,
+		original: newExpr,
+		subq:     inner,
+	}
+	newOp := mergeSubqueryInputs(ctx, innerRoute, outerRoute, inner.GetMergePredicates(), sqm)
+	if newOp == nil {
+		return nil, nil
+	}
+
+	outer.RHS = newOp
+	ctx.MergedSubqueries = append(ctx.MergedSubqueries, inner.originalSubquery)
+	return outer, Rewrote("merged subquery with rhs of join")
+}
+
+// addSubQuery adds a SubQuery to the given operator. If the operator is a SubQueryContainer,
+// it will add the SubQuery to the SubQueryContainer. If the operator is something else,	it will
+// create a new SubQueryContainer with the given operator as the outer and the SubQuery as the inner.
+func addSubQuery(in Operator, inner *SubQuery) Operator {
+	sql, ok := in.(*SubQueryContainer)
+	if !ok {
+		return &SubQueryContainer{
+			Outer: in,
+			Inner: []*SubQuery{inner},
+		}
+	}
+
+	sql.Inner = append(sql.Inner, inner)
+	return sql
+}
+
+// rewriteOriginalPushedToRHS rewrites the original expression to use the argument names instead of the column names
+// this is necessary because we are pushing the subquery into the RHS of the join, and we need to use the argument names
+// instead of the column names
+func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) sqlparser.Expr {
+	outerID := TableID(outer.LHS)
+	result := sqlparser.CopyOnRewrite(expression, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok || ctx.SemTable.RecursiveDeps(col) != outerID {
+			// we are only interested in columns that are coming from the LHS of the join
+			return
+		}
+		// this is a dependency we are being fed from the LHS of the join, so we
+		// need to find the argument name for it and use that instead
+		// we can't use the column name directly, because we're in the RHS of the join
+		name := outer.findOrAddColNameBindVarName(ctx, col)
+		cursor.Replace(sqlparser.NewArgument(name))
+	}, nil)
+	return result.(sqlparser.Expr)
+}
+
+func rewriteColNameToArgument(ctx *plancontext.PlanningContext, in sqlparser.Expr, se SubQueryExpression, subqueries ...*SubQuery) sqlparser.Expr {
+	rewriteIt := func(s string) sqlparser.SQLNode {
+		for _, sq1 := range se {
+			if sq1.ArgName != s && sq1.HasValuesName != s {
+				continue
+			}
+
+			for _, sq2 := range subqueries {
+				if s == sq2.ArgName {
+					switch {
+					case sq1.FilterType.NeedsListArg():
+						return sqlparser.NewListArg(s)
+					case sq1.FilterType == opcode.PulloutExists:
+						if sq1.HasValuesName == "" {
+							sq1.HasValuesName = ctx.ReservedVars.ReserveHasValuesSubQuery()
+							sq2.HasValuesName = sq1.HasValuesName
+						}
+						return sqlparser.NewArgument(sq1.HasValuesName)
+					default:
+						return sqlparser.NewArgument(s)
+					}
+				}
+			}
+		}
+		return nil
+	}
+
+	// replace the ColNames with Argument inside the subquery
+	result := sqlparser.Rewrite(in, nil, func(cursor *sqlparser.Cursor) bool {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok || !col.Qualifier.IsEmpty() {
+			return true
+		}
+		arg := rewriteIt(col.Name.String())
+		if arg == nil {
+			return true
+		}
+		cursor.Replace(arg)
+		return true
+	})
+	return result.(sqlparser.Expr)
+}
+
+func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQueryContainer) (Operator, *ApplyResult) {
+	if !reachedPhase(ctx, initialPlanning) {
+		return in, NoRewrite
+	}
+
+	var remaining []*SubQuery
+	var result *ApplyResult
+	for _, inner := range in.Inner {
+		newOuter, _result := pushOrMerge(ctx, in.Outer, inner)
+		if _result == NoRewrite {
+			remaining = append(remaining, inner)
+			continue
+		}
+
+		in.Outer = newOuter
+		result = result.Merge(_result)
+	}
+
+	if len(remaining) == 0 {
+		return in.Outer, result
+	}
+
+	in.Inner = remaining
+
+	return in, result
+}
+
+func tryMergeSubQuery(
+	ctx *plancontext.PlanningContext,
+	subQuery *SubQuery,
+	outer *Route,
+) (newOuter Operator, result *ApplyResult) {
+	switch inner := subQuery.Subquery.(type) {
+	case *Route:
+		return tryMergeSubqueryWithOuter(ctx, subQuery, outer, inner)
+	case *SubQueryContainer:
+		return tryMergeSubqueriesRecursively(ctx, subQuery, outer, inner)
+	}
+	return outer, NoRewrite
+}
+
+// tryMergeSubqueriesRecursively attempts to merge a SubQueryContainer with the outer Route.
+func tryMergeSubqueriesRecursively(
+	ctx *plancontext.PlanningContext,
+	subQuery *SubQuery,
+	outer *Route,
+	inner *SubQueryContainer,
+) (Operator, *ApplyResult) {
+	exprs := subQuery.GetMergePredicates()
+	merger := &subqueryRouteMerger{
+		outer:    outer,
+		original: subQuery.Original,
+		subq:     subQuery,
+	}
+	op := mergeSubqueryInputs(ctx, inner.Outer, outer, exprs, merger)
+	if op == nil {
+		return outer, NoRewrite
+	}
+
+	op = Clone(op).(*Route)
+	op.Source = outer.Source
+	var finalResult *ApplyResult
+	for _, subq := range inner.Inner {
+		newOuter, res := tryMergeSubQuery(ctx, subq, op)
+		if res == NoRewrite {
+			// we failed to merge one of the inners - we need to abort
+			return nil, NoRewrite
+		}
+		op = newOuter.(*Route)
+		finalResult = finalResult.Merge(res)
+	}
+
+	op.Source = newFilter(outer.Source, subQuery.Original)
+	return op, finalResult.Merge(Rewrote("merge outer of two subqueries"))
+}
+
+func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQuery, outer *Route, inner Operator) (Operator, *ApplyResult) {
+	if updOp, ok := outer.Source.(*Update); ok && mergingIsBlocked(subQuery, updOp) {
+		return outer, NoRewrite
+	}
+	exprs := subQuery.GetMergePredicates()
+	merger := &subqueryRouteMerger{
+		outer:    outer,
+		original: subQuery.Original,
+		subq:     subQuery,
+	}
+	op := mergeSubqueryInputs(ctx, inner, outer, exprs, merger)
+	if op == nil {
+		return outer, NoRewrite
+	}
+	if !subQuery.IsProjection {
+		op.Source = newFilter(outer.Source, subQuery.Original)
+	}
+	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery.originalSubquery)
+	return op, Rewrote("merged subquery with outer")
+}
+
+// This checked if subquery is part of the changed vindex values. Subquery cannot be merged with the outer route.
+func mergingIsBlocked(subQuery *SubQuery, updOp *Update) bool {
+	for _, sqArg := range updOp.SubQueriesArgOnChangedVindex {
+		if sqArg == subQuery.ArgName {
+			return true
+		}
+	}
+	return false
+}
+
+func pushOrMerge(ctx *plancontext.PlanningContext, outer Operator, inner *SubQuery) (Operator, *ApplyResult) {
+	switch o := outer.(type) {
+	case *Route:
+		return tryMergeSubQuery(ctx, inner, o)
+	case *ApplyJoin:
+		join, applyResult := tryPushSubQueryInJoin(ctx, inner, o)
+		if join == nil {
+			return outer, NoRewrite
+		}
+		return join, applyResult
+	default:
+		return outer, NoRewrite
+	}
+}
+
+type subqueryRouteMerger struct {
+	outer    *Route
+	original sqlparser.Expr
+	subq     *SubQuery
+}
+
+func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, old1, old2 *Route) *Route {
+	tr := &ShardedRouting{
+		VindexPreds: append(r1.VindexPreds, r2.VindexPreds...),
+		keyspace:    r1.keyspace,
+		RouteOpCode: r1.RouteOpCode,
+	}
+
+	if !s.subq.TopLevel {
+		// if the subquery is not at the root level, we can't use it for routing, only for merging
+		tr.SeenPredicates = r2.SeenPredicates
+	} else {
+		tr.SeenPredicates = slice.Filter(append(r1.SeenPredicates, r2.SeenPredicates...), func(expr sqlparser.Expr) bool {
+			// There are two cases we can have - we can have predicates in the outer
+			// that are no longer valid, and predicates in the inner that are no longer valid
+			// For the case WHERE exists(select 1 from user where user.id = ue.user_id)
+			// Outer: ::has_values
+			// Inner: user.id = :ue_user_id
+			//
+			// And for the case WHERE id IN (select id FROM user WHERE id = 5)
+			// Outer: id IN ::__sq1
+			// Inner: id = 5
+			//
+			// We only keep SeenPredicates that are not bind variables in the join columns.
+			// We have to remove the outer predicate since we merge both routes, and no one
+			// is producing the bind variable anymore.
+			if exprFromSubQ := ctx.SemTable.RecursiveDeps(expr).IsOverlapping(TableID(s.subq.Subquery)); !exprFromSubQ {
 				return true
 			}
-			resultOuterOp = newOuterOp
-			lhsCols = append(lhsCols, node)
-			vars[bindVar] = offset
-			return true
+			var argFound bool
+			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				arg, ok := node.(*sqlparser.Argument)
+				if !ok {
+					return true, nil
+				}
+				f := func(bve BindVarExpr) bool { return bve.Name == arg.Name }
+				for _, jc := range s.subq.JoinColumns {
+					if slices.ContainsFunc(jc.LHSExprs, f) {
+						argFound = true
+						return false, io.EOF
+					}
+				}
+				return true, nil
+			}, expr)
+
+			return !argFound
 		})
-		if rewriteError != nil {
-			return nil, rewriteError
-		}
-		var err error
-		innerOp, err = innerOp.AddPredicate(ctx, pred)
-		if err != nil {
-			return nil, err
-		}
 	}
-	return &CorrelatedSubQueryOp{
-		Outer:      resultOuterOp,
-		Inner:      innerOp,
-		Extracted:  extractedSubquery,
-		Vars:       vars,
-		LHSColumns: lhsCols,
-	}, nil
+
+	routing := tr.resetRoutingLogic(ctx)
+	return s.merge(ctx, old1, old2, routing)
 }
 
-// canMergeSubqueryOnColumnSelection will return true if the predicate used allows us to merge the two subqueries
-// into a single Route. This can be done if we are comparing two columns that contain data that is guaranteed
-// to exist on the same shard.
-func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate *sqlparser.ExtractedSubquery) bool {
-	left := predicate.OtherSide
-	opCode := predicate.OpCode
-	if opCode != int(popcode.PulloutValue) && opCode != int(popcode.PulloutIn) {
-		return false
+func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing) *Route {
+	if !s.subq.TopLevel {
+		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
+		return &Route{
+			Source:        outer.Source,
+			MergedWith:    mergedWith(inner, outer),
+			Routing:       outer.Routing,
+			Ordering:      outer.Ordering,
+			ResultColumns: outer.ResultColumns,
+		}
 	}
-
-	lVindex := findColumnVindex(ctx, a, left)
-	if lVindex == nil || !lVindex.IsUnique() {
-		return false
+	_, isSharded := r.(*ShardedRouting)
+	var src Operator
+	if isSharded {
+		src = s.outer.Source
+		if !s.subq.IsProjection {
+			src = newFilter(s.outer.Source, s.original)
+		}
+	} else {
+		src = s.rewriteASTExpression(ctx, inner)
 	}
-
-	rightSelection := extractSingleColumnSubquerySelection(predicate.Subquery)
-	if rightSelection == nil {
-		return false
+	return &Route{
+		Source:        src,
+		MergedWith:    mergedWith(inner, outer),
+		Routing:       r,
+		Ordering:      s.outer.Ordering,
+		ResultColumns: s.outer.ResultColumns,
 	}
-
-	rVindex := findColumnVindex(ctx, b, rightSelection)
-	if rVindex == nil {
-		return false
-	}
-	return rVindex == lVindex
 }
 
-// Searches for the single column returned from a subquery, like the `col` in `(SELECT col FROM tbl)`
-func extractSingleColumnSubquerySelection(subquery *sqlparser.Subquery) *sqlparser.ColName {
-	if subquery.Select.GetColumnCount() != 1 {
-		return nil
+// rewriteASTExpression rewrites the subquery expression that is used in the merged output
+// Any changes that have been done to the operator tree since it was extracted from the
+// query need make it to the expression
+// TODO: systay 2023-09-26
+// we should be able to use this method for all plan types,
+// but using this method for sharded queries introduces bugs
+// We really need to figure out why this is not working as expected
+func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningContext, inner *Route) Operator {
+	src := s.outer.Source
+	stmt, _, err := ToSQL(ctx, inner.Source)
+	if err != nil {
+		panic(err)
 	}
-
-	columnExpr := subquery.Select.GetColumns()[0]
-
-	aliasedExpr, ok := columnExpr.(*sqlparser.AliasedExpr)
+	subqStmt, ok := stmt.(sqlparser.SelectStatement)
 	if !ok {
+		panic(vterrors.VT13001("subqueries should only be select statement"))
+	}
+	subqID := TableID(s.subq.Subquery)
+	subqStmt = sqlparser.CopyOnRewrite(subqStmt, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		arg, ok := cursor.Node().(*sqlparser.Argument)
+		if !ok {
+			return
+		}
+		var exprFound sqlparser.Expr
+		for expr, argName := range ctx.ReservedArguments {
+			if arg.Name == argName {
+				exprFound = expr
+			}
+		}
+		if exprFound == nil {
+			return
+		}
+		deps := ctx.SemTable.RecursiveDeps(exprFound)
+		if deps.IsEmpty() {
+			err = vterrors.VT13001("found colname that we dont have deps for")
+			cursor.StopTreeWalk()
+			return
+		}
+		if !deps.IsSolvedBy(subqID) {
+			cursor.Replace(exprFound)
+		}
+	}, nil).(sqlparser.SelectStatement)
+	if err != nil {
+		panic(err)
+	}
+
+	if s.subq.IsProjection {
+		ctx.SemTable.CopySemanticInfo(s.subq.originalSubquery.Select, subqStmt)
+		s.subq.originalSubquery.Select = subqStmt
+	} else {
+		sQuery := sqlparser.CopyOnRewrite(s.original, dontEnterSubqueries, func(cursor *sqlparser.CopyOnWriteCursor) {
+			if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
+				subq.Select = subqStmt
+				cursor.Replace(subq)
+			}
+		}, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
+		src = newFilter(s.outer.Source, sQuery)
+	}
+	return src
+}
+
+// mergeSubqueryInputs checks whether two operators can be merged into a single one.
+// If they can be merged, a new operator with the merged routing is returned
+// If they cannot be merged, nil is returned.
+// These rules are similar but different from join merging
+func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joinPredicates []sqlparser.Expr, m *subqueryRouteMerger) *Route {
+	inRoute, outRoute := operatorsToRoutes(in, out)
+	if inRoute == nil || outRoute == nil {
 		return nil
 	}
 
-	return getColName(aliasedExpr.Expr)
+	inRoute, outRoute, inRouting, outRouting, sameKeyspace := getRoutesOrAlternates(inRoute, outRoute)
+	inner, outer := getRoutingType(inRouting), getRoutingType(outRouting)
+
+	switch {
+	// We have to let the outer control how many rows are returned,
+	// which means that we have to be careful with merging when the outer side
+	case inner == dual ||
+		(inner == anyShard && sameKeyspace):
+		return m.merge(ctx, inRoute, outRoute, outRouting)
+
+	case inner == none && sameKeyspace:
+		return m.merge(ctx, inRoute, outRoute, inRouting)
+
+	// we can merge dual-outer subqueries only if the
+	// inner is guaranteed to hit a single shard
+	case inRoute.IsSingleShard() &&
+		(outer == dual || (outer == anyShard && sameKeyspace)):
+		return m.merge(ctx, inRoute, outRoute, inRouting)
+
+	case outer == none && sameKeyspace:
+		return m.merge(ctx, inRoute, outRoute, outRouting)
+
+	// infoSchema routing is complex, so we handle it in a separate method
+	case inner == infoSchema && outer == infoSchema:
+		return tryMergeInfoSchemaRoutings(ctx, inRouting, outRouting, m, inRoute, outRoute)
+
+	// sharded routing is complex, so we handle it in a separate method
+	case inner == sharded && outer == sharded:
+		return tryMergeJoinShardedRouting(ctx, inRoute, outRoute, m, joinPredicates)
+
+	default:
+		return nil
+	}
 }
+
+func mergedWith(inner *Route, outer *Route) []*Route {
+	mergedWith := append(inner.MergedWith, inner, outer)
+	mergedWith = append(mergedWith, outer.MergedWith...)
+	return mergedWith
+}
+
+var _ merger = (*subqueryRouteMerger)(nil)

@@ -17,13 +17,13 @@ limitations under the License.
 package srvtopo
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"context"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -34,11 +34,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func initResolver(t *testing.T, name string) *Resolver {
-	ctx := context.Background()
+func initResolver(t *testing.T, ctx context.Context) *Resolver {
 	cell := "cell1"
-	ts := memorytopo.NewServer(cell)
-	rs := NewResilientServer(ts, name)
+	ts := memorytopo.NewServer(ctx, cell)
+	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	rs := NewResilientServer(ctx, ts, counts)
 
 	// Create sharded keyspace and shards.
 	if err := ts.CreateKeyspace(ctx, "sks", &topodatapb.Keyspace{}); err != nil {
@@ -97,7 +97,9 @@ func initResolver(t *testing.T, name string) *Resolver {
 }
 
 func TestResolveDestinations(t *testing.T) {
-	resolver := initResolver(t, "TestResolveDestinations")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resolver := initResolver(t, ctx)
 
 	id1 := &querypb.Value{
 		Type:  sqltypes.VarChar,

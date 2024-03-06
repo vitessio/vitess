@@ -252,6 +252,17 @@ func (fhc *FakeHealthCheck) CacheStatus() TabletsCacheStatusList {
 	return tcsl
 }
 
+// HealthyStatus returns the status for each healthy tablet
+func (fhc *FakeHealthCheck) HealthyStatus() TabletsCacheStatusList {
+	tcsMap := fhc.CacheStatusMap()
+	tcsl := make(TabletsCacheStatusList, 0, len(tcsMap))
+	for _, tcs := range tcsMap {
+		tcsl = append(tcsl, tcs)
+	}
+	sort.Sort(tcsl)
+	return tcsl
+}
+
 // CacheStatusMap returns a map of the health check cache.
 func (fhc *FakeHealthCheck) CacheStatusMap() map[string]*TabletsCacheStatus {
 	tcsMap := make(map[string]*TabletsCacheStatus)
@@ -380,9 +391,9 @@ func (fhc *FakeHealthCheck) BroadcastAll() {
 func simpleCopy(th *TabletHealth) *TabletHealth {
 	return &TabletHealth{
 		Conn:                 th.Conn,
-		Tablet:               proto.Clone(th.Tablet).(*topodatapb.Tablet),
-		Target:               proto.Clone(th.Target).(*querypb.Target),
-		Stats:                proto.Clone(th.Stats).(*querypb.RealtimeStats),
+		Tablet:               th.Tablet.CloneVT(),
+		Target:               th.Target.CloneVT(),
+		Stats:                th.Stats.CloneVT(),
 		LastError:            th.LastError,
 		PrimaryTermStartTime: th.PrimaryTermStartTime,
 		Serving:              th.Serving,

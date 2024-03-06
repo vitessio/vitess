@@ -17,26 +17,24 @@ limitations under the License.
 package operators
 
 import (
+	"slices"
 	"strings"
 
-	"golang.org/x/exp/slices"
-
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type Ordering struct {
-	Source  ops.Operator
+	Source  Operator
 	Offset  []int
 	WOffset []int
 
-	Order         []ops.OrderBy
+	Order         []OrderBy
 	ResultColumns int
 }
 
-func (o *Ordering) Clone(inputs []ops.Operator) ops.Operator {
+func (o *Ordering) Clone(inputs []Operator) Operator {
 	return &Ordering{
 		Source:        inputs[0],
 		Offset:        slices.Clone(o.Offset),
@@ -46,51 +44,42 @@ func (o *Ordering) Clone(inputs []ops.Operator) ops.Operator {
 	}
 }
 
-func (o *Ordering) Inputs() []ops.Operator {
-	return []ops.Operator{o.Source}
+func (o *Ordering) Inputs() []Operator {
+	return []Operator{o.Source}
 }
 
-func (o *Ordering) SetInputs(operators []ops.Operator) {
+func (o *Ordering) SetInputs(operators []Operator) {
 	o.Source = operators[0]
 }
 
-func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	newSrc, err := o.Source.AddPredicate(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-	o.Source = newSrc
-	return o, nil
+func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	o.Source = o.Source.AddPredicate(ctx, expr)
+	return o
 }
 
-func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
-	newSrc, offset, err := o.Source.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
-	if err != nil {
-		return nil, 0, err
-	}
-	o.Source = newSrc
-	return o, offset, nil
+func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
+	return o.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (o *Ordering) GetColumns() ([]*sqlparser.AliasedExpr, error) {
-	return o.Source.GetColumns()
+func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	return o.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (o *Ordering) GetSelectExprs() (sqlparser.SelectExprs, error) {
-	return o.Source.GetSelectExprs()
+func (o *Ordering) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return o.Source.GetColumns(ctx)
 }
 
-func (o *Ordering) GetOrdering() ([]ops.OrderBy, error) {
-	return o.Order, nil
+func (o *Ordering) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+	return o.Source.GetSelectExprs(ctx)
 }
 
-func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
+func (o *Ordering) GetOrdering(*plancontext.PlanningContext) []OrderBy {
+	return o.Order
+}
+
+func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	for _, order := range o.Order {
-		newSrc, offset, err := o.Source.AddColumn(ctx, aeWrap(order.SimplifiedExpr), true, false)
-		if err != nil {
-			return err
-		}
-		o.Source = newSrc
+		offset := o.Source.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 		o.Offset = append(o.Offset, offset)
 
 		if !ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
@@ -99,20 +88,15 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) error {
 		}
 
 		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.SimplifiedExpr}
-		newSrc, offset, err = o.Source.AddColumn(ctx, aeWrap(wsExpr), true, false)
-		if err != nil {
-			return err
-		}
-		o.Source = newSrc
+		offset = o.Source.AddColumn(ctx, true, false, aeWrap(wsExpr))
 		o.WOffset = append(o.WOffset, offset)
 	}
-
 	return nil
 }
 
 func (o *Ordering) ShortDescription() string {
-	ordering := slices2.Map(o.Order, func(o ops.OrderBy) string {
-		return sqlparser.String(o.Inner)
+	ordering := slice.Map(o.Order, func(o OrderBy) string {
+		return sqlparser.String(o.SimplifiedExpr)
 	})
 	return strings.Join(ordering, ", ")
 }

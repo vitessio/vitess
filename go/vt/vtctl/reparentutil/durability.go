@@ -43,10 +43,24 @@ func init() {
 		return &durabilityNone{}
 	})
 	RegisterDurability("semi_sync", func() Durabler {
-		return &durabilitySemiSync{}
+		return &durabilitySemiSync{
+			rdonlySemiSync: false,
+		}
 	})
 	RegisterDurability("cross_cell", func() Durabler {
-		return &durabilityCrossCell{}
+		return &durabilityCrossCell{
+			rdonlySemiSync: false,
+		}
+	})
+	RegisterDurability("semi_sync_with_rdonly_ack", func() Durabler {
+		return &durabilitySemiSync{
+			rdonlySemiSync: true,
+		}
+	})
+	RegisterDurability("cross_cell_with_rdonly_ack", func() Durabler {
+		return &durabilityCrossCell{
+			rdonlySemiSync: true,
+		}
 	})
 	RegisterDurability("test", func() Durabler {
 		return &durabilityTest{}
@@ -141,7 +155,9 @@ func (d *durabilityNone) isReplicaSemiSync(primary, replica *topodatapb.Tablet) 
 
 // durabilitySemiSync has 1 semi-sync setup. It only allows Primary and Replica type servers to acknowledge semi sync
 // It returns NeutralPromoteRule for Primary and Replica tablet types, MustNotPromoteRule for everything else
-type durabilitySemiSync struct{}
+type durabilitySemiSync struct {
+	rdonlySemiSync bool
+}
 
 // promotionRule implements the Durabler interface
 func (d *durabilitySemiSync) promotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
@@ -162,6 +178,8 @@ func (d *durabilitySemiSync) isReplicaSemiSync(primary, replica *topodatapb.Tabl
 	switch replica.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
 		return true
+	case topodatapb.TabletType_RDONLY:
+		return d.rdonlySemiSync
 	}
 	return false
 }
@@ -171,7 +189,9 @@ func (d *durabilitySemiSync) isReplicaSemiSync(primary, replica *topodatapb.Tabl
 // durabilityCrossCell has 1 semi-sync setup. It only allows Primary and Replica type servers from a different cell to acknowledge semi sync.
 // This means that a transaction must be in two cells for it to be acknowledged
 // It returns NeutralPromoteRule for Primary and Replica tablet types, MustNotPromoteRule for everything else
-type durabilityCrossCell struct{}
+type durabilityCrossCell struct {
+	rdonlySemiSync bool
+}
 
 // promotionRule implements the Durabler interface
 func (d *durabilityCrossCell) promotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
@@ -192,6 +212,8 @@ func (d *durabilityCrossCell) isReplicaSemiSync(primary, replica *topodatapb.Tab
 	switch replica.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
 		return primary.Alias.Cell != replica.Alias.Cell
+	case topodatapb.TabletType_RDONLY:
+		return d.rdonlySemiSync && primary.Alias.Cell != replica.Alias.Cell
 	}
 	return false
 }

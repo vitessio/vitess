@@ -21,13 +21,15 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type EvalResult struct {
-	v eval
+	v            eval
+	collationEnv *collations.Environment
 }
 
 // Value allows for retrieval of the value we expose for public consumption.
@@ -39,7 +41,7 @@ func (er EvalResult) Value(id collations.ID) sqltypes.Value {
 		return evalToSQLValue(er.v)
 	}
 
-	dst, err := charset.Convert(nil, id.Get().Charset(), str.bytes, str.col.Collation.Get().Charset())
+	dst, err := charset.Convert(nil, colldata.Lookup(id).Charset(), str.bytes, colldata.Lookup(str.col.Collation).Charset())
 	if err != nil {
 		// If we can't convert, we just return what we have, but it's going
 		// to be invalidly encoded. Should normally never happen as only utf8mb4
@@ -55,7 +57,7 @@ func (er EvalResult) Collation() collations.ID {
 }
 
 func (er EvalResult) String() string {
-	return er.Value(collations.Default()).String()
+	return er.Value(er.collationEnv.DefaultConnectionCharset()).String()
 }
 
 // TupleValues allows for retrieval of the value we expose for public consumption

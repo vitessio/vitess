@@ -17,9 +17,8 @@ limitations under the License.
 package json
 
 import (
+	"slices"
 	"testing"
-
-	"golang.org/x/exp/slices"
 )
 
 func TestParseJSONPath(t *testing.T) {

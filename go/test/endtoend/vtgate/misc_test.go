@@ -17,15 +17,38 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
-
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
+
+func TestInsertOnDuplicateKey(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "insert into t11(id, sharding_key, col1, col2, col3) values(1, 2, 'a', 1, 2)")
+	utils.Exec(t, conn, "insert into t11(id, sharding_key, col1, col2, col3) values(1, 2, 'a', 1, 2) on duplicate key update id=10;")
+	utils.AssertMatches(t, conn, "select id, sharding_key from t11 where id=10", "[[INT64(10) INT64(2)]]")
+
+}
+
+func TestInsertNeg(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "insert ignore into t10(id, sharding_key, col1, col2, col3) values(10, 20, 'a', 1, 2), (20, -20, 'b', 3, 4), (30, -40, 'c', 6, 7), (40, 60, 'd', 4, 10)")
+	utils.Exec(t, conn, "insert ignore into t10(id, sharding_key, col1, col2, col3) values(1, 2, 'a', 1, 2), (2, -2, 'b', -3, 4), (3, -4, 'c', 6, -7), (4, 6, 'd', 4, -10)")
+}
 
 func TestSelectNull(t *testing.T) {
 	conn, closer := start(t)
@@ -326,6 +349,52 @@ func TestFlush(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 	utils.Exec(t, conn, "flush local tables t1, t2")
+}
+
+// TestFlushLock tests that ftwrl and unlock tables should unblock other session connections to execute the query.
+func TestFlushLock(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	// replica: fail it
+	utils.Exec(t, conn, "use @replica")
+	_, err := utils.ExecAllowError(t, conn, "flush tables ks.t1, ks.t2 with read lock")
+	require.ErrorContains(t, err, "VT09012: FLUSH statement with REPLICA tablet not allowed")
+
+	// primary: should work
+	utils.Exec(t, conn, "use @primary")
+	utils.Exec(t, conn, "flush tables ks.t1, ks.t2 with read lock")
+
+	var cnt atomic.Int32
+	go func() {
+		ctx := context.Background()
+		conn2, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+		defer conn2.Close()
+
+		cnt.Add(1)
+		utils.Exec(t, conn2, "select * from ks.t1 for update")
+		cnt.Add(1)
+	}()
+	for cnt.Load() == 0 {
+	}
+	// added sleep to let the query execute inside the go routine, which should be blocked.
+	time.Sleep(1 * time.Second)
+	require.EqualValues(t, 1, cnt.Load())
+
+	// unlock it
+	utils.Exec(t, conn, "unlock tables")
+
+	// now wait for go routine to complete.
+	timeout := time.After(3 * time.Second)
+	for cnt.Load() != 2 {
+		select {
+		case <-timeout:
+			t.Fatalf("test timeout waiting for select query to complete")
+		default:
+
+		}
+	}
 }
 
 func TestShowVariables(t *testing.T) {
@@ -722,12 +791,57 @@ func TestJoinWithMergedRouteWithPredicate(t *testing.T) {
 }
 
 func TestRowCountExceed(t *testing.T) {
-	conn, closer := start(t)
-	defer closer()
+	conn, _ := start(t)
+	defer func() {
+		cluster.PanicHandler(t)
+		// needs special delete logic as it exceeds row count.
+		for i := 50; i <= 300; i += 50 {
+			utils.Exec(t, conn, fmt.Sprintf("delete from t1 where id1 < %d", i))
+		}
+		conn.Close()
+	}()
 
 	for i := 0; i < 250; i++ {
 		utils.Exec(t, conn, fmt.Sprintf("insert into t1 (id1, id2) values (%d, %d)", i, i+1))
 	}
 
 	utils.AssertContainsError(t, conn, "select id1 from t1 where id1 < 1000", `Row count exceeded 100`)
+}
+
+func TestLookupErrorMetric(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	oldErrCount := getVtgateApiErrorCounts(t)
+
+	utils.Exec(t, conn, `insert into t1 values (1,1)`)
+	_, err := utils.ExecAllowError(t, conn, `insert into t1 values (2,1)`)
+	require.ErrorContains(t, err, `(errno 1062) (sqlstate 23000)`)
+
+	newErrCount := getVtgateApiErrorCounts(t)
+	require.EqualValues(t, oldErrCount+1, newErrCount)
+}
+
+func getVtgateApiErrorCounts(t *testing.T) float64 {
+	apiErr := getVar(t, "VtgateApiErrorCounts")
+	if apiErr == nil {
+		return 0
+	}
+	mapErrors := apiErr.(map[string]interface{})
+	val, exists := mapErrors["Execute.ks.primary.ALREADY_EXISTS"]
+	if exists {
+		return val.(float64)
+	}
+	return 0
+}
+
+func getVar(t *testing.T, key string) interface{} {
+	vars, err := clusterInstance.VtgateProcess.GetVars()
+	require.NoError(t, err)
+
+	val, exists := vars[key]
+	if !exists {
+		return nil
+	}
+	return val
 }

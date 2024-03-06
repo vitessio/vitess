@@ -28,22 +28,20 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -108,8 +106,9 @@ type vreplicator struct {
 	originalFKCheckSetting int64
 	originalSQLMode        string
 
-	WorkflowType int32
-	WorkflowName string
+	WorkflowType    int32
+	WorkflowSubType int32
+	WorkflowName    string
 
 	throttleUpdatesRateLimiter *timer.RateLimiter
 }
@@ -141,7 +140,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
 			vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
-	return &vreplicator{
+	vr := &vreplicator{
 		vre:             vre,
 		id:              id,
 		source:          source,
@@ -150,6 +149,8 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
 	}
+	vr.setExistingRowsCopied()
+	return vr
 }
 
 // Replicate starts a vreplication stream. It can be in one of three phases:
@@ -271,17 +272,25 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				log.Warningf("Unable to clear FK check %v", err)
 				return err
 			}
-			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
-				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
-				return err
-			}
-			settings, numTablesToCopy, err = vr.loadSettings(ctx, vr.dbClient)
-			if err != nil {
-				return err
-			}
-			if numTablesToCopy == 0 {
-				if err := vr.insertLog(LogCopyEnd, fmt.Sprintf("Copy phase completed at gtid %s", settings.StartPos)); err != nil {
+			if vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) {
+				if err := newVCopier(vr).copyAll(ctx, settings); err != nil {
+					log.Infof("Error atomically copying all tables: %v", err)
+					vr.stats.ErrorCounts.Add([]string{"CopyAll"}, 1)
 					return err
+				}
+			} else {
+				if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
+					vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
+					return err
+				}
+				settings, numTablesToCopy, err = vr.loadSettings(ctx, vr.dbClient)
+				if err != nil {
+					return err
+				}
+				if numTablesToCopy == 0 {
+					if err := vr.insertLog(LogCopyEnd, fmt.Sprintf("Copy phase completed at gtid %s", settings.StartPos)); err != nil {
+						return err
+					}
 				}
 			}
 		case settings.StartPos.IsZero():
@@ -318,7 +327,13 @@ type ColumnInfo struct {
 }
 
 func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}, ExcludeTables: []string{"/" + schema.GCTableNameExpression + "/"}}
+	req := &tabletmanagerdatapb.GetSchemaRequest{
+		Tables: []string{"/.*/"},
+		ExcludeTables: []string{
+			"/" + schema.OldGCTableNameExpression + "/",
+			"/" + schema.GCTableNameExpression + "/",
+		},
+	}
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
 	if err != nil {
 		return nil, err
@@ -337,14 +352,18 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 
 		var pks []string
 		if len(td.PrimaryKeyColumns) != 0 {
-			// Use the PK
+			// Use the PK.
 			pks = td.PrimaryKeyColumns
 		} else {
-			// Use a PK equivalent if one exists
-			if pks, err = vr.mysqld.GetPrimaryKeyEquivalentColumns(ctx, vr.dbClient.DBName(), td.Name); err != nil {
+			// Use a PK equivalent if one exists.
+			executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+				// This sets wantfields to true.
+				return vr.dbClient.ExecuteFetch(query, maxrows)
+			}
+			if pks, _, err = mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, vr.dbClient.DBName(), td.Name); err != nil {
 				return nil, err
 			}
-			// Fall back to using every column in the table if there's no PK or PKE
+			// Fall back to using every column in the table if there's no PK or PKE.
 			if len(pks) == 0 {
 				pks = td.Columns
 			}
@@ -406,6 +425,7 @@ func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (s
 	settings, numTablesToCopy, err = vr.readSettings(ctx, dbClient)
 	if err == nil {
 		vr.WorkflowType = int32(settings.WorkflowType)
+		vr.WorkflowSubType = int32(settings.WorkflowSubType)
 		vr.WorkflowName = settings.WorkflowName
 	}
 	return settings, numTablesToCopy, err
@@ -484,7 +504,7 @@ func encodeString(in string) string {
 }
 
 func (vr *vreplicator) getSettingFKCheck() error {
-	qr, err := vr.dbClient.Execute("select @@foreign_key_checks;")
+	qr, err := vr.dbClient.Execute("select @@foreign_key_checks")
 	if err != nil {
 		return err
 	}
@@ -499,7 +519,7 @@ func (vr *vreplicator) getSettingFKCheck() error {
 }
 
 func (vr *vreplicator) resetFKCheckAfterCopy(dbClient *vdbClient) error {
-	_, err := dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalFKCheckSetting))
+	_, err := dbClient.Execute(fmt.Sprintf("set @@session.foreign_key_checks=%d", vr.originalFKCheckSetting))
 	return err
 }
 
@@ -549,7 +569,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 //   - "vreplication" for most flows
 //   - "vreplication:online-ddl" for online ddl flows.
 //     Note that with such name, it's possible to throttle
-//     the worflow by either /throttler/throttle-app?app=vreplication and/or /throttler/throttle-app?app=online-ddl
+//     the workflow by either /throttler/throttle-app?app=vreplication and/or /throttler/throttle-app?app=online-ddl
 //     This is useful when we want to throttle all migrations. We throttle "online-ddl" and that applies to both vreplication
 //     migrations as well as gh-ost migrations.
 func (vr *vreplicator) throttlerAppName() string {
@@ -560,10 +580,21 @@ func (vr *vreplicator) throttlerAppName() string {
 	return throttlerapp.Concatenate(names...)
 }
 
+// updateTimeThrottled updates the time_throttled field in the _vt.vreplication record
+// with a rate limit so that it's only saved in the database at most once per
+// throttleUpdatesRateLimiter.tickerTime.
+// It also increments the throttled count in the stats to keep track of how many
+// times a VReplication workflow, and the specific sub-component, is throttled by the
+// tablet throttler over time. It also increments the global throttled count to keep
+// track of how many times in total vreplication has been throttled across all workflows
+// (both ones that currently exist and ones that no longer do).
 func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name) error {
+	appName := appThrottled.String()
+	vr.stats.ThrottledCounts.Add([]string{"tablet", appName}, 1)
+	globalStats.ThrottledCount.Add(1)
 	err := vr.throttleUpdatesRateLimiter.Do(func() error {
 		tm := time.Now().Unix()
-		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appThrottled.String())
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, appName)
 		if err != nil {
 			return err
 		}
@@ -587,7 +618,7 @@ func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
 }
 
 func (vr *vreplicator) clearFKCheck(dbClient *vdbClient) error {
-	_, err := dbClient.Execute("set foreign_key_checks=0;")
+	_, err := dbClient.Execute("set @@session.foreign_key_checks=0")
 	return err
 }
 
@@ -645,7 +676,7 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 			//   to each record.
 			// - You can not add/remove multiple fulltext keys
 			//   in a single ALTER statement.
-			if secondaryKey.Info.Primary || secondaryKey.Info.Fulltext {
+			if secondaryKey.Info.Type == sqlparser.IndexTypePrimary || secondaryKey.Info.Type == sqlparser.IndexTypeFullText {
 				continue
 			}
 			alterDrop.AlterOptions = append(alterDrop.AlterOptions,
@@ -716,7 +747,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	}
 	tableSchema := schema.TableDefinitions[0].Schema
 	var secondaryKeys []*sqlparser.IndexDefinition
-	parsedDDL, err := sqlparser.ParseStrictDDL(tableSchema)
+	parsedDDL, err := vr.vre.env.Parser().ParseStrictDDL(tableSchema)
 	if err != nil {
 		return secondaryKeys, err
 	}
@@ -727,8 +758,27 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
 	}
 
-	for _, index := range createTable.GetTableSpec().Indexes {
-		if !index.Info.Primary {
+	tableSpec := createTable.GetTableSpec()
+	fkIndexCols := make(map[string]bool)
+	for _, constraint := range tableSpec.Constraints {
+		if fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
+			fkCols := make([]string, len(fkDef.Source))
+			for i, fkCol := range fkDef.Source {
+				fkCols[i] = fkCol.Lowered()
+			}
+			fkIndexCols[strings.Join(fkCols, ",")] = true
+		}
+	}
+	for _, index := range tableSpec.Indexes {
+		if index.Info.Type != sqlparser.IndexTypePrimary {
+			cols := make([]string, len(index.Columns))
+			for i, col := range index.Columns {
+				cols[i] = col.Column.Lowered()
+			}
+			if fkIndexCols[strings.Join(cols, ",")] {
+				// This index is needed for a FK constraint so we cannot drop it.
+				continue
+			}
 			secondaryKeys = append(secondaryKeys, index)
 		}
 	}
@@ -944,7 +994,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 				// the table schema and if so move forward and delete the
 				// post_copy_action record.
 				if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERDupKeyName {
-					stmt, err := sqlparser.ParseStrictDDL(action.Task)
+					stmt, err := vr.vre.env.Parser().ParseStrictDDL(action.Task)
 					if err != nil {
 						return failedAlterErr
 					}
@@ -1019,4 +1069,40 @@ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, err
 		return nil, vterrors.Wrap(err, "failed to clear foreign key check")
 	}
 	return dbClient, nil
+}
+
+// setExistingRowsCopied deals with the case where another tablet started
+// the workflow and a reparent occurred, and now that we manage the
+// workflow, we need to read the rows_copied that already exists and add
+// them to our counter, otherwise it will look like the reparent wiped all the
+// rows_copied. So in the event that our CopyRowCount counter is zero, and
+// the existing rows_copied in the vreplication table is not, copy the value of
+// vreplication.rows_copied into our CopyRowCount.
+func (vr *vreplicator) setExistingRowsCopied() {
+	if vr.stats.CopyRowCount.Get() == 0 {
+		rowsCopiedExisting, err := vr.readExistingRowsCopied(vr.id)
+		if err != nil {
+			log.Warningf("Failed to read existing rows copied value for %s workflow: %v", vr.WorkflowName, err)
+		} else if rowsCopiedExisting != 0 {
+			log.Infof("Resuming the %s vreplication workflow started on another tablet, setting rows copied counter to %v", vr.WorkflowName, rowsCopiedExisting)
+			vr.stats.CopyRowCount.Set(rowsCopiedExisting)
+		}
+	}
+}
+
+func (vr *vreplicator) readExistingRowsCopied(id int32) (int64, error) {
+	query, err := sqlparser.ParseAndBind(`SELECT rows_copied FROM _vt.vreplication WHERE id=%a`,
+		sqltypes.Int32BindVariable(id),
+	)
+	if err != nil {
+		return 0, err
+	}
+	r, err := vr.dbClient.Execute(query)
+	if err != nil {
+		return 0, err
+	}
+	if len(r.Rows) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not get expected single row value when getting rows_copied for workflow id: %d", id)
+	}
+	return r.Rows[0][0].ToInt64()
 }

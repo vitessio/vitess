@@ -18,22 +18,16 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/servenv"
 )
 
 type builtinUser struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinUser)(nil)
+var _ IR = (*builtinUser)(nil)
 
 func (call *builtinUser) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalText([]byte(env.currentUser()), collationUtf8mb3), nil
-}
-
-func (call *builtinUser) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.VarChar, 0
 }
 
 func (*builtinUser) compile(c *compiler) (ctype, error) {
@@ -49,14 +43,10 @@ type builtinVersion struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinVersion)(nil)
+var _ IR = (*builtinVersion)(nil)
 
 func (call *builtinVersion) eval(env *ExpressionEnv) (eval, error) {
-	return newEvalText([]byte(servenv.MySQLServerVersion()), collationUtf8mb3), nil
-}
-
-func (call *builtinVersion) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.VarChar, 0
+	return newEvalText([]byte(env.currentVersion()), collationUtf8mb3), nil
 }
 
 func (*builtinVersion) compile(c *compiler) (ctype, error) {
@@ -68,7 +58,7 @@ type builtinDatabase struct {
 	CallExpr
 }
 
-var _ Expr = (*builtinDatabase)(nil)
+var _ IR = (*builtinDatabase)(nil)
 
 func (call *builtinDatabase) eval(env *ExpressionEnv) (eval, error) {
 	db := env.currentDatabase()
@@ -76,10 +66,6 @@ func (call *builtinDatabase) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 	return newEvalText([]byte(db), collationUtf8mb3), nil
-}
-
-func (call *builtinDatabase) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return sqltypes.VarChar, 0
 }
 
 func (*builtinDatabase) compile(c *compiler) (ctype, error) {

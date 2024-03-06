@@ -86,7 +86,16 @@ func (orc *VTOrcProcess) Setup() (err error) {
 
 	// create the configuration file
 	timeNow := time.Now().UnixNano()
-	configFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-config-%d.json", timeNow)))
+	err = os.MkdirAll(orc.LogDir, 0755)
+	if err != nil {
+		log.Errorf("cannot create log directory for vtorc: %v", err)
+		return err
+	}
+	configFile, err := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-config-%d.json", timeNow)))
+	if err != nil {
+		log.Errorf("cannot create config file for vtorc: %v", err)
+		return err
+	}
 	orc.ConfigPath = configFile.Name()
 
 	// Add the default configurations and print them out
@@ -117,8 +126,14 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--instance-poll-time", "1s",
 		// Faster topo information refresh speeds up the tests. This doesn't add any significant load either
 		"--topo-information-refresh-duration", "3s",
-		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
+
+	if v, err := GetMajorVersion("vtorc"); err != nil {
+		return err
+	} else if v >= 18 {
+		orc.proc.Args = append(orc.proc.Args, "--bind-address", "127.0.0.1")
+	}
+
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))
 	}
@@ -129,10 +144,15 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	if orc.LogFileName == "" {
 		orc.LogFileName = fmt.Sprintf("orc-stderr-%d.txt", timeNow)
 	}
-	errFile, _ := os.Create(path.Join(orc.LogDir, orc.LogFileName))
+	errFile, err := os.Create(path.Join(orc.LogDir, orc.LogFileName))
+	if err != nil {
+		log.Errorf("cannot create error log file for vtorc: %v", err)
+		return err
+	}
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
+	orc.proc.Env = append(orc.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.Args, " "))
 

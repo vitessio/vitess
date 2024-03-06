@@ -43,7 +43,7 @@ import (
 
 const (
 	// vdiffStopPosition is the default stop position for the target vreplication.
-	// It can be overridden with the positons argument to newTestVDiffEnv.
+	// It can be overridden with the positions argument to newTestVDiffEnv.
 	vdiffStopPosition = "MySQL56/d834e6b8-7cbf-11ed-a1eb-0242ac120002:1-892"
 	// vdiffSourceGtid should be the position reported by the source side VStreamResults.
 	// It's expected to be higher the vdiffStopPosition.
@@ -69,11 +69,11 @@ type testVDiffEnv struct {
 //----------------------------------------------
 // testVDiffEnv
 
-func newTestVDiffEnv(t testing.TB, sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
+func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
 	env := &testVDiffEnv{
 		workflow:   "vdiffTest",
 		tablets:    make(map[int]*testVDiffTablet),
-		topoServ:   memorytopo.NewServer("cell"),
+		topoServ:   memorytopo.NewServer(ctx, "cell"),
 		cell:       "cell",
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestVDiffTMClient(),

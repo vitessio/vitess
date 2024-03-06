@@ -98,11 +98,6 @@ func (q *Queue) startMonitoring() {
 	}
 }
 
-// Stop monitoring the queue
-func (q *Queue) stopMonitoring() {
-	q.done <- struct{}{}
-}
-
 // do a check of the entries in the queue, both those active and queued
 func (q *Queue) collectStatistics() {
 	q.Lock()

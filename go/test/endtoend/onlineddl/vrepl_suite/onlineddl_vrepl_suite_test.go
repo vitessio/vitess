@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -58,8 +59,7 @@ var (
 )
 
 const (
-	testDataPath   = "testdata"
-	defaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+	testDataPath = "testdata"
 )
 
 func TestMain(m *testing.M) {
@@ -178,7 +178,7 @@ func testSingle(t *testing.T, testName string) {
 		}
 	}
 
-	sqlMode := defaultSQLMode
+	sqlMode := config.DefaultSQLMode
 	if overrideSQLMode, exists := readTestFile(t, testName, "sql_mode"); exists {
 		sqlMode = overrideSQLMode
 	}

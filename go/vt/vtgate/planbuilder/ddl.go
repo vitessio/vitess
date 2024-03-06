@@ -2,9 +2,11 @@ package planbuilder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/key"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -18,18 +20,6 @@ const (
 	ViewComplex           string = "Complex select queries are not supported in create or alter view statements"
 	DifferentDestinations string = "Tables or Views specified in the query do not belong to the same destination"
 )
-
-type fkStrategy int
-
-const (
-	fkAllow fkStrategy = iota
-	fkDisallow
-)
-
-var fkStrategyMap = map[string]fkStrategy{
-	"allow":    fkAllow,
-	"disallow": fkDisallow,
-}
 
 type fkContraint struct {
 	found bool
@@ -55,7 +45,7 @@ func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error)
 // and which chooses which of the two to invoke at runtime.
 func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	if vschema.Destination() != nil {
-		return buildByPassDDLPlan(sql, vschema)
+		return buildByPassPlan(sql, vschema)
 	}
 	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(ctx, sql, ddlStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
@@ -90,7 +80,7 @@ func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser
 	return newPlanResult(eddl, tc.getTables()...), nil
 }
 
-func buildByPassDDLPlan(sql string, vschema plancontext.VSchema) (*planResult, error) {
+func buildByPassPlan(sql string, vschema plancontext.VSchema) (*planResult, error) {
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
@@ -110,10 +100,6 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 
 	switch ddl := ddlStatement.(type) {
 	case *sqlparser.AlterTable, *sqlparser.CreateTable, *sqlparser.TruncateTable:
-		err = checkFKError(vschema, ddlStatement)
-		if err != nil {
-			return nil, nil, err
-		}
 		// For ALTER TABLE and TRUNCATE TABLE, the table must already exist
 		//
 		// For CREATE TABLE, the table may (in the case of --declarative)
@@ -121,6 +107,10 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		//
 		// We should find the target of the query from this tables location.
 		destination, keyspace, err = findTableDestinationAndKeyspace(vschema, ddlStatement)
+		if err != nil {
+			return nil, nil, err
+		}
+		err = checkFKError(vschema, ddlStatement, keyspace)
 	case *sqlparser.CreateView:
 		destination, keyspace, err = buildCreateView(ctx, vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterView:
@@ -161,8 +151,12 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		}, nil
 }
 
-func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) error {
-	if fkStrategyMap[vschema.ForeignKeyMode()] == fkDisallow {
+func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement, keyspace *vindexes.Keyspace) error {
+	fkMode, err := vschema.ForeignKeyMode(keyspace.Name)
+	if err != nil {
+		return err
+	}
+	if fkMode == vschemapb.Keyspace_disallow {
 		fk := &fkContraint{}
 		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
 		if fk.found {
@@ -179,7 +173,8 @@ func findTableDestinationAndKeyspace(vschema plancontext.VSchema, ddlStatement s
 	var err error
 	table, _, _, _, destination, err = vschema.FindTableOrVindex(ddlStatement.GetTable())
 	if err != nil {
-		_, isNotFound := err.(vindexes.NotFoundError)
+		var notFoundError vindexes.NotFoundError
+		isNotFound := errors.As(err, &notFoundError)
 		if !isNotFound {
 			return nil, nil, err
 		}
@@ -319,7 +314,8 @@ func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLState
 		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
 
 		if err != nil {
-			_, isNotFound := err.(vindexes.NotFoundError)
+			var notFoundError vindexes.NotFoundError
+			isNotFound := errors.As(err, &notFoundError)
 			if !isNotFound {
 				return nil, nil, err
 			}
@@ -362,7 +358,8 @@ func buildRenameTable(vschema plancontext.VSchema, renameTable *sqlparser.Rename
 		table, _, _, _, destinationFrom, err = vschema.FindTableOrVindex(tabPair.FromTable)
 
 		if err != nil {
-			_, isNotFound := err.(vindexes.NotFoundError)
+			var notFoundError vindexes.NotFoundError
+			isNotFound := errors.As(err, &notFoundError)
 			if !isNotFound {
 				return nil, nil, err
 			}

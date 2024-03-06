@@ -18,10 +18,10 @@ package sqlparser
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,8 +53,9 @@ func TestAndOrPrecedence(t *testing.T) {
 		input:  "select * from a where a=b or c=d and e=f",
 		output: "(a = b or (c = d and e = f))",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -64,49 +65,6 @@ func TestAndOrPrecedence(t *testing.T) {
 			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
 		}
 	}
-}
-
-func TestNotInSubqueryPrecedence(t *testing.T) {
-	tree, err := Parse("select * from a where not id in (select 42)")
-	require.NoError(t, err)
-	not := tree.(*Select).Where.Expr.(*NotExpr)
-	cmp := not.Expr.(*ComparisonExpr)
-	subq := cmp.Right.(*Subquery)
-
-	extracted := &ExtractedSubquery{
-		Original:  cmp,
-		OpCode:    1,
-		Subquery:  subq,
-		OtherSide: cmp.Left,
-	}
-	extracted.SetArgName("arg1")
-	extracted.SetHasValuesArg("has_values1")
-
-	not.Expr = extracted
-	output := readable(not)
-	assert.Equal(t, "not (:has_values1 = 1 and id in ::arg1)", output)
-}
-
-func TestSubqueryPrecedence(t *testing.T) {
-	tree, err := Parse("select * from a where id in (select 42) and false")
-	require.NoError(t, err)
-	where := tree.(*Select).Where
-	andExpr := where.Expr.(*AndExpr)
-	cmp := andExpr.Left.(*ComparisonExpr)
-	subq := cmp.Right.(*Subquery)
-
-	extracted := &ExtractedSubquery{
-		Original:  andExpr.Left,
-		OpCode:    1,
-		Subquery:  subq,
-		OtherSide: cmp.Left,
-	}
-	extracted.SetArgName("arg1")
-	extracted.SetHasValuesArg("has_values1")
-
-	andExpr.Left = extracted
-	output := readable(extracted)
-	assert.Equal(t, ":has_values1 = 1 and id in ::arg1", output)
 }
 
 func TestPlusStarPrecedence(t *testing.T) {
@@ -120,8 +78,9 @@ func TestPlusStarPrecedence(t *testing.T) {
 		input:  "select 1*2+3 from a",
 		output: "((1 * 2) + 3)",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -147,8 +106,9 @@ func TestIsPrecedence(t *testing.T) {
 		input:  "select * from a where (a=1 and b=2) is true",
 		output: "((a = 1 and b = 2) is true)",
 	}}
+	parser := NewTestParser()
 	for _, tcase := range validSQL {
-		tree, err := Parse(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -201,9 +161,10 @@ func TestParens(t *testing.T) {
 		{in: "0 <=> (1 and 0)", expected: "0 <=> (1 and 0)"},
 	}
 
+	parser := NewTestParser()
 	for _, tc := range tests {
 		t.Run(tc.in, func(t *testing.T) {
-			stmt, err := Parse("select " + tc.in)
+			stmt, err := parser.Parse("select " + tc.in)
 			require.NoError(t, err)
 			out := String(stmt)
 			require.Equal(t, "select "+tc.expected+" from dual", out)
@@ -215,20 +176,22 @@ func TestRandom(t *testing.T) {
 	// The purpose of this test is to find discrepancies between Format and parsing. If for example our precedence rules are not consistent between the two, this test should find it.
 	// The idea is to generate random queries, and pass them through the parser and then the unparser, and one more time. The result of the first unparse should be the same as the second result.
 	seed := time.Now().UnixNano()
-	fmt.Println(fmt.Sprintf("seed is %d", seed)) // nolint
-	g := NewGenerator(seed, 5)
+	r := rand.New(rand.NewSource(seed))
+	fmt.Printf("seed is %d\n", seed)
+	g := NewGenerator(r, 5)
 	endBy := time.Now().Add(1 * time.Second)
 
+	parser := NewTestParser()
 	for {
 		if time.Now().After(endBy) {
 			break
 		}
 		// Given a random expression
-		randomExpr := g.Expression()
+		randomExpr := g.Expression(ExprGeneratorConfig{})
 		inputQ := "select " + String(randomExpr) + " from t"
 
 		// When it's parsed and unparsed
-		parsedInput, err := Parse(inputQ)
+		parsedInput, err := parser.Parse(inputQ)
 		require.NoError(t, err, inputQ)
 
 		// Then the unparsing should be the same as the input query

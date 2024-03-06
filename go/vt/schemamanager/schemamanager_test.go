@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -94,7 +96,7 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"create table test_table (pk int);"}, false, false, false)
 	controller.SetKeyspace("unknown_keyspace")
-	executor := NewTabletExecutor("TestSchemaManagerExecutorOpenFail", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
+	executor := NewTabletExecutor("TestSchemaManagerExecutorOpenFail", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 	ctx := context.Background()
 
 	_, err := Run(ctx, controller, executor)
@@ -125,7 +127,7 @@ func TestSchemaManagerRun(t *testing.T) {
 			})
 
 			fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
-			executor := NewTabletExecutor("TestSchemaManagerRun", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
+			executor := NewTabletExecutor("TestSchemaManagerRun", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 
 			ctx := context.Background()
 			resp, err := Run(ctx, controller, executor)
@@ -176,7 +178,7 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 	fakeTmc.EnableExecuteFetchAsDbaError = true
-	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
+	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 
 	ctx := context.Background()
 	resp, err := Run(ctx, controller, executor)
@@ -196,7 +198,7 @@ func TestSchemaManagerExecutorBatchVsStrategyFail(t *testing.T) {
 
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 	fakeTmc.EnableExecuteFetchAsDbaError = true
-	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 10)
+	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 10, sqlparser.NewTestParser())
 	executor.SetDDLStrategy("online")
 
 	ctx := context.Background()
@@ -212,7 +214,7 @@ func TestSchemaManagerExecutorBatchVsQueriesFail(t *testing.T) {
 
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 	fakeTmc.EnableExecuteFetchAsDbaError = true
-	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 10)
+	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 10, sqlparser.NewTestParser())
 	executor.SetDDLStrategy("direct")
 
 	ctx := context.Background()
@@ -228,7 +230,7 @@ func TestSchemaManagerExecutorBatchVsUUIDsFail(t *testing.T) {
 
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 	fakeTmc.EnableExecuteFetchAsDbaError = true
-	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 10)
+	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 10, sqlparser.NewTestParser())
 	executor.SetDDLStrategy("direct")
 	executor.SetUUIDList([]string{"4e5dcf80_354b_11eb_82cd_f875a4d24e90"})
 
@@ -271,7 +273,7 @@ func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
 }
 
 func newFakeExecutor(t *testing.T) *TabletExecutor {
-	return NewTabletExecutor("newFakeExecutor", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0)
+	return NewTabletExecutor("newFakeExecutor", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 }
 
 func newFakeTabletManagerClient() *fakeTabletManagerClient {
@@ -331,8 +333,9 @@ func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 // - 3 shards named '1', '2', '3'.
 // - A primary tablet for each shard.
 func newFakeTopo(t *testing.T) *topo.Server {
-	ts := memorytopo.NewServer("test_cell")
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "test_cell")
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}

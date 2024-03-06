@@ -23,8 +23,7 @@ package uset
 
 import (
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // HIGH_VALUE > all valid values. 110000 for codepoints
@@ -57,10 +56,6 @@ func New() *UnicodeSet {
 	buf := make([]rune, 1, 25)
 	buf[0] = unicodeSetHigh
 	return &UnicodeSet{list: buf}
-}
-
-func FromRunes(list []rune) *UnicodeSet {
-	return &UnicodeSet{list: list}
 }
 
 func (u *UnicodeSet) ensureBufferCapacity(c int) {
@@ -199,13 +194,6 @@ loopEnd:
 	k++
 
 	u.list, u.buffer = u.buffer[:k], u.list
-}
-
-func max(a, b rune) rune {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func pinCodePoint(c *rune) rune {

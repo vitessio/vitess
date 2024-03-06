@@ -13,7 +13,7 @@ type FakeStats struct {
 		Duration time.Duration
 	}
 	ScopeCalls   [][]Scope
-	ScopeReturns []Stats
+	ScopeReturns []*FakeStats
 	mutex        sync.Mutex
 }
 

@@ -17,11 +17,13 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"testing"
+	"time"
 
-	"context"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/topo"
@@ -38,7 +40,9 @@ func TestZk2Topo(t *testing.T) {
 
 	// Run the test suite.
 	testIndex := 0
-	test.TopoServerTestSuite(t, func() *topo.Server {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	test.TopoServerTestSuite(t, ctx, func() *topo.Server {
 		// Each test will use its own sub-directories.
 		// The directories will be created when used the first time.
 		testRoot := fmt.Sprintf("/test-%v", testIndex)
@@ -50,14 +54,25 @@ func TestZk2Topo(t *testing.T) {
 		// Note we exercise the observer feature here by passing in
 		// the same server twice, with a "|" separator.
 		ts, err := topo.OpenServer("zk2", serverAddr+"|"+serverAddr, globalRoot)
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
-		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
-			ServerAddress: serverAddr,
-			Root:          cellRoot,
-		}); err != nil {
-			t.Fatalf("CreateCellInfo() failed: %v", err)
+		require.NoError(t, err, "OpenServer() failed")
+		// We retry creating the cell info until we no longer get a connection error.
+		timeout := time.After(15 * time.Second)
+		for {
+			err = ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+				ServerAddress: serverAddr,
+				Root:          cellRoot,
+			})
+			if err == nil {
+				break
+			}
+			select {
+			case <-timeout:
+				t.Fatalf("Timedout creating cell info - %v", err)
+				return nil
+			default:
+				require.ErrorContainsf(t, err, "could not connect to a server", "Received an error that isn't a connection error")
+				time.Sleep(1 * time.Second)
+			}
 		}
 
 		return ts

@@ -17,11 +17,10 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"path"
 	"reflect"
 	"testing"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -35,7 +34,10 @@ func TestHandlePathRoot(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
 	want := []string{topo.GlobalCell, "cell1", "cell2", "cell3"}
 
-	ts := memorytopo.NewServer(cells...)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cells...)
+	defer ts.Close()
 	ex := newBackendExplorer(ts)
 	result := ex.HandlePath(input, nil)
 	if got := result.Children; !reflect.DeepEqual(got, want) {
@@ -52,8 +54,10 @@ func TestHandlePathKeyspace(t *testing.T) {
 		KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
 	}
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cells...)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cells...)
+	defer ts.Close()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
@@ -101,8 +105,11 @@ func TestHandlePathShard(t *testing.T) {
 	keyspace := &topodatapb.Keyspace{}
 	want := "is_primary_serving:true"
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cells...)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cells...)
+	defer ts.Close()
+
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
@@ -140,8 +147,11 @@ func TestHandlePathTablet(t *testing.T) {
 	}
 	want := "alias:{cell:\"cell1\" uid:123} hostname:\"example.com\" port_map:{key:\"vt\" value:4321}"
 
-	ctx := context.Background()
-	ts := memorytopo.NewServer(cells...)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cells...)
+	defer ts.Close()
+
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet error: %v", err)
 	}
@@ -164,7 +174,11 @@ func TestHandleBadPath(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
 	want := "Invalid cell: node doesn't exist: cells/foo/CellInfo"
 
-	ts := memorytopo.NewServer(cells...)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, cells...)
+	defer ts.Close()
+
 	ex := newBackendExplorer(ts)
 	result := ex.HandlePath(input, nil)
 	if got := result.Error; !reflect.DeepEqual(got, want) {

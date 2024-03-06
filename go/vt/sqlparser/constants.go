@@ -27,9 +27,14 @@ const (
 	SQLCalcFoundRowsStr = "sql_calc_found_rows "
 
 	// Select.Lock
-	NoLockStr    = ""
-	ForUpdateStr = " for update"
-	ShareModeStr = " lock in share mode"
+	NoLockStr              = ""
+	ForUpdateStr           = " for update"
+	ForUpdateNoWaitStr     = " for update nowait"
+	ForUpdateSkipLockedStr = " for update skip locked"
+	ForShareStr            = " for share"
+	ForShareNoWaitStr      = " for share nowait"
+	ForShareSkipLockedStr  = " for share skip locked"
+	ShareModeStr           = " lock in share mode"
 
 	// Select.Cache
 	SQLCacheStr   = "sql_cache "
@@ -65,7 +70,9 @@ const (
 	AddColVindexStr     = "on table add vindex"
 	DropColVindexStr    = "on table drop vindex"
 	AddSequenceStr      = "add sequence"
+	DropSequenceStr     = "drop sequence"
 	AddAutoIncStr       = "add auto_increment"
+	DropAutoIncStr      = "drop auto_increment"
 
 	// ALTER TABLE ALGORITHM string.
 	DefaultStr = "default"
@@ -115,10 +122,15 @@ const (
 	NaturalLeftJoinStr  = "natural left join"
 	NaturalRightJoinStr = "natural right join"
 
-	// Index hints.
-	UseStr    = "use "
+	// IgnoreStr string.
 	IgnoreStr = "ignore "
-	ForceStr  = "force "
+
+	// Index hints.
+	UseStr          = "use index"
+	IgnoreIndexStr  = "ignore index"
+	ForceStr        = "force index"
+	UseVindexStr    = "use vindex"
+	IgnoreVindexStr = "ignore vindex"
 
 	// Index hints For types.
 	JoinForStr    = "join"
@@ -255,10 +267,8 @@ const (
 	EmptyStr       = ""
 	TreeStr        = "tree"
 	JSONStr        = "json"
-	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
-	VTExplainStr   = "vtexplain"
 	QueriesStr     = "queries"
 	AllVExplainStr = "all"
 	PlanStr        = "plan"
@@ -307,6 +317,7 @@ const (
 	VitessTargetStr            = " vitess_target"
 	VitessVariablesStr         = " vitess_metadata variables"
 	VschemaTablesStr           = " vschema tables"
+	VschemaKeyspacesStr        = " vschema keyspaces"
 	VschemaVindexesStr         = " vschema vindexes"
 	WarningsStr                = " warnings"
 
@@ -489,7 +500,9 @@ const (
 	AddColVindexDDLAction
 	DropColVindexDDLAction
 	AddSequenceDDLAction
+	DropSequenceDDLAction
 	AddAutoIncDDLAction
+	DropAutoIncDDLAction
 	RevertDDLAction
 )
 
@@ -511,6 +524,11 @@ const (
 	NoLock Lock = iota
 	ForUpdateLock
 	ShareModeLock
+	ForShareLock
+	ForShareLockNoWait
+	ForShareLockSkipLocked
+	ForUpdateLockNoWait
+	ForUpdateLockSkipLocked
 )
 
 // Constants for Enum Type - TrimType
@@ -659,6 +677,38 @@ const (
 	NotRegexpOp
 )
 
+func Inverse(in ComparisonExprOperator) ComparisonExprOperator {
+	switch in {
+	case EqualOp:
+		return NotEqualOp
+	case LessThanOp:
+		return GreaterEqualOp
+	case GreaterThanOp:
+		return LessEqualOp
+	case LessEqualOp:
+		return GreaterThanOp
+	case GreaterEqualOp:
+		return LessThanOp
+	case NotEqualOp:
+		return EqualOp
+	case NullSafeEqualOp:
+		return NotEqualOp
+	case InOp:
+		return NotInOp
+	case NotInOp:
+		return InOp
+	case LikeOp:
+		return NotLikeOp
+	case NotLikeOp:
+		return LikeOp
+	case RegexpOp:
+		return NotRegexpOp
+	case NotRegexpOp:
+		return RegexpOp
+	}
+	panic("unreachable")
+}
+
 // Constant for Enum Type - IsExprOperator
 const (
 	IsNullOp IsExprOperator = iota
@@ -715,6 +765,8 @@ const (
 	UseOp IndexHintType = iota
 	IgnoreOp
 	ForceOp
+	UseVindexOp
+	IgnoreVindexOp
 )
 
 // Constant for Enum Type - IndexHintForType
@@ -763,8 +815,6 @@ const (
 	EmptyType ExplainType = iota
 	TreeType
 	JSONType
-	VitessType
-	VTExplainType
 	TraditionalType
 	AnalyzeType
 )
@@ -845,6 +895,7 @@ const (
 	VitessTarget
 	VitessVariables
 	VschemaTables
+	VschemaKeyspaces
 	VschemaVindexes
 	Warnings
 	Keyspace
@@ -880,6 +931,8 @@ const (
 	ThrottleAllMigrationType
 	UnthrottleMigrationType
 	UnthrottleAllMigrationType
+	ForceCutOverMigrationType
+	ForceCutOverAllMigrationType
 )
 
 // ColumnStorage constants
@@ -1025,4 +1078,12 @@ const (
 const (
 	ConnectionType KillType = iota
 	QueryType
+)
+
+const (
+	IndexTypeDefault IndexType = iota
+	IndexTypePrimary
+	IndexTypeUnique
+	IndexTypeSpatial
+	IndexTypeFullText
 )

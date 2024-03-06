@@ -49,7 +49,7 @@ func TestConvertMySQLVersion(t *testing.T) {
 
 	for _, tcase := range testcases {
 		t.Run(tcase.version, func(t *testing.T) {
-			output, err := convertMySQLVersionToCommentVersion(tcase.version)
+			output, err := ConvertMySQLVersionToCommentVersion(tcase.version)
 			if tcase.error != "" {
 				require.EqualError(t, err, tcase.error)
 			} else {

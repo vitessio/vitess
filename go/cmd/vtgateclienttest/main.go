@@ -14,46 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package main is the implementation of vtgateclienttest.
-// This program has a chain of vtgateservice.VTGateService implementations,
-// each one being responsible for one test scenario.
 package main
 
 import (
-	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/cmd/vtgateclienttest/services"
+	"vitess.io/vitess/go/cmd/vtgateclienttest/cli"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtgate"
+	"vitess.io/vitess/go/vt/log"
 )
-
-func init() {
-	servenv.RegisterDefaultFlags()
-	servenv.RegisterFlags()
-	servenv.RegisterGRPCServerFlags()
-	servenv.RegisterGRPCServerAuthFlags()
-	servenv.RegisterServiceMapFlag()
-
-	servenv.OnParse(func(fs *pflag.FlagSet) {
-		acl.RegisterFlags(fs)
-	})
-}
 
 func main() {
 	defer exit.Recover()
 
-	servenv.ParseFlags("vtgateclienttest")
-	servenv.Init()
-
-	// The implementation chain.
-	servenv.OnRun(func() {
-		s := services.CreateServices()
-		for _, f := range vtgate.RegisterVTGates {
-			f(s)
-		}
-	})
-
-	servenv.RunDefault()
+	if err := cli.Main.Execute(); err != nil {
+		log.Exitf("%s", err)
+	}
 }

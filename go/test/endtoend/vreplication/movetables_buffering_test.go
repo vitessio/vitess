@@ -14,14 +14,13 @@ import (
 func TestMoveTablesBuffering(t *testing.T) {
 	defaultRdonly = 1
 	vc = setupMinimalCluster(t)
-	defer vtgateConn.Close()
-	defer vc.TearDown(t)
+	defer vc.TearDown()
 
 	currentWorkflowType = wrangler.MoveTablesWorkflow
 	setupMinimalCustomerKeyspace(t)
 	tables := "loadtest"
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
-		tables, workflowActionCreate, "", "", "")
+		tables, workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
@@ -33,7 +32,7 @@ func TestMoveTablesBuffering(t *testing.T) {
 
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
-	vdiff1(t, ksWorkflow, "")
+	vdiffSideBySide(t, ksWorkflow, "")
 	waitForLowLag(t, "customer", workflowName)
 	tstWorkflowSwitchReads(t, "", "")
 	tstWorkflowSwitchWrites(t)
@@ -41,5 +40,4 @@ func TestMoveTablesBuffering(t *testing.T) {
 	lg.stop()
 
 	log.Infof("TestMoveTablesBuffering: done")
-	log.Flush()
 }

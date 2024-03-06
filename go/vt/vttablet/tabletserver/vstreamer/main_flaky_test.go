@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamer
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -26,16 +27,17 @@ import (
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 )
 
 var (
-	engine    *Engine
-	env       *testenv.Env
-	schemaDir string
+	engine *Engine
+	env    *testenv.Env
 
 	ignoreKeyspaceShardInFieldAndRowEvents bool
+	testRowEventFlags                      bool
 )
 
 func TestMain(m *testing.M) {
@@ -44,7 +46,9 @@ func TestMain(m *testing.M) {
 
 	exitCode := func() int {
 		var err error
-		env, err = testenv.Init()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		env, err = testenv.Init(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -63,7 +67,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func newEngine(t *testing.T, binlogRowImage string) {
+func newEngine(t *testing.T, ctx context.Context, binlogRowImage string) {
 	if engine != nil {
 		engine.Close()
 	}
@@ -71,7 +75,7 @@ func newEngine(t *testing.T, binlogRowImage string) {
 		env.Close()
 	}
 	var err error
-	env, err = testenv.Init()
+	env, err = testenv.Init(ctx)
 	require.NoError(t, err)
 
 	setBinlogRowImage(t, binlogRowImage)
@@ -87,10 +91,10 @@ func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams
 	original, err := env.Dbcfgs.AppWithDB().MysqlParams()
 	require.NoError(t, err)
 	modified := modifier(*original)
-	config := env.TabletEnv.Config().Clone()
-	config.DB = dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
+	cfg := env.TabletEnv.Config().Clone()
+	cfg.DB = dbconfigs.NewTestDBConfigs(modified, modified, modified.DbName)
 
-	engine := NewEngine(tabletenv.NewEnv(config, "VStreamerTest"), env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
+	engine := NewEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "VStreamerTest"), env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
 	engine.InitDBConfig(env.KeyspaceName, env.ShardName)
 	engine.Open()
 	return engine

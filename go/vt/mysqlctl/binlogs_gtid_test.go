@@ -85,13 +85,13 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 			name:          "last binlog excluded, no binlogs found",
 			previousGTIDs: basePreviousGTIDs,
 			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-331",
-			expectError:   "no binary logs to backup",
+			expectBinlogs: nil,
 		},
 		{
 			name:          "backup pos beyond all binlogs",
 			previousGTIDs: basePreviousGTIDs,
 			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-630000",
-			expectError:   "no binary logs to backup",
+			expectError:   "cannot find binary logs that cover requested GTID range",
 		},
 		{
 			name:          "missing GTID entries",
@@ -111,6 +111,46 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 			},
 			backupPos:   "16b1039f-0000-0000-0000-000000000000:1-63",
 			expectError: "Mismatching GTID entries",
+		},
+		{
+			name: "empty previous GTIDs in first binlog with gap, with good backup pos",
+			previousGTIDs: map[string]string{
+				"vt-bin.000001": "",
+				"vt-bin.000002": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000003": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000004": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+				"vt-bin.000005": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-243",
+				"vt-bin.000006": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-331",
+			},
+			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+			expectBinlogs: []string{"vt-bin.000004", "vt-bin.000005"},
+		},
+		{
+			name: "empty previous GTIDs in first binlog with gap, and without gtid_purged",
+			previousGTIDs: map[string]string{
+				"vt-bin.000001": "",
+				"vt-bin.000002": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000003": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000004": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+				"vt-bin.000005": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-243",
+				"vt-bin.000006": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-331",
+			},
+			backupPos:   "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-78",
+			expectError: "Mismatching GTID entries",
+		},
+		{
+			name: "empty previous GTIDs in first binlog but with proper gtid_purged",
+			previousGTIDs: map[string]string{
+				"vt-bin.000001": "",
+				"vt-bin.000002": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000003": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-60",
+				"vt-bin.000004": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-78",
+				"vt-bin.000005": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-243",
+				"vt-bin.000006": "16b1039f-22b6-11ed-b765-0a43f95f28a3:40-331",
+			},
+			backupPos:     "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-78",
+			gtidPurged:    "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-40",
+			expectBinlogs: []string{"vt-bin.000004", "vt-bin.000005"},
 		},
 		{
 			name: "empty previous GTIDs in first binlog covering backup pos",
@@ -254,13 +294,14 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.NotEmpty(t, binlogsToBackup)
 			assert.Equal(t, tc.expectBinlogs, binlogsToBackup)
-			if tc.previousGTIDs[binlogsToBackup[0]] != "" {
-				assert.Equal(t, tc.previousGTIDs[binlogsToBackup[0]], fromGTID)
+			if len(binlogsToBackup) > 0 {
+				if tc.previousGTIDs[binlogsToBackup[0]] != "" {
+					assert.Equal(t, tc.previousGTIDs[binlogsToBackup[0]], fromGTID)
+				}
+				assert.Equal(t, tc.previousGTIDs[binlogs[len(binlogs)-1]], toGTID)
+				assert.NotEqual(t, fromGTID, toGTID)
 			}
-			assert.Equal(t, tc.previousGTIDs[binlogs[len(binlogs)-1]], toGTID)
-			assert.NotEqual(t, fromGTID, toGTID)
 		})
 	}
 }

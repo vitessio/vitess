@@ -36,7 +36,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		tables := []string{"t1", "uks.unsharded"}
+		tables := []string{"t1", "tbl", "unq_idx", "nonunq_idx", "uks.unsharded"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -59,8 +59,25 @@ func TestBitVals(t *testing.T) {
 
 	mcmp.AssertMatches(`select b'1001', 0x9, B'010011011010'`, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\x04\xda")]]`)
 	mcmp.AssertMatches(`select b'1001', 0x9, B'010011011010' from t1`, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\x04\xda")]]`)
-	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
-	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
+	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+	if vtgateVersion >= 19 {
+		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[INT64(10) UINT64(11) INT64(1245)]]`)
+		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[INT64(10) UINT64(11) INT64(1245)]]`)
+	} else {
+		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
+		mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
+	}
+}
+
+// TestTimeFunctionWithPrecision tests that inserting data with NOW(1) works as intended.
+func TestTimeFunctionWithPrecision(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (1, NOW(1))")
+	mcmp.Exec("insert into t1(id1, id2) values (2, NOW(2))")
+	mcmp.Exec("insert into t1(id1, id2) values (3, NOW())")
 }
 
 func TestHexVals(t *testing.T) {
@@ -96,58 +113,6 @@ func TestInvalidDateTimeTimestampVals(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestQueryTimeoutWithDual(t *testing.T) {
-	mcmp, closer := start(t)
-	defer closer()
-
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
-	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.24) from dual")
-	assert.Error(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "set @@session.query_timeout=20")
-	require.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.04) from dual")
-	assert.Error(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(0.01) from dual")
-	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.24) from dual")
-	assert.NoError(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=10 */ sleep(0.04) from dual")
-	assert.Error(t, err)
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=15 */ sleep(0.001) from dual")
-	assert.NoError(t, err)
-}
-
-func TestQueryTimeoutWithTables(t *testing.T) {
-	mcmp, closer := start(t)
-	defer closer()
-
-	// unsharded
-	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
-	for i := 0; i < 12; i++ {
-		utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=2000 */ into uks.unsharded(id1) select id1+5 from uks.unsharded")
-	}
-
-	utils.Exec(t, mcmp.VtConn, "select count(*) from uks.unsharded where id1 > 31")
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*) from uks.unsharded where id1 > 31")
-
-	// the query usually takes more than 5ms to return. So this should fail.
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=1 */ count(*) from uks.unsharded where id1 > 31")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "context deadline exceeded")
-	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
-
-	// sharded
-	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into ks_misc.t1(id1, id2) values (1,2),(2,4),(3,6),(4,8),(5,10)")
-
-	// sleep take in seconds, so 0.1 is 100ms
-	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
-	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "context deadline exceeded")
-	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
-}
-
 // TestIntervalWithMathFunctions tests that the Interval keyword can be used with math functions.
 func TestIntervalWithMathFunctions(t *testing.T) {
 	mcmp, closer := start(t)
@@ -170,6 +135,41 @@ func TestCast(t *testing.T) {
 	mcmp.AssertMatches("select cast('3.2' as float)", `[[FLOAT32(3.2)]]`)
 	mcmp.AssertMatches("select cast('3.2' as double)", `[[FLOAT64(3.2)]]`)
 	mcmp.AssertMatches("select cast('3.2' as unsigned)", `[[UINT64(3)]]`)
+}
+
+// TestVindexHints tests that vindex hints work as intended.
+func TestVindexHints(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,0,10), (2,10,10), (3,4,20), (4,30,20), (5,40,10)")
+	mcmp.AssertMatches("select id, unq_col, nonunq_col from tbl where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", "[[INT64(2) INT64(10) INT64(10)]]")
+
+	// Verify that without any vindex hints, the query plan uses a hash vindex.
+	res, err := mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "hash")
+
+	// Now we make the query explicitly use the unique lookup vindex.
+	// We make sure the query still works.
+	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	// Verify that we are using the unq_vdx, that we requested explicitly.
+	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "unq_vdx")
+
+	// Now we make the query explicitly refuse two of the three vindexes.
+	// We make sure the query still works.
+	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	// Verify that we are using the nonunq_vdx, which is the only one left to be used.
+	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
+	require.NoError(t, err)
+	require.Contains(t, fmt.Sprintf("%v", res.Rows), "nonunq_vdx")
 }
 
 func TestOuterJoinWithPredicate(t *testing.T) {
@@ -211,10 +211,12 @@ func TestHighNumberOfParams(t *testing.T) {
 	// connect to the vitess cluster
 	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s", vtParams.Host, vtParams.Port, vtParams.DbName))
 	require.NoError(t, err)
+	defer db.Close()
 
 	// run the query
-	r, err := db.Query(fmt.Sprintf("SELECT /*vt+ QUERY_TIMEOUT_MS=10000 */ id1 FROM t1 WHERE id1 in (%s) ORDER BY id1 ASC", strings.Join(params, ", ")), vals...)
+	r, err := db.Query(fmt.Sprintf("SELECT id1 FROM t1 WHERE id1 in (%s) ORDER BY id1 ASC", strings.Join(params, ", ")), vals...)
 	require.NoError(t, err)
+	defer r.Close()
 
 	// check the results we got, we should get 5 rows with each: 0, 1, 2, 3, 4
 	// count is the row number we are currently visiting, also correspond to the
@@ -293,4 +295,79 @@ func TestBuggyOuterJoin(t *testing.T) {
 
 	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
 	mcmp.Exec("select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2")
+}
+
+func TestLeftJoinUsingUnsharded(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1) values (1),(2),(3),(4),(5)")
+	utils.Exec(t, mcmp.VtConn, "select * from uks.unsharded as A left join uks.unsharded as B using(id1)")
+}
+
+// TestAnalyze executes different analyze statement and validates that they run successfully.
+func TestAnalyze(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	for _, workload := range []string{"olap", "oltp"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", workload))
+			utils.Exec(t, mcmp.VtConn, "analyze table t1")
+			utils.Exec(t, mcmp.VtConn, "analyze table uks.unsharded")
+			utils.Exec(t, mcmp.VtConn, "analyze table mysql.user")
+		})
+	}
+}
+
+// TestTransactionModeVar executes SELECT on `transaction_mode` variable
+func TestTransactionModeVar(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	tcases := []struct {
+		setStmt string
+		expRes  string
+	}{{
+		expRes: `[[VARCHAR("MULTI")]]`,
+	}, {
+		setStmt: `set transaction_mode = single`,
+		expRes:  `[[VARCHAR("SINGLE")]]`,
+	}, {
+		setStmt: `set transaction_mode = multi`,
+		expRes:  `[[VARCHAR("MULTI")]]`,
+	}, {
+		setStmt: `set transaction_mode = twopc`,
+		expRes:  `[[VARCHAR("TWOPC")]]`,
+	}}
+
+	for _, tcase := range tcases {
+		mcmp.Run(tcase.setStmt, func(mcmp *utils.MySQLCompare) {
+			if tcase.setStmt != "" {
+				utils.Exec(t, mcmp.VtConn, tcase.setStmt)
+			}
+			utils.AssertMatches(t, mcmp.VtConn, "select @@transaction_mode", tcase.expRes)
+		})
+	}
+}
+
+// TestAliasesInOuterJoinQueries tests that aliases work in queries that have outer join clauses.
+func TestAliasesInOuterJoinQueries(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert data into the 2 tables
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,2,3), (2,5,3), (3, 42, 2)")
+
+	// Check that the select query works as intended and then run it again verifying the column names as well.
+	mcmp.AssertMatches("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col", `[[INT64(1) INT64(1) INT64(42)] [INT64(5) INT64(5) NULL] [INT64(42) INT64(42) NULL]]`)
+	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col")
+
+	mcmp.AssertMatches("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2", `[[INT64(1) INT64(1) INT64(42)] [INT64(42) INT64(42) NULL]]`)
+	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2")
 }

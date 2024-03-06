@@ -17,16 +17,15 @@ limitations under the License.
 package operators
 
 import (
-	"golang.org/x/exp/slices"
+	"fmt"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -53,7 +52,7 @@ type ShardedRouting struct {
 
 var _ Routing = (*ShardedRouting)(nil)
 
-func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
+func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.Table, id semantics.TableSet) Routing {
 	routing := &ShardedRouting{
 		RouteOpCode: engine.Scatter,
 		keyspace:    vtable.Keyspace,
@@ -78,7 +77,33 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 		}
 
 	}
+	// Find the tableInfo for the given id
+	ti, err := ctx.SemTable.TableInfoFor(id)
+	if err != nil {
+		panic(err)
+	}
+
+	// If the tableInfo is a realTable, then get the vindexHint from it.
+	var vindexHint *sqlparser.IndexHint
+	rt, isRt := ti.(*semantics.RealTable)
+	if isRt {
+		vindexHint = rt.GetVindexHint()
+	}
 	for _, columnVindex := range vtable.ColumnVindexes {
+		if vindexHint != nil {
+			switch vindexHint.Type {
+			case sqlparser.UseVindexOp:
+				// For a USE VINDEX type vindex hint, we want to skip any vindex that isn't in the indexes list.
+				if !indexesContains(vindexHint.Indexes, columnVindex.Name) {
+					continue
+				}
+			case sqlparser.IgnoreVindexOp:
+				// For a IGNORE VINDEX type vindex hint, we want to skip any vindex that is in the indexes list.
+				if indexesContains(vindexHint.Indexes, columnVindex.Name) {
+					continue
+				}
+			}
+		}
 		// ignore any backfilling vindexes from vindex selection.
 		if columnVindex.IsBackfilling() {
 			continue
@@ -86,6 +111,13 @@ func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 		routing.VindexPreds = append(routing.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: id})
 	}
 	return routing
+}
+
+// indexesContains is a helper function that returns whether a given string is part of the IdentifierCI list.
+func indexesContains(indexes []sqlparser.IdentifierCI, name string) bool {
+	return slices.ContainsFunc(indexes, func(ci sqlparser.IdentifierCI) bool {
+		return ci.EqualString(name)
+	})
 }
 
 func (tr *ShardedRouting) isScatter() bool {
@@ -98,28 +130,23 @@ func (tr *ShardedRouting) isScatter() bool {
 //     This can sometimes push a predicate to the top, so it's not hiding inside an OR
 //  2. If that is not enough, an additional rewrite pass is performed where we try to
 //     turn ORs into IN, which is easier for the planner to plan
-func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable *QueryTable) (Routing, error) {
+func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable *QueryTable) Routing {
 	oldPredicates := queryTable.Predicates
 	queryTable.Predicates = nil
 	tr.SeenPredicates = nil
 	var routing Routing = tr
-	var err error
 	for _, pred := range oldPredicates {
 		rewritten := sqlparser.RewritePredicate(pred)
 		predicates := sqlparser.SplitAndExpression(nil, rewritten.(sqlparser.Expr))
 		for _, predicate := range predicates {
 			queryTable.Predicates = append(queryTable.Predicates, predicate)
-
-			routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-			if err != nil {
-				return nil, err
-			}
+			routing = UpdateRoutingLogic(ctx, predicate, routing)
 		}
 	}
 
 	// If we have something other than a sharded routing with scatter, we are done
 	if sr, ok := routing.(*ShardedRouting); !ok || !sr.isScatter() {
-		return routing, nil
+		return routing
 	}
 
 	// if we _still_ haven't found a better route, we can run this additional rewrite on any ORs we have
@@ -129,23 +156,19 @@ func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTabl
 			continue
 		}
 		for _, predicate := range sqlparser.ExtractINFromOR(or) {
-			routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-			if err != nil {
-				return nil, err
-			}
+			routing = UpdateRoutingLogic(ctx, predicate, routing)
 		}
 	}
 
-	return routing, nil
+	return routing
 }
 
-func (tr *ShardedRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+func (tr *ShardedRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.Keyspace = tr.keyspace
 	if tr.Selected != nil {
 		rp.Vindex = tr.Selected.FoundVindex
 		rp.Values = tr.Selected.Values
 	}
-	return nil
 }
 
 func (tr *ShardedRouting) Clone() Routing {
@@ -155,7 +178,7 @@ func (tr *ShardedRouting) Clone() Routing {
 		selected = &t
 	}
 	return &ShardedRouting{
-		VindexPreds: slices2.Map(tr.VindexPreds, func(from *VindexPlusPredicates) *VindexPlusPredicates {
+		VindexPreds: slice.Map(tr.VindexPreds, func(from *VindexPlusPredicates) *VindexPlusPredicates {
 			// we do this to create a copy of the struct
 			p := *from
 			return &p
@@ -167,17 +190,13 @@ func (tr *ShardedRouting) Clone() Routing {
 	}
 }
 
-func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
 	tr.SeenPredicates = append(tr.SeenPredicates, expr)
 
-	newRouting, newVindexFound, err := tr.searchForNewVindexes(ctx, expr)
-	if err != nil {
-		return nil, err
-	}
-
+	newRouting, newVindexFound := tr.searchForNewVindexes(ctx, expr)
 	if newRouting != nil {
 		// we found something that we can route with something other than ShardedRouting
-		return newRouting, nil
+		return newRouting
 	}
 
 	// if we didn't open up any new vindex Options, no need to enter here
@@ -185,10 +204,10 @@ func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, e
 		tr.PickBestAvailableVindex()
 	}
 
-	return tr, nil
+	return tr
 }
 
-func (tr *ShardedRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
+func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
 	tr.RouteOpCode = engine.Scatter
 	tr.Selected = nil
 	for i, vp := range tr.VindexPreds {
@@ -197,31 +216,14 @@ func (tr *ShardedRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (R
 
 	var routing Routing = tr
 	for _, predicate := range tr.SeenPredicates {
-		var err error
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-		if err != nil {
-			return nil, err
-		}
+		routing = UpdateRoutingLogic(ctx, predicate, routing)
 	}
-	return routing, nil
+	return routing
 }
 
-func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool, error) {
+func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool) {
 	newVindexFound := false
 	switch node := predicate.(type) {
-	case *sqlparser.ExtractedSubquery:
-		originalCmp, ok := node.Original.(*sqlparser.ComparisonExpr)
-		if !ok {
-			break
-		}
-
-		// using the node.subquery which is the rewritten version of our subquery
-		cmp := &sqlparser.ComparisonExpr{
-			Left:     node.OtherSide,
-			Right:    &sqlparser.Subquery{Select: node.Subquery.Select},
-			Operator: originalCmp.Operator,
-		}
-		return tr.planComparison(ctx, cmp)
 	case *sqlparser.ComparisonExpr:
 		return tr.planComparison(ctx, node)
 
@@ -230,23 +232,23 @@ func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext,
 		newVindexFound = newVindexFound || found
 	}
 
-	return nil, newVindexFound, nil
+	return nil, newVindexFound
 }
 
-func (tr *ShardedRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (routing Routing, foundNew bool, err error) {
+func (tr *ShardedRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (routing Routing, foundNew bool) {
 	switch cmp.Operator {
 	case sqlparser.EqualOp:
 		found := tr.planEqualOp(ctx, cmp)
-		return nil, found, nil
+		return nil, found
 	case sqlparser.InOp:
 		found := tr.planInOp(ctx, cmp)
-		return nil, found, nil
+		return nil, found
 	case sqlparser.LikeOp:
 		found := tr.planLikeOp(ctx, cmp)
-		return nil, found, nil
+		return nil, found
 
 	}
-	return nil, false, nil
+	return nil, false
 }
 
 func (tr *ShardedRouting) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsExpr) bool {
@@ -290,13 +292,13 @@ func (tr *ShardedRouting) planInOp(ctx *plancontext.PlanningContext, cmp *sqlpar
 		opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.IN }
 		return tr.haveMatchingVindex(ctx, cmp, vdValue, left, value, opcode, justTheVindex)
 	case sqlparser.ValTuple:
-		right, rightIsValTuple := cmp.Right.(sqlparser.ValTuple)
-		if !rightIsValTuple {
-			return false
+		switch right := cmp.Right.(type) {
+		case sqlparser.ValTuple:
+			return tr.planCompositeInOpRecursive(ctx, cmp, left, right, nil)
+		case sqlparser.ListArg:
+			return tr.planCompositeInOpArg(ctx, cmp, left, right)
 		}
-		return tr.planCompositeInOpRecursive(ctx, cmp, left, right, nil)
 	}
-
 	return false
 }
 
@@ -327,7 +329,7 @@ func (tr *ShardedRouting) Cost() int {
 	switch tr.RouteOpCode {
 	case engine.EqualUnique:
 		return 1
-	case engine.Equal:
+	case engine.Equal, engine.SubShard:
 		return 5
 	case engine.IN:
 		return 10
@@ -379,7 +381,6 @@ func (tr *ShardedRouting) haveMatchingVindex(
 		switch v.ColVindex.Vindex.(type) {
 		case vindexes.SingleColumn:
 			newVindexFound = tr.processSingleColumnVindex(node, valueExpr, column, value, opcode, vfunc, v, newVindexFound)
-
 		case vindexes.MultiColumn:
 			newVindexFound = tr.processMultiColumnVindex(node, valueExpr, column, value, opcode, vfunc, v, newVindexFound)
 		}
@@ -409,15 +410,19 @@ func (tr *ShardedRouting) processSingleColumnVindex(
 		return newVindexFound
 	}
 
-	vindexPlusPredicates.Options = append(vindexPlusPredicates.Options, &VindexOption{
+	vo := &VindexOption{
 		Values:      []evalengine.Expr{value},
-		ValueExprs:  []sqlparser.Expr{valueExpr},
 		Predicates:  []sqlparser.Expr{node},
 		OpCode:      routeOpcode,
 		FoundVindex: vindex,
 		Cost:        costFor(vindexPlusPredicates.ColVindex, routeOpcode),
 		Ready:       true,
-	})
+	}
+	if valueExpr != nil {
+		vo.ValueExprs = []sqlparser.Expr{valueExpr}
+	}
+	vindexPlusPredicates.Options = append(vindexPlusPredicates.Options, vo)
+
 	return true
 }
 
@@ -546,6 +551,40 @@ func (tr *ShardedRouting) planCompositeInOpRecursive(
 	return foundVindex
 }
 
+func (tr *ShardedRouting) planCompositeInOpArg(
+	ctx *plancontext.PlanningContext,
+	cmp *sqlparser.ComparisonExpr,
+	left sqlparser.ValTuple,
+	right sqlparser.ListArg,
+) bool {
+	foundVindex := false
+	for idx, expr := range left {
+		col, ok := expr.(*sqlparser.ColName)
+		if !ok {
+			continue
+		}
+
+		// check if left col is a vindex
+		if !tr.hasVindex(col) {
+			continue
+		}
+
+		value := &evalengine.TupleBindVariable{
+			Key:   right.String(),
+			Index: idx,
+		}
+		if typ, found := ctx.SemTable.TypeForExpr(col); found {
+			value.Type = typ.Type()
+			value.Collation = typ.Collation()
+		}
+
+		opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.MultiEqual }
+		newVindex := tr.haveMatchingVindex(ctx, cmp, nil, col, value, opcode, justTheVindex)
+		foundVindex = newVindex || foundVindex
+	}
+	return foundVindex
+}
+
 func (tr *ShardedRouting) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range tr.VindexPreds {
 		for _, col := range v.ColVindex.Columns {
@@ -555,29 +594,6 @@ func (tr *ShardedRouting) hasVindex(column *sqlparser.ColName) bool {
 		}
 	}
 	return false
-}
-
-// Reset all vindex predicates on this route and re-build their options from
-// the list of seen routing predicates.
-func (tr *ShardedRouting) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
-	tr.RouteOpCode = engine.Scatter
-	tr.Selected = nil
-	for i, vp := range tr.VindexPreds {
-		tr.VindexPreds[i] = &VindexPlusPredicates{ColVindex: vp.ColVindex, TableID: vp.TableID}
-	}
-
-	var routing Routing = tr
-	for _, predicate := range tr.SeenPredicates {
-		var err error
-		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-		if err != nil {
-			return err
-		}
-	}
-	if routing != tr {
-		return vterrors.VT13001("uh-oh. we ended up with a different type of routing")
-	}
-	return nil
 }
 
 func (tr *ShardedRouting) SelectedVindex() vindexes.Vindex {
@@ -594,7 +610,36 @@ func (tr *ShardedRouting) VindexExpressions() []sqlparser.Expr {
 	return tr.Selected.ValueExprs
 }
 
-func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, routeB *Route, m merger, joinPredicates []sqlparser.Expr) (ops.Operator, error) {
+func (tr *ShardedRouting) extraInfo() string {
+	if tr.Selected == nil {
+		return fmt.Sprintf(
+			"Seen:[%s]",
+			sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
+		)
+	}
+
+	if len(tr.Selected.ValueExprs) == 0 {
+		return fmt.Sprintf(
+			"Vindex[%s] Seen:[%s]",
+			tr.Selected.FoundVindex.String(),
+			sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
+		)
+	}
+
+	return fmt.Sprintf(
+		"Vindex[%s] Values[%s] Seen:[%s]",
+		tr.Selected.FoundVindex.String(),
+		sqlparser.String(sqlparser.Exprs(tr.Selected.ValueExprs)),
+		sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
+	)
+}
+
+func tryMergeJoinShardedRouting(
+	ctx *plancontext.PlanningContext,
+	routeA, routeB *Route,
+	m merger,
+	joinPredicates []sqlparser.Expr,
+) *Route {
 	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
 	tblA := routeA.Routing.(*ShardedRouting)
 	tblB := routeB.Routing.(*ShardedRouting)
@@ -608,7 +653,7 @@ func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, rou
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
 			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return m.mergeTables(tblA, tblB, routeA, routeB)
+				return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
 			}
 		}
 
@@ -621,44 +666,29 @@ func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, rou
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
 			// no join predicates - no vindex
-			return nil, nil
+			return nil
 		}
 
 		if !sameKeyspace {
-			return nil, vterrors.VT12001("cross-shard correlated subquery")
+			panic(vterrors.VT12001("cross-shard correlated subquery"))
 		}
 
 		canMerge := canMergeOnFilters(ctx, routeA, routeB, joinPredicates)
 		if !canMerge {
-			return nil, nil
+			return nil
 		}
-		return m.mergeTables(tblA, tblB, routeA, routeB)
+		return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
 	}
-	return nil, nil
+	return nil
 }
 
 // makeEvalEngineExpr transforms the given sqlparser.Expr into an evalengine expression
 func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) evalengine.Expr {
-	if ctx.IsSubQueryToReplace(n) {
-		return nil
-	}
-
 	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
-		if subq, isSubq := expr.(*sqlparser.Subquery); isSubq {
-			extractedSubquery := ctx.SemTable.FindSubqueryReference(subq)
-			if extractedSubquery == nil {
-				continue
-			}
-			switch popcode.PulloutOpcode(extractedSubquery.OpCode) {
-			case popcode.PulloutIn, popcode.PulloutNotIn:
-				expr = sqlparser.NewListArg(extractedSubquery.GetArgName())
-			case popcode.PulloutValue, popcode.PulloutExists:
-				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
-			}
-		}
 		ee, _ := evalengine.Translate(expr, &evalengine.Config{
 			Collation:   ctx.SemTable.Collation,
 			ResolveType: ctx.SemTable.TypeForExpr,
+			Environment: ctx.VSchema.Environment(),
 		})
 		if ee != nil {
 			return ee

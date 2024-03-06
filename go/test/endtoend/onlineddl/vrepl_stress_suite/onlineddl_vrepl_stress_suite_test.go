@@ -40,18 +40,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/schema"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vttablet"
 )
 
 type testcase struct {
@@ -436,6 +436,9 @@ func TestMain(m *testing.M) {
 			"--migration_check_interval", "5s",
 			"--vstream_packet_size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
 			"--watch_replication_stream",
+			// Test VPlayer batching mode.
+			fmt.Sprintf("--vreplication_experimental_flags=%d",
+				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -550,10 +553,10 @@ func TestSchemaChange(t *testing.T) {
 func testWithInitialSchema(t *testing.T) {
 	// Create the stress table
 	for _, statement := range cleanupStatements {
-		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, statement)
+		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, statement)
 		require.Nil(t, err)
 	}
-	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, createStatement)
+	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, createStatement)
 	require.Nil(t, err)
 
 	// Check if table is created
@@ -569,7 +572,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
+		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)

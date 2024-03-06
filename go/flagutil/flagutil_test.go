@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStringList(t *testing.T) {
@@ -37,12 +39,9 @@ func TestStringList(t *testing.T) {
 			t.Errorf("v.Set(%v): %v", in, err)
 			continue
 		}
-		if strings.Join(p, ".") != out {
-			t.Errorf("want %#v, got %#v", strings.Split(out, "."), p)
-		}
-		if p.String() != in {
-			t.Errorf("v.String(): want %#v, got %#v", in, p.String())
-		}
+		assert.Equal(t, out, strings.Join(p, "."))
+		assert.Equal(t, in, p.String())
+
 	}
 }
 
@@ -105,4 +104,18 @@ func TestStringMap(t *testing.T) {
 			t.Errorf("v.String(): want %#v, got %#v", want.in, vs)
 		}
 	}
+}
+
+func TestStringListValue(t *testing.T) {
+	strListVal := StringListValue{"temp", "val"}
+	require.Equal(t, []string([]string{"temp", "val"}), strListVal.Get())
+	require.Equal(t, "strings", strListVal.Type())
+}
+
+func TestStringMapValue(t *testing.T) {
+	strMapVal := StringMapValue{
+		"key": "val",
+	}
+	require.Equal(t, "StringMap", strMapVal.Type())
+	require.Equal(t, map[string]string(map[string]string{"key": "val"}), strMapVal.Get())
 }

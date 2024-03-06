@@ -17,31 +17,16 @@ limitations under the License.
 
 package collations
 
-import hack "vitess.io/vitess/go/hack"
+import (
+	"math"
+	"reflect"
+	"unsafe"
 
-type cachedObject interface {
-	CachedSize(alloc bool) int64
-}
+	hack "vitess.io/vitess/go/hack"
+)
 
-func (cached *eightbitWildcard) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(32)
-	}
-	// field sort *[256]byte
-	if cached.sort != nil {
-		size += hack.RuntimeAllocSize(int64(cap(*cached.sort)))
-	}
-	// field pattern []int16
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.pattern)) * int64(2))
-	}
-	return size
-}
-func (cached *fastMatcher) CachedSize(alloc bool) int64 {
+//go:nocheckptr
+func (cached *Environment) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -49,27 +34,78 @@ func (cached *fastMatcher) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field pattern []byte
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.pattern)))
-	}
-	return size
-}
-func (cached *unicodeWildcard) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
+	// field byName map[string]vitess.io/vitess/go/mysql/collations.ID
+	if cached.byName != nil {
 		size += int64(48)
+		hmap := reflect.ValueOf(cached.byName)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 160))
+		if len(cached.byName) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 160))
+		}
+		for k := range cached.byName {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+		}
 	}
-	// field charset vitess.io/vitess/go/mysql/collations/charset/types.Charset
-	if cc, ok := cached.charset.(cachedObject); ok {
-		size += cc.CachedSize(true)
+	// field byCharset map[string]*vitess.io/vitess/go/mysql/collations.colldefaults
+	if cached.byCharset != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.byCharset)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
+		if len(cached.byCharset) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
+		}
+		for k, v := range cached.byCharset {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			if v != nil {
+				size += hack.RuntimeAllocSize(int64(4))
+			}
+		}
 	}
-	// field pattern []rune
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.pattern)) * int64(4))
+	// field byCharsetName map[vitess.io/vitess/go/mysql/collations.ID]string
+	if cached.byCharsetName != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.byCharsetName)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 160))
+		if len(cached.byCharsetName) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 160))
+		}
+		for _, v := range cached.byCharsetName {
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
+	// field unsupported map[string]vitess.io/vitess/go/mysql/collations.ID
+	if cached.unsupported != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.unsupported)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 160))
+		if len(cached.unsupported) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 160))
+		}
+		for k := range cached.unsupported {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+		}
+	}
+	// field byID map[vitess.io/vitess/go/mysql/collations.ID]string
+	if cached.byID != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.byID)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 160))
+		if len(cached.byID) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 160))
+		}
+		for _, v := range cached.byID {
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
 	}
 	return size
 }
