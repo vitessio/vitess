@@ -89,7 +89,7 @@ func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result stri
 		vtctl.Binary,
 		filterDoubleDashArgs(args, vtctl.VtctlMajorVersion)...,
 	)
-	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Info(fmt.Sprintf("Executing vtctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	resultByte, err := tmpProcess.CombinedOutput()
 	return filterResultForWarning(filterResultWhenRunsForCoverage(string(resultByte))), err
 }
@@ -107,7 +107,7 @@ func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
 		vtctl.Binary,
 		filterDoubleDashArgs(args, vtctl.VtctlMajorVersion)...,
 	)
-	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Info(fmt.Sprintf("Executing vtctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }
 
