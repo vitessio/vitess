@@ -3343,6 +3343,10 @@ var (
 			output: "create table t (\n\tpk int\n) ENGINE InnoDB DEFAULT CHARSET binary",
 		},
 		{
+			input:  "CREATE TABLE `t` (pk int) ENGINE=InnoDB DEFAULT CHARACTER SET=binary;",
+			output: "create table t (\n\tpk int\n) ENGINE InnoDB DEFAULT CHARACTER SET binary",
+		},
+		{
 			input:  "CREATE TABLE test (\n  data varchar(5) NULL DEFAULT _utf8 \"KZPVD\"\n) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8mb4 DEFAULT COLLATE = UTF8MB4_BIN;",
 			output: "create table test (\n\t`data` varchar(5) default _utf8mb3 'KZPVD'\n) ENGINE InnoDB DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE UTF8MB4_BIN",
 		}, {
