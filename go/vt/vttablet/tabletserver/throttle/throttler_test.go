@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -48,6 +49,8 @@ const (
 type fakeTMClient struct {
 	tmclient.TabletManagerClient
 	appNames []string
+
+	mu sync.Mutex
 }
 
 func (c *fakeTMClient) Close() {
@@ -60,8 +63,16 @@ func (c *fakeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Ta
 		Threshold:       1,
 		RecentlyChecked: false,
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.appNames = append(c.appNames, request.AppName)
 	return resp, nil
+}
+
+func (c *fakeTMClient) AppNames() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.appNames
 }
 
 type FakeTopoServer struct {
@@ -388,7 +399,7 @@ func TestProbesWhileOperating(t *testing.T) {
 
 	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
 	require.True(t, ok)
-	assert.Empty(t, tmClient.appNames)
+	assert.Empty(t, tmClient.AppNames())
 
 	t.Run("aggregated", func(t *testing.T) {
 		assert.Equal(t, 0, throttler.aggregatedMetrics.ItemCount())
@@ -412,11 +423,11 @@ func TestProbesWhileOperating(t *testing.T) {
 					assert.Failf(t, "unknown clusterName", "%v", clusterName)
 				}
 			}
-			assert.NotEmpty(t, tmClient.appNames)
+			assert.NotEmpty(t, tmClient.AppNames())
 			// The throttler here emulates a PRIMARY tablet, and therefore should probe the replicas using
 			// the "vitess" app name.
 			uniqueNames := map[string]int{}
-			for _, appName := range tmClient.appNames {
+			for _, appName := range tmClient.AppNames() {
 				uniqueNames[appName]++
 			}
 			// PRIMARY throttler probes replicas with empty app name, which is then
@@ -539,10 +550,10 @@ func TestReplica(t *testing.T) {
 
 	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
 	require.True(t, ok)
-	assert.Empty(t, tmClient.appNames)
+	assert.Empty(t, tmClient.AppNames())
 
 	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
-		assert.Empty(t, tmClient.appNames)
+		assert.Empty(t, tmClient.AppNames())
 		flags := &CheckFlags{}
 		throttler.CheckByType(ctx, throttlerapp.VitessName.String(), "", flags, ThrottleCheckSelf)
 		go func() {
@@ -550,16 +561,17 @@ func TestReplica(t *testing.T) {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")
 			case <-time.After(time.Second):
-				assert.Empty(t, tmClient.appNames)
+				assert.Empty(t, tmClient.AppNames())
 			}
 			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", flags, ThrottleCheckSelf)
 			select {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")
 			case <-time.After(time.Second):
-				assert.NotEmpty(t, tmClient.appNames)
-				assert.Containsf(t, tmClient.appNames, throttlerapp.ThrottlerStimulatorName.String(), "%+v", tmClient.appNames)
-				assert.Equalf(t, 1, len(tmClient.appNames), "%+v", tmClient.appNames)
+				appNames := tmClient.AppNames()
+				assert.NotEmpty(t, appNames)
+				assert.Containsf(t, appNames, throttlerapp.ThrottlerStimulatorName.String(), "%+v", appNames)
+				assert.Equalf(t, 1, len(appNames), "%+v", appNames)
 			}
 			throttler.CheckByType(ctx, throttlerapp.OnlineDDLName.String(), "", flags, ThrottleCheckSelf)
 			select {
@@ -567,7 +579,8 @@ func TestReplica(t *testing.T) {
 				require.FailNow(t, "context expired before testing completed")
 			case <-time.After(time.Second):
 				// Due to stimulation rate limiting, we shouldn't see a 2nd CheckThrottler request.
-				assert.Equalf(t, 1, len(tmClient.appNames), "%+v", tmClient.appNames)
+				appNames := tmClient.AppNames()
+				assert.Equalf(t, 1, len(appNames), "%+v", appNames)
 			}
 			cancel() // end test early
 		}()
