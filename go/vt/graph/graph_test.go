@@ -90,11 +90,12 @@ func TestIntegerGraph(t *testing.T) {
 // TestStringGraph tests that a graph with strings can be created and all graph functions work as intended.
 func TestStringGraph(t *testing.T) {
 	testcases := []struct {
-		name          string
-		edges         [][2]string
-		wantedGraph   string
-		wantEmpty     bool
-		wantHasCycles bool
+		name              string
+		edges             [][2]string
+		wantedGraph       string
+		wantEmpty         bool
+		wantHasCycles     bool
+		wantCycleVertices []string
 	}{
 		{
 			name:          "empty graph",
@@ -135,8 +136,9 @@ C -
 D - E
 E - F
 F - A`,
-			wantEmpty:     false,
-			wantHasCycles: true,
+			wantEmpty:         false,
+			wantHasCycles:     true,
+			wantCycleVertices: []string{"A", "D"},
 		},
 	}
 	for _, tt := range testcases {
@@ -148,6 +150,7 @@ F - A`,
 			require.Equal(t, tt.wantedGraph, graph.PrintGraph())
 			require.Equal(t, tt.wantEmpty, graph.Empty())
 			require.Equal(t, tt.wantHasCycles, graph.HasCycles())
+			require.Equal(t, tt.wantCycleVertices, graph.GetCycleVertices())
 		})
 	}
 }

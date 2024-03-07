@@ -24,13 +24,15 @@ import (
 
 // Graph is a generic graph implementation.
 type Graph[C comparable] struct {
-	edges map[C][]C
+	edges        map[C][]C
+	orderedEdged []C
 }
 
 // NewGraph creates a new graph for the given comparable type.
 func NewGraph[C comparable]() *Graph[C] {
 	return &Graph[C]{
-		edges: map[C][]C{},
+		edges:        map[C][]C{},
+		orderedEdged: []C{},
 	}
 }
 
@@ -41,6 +43,7 @@ func (gr *Graph[C]) AddVertex(vertex C) {
 		return
 	}
 	gr.edges[vertex] = []C{}
+	gr.orderedEdged = append(gr.orderedEdged, vertex)
 }
 
 // AddEdge adds an edge to the given Graph.
@@ -92,6 +95,30 @@ func (gr *Graph[C]) HasCycles() bool {
 		}
 	}
 	return false
+}
+
+// HasCycles checks whether the given graph has a cycle or not.
+// We are using a well-known DFS based colouring algorithm to check for cycles.
+// Look at https://cp-algorithms.com/graph/finding-cycle.html for more details on the algorithm.
+func (gr *Graph[C]) GetCycleVertices() (vertices []C) {
+	// If the graph is empty, then we don't need to check anything.
+	if gr.Empty() {
+		return nil
+	}
+	// Initialize the coloring map.
+	// 0 represents white.
+	// 1 represents grey.
+	// 2 represents black.
+	color := map[C]int{}
+	for _, vertex := range gr.orderedEdged {
+		// If any vertex is still white, we initiate a new DFS.
+		if color[vertex] == 0 {
+			if gr.hasCyclesDfs(color, vertex) {
+				vertices = append(vertices, vertex)
+			}
+		}
+	}
+	return vertices
 }
 
 // hasCyclesDfs is a utility function for checking for cycles in a graph.
