@@ -27,7 +27,6 @@ import (
 // it does it's work after visiting the children (up), since the children types is often needed to type a node.
 type typer struct {
 	m            map[sqlparser.Expr]evalengine.Type
-	tc           *tableCollector
 	collationEnv *collations.Environment
 }
 

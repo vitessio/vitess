@@ -40,6 +40,8 @@ func r(names, types string, rows ...string) *sqltypes.Result {
 		} else {
 			f.Charset = collations.CollationBinaryID
 		}
+		_, flags := sqltypes.TypeToMySQL(f.Type)
+		f.Flags = uint32(flags)
 	}
 	return sqltypes.MakeTestResult(fields, rows...)
 }
@@ -187,7 +189,7 @@ func TestConcatenateTypes(t *testing.T) {
 		{t1: "int32", t2: "varchar", expected: `[name:"id" type:varchar charset:255]`},
 		{t1: "int32", t2: "decimal", expected: `[name:"id" type:decimal charset:63]`},
 		{t1: "hexval", t2: "uint64", expected: `[name:"id" type:varchar charset:255]`},
-		{t1: "varchar", t2: "varbinary", expected: `[name:"id" type:varbinary charset:63]`},
+		{t1: "varchar", t2: "varbinary", expected: `[name:"id" type:varbinary charset:63 flags:128]`},
 	}
 
 	for _, test := range tests {
