@@ -7240,6 +7240,10 @@ charset:
 {
     $$ = string($1)
 }
+| BINARY
+{
+    $$ = string($1)
+}
 
 underscore_charsets:
   UNDERSCORE_ARMSCII8
