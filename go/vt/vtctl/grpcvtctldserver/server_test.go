@@ -6150,6 +6150,211 @@ func TestGetShard(t *testing.T) {
 	}
 }
 
+func TestGetShardReplication(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                   string
+		shardReplicationByCell map[string]map[string]map[string]*topodatapb.ShardReplication
+		topoError              error
+		req                    *vtctldatapb.GetShardReplicationRequest
+		expected               *vtctldatapb.GetShardReplicationResponse
+		shouldErr              bool
+	}{
+		{
+			name: "success",
+			shardReplicationByCell: map[string]map[string]map[string]*topodatapb.ShardReplication{
+				"zone1": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+							},
+						},
+					},
+				},
+				"zone2": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.GetShardReplicationRequest{
+				Keyspace: "ks1",
+				Shard:    "0",
+			},
+			expected: &vtctldatapb.GetShardReplicationResponse{
+				ShardReplicationByCell: map[string]*topodatapb.ShardReplication{
+					"zone1": {
+						Nodes: []*topodatapb.ShardReplication_Node{
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+						},
+					},
+					"zone2": {
+						Nodes: []*topodatapb.ShardReplication_Node{
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "cell filtering",
+			shardReplicationByCell: map[string]map[string]map[string]*topodatapb.ShardReplication{
+				"zone1": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+							},
+						},
+					},
+				},
+				"zone2": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.GetShardReplicationRequest{
+				Keyspace: "ks1",
+				Shard:    "0",
+				Cells:    []string{"zone2"},
+			},
+			expected: &vtctldatapb.GetShardReplicationResponse{
+				ShardReplicationByCell: map[string]*topodatapb.ShardReplication{
+					"zone2": {
+						Nodes: []*topodatapb.ShardReplication_Node{
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+							{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "all cells topo down",
+			shardReplicationByCell: map[string]map[string]map[string]*topodatapb.ShardReplication{
+				"zone1": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+							},
+						},
+					},
+				},
+				"zone2": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.GetShardReplicationRequest{
+				Keyspace: "ks1",
+				Shard:    "0",
+			},
+			topoError: errors.New("topo down for testing"),
+			shouldErr: true,
+		},
+		{
+			name: "cell filtering topo down",
+			shardReplicationByCell: map[string]map[string]map[string]*topodatapb.ShardReplication{
+				"zone1": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}},
+							},
+						},
+					},
+				},
+				"zone2": {
+					"ks1": {
+						"0": &topodatapb.ShardReplication{
+							Nodes: []*topodatapb.ShardReplication_Node{
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}},
+								{TabletAlias: &topodatapb.TabletAlias{Cell: "zone2", Uid: 201}},
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.GetShardReplicationRequest{
+				Keyspace: "ks1",
+				Shard:    "0",
+				Cells:    []string{"zone2"},
+			},
+			topoError: errors.New("topo down for testing"),
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cells := make([]string, 0, len(tt.shardReplicationByCell))
+			for cell := range tt.shardReplicationByCell {
+				cells = append(cells, cell)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ts, factory := memorytopo.NewServerAndFactory(ctx, cells...)
+
+			for cell, shardReplication := range tt.shardReplicationByCell {
+				for ks, shardRepl := range shardReplication {
+					for shard, repl := range shardRepl {
+						err := ts.UpdateShardReplicationFields(ctx, cell, ks, shard, func(sr *topodatapb.ShardReplication) error {
+							sr.Nodes = repl.Nodes
+							return nil
+						})
+						require.NoError(t, err, "UpdateShardReplicationFields(%s, %s, %s, %+v) failed", cell, ks, shard, repl)
+					}
+				}
+			}
+
+			if tt.topoError != nil {
+				factory.SetError(tt.topoError)
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			resp, err := vtctld.GetShardReplication(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	t.Parallel()
 

@@ -1025,6 +1025,9 @@ func testScheduler(t *testing.T) {
 			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion --retain-artifacts=1s", "vtctl", "", "", true)) // skip wait
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 		})
+		t.Run("wait for ready_to_complete", func(t *testing.T) {
+			waitForReadyToComplete(t, t1uuid, true)
+		})
 		var artifacts []string
 		t.Run("validate artifact exists", func(t *testing.T) {
 			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
@@ -2512,7 +2515,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.Nil(t, err)
-	return assert.Equal(t, expectCount, len(queryResult.Rows))
+	return assert.Equalf(t, expectCount, len(queryResult.Rows), "checkTablesCount cannot find table like '%%%s%%'", showTableName)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration

@@ -40,13 +40,16 @@ type (
 	}
 
 	scope struct {
-		parent    *scope
-		stmt      sqlparser.Statement
-		tables    []TableInfo
-		isUnion   bool
-		joinUsing map[string]TableSet
-		stmtScope bool
-		ctes      map[string]*sqlparser.CommonTableExpr
+		parent       *scope
+		stmt         sqlparser.Statement
+		tables       []TableInfo
+		isUnion      bool
+		joinUsing    map[string]TableSet
+		stmtScope    bool
+		ctes         map[string]*sqlparser.CommonTableExpr
+		inGroupBy    bool
+		inHaving     bool
+		inHavingAggr bool
 	}
 )
 
@@ -76,9 +79,19 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		return s.addColumnInfoForOrderBy(cursor, node)
 	case sqlparser.GroupBy:
 		return s.addColumnInfoForGroupBy(cursor, node)
+	case sqlparser.AggrFunc:
+		if !s.currentScope().inHaving {
+			break
+		}
+		s.currentScope().inHavingAggr = true
 	case *sqlparser.Where:
 		if node.Type == sqlparser.HavingClause {
-			return s.createSpecialScopePostProjection(cursor.Parent())
+			err := s.createSpecialScopePostProjection(cursor.Parent())
+			if err != nil {
+				return err
+			}
+			s.currentScope().inHaving = true
+			return nil
 		}
 	}
 	return nil
@@ -97,10 +110,12 @@ func (s *scoper) addColumnInfoForGroupBy(cursor *sqlparser.Cursor, node sqlparse
 	if err != nil {
 		return err
 	}
+	currentScope := s.currentScope()
+	currentScope.inGroupBy = true
 	for _, expr := range node {
 		lit := keepIntLiteral(expr)
 		if lit != nil {
-			s.specialExprScopes[lit] = s.currentScope()
+			s.specialExprScopes[lit] = currentScope
 		}
 	}
 	return nil
@@ -210,6 +225,8 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 			break
 		}
 		s.popScope()
+	case sqlparser.AggrFunc:
+		s.currentScope().inHavingAggr = false
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
 			curScope := s.currentScope()

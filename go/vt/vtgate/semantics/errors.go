@@ -52,7 +52,8 @@ type (
 	SubqueryColumnCountError       struct{ Expected int }
 	ColumnsMissingInSchemaError    struct{}
 	CantUseMultipleVindexHints     struct{ Table string }
-	InvalidUserOfGroupFunction     struct{}
+	InvalidUseOfGroupFunction      struct{}
+	CantGroupOn                    struct{ Column string }
 
 	NoSuchVindexFound struct {
 		Table      string
@@ -71,6 +72,10 @@ type (
 		Column *sqlparser.ColName
 		Table  *sqlparser.TableName
 	}
+	ColumnNotFoundClauseError struct {
+		Column string
+		Clause string
+	}
 )
 
 func eprintf(e error, format string, args ...any) string {
@@ -81,6 +86,10 @@ func eprintf(e error, format string, args ...any) string {
 		format = "VT13001: [BUG] " + format
 	}
 	return fmt.Sprintf(format, args...)
+}
+
+func newAmbiguousColumnError(name *sqlparser.ColName) error {
+	return &AmbiguousColumnError{Column: sqlparser.String(name)}
 }
 
 // Specific error implementations follow
@@ -289,15 +298,41 @@ func (c *NoSuchVindexFound) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_FAILED_PRECONDITION
 }
 
-// InvalidUserOfGroupFunction
-func (*InvalidUserOfGroupFunction) Error() string {
+// InvalidUseOfGroupFunction
+func (*InvalidUseOfGroupFunction) Error() string {
 	return "Invalid use of group function"
 }
 
-func (*InvalidUserOfGroupFunction) ErrorCode() vtrpcpb.Code {
+func (*InvalidUseOfGroupFunction) ErrorCode() vtrpcpb.Code {
 	return vtrpcpb.Code_INVALID_ARGUMENT
 }
 
-func (*InvalidUserOfGroupFunction) ErrorState() vterrors.State {
+func (*InvalidUseOfGroupFunction) ErrorState() vterrors.State {
 	return vterrors.InvalidGroupFuncUse
+}
+
+// CantGroupOn
+func (e *CantGroupOn) Error() string {
+	return vterrors.VT03005(e.Column).Error()
+}
+
+func (*CantGroupOn) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
+}
+
+func (e *CantGroupOn) ErrorState() vterrors.State {
+	return vterrors.VT03005(e.Column).State
+}
+
+// ColumnNotFoundInGroupByError
+func (e *ColumnNotFoundClauseError) Error() string {
+	return fmt.Sprintf("Unknown column '%s' in '%s'", e.Column, e.Clause)
+}
+
+func (*ColumnNotFoundClauseError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
+}
+
+func (e *ColumnNotFoundClauseError) ErrorState() vterrors.State {
+	return vterrors.BadFieldError
 }

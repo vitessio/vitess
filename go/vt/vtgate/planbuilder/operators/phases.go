@@ -144,10 +144,11 @@ func createDMLWithInput(ctx *plancontext.PlanningContext, op, src Operator, in *
 	dm := &DMLWithInput{}
 	var leftComp sqlparser.ValTuple
 	proj := newAliasedProjection(src)
+	dm.cols = make([][]*sqlparser.ColName, 1)
 	for _, col := range in.Target.VTable.PrimaryKey {
 		colName := sqlparser.NewColNameWithQualifier(col.String(), in.Target.Name)
 		proj.AddColumn(ctx, true, false, aeWrap(colName))
-		dm.cols = append(dm.cols, colName)
+		dm.cols[0] = append(dm.cols[0], colName)
 		leftComp = append(leftComp, colName)
 		ctx.SemTable.Recursive[colName] = in.Target.ID
 	}
@@ -189,7 +190,7 @@ func createDMLWithInput(ctx *plancontext.PlanningContext, op, src Operator, in *
 		in.OwnedVindexQuery.OrderBy = nil
 		in.OwnedVindexQuery.Limit = nil
 	}
-	dm.DML = op
+	dm.DML = append(dm.DML, op)
 
 	return dm, Rewrote("changed Delete to DMLWithInput")
 }

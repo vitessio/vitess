@@ -38,7 +38,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/syscallutil"
@@ -317,6 +316,44 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		return cluster.startPartialKeyspace(keyspace, shardNames, movedShard, replicaCount, rdonly, customizers...)
 	}
 	return nil
+}
+
+// InitTablet initializes a tablet record in the topo server. It does not start the tablet process.
+func (cluster *LocalProcessCluster) InitTablet(tablet *Vttablet, keyspace string, shard string) error {
+	tabletpb := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: tablet.Cell,
+			Uid:  uint32(tablet.TabletUID),
+		},
+		Hostname: cluster.Hostname,
+		Type:     topodatapb.TabletType_REPLICA,
+		PortMap: map[string]int32{
+			"vt": int32(tablet.HTTPPort),
+		},
+		Keyspace: keyspace,
+		Shard:    shard,
+	}
+
+	switch tablet.Type {
+	case "rdonly":
+		tabletpb.Type = topodatapb.TabletType_RDONLY
+	case "primary":
+		tabletpb.Type = topodatapb.TabletType_PRIMARY
+	}
+
+	if tablet.MySQLPort > 0 {
+		tabletpb.PortMap["mysql"] = int32(tablet.MySQLPort)
+	}
+
+	if tablet.GrpcPort > 0 {
+		tabletpb.PortMap["grpc"] = int32(tablet.GrpcPort)
+	}
+
+	allowPrimaryOverride := false
+	createShardAndKeyspace := true
+	allowUpdate := true
+
+	return cluster.TopoProcess.Server.InitTablet(context.Background(), tabletpb, allowPrimaryOverride, createShardAndKeyspace, allowUpdate)
 }
 
 // StartKeyspace starts required number of shard and the corresponding tablets
@@ -856,7 +893,7 @@ func (cluster *LocalProcessCluster) ExecOnTablet(ctx context.Context, vttablet *
 		return nil, err
 	}
 
-	tablet, err := cluster.VtctlclientGetTablet(vttablet)
+	tablet, err := cluster.VtctldClientProcess.GetTablet(vttablet.Alias)
 	if err != nil {
 		return nil, err
 	}
@@ -899,7 +936,7 @@ func (cluster *LocalProcessCluster) ExecOnVTGate(ctx context.Context, addr strin
 // returns the responses. It returns an error if the stream ends with fewer than
 // `count` responses.
 func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vttablet *Vttablet, count int) (responses []*querypb.StreamHealthResponse, err error) {
-	tablet, err := cluster.VtctlclientGetTablet(vttablet)
+	tablet, err := cluster.VtctldClientProcess.GetTablet(vttablet.Alias)
 	if err != nil {
 		return nil, err
 	}
@@ -934,7 +971,7 @@ func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vtta
 // StreamTabletHealthUntil invokes a HealthStream on a local cluster Vttablet and
 // returns the responses. It waits until a certain condition is met. The amount of time to wait is an input that it takes.
 func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context, vttablet *Vttablet, timeout time.Duration, condition func(shr *querypb.StreamHealthResponse) bool) error {
-	tablet, err := cluster.VtctlclientGetTablet(vttablet)
+	tablet, err := cluster.VtctldClientProcess.GetTablet(vttablet.Alias)
 	if err != nil {
 		return err
 	}
@@ -968,25 +1005,6 @@ func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context,
 	if timeoutExceeded.Load() {
 		return errors.New("timeout exceed while waiting for the condition in StreamHealth")
 	}
-	return err
-}
-
-func (cluster *LocalProcessCluster) VtctlclientGetTablet(tablet *Vttablet) (*topodatapb.Tablet, error) {
-	result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", "--", tablet.Alias)
-	if err != nil {
-		return nil, err
-	}
-
-	var ti topodatapb.Tablet
-	if err := json2.Unmarshal([]byte(result), &ti); err != nil {
-		return nil, err
-	}
-
-	return &ti, nil
-}
-
-func (cluster *LocalProcessCluster) VtctlclientChangeTabletType(tablet *Vttablet, tabletType topodatapb.TabletType) error {
-	_, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", "--", tablet.Alias, tabletType.String())
 	return err
 }
 

@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	vtorcutils "vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -119,11 +120,11 @@ func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
 
 	// change the RDONLY tablet to SPARE
 	rdOnlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
-	err = clusterInstance.VtctlclientChangeTabletType(rdOnlyTablet, topodata.TabletType_SPARE)
+	err = clusterInstance.VtctldClientProcess.ChangeTabletType(rdOnlyTablet, topodata.TabletType_SPARE)
 	require.NoError(t, err)
 	// Change it back to RDONLY afterward as the cluster is re-used.
 	defer func() {
-		err = clusterInstance.VtctlclientChangeTabletType(rdOnlyTablet, topodata.TabletType_RDONLY)
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdOnlyTablet.Alias, "rdonly")
 		require.NoError(t, err)
 	}()
 
@@ -281,6 +282,44 @@ func TestReplicaTransactions(t *testing.T) {
 	utils.Exec(t, readConn, "begin")
 	qr4 := utils.Exec(t, readConn, fetchAllCustomers)
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr4.Rows), "we are not able to reconnect after restart")
+}
+
+// TestStreamingRPCStuck tests that StreamExecute calls don't get stuck on the vttablets if a client stop reading from a stream.
+func TestStreamingRPCStuck(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer vtConn.Close()
+
+	// We want the table to have enough rows such that a streaming call returns multiple packets.
+	// Therefore, we insert one row and keep doubling it.
+	utils.Exec(t, vtConn, "insert into customer(email) values('testemail')")
+	for i := 0; i < 15; i++ {
+		// Double the number of rows in customer table.
+		utils.Exec(t, vtConn, "insert into customer (email) select email from customer")
+	}
+
+	// Connect to vtgate and run a streaming query.
+	vtgateConn, err := cluster.DialVTGate(ctx, t.Name(), vtgateGrpcAddress, "test_user", "")
+	require.NoError(t, err)
+	stream, err := vtgateConn.Session("", &querypb.ExecuteOptions{}).StreamExecute(ctx, "select * from customer", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	// We read packets until we see the first set of results. This ensures that the stream is working.
+	for {
+		res, err := stream.Recv()
+		require.NoError(t, err)
+		if res != nil && len(res.Rows) > 0 {
+			// breaking here stops reading from the stream.
+			break
+		}
+	}
+
+	// We simulate a misbehaving client that doesn't read from the stream anymore.
+	// This however shouldn't block PlannedReparentShard calls.
+	err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, "0", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
+	require.NoError(t, err)
 }
 
 func getMapFromJSON(JSON map[string]any, key string) map[string]any {
