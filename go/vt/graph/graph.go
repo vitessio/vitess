@@ -18,8 +18,15 @@ package graph
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
+)
+
+const (
+	white int = iota
+	grey
+	black
 )
 
 // Graph is a generic graph implementation.
@@ -88,8 +95,8 @@ func (gr *Graph[C]) HasCycles() bool {
 	color := map[C]int{}
 	for vertex := range gr.edges {
 		// If any vertex is still white, we initiate a new DFS.
-		if color[vertex] == 0 {
-			if gr.hasCyclesDfs(color, vertex) {
+		if color[vertex] == white {
+			if hasCycle, _ := gr.hasCyclesDfs(color, vertex); hasCycle {
 				return true
 			}
 		}
@@ -100,11 +107,12 @@ func (gr *Graph[C]) HasCycles() bool {
 // HasCycles checks whether the given graph has a cycle or not.
 // We are using a well-known DFS based colouring algorithm to check for cycles.
 // Look at https://cp-algorithms.com/graph/finding-cycle.html for more details on the algorithm.
-func (gr *Graph[C]) GetCycleVertices() (vertices []C) {
+func (gr *Graph[C]) GetCycleVertices() (vertices map[C][]C) {
 	// If the graph is empty, then we don't need to check anything.
 	if gr.Empty() {
 		return nil
 	}
+	vertices = make(map[C][]C)
 	// Initialize the coloring map.
 	// 0 represents white.
 	// 1 represents grey.
@@ -112,9 +120,10 @@ func (gr *Graph[C]) GetCycleVertices() (vertices []C) {
 	color := map[C]int{}
 	for _, vertex := range gr.orderedEdged {
 		// If any vertex is still white, we initiate a new DFS.
-		if color[vertex] == 0 {
-			if gr.hasCyclesDfs(color, vertex) {
-				vertices = append(vertices, vertex)
+		if color[vertex] == white {
+			color := maps.Clone(color)
+			if hasCycle, cycle := gr.hasCyclesDfs(color, vertex); hasCycle {
+				vertices[vertex] = cycle
 			}
 		}
 	}
@@ -125,22 +134,23 @@ func (gr *Graph[C]) GetCycleVertices() (vertices []C) {
 // It runs a dfs from the given vertex marking each vertex as grey. During the dfs,
 // if we encounter a grey vertex, we know we have a cycle. We mark the visited vertices black
 // on finishing the dfs.
-func (gr *Graph[C]) hasCyclesDfs(color map[C]int, vertex C) bool {
+func (gr *Graph[C]) hasCyclesDfs(color map[C]int, vertex C) (bool, []C) {
 	// Mark the vertex grey.
-	color[vertex] = 1
+	color[vertex] = grey
+	result := []C{vertex}
 	// Go over all the edges.
 	for _, end := range gr.edges[vertex] {
 		// If we encounter a white vertex, we continue the dfs.
-		if color[end] == 0 {
-			if gr.hasCyclesDfs(color, end) {
-				return true
+		if color[end] == white {
+			if hasCycle, cycle := gr.hasCyclesDfs(color, end); hasCycle {
+				return true, append(result, cycle...)
 			}
-		} else if color[end] == 1 {
+		} else if color[end] == grey {
 			// We encountered a grey vertex, we have a cycle.
-			return true
+			return true, append(result, end)
 		}
 	}
 	// Mark the vertex black before finishing
-	color[vertex] = 2
-	return false
+	color[vertex] = black
+	return false, nil
 }

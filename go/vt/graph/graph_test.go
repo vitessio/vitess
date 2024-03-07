@@ -95,7 +95,7 @@ func TestStringGraph(t *testing.T) {
 		wantedGraph       string
 		wantEmpty         bool
 		wantHasCycles     bool
-		wantCycleVertices []string
+		wantCycleVertices map[string][]string
 	}{
 		{
 			name:          "empty graph",
@@ -136,9 +136,15 @@ C -
 D - E
 E - F
 F - A`,
-			wantEmpty:         false,
-			wantHasCycles:     true,
-			wantCycleVertices: []string{"A", "D"},
+			wantEmpty:     false,
+			wantHasCycles: true,
+			wantCycleVertices: map[string][]string{
+				"A": {"A", "B", "E", "F", "A"},
+				"B": {"B", "E", "F", "A", "B"},
+				"D": {"D", "E", "F", "A", "B", "E"},
+				"E": {"E", "F", "A", "B", "E"},
+				"F": {"F", "A", "B", "E", "F"},
+			},
 		},
 	}
 	for _, tt := range testcases {
@@ -150,7 +156,14 @@ F - A`,
 			require.Equal(t, tt.wantedGraph, graph.PrintGraph())
 			require.Equal(t, tt.wantEmpty, graph.Empty())
 			require.Equal(t, tt.wantHasCycles, graph.HasCycles())
-			require.Equal(t, tt.wantCycleVertices, graph.GetCycleVertices())
+			if tt.wantCycleVertices == nil {
+				tt.wantCycleVertices = map[string][]string{}
+			}
+			actualCycleVertices := graph.GetCycleVertices()
+			if actualCycleVertices == nil {
+				actualCycleVertices = map[string][]string{}
+			}
+			require.Equal(t, tt.wantCycleVertices, actualCycleVertices)
 		})
 	}
 }
