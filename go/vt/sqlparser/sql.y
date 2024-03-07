@@ -4174,11 +4174,11 @@ table_option:
   }
 | CHARSET equal_opt charset
   {
-    $$ = string($1) + " " + string($3) + " "
+    $$ = "CHARACTER SET " + string($3) + " "
   }
 | DEFAULT CHARSET equal_opt charset
   {
-    $$ = string($1) + " " + string($2) + " " + $4
+    $$ = string($1) + " " + "CHARACTER SET " + $4
   }
 | CHARACTER SET equal_opt charset
   {

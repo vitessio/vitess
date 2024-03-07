@@ -16206,13 +16206,13 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4176
 		{
-			yyVAL.str = string(yyDollar[1].bytes) + " " + string(yyDollar[3].str) + " "
+			yyVAL.str = "CHARACTER SET " + string(yyDollar[3].str) + " "
 		}
 	case 803:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:4180
 		{
-			yyVAL.str = string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes) + " " + yyDollar[4].str
+			yyVAL.str = string(yyDollar[1].bytes) + " " + "CHARACTER SET " + yyDollar[4].str
 		}
 	case 804:
 		yyDollar = yyS[yypt-4 : yypt+1]

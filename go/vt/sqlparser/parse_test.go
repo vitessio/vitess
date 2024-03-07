@@ -3336,11 +3336,11 @@ var (
 		},
 		{
 			input:  "CREATE TABLE `t4` (`pk` int NOT NULL, `_tinytext` tinytext, `_text` text, `_longtext` longtext, `_mediumtext` mediumtext, PRIMARY KEY (`pk`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;",
-			output: "create table t4 (\n\tpk int not null,\n\t_tinytext tinytext,\n\t_text text,\n\t_longtext longtext,\n\t_mediumtext mediumtext,\n\tPRIMARY KEY (pk)\n) ENGINE InnoDB DEFAULT CHARSET utf8mb3",
+			output: "create table t4 (\n\tpk int not null,\n\t_tinytext tinytext,\n\t_text text,\n\t_longtext longtext,\n\t_mediumtext mediumtext,\n\tPRIMARY KEY (pk)\n) ENGINE InnoDB DEFAULT CHARACTER SET utf8mb3",
 		},
 		{
 			input:  "CREATE TABLE `t` (pk int) ENGINE=InnoDB DEFAULT CHARSET=binary;",
-			output: "create table t (\n\tpk int\n) ENGINE InnoDB DEFAULT CHARSET binary",
+			output: "create table t (\n\tpk int\n) ENGINE InnoDB DEFAULT CHARACTER SET binary",
 		},
 		{
 			input:  "CREATE TABLE `t` (pk int) ENGINE=InnoDB DEFAULT CHARACTER SET=binary;",
