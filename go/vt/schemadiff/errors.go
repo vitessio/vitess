@@ -294,8 +294,23 @@ type ForeignKeyLoopError struct {
 func (e *ForeignKeyLoopError) Error() string {
 	tableIsInsideLoop := false
 
-	escaped := make([]string, len(e.Loop))
-	for i, t := range e.Loop {
+	loop := e.Loop
+	// The tables in the loop could be e.g.:
+	// t1->t2->a->b->c->a
+	// In such case, the loop is a->b->c->a. The last item is always the head & tail of the loop.
+	// We want to distinguish between the case where the table is inside the loop and the case where it's outside,
+	// so we remove the prefix of the loop that doesn't participate in the actual cycle.
+	if len(loop) > 0 {
+		last := loop[len(loop)-1]
+		for i := range loop {
+			if loop[i] == last {
+				loop = loop[i:]
+				break
+			}
+		}
+	}
+	escaped := make([]string, len(loop))
+	for i, t := range loop {
 		escaped[i] = sqlescape.EscapeID(t)
 		if t == e.Table {
 			tableIsInsideLoop = true
