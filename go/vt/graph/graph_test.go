@@ -90,12 +90,12 @@ func TestIntegerGraph(t *testing.T) {
 // TestStringGraph tests that a graph with strings can be created and all graph functions work as intended.
 func TestStringGraph(t *testing.T) {
 	testcases := []struct {
-		name              string
-		edges             [][2]string
-		wantedGraph       string
-		wantEmpty         bool
-		wantHasCycles     bool
-		wantCycleVertices map[string][]string
+		name          string
+		edges         [][2]string
+		wantedGraph   string
+		wantEmpty     bool
+		wantHasCycles bool
+		wantCycles    map[string][]string
 	}{
 		{
 			name:          "empty graph",
@@ -138,7 +138,7 @@ E - F
 F - A`,
 			wantEmpty:     false,
 			wantHasCycles: true,
-			wantCycleVertices: map[string][]string{
+			wantCycles: map[string][]string{
 				"A": {"A", "B", "E", "F", "A"},
 				"B": {"B", "E", "F", "A", "B"},
 				"D": {"D", "E", "F", "A", "B", "E"},
@@ -156,14 +156,14 @@ F - A`,
 			require.Equal(t, tt.wantedGraph, graph.PrintGraph())
 			require.Equal(t, tt.wantEmpty, graph.Empty())
 			require.Equal(t, tt.wantHasCycles, graph.HasCycles())
-			if tt.wantCycleVertices == nil {
-				tt.wantCycleVertices = map[string][]string{}
+			if tt.wantCycles == nil {
+				tt.wantCycles = map[string][]string{}
 			}
-			actualCycleVertices := graph.GetCycleVertices()
-			if actualCycleVertices == nil {
-				actualCycleVertices = map[string][]string{}
+			actualCycles := graph.GetCycles()
+			if actualCycles == nil {
+				actualCycles = map[string][]string{}
 			}
-			require.Equal(t, tt.wantCycleVertices, actualCycleVertices)
+			require.Equal(t, tt.wantCycles, actualCycles)
 		})
 	}
 }
