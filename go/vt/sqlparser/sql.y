@@ -5270,6 +5270,10 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3) + " " + string($4)}
   }
+| SHOW BINARY LOGS
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
 
 naked_like:
 LIKE value_expression like_escape_opt
