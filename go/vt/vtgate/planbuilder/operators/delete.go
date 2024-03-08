@@ -64,10 +64,7 @@ func (d *Delete) ShortDescription() string {
 }
 
 func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlparser.Delete) (op Operator) {
-	var childFks []vindexes.ChildFKInfo
-	for _, target := range deleteStmt.Targets {
-		childFks = append(childFks, ctx.SemTable.GetChildForeignKeysForTable(target)...)
-	}
+	childFks := ctx.SemTable.GetChildForeignKeysForTargets()
 
 	// We check if delete with input plan is required. DML with input planning is generally
 	// slower, because it does a selection and then creates a delete statement wherein we have to
@@ -131,7 +128,7 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 	}
 
 	var delOps []dmlOp
-	for _, target := range del.Targets {
+	for _, target := range ctx.SemTable.Targets.Constituents() {
 		op := createDeleteOpWithTarget(ctx, target, del.Ignore)
 		delOps = append(delOps, op)
 	}
@@ -171,9 +168,8 @@ func getFirstVindex(vTbl *vindexes.Table) vindexes.Vindex {
 	return nil
 }
 
-func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target sqlparser.TableName, ignore sqlparser.Ignore) dmlOp {
-	ts := ctx.SemTable.Targets[target.Name]
-	ti, err := ctx.SemTable.TableInfoFor(ts)
+func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target semantics.TableSet, ignore sqlparser.Ignore) dmlOp {
+	ti, err := ctx.SemTable.TableInfoFor(target)
 	if err != nil {
 		panic(vterrors.VT13001(err.Error()))
 	}
@@ -182,14 +178,18 @@ func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target sqlparser
 	if len(vTbl.PrimaryKey) == 0 {
 		panic(vterrors.VT09015())
 	}
+	tblName, err := ti.Name()
+	if err != nil {
+		panic(err)
+	}
 
 	var leftComp sqlparser.ValTuple
 	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
 	for _, col := range vTbl.PrimaryKey {
-		colName := sqlparser.NewColNameWithQualifier(col.String(), target)
+		colName := sqlparser.NewColNameWithQualifier(col.String(), tblName)
 		cols = append(cols, colName)
 		leftComp = append(leftComp, colName)
-		ctx.SemTable.Recursive[colName] = ts
+		ctx.SemTable.Recursive[colName] = target
 	}
 	// optimize for case when there is only single column on left hand side.
 	var lhs sqlparser.Expr = leftComp
@@ -201,7 +201,7 @@ func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target sqlparser
 	del := &sqlparser.Delete{
 		Ignore:     ignore,
 		TableExprs: sqlparser.TableExprs{ti.GetAliasedTableExpr()},
-		Targets:    sqlparser.TableNames{target},
+		Targets:    sqlparser.TableNames{tblName},
 		Where:      sqlparser.NewWhere(sqlparser.WhereClause, compExpr),
 	}
 	return dmlOp{
@@ -219,10 +219,9 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 		op = addWherePredsToSubQueryBuilder(ctx, del.Where.Expr, op, sqc)
 	}
 
-	target := del.Targets[0]
-	tblID, exists := ctx.SemTable.Targets[target.Name]
-	if !exists {
-		panic(vterrors.VT13001("delete target table should be part of semantic analyzer"))
+	tblID, err := ctx.SemTable.GetTargetTableSetForTableName(del.Targets[0])
+	if err != nil {
+		panic(err)
 	}
 	tblInfo, err := ctx.SemTable.TableInfoFor(tblID)
 	if err != nil {

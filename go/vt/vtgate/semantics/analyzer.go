@@ -138,7 +138,6 @@ func (a *analyzer) newSemTable(
 			NotUnshardedErr:           a.unshardedErr,
 			Recursive:                 ExprDependencies{},
 			Direct:                    ExprDependencies{},
-			Targets:                   map[sqlparser.IdentifierCS]TableSet{},
 			ColumnEqualities:          map[columnName][]sqlparser.Expr{},
 			ExpandedColumns:           map[sqlparser.TableName][]*sqlparser.ColName{},
 			columns:                   map[*sqlparser.Union]sqlparser.SelectExprs{},

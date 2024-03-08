@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"errors"
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -31,7 +32,7 @@ import (
 type binder struct {
 	recursive ExprDependencies
 	direct    ExprDependencies
-	targets   map[sqlparser.IdentifierCS]TableSet
+	targets   TableSet
 	scoper    *scoper
 	tc        *tableCollector
 	org       originable
@@ -47,7 +48,6 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 	return &binder{
 		recursive:     map[sqlparser.Expr]TableSet{},
 		direct:        map[sqlparser.Expr]TableSet{},
-		targets:       map[sqlparser.IdentifierCS]TableSet{},
 		scoper:        scoper,
 		org:           org,
 		tc:            tc,
@@ -122,22 +122,14 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 			if err != nil {
 				return err
 			}
-			b.targets[target.Name] = finalDep.direct
+			b.targets = b.targets.Merge(finalDep.direct)
 		}
 	case *sqlparser.UpdateExpr:
 		ts, ok := b.direct[node.Name]
 		if !ok {
 			return nil
 		}
-		tblInfo, err := b.tc.tableInfoFor(ts)
-		if err != nil {
-			return err
-		}
-		tblName, err := tblInfo.Name()
-		if err != nil {
-			return err
-		}
-		b.targets[tblName.Name] = ts
+		b.targets = b.targets.Merge(ts)
 	}
 	return nil
 }
@@ -243,7 +235,7 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti, singleTableFallBack bool) (dependency, error) {
 	if !current.stmtScope && current.inGroupBy {
-		return b.resolveColInGroupBy(colName, current, allowMulti, singleTableFallBack)
+		return b.resolveColInGroupBy(colName, current, allowMulti)
 	}
 	if !current.stmtScope && current.inHaving && !current.inHavingAggr {
 		return b.resolveColumnInHaving(colName, current, allowMulti)
@@ -386,12 +378,7 @@ func (b *binder) searchInSelectExpressions(colName *sqlparser.ColName, deps depe
 }
 
 // resolveColInGroupBy handles the special rules we have when binding on the GROUP BY column
-func (b *binder) resolveColInGroupBy(
-	colName *sqlparser.ColName,
-	current *scope,
-	allowMulti bool,
-	singleTableFallBack bool,
-) (dependency, error) {
+func (b *binder) resolveColInGroupBy(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
 	if current.parent == nil {
 		return dependency{}, vterrors.VT13001("did not expect this to be the last scope")
 	}
@@ -445,7 +432,7 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 }
 
 func makeAmbiguousError(colName *sqlparser.ColName, err error) error {
-	if err == ambigousErr {
+	if errors.Is(err, ambigousErr) {
 		err = &AmbiguousColumnError{Column: sqlparser.String(colName)}
 	}
 	return err

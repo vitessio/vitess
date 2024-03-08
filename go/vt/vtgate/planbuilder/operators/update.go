@@ -99,14 +99,8 @@ func (u *Update) ShortDescription() string {
 
 func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update) (op Operator) {
 	errIfUpdateNotSupported(ctx, updStmt)
-	var parentFks []vindexes.ParentFKInfo
-	for _, ts := range ctx.SemTable.GetSortedTargets() {
-		parentFks = append(parentFks, ctx.SemTable.GetParentForeignKeysForTableSet(ts)...)
-	}
-	var childFks []vindexes.ChildFKInfo
-	for _, ts := range ctx.SemTable.GetSortedTargets() {
-		childFks = append(childFks, ctx.SemTable.GetChildForeignKeysForTableSet(ts)...)
-	}
+	parentFks := ctx.SemTable.GetParentForeignKeysForTargets()
+	childFks := ctx.SemTable.GetChildForeignKeysForTargets()
 
 	// We check if dml with input plan is required. DML with input planning is generally
 	// slower, because it does a selection and then creates a update statement wherein we have to
@@ -174,7 +168,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	upd.Limit = nil
 
 	var updOps []dmlOp
-	for _, target := range ctx.SemTable.GetSortedTargets() {
+	for _, target := range ctx.SemTable.Targets.Constituents() {
 		op := createUpdateOpWithTarget(ctx, target, upd)
 		updOps = append(updOps, op)
 	}
