@@ -301,7 +301,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> TABLE_ENCRYPTION_ADMIN TP_CONNECTION_ADMIN VERSION_TOKEN_ADMIN XA_RECOVER_ADMIN
 
 // Replication Tokens
-%token <bytes> REPLICA SOURCE STOP RESET FILTER
+%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG
 %token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 
@@ -5262,6 +5262,18 @@ show_statement:
   {
     $$ = &Show{Type: string($2), ShowTablesOpt: &ShowTablesOpt{DbName: $3, Filter: $4}}
   }
+| SHOW REPLICAS
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW BINARY LOG STATUS
+  {
+    $$ = &Show{Type: string($2) + " " + string($3) + " " + string($4)}
+  }
+| SHOW BINARY LOGS
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
 
 naked_like:
 LIKE value_expression like_escape_opt
@@ -8993,6 +9005,7 @@ non_reserved_keyword:
 | LIST
 | LOCAL
 | LOCKED
+| LOG
 | LOGS
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
@@ -9061,6 +9074,7 @@ non_reserved_keyword:
 | REPAIR
 | REPEATABLE
 | REPLICA
+| REPLICAS
 | REPLICATE_DO_TABLE
 | REPLICATE_IGNORE_TABLE
 | REPLICATION
