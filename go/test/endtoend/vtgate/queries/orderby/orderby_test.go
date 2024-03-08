@@ -145,6 +145,7 @@ func TestOrderByComplex(t *testing.T) {
 		"select email, max(col) as max_col from (select email, col from user where col > 20) as filtered group by email order by max_col",
 		"select a.email, a.max_col from (select email, max(col) as max_col from user group by email) as a order by a.max_col desc",
 		"select email, max(col) as max_col from user where email like 'a%' group by email order by max_col, email",
+		`select email, max(col) as max_col from user group by email union select email, avg(col) as avg_col from user group by email order by email desc`,
 	}
 
 	for _, query := range queries {
@@ -152,24 +153,4 @@ func TestOrderByComplex(t *testing.T) {
 			_, _ = mcmp.ExecAllowAndCompareError(query)
 		})
 	}
-}
-
-func TestBug(t *testing.T) {
-	mcmp, closer := start(t)
-	defer closer()
-
-	mcmp.Exec("insert into user(id, col, email) values(1,1,'a'), (2,2,'Abc'), (3,3,'b'), (4,4,'c'), (5,2,'test'), (6,1,'test'), (7,2,'a'), (8,3,'b'), (9,4,'c3'), (10,2,'d')")
-
-	query := `select email, max(col) as max_col
-from user
-group by email
-union
-select email, avg(col) as avg_col
-from user
-group by email
-order by email desc`
-
-	mcmp.Run(query, func(mcmp *utils.MySQLCompare) {
-		_ = mcmp.Exec(query)
-	})
 }
