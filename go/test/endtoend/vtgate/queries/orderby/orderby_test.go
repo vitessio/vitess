@@ -145,6 +145,7 @@ func TestOrderByComplex(t *testing.T) {
 		"select email, max(col) as max_col from (select email, col from user where col > 20) as filtered group by email order by max_col",
 		"select a.email, a.max_col from (select email, max(col) as max_col from user group by email) as a order by a.max_col desc",
 		"select email, max(col) as max_col from user where email like 'a%' group by email order by max_col, email",
+		`select email, max(col) as max_col from user group by email union select email, avg(col) as avg_col from user group by email order by email desc`,
 	}
 
 	for _, query := range queries {
