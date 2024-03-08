@@ -118,6 +118,9 @@ var (
 			output: "set global GTID_PURGED = '+beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126'",
 		},
 		{
+			input:  "show replicas",
+		},
+		{
 			input: "start replica",
 		},
 		{

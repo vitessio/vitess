@@ -483,6 +483,7 @@ var keywords = map[string]int{
 	"repeatable":                    REPEATABLE,
 	"replace":                       REPLACE,
 	"replica":                       REPLICA,
+	"replicas":                      REPLICAS,
 	"replicate_do_table":            REPLICATE_DO_TABLE,
 	"replicate_ignore_table":        REPLICATE_IGNORE_TABLE,
 	"replication":                   REPLICATION,

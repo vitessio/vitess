@@ -301,7 +301,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> TABLE_ENCRYPTION_ADMIN TP_CONNECTION_ADMIN VERSION_TOKEN_ADMIN XA_RECOVER_ADMIN
 
 // Replication Tokens
-%token <bytes> REPLICA SOURCE STOP RESET FILTER
+%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER
 %token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 
@@ -5261,6 +5261,10 @@ show_statement:
 | SHOW EVENTS from_database_opt like_or_where_opt
   {
     $$ = &Show{Type: string($2), ShowTablesOpt: &ShowTablesOpt{DbName: $3, Filter: $4}}
+  }
+| SHOW REPLICAS
+  {
+    $$ = &Show{Type: string($2)}
   }
 
 naked_like:
