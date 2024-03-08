@@ -6698,8 +6698,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.id, u.col from `user` as u where 1 != 1",
-                "Query": "select `user`.id, u.col from `user` as u for update",
+                "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+                "Query": "select u.id, u.col from `user` as u for update",
                 "Table": "`user`"
               },
               {
@@ -6709,8 +6709,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select music.id from music as m where 1 != 1",
-                "Query": "select music.id from music as m where m.col = :u_col for update",
+                "FieldQuery": "select m.id from music as m where 1 != 1",
+                "Query": "select m.id from music as m where m.col = :u_col for update",
                 "Table": "music"
               }
             ]
@@ -6723,7 +6723,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update ignore `user` as u set u.foo = 21 where `user`.id in ::dml_vals",
+            "Query": "update ignore `user` as u set u.foo = 21 where u.id in ::dml_vals",
             "Table": "user",
             "Values": [
               "::dml_vals"
@@ -6738,7 +6738,7 @@
               "Sharded": true
             },
             "TargetTabletType": "PRIMARY",
-            "Query": "update ignore music as m set m.bar = 'abc' where music.id in ::dml_vals",
+            "Query": "update ignore music as m set m.bar = 'abc' where m.id in ::dml_vals",
             "Table": "music",
             "Values": [
               "::dml_vals"

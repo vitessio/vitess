@@ -231,11 +231,15 @@ func createUpdateOpWithTarget(ctx *plancontext.PlanningContext, target semantics
 		panic(vterrors.VT13001(err.Error()))
 	}
 	vTbl := ti.GetVindexTable()
+	tblName, err := ti.Name()
+	if err != nil {
+		panic(err)
+	}
 
 	var leftComp sqlparser.ValTuple
 	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
 	for _, col := range vTbl.PrimaryKey {
-		colName := sqlparser.NewColNameWithQualifier(col.String(), vTbl.GetTableName())
+		colName := sqlparser.NewColNameWithQualifier(col.String(), tblName)
 		cols = append(cols, colName)
 		leftComp = append(leftComp, colName)
 		ctx.SemTable.Recursive[colName] = target
