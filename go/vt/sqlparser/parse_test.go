@@ -691,6 +691,9 @@ var (
 		}, {
 			input: "select /* s.t */ 1 from s.t",
 		}, {
+			input:  "select /* s.keyword */ 1 from s.account",
+			output: "select /* s.keyword */ 1 from s.`account`",
+		}, {
 			input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
 		}, {
 			input: "select /* select in from */ 1 from (select 1 from t) as a",
@@ -3330,10 +3333,20 @@ var (
 		}, {
 			input:  "DROP TABLE `dual`",
 			output: "drop table `dual`",
-		}, {
+		},
+		{
 			input:  "CREATE TABLE `t4` (`pk` int NOT NULL, `_tinytext` tinytext, `_text` text, `_longtext` longtext, `_mediumtext` mediumtext, PRIMARY KEY (`pk`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;",
-			output: "create table t4 (\n\tpk int not null,\n\t_tinytext tinytext,\n\t_text text,\n\t_longtext longtext,\n\t_mediumtext mediumtext,\n\tPRIMARY KEY (pk)\n) ENGINE InnoDB DEFAULT CHARSET utf8mb3",
-		}, {
+			output: "create table t4 (\n\tpk int not null,\n\t_tinytext tinytext,\n\t_text text,\n\t_longtext longtext,\n\t_mediumtext mediumtext,\n\tPRIMARY KEY (pk)\n) ENGINE InnoDB DEFAULT CHARACTER SET utf8mb3",
+		},
+		{
+			input:  "CREATE TABLE `t` (pk int) ENGINE=InnoDB DEFAULT CHARSET=binary;",
+			output: "create table t (\n\tpk int\n) ENGINE InnoDB DEFAULT CHARACTER SET binary",
+		},
+		{
+			input:  "CREATE TABLE `t` (pk int) ENGINE=InnoDB DEFAULT CHARACTER SET=binary;",
+			output: "create table t (\n\tpk int\n) ENGINE InnoDB DEFAULT CHARACTER SET binary",
+		},
+		{
 			input:  "CREATE TABLE test (\n  data varchar(5) NULL DEFAULT _utf8 \"KZPVD\"\n) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8mb4 DEFAULT COLLATE = UTF8MB4_BIN;",
 			output: "create table test (\n\t`data` varchar(5) default _utf8mb3 'KZPVD'\n) ENGINE InnoDB DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE UTF8MB4_BIN",
 		}, {
@@ -5605,64 +5618,97 @@ func TestConvert(t *testing.T) {
 	validSQL := []parseTest{
 		{
 			input: "select cast('abc' as date) from t",
-		}, {
-			input:                      "select cast('abc' as date) from t",
+		},
+		{
+			input: "select cast('abc' as year) from t",
+		},
+		{
+			input: "select cast('abc' as date) from t",
 			useSelectExpressionLiteral: true,
-		}, {
+		},
+		{
 			input: "select convert('abc', binary(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', binary) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char character set binary) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char(4) ascii) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char unicode) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', char) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', nchar(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', nchar) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', signed) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', signed integer) from t",
 			output: "select convert('abc', signed) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', signed) from t",
 			output: "select convert('abc', signed) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', unsigned) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', unsigned integer) from t",
 			output: "select convert('abc', unsigned) from t",
-		}, {
+		},
+		{
 			input:  "select convert('abc', unsigned) from t",
 			output: "select convert('abc', unsigned) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', decimal(3, 4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', decimal(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', decimal) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', date) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', time(4)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', time) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', datetime(9)) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', datetime) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc', json) from t",
-		}, {
+		},
+		{
 			input: "select convert('abc' using ascii) from t",
-		}}
+		},
+		{
+			input: "select convert('abc', year) from t",
+		},
+		}
 
 	for _, tcase := range validSQL {
 		runParseTestCase(t, tcase)

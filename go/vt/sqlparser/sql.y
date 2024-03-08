@@ -4174,11 +4174,11 @@ table_option:
   }
 | CHARSET equal_opt charset
   {
-    $$ = string($1) + " " + string($3) + " "
+    $$ = "CHARACTER SET " + string($3) + " "
   }
 | DEFAULT CHARSET equal_opt charset
   {
-    $$ = string($1) + " " + string($2) + " " + $4
+    $$ = string($1) + " " + "CHARACTER SET " + $4
   }
 | CHARACTER SET equal_opt charset
   {
@@ -7240,6 +7240,10 @@ charset:
 {
     $$ = string($1)
 }
+| BINARY
+{
+    $$ = string($1)
+}
 
 underscore_charsets:
   UNDERSCORE_ARMSCII8
@@ -7438,6 +7442,14 @@ convert_type:
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
+| DOUBLE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| FLOAT_TYPE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
 | JSON
   {
     $$ = &ConvertType{Type: string($1)}
@@ -7466,11 +7478,7 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1)}
   }
-| DOUBLE
-  {
-    $$ = &ConvertType{Type: string($1)}
-  }
-| FLOAT_TYPE
+| YEAR
   {
     $$ = &ConvertType{Type: string($1)}
   }
@@ -8138,6 +8146,14 @@ table_id:
 reserved_table_id:
   table_id
 | reserved_keyword
+  {
+    $$ = NewTableIdent(string($1))
+  }
+| non_reserved_keyword2
+  {
+    $$ = NewTableIdent(string($1))
+  }
+| non_reserved_keyword3
   {
     $$ = NewTableIdent(string($1))
   }

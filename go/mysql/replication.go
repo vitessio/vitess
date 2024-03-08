@@ -87,8 +87,9 @@ func (c *Conn) WriteBinlogEvent(ev BinlogEvent, semiSyncEnabled bool) error {
 		extraBytes += 2
 	}
 
-	// TODO: Vitess uses startEphemerlPacketWithHeader, but we don't have that method ported
-	//       over, so we use startEphemeralPacket instead with a 0 length header instead
+	// NOTE: The latest Vitess code has changed startEphemeralPacket to startEphemeralPacketWithHeader,
+	//       but we haven't ported that over yet, so instead, we use startEphemeralPacket and assign
+	//       0 to pos to indicate no header was included.
 	//data, pos := c.startEphemeralPacketWithHeader(len(ev.Bytes()) + extraBytes)
 
 	data, pos := c.startEphemeralPacket(len(ev.Bytes()) + extraBytes), 0
