@@ -220,6 +220,26 @@ func TestInfrSchemaAndUnionAll(t *testing.T) {
 	}
 }
 
+func TestInfoschemaTypes(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+
+	require.NoError(t,
+		utils.WaitForAuthoritative(t, "ks", "t1", clusterInstance.VtgateProcess.ReadVSchema))
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`
+	SELECT ORDINAL_POSITION
+		FROM INFORMATION_SCHEMA.COLUMNS
+	WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't1'
+	UNION
+	SELECT ORDINAL_POSITION
+		FROM INFORMATION_SCHEMA.COLUMNS
+	WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 't2';
+	`)
+}
+
 func TestTypeORMQuery(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	// This test checks that we can run queries similar to the ones that the TypeORM framework uses

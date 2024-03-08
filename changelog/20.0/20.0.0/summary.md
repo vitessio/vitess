@@ -18,6 +18,7 @@
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
+  - **[`SIGHUP` reload of gRPC client static auth creds](#sighup-reload-of-grpc-client-auth-creds)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -104,3 +105,7 @@ VTTablet exposes two new counter stats:
 
  * `QueryCacheHits`: Query engine query cache hits
  * `QueryCacheMisses`: Query engine query cache misses
+
+### <a id="sighup-reload-of-grpc-client-auth-creds"/>`SIGHUP` reload of gRPC client static auth creds
+
+The internal gRPC client now caches the static auth credentials and supports reloading via the `SIGHUP` signal. Previous to v20 the credentials were not cached. They were re-loaded from disk on every use.

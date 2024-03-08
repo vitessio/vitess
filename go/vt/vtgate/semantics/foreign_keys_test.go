@@ -133,14 +133,14 @@ var tbl = map[string]TableInfo{
 func TestGetAllManagedForeignKeys(t *testing.T) {
 	tests := []struct {
 		name           string
-		analyzer       *analyzer
+		fkManager      *fkManager
 		childFkWanted  map[TableSet][]vindexes.ChildFKInfo
 		parentFkWanted map[TableSet][]vindexes.ParentFKInfo
 		expectedErr    string
 	}{
 		{
 			name: "Collect all foreign key constraints",
-			analyzer: &analyzer{
+			fkManager: &fkManager{
 				tables: &tableCollector{
 					Tables: []TableInfo{
 						tbl["t0"],
@@ -170,7 +170,7 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 		},
 		{
 			name: "keyspace not found in schema information",
-			analyzer: &analyzer{
+			fkManager: &fkManager{
 				tables: &tableCollector{
 					Tables: []TableInfo{
 						tbl["t2"],
@@ -187,7 +187,7 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 		},
 		{
 			name: "Cyclic fk constraints error",
-			analyzer: &analyzer{
+			fkManager: &fkManager{
 				tables: &tableCollector{
 					Tables: []TableInfo{
 						tbl["t0"], tbl["t1"],
@@ -209,7 +209,7 @@ func TestGetAllManagedForeignKeys(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			childFk, parentFk, err := tt.analyzer.getAllManagedForeignKeys()
+			childFk, parentFk, err := tt.fkManager.getAllManagedForeignKeys()
 			if tt.expectedErr != "" {
 				require.EqualError(t, err, tt.expectedErr)
 				return
@@ -226,7 +226,7 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 	colb := sqlparser.NewColName("colb")
 	colc := sqlparser.NewColName("colc")
 	cold := sqlparser.NewColName("cold")
-	a := &analyzer{
+	a := &fkManager{
 		binder: &binder{
 			direct: map[sqlparser.Expr]TableSet{
 				cola: SingleTableSet(0),
@@ -235,7 +235,7 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 				cold: SingleTableSet(1),
 			},
 		},
-		unshardedErr: fmt.Errorf("ambiguous test error"),
+		getError: func() error { return fmt.Errorf("ambiguous test error") },
 		tables: &tableCollector{
 			Tables: []TableInfo{
 				tbl["t4"],
@@ -256,7 +256,7 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 	}
 	tests := []struct {
 		name            string
-		analyzer        *analyzer
+		fkManager       *fkManager
 		allChildFks     map[TableSet][]vindexes.ChildFKInfo
 		allParentFks    map[TableSet][]vindexes.ParentFKInfo
 		updExprs        sqlparser.UpdateExprs
@@ -266,7 +266,7 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 	}{
 		{
 			name:         "Child Foreign Keys Filtering",
-			analyzer:     a,
+			fkManager:    a,
 			allParentFks: nil,
 			allChildFks: map[TableSet][]vindexes.ChildFKInfo{
 				SingleTableSet(0): tbl["t4"].(*RealTable).Table.ChildForeignKeys,
@@ -285,8 +285,8 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 			},
 			parentFksWanted: map[TableSet][]vindexes.ParentFKInfo{},
 		}, {
-			name:     "Parent Foreign Keys Filtering",
-			analyzer: a,
+			name:      "Parent Foreign Keys Filtering",
+			fkManager: a,
 			allParentFks: map[TableSet][]vindexes.ParentFKInfo{
 				SingleTableSet(0): tbl["t4"].(*RealTable).Table.ParentForeignKeys,
 				SingleTableSet(1): tbl["t5"].(*RealTable).Table.ParentForeignKeys,
@@ -304,8 +304,8 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 				},
 			},
 		}, {
-			name:     "Unknown column",
-			analyzer: a,
+			name:      "Unknown column",
+			fkManager: a,
 			allParentFks: map[TableSet][]vindexes.ParentFKInfo{
 				SingleTableSet(0): tbl["t4"].(*RealTable).Table.ParentForeignKeys,
 				SingleTableSet(1): tbl["t5"].(*RealTable).Table.ParentForeignKeys,
@@ -319,7 +319,7 @@ func TestFilterForeignKeysUsingUpdateExpressions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			childFks, parentFks, _, err := tt.analyzer.filterForeignKeysUsingUpdateExpressions(tt.allChildFks, tt.allParentFks, tt.updExprs)
+			childFks, parentFks, _, err := tt.fkManager.filterForeignKeysUsingUpdateExpressions(tt.allChildFks, tt.allParentFks, tt.updExprs)
 			require.EqualValues(t, tt.childFksWanted, childFks)
 			require.EqualValues(t, tt.parentFksWanted, parentFks)
 			if tt.errWanted != "" {
@@ -340,7 +340,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 	tests := []struct {
 		name                     string
 		stmt                     sqlparser.Statement
-		analyzer                 *analyzer
+		fkManager                *fkManager
 		childFksWanted           map[TableSet][]vindexes.ChildFKInfo
 		parentFksWanted          map[TableSet][]vindexes.ParentFKInfo
 		childFkUpdateExprsWanted map[string]sqlparser.UpdateExprs
@@ -349,7 +349,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 		{
 			name: "Delete Query",
 			stmt: &sqlparser.Delete{},
-			analyzer: &analyzer{
+			fkManager: &fkManager{
 				tables: &tableCollector{
 					Tables: []TableInfo{
 						tbl["t0"],
@@ -380,7 +380,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 					&sqlparser.UpdateExpr{Name: cold, Expr: &sqlparser.NullVal{}},
 				},
 			},
-			analyzer: &analyzer{
+			fkManager: &fkManager{
 				binder: &binder{
 					direct: map[sqlparser.Expr]TableSet{
 						cola: SingleTableSet(0),
@@ -432,7 +432,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 			stmt: &sqlparser.Insert{
 				Action: sqlparser.ReplaceAct,
 			},
-			analyzer: &analyzer{
+			fkManager: &fkManager{
 				tables: &tableCollector{
 					Tables: []TableInfo{
 						tbl["t0"],
@@ -464,7 +464,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 			stmt: &sqlparser.Insert{
 				Action: sqlparser.InsertAct,
 			},
-			analyzer: &analyzer{
+			fkManager: &fkManager{
 				tables: &tableCollector{
 					Tables: []TableInfo{
 						tbl["t0"],
@@ -495,7 +495,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 					&sqlparser.UpdateExpr{Name: colb, Expr: &sqlparser.NullVal{}},
 				},
 			},
-			analyzer: &analyzer{
+			fkManager: &fkManager{
 				binder: &binder{
 					direct: map[sqlparser.Expr]TableSet{
 						cola: SingleTableSet(0),
@@ -535,7 +535,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 		{
 			name: "Insert error",
 			stmt: &sqlparser.Insert{},
-			analyzer: &analyzer{
+			fkManager: &fkManager{
 				tables: &tableCollector{
 					Tables: []TableInfo{
 						tbl["t2"],
@@ -553,7 +553,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 		{
 			name: "Update error",
 			stmt: &sqlparser.Update{},
-			analyzer: &analyzer{
+			fkManager: &fkManager{
 				tables: &tableCollector{
 					Tables: []TableInfo{
 						tbl["t2"],
@@ -572,7 +572,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fkState := true
-			childFks, parentFks, childFkUpdateExprs, err := tt.analyzer.getInvolvedForeignKeys(tt.stmt, &fkState)
+			childFks, parentFks, childFkUpdateExprs, err := tt.fkManager.getInvolvedForeignKeys(tt.stmt, &fkState)
 			if tt.expectedErr != "" {
 				require.EqualError(t, err, tt.expectedErr)
 				return

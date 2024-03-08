@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -78,6 +79,38 @@ func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, sc
 		size:      size,
 		scale:     scale,
 	}
+}
+
+func NewTypeFromField(f *querypb.Field) Type {
+	return Type{
+		typ:       f.Type,
+		collation: collations.ID(f.Charset),
+		nullable:  f.Flags&uint32(querypb.MySqlFlag_NOT_NULL_FLAG) == 0,
+		init:      true,
+		size:      int32(f.ColumnLength),
+		scale:     int32(f.Decimals),
+	}
+}
+
+func (t *Type) ToField(name string) *querypb.Field {
+	// need to get the proper flags for the type; usually leaving flags
+	// to 0 is OK, because Vitess' MySQL client will generate the right
+	// ones for the column's type, but here we're also setting the NotNull
+	// flag, so it needs to be set with the full flags for the column
+	_, flags := sqltypes.TypeToMySQL(t.typ)
+	if !t.nullable {
+		flags |= int64(querypb.MySqlFlag_NOT_NULL_FLAG)
+	}
+
+	f := &querypb.Field{
+		Name:         name,
+		Type:         t.typ,
+		Charset:      uint32(t.collation),
+		ColumnLength: uint32(t.size),
+		Decimals:     uint32(t.scale),
+		Flags:        uint32(flags),
+	}
+	return f
 }
 
 func (t *Type) Type() sqltypes.Type {

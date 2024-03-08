@@ -247,7 +247,7 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 
 	var ovq *sqlparser.Select
 	if vTbl.Keyspace.Sharded && vTbl.Type == vindexes.TypeTable {
-		primaryVindex, _ := getVindexInformation(tblID, vTbl)
+		primaryVindex := getVindexInformation(tblID, vTbl)
 		if len(vTbl.Owned) > 0 {
 			ovq = generateOwnedVindexQuery(del, targetTbl, primaryVindex.Columns)
 		}

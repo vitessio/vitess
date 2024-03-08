@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -468,7 +469,7 @@ func shouldGenerate(v sqltypes.Value, sqlmode evalengine.SQLMode) bool {
 
 	// Unless the NO_AUTO_VALUE_ON_ZERO sql mode is active in mysql, it also
 	// treats 0 as a value that should generate a new sequence.
-	value, err := evalengine.CoerceTo(v, sqltypes.Uint64, sqlmode)
+	value, err := evalengine.CoerceTo(v, evalengine.NewType(sqltypes.Uint64, collations.CollationBinaryID), sqlmode)
 	if err != nil {
 		return false
 	}
