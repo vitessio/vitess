@@ -301,7 +301,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> TABLE_ENCRYPTION_ADMIN TP_CONNECTION_ADMIN VERSION_TOKEN_ADMIN XA_RECOVER_ADMIN
 
 // Replication Tokens
-%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER
+%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG
 %token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 
@@ -5265,6 +5265,10 @@ show_statement:
 | SHOW REPLICAS
   {
     $$ = &Show{Type: string($2)}
+  }
+| SHOW BINARY LOG STATUS
+  {
+    $$ = &Show{Type: string($2) + " " + string($3) + " " + string($4)}
   }
 
 naked_like:

@@ -356,6 +356,7 @@ var keywords = map[string]int{
 	"localtimestamp":                LOCALTIMESTAMP,
 	"lock":                          LOCK,
 	"locked":                        LOCKED,
+	"log":                           LOG,
 	"logs":                          LOGS,
 	"long":                          LONG,
 	"longblob":                      LONGBLOB,

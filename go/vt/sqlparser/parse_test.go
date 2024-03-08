@@ -121,6 +121,9 @@ var (
 			input:  "show replicas",
 		},
 		{
+			input:  "show binary log status",
+		},
+		{
 			input: "start replica",
 		},
 		{
