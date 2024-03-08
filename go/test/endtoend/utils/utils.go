@@ -88,7 +88,13 @@ func AssertMatchesAny(t testing.TB, conn *mysql.Conn, query string, expected ...
 			return
 		}
 	}
-	t.Errorf("Query: %s (-want +got):\n%v\nGot:%s", query, expected, got)
+
+	var err strings.Builder
+	_, _ = fmt.Fprintf(&err, "Query did not match:\n%s\n", query)
+	for i, e := range expected {
+		_, _ = fmt.Fprintf(&err, "Expected query %d does not match.\nwant: %v\ngot:  %v\n\n", i, e, got)
+	}
+	t.Error(err.String())
 }
 
 // AssertMatchesCompareMySQL executes the given query on both Vitess and MySQL and make sure

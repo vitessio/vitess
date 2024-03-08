@@ -341,6 +341,7 @@ func isParentSelectStatement(cursor *sqlparser.Cursor) bool {
 type originable interface {
 	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
 	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ evalengine.Type)
+	collationEnv() *collations.Environment
 }
 
 func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ evalengine.Type) {
@@ -348,6 +349,10 @@ func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet,
 	direct = a.binder.direct.dependencies(expr)
 	typ = a.typer.exprType(expr)
 	return
+}
+
+func (a *analyzer) collationEnv() *collations.Environment {
+	return a.typer.collationEnv
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
