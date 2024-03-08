@@ -1003,8 +1003,8 @@ func buildChangedVindexesValues(
 	table *vindexes.Table,
 	ksidCols []sqlparser.IdentifierCI,
 	assignments []SetExpr,
-) (vv map[string]*engine.VindexValues, ownedVindexQuery *sqlparser.Select, subQueriesArgOnChangedVindex []string) {
-	changedVindexes := make(map[string]*engine.VindexValues)
+) (changedVindexes map[string]*engine.VindexValues, ovq *sqlparser.Select, subQueriesArgOnChangedVindex []string) {
+	changedVindexes = make(map[string]*engine.VindexValues)
 	selExprs, offset := initialQuery(ksidCols, table)
 	for i, vindex := range table.ColumnVindexes {
 		vindexValueMap := make(map[string]evalengine.Expr)
@@ -1036,7 +1036,7 @@ func buildChangedVindexesValues(
 		return nil, nil, nil
 	}
 	// generate rest of the owned vindex query.
-	ovq := &sqlparser.Select{
+	ovq = &sqlparser.Select{
 		SelectExprs: selExprs,
 		OrderBy:     update.OrderBy,
 		Limit:       update.Limit,

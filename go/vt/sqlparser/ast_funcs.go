@@ -2687,7 +2687,8 @@ func (node *Update) SetWherePredicate(expr Expr) {
 	}
 }
 
-func (lock Lock) Merge(newLock Lock) Lock {
+// GetHighestOrderLock returns the higher level lock between the current lock and the new lock
+func (lock Lock) GetHighestOrderLock(newLock Lock) Lock {
 	if newLock > lock {
 		return newLock
 	}
