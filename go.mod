@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.20
+go 1.20.13
 
 require (
 	cloud.google.com/go/storage v1.30.1
@@ -21,7 +21,7 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/golang/glog v1.1.2
-	github.com/golang/protobuf v1.5.3
+	github.com/golang/protobuf v1.5.4
 	github.com/golang/snappy v0.0.4
 	github.com/google/go-cmp v0.5.9
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
