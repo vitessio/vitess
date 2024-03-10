@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -74,6 +75,16 @@ var (
 		"inorder": TabletPickerTabletOrder_InOrder,
 	}
 )
+
+// BuildTabletTypesString is a helper to build a serialized string representation of
+// the tablet type(s) and optional in order clause for later use with the TabletPicker.
+func BuildTabletTypesString(tabletTypes []topodatapb.TabletType, tabletSelectionPreference tabletmanagerdatapb.TabletSelectionPreference) string {
+	tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
+	if tabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
+		tabletTypesStr = InOrderHint + tabletTypesStr
+	}
+	return tabletTypesStr
+}
 
 // GetTabletPickerRetryDelay synchronizes changes to tabletPickerRetryDelay. Used in tests only at the moment
 func GetTabletPickerRetryDelay() time.Duration {

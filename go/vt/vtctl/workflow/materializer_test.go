@@ -28,12 +28,11 @@ import (
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtenv"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -540,8 +539,26 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	require.NoError(t, err)
 	sourceShard, err := env.topoServ.GetShardNames(ctx, ms.SourceKeyspace)
 	require.NoError(t, err)
-	want := fmt.Sprintf("shard_streams:{key:\"%s/%s\" value:{streams:{id:1 tablet:{cell:\"%s\" uid:200} source_shard:\"%s/%s\" position:\"%s\" status:\"Running\" info:\"VStream Lag: 0s\"}}} traffic_state:\"Reads Not Switched. Writes Not Switched\"",
-		ms.TargetKeyspace, targetShard[0], env.cell, ms.SourceKeyspace, sourceShard[0], position)
+	want := &vtctldatapb.WorkflowStatusResponse{
+		ShardStreams: map[string]*vtctldatapb.WorkflowStatusResponse_ShardStreams{
+			fmt.Sprintf("%s/%s", ms.TargetKeyspace, targetShard[0]): {
+				Streams: []*vtctldatapb.WorkflowStatusResponse_ShardStreamState{
+					{
+						Id: 1,
+						Tablet: &topodatapb.TabletAlias{
+							Cell: env.cell,
+							Uid:  200,
+						},
+						SourceShard: fmt.Sprintf("%s/%s", ms.SourceKeyspace, sourceShard[0]),
+						Position:    position,
+						Status:      binlogdatapb.VReplicationWorkflowState_Running.String(),
+						Info:        "VStream Lag: 0s",
+					},
+				},
+			},
+		},
+		TrafficState: "Reads Not Switched. Writes Not Switched",
+	}
 
 	res, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:       ms.Workflow,
@@ -551,7 +568,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 		NoRoutingRules: true,
 	})
 	require.NoError(t, err)
-	require.Equal(t, want, fmt.Sprintf("%+v", res))
+	require.EqualValues(t, want, res, "got: %+v, want: %+v", res, want)
 	rr, err := env.ws.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
 	require.Zerof(t, len(rr.Rules), "routing rules should be empty, found %+v", rr.Rules)

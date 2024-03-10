@@ -400,7 +400,6 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	results := make(map[*topo.TabletInfo]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, len(shards))
 	readWorkflowsEg, readWorkflowsCtx := errgroup.WithContext(ctx)
 	for _, shard := range shards {
-		shard := shard // https://golang.org/doc/faq#closures_and_goroutines
 		readWorkflowsEg.Go(func() error {
 			si, err := s.ts.GetShard(readWorkflowsCtx, req.Keyspace, shard)
 			if err != nil {
@@ -1603,10 +1602,7 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 		log.Errorf("%w", err2)
 		return nil, err
 	}
-	tabletTypesStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
-	if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
-		tabletTypesStr = discovery.InOrderHint + tabletTypesStr
-	}
+	tabletTypesStr := discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
 	rs, err := s.buildResharder(ctx, keyspace, req.Workflow, req.SourceShards, req.TargetShards, strings.Join(cells, ","), tabletTypesStr)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "buildResharder")
@@ -1653,7 +1649,7 @@ func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRe
 	span.Annotate("auto_retry", req.AutoRetry)
 	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 
-	tabletTypesStr := buildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
+	tabletTypesStr := discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
 
 	// This is a pointer so there's no ZeroValue in the message
 	// and an older v18 client will not provide it.

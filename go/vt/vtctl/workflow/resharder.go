@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo"
@@ -193,7 +194,7 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 						workflow:        workflow.Workflow,
 						bls:             bls,
 						cell:            workflow.Cells,
-						tabletTypes:     buildTabletTypesString(workflow.TabletTypes, workflow.TabletSelectionPreference),
+						tabletTypes:     discovery.BuildTabletTypesString(workflow.TabletTypes, workflow.TabletSelectionPreference),
 						workflowType:    workflow.WorkflowType,
 						workflowSubType: workflow.WorkflowSubType,
 					}

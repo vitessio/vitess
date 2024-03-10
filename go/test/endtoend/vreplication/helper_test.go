@@ -574,12 +574,10 @@ func isTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table st
 func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int, states ...string) {
 	var query string
 	if len(states) == 0 {
-		query = sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where workflow='%s' and state='%s'",
-			sidecarDBIdentifier, workflow, binlogdatapb.VReplicationWorkflowState_Running.String()).Query
-	} else {
-		query = sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where workflow='%s' and state in ('%s')",
-			sidecarDBIdentifier, workflow, strings.Join(states, "','")).Query
+		states = append(states, binlogdatapb.VReplicationWorkflowState_Running.String())
 	}
+	query = sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where workflow='%s' and state in ('%s')",
+		sidecarDBIdentifier, workflow, strings.Join(states, "','")).Query
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 

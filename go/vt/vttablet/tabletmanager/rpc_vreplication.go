@@ -284,12 +284,12 @@ func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tab
 		if err != nil {
 			return nil, vterrors.Wrap(err, "error parsing binlog_source field from vreplication table record")
 		}
-		blspb := &binlogdatapb.BinlogSource{}
-		err = prototext.Unmarshal(srcBytes, blspb)
+		bls := &binlogdatapb.BinlogSource{}
+		err = prototext.Unmarshal(srcBytes, bls)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "error unmarshaling binlog_source field from vreplication table record")
 		}
-		stream.Bls = blspb
+		stream.Bls = bls
 		stream.Pos = row["pos"].ToString()
 		stream.StopPos = row["stop_pos"].ToString()
 		if stream.MaxTps, err = row["max_tps"].ToInt64(); err != nil {

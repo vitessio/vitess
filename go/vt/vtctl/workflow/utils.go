@@ -767,11 +767,3 @@ func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.Table
 		WorkflowSubType: workflowSubType,
 	}, nil
 }
-
-func buildTabletTypesString(tabletTypes []topodatapb.TabletType, tabletSelectionPreference tabletmanagerdatapb.TabletSelectionPreference) string {
-	tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
-	if tabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
-		tabletTypesStr = discovery.InOrderHint + tabletTypesStr
-	}
-	return tabletTypesStr
-}
