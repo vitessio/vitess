@@ -695,6 +695,36 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityImpossible,
 		},
 		{
+			name: "add a table and a valid fk cycle references",
+			toQueries: []string{
+				"create table t0 (id int primary key, info int not null, i int, constraint f1 foreign key (i) references t2 (id) on delete restrict);",
+				"create table t1 (id int primary key, info int not null);",
+				"create table t2 (id int primary key, ts timestamp,      i int, constraint f2 foreign key (i) references t0 (id) on delete set null);",
+				"create view v1 as select id from t1",
+			},
+			expectDiffs:       2,
+			expectDeps:        2,
+			sequential:        true,
+			fkStrategy:        ForeignKeyCheckStrategyStrict,
+			entityOrder:       []string{"t0", "t2"},
+			instantCapability: InstantDDLCapabilityImpossible,
+		},
+		{
+			name: "add a table and a valid fk cycle references, lelxicographically desc",
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create table t2 (id int primary key, ts timestamp,      i int, constraint f2 foreign key (i) references t9 (id) on delete set null);",
+				"create table t9 (id int primary key, info int not null, i int, constraint f1 foreign key (i) references t2 (id) on delete restrict);",
+				"create view v1 as select id from t1",
+			},
+			expectDiffs:       2,
+			expectDeps:        2,
+			sequential:        true,
+			fkStrategy:        ForeignKeyCheckStrategyStrict,
+			entityOrder:       []string{"t9", "t2"},
+			instantCapability: InstantDDLCapabilityImpossible,
+		},
+		{
 			name: "add FK, unrelated alter",
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null, key info_idx(info));",
