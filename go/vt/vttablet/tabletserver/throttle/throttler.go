@@ -583,6 +583,10 @@ func (throttler *Throttler) requestHeartbeats() {
 // stimulatePrimaryThrottler sends a check request to the primary tablet in the shard, to stimulate
 // it to request for heartbeats.
 func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmClient tmclient.TabletManagerClient) error {
+	// Some reasonable timeout, to ensure we release connections even if they're hanging (otherwise grpc-go keeps polling those connections forever)
+	ctx, cancel := context.WithTimeout(ctx, throttler.dormantPeriod)
+	defer cancel()
+
 	tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
 	if err != nil {
 		return err
