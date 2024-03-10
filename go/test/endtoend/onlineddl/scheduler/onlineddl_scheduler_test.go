@@ -2214,6 +2214,7 @@ func testForeignKeys(t *testing.T) {
 		sql                       string
 		allowForeignKeys          bool
 		expectHint                string
+		expectCountUUIDs          int
 		onlyIfFKOnlineDDLPossible bool
 	}
 	var testCases = []testCase{
@@ -2293,6 +2294,7 @@ func testForeignKeys(t *testing.T) {
 				create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id));
 				`,
 			allowForeignKeys: true,
+			expectCountUUIDs: 2,
 			expectHint:       "t11",
 		},
 	}
@@ -2337,6 +2339,9 @@ func testForeignKeys(t *testing.T) {
 		return testOnlineDDLStatement(t, createParams(sql, ddlStrategy, "vtctl", expectHint, errorHint, false))
 	}
 	for _, testcase := range testCases {
+		if testcase.expectCountUUIDs == 0 {
+			testcase.expectCountUUIDs = 1
+		}
 		t.Run(testcase.name, func(t *testing.T) {
 			if testcase.onlyIfFKOnlineDDLPossible && !fkOnlineDDLPossible {
 				t.Skipf("skipped because backing database does not support 'rename_table_preserve_foreign_key'")
@@ -2373,7 +2378,10 @@ func testForeignKeys(t *testing.T) {
 			var uuid string
 			t.Run("run migration", func(t *testing.T) {
 				if testcase.allowForeignKeys {
-					uuid = testStatement(t, testcase.sql, ddlStrategyAllowFK, testcase.expectHint, false)
+					output := testStatement(t, testcase.sql, ddlStrategyAllowFK, testcase.expectHint, false)
+					uuids := strings.Split(output, "\n")
+					assert.Equal(t, testcase.expectCountUUIDs, len(uuids))
+					uuid = uuids[0] // in case of multiple statements, we only check the first
 					onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 				} else {
 					uuid = testStatement(t, testcase.sql, ddlStrategy, "", true)
@@ -2393,7 +2401,7 @@ func testForeignKeys(t *testing.T) {
 					artifacts = textutil.SplitDelimitedList(row.AsString("artifacts", ""))
 				}
 
-				artifacts = append(artifacts, "child_table", "child_nofk_table", "parent_table")
+				artifacts = append(artifacts, "child_table", "child_nofk_table", "parent_table", "t11", "t12")
 				// brute force drop all tables. In MySQL 8.0 you can do a single `DROP TABLE ... <list of all tables>`
 				// which auto-resovled order. But in 5.7 you can't.
 				droppedTables := map[string]bool{}
