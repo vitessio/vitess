@@ -830,12 +830,12 @@ func TestDiffSchemas(t *testing.T) {
 				create table t12 (id int primary key, i int, constraint f1201c foreign key (i) references t11 (id) on delete set null);
 			`,
 			diffs: []string{
-				"create table t11 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f1101 (i),\n\tconstraint f1101 foreign key (i) references t12 (id) on delete restrict\n)",
-				"create table t12 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f1201 (i),\n\tconstraint f1201 foreign key (i) references t11 (id) on delete set null\n)",
+				"create table t11 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f1101c (i),\n\tconstraint f1101c foreign key (i) references t12 (id) on delete restrict\n)",
+				"create table t12 (\n\tid int,\n\ti int,\n\tprimary key (id),\n\tkey f1201c (i),\n\tconstraint f1201c foreign key (i) references t11 (id) on delete set null\n)",
 			},
 			cdiffs: []string{
-				"CREATE TABLE `t11` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f1101` (`i`),\n\tCONSTRAINT `f1101` FOREIGN KEY (`i`) REFERENCES `t12` (`id`) ON DELETE RESTRICT\n)",
-				"CREATE TABLE `t12` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f1201` (`i`),\n\tCONSTRAINT `f1201` FOREIGN KEY (`i`) REFERENCES `t11` (`id`) ON DELETE SET NULL\n)",
+				"CREATE TABLE `t11` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f1101c` (`i`),\n\tCONSTRAINT `f1101c` FOREIGN KEY (`i`) REFERENCES `t12` (`id`) ON DELETE RESTRICT\n)",
+				"CREATE TABLE `t12` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f1201c` (`i`),\n\tCONSTRAINT `f1201c` FOREIGN KEY (`i`) REFERENCES `t11` (`id`) ON DELETE SET NULL\n)",
 			},
 			fkStrategy: ForeignKeyCheckStrategyIgnore,
 		},

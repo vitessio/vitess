@@ -681,6 +681,20 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityImpossible,
 		},
 		{
+			name: "add two valid fk cycle references",
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, i int, constraint f1 foreign key (i) references t2 (id) on delete restrict);",
+				"create table t2 (id int primary key, ts timestamp,      i int, constraint f2 foreign key (i) references t1 (id) on delete set null);",
+				"create view v1 as select id from t1",
+			},
+			expectDiffs:       2,
+			expectDeps:        2,
+			sequential:        false,
+			fkStrategy:        ForeignKeyCheckStrategyStrict,
+			entityOrder:       []string{"t1", "t2"},
+			instantCapability: InstantDDLCapabilityImpossible,
+		},
+		{
 			name: "add FK, unrelated alter",
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null, key info_idx(info));",
