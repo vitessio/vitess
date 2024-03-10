@@ -54,12 +54,7 @@ import (
 )
 
 const (
-	dbNamePrefix             = "vt_"
 	insertVReplicationPrefix = "insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys)"
-	getWorkflow              = "select id from _vt.vreplication where db_name='vt_%s' and workflow='%s'"
-	checkForWorkflow         = "select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'"
-	checkForFrozenWorkflow   = "select 1 from _vt.vreplication where db_name='vt_%s' and message='FROZEN' and workflow_sub_type != 1"
-	freezeWorkflow           = "update _vt.vreplication set message = 'FROZEN' where db_name='vt_%s' and workflow='%s'"
 	checkForJournal          = "/select val from _vt.resharding_journal where id="
 	getWorkflowState         = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=%d"
 	getCopyState             = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
@@ -78,9 +73,9 @@ const (
 	deleteWorkflow           = "delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
 	updatePickedSourceTablet = `update _vt.vreplication set message='Picked source tablet: cell:\"%s\" uid:%d' where id=%d`
 	getRowsCopied            = "SELECT rows_copied FROM _vt.vreplication WHERE id=%d"
-	hasWorkflows             = "select if(count(*) > 0, 1, 0) as has_workflows from _vt.vreplication where db_name = 'vt_%s'"
-	readAllWorkflows         = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_%s'%s group by workflow, id order by workflow, id"
-	readWorkflowsLimited     = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_%s' and workflow in ('%s') group by workflow, id order by workflow, id"
+	hasWorkflows             = "select if(count(*) > 0, 1, 0) as has_workflows from _vt.vreplication where db_name = '%s'"
+	readAllWorkflows         = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = '%s'%s group by workflow, id order by workflow, id"
+	readWorkflowsLimited     = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = '%s' and workflow in ('%s') group by workflow, id order by workflow, id"
 	readWorkflow             = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow = '%s' and db_name = '%s'"
 	readWorkflowConfig       = "select id, source, cell, tablet_types, state, message from _vt.vreplication where workflow = '%s'"
 	updateWorkflow           = "update _vt.vreplication set state = '%s', source = '%s', cell = '%s', tablet_types = '%s' where id in (%d)"
@@ -284,7 +279,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			// the test with an error as at this point we've tested what
 			// we wanted to test.
 			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 			targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 			targetTablet.vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{}, errShortCircuit)
 			_, err := ws.MoveTablesCreate(ctx, tt.req)
@@ -397,7 +392,7 @@ func TestMoveTables(t *testing.T) {
 		addInvariants(ftc.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 
 		tenv.tmc.setVReplicationExecResults(ftc.tablet, getCopyState, &sqltypes.Result{})
-		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 		insert := fmt.Sprintf(`%s values ('%s', 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(id, \'%s.hash\', \'%s\')\"}}', '', 0, 0, '%s', 'primary,replica,rdonly', now(), 0, 'Stopped', '%s', %d, 0, 0)`,
 			insertVReplicationPrefix, wf, sourceKs, sourceShard, targetKs, ftc.tablet.Shard, tenv.cells[0], tenv.dbName, vreplID)
 		ftc.vrdbClient.ExpectRequest(insert, &sqltypes.Result{InsertID: 1}, nil)
@@ -441,7 +436,7 @@ func TestMoveTables(t *testing.T) {
 			),
 			fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Running||%s|1||0|0|0||0|1", vreplID, bls, position, targetKs),
 		), nil)
-		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowsLimited, targetKs, wf), sqltypes.MakeTestResult(
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowsLimited, tenv.dbName, wf), sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"workflow|id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys",
 				"workflow|int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64",
@@ -477,7 +472,7 @@ func TestMoveTables(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, ftc := range targetShards {
-		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowsLimited, targetKs, wf), sqltypes.MakeTestResult(
+		ftc.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowsLimited, tenv.dbName, wf), sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"workflow|id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys",
 				"workflow|int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64",
@@ -521,7 +516,7 @@ func TestMoveTables(t *testing.T) {
 		),
 		fmt.Sprintf("%d|%s|%s|NULL|0|0|||1686577659|0|Running||%s|1||0|0|0||0|1", vreplID, bls, position, sourceKs),
 	), nil)
-	sourceTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowsLimited, sourceKs, workflow.ReverseWorkflowName(wf)), sqltypes.MakeTestResult(
+	sourceTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowsLimited, tenv.dbName, workflow.ReverseWorkflowName(wf)), sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"workflow|id|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type|defer_secondary_keys",
 			"workflow|int64|varchar|blob|varchar|int64|int64|varchar|varchar|int64|int64|varchar|varchar|varchar|int64|varchar|int64|int64|int64|varchar|int64|int64",
@@ -987,7 +982,7 @@ func TestSourceShardSelection(t *testing.T) {
 			for uid, streams := range tt.streams {
 				tt := targetTablets[uid]
 				tt.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-				tt.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+				tt.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 				for i, sourceShard := range streams {
 					var err error
 					if i == len(streams)-1 {
@@ -1078,7 +1073,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 
 	addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 
-	tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	tenv.tmc.tablets[targetTabletUID].vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(
 		fmt.Sprintf("%s %s",
 			insertVReplicationPrefix,
@@ -1241,12 +1236,10 @@ func TestHasVReplicationWorkflows(t *testing.T) {
 
 			require.NotNil(t, tt.tablet, "No tablet provided")
 
-			req := &tabletmanagerdatapb.HasVReplicationWorkflowsRequest{
-				DbName: dbNamePrefix + tt.tablet.tablet.Keyspace,
-			}
+			req := &tabletmanagerdatapb.HasVReplicationWorkflowsRequest{}
 
 			tt.tablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-			tt.tablet.vrdbClient.ExpectRequest(fmt.Sprintf(hasWorkflows, tt.tablet.tablet.Keyspace), tt.queryRes, nil)
+			tt.tablet.vrdbClient.ExpectRequest(fmt.Sprintf(hasWorkflows, tenv.dbName), tt.queryRes, nil)
 
 			got, err := tenv.tmc.HasVReplicationWorkflows(ctx, tt.tablet.tablet, req)
 			if (err != nil) != tt.wantErr {
@@ -1281,21 +1274,13 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name:    "no db name",
-			req:     &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{},
-			wantErr: true,
-		},
-		{
-			name: "only db name",
-			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-				DbName: dbNamePrefix + ks,
-			},
+			name: "nothing",
+			req:  &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{},
 			// No additional query predicates.
 		},
 		{
 			name: "all except frozen",
 			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-				DbName:        dbNamePrefix + ks,
 				ExcludeFrozen: true,
 			},
 			wantPreds: " and message != 'FROZEN'",
@@ -1303,7 +1288,6 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 		{
 			name: "1-3 unless frozen",
 			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-				DbName:        dbNamePrefix + ks,
 				IncludeIds:    []int32{1, 2, 3},
 				ExcludeFrozen: true,
 			},
@@ -1312,7 +1296,6 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 		{
 			name: "all but wf1 and wf2",
 			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-				DbName:           dbNamePrefix + ks,
 				ExcludeWorkflows: []string{"wf1", "wf2"},
 			},
 			wantPreds: " and workflow not in ('wf1','wf2')",
@@ -1320,7 +1303,6 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 		{
 			name: "all but wf1 and wf2",
 			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-				DbName:           dbNamePrefix + ks,
 				ExcludeWorkflows: []string{"wf1", "wf2"},
 			},
 			wantPreds: " and workflow not in ('wf1','wf2')",
@@ -1328,7 +1310,6 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 		{
 			name: "only wf1 and wf2",
 			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-				DbName:           dbNamePrefix + ks,
 				IncludeWorkflows: []string{"wf1", "wf2"},
 				ExcludeStates: []binlogdatapb.VReplicationWorkflowState{
 					binlogdatapb.VReplicationWorkflowState_Stopped,
@@ -1339,7 +1320,6 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 		{
 			name: "only copying or running",
 			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-				DbName: dbNamePrefix + ks,
 				IncludeStates: []binlogdatapb.VReplicationWorkflowState{
 					binlogdatapb.VReplicationWorkflowState_Copying,
 					binlogdatapb.VReplicationWorkflowState_Running,
@@ -1350,7 +1330,6 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 		{
 			name: "mess of predicates",
 			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-				DbName:           dbNamePrefix + ks,
 				IncludeIds:       []int32{1, 3},
 				IncludeWorkflows: []string{"wf1"},
 				ExcludeWorkflows: []string{"wf2"},
@@ -1376,7 +1355,7 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 
 			if !tt.wantErr { // Errors we're testing for occur before executing any queries.
 				tablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-				tablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tablet.tablet.Keyspace, tt.wantPreds), &sqltypes.Result{}, nil)
+				tablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, tt.wantPreds), &sqltypes.Result{}, nil)
 			}
 
 			_, err := tenv.tmc.ReadVReplicationWorkflows(ctx, tablet.tablet, tt.req)
@@ -1767,7 +1746,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
 
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 
 	// This is our expected query, which will also short circuit
@@ -1829,7 +1808,7 @@ func TestMaterializerManyToOne(t *testing.T) {
 
 	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
 	targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 	// This is our expected query, which will also short circuit
 	// the test with an error as at this point we've tested what
@@ -1930,7 +1909,7 @@ func TestMaterializerOneToMany(t *testing.T) {
 		targetTablet := targetShards[targetShard]
 		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 		targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
-		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, '%s.xxhash', '%s')\"}}",
 			sourceKs, sourceShard, targetKs, targetShard)
@@ -2028,7 +2007,7 @@ func TestMaterializerManyToMany(t *testing.T) {
 	for _, targetShard := range []string{"-80", "80-"} {
 		targetTablet := targetShards[targetShard]
 		targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
-		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 		for i, sourceShard := range []string{"-40", "40-"} { // One insert per [binlog]source/stream
 			addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID+(i*10), position, wf, tenv.cells[0])
@@ -2131,7 +2110,7 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 		targetTablet := targetShards[targetShard]
 		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 		targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
-		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1 where in_keyrange(c1, c2, '%s.region', '%s')\"}}",
 			sourceKs, sourceShard, targetKs, targetShard)
@@ -2212,7 +2191,7 @@ func TestMaterializerDeploySchema(t *testing.T) {
 	}
 	tenv.tmc.tabletSchemas[targetTabletUID] = schema
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, `t2ddl`, &sqltypes.Result{}) // Execute the fake CreateDdl
 
@@ -2283,7 +2262,7 @@ func TestMaterializerCopySchema(t *testing.T) {
 	}
 	tenv.tmc.tabletSchemas[targetTabletUID] = schema
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 
 	// This is our expected query, which will also short circuit
@@ -2371,7 +2350,7 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 		targetTablet := targetShards[targetShard]
 		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 		targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
-		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c1, c1 + c2, c2 from t1 where in_keyrange(c1, c2, '%s.region', '%s')\"}}",
 			sourceKs, sourceShard, targetKs, targetShard)
@@ -2471,7 +2450,7 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 		targetTablet := targetShards[targetShard]
 		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
 		targetTablet.vrdbClient.AddInvariant("update _vt.vreplication set message='no schema defined' where id=1", &sqltypes.Result{}) // If the first workflow controller progresses ...
-		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 		bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select c3 as c1, c1 + c2, c4 as c2 from t1 where in_keyrange(c3, c4, '%s.region', '%s')\"}}",
 			sourceKs, sourceShard, targetKs, targetShard)
@@ -2544,7 +2523,7 @@ func TestMaterializerStopAfterCopy(t *testing.T) {
 	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
 
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
 
 	// This is our expected query, which will also short circuit
@@ -2603,7 +2582,7 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 	addMaterializeSettingsTablesToSchema(ms, tenv, vtenv)
 
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 	err = ws.Materialize(ctx, ms)
 	targetTablet.vrdbClient.Wait()
@@ -2648,7 +2627,7 @@ func TestMaterializerNoDDL(t *testing.T) {
 	// Clear out the schema on the target tablet.
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
@@ -2745,7 +2724,7 @@ func TestMaterializerTableMismatchNonCopy(t *testing.T) {
 	// Clear out the schema on the target tablet.
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
@@ -2791,7 +2770,7 @@ func TestMaterializerTableMismatchCopy(t *testing.T) {
 	// Clear out the schema on the target tablet.
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "source and target table names must match for copying schema: t2 vs t1")
@@ -2833,7 +2812,7 @@ func TestMaterializerNoSourceTable(t *testing.T) {
 	tenv.tmc.tabletSchemas[sourceTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "source table t1 does not exist")
@@ -2881,7 +2860,7 @@ func TestMaterializerSyntaxError(t *testing.T) {
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, ms.TableSettings[0].CreateDdl, &sqltypes.Result{})
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "syntax error at position 4 near 'bad'")
@@ -2929,7 +2908,7 @@ func TestMaterializerNotASelect(t *testing.T) {
 	tenv.tmc.tabletSchemas[targetTabletUID] = &tabletmanagerdatapb.SchemaDefinition{}
 	tenv.tmc.setVReplicationExecResults(targetTablet.tablet, ms.TableSettings[0].CreateDdl, &sqltypes.Result{})
 	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.GetIdentifier()), &sqltypes.Result{}, nil)
-	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+	targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "unrecognized statement: update t1 set val=1")
@@ -3007,7 +2986,7 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 	for _, targetShard := range []string{"-80", "80-"} {
 		targetTablet := targetShards[targetShard]
 		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
-		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 		errs = append(errs, errNoVindex)
 	}
 
@@ -3082,7 +3061,7 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 	for _, targetShard := range []string{"-80", "80-"} {
 		targetTablet := targetShards[targetShard]
 		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
-		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 		errs = append(errs, errNoVindex)
 	}
 
@@ -3157,7 +3136,7 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 	for _, targetShard := range []string{"-80", "80-"} {
 		targetTablet := targetShards[targetShard]
 		addInvariants(targetTablet.vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
-		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, targetKs, ""), &sqltypes.Result{}, nil)
+		targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readAllWorkflows, tenv.dbName, ""), &sqltypes.Result{}, nil)
 		errs = append(errs, errNoVindex)
 	}
 
@@ -3166,7 +3145,11 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 }
 
 func TestBuildReadVReplicationWorkflowsQuery(t *testing.T) {
-	dbName := "vt_testks"
+	tm := &TabletManager{
+		DBConfigs: &dbconfigs.DBConfigs{
+			DBName: "vt_testks",
+		},
+	}
 	tests := []struct {
 		name    string
 		req     *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest
@@ -3174,14 +3157,8 @@ func TestBuildReadVReplicationWorkflowsQuery(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "no db name",
-			req:     &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{},
-			wantErr: errNoDBName.Error(),
-		},
-		{
 			name: "all options",
 			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-				DbName:           dbName,
 				IncludeIds:       []int32{1, 2, 3},
 				IncludeWorkflows: []string{"wf1", "wf2"},
 				ExcludeWorkflows: []string{"1wf"},
@@ -3193,7 +3170,6 @@ func TestBuildReadVReplicationWorkflowsQuery(t *testing.T) {
 		{
 			name: "2 workflows if running",
 			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-				DbName:           dbName,
 				IncludeWorkflows: []string{"wf1", "wf2"},
 				IncludeStates:    []binlogdatapb.VReplicationWorkflowState{binlogdatapb.VReplicationWorkflowState_Running},
 			},
@@ -3202,7 +3178,7 @@ func TestBuildReadVReplicationWorkflowsQuery(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := buildReadVReplicationWorkflowsQuery(tt.req)
+			got, err := tm.buildReadVReplicationWorkflowsQuery(tt.req)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 			} else {

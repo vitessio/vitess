@@ -1927,9 +1927,7 @@ func (m *HasVReplicationWorkflowsRequest) CloneVT() *HasVReplicationWorkflowsReq
 	if m == nil {
 		return (*HasVReplicationWorkflowsRequest)(nil)
 	}
-	r := &HasVReplicationWorkflowsRequest{
-		DbName: m.DbName,
-	}
+	r := &HasVReplicationWorkflowsRequest{}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1964,7 +1962,6 @@ func (m *ReadVReplicationWorkflowsRequest) CloneVT() *ReadVReplicationWorkflowsR
 		return (*ReadVReplicationWorkflowsRequest)(nil)
 	}
 	r := &ReadVReplicationWorkflowsRequest{
-		DbName:        m.DbName,
 		ExcludeFrozen: m.ExcludeFrozen,
 	}
 	if rhs := m.IncludeIds; rhs != nil {
@@ -6882,13 +6879,6 @@ func (m *HasVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (i
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.DbName) > 0 {
-		i -= len(m.DbName)
-		copy(dAtA[i:], m.DbName)
-		i = encodeVarint(dAtA, i, uint64(len(m.DbName)))
-		i--
-		dAtA[i] = 0xa
-	}
 	return len(dAtA) - i, nil
 }
 
@@ -6973,7 +6963,7 @@ func (m *ReadVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x38
+		dAtA[i] = 0x30
 	}
 	if len(m.ExcludeStates) > 0 {
 		var pksize2 int
@@ -6994,7 +6984,7 @@ func (m *ReadVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 		}
 		i = encodeVarint(dAtA, i, uint64(pksize2))
 		i--
-		dAtA[i] = 0x32
+		dAtA[i] = 0x2a
 	}
 	if len(m.ExcludeWorkflows) > 0 {
 		for iNdEx := len(m.ExcludeWorkflows) - 1; iNdEx >= 0; iNdEx-- {
@@ -7002,7 +6992,7 @@ func (m *ReadVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 			copy(dAtA[i:], m.ExcludeWorkflows[iNdEx])
 			i = encodeVarint(dAtA, i, uint64(len(m.ExcludeWorkflows[iNdEx])))
 			i--
-			dAtA[i] = 0x2a
+			dAtA[i] = 0x22
 		}
 	}
 	if len(m.IncludeStates) > 0 {
@@ -7024,7 +7014,7 @@ func (m *ReadVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 		}
 		i = encodeVarint(dAtA, i, uint64(pksize4))
 		i--
-		dAtA[i] = 0x22
+		dAtA[i] = 0x1a
 	}
 	if len(m.IncludeWorkflows) > 0 {
 		for iNdEx := len(m.IncludeWorkflows) - 1; iNdEx >= 0; iNdEx-- {
@@ -7032,7 +7022,7 @@ func (m *ReadVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 			copy(dAtA[i:], m.IncludeWorkflows[iNdEx])
 			i = encodeVarint(dAtA, i, uint64(len(m.IncludeWorkflows[iNdEx])))
 			i--
-			dAtA[i] = 0x1a
+			dAtA[i] = 0x12
 		}
 	}
 	if len(m.IncludeIds) > 0 {
@@ -7053,13 +7043,6 @@ func (m *ReadVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (
 			j5++
 		}
 		i = encodeVarint(dAtA, i, uint64(pksize6))
-		i--
-		dAtA[i] = 0x12
-	}
-	if len(m.DbName) > 0 {
-		i -= len(m.DbName)
-		copy(dAtA[i:], m.DbName)
-		i = encodeVarint(dAtA, i, uint64(len(m.DbName)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -9809,10 +9792,6 @@ func (m *HasVReplicationWorkflowsRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.DbName)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9836,10 +9815,6 @@ func (m *ReadVReplicationWorkflowsRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.DbName)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
 	if len(m.IncludeIds) > 0 {
 		l = 0
 		for _, e := range m.IncludeIds {
@@ -19625,38 +19600,6 @@ func (m *HasVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: HasVReplicationWorkflowsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DbName", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.DbName = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -19780,38 +19723,6 @@ func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DbName", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.DbName = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 2:
 			if wireType == 0 {
 				var v int32
 				for shift := uint(0); ; shift += 7 {
@@ -19887,7 +19798,7 @@ func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field IncludeIds", wireType)
 			}
-		case 3:
+		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field IncludeWorkflows", wireType)
 			}
@@ -19919,7 +19830,7 @@ func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.IncludeWorkflows = append(m.IncludeWorkflows, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
-		case 4:
+		case 3:
 			if wireType == 0 {
 				var v binlogdata.VReplicationWorkflowState
 				for shift := uint(0); ; shift += 7 {
@@ -19988,7 +19899,7 @@ func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field IncludeStates", wireType)
 			}
-		case 5:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeWorkflows", wireType)
 			}
@@ -20020,7 +19931,7 @@ func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ExcludeWorkflows = append(m.ExcludeWorkflows, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
-		case 6:
+		case 5:
 			if wireType == 0 {
 				var v binlogdata.VReplicationWorkflowState
 				for shift := uint(0); ; shift += 7 {
@@ -20089,7 +20000,7 @@ func (m *ReadVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeStates", wireType)
 			}
-		case 7:
+		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeFrozen", wireType)
 			}

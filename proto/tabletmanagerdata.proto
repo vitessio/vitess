@@ -551,7 +551,6 @@ message DeleteVReplicationWorkflowResponse {
 }
 
 message HasVReplicationWorkflowsRequest {
-  string db_name = 1;
 }
 
 message HasVReplicationWorkflowsResponse {
@@ -559,13 +558,12 @@ message HasVReplicationWorkflowsResponse {
 }
 
 message ReadVReplicationWorkflowsRequest {
-  string db_name = 1;
-  repeated int32 include_ids = 2;
-  repeated string include_workflows = 3;
-  repeated binlogdata.VReplicationWorkflowState include_states = 4;
-  repeated string exclude_workflows = 5;
-  repeated binlogdata.VReplicationWorkflowState exclude_states = 6;
-  bool exclude_frozen = 7;
+  repeated int32 include_ids = 1;
+  repeated string include_workflows = 2;
+  repeated binlogdata.VReplicationWorkflowState include_states = 3;
+  repeated string exclude_workflows = 4;
+  repeated binlogdata.VReplicationWorkflowState exclude_states = 5;
+  bool exclude_frozen = 6;
 }
 
 message ReadVReplicationWorkflowsResponse {

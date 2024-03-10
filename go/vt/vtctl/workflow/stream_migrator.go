@@ -359,7 +359,6 @@ func (sm *StreamMigrator) legacyReadTabletStreams(ctx context.Context, ti *topo.
 // the Reshard workflow's reverse variant.
 func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, ids []int32, states []binlogdatapb.VReplicationWorkflowState, excludeFrozen bool) ([]*VReplicationStream, error) {
 	req := &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-		DbName:           ti.DbName(),
 		ExcludeWorkflows: []string{sm.ts.ReverseWorkflowName()},
 		IncludeIds:       ids,
 		IncludeStates:    states,

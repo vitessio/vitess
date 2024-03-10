@@ -64,7 +64,6 @@ const (
 var (
 	errNoFieldsToUpdate               = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no field values provided to update")
 	errAllWithIncludeExcludeWorkflows = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify all workflows along with either of include or exclude workflows")
-	errNoDBName                       = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no DB name provided")
 )
 
 func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
@@ -140,11 +139,8 @@ func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *ta
 }
 
 func (tm *TabletManager) HasVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
-	if req.GetDbName() == "" {
-		return nil, errNoDBName
-	}
 	bindVars := map[string]*querypb.BindVariable{
-		"db": sqltypes.StringBindVariable(req.GetDbName()),
+		"db": sqltypes.StringBindVariable(tm.DBConfigs.DBName),
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlHasVReplicationWorkflows, sidecar.GetIdentifier(), ":db")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
@@ -173,11 +169,11 @@ func (tm *TabletManager) HasVReplicationWorkflows(ctx context.Context, req *tabl
 }
 
 func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
-	stmt, err := buildReadVReplicationWorkflowsQuery(req)
+	query, err := tm.buildReadVReplicationWorkflowsQuery(req)
 	if err != nil {
 		return nil, err
 	}
-	res, err := tm.VREngine.Exec(stmt)
+	res, err := tm.VREngine.Exec(query)
 	if err != nil {
 		return nil, err
 	}
@@ -527,12 +523,9 @@ func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, p
 
 // buildReadVReplicationWorkflowsQuery builds the SQL query used to read N
 // vreplication workflows based on the request.
-func buildReadVReplicationWorkflowsQuery(req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (string, error) {
-	if req.GetDbName() == "" {
-		return "", errNoDBName
-	}
+func (tm *TabletManager) buildReadVReplicationWorkflowsQuery(req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (string, error) {
 	bindVars := map[string]*querypb.BindVariable{
-		"db": sqltypes.StringBindVariable(req.GetDbName()),
+		"db": sqltypes.StringBindVariable(tm.DBConfigs.DBName),
 	}
 	additionalPredicates := strings.Builder{}
 	if req.GetExcludeFrozen() {
@@ -589,11 +582,11 @@ func buildReadVReplicationWorkflowsQuery(req *tabletmanagerdatapb.ReadVReplicati
 		additionalPredicates.WriteByte(')')
 	}
 	parsed := sqlparser.BuildParsedQuery(sqlReadVReplicationWorkflows, sidecar.GetIdentifier(), ":db", additionalPredicates.String())
-	stmt, err := parsed.GenerateQuery(bindVars, nil)
+	query, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", err
 	}
-	return stmt, nil
+	return query, nil
 }
 
 // buildUpdateVReplicationWorkflowsQuery builds the SQL query used to update

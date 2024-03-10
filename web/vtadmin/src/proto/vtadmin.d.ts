@@ -27769,9 +27769,6 @@ export namespace tabletmanagerdata {
 
     /** Properties of a HasVReplicationWorkflowsRequest. */
     interface IHasVReplicationWorkflowsRequest {
-
-        /** HasVReplicationWorkflowsRequest db_name */
-        db_name?: (string|null);
     }
 
     /** Represents a HasVReplicationWorkflowsRequest. */
@@ -27782,9 +27779,6 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IHasVReplicationWorkflowsRequest);
-
-        /** HasVReplicationWorkflowsRequest db_name. */
-        public db_name: string;
 
         /**
          * Creates a new HasVReplicationWorkflowsRequest instance using the specified properties.
@@ -27964,9 +27958,6 @@ export namespace tabletmanagerdata {
     /** Properties of a ReadVReplicationWorkflowsRequest. */
     interface IReadVReplicationWorkflowsRequest {
 
-        /** ReadVReplicationWorkflowsRequest db_name */
-        db_name?: (string|null);
-
         /** ReadVReplicationWorkflowsRequest include_ids */
         include_ids?: (number[]|null);
 
@@ -27994,9 +27985,6 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IReadVReplicationWorkflowsRequest);
-
-        /** ReadVReplicationWorkflowsRequest db_name. */
-        public db_name: string;
 
         /** ReadVReplicationWorkflowsRequest include_ids. */
         public include_ids: number[];

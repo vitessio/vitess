@@ -134,9 +134,9 @@ func (s *Server) buildResharder(ctx context.Context, keyspace, workflow string, 
 func (rs *resharder) validateTargets(ctx context.Context) error {
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary := rs.targetPrimaries[target.ShardName()]
-		res, err := rs.s.tmc.HasVReplicationWorkflows(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.HasVReplicationWorkflowsRequest{DbName: targetPrimary.DbName()})
+		res, err := rs.s.tmc.HasVReplicationWorkflows(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.HasVReplicationWorkflowsRequest{})
 		if err != nil {
-			return vterrors.Wrapf(err, "HasVReplicationWorkflows(%v, %s)", targetPrimary.Tablet, targetPrimary.DbName())
+			return vterrors.Wrapf(err, "HasVReplicationWorkflows(%v)", targetPrimary.Tablet)
 		}
 		if res.Has {
 			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "some streams already exist in the target shards, please clean them up and retry the command")
@@ -152,7 +152,6 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 		sourcePrimary := rs.sourcePrimaries[source.ShardName()]
 
 		req := &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-			DbName:        sourcePrimary.DbName(),
 			ExcludeFrozen: true,
 		}
 		res, err := rs.s.tmc.ReadVReplicationWorkflows(ctx, sourcePrimary.Tablet, req)

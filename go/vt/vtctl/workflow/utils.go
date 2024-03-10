@@ -106,9 +106,7 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.GetTablet"))
 				return
 			}
-			res, err := tmc.ReadVReplicationWorkflows(ctx, primary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
-				DbName: primary.DbName(),
-			})
+			res, err := tmc.ReadVReplicationWorkflows(ctx, primary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{})
 			if err != nil {
 				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.ReadVReplicationWorkflows"))
 				return

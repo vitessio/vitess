@@ -417,7 +417,6 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			}
 			// Clone the request so that we can set the correct DB name for tablet.
 			req := readReq.CloneVT()
-			req.DbName = primary.DbName()
 			wres, err := s.tmc.ReadVReplicationWorkflows(readWorkflowsCtx, primary.Tablet, req)
 			if err != nil {
 				return err
