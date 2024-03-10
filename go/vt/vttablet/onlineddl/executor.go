@@ -1288,7 +1288,7 @@ func (e *Executor) newConstraintName(onlineDDL *schema.OnlineDDL, constraintType
 // validateAndEditCreateTableStatement inspects the CreateTable AST and does the following:
 // - extra validation (no FKs for now...)
 // - generate new and unique names for all constraints (CHECK and FK; yes, why not handle FK names; even as we don't support FKs today, we may in the future)
-func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onlineDDL *schema.OnlineDDL, createTable *sqlparser.CreateTable) (constraintMap map[string]string, err error) {
+func (e *Executor) validateAndEditCreateTableStatement(onlineDDL *schema.OnlineDDL, createTable *sqlparser.CreateTable) (constraintMap map[string]string, err error) {
 	constraintMap = map[string]string{}
 	hashExists := map[string]bool{}
 
@@ -1315,7 +1315,7 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 // validateAndEditAlterTableStatement inspects the AlterTable statement and:
 // - modifies any CONSTRAINT name according to given name mapping
 // - explode ADD FULLTEXT KEY into multiple statements
-func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, capableOf capabilities.CapableOf, onlineDDL *schema.OnlineDDL, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (alters []*sqlparser.AlterTable, err error) {
+func (e *Executor) validateAndEditAlterTableStatement(capableOf capabilities.CapableOf, onlineDDL *schema.OnlineDDL, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (alters []*sqlparser.AlterTable, err error) {
 	capableOfInstantDDLXtrabackup, err := capableOf(capabilities.InstantDDLXtrabackupCapability)
 	if err != nil {
 		return nil, err
@@ -1405,7 +1405,7 @@ func (e *Executor) duplicateCreateTable(ctx context.Context, onlineDDL *schema.O
 	newCreateTable.SetTable(newCreateTable.GetTable().Qualifier.CompliantName(), newTableName)
 	// manipulate CreateTable statement: take care of constraints names which have to be
 	// unique across the schema
-	constraintMap, err = e.validateAndEditCreateTableStatement(ctx, onlineDDL, newCreateTable)
+	constraintMap, err = e.validateAndEditCreateTableStatement(onlineDDL, newCreateTable)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -1475,7 +1475,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	// Also, change any constraint names:
 
 	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
-	alters, err := e.validateAndEditAlterTableStatement(ctx, capableOf, onlineDDL, alterTable, constraintMap)
+	alters, err := e.validateAndEditAlterTableStatement(capableOf, onlineDDL, alterTable, constraintMap)
 	if err != nil {
 		return v, err
 	}
@@ -2995,7 +2995,7 @@ func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDD
 		newCreateTable := sqlparser.CloneRefOfCreateTable(originalCreateTable)
 		// Rewrite this CREATE TABLE statement such that CONSTRAINT names are edited,
 		// specifically removing any <tablename> prefix.
-		if _, err := e.validateAndEditCreateTableStatement(ctx, onlineDDL, newCreateTable); err != nil {
+		if _, err := e.validateAndEditCreateTableStatement(onlineDDL, newCreateTable); err != nil {
 			return failMigration(err)
 		}
 		ddlStmt = newCreateTable
