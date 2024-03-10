@@ -59,30 +59,12 @@ func shortDesc(target TargetTable, ovq *sqlparser.Select) string {
 
 // getVindexInformation returns the vindex and VindexPlusPredicates for the DML,
 // If it cannot find a unique vindex match, it returns an error.
-func getVindexInformation(id semantics.TableSet, table *vindexes.Table) (
-	*vindexes.ColumnVindex,
-	[]*VindexPlusPredicates) {
-
+func getVindexInformation(id semantics.TableSet, table *vindexes.Table) *vindexes.ColumnVindex {
 	// Check that we have a primary vindex which is valid
 	if len(table.ColumnVindexes) == 0 || !table.ColumnVindexes[0].IsUnique() {
 		panic(vterrors.VT09001(table.Name))
 	}
-	primaryVindex := table.ColumnVindexes[0]
-
-	var vindexesAndPredicates []*VindexPlusPredicates
-	for _, colVindex := range table.Ordered {
-		if lu, isLu := colVindex.Vindex.(vindexes.LookupBackfill); isLu && lu.IsBackfilling() {
-			// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table,
-			// and we will be able to do a delete equal. Otherwise, we continue to look for next best vindex.
-			continue
-		}
-
-		vindexesAndPredicates = append(vindexesAndPredicates, &VindexPlusPredicates{
-			ColVindex: colVindex,
-			TableID:   id,
-		})
-	}
-	return primaryVindex, vindexesAndPredicates
+	return table.ColumnVindexes[0]
 }
 
 func createAssignmentExpressions(

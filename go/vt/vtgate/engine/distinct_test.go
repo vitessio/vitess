@@ -189,6 +189,7 @@ func TestWeightStringFallBack(t *testing.T) {
 	checkCols := []CheckCol{{
 		Col:   0,
 		WsCol: &offsetOne,
+		Type:  evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID),
 	}}
 	input := r("myid|weightstring(myid)",
 		"varchar|varbinary",
@@ -213,5 +214,6 @@ func TestWeightStringFallBack(t *testing.T) {
 	utils.MustMatch(t, []CheckCol{{
 		Col:   0,
 		WsCol: &offsetOne,
+		Type:  evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID),
 	}}, distinct.CheckCols, "checkCols should not be updated")
 }

@@ -193,8 +193,14 @@ func TestCleanupLockfile(t *testing.T) {
 	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
 	assert.NoFileExists(t, "mysql.sock.lock")
 
-	// If the lockfile exists, and the process is found, we don't clean it up.
+	// If the lockfile exists, and the process is found, but it's for ourselves,
+	// we clean it up.
 	os.WriteFile("mysql.sock.lock", []byte(strconv.Itoa(os.Getpid())), 0o600)
+	assert.NoError(t, cleanupLockfile("mysql.sock", ts))
+	assert.NoFileExists(t, "mysql.sock.lock")
+
+	// If the lockfile exists, and the process is found, we don't clean it up.
+	os.WriteFile("mysql.sock.lock", []byte(strconv.Itoa(os.Getppid())), 0o600)
 	assert.Error(t, cleanupLockfile("mysql.sock", ts))
 	assert.FileExists(t, "mysql.sock.lock")
 }

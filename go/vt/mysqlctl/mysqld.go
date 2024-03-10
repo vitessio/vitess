@@ -460,6 +460,10 @@ func cleanupLockfile(socket string, ts string) error {
 		log.Errorf("%v: error parsing pid from lock file: %v", ts, err)
 		return err
 	}
+	if os.Getpid() == p {
+		log.Infof("%v: lock file at %s is ours, removing it", ts, lockPath)
+		return os.Remove(lockPath)
+	}
 	proc, err := os.FindProcess(p)
 	if err != nil {
 		log.Errorf("%v: error finding process: %v", ts, err)
@@ -469,7 +473,13 @@ func cleanupLockfile(socket string, ts string) error {
 	if err == nil {
 		// If the process still exists, it's not safe to
 		// remove the lock file, so we have to keep it around.
-		log.Errorf("%v: not removing socket lock file: %v with pid %v", ts, lockPath, p)
+		cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", p))
+		if err == nil {
+			name := string(bytes.ReplaceAll(cmdline, []byte{0}, []byte(" ")))
+			log.Errorf("%v: not removing socket lock file: %v with pid %v for %q", ts, lockPath, p, name)
+		} else {
+			log.Errorf("%v: not removing socket lock file: %v with pid %v (failed to read process name: %v)", ts, lockPath, p, err)
+		}
 		return fmt.Errorf("process %v is still running", p)
 	}
 	if !errors.Is(err, os.ErrProcessDone) {

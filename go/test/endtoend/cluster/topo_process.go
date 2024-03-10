@@ -33,6 +33,11 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	vtopo "vitess.io/vitess/go/vt/topo"
+
+	// Register topo server implementations
+	_ "vitess.io/vitess/go/vt/topo/consultopo"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
+	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 )
 
 // TopoProcess is a generic handle for a running Topo service .
@@ -51,6 +56,7 @@ type TopoProcess struct {
 	PeerURL            string
 	ZKPorts            string
 	Client             interface{}
+	Server             *vtopo.Server
 
 	proc *exec.Cmd
 	exit chan error
@@ -60,15 +66,22 @@ type TopoProcess struct {
 func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) (err error) {
 	switch topoFlavor {
 	case "zk2":
-		return topo.SetupZookeeper(cluster)
+		err = topo.SetupZookeeper(cluster)
 	case "consul":
-		return topo.SetupConsul(cluster)
+		err = topo.SetupConsul(cluster)
 	default:
 		// Override any inherited ETCDCTL_API env value to
 		// ensure that we use the v3 API and storage.
 		os.Setenv("ETCDCTL_API", "3")
-		return topo.SetupEtcd()
+		err = topo.SetupEtcd()
 	}
+
+	if err != nil {
+		return
+	}
+
+	topo.Server, err = vtopo.OpenServer(topoFlavor, net.JoinHostPort(topo.Host, fmt.Sprintf("%d", topo.Port)), TopoGlobalRoot(topoFlavor))
+	return
 }
 
 // SetupEtcd spawns a new etcd service and initializes it with the defaults.
@@ -289,6 +302,11 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 
 // TearDown shutdowns the running topo service.
 func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoot string, keepdata bool, topoFlavor string) error {
+	if topo.Server != nil {
+		topo.Server.Close()
+		topo.Server = nil
+	}
+
 	if topo.Client != nil {
 		switch cli := topo.Client.(type) {
 		case *clientv3.Client:
@@ -436,4 +454,14 @@ func TopoProcessInstance(port int, peerPort int, hostname string, flavor string,
 	topo.VerifyURL = fmt.Sprintf("http://%s:%d/health", topo.Host, topo.Port)
 	topo.PeerURL = fmt.Sprintf("http://%s:%d", hostname, peerPort)
 	return topo
+}
+
+// TopoGlobalRoot returns the global root for the given topo flavor.
+func TopoGlobalRoot(flavor string) string {
+	switch flavor {
+	case "consul":
+		return "global"
+	default:
+		return "/vitess/global"
+	}
 }
