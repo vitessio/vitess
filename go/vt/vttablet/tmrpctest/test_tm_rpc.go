@@ -85,7 +85,7 @@ func (fra *fakeRPCTM) UpdateVReplicationWorkflow(ctx context.Context, req *table
 	panic("implement me")
 }
 
-func (fra *fakeRPCTM) UpdateVReplicationWorkflowsState(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse, error) {
+func (fra *fakeRPCTM) UpdateVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
 	//TODO implement me
 	panic("implement me")
 }

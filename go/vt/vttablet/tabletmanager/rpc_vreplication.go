@@ -56,9 +56,14 @@ const (
 	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
 	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
-	// Update state values for multiple workflows. The final format specifier is
-	// used to optionally add any additional predicates to the query.
-	sqlUpdateVReplicationWorkflowsState = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
+	// Update metadata/flowcontrol values for multiple workflows. The final format
+	// specifier is used to optionally add any additional predicates to the query.
+	sqlUpdateVReplicationWorkflows = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
+)
+
+var (
+	errNoFieldsToUpdate               = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no field values provided to update")
+	errAllWithIncludeExcludeWorkflows = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify all workflows along with either of include or exclude workflows")
 )
 
 func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
@@ -538,17 +543,57 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 	}, nil
 }
 
-// UpdateVReplicationWorkflowsState operates in much the same way that
-// UpdateVReplicationWorkflow does, but it allows you to update the state
-// related fields -- state, message, stop_pos -- for multiple workflows.
+// UpdateVReplicationWorkflows operates in much the same way that
+// UpdateVReplicationWorkflow does, but it allows you to update the
+// metadata/flow control fields -- state, message, and stop_pos -- for
+// multiple workflows.
 // Note: today this is only used during Reshard as all of the vreplication
 // streams need to be migrated from the old shards to the new ones.
-func (tm *TabletManager) UpdateVReplicationWorkflowsState(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse, error) {
+func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
+	query, err := tm.buildUpdateVReplicationWorkflowsQuery(req)
+	if err != nil {
+		return nil, err
+	}
+	res, err := tm.VREngine.Exec(query)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse{
+		Result: &querypb.QueryResult{
+			RowsAffected: uint64(len(res.Rows)),
+		},
+	}, nil
+}
+
+// VReplicationExec executes a vreplication command.
+func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
+	// Replace any provided sidecar database qualifiers with the correct one.
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
+	if err != nil {
+		return nil, err
+	}
+	qr, err := tm.VREngine.ExecWithDBA(uq)
+	if err != nil {
+		return nil, err
+	}
+	return sqltypes.ResultToProto3(qr), nil
+}
+
+// VReplicationWaitForPos waits for the specified position.
+func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, pos string) error {
+	return tm.VREngine.WaitForPos(ctx, id, pos)
+}
+
+// buildUpdateVReplicationWorkflowsQuery builds the SQL query used to update
+// the metadata/flow control fields for N vreplication workflows based on the
+// request.
+func (tm *TabletManager) buildUpdateVReplicationWorkflowsQuery(req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (string, error) {
 	if req.GetAllWorkflows() && (len(req.GetIncludeWorkflows()) > 0 || len(req.GetExcludeWorkflows()) > 0) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify all workflows along with either of include or exclude workflows")
+		return "", errAllWithIncludeExcludeWorkflows
 	}
 	if textutil.ValueIsSimulatedNull(req.GetState()) && textutil.ValueIsSimulatedNull(req.GetMessage()) && textutil.ValueIsSimulatedNull(req.GetStopPosition()) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no state fields values to update")
+		return "", errNoFieldsToUpdate
 	}
 	sets := strings.Builder{}
 	predicates := strings.Builder{}
@@ -557,7 +602,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflowsState(ctx context.Context, r
 	if !textutil.ValueIsSimulatedNull(req.GetState()) {
 		state, ok := binlogdatapb.VReplicationWorkflowState_name[int32(req.GetState())]
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid state value: %v", req.GetState())
+			return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid state value: %v", req.GetState())
 		}
 		sets.WriteString(" state = ")
 		sets.WriteString(sqltypes.EncodeStringSQL(state))
@@ -598,35 +643,6 @@ func (tm *TabletManager) UpdateVReplicationWorkflowsState(ctx context.Context, r
 		}
 		predicates.WriteByte(')')
 	}
-
-	query := sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflowsState, sidecar.GetIdentifier(), sets.String(), tm.DBConfigs.DBName, predicates.String()).Query
-	res, err := tm.VREngine.Exec(query)
-	if err != nil {
-		return nil, err
-	}
-
-	return &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse{
-		Result: &querypb.QueryResult{
-			RowsAffected: uint64(len(res.Rows)),
-		},
-	}, nil
-}
-
-// VReplicationExec executes a vreplication command.
-func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
-	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
-	if err != nil {
-		return nil, err
-	}
-	qr, err := tm.VREngine.ExecWithDBA(uq)
-	if err != nil {
-		return nil, err
-	}
-	return sqltypes.ResultToProto3(qr), nil
-}
-
-// VReplicationWaitForPos waits for the specified position.
-func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, pos string) error {
-	return tm.VREngine.WaitForPos(ctx, id, pos)
+	query := sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflows, sidecar.GetIdentifier(), sets.String(), tm.DBConfigs.DBName, predicates.String()).Query
+	return query, nil
 }

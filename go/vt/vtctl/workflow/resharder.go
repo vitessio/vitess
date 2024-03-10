@@ -327,15 +327,15 @@ func (rs *resharder) startStreams(ctx context.Context) error {
 		// because we've already confirmed that there were no existing workflows
 		// on the shards when we started, and we want to start all of the ones
 		// that we've created on the new shards as we're migrating them.
-		req := &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest{
+		req := &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 			AllWorkflows: true,
 			State:        binlogdatapb.VReplicationWorkflowState_Running,
 			// We don't want to update anything else so use simulated NULLs.
 			Message:      textutil.SimulatedNullString,
 			StopPosition: textutil.SimulatedNullString,
 		}
-		if _, err := rs.s.tmc.UpdateVReplicationWorkflowsState(ctx, targetPrimary.Tablet, req); err != nil {
-			return vterrors.Wrapf(err, "UpdateVReplicationWorkflowsState(%v, 'state='%s')",
+		if _, err := rs.s.tmc.UpdateVReplicationWorkflows(ctx, targetPrimary.Tablet, req); err != nil {
+			return vterrors.Wrapf(err, "UpdateVReplicationWorkflows(%v, 'state='%s')",
 				targetPrimary.Tablet, binlogdatapb.VReplicationWorkflowState_Running.String())
 		}
 		return nil

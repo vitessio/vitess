@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -697,7 +698,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	}
 }
 
-func TestUpdateVReplicationWorkflowsState(t *testing.T) {
+func TestUpdateVReplicationWorkflows(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	keyspace := "testks"
@@ -713,12 +714,12 @@ func TestUpdateVReplicationWorkflowsState(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		request *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest
+		request *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest
 		query   string
 	}{
 		{
 			name: "update only state=running for all workflows",
-			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest{
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 				AllWorkflows: true,
 				State:        binlogdatapb.VReplicationWorkflowState_Running,
 				Message:      textutil.SimulatedNullString,
@@ -728,7 +729,7 @@ func TestUpdateVReplicationWorkflowsState(t *testing.T) {
 		},
 		{
 			name: "update only state=running for all but reverse workflows",
-			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest{
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 				ExcludeWorkflows: []string{workflow.ReverseWorkflowName("testwf")},
 				State:            binlogdatapb.VReplicationWorkflowState_Running,
 				Message:          textutil.SimulatedNullString,
@@ -738,7 +739,7 @@ func TestUpdateVReplicationWorkflowsState(t *testing.T) {
 		},
 		{
 			name: "update all vals for all workflows",
-			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest{
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 				AllWorkflows: true,
 				State:        binlogdatapb.VReplicationWorkflowState_Running,
 				Message:      "hi",
@@ -748,7 +749,7 @@ func TestUpdateVReplicationWorkflowsState(t *testing.T) {
 		},
 		{
 			name: "update state=stopped, messege=for vdiff for two workflows",
-			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest{
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
 				IncludeWorkflows: []string{"testwf", "testwf2"},
 				State:            binlogdatapb.VReplicationWorkflowState_Running,
 				Message:          textutil.SimulatedNullString,
@@ -793,7 +794,7 @@ func TestUpdateVReplicationWorkflowsState(t *testing.T) {
 			// the test with an error as at this point we've tested what
 			// we wanted to test.
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{}, errShortCircuit)
-			_, err := tenv.tmc.tablets[tabletUID].tm.UpdateVReplicationWorkflowsState(ctx, tt.request)
+			_, err := tenv.tmc.tablets[tabletUID].tm.UpdateVReplicationWorkflows(ctx, tt.request)
 			tenv.tmc.tablets[tabletUID].vrdbClient.Wait()
 			require.ErrorIs(t, err, errShortCircuit)
 		})
@@ -3162,4 +3163,89 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 
 	err = ws.Materialize(ctx, ms)
 	require.EqualError(t, err, strings.Join(errs, "\n"))
+}
+
+func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
+	tm := &TabletManager{
+		DBConfigs: &dbconfigs.DBConfigs{
+			DBName: "vt_testks",
+		},
+	}
+	tests := []struct {
+		name    string
+		req     *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest
+		want    string
+		wantErr string
+	}{
+		{
+			name: "nothing to update",
+			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
+				State:        binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt),
+				Message:      textutil.SimulatedNullString,
+				StopPosition: textutil.SimulatedNullString,
+			},
+			wantErr: errNoFieldsToUpdate.Error(),
+		},
+		{
+			name: "mutually exclusive options",
+			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
+				State:            binlogdatapb.VReplicationWorkflowState_Running,
+				AllWorkflows:     true,
+				ExcludeWorkflows: []string{"wf1"},
+			},
+			wantErr: errAllWithIncludeExcludeWorkflows.Error(),
+		},
+		{
+			name: "all values and options",
+			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
+				State:            binlogdatapb.VReplicationWorkflowState_Running,
+				Message:          "test message",
+				StopPosition:     "MySQL56/17b1039f-21b6-13ed-b365-1a43f95f28a3:1-20",
+				IncludeWorkflows: []string{"wf2", "wf3"},
+				ExcludeWorkflows: []string{"1wf"},
+			},
+			want: "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running', message = 'test message', stop_pos = 'MySQL56/17b1039f-21b6-13ed-b365-1a43f95f28a3:1-20' where db_name = 'vt_testks' and workflow in ('wf2','wf3') and workflow not in ('1wf')",
+		},
+		{
+			name: "state for all",
+			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
+				State:        binlogdatapb.VReplicationWorkflowState_Running,
+				Message:      textutil.SimulatedNullString,
+				StopPosition: textutil.SimulatedNullString,
+				AllWorkflows: true,
+			},
+			want: "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running' where db_name = 'vt_testks'",
+		},
+		{
+			name: "stop all for vdiff",
+			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
+				State:        binlogdatapb.VReplicationWorkflowState_Stopped,
+				Message:      "for vdiff",
+				StopPosition: textutil.SimulatedNullString,
+				AllWorkflows: true,
+			},
+			want: "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Stopped', message = 'for vdiff' where db_name = 'vt_testks'",
+		},
+		{
+			name: "start one until position",
+			req: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
+				State:            binlogdatapb.VReplicationWorkflowState_Running,
+				Message:          "for until position",
+				StopPosition:     "MySQL56/17b1039f-21b6-13ed-b365-1a43f95f28a3:1-9999",
+				IncludeWorkflows: []string{"wf1"},
+			},
+			want: "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state = 'Running', message = 'for until position', stop_pos = 'MySQL56/17b1039f-21b6-13ed-b365-1a43f95f28a3:1-9999' where db_name = 'vt_testks' and workflow in ('wf1')",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tm.buildUpdateVReplicationWorkflowsQuery(tt.req)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.want, got, "buildUpdateVReplicationWorkflowsQuery() = %v, want %v", got, tt.want)
+		})
+	}
 }

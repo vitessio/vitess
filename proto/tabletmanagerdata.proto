@@ -667,7 +667,7 @@ message UpdateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
 }
 
-message UpdateVReplicationWorkflowsStateRequest {
+message UpdateVReplicationWorkflowsRequest {
   bool all_workflows = 1;
   repeated string include_workflows = 2;
   repeated string exclude_workflows = 3;
@@ -676,7 +676,7 @@ message UpdateVReplicationWorkflowsStateRequest {
   string stop_position = 6;
 }
 
-message UpdateVReplicationWorkflowsStateResponse {
+message UpdateVReplicationWorkflowsResponse {
   query.QueryResult result = 1;
 }
 

@@ -2296,11 +2296,11 @@ func (m *UpdateVReplicationWorkflowResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *UpdateVReplicationWorkflowsStateRequest) CloneVT() *UpdateVReplicationWorkflowsStateRequest {
+func (m *UpdateVReplicationWorkflowsRequest) CloneVT() *UpdateVReplicationWorkflowsRequest {
 	if m == nil {
-		return (*UpdateVReplicationWorkflowsStateRequest)(nil)
+		return (*UpdateVReplicationWorkflowsRequest)(nil)
 	}
-	r := &UpdateVReplicationWorkflowsStateRequest{
+	r := &UpdateVReplicationWorkflowsRequest{
 		AllWorkflows: m.AllWorkflows,
 		State:        m.State,
 		Message:      m.Message,
@@ -2323,15 +2323,15 @@ func (m *UpdateVReplicationWorkflowsStateRequest) CloneVT() *UpdateVReplicationW
 	return r
 }
 
-func (m *UpdateVReplicationWorkflowsStateRequest) CloneMessageVT() proto.Message {
+func (m *UpdateVReplicationWorkflowsRequest) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *UpdateVReplicationWorkflowsStateResponse) CloneVT() *UpdateVReplicationWorkflowsStateResponse {
+func (m *UpdateVReplicationWorkflowsResponse) CloneVT() *UpdateVReplicationWorkflowsResponse {
 	if m == nil {
-		return (*UpdateVReplicationWorkflowsStateResponse)(nil)
+		return (*UpdateVReplicationWorkflowsResponse)(nil)
 	}
-	r := &UpdateVReplicationWorkflowsStateResponse{
+	r := &UpdateVReplicationWorkflowsResponse{
 		Result: m.Result.CloneVT(),
 	}
 	if len(m.unknownFields) > 0 {
@@ -2341,7 +2341,7 @@ func (m *UpdateVReplicationWorkflowsStateResponse) CloneVT() *UpdateVReplication
 	return r
 }
 
-func (m *UpdateVReplicationWorkflowsStateResponse) CloneMessageVT() proto.Message {
+func (m *UpdateVReplicationWorkflowsResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -7953,7 +7953,7 @@ func (m *UpdateVReplicationWorkflowResponse) MarshalToSizedBufferVT(dAtA []byte)
 	return len(dAtA) - i, nil
 }
 
-func (m *UpdateVReplicationWorkflowsStateRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *UpdateVReplicationWorkflowsRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -7966,12 +7966,12 @@ func (m *UpdateVReplicationWorkflowsStateRequest) MarshalVT() (dAtA []byte, err 
 	return dAtA[:n], nil
 }
 
-func (m *UpdateVReplicationWorkflowsStateRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *UpdateVReplicationWorkflowsRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *UpdateVReplicationWorkflowsStateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *UpdateVReplicationWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -8033,7 +8033,7 @@ func (m *UpdateVReplicationWorkflowsStateRequest) MarshalToSizedBufferVT(dAtA []
 	return len(dAtA) - i, nil
 }
 
-func (m *UpdateVReplicationWorkflowsStateResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *UpdateVReplicationWorkflowsResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -8046,12 +8046,12 @@ func (m *UpdateVReplicationWorkflowsStateResponse) MarshalVT() (dAtA []byte, err
 	return dAtA[:n], nil
 }
 
-func (m *UpdateVReplicationWorkflowsStateResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *UpdateVReplicationWorkflowsResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *UpdateVReplicationWorkflowsStateResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *UpdateVReplicationWorkflowsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -10238,7 +10238,7 @@ func (m *UpdateVReplicationWorkflowResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *UpdateVReplicationWorkflowsStateRequest) SizeVT() (n int) {
+func (m *UpdateVReplicationWorkflowsRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -10274,7 +10274,7 @@ func (m *UpdateVReplicationWorkflowsStateRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *UpdateVReplicationWorkflowsStateResponse) SizeVT() (n int) {
+func (m *UpdateVReplicationWorkflowsResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -22543,7 +22543,7 @@ func (m *UpdateVReplicationWorkflowResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *UpdateVReplicationWorkflowsStateRequest) UnmarshalVT(dAtA []byte) error {
+func (m *UpdateVReplicationWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -22566,10 +22566,10 @@ func (m *UpdateVReplicationWorkflowsStateRequest) UnmarshalVT(dAtA []byte) error
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: UpdateVReplicationWorkflowsStateRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowsRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: UpdateVReplicationWorkflowsStateRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -22761,7 +22761,7 @@ func (m *UpdateVReplicationWorkflowsStateRequest) UnmarshalVT(dAtA []byte) error
 	}
 	return nil
 }
-func (m *UpdateVReplicationWorkflowsStateResponse) UnmarshalVT(dAtA []byte) error {
+func (m *UpdateVReplicationWorkflowsResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -22784,10 +22784,10 @@ func (m *UpdateVReplicationWorkflowsStateResponse) UnmarshalVT(dAtA []byte) erro
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: UpdateVReplicationWorkflowsStateResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowsResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: UpdateVReplicationWorkflowsStateResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: UpdateVReplicationWorkflowsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

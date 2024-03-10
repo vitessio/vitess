@@ -122,7 +122,7 @@ service TabletManager {
   rpc VReplicationExec(tabletmanagerdata.VReplicationExecRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
   rpc VReplicationWaitForPos(tabletmanagerdata.VReplicationWaitForPosRequest) returns(tabletmanagerdata.VReplicationWaitForPosResponse) {};
   rpc UpdateVReplicationWorkflow(tabletmanagerdata.UpdateVReplicationWorkflowRequest) returns(tabletmanagerdata.UpdateVReplicationWorkflowResponse) {};
-  rpc UpdateVReplicationWorkflowsState(tabletmanagerdata.UpdateVReplicationWorkflowsStateRequest) returns(tabletmanagerdata.UpdateVReplicationWorkflowsStateResponse) {};
+  rpc UpdateVReplicationWorkflows(tabletmanagerdata.UpdateVReplicationWorkflowsRequest) returns(tabletmanagerdata.UpdateVReplicationWorkflowsResponse) {};
 
   // VDiff API
   rpc VDiff(tabletmanagerdata.VDiffRequest) returns(tabletmanagerdata.VDiffResponse) {};

@@ -816,13 +816,13 @@ func (client *Client) UpdateVReplicationWorkflow(ctx context.Context, tablet *to
 	return response, nil
 }
 
-func (client *Client) UpdateVReplicationWorkflowsState(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVReplicationWorkflowsStateRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsStateResponse, error) {
+func (client *Client) UpdateVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.UpdateVReplicationWorkflowsState(ctx, request)
+	response, err := c.UpdateVReplicationWorkflows(ctx, request)
 	if err != nil {
 		return nil, err
 	}
