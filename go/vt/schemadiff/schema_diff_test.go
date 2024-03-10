@@ -272,6 +272,9 @@ func TestSchemaDiff(t *testing.T) {
 		entityOrder        []string // names of tables/views in expected diff order
 		mysqlServerVersion string
 		instantCapability  InstantDDLCapability
+		fkStrategy         int
+		expectError        string
+		expectOrderedError string
 	}{
 		{
 			name:              "no change",
@@ -625,6 +628,33 @@ func TestSchemaDiff(t *testing.T) {
 			instantCapability: InstantDDLCapabilityIrrelevant,
 		},
 		{
+			name: "create two tables valid fk cycle",
+			toQueries: append(
+				createQueries,
+				"create table t11 (id int primary key, i int, constraint f1101 foreign key (i) references t12 (id) on delete restrict);",
+				"create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (id) on delete set null);",
+			),
+			expectDiffs:        2,
+			expectDeps:         2,
+			sequential:         true,
+			fkStrategy:         ForeignKeyCheckStrategyStrict,
+			expectOrderedError: "no valid applicable order for diffs",
+		},
+		{
+			name: "create two tables valid fk cycle, fk ignore",
+			toQueries: append(
+				createQueries,
+				"create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (id) on delete set null);",
+				"create table t11 (id int primary key, i int, constraint f1101 foreign key (i) references t12 (id) on delete restrict);",
+			),
+			expectDiffs:       2,
+			expectDeps:        2,
+			entityOrder:       []string{"t11", "t12"}, // Note that the tables were reordered lexicographically
+			sequential:        true,
+			instantCapability: InstantDDLCapabilityIrrelevant,
+			fkStrategy:        ForeignKeyCheckStrategyIgnore,
+		},
+		{
 			name: "add FK",
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
@@ -934,7 +964,13 @@ func TestSchemaDiff(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, toSchema)
 
-			schemaDiff, err := fromSchema.SchemaDiff(toSchema, baseHints)
+			hints := *baseHints
+			hints.ForeignKeyCheckStrategy = tc.fkStrategy
+			schemaDiff, err := fromSchema.SchemaDiff(toSchema, &hints)
+			if tc.expectError != "" {
+				assert.ErrorContains(t, err, tc.expectError)
+				return
+			}
 			require.NoError(t, err)
 
 			allDiffs := schemaDiff.UnorderedDiffs()
@@ -953,6 +989,10 @@ func TestSchemaDiff(t *testing.T) {
 			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDependencies())
 
 			orderedDiffs, err := schemaDiff.OrderedDiffs(ctx)
+			if tc.expectOrderedError != "" {
+				assert.ErrorContains(t, err, tc.expectOrderedError)
+				return
+			}
 			if tc.conflictingDiffs > 0 {
 				assert.Error(t, err)
 				impossibleOrderErr, ok := err.(*ImpossibleApplyDiffOrderError)

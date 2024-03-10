@@ -124,6 +124,11 @@ const (
 	EnumReorderStrategyReject
 )
 
+const (
+	ForeignKeyCheckStrategyStrict int = iota
+	ForeignKeyCheckStrategyIgnore
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering         bool
@@ -137,6 +142,11 @@ type DiffHints struct {
 	TableQualifierHint          int
 	AlterTableAlgorithmStrategy int
 	EnumReorderStrategy         int
+	ForeignKeyCheckStrategy     int
+}
+
+func EmptyDiffHints() *DiffHints {
+	return &DiffHints{}
 }
 
 const (
