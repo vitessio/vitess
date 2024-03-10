@@ -3165,6 +3165,54 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 	require.EqualError(t, err, strings.Join(errs, "\n"))
 }
 
+func TestBuildReadVReplicationWorkflowsQuery(t *testing.T) {
+	dbName := "vt_testks"
+	tests := []struct {
+		name    string
+		req     *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest
+		want    string
+		wantErr string
+	}{
+		{
+			name:    "no db name",
+			req:     &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{},
+			wantErr: errNoDBName.Error(),
+		},
+		{
+			name: "all options",
+			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+				DbName:           dbName,
+				IncludeIds:       []int32{1, 2, 3},
+				IncludeWorkflows: []string{"wf1", "wf2"},
+				ExcludeWorkflows: []string{"1wf"},
+				IncludeStates:    []binlogdatapb.VReplicationWorkflowState{binlogdatapb.VReplicationWorkflowState_Stopped, binlogdatapb.VReplicationWorkflowState_Error},
+				ExcludeFrozen:    true,
+			},
+			want: "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_testks' and message != 'FROZEN' and id in (1,2,3) and workflow in ('wf1','wf2') and workflow not in ('1wf') and state in ('Stopped','Error') group by workflow, id order by workflow, id",
+		},
+		{
+			name: "2 workflows if running",
+			req: &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{
+				DbName:           dbName,
+				IncludeWorkflows: []string{"wf1", "wf2"},
+				IncludeStates:    []binlogdatapb.VReplicationWorkflowState{binlogdatapb.VReplicationWorkflowState_Running},
+			},
+			want: "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_testks' and workflow in ('wf1','wf2') and state in ('Running') group by workflow, id order by workflow, id",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := buildReadVReplicationWorkflowsQuery(tt.req)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.want, got, "buildReadVReplicationWorkflowsQuery() = %v, want %v", got, tt.want)
+		})
+	}
+}
+
 func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 	tm := &TabletManager{
 		DBConfigs: &dbconfigs.DBConfigs{

@@ -64,6 +64,7 @@ const (
 var (
 	errNoFieldsToUpdate               = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no field values provided to update")
 	errAllWithIncludeExcludeWorkflows = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify all workflows along with either of include or exclude workflows")
+	errNoDBName                       = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no DB name provided")
 )
 
 func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
@@ -140,7 +141,7 @@ func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *ta
 
 func (tm *TabletManager) HasVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
 	if req.GetDbName() == "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no DB name provided")
+		return nil, errNoDBName
 	}
 	bindVars := map[string]*querypb.BindVariable{
 		"db": sqltypes.StringBindVariable(req.GetDbName()),
@@ -172,68 +173,7 @@ func (tm *TabletManager) HasVReplicationWorkflows(ctx context.Context, req *tabl
 }
 
 func (tm *TabletManager) ReadVReplicationWorkflows(ctx context.Context, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
-	if req.GetDbName() == "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid request, no DB name provided")
-	}
-	bindVars := map[string]*querypb.BindVariable{
-		"db": sqltypes.StringBindVariable(req.GetDbName()),
-	}
-	additionalPredicates := strings.Builder{}
-	if req.GetExcludeFrozen() {
-		additionalPredicates.WriteString(fmt.Sprintf(" and message != '%s'", workflow.Frozen))
-	}
-	if len(req.GetIncludeIds()) > 0 {
-		additionalPredicates.WriteString(" and id in (")
-		for i, id := range req.GetIncludeIds() {
-			if i > 0 {
-				additionalPredicates.WriteByte(',')
-			}
-			additionalPredicates.WriteString(fmt.Sprintf("%d", id))
-		}
-		additionalPredicates.WriteByte(')')
-	}
-	if len(req.GetIncludeWorkflows()) > 0 {
-		additionalPredicates.WriteString(" and workflow in (")
-		for i, wf := range req.GetIncludeWorkflows() {
-			if i > 0 {
-				additionalPredicates.WriteByte(',')
-			}
-			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(wf))
-		}
-		additionalPredicates.WriteByte(')')
-	}
-	if len(req.GetExcludeWorkflows()) > 0 {
-		additionalPredicates.WriteString(" and workflow not in (")
-		for i, wf := range req.GetExcludeWorkflows() {
-			if i > 0 {
-				additionalPredicates.WriteByte(',')
-			}
-			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(wf))
-		}
-		additionalPredicates.WriteByte(')')
-	}
-	if len(req.GetIncludeStates()) > 0 {
-		additionalPredicates.WriteString(" and state in (")
-		for i, state := range req.GetIncludeStates() {
-			if i > 0 {
-				additionalPredicates.WriteByte(',')
-			}
-			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(state.String()))
-		}
-		additionalPredicates.WriteByte(')')
-	}
-	if len(req.GetExcludeStates()) > 0 {
-		additionalPredicates.WriteString(" and state not in (")
-		for i, state := range req.GetExcludeStates() {
-			if i > 0 {
-				additionalPredicates.WriteByte(',')
-			}
-			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(state.String()))
-		}
-		additionalPredicates.WriteByte(')')
-	}
-	parsed := sqlparser.BuildParsedQuery(sqlReadVReplicationWorkflows, sidecar.GetIdentifier(), ":db", additionalPredicates.String())
-	stmt, err := parsed.GenerateQuery(bindVars, nil)
+	stmt, err := buildReadVReplicationWorkflowsQuery(req)
 	if err != nil {
 		return nil, err
 	}
@@ -583,6 +523,77 @@ func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*q
 // VReplicationWaitForPos waits for the specified position.
 func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, pos string) error {
 	return tm.VREngine.WaitForPos(ctx, id, pos)
+}
+
+// buildReadVReplicationWorkflowsQuery builds the SQL query used to read N
+// vreplication workflows based on the request.
+func buildReadVReplicationWorkflowsQuery(req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (string, error) {
+	if req.GetDbName() == "" {
+		return "", errNoDBName
+	}
+	bindVars := map[string]*querypb.BindVariable{
+		"db": sqltypes.StringBindVariable(req.GetDbName()),
+	}
+	additionalPredicates := strings.Builder{}
+	if req.GetExcludeFrozen() {
+		additionalPredicates.WriteString(fmt.Sprintf(" and message != '%s'", workflow.Frozen))
+	}
+	if len(req.GetIncludeIds()) > 0 {
+		additionalPredicates.WriteString(" and id in (")
+		for i, id := range req.GetIncludeIds() {
+			if i > 0 {
+				additionalPredicates.WriteByte(',')
+			}
+			additionalPredicates.WriteString(fmt.Sprintf("%d", id))
+		}
+		additionalPredicates.WriteByte(')')
+	}
+	if len(req.GetIncludeWorkflows()) > 0 {
+		additionalPredicates.WriteString(" and workflow in (")
+		for i, wf := range req.GetIncludeWorkflows() {
+			if i > 0 {
+				additionalPredicates.WriteByte(',')
+			}
+			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(wf))
+		}
+		additionalPredicates.WriteByte(')')
+	}
+	if len(req.GetExcludeWorkflows()) > 0 {
+		additionalPredicates.WriteString(" and workflow not in (")
+		for i, wf := range req.GetExcludeWorkflows() {
+			if i > 0 {
+				additionalPredicates.WriteByte(',')
+			}
+			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(wf))
+		}
+		additionalPredicates.WriteByte(')')
+	}
+	if len(req.GetIncludeStates()) > 0 {
+		additionalPredicates.WriteString(" and state in (")
+		for i, state := range req.GetIncludeStates() {
+			if i > 0 {
+				additionalPredicates.WriteByte(',')
+			}
+			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(state.String()))
+		}
+		additionalPredicates.WriteByte(')')
+	}
+	if len(req.GetExcludeStates()) > 0 {
+		additionalPredicates.WriteString(" and state not in (")
+		for i, state := range req.GetExcludeStates() {
+			if i > 0 {
+				additionalPredicates.WriteByte(',')
+			}
+			additionalPredicates.WriteString(sqltypes.EncodeStringSQL(state.String()))
+		}
+		additionalPredicates.WriteByte(')')
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlReadVReplicationWorkflows, sidecar.GetIdentifier(), ":db", additionalPredicates.String())
+	stmt, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return "", err
+	}
+	return stmt, nil
 }
 
 // buildUpdateVReplicationWorkflowsQuery builds the SQL query used to update
