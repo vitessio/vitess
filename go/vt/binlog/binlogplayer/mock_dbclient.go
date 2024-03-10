@@ -99,12 +99,6 @@ func NewMockDbaClient(t *testing.T) *MockDBClient {
 	}
 }
 
-func (dc *MockDBClient) AddInvariant(query string, result *sqltypes.Result) {
-	dc.expectMu.Lock()
-	defer dc.expectMu.Unlock()
-	dc.invariants[query] = result
-}
-
 // ExpectRequest adds an expected result to the mock.
 // This function should not be called conncurrently with other commands.
 func (dc *MockDBClient) ExpectRequest(query string, result *sqltypes.Result, err error) {
