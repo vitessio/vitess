@@ -56,8 +56,8 @@ const (
 	sqlSelectVReplicationWorkflowConfig = "select id, source, cell, tablet_types, state, message from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
 	sqlUpdateVReplicationWorkflowStreamConfig = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
-	// Update metadata/flowcontrol values for multiple workflows. The final format
-	// specifier is used to optionally add any additional predicates to the query.
+	// Update field values for multiple workflows. The final format specifier is
+	// used to optionally add any additional predicates to the query.
 	sqlUpdateVReplicationWorkflows = "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ %s.vreplication set%s where db_name = '%s'%s"
 )
 
