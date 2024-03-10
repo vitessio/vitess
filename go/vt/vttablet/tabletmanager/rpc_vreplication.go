@@ -527,6 +527,7 @@ func (tm *TabletManager) buildReadVReplicationWorkflowsQuery(req *tabletmanagerd
 	bindVars := map[string]*querypb.BindVariable{
 		"db": sqltypes.StringBindVariable(tm.DBConfigs.DBName),
 	}
+
 	additionalPredicates := strings.Builder{}
 	if req.GetExcludeFrozen() {
 		additionalPredicates.WriteString(fmt.Sprintf(" and message != '%s'", workflow.Frozen))
@@ -581,12 +582,9 @@ func (tm *TabletManager) buildReadVReplicationWorkflowsQuery(req *tabletmanagerd
 		}
 		additionalPredicates.WriteByte(')')
 	}
+
 	parsed := sqlparser.BuildParsedQuery(sqlReadVReplicationWorkflows, sidecar.GetIdentifier(), ":db", additionalPredicates.String())
-	query, err := parsed.GenerateQuery(bindVars, nil)
-	if err != nil {
-		return "", err
-	}
-	return query, nil
+	return parsed.GenerateQuery(bindVars, nil)
 }
 
 // buildUpdateVReplicationWorkflowsQuery builds the SQL query used to update
@@ -647,6 +645,6 @@ func (tm *TabletManager) buildUpdateVReplicationWorkflowsQuery(req *tabletmanage
 		}
 		predicates.WriteByte(')')
 	}
-	query := sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflows, sidecar.GetIdentifier(), sets.String(), tm.DBConfigs.DBName, predicates.String()).Query
-	return query, nil
+
+	return sqlparser.BuildParsedQuery(sqlUpdateVReplicationWorkflows, sidecar.GetIdentifier(), sets.String(), tm.DBConfigs.DBName, predicates.String()).Query, nil
 }
