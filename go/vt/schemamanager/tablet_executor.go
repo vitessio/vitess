@@ -490,10 +490,14 @@ func (exec *TabletExecutor) executeOneTablet(
 				return
 			}
 		}
-		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		request := &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
 			Query:   []byte(sql),
 			MaxRows: 10,
-		})
+		}
+		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowForeignKeysFlag() {
+			request.DisableForeignKeyChecks = true
+		}
+		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, request)
 
 	}
 	if err != nil {

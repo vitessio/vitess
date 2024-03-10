@@ -2286,6 +2286,15 @@ func testForeignKeys(t *testing.T) {
 			expectHint:                "child_hint",
 			onlyIfFKOnlineDDLPossible: true,
 		},
+		{
+			name: "add two tables with cyclic fk relationship",
+			sql: `
+				create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t12 (id));
+				create table t12 (id int primary key, i int, constraint f12 foreign key (i) references t11 (id));
+				`,
+			allowForeignKeys: true,
+			expectHint:       "t11",
+		},
 	}
 
 	fkOnlineDDLPossible := false

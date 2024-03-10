@@ -646,6 +646,21 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	}
 
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
+	if onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
+		// Foreign key support is curently "unsafe". We further put the burden on the user
+		// by disabling foreign key checks. With this, the user is able to create cyclic
+		// foreign key references (e.g. t1<->t2) without going through the trouble of
+		// CREATE TABLE t1->CREATE TABLE t2->ALTER TABLE t1 ADD FOREIGN KEY ... REFERENCES ts
+		// Grab current sql_mode value
+		if _, err := conn.ExecuteFetch(`set @vt_onlineddl_foreign_key_checks=@@foreign_key_checks`, 0, false); err != nil {
+			return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read foreign_key_checks: %v", err)
+		}
+		_, err = conn.ExecuteFetch("SET foreign_key_checks=0", 0, false)
+		if err != nil {
+			return false, err
+		}
+		defer conn.ExecuteFetch("SET foreign_key_checks=@vt_onlineddl_foreign_key_checks", 0, false)
+	}
 	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
 
 	if err != nil {
