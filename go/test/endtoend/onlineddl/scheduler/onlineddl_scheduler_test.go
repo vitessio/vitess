@@ -2411,7 +2411,7 @@ func testForeignKeys(t *testing.T) {
 							continue
 						}
 						statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", artifact)
-						_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.ApplySchemaParams{DDLStrategy: "direct"})
+						_, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.ApplySchemaParams{DDLStrategy: "direct --unsafe-allow-foreign-keys"})
 						if err == nil {
 							droppedTables[artifact] = true
 						}
