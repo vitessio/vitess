@@ -165,6 +165,7 @@ func permDiff(ctx context.Context, a []EntityDiff, callback func([]EntityDiff) (
 // Operations on SchemaDiff are not concurrency-safe.
 type SchemaDiff struct {
 	schema *Schema
+	hints  *DiffHints
 	diffs  []EntityDiff
 
 	diffMap      map[string]EntityDiff // key is diff's CanonicalStatementString()
@@ -173,9 +174,10 @@ type SchemaDiff struct {
 	r *mathutil.EquivalenceRelation // internal structure to help determine diffs
 }
 
-func NewSchemaDiff(schema *Schema) *SchemaDiff {
+func NewSchemaDiff(schema *Schema, hints *DiffHints) *SchemaDiff {
 	return &SchemaDiff{
 		schema:       schema,
+		hints:        hints,
 		dependencies: make(map[string]*DiffDependency),
 		diffMap:      make(map[string]EntityDiff),
 		r:            mathutil.NewEquivalenceRelation(),
@@ -318,7 +320,7 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 			// We want to apply the changes one by one, and validate the schema after each change
 			for i := range permutatedDiffs {
 				// apply inline
-				if err := permutationSchema.apply(permutatedDiffs[i : i+1]); err != nil {
+				if err := permutationSchema.apply(permutatedDiffs[i:i+1], d.hints); err != nil {
 					// permutation is invalid
 					return false // continue searching
 				}
@@ -340,6 +342,18 @@ func (d *SchemaDiff) OrderedDiffs(ctx context.Context) ([]EntityDiff, error) {
 		}
 
 		// Done taking care of this equivalence class.
+	}
+	if d.hints.ForeignKeyCheckStrategy != ForeignKeyCheckStrategyStrict {
+		// We may have allowed invalid foreign key dependencies along the way. But we must then validate the final schema
+		// to ensure that all foreign keys are valid.
+		hints := *d.hints
+		hints.ForeignKeyCheckStrategy = ForeignKeyCheckStrategyStrict
+		if err := lastGoodSchema.normalize(&hints); err != nil {
+			return nil, &ImpossibleApplyDiffOrderError{
+				UnorderedDiffs:   d.UnorderedDiffs(),
+				ConflictingDiffs: d.UnorderedDiffs(),
+			}
+		}
 	}
 	return orderedDiffs, nil
 }

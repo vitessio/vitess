@@ -145,7 +145,7 @@ func TestCreateViewDiff(t *testing.T) {
 			cdiff: "ALTER ALGORITHM = TEMPTABLE VIEW `v1` AS SELECT `a` FROM `t`",
 		},
 	}
-	hints := &DiffHints{}
+	hints := EmptyDiffHints()
 	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {

@@ -95,6 +95,7 @@ func TestStringGraph(t *testing.T) {
 		wantedGraph   string
 		wantEmpty     bool
 		wantHasCycles bool
+		wantCycles    map[string][]string
 	}{
 		{
 			name:          "empty graph",
@@ -137,6 +138,13 @@ E - F
 F - A`,
 			wantEmpty:     false,
 			wantHasCycles: true,
+			wantCycles: map[string][]string{
+				"A": {"A", "B", "E", "F", "A"},
+				"B": {"B", "E", "F", "A", "B"},
+				"D": {"D", "E", "F", "A", "B", "E"},
+				"E": {"E", "F", "A", "B", "E"},
+				"F": {"F", "A", "B", "E", "F"},
+			},
 		},
 	}
 	for _, tt := range testcases {
@@ -148,6 +156,14 @@ F - A`,
 			require.Equal(t, tt.wantedGraph, graph.PrintGraph())
 			require.Equal(t, tt.wantEmpty, graph.Empty())
 			require.Equal(t, tt.wantHasCycles, graph.HasCycles())
+			if tt.wantCycles == nil {
+				tt.wantCycles = map[string][]string{}
+			}
+			actualCycles := graph.GetCycles()
+			if actualCycles == nil {
+				actualCycles = map[string][]string{}
+			}
+			require.Equal(t, tt.wantCycles, actualCycles)
 		})
 	}
 }

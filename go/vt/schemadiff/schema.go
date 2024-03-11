@@ -18,10 +18,14 @@ package schemadiff
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -37,7 +41,6 @@ type Schema struct {
 
 	foreignKeyParents  []*CreateTableEntity // subset of tables
 	foreignKeyChildren []*CreateTableEntity // subset of tables
-	foreignKeyLoopMap  map[string][]string  // map of table name that either participate, or directly or indirectly reference foreign key loops
 
 	env *Environment
 }
@@ -52,7 +55,6 @@ func newEmptySchema(env *Environment) *Schema {
 
 		foreignKeyParents:  []*CreateTableEntity{},
 		foreignKeyChildren: []*CreateTableEntity{},
-		foreignKeyLoopMap:  map[string][]string{},
 
 		env: env,
 	}
@@ -72,7 +74,7 @@ func NewSchemaFromEntities(env *Environment, entities []Entity) (*Schema, error)
 			return nil, &UnsupportedEntityError{Entity: c.Name(), Statement: c.Create().CanonicalStatementString()}
 		}
 	}
-	err := schema.normalize()
+	err := schema.normalize(EmptyDiffHints())
 	return schema, err
 }
 
@@ -135,42 +137,6 @@ func getForeignKeyParentTableNames(createTable *sqlparser.CreateTable) (names []
 	return names
 }
 
-// findForeignKeyLoop is a stateful recursive function that determines whether a given table participates in a foreign
-// key loop or derives from one. It returns a list of table names that form a loop, or nil if no loop is found.
-// The function updates and checks the stateful map s.foreignKeyLoopMap to avoid re-analyzing the same table twice.
-func (s *Schema) findForeignKeyLoop(tableName string, seen []string) (loop []string) {
-	if loop := s.foreignKeyLoopMap[tableName]; loop != nil {
-		return loop
-	}
-	t := s.Table(tableName)
-	if t == nil {
-		return nil
-	}
-	seen = append(seen, tableName)
-	for i, seenTable := range seen {
-		if i == len(seen)-1 {
-			// as we've just appended the table name to the end of the slice, we should skip it.
-			break
-		}
-		if seenTable == tableName {
-			// This table alreay appears in `seen`.
-			// We only return the suffix of `seen` that starts (and now ends) with this table.
-			return seen[i:]
-		}
-	}
-	for _, referencedTableName := range getForeignKeyParentTableNames(t.CreateTable) {
-		if loop := s.findForeignKeyLoop(referencedTableName, seen); loop != nil {
-			// Found loop. Update cache.
-			// It's possible for one table to participate in more than one foreign key loop, but
-			// we suffice with one loop, since we already only ever report one foreign key error
-			// per table.
-			s.foreignKeyLoopMap[tableName] = loop
-			return loop
-		}
-	}
-	return nil
-}
-
 // getViewDependentTableNames analyzes a CREATE VIEW definition and extracts all tables/views read by this view
 func getViewDependentTableNames(createView *sqlparser.CreateView) (names []string) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -191,7 +157,7 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 
 // normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
 // It validates some cross-entity constraints, and orders entity based on dependencies (e.g. tables, views that read from tables, 2nd level views, etc.)
-func (s *Schema) normalize() error {
+func (s *Schema) normalize(hints *DiffHints) error {
 	var errs error
 
 	s.named = make(map[string]Entity, len(s.tables)+len(s.views))
@@ -284,8 +250,10 @@ func (s *Schema) normalize() error {
 				}
 				referencedEntity, ok := s.named[referencedTableName]
 				if !ok {
-					errs = errors.Join(errs, addEntityFkError(t, &ForeignKeyNonexistentReferencedTableError{Table: name, ReferencedTable: referencedTableName}))
-					continue
+					if hints.ForeignKeyCheckStrategy == ForeignKeyCheckStrategyStrict {
+						errs = errors.Join(errs, addEntityFkError(t, &ForeignKeyNonexistentReferencedTableError{Table: name, ReferencedTable: referencedTableName}))
+						continue
+					}
 				}
 				if _, ok := referencedEntity.(*CreateViewEntity); ok {
 					errs = errors.Join(errs, addEntityFkError(t, &ForeignKeyReferencesViewError{Table: name, ReferencedView: referencedTableName}))
@@ -310,6 +278,76 @@ func (s *Schema) normalize() error {
 			s.foreignKeyParents = append(s.foreignKeyParents, t)
 		}
 	}
+	if len(dependencyLevels) != len(s.tables) {
+		// We have leftover tables. This can happen if there's foreign key loops
+		for _, t := range s.tables {
+			if _, ok := dependencyLevels[t.Name()]; ok {
+				// known table
+				continue
+			}
+			// Table is part of a loop or references a loop
+			s.sorted = append(s.sorted, t)
+			dependencyLevels[t.Name()] = iterationLevel // all in same level
+		}
+
+		// Now, let's see if the loop is valid or invalid. For example:
+		//   users.avatar_id -> avatars.id
+		//   avatars.creator_id -> users.id
+		// is a valid loop, because even though the two tables reference each other, the loop ends in different columns.
+		type tableCol struct {
+			tableName sqlparser.TableName
+			colNames  sqlparser.Columns
+		}
+		var tableColHash = func(tc tableCol) string {
+			res := sqlparser.String(tc.tableName)
+			for _, colName := range tc.colNames {
+				res += "|" + sqlparser.String(colName)
+			}
+			return res
+		}
+		var decodeTableColHash = func(hash string) *ForeignKeyTableColumns {
+			tokens := strings.Split(hash, "|")
+			return &ForeignKeyTableColumns{tokens[0], tokens[1:]}
+		}
+		g := graph.NewGraph[string]()
+		for _, table := range s.tables {
+			for _, cfk := range table.TableSpec.Constraints {
+				check, ok := cfk.Details.(*sqlparser.ForeignKeyDefinition)
+				if !ok {
+					// Not a foreign key
+					continue
+				}
+
+				parentVertex := tableCol{
+					tableName: check.ReferenceDefinition.ReferencedTable,
+					colNames:  check.ReferenceDefinition.ReferencedColumns,
+				}
+				childVertex := tableCol{
+					tableName: table.Table,
+					colNames:  check.Source,
+				}
+				g.AddEdge(tableColHash(parentVertex), tableColHash(childVertex))
+			}
+		}
+		cycles := g.GetCycles() // map of table name to cycle
+		// golang maps have undefined iteration order. For consistent output, we sort the keys.
+		vertices := maps.Keys(cycles)
+		slices.Sort(vertices)
+		for _, vertex := range vertices {
+			cycle := cycles[vertex]
+			if len(cycle) == 0 {
+				continue
+			}
+			cycleTables := make([]*ForeignKeyTableColumns, len(cycle))
+			for i := range cycle {
+				// Reduce tablename|colname(s) to just tablename
+				cycleTables[i] = decodeTableColHash(cycle[i])
+			}
+			tableName := cycleTables[0].Table
+			errs = errors.Join(errs, addEntityFkError(s.named[tableName], &ForeignKeyLoopError{Table: tableName, Loop: cycleTables}))
+		}
+	}
+
 	// We now iterate all views. We iterate "dependency levels":
 	// - first we want all views that only depend on tables. These are 1st level views.
 	// - then we only want views that depend on 1st level views or on tables. These are 2nd level views.
@@ -347,14 +385,6 @@ func (s *Schema) normalize() error {
 	}
 
 	if len(s.sorted) != len(s.tables)+len(s.views) {
-
-		for _, t := range s.tables {
-			if _, ok := dependencyLevels[t.Name()]; !ok {
-				if loop := s.findForeignKeyLoop(t.Name(), nil); loop != nil {
-					errs = errors.Join(errs, addEntityFkError(t, &ForeignKeyLoopError{Table: t.Name(), Loop: loop}))
-				}
-			}
-		}
 		// We have leftover tables or views. This can happen if the schema definition is invalid:
 		// - a table's foreign key references a nonexistent table
 		// - two or more tables have circular FK dependency
@@ -724,7 +754,7 @@ func (s *Schema) copy() *Schema {
 
 // apply attempts to apply given list of diffs to this object.
 // These diffs are CREATE/DROP/ALTER TABLE/VIEW.
-func (s *Schema) apply(diffs []EntityDiff) error {
+func (s *Schema) apply(diffs []EntityDiff, hints *DiffHints) error {
 	for _, diff := range diffs {
 		switch diff := diff.(type) {
 		case *CreateTableEntityDiff:
@@ -834,7 +864,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			return &UnsupportedApplyOperationError{Statement: diff.CanonicalStatementString()}
 		}
 	}
-	if err := s.normalize(); err != nil {
+	if err := s.normalize(hints); err != nil {
 		return err
 	}
 	return nil
@@ -845,7 +875,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 // The operation does not modify this object. Instead, if successful, a new (modified) Schema is returned.
 func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 	dup := s.copy()
-	if err := dup.apply(diffs); err != nil {
+	if err := dup.apply(diffs, EmptyDiffHints()); err != nil {
 		return nil, err
 	}
 	return dup, nil
@@ -861,7 +891,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 	if err != nil {
 		return nil, err
 	}
-	schemaDiff := NewSchemaDiff(s)
+	schemaDiff := NewSchemaDiff(s, hints)
 	schemaDiff.loadDiffs(diffs)
 
 	// Utility function to see whether the given diff has dependencies on diffs that operate on any of the given named entities,
