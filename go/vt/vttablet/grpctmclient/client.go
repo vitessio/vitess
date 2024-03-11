@@ -737,6 +737,32 @@ func (client *Client) DeleteVReplicationWorkflow(ctx context.Context, tablet *to
 	return response, nil
 }
 
+func (client *Client) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.HasVReplicationWorkflows(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (client *Client) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.ReadVReplicationWorkflows(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 func (client *Client) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
@@ -784,6 +810,19 @@ func (client *Client) UpdateVReplicationWorkflow(ctx context.Context, tablet *to
 	}
 	defer closer.Close()
 	response, err := c.UpdateVReplicationWorkflow(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (client *Client) UpdateVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.UpdateVReplicationWorkflows(ctx, request)
 	if err != nil {
 		return nil, err
 	}

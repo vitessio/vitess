@@ -182,6 +182,10 @@ func (dc *MockDBClient) Close() {
 
 // ExecuteFetch is part of the DBClient interface
 func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+	// Serialize ExecuteFetch to enforce a strict order on shared dbClients.
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+
 	dc.t.Helper()
 	msg := "DBClient query: %v"
 	if dc.Tag != "" {
@@ -195,8 +199,6 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		}
 	}
 
-	dc.expectMu.Lock()
-	defer dc.expectMu.Unlock()
 	if dc.currentResult >= len(dc.expect) {
 		msg := "DBClientMock: query: %s, no more requests are expected"
 		if dc.Tag != "" {
