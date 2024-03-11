@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/concurrency"
+	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -942,6 +943,7 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 		if err != nil {
 			return vterrors.Wrap(err, "failed to restore file")
 		}
+
 		req := &mysqlctlpb.ApplyBinlogFileRequest{
 			BinlogFileName:        binlogFile,
 			BinlogRestoreDatetime: protoutil.TimeToProto(params.RestoreToTimestamp),
@@ -1006,7 +1008,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 	}
 
 	if bm.Incremental {
-		createdDir, err = os.MkdirTemp("", "restore-incremental-*")
+		createdDir, err = os.MkdirTemp(vtenv.VtDataRoot(), "restore-incremental-*")
 		if err != nil {
 			return "", err
 		}
