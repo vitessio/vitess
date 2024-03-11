@@ -289,7 +289,8 @@ func TestBindingDelete(t *testing.T) {
 			ts := semTable.TableSetFor(t1)
 			assert.Equal(t, SingleTableSet(0), ts)
 
-			actualTs := semTable.Targets[del.Targets[0].Name]
+			actualTs, err := semTable.GetTargetTableSetForTableName(del.Targets[0])
+			require.NoError(t, err)
 			assert.Equal(t, ts, actualTs)
 		})
 	}

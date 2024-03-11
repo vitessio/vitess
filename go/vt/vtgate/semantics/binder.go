@@ -31,7 +31,7 @@ import (
 type binder struct {
 	recursive ExprDependencies
 	direct    ExprDependencies
-	targets   map[sqlparser.IdentifierCS]TableSet
+	targets   TableSet
 	scoper    *scoper
 	tc        *tableCollector
 	org       originable
@@ -47,7 +47,6 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 	return &binder{
 		recursive:     map[sqlparser.Expr]TableSet{},
 		direct:        map[sqlparser.Expr]TableSet{},
-		targets:       map[sqlparser.IdentifierCS]TableSet{},
 		scoper:        scoper,
 		org:           org,
 		tc:            tc,
@@ -70,9 +69,20 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		return b.bindUnion(node)
 	case sqlparser.TableNames:
 		return b.bindTableNames(cursor, node)
+	case *sqlparser.UpdateExpr:
+		return b.bindUpdateExpr(node)
 	default:
 		return nil
 	}
+}
+
+func (b *binder) bindUpdateExpr(ue *sqlparser.UpdateExpr) error {
+	ts, ok := b.direct[ue.Name]
+	if !ok {
+		return nil
+	}
+	b.targets = b.targets.Merge(ts)
+	return nil
 }
 
 func (b *binder) bindTableNames(cursor *sqlparser.Cursor, tables sqlparser.TableNames) error {
@@ -86,7 +96,7 @@ func (b *binder) bindTableNames(cursor *sqlparser.Cursor, tables sqlparser.Table
 		if err != nil {
 			return err
 		}
-		b.targets[target.Name] = finalDep.direct
+		b.targets = b.targets.Merge(finalDep.direct)
 	}
 	return nil
 }
