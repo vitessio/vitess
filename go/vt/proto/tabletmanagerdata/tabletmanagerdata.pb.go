@@ -1627,9 +1627,10 @@ type ApplySchemaRequest struct {
 	BeforeSchema     *SchemaDefinition `protobuf:"bytes,4,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
 	AfterSchema      *SchemaDefinition `protobuf:"bytes,5,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
 	SqlMode          string            `protobuf:"bytes,6,opt,name=sql_mode,json=sqlMode,proto3" json:"sql_mode,omitempty"`
-	// BatchSize indicates how many queries to apply together
-	BatchSize              int64 `protobuf:"varint,7,opt,name=batch_size,json=batchSize,proto3" json:"batch_size,omitempty"`
-	SetForeignKeyChecksOff bool  `protobuf:"varint,8,opt,name=set_foreign_key_checks_off,json=setForeignKeyChecksOff,proto3" json:"set_foreign_key_checks_off,omitempty"`
+	// BatchSize indicates how many queries to apply together.
+	BatchSize int64 `protobuf:"varint,7,opt,name=batch_size,json=batchSize,proto3" json:"batch_size,omitempty"`
+	// SetForeignKeyChecksOff will result in setting foreign_key_checks to off before applying the schema.
+	SetForeignKeyChecksOff bool `protobuf:"varint,8,opt,name=set_foreign_key_checks_off,json=setForeignKeyChecksOff,proto3" json:"set_foreign_key_checks_off,omitempty"`
 }
 
 func (x *ApplySchemaRequest) Reset() {
