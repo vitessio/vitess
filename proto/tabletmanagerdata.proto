@@ -221,6 +221,7 @@ message ApplySchemaRequest {
   string sql_mode = 6;
   // BatchSize indicates how many queries to apply together
   int64 batch_size = 7;
+  bool set_foreign_key_checks_off = 8;
 }
 
 message ApplySchemaResponse {

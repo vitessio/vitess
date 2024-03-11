@@ -337,10 +337,11 @@ func (mz *materializer) deploySchema() error {
 			sql := strings.Join(applyDDLs, ";\n")
 
 			_, err = mz.tmc.ApplySchema(mz.ctx, targetTablet.Tablet, &tmutils.SchemaChange{
-				SQL:              sql,
-				Force:            false,
-				AllowReplication: true,
-				SQLMode:          vreplication.SQLMode,
+				SQL:                    sql,
+				Force:                  false,
+				AllowReplication:       true,
+				SQLMode:                vreplication.SQLMode,
+				SetForeignKeyChecksOff: true,
 			})
 			if err != nil {
 				return err

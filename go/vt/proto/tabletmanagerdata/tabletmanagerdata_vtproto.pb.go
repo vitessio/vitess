@@ -642,13 +642,14 @@ func (m *ApplySchemaRequest) CloneVT() *ApplySchemaRequest {
 		return (*ApplySchemaRequest)(nil)
 	}
 	r := &ApplySchemaRequest{
-		Sql:              m.Sql,
-		Force:            m.Force,
-		AllowReplication: m.AllowReplication,
-		BeforeSchema:     m.BeforeSchema.CloneVT(),
-		AfterSchema:      m.AfterSchema.CloneVT(),
-		SqlMode:          m.SqlMode,
-		BatchSize:        m.BatchSize,
+		Sql:                    m.Sql,
+		Force:                  m.Force,
+		AllowReplication:       m.AllowReplication,
+		BeforeSchema:           m.BeforeSchema.CloneVT(),
+		AfterSchema:            m.AfterSchema.CloneVT(),
+		SqlMode:                m.SqlMode,
+		BatchSize:              m.BatchSize,
+		SetForeignKeyChecksOff: m.SetForeignKeyChecksOff,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -3815,6 +3816,16 @@ func (m *ApplySchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.SetForeignKeyChecksOff {
+		i--
+		if m.SetForeignKeyChecksOff {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
 	}
 	if m.BatchSize != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.BatchSize))
@@ -8783,6 +8794,9 @@ func (m *ApplySchemaRequest) SizeVT() (n int) {
 	if m.BatchSize != 0 {
 		n += 1 + sov(uint64(m.BatchSize))
 	}
+	if m.SetForeignKeyChecksOff {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -13634,6 +13648,26 @@ func (m *ApplySchemaRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SetForeignKeyChecksOff", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.SetForeignKeyChecksOff = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

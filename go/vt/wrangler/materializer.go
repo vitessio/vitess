@@ -1276,12 +1276,12 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				}
 			}
 			sql := strings.Join(applyDDLs, ";\n")
-
 			_, err = mz.wr.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
-				SQL:              sql,
-				Force:            false,
-				AllowReplication: true,
-				SQLMode:          vreplication.SQLMode,
+				SQL:                    sql,
+				Force:                  false,
+				AllowReplication:       true,
+				SQLMode:                vreplication.SQLMode,
+				SetForeignKeyChecksOff: true,
 			})
 			if err != nil {
 				return err

@@ -36,6 +36,8 @@ import (
 
 const testWorkflowFlavor = workflowFlavorRandom
 
+var counter int = 100
+
 // TestFKWorkflow runs a MoveTables workflow with atomic copy for a db with foreign key constraints.
 // It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,
 // i.e. with foreign_key_checks=0.
@@ -106,7 +108,9 @@ func TestFKWorkflow(t *testing.T) {
 	require.NotNil(t, targetTab)
 	catchup(t, targetTab, workflowName, "MoveTables")
 	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
-	ls.waitForAdditionalRows(200)
+	if withLoad {
+		ls.waitForAdditionalRows(200)
+	}
 	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
 	if withLoad {
 		cancel()
@@ -121,9 +125,7 @@ func TestFKWorkflow(t *testing.T) {
 		ls = newFKLoadSimulator(t, ctx)
 		defer cancel()
 		go ls.simulateLoad()
-	}
-	ls.waitForAdditionalRows(200)
-	if withLoad {
+		ls.waitForAdditionalRows(200)
 		cancel()
 		<-ch
 	}
@@ -137,9 +139,7 @@ func insertInitialFKData(t *testing.T) {
 		sourceKeyspace := "fksource"
 		shard := "0"
 		db := fmt.Sprintf("%s:%s", sourceKeyspace, shard)
-		log.Infof("Inserting initial FK data")
 		execMultipleQueries(t, vtgateConn, db, initialFKData)
-		log.Infof("Done inserting initial FK data")
 		waitForRowCount(t, vtgateConn, db, "parent", 2)
 		waitForRowCount(t, vtgateConn, db, "child", 3)
 		waitForRowCount(t, vtgateConn, db, "t1", 2)
@@ -193,8 +193,13 @@ func (ls *fkLoadSimulator) simulateLoad() {
 		default: // 20% chance to delete
 			ls.delete()
 		}
+		for _, table := range []string{"t11", "t12"} {
+			query := fmt.Sprintf("insert /*+ SET_VAR(foreign_key_checks=0) */ into fksource.%s values(%d, %d)", table, counter, counter)
+			ls.exec(query)
+			counter++
+		}
 		require.NoError(t, err)
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
