@@ -31,15 +31,15 @@ const (
 
 // Graph is a generic graph implementation.
 type Graph[C comparable] struct {
-	edges        map[C][]C
-	orderedEdged []C
+	edges           map[C][]C
+	orderedVertices []C
 }
 
 // NewGraph creates a new graph for the given comparable type.
 func NewGraph[C comparable]() *Graph[C] {
 	return &Graph[C]{
-		edges:        map[C][]C{},
-		orderedEdged: []C{},
+		edges:           map[C][]C{},
+		orderedVertices: []C{},
 	}
 }
 
@@ -50,7 +50,7 @@ func (gr *Graph[C]) AddVertex(vertex C) {
 		return
 	}
 	gr.edges[vertex] = []C{}
-	gr.orderedEdged = append(gr.orderedEdged, vertex)
+	gr.orderedVertices = append(gr.orderedVertices, vertex)
 }
 
 // AddEdge adds an edge to the given Graph.
@@ -119,7 +119,7 @@ func (gr *Graph[C]) GetCycles() (vertices map[C][]C) {
 	// 1 represents grey.
 	// 2 represents black.
 	color := map[C]int{}
-	for _, vertex := range gr.orderedEdged {
+	for _, vertex := range gr.orderedVertices {
 		// If any vertex is still white, we initiate a new DFS.
 		if color[vertex] == white {
 			// We clone the colors because we wnt full coverage for all vertices.
