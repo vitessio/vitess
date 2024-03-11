@@ -16,6 +16,8 @@ limitations under the License.
 
 package vreplication
 
+// The tables in the schema are selected so that we have one parent/child table with names in reverse lexical order
+// (child before parent), t1,t2  are in lexical order, and t11,t12  have valid circular foreign key constraints.
 var (
 	initialFKSchema = `
 create table parent(id int, name varchar(128), primary key(id)) engine=innodb;

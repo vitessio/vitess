@@ -36,8 +36,6 @@ import (
 
 const testWorkflowFlavor = workflowFlavorRandom
 
-var counter int = 100
-
 // TestFKWorkflow runs a MoveTables workflow with atomic copy for a db with foreign key constraints.
 // It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,
 // i.e. with foreign_key_checks=0.
@@ -130,6 +128,14 @@ func TestFKWorkflow(t *testing.T) {
 		<-ch
 	}
 	mt.Complete()
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+
+	t11Count := getRowCount(t, vtgateConn, "t11")
+	t12Count := getRowCount(t, vtgateConn, "t12")
+	require.Greater(t, t11Count, 1)
+	require.Greater(t, t12Count, 1)
+	require.Equal(t, t11Count, t12Count)
 }
 
 func insertInitialFKData(t *testing.T) {
@@ -139,12 +145,21 @@ func insertInitialFKData(t *testing.T) {
 		sourceKeyspace := "fksource"
 		shard := "0"
 		db := fmt.Sprintf("%s:%s", sourceKeyspace, shard)
+		log.Infof("Inserting initial FK data")
 		execMultipleQueries(t, vtgateConn, db, initialFKData)
-		waitForRowCount(t, vtgateConn, db, "parent", 2)
-		waitForRowCount(t, vtgateConn, db, "child", 3)
-		waitForRowCount(t, vtgateConn, db, "t1", 2)
-		waitForRowCount(t, vtgateConn, db, "t2", 3)
+		log.Infof("Done inserting initial FK data")
 
+		type tableCounts struct {
+			name  string
+			count int
+		}
+		for _, table := range []tableCounts{
+			{"parent", 2}, {"child", 3},
+			{"t1", 2}, {"t2", 3},
+			{"t11", 1}, {"t12", 1},
+		} {
+			waitForRowCount(t, vtgateConn, db, table.name, table.count)
+		}
 	})
 }
 
@@ -170,6 +185,7 @@ func newFKLoadSimulator(t *testing.T, ctx context.Context) *fkLoadSimulator {
 	}
 }
 
+var indexCounter int = 100 // used to insert into t11 and t12
 func (ls *fkLoadSimulator) simulateLoad() {
 	t := ls.t
 	var err error
@@ -194,9 +210,9 @@ func (ls *fkLoadSimulator) simulateLoad() {
 			ls.delete()
 		}
 		for _, table := range []string{"t11", "t12"} {
-			query := fmt.Sprintf("insert /*+ SET_VAR(foreign_key_checks=0) */ into fksource.%s values(%d, %d)", table, counter, counter)
+			query := fmt.Sprintf("insert /*+ SET_VAR(foreign_key_checks=0) */ into fksource.%s values(%d, %d)", table, indexCounter, indexCounter)
 			ls.exec(query)
-			counter++
+			indexCounter++
 		}
 		require.NoError(t, err)
 		time.Sleep(10 * time.Millisecond)

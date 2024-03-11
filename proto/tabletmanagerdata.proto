@@ -219,8 +219,9 @@ message ApplySchemaRequest {
   SchemaDefinition before_schema = 4;
   SchemaDefinition after_schema = 5;
   string sql_mode = 6;
-  // BatchSize indicates how many queries to apply together
+  // BatchSize indicates how many queries to apply together.
   int64 batch_size = 7;
+  // SetForeignKeyChecksOff will result in setting foreign_key_checks to off before applying the schema.
   bool set_foreign_key_checks_off = 8;
 }
 
