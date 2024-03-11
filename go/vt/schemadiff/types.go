@@ -17,6 +17,9 @@ limitations under the License.
 package schemadiff
 
 import (
+	"strings"
+
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -154,3 +157,21 @@ const (
 	ApplyDiffsInOrder      = "ApplyDiffsInOrder"
 	ApplyDiffsSequential   = "ApplyDiffsSequential"
 )
+
+type ForeignKeyTableColumns struct {
+	Table   string
+	Columns []string
+}
+
+func (f ForeignKeyTableColumns) Escaped() string {
+	var b strings.Builder
+	b.WriteString(sqlescape.EscapeID(f.Table))
+	b.WriteString(" (")
+	escapedColumns := make([]string, len(f.Columns))
+	for i, column := range f.Columns {
+		escapedColumns[i] = sqlescape.EscapeID(column)
+	}
+	b.WriteString(strings.Join(escapedColumns, ", "))
+	b.WriteString(")")
+	return b.String()
+}

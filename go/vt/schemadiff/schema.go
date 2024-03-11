@@ -41,7 +41,6 @@ type Schema struct {
 
 	foreignKeyParents  []*CreateTableEntity // subset of tables
 	foreignKeyChildren []*CreateTableEntity // subset of tables
-	foreignKeyLoopMap  map[string][]string  // map of table name that either participate, or directly or indirectly reference foreign key loops
 
 	env *Environment
 }
@@ -56,7 +55,6 @@ func newEmptySchema(env *Environment) *Schema {
 
 		foreignKeyParents:  []*CreateTableEntity{},
 		foreignKeyChildren: []*CreateTableEntity{},
-		foreignKeyLoopMap:  map[string][]string{},
 
 		env: env,
 	}
@@ -307,9 +305,9 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			}
 			return res
 		}
-		var decodeTableColHash = func(hash string) (tableName string, colNames []string) {
+		var decodeTableColHash = func(hash string) *ForeignKeyTableColumns {
 			tokens := strings.Split(hash, "|")
-			return tokens[0], tokens[1:]
+			return &ForeignKeyTableColumns{tokens[0], tokens[1:]}
 		}
 		g := graph.NewGraph[string]()
 		for _, table := range s.tables {
@@ -340,13 +338,12 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			if len(cycle) == 0 {
 				continue
 			}
-			cycleTables := make([]string, len(cycle))
+			cycleTables := make([]*ForeignKeyTableColumns, len(cycle))
 			for i := range cycle {
 				// Reduce tablename|colname(s) to just tablename
-				cycleTables[i], _ = decodeTableColHash(cycle[i])
+				cycleTables[i] = decodeTableColHash(cycle[i])
 			}
-			tableName := cycleTables[0]
-			s.foreignKeyLoopMap[tableName] = cycleTables
+			tableName := cycleTables[0].Table
 			errs = errors.Join(errs, addEntityFkError(s.named[tableName], &ForeignKeyLoopError{Table: tableName, Loop: cycleTables}))
 		}
 	}

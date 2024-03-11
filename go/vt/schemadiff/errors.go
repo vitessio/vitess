@@ -288,7 +288,7 @@ func (e *ForeignKeyDependencyUnresolvedError) Error() string {
 
 type ForeignKeyLoopError struct {
 	Table string
-	Loop  []string
+	Loop  []*ForeignKeyTableColumns
 }
 
 func (e *ForeignKeyLoopError) Error() string {
@@ -303,16 +303,16 @@ func (e *ForeignKeyLoopError) Error() string {
 	if len(loop) > 0 {
 		last := loop[len(loop)-1]
 		for i := range loop {
-			if loop[i] == last {
+			if loop[i].Table == last.Table {
 				loop = loop[i:]
 				break
 			}
 		}
 	}
 	escaped := make([]string, len(loop))
-	for i, t := range loop {
-		escaped[i] = sqlescape.EscapeID(t)
-		if t == e.Table {
+	for i, fk := range loop {
+		escaped[i] = fk.Escaped()
+		if fk.Table == e.Table {
 			tableIsInsideLoop = true
 		}
 	}

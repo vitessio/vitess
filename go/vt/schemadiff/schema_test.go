@@ -310,9 +310,8 @@ func TestTableForeignKeyOrdering(t *testing.T) {
 
 func TestInvalidSchema(t *testing.T) {
 	tt := []struct {
-		schema           string
-		expectErr        error
-		expectLoopTables int
+		schema    string
+		expectErr error
 	}{
 		{
 			schema: "create table t11 (id int primary key, i int, key ix(i), constraint f11 foreign key (i) references t11(id) on delete restrict)",
@@ -358,10 +357,9 @@ func TestInvalidSchema(t *testing.T) {
 				create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (i) on delete set null)
 			`,
 			expectErr: errors.Join(
-				&ForeignKeyLoopError{Table: "t11", Loop: []string{"t11", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t12", Loop: []string{"t12", "t11", "t12"}},
+				&ForeignKeyLoopError{Table: "t11", Loop: []*ForeignKeyTableColumns{{"t11", []string{"i"}}, {"t12", []string{"i"}}, {"t11", []string{"i"}}}},
+				&ForeignKeyLoopError{Table: "t12", Loop: []*ForeignKeyTableColumns{{"t12", []string{"i"}}, {"t11", []string{"i"}}, {"t12", []string{"i"}}}},
 			),
-			expectLoopTables: 2,
 		},
 		{
 			// t10, t12<->t11
@@ -391,10 +389,9 @@ func TestInvalidSchema(t *testing.T) {
 				create table t13 (id int primary key, i int, constraint f1305 foreign key (i) references t11 (id) on delete restrict)
 			`,
 			expectErr: errors.Join(
-				&ForeignKeyLoopError{Table: "t11", Loop: []string{"t11", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t12", Loop: []string{"t12", "t11", "t12"}},
+				&ForeignKeyLoopError{Table: "t11", Loop: []*ForeignKeyTableColumns{{"t11", []string{"i"}}, {"t12", []string{"id"}}, {"t11", []string{"i"}}}},
+				&ForeignKeyLoopError{Table: "t12", Loop: []*ForeignKeyTableColumns{{"t12", []string{"id"}}, {"t11", []string{"i"}}, {"t12", []string{"id"}}}},
 			),
-			expectLoopTables: 2,
 		},
 		{
 			// t10, t12<->t11<-t13<-t14
@@ -415,11 +412,10 @@ func TestInvalidSchema(t *testing.T) {
 				create table t13 (id int primary key, i int, key i_idx (i), constraint f1307 foreign key (i) references t11 (i));
 			`,
 			expectErr: errors.Join(
-				&ForeignKeyLoopError{Table: "t11", Loop: []string{"t11", "t13", "t12", "t11"}},
-				&ForeignKeyLoopError{Table: "t12", Loop: []string{"t12", "t11", "t13", "t12"}},
-				&ForeignKeyLoopError{Table: "t13", Loop: []string{"t13", "t12", "t11", "t13"}},
+				&ForeignKeyLoopError{Table: "t11", Loop: []*ForeignKeyTableColumns{{"t11", []string{"i"}}, {"t13", []string{"i"}}, {"t12", []string{"id"}}, {"t11", []string{"i"}}}},
+				&ForeignKeyLoopError{Table: "t12", Loop: []*ForeignKeyTableColumns{{"t12", []string{"id"}}, {"t11", []string{"i"}}, {"t13", []string{"i"}}, {"t12", []string{"id"}}}},
+				&ForeignKeyLoopError{Table: "t13", Loop: []*ForeignKeyTableColumns{{"t13", []string{"i"}}, {"t12", []string{"id"}}, {"t11", []string{"i"}}, {"t13", []string{"i"}}}},
 			),
-			expectLoopTables: 3,
 		},
 		{
 			schema:    "create table t11 (id int primary key, i int, key ix(i), constraint f11 foreign key (i) references t11(id2) on delete restrict)",
@@ -493,14 +489,13 @@ func TestInvalidSchema(t *testing.T) {
 	for _, ts := range tt {
 		t.Run(ts.schema, func(t *testing.T) {
 
-			s, err := NewSchemaFromSQL(NewTestEnv(), ts.schema)
+			_, err := NewSchemaFromSQL(NewTestEnv(), ts.schema)
 			if ts.expectErr == nil {
 				assert.NoError(t, err)
 			} else {
 				assert.Error(t, err)
 				assert.EqualError(t, err, ts.expectErr.Error())
 			}
-			assert.Equal(t, ts.expectLoopTables, len(s.foreignKeyLoopMap))
 		})
 	}
 }
@@ -541,9 +536,10 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 		}
 		_, err := NewSchemaFromQueries(NewTestEnv(), fkQueries)
 		assert.Error(t, err)
-		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t11", Loop: []string{"t11", "t13", "t12", "t11"}}).Error())
-		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t12", Loop: []string{"t12", "t11", "t13", "t12"}}).Error())
-		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t13", Loop: []string{"t13", "t12", "t11", "t13"}}).Error())
+
+		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t11", Loop: []*ForeignKeyTableColumns{{"t11", []string{"i"}}, {"t13", []string{"i"}}, {"t12", []string{"i"}}, {"t11", []string{"i"}}}}).Error())
+		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t12", Loop: []*ForeignKeyTableColumns{{"t12", []string{"i"}}, {"t11", []string{"i"}}, {"t13", []string{"i"}}, {"t12", []string{"i"}}}}).Error())
+		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t13", Loop: []*ForeignKeyTableColumns{{"t13", []string{"i"}}, {"t12", []string{"i"}}, {"t11", []string{"i"}}, {"t13", []string{"i"}}}}).Error())
 	}
 	{
 		fkQueries := []string{
