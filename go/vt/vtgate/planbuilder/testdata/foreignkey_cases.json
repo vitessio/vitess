@@ -3518,7 +3518,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col14 from u_tbl1 where 1 != 1",
-            "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ col14 from u_tbl1 where x = 2 and y = 4 lock in share mode",
+            "Query": "select col14 from u_tbl1 where x = 2 and y = 4 lock in share mode",
             "Table": "u_tbl1"
           },
           {
@@ -3534,7 +3534,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where 1 != 1",
-                "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where u_tbl1.col14 is null and cast(:__sq1 as SIGNED) is not null and not (u_tbl4.col41) <=> (cast(:__sq1 as SIGNED)) and u_tbl4.col4 = 3 limit 1 lock in share mode",
+                "Query": "select 1 from u_tbl4 left join u_tbl1 on u_tbl1.col14 = cast(:__sq1 as SIGNED) where u_tbl1.col14 is null and cast(:__sq1 as SIGNED) is not null and not (u_tbl4.col41) <=> (cast(:__sq1 as SIGNED)) and u_tbl4.col4 = 3 limit 1 for share",
                 "Table": "u_tbl1, u_tbl4"
               },
               {
@@ -3581,7 +3581,7 @@
               "Sharded": false
             },
             "FieldQuery": "select foo from u_tbl1 where 1 != 1",
-            "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ foo from u_tbl1 where id = 1 lock in share mode",
+            "Query": "select foo from u_tbl1 where id = 1 lock in share mode",
             "Table": "u_tbl1"
           },
           {
@@ -3597,7 +3597,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl1.col1 from u_tbl1 where 1 != 1",
-                "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1.col1 from u_tbl1 order by id desc lock in share mode",
+                "Query": "select u_tbl1.col1 from u_tbl1 order by id desc for update",
                 "Table": "u_tbl1"
               },
               {
@@ -3617,7 +3617,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                    "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals lock in share mode",
+                    "Query": "select u_tbl2.col2 from u_tbl2 where (col2) in ::fkc_vals for update",
                     "Table": "u_tbl2"
                   },
                   {
@@ -3633,7 +3633,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:__sq1 as CHAR) is null or (col3) not in ((cast(:__sq1 as CHAR))))",
+                    "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals1 and (cast(:__sq1 as CHAR) is null or (col3) not in ((cast(:__sq1 as CHAR))))",
                     "Table": "u_tbl3"
                   },
                   {
@@ -3667,7 +3667,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select u_tbl9.col9 from u_tbl9 where 1 != 1",
-                    "Query": "select /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR)))) lock in share mode",
+                    "Query": "select u_tbl9.col9 from u_tbl9 where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR)))) for update nowait",
                     "Table": "u_tbl9"
                   },
                   {
@@ -3683,7 +3683,7 @@
                     "Cols": [
                       0
                     ],
-                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
+                    "Query": "update u_tbl8 set col8 = null where (col8) in ::fkc_vals3",
                     "Table": "u_tbl8"
                   },
                   {
@@ -3695,7 +3695,7 @@
                       "Sharded": false
                     },
                     "TargetTabletType": "PRIMARY",
-                    "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR))))",
+                    "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR))))",
                     "Table": "u_tbl9"
                   }
                 ]
