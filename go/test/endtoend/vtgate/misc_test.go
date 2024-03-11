@@ -321,19 +321,6 @@ func TestCreateIndex(t *testing.T) {
 	utils.Exec(t, conn, `create index i2 on ks.t1000 (id1)`)
 }
 
-func TestCreateView(t *testing.T) {
-	// The test wont work since we cant change the vschema without reloading the vtgate.
-	t.Skip()
-	conn, closer := start(t)
-	defer closer()
-	// Test that create view works and the output is as expected
-	utils.Exec(t, conn, `create view v1 as select * from t1`)
-	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
-	// This wont work, since ALTER VSCHEMA ADD TABLE is only supported for unsharded keyspaces
-	utils.Exec(t, conn, "alter vschema add table v1")
-	utils.AssertMatches(t, conn, "select * from v1", `[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)] [INT64(5) INT64(5)]]`)
-}
-
 func TestVersions(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()

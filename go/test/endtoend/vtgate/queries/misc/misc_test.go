@@ -371,3 +371,41 @@ func TestAliasesInOuterJoinQueries(t *testing.T) {
 	mcmp.AssertMatches("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2", `[[INT64(1) INT64(1) INT64(42)] [INT64(42) INT64(42) NULL]]`)
 	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2")
 }
+
+func TestAlterTableWithView(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Test that create view works and the output is as expected
+	mcmp.Exec(`use ks_misc`)
+	mcmp.Exec(`create view v1 as select * from t1`)
+	var viewDef string
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, keyspaceName, func(t *testing.T, ksMap map[string]interface{}) bool {
+		views, ok := ksMap["views"]
+		if !ok {
+			return false
+		}
+		viewsMap := views.(map[string]interface{})
+		view, ok := viewsMap["v1"]
+		if ok {
+			viewDef = view.(string)
+		}
+		return ok
+	}, "Waiting for view creation")
+	mcmp.Exec(`insert into t1(id1, id2) values (1, 1)`)
+	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1)]]`)
+
+	// alter table
+	mcmp.Exec(`alter table t1 add column test bigint`)
+	mcmp.Exec(`alter view v1 as select * from t1`)
+
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, keyspaceName, func(t *testing.T, ksMap map[string]interface{}) bool {
+		// wait for the view definition to change
+		views := ksMap["views"]
+		viewsMap := views.(map[string]interface{})
+		view := viewsMap["v1"]
+		return view.(string) != viewDef
+	}, "Waiting for alter view")
+
+	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1) NULL]]`)
+}
