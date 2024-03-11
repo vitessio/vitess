@@ -172,7 +172,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 			require.True(t, ok)
 
 			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "onlineddl_test", Options: tc.strategyOptions}
-			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), onlineDDL, createTable)
+			constraintMap, err := e.validateAndEditCreateTableStatement(onlineDDL, createTable)
 			if tc.expectError != "" {
 				assert.ErrorContains(t, err, tc.expectError)
 				return
@@ -290,7 +290,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			}
 			capableOf := mysql.ServerVersionCapableOf(tc.mySQLVersion)
 			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "t", Options: "--unsafe-allow-foreign-keys"}
-			alters, err := e.validateAndEditAlterTableStatement(context.Background(), capableOf, onlineDDL, alterTable, m)
+			alters, err := e.validateAndEditAlterTableStatement(capableOf, onlineDDL, alterTable, m)
 			assert.NoError(t, err)
 			var altersStrings []string
 			for _, alter := range alters {
