@@ -374,7 +374,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "create view tmp_view as select user_id, col1, col2 from authoritative"
+        "Query": "create view tmp_view as select * from authoritative"
       },
       "TablesUsed": [
         "user.tmp_view"

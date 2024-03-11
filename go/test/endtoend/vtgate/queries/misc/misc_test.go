@@ -395,7 +395,7 @@ func TestAlterTableWithView(t *testing.T) {
 	mcmp.Exec(`insert into t1(id1, id2) values (1, 1)`)
 	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1)]]`)
 
-	// alter table
+	// alter table add column
 	mcmp.Exec(`alter table t1 add column test bigint`)
 	mcmp.Exec(`alter view v1 as select * from t1`)
 

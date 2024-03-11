@@ -3069,6 +3069,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 		// it actually easier for us to issue a CREATE OR REPLACE, because it
 		// actually creates a view...
 		stmt = &sqlparser.CreateView{
+
 			Algorithm:   viewStmt.Algorithm,
 			Definer:     viewStmt.Definer,
 			Security:    viewStmt.Security,
