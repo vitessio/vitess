@@ -217,7 +217,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
 
-	fs.BoolVar(&currentConfig.UnmanagedTablet, "unmanaged", false, "Indicates an unmanaged tablet, i.e. using an external mysql-compatible database")
+	fs.BoolVar(&currentConfig.Unmanaged, "unmanaged", false, "Indicates an unmanaged tablet, i.e. using an external mysql-compatible database")
 }
 
 var (
@@ -303,7 +303,7 @@ func Init() {
 type TabletConfig struct {
 	DB *dbconfigs.DBConfigs `json:"db,omitempty"`
 
-	UnmanagedTablet bool `json:"unmanaged,omitempty"`
+	Unmanaged bool `json:"unmanaged,omitempty"`
 
 	OltpReadPool ConnPoolConfig `json:"oltpReadPool,omitempty"`
 	OlapReadPool ConnPoolConfig `json:"olapReadPool,omitempty"`
@@ -895,7 +895,7 @@ func (c *TabletConfig) Verify() error {
 // verifyUnmanagedTabletConfig checks unmanaged tablet related config for sanity
 func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
 	// Skip checks if tablet is not unmanaged
-	if !c.UnmanagedTablet {
+	if !c.Unmanaged {
 		return nil
 	}
 

@@ -465,7 +465,7 @@ func TestVerifyUnmanagedTabletConfig(t *testing.T) {
 	err := config.verifyUnmanagedTabletConfig()
 	assert.Nil(t, err)
 
-	config.UnmanagedTablet = true
+	config.Unmanaged = true
 	err = config.verifyUnmanagedTabletConfig()
 	assert.EqualError(t, err, "no connection parameters specified but unmanaged mode specified")
 
