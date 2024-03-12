@@ -17,11 +17,9 @@ jobs:
 
     steps:
     - name: Check out code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v4
 
     - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: dorny/paths-filter@v3.0.1
       id: changes
       with:
@@ -58,13 +56,13 @@ jobs:
     - name: Get dependencies
       run: |
         export DEBIAN_FRONTEND="noninteractive"
-        sudo apt-get -q update
+        sudo apt-get -qq update
 
         # Uninstall any previously installed MySQL first
         sudo systemctl stop apparmor
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
-        sudo apt-get -yq autoremove
-        sudo apt-get -yq autoclean
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -qq -y autoremove
+        sudo apt-get -qq -y autoclean
         sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
@@ -76,10 +74,10 @@ jobs:
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get -yq update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -yq mysql-server mysql-client
+        sudo apt-get -qq -y update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-server mysql-client
 
-        sudo apt-get install -yq make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
+        sudo apt-get -qq install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
