@@ -618,7 +618,7 @@ func (db *LocalCluster) ExecuteFetch(sql string, dbname string) (*sqltypes.Resul
 	}
 	defer conn.Close()
 
-	log.Infof("ExecuteFetch(%s): \"%s\"", dbname, sql)
+	// log.Infof("ExecuteFetch(%s): \"%s\"", dbname, sql)
 	rs, err := conn.ExecuteFetch(sql, -1, true)
 	return rs, err
 }
