@@ -830,7 +830,7 @@ func (vtl *vcopierCopyTaskLifecycle) after(state vcopierCopyTaskState) *vcopierC
 }
 
 // before returns a vcopierCopyTaskHooks that can be used to register callbacks
-// to be triggered before the the specified vcopierCopyTaskState.
+// to be triggered before the specified vcopierCopyTaskState.
 func (vtl *vcopierCopyTaskLifecycle) before(state vcopierCopyTaskState) *vcopierCopyTaskHooks {
 	key := "before:" + state.String()
 	if _, ok := vtl.hooks[key]; !ok {

@@ -43,7 +43,7 @@ var (
 	unknownParamsLoggedDryRunVSchema string
 )
 
-// TestApplyVSchema tests the the MoveTables client command
+// TestApplyVSchema tests the MoveTables client command
 // via the commandVRApplyVSchema() cmd handler.
 func TestApplyVSchema(t *testing.T) {
 	shard := "0"
@@ -139,7 +139,7 @@ Dry run: Skipping update of VSchema`,
 	}
 }
 
-// TestMoveTables tests the the MoveTables client command
+// TestMoveTables tests the MoveTables client command
 // via the commandVReplicationWorkflow() cmd handler.
 // This currently only tests the Progress action (which is
 // a parent of the Show action) but it can be used to test
