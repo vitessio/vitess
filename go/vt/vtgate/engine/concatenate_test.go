@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -32,7 +33,17 @@ import (
 )
 
 func r(names, types string, rows ...string) *sqltypes.Result {
-	return sqltypes.MakeTestResult(sqltypes.MakeTestFields(names, types), rows...)
+	fields := sqltypes.MakeTestFields(names, types)
+	for _, f := range fields {
+		if sqltypes.IsText(f.Type) {
+			f.Charset = collations.CollationUtf8mb4ID
+		} else {
+			f.Charset = collations.CollationBinaryID
+		}
+		_, flags := sqltypes.TypeToMySQL(f.Type)
+		f.Flags = uint32(flags)
+	}
+	return sqltypes.MakeTestResult(fields, rows...)
 }
 
 func TestConcatenate_NoErrors(t *testing.T) {
@@ -173,12 +184,12 @@ func TestConcatenateTypes(t *testing.T) {
 	tests := []struct {
 		t1, t2, expected string
 	}{
-		{t1: "int32", t2: "int64", expected: "int64"},
-		{t1: "int32", t2: "int32", expected: "int32"},
-		{t1: "int32", t2: "varchar", expected: "varchar"},
-		{t1: "int32", t2: "decimal", expected: "decimal"},
-		{t1: "hexval", t2: "uint64", expected: "varchar"},
-		{t1: "varchar", t2: "varbinary", expected: "varbinary"},
+		{t1: "int32", t2: "int64", expected: `[name:"id" type:int64 charset:63]`},
+		{t1: "int32", t2: "int32", expected: `[name:"id" type:int32 charset:63]`},
+		{t1: "int32", t2: "varchar", expected: `[name:"id" type:varchar charset:255]`},
+		{t1: "int32", t2: "decimal", expected: `[name:"id" type:decimal charset:63]`},
+		{t1: "hexval", t2: "uint64", expected: `[name:"id" type:varchar charset:255]`},
+		{t1: "varchar", t2: "varbinary", expected: `[name:"id" type:varbinary charset:63 flags:128]`},
 	}
 
 	for _, test := range tests {
@@ -196,8 +207,7 @@ func TestConcatenateTypes(t *testing.T) {
 			res, err := concatenate.GetFields(context.Background(), &noopVCursor{}, nil)
 			require.NoError(t, err)
 
-			expected := fmt.Sprintf(`[name:"id" type:%s]`, test.expected)
-			assert.Equal(t, expected, strings.ToLower(fmt.Sprintf("%v", res.Fields)))
+			assert.Equal(t, test.expected, strings.ToLower(fmt.Sprintf("%v", res.Fields)))
 		})
 	}
 }

@@ -182,6 +182,10 @@ func (dc *MockDBClient) Close() {
 
 // ExecuteFetch is part of the DBClient interface
 func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+	// Serialize ExecuteFetch to enforce a strict order on shared dbClients.
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+
 	dc.t.Helper()
 	msg := "DBClient query: %v"
 	if dc.Tag != "" {
@@ -195,8 +199,6 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		}
 	}
 
-	dc.expectMu.Lock()
-	defer dc.expectMu.Unlock()
 	if dc.currentResult >= len(dc.expect) {
 		msg := "DBClientMock: query: %s, no more requests are expected"
 		if dc.Tag != "" {
@@ -243,4 +245,18 @@ func (dc *MockDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltype
 		results = append(results, qr)
 	}
 	return results, nil
+}
+
+// AddInvariant can be used to customize the behavior of the mock client.
+func (dc *MockDBClient) AddInvariant(query string, result *sqltypes.Result) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+	dc.invariants[query] = result
+}
+
+// RemoveInvariant can be used to customize the behavior of the mock client.
+func (dc *MockDBClient) RemoveInvariant(query string) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+	delete(dc.invariants, query)
 }

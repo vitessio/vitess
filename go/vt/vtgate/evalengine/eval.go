@@ -21,7 +21,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
@@ -87,50 +86,45 @@ func evalToSQLValue(e eval) sqltypes.Value {
 	return sqltypes.MakeTrusted(e.SQLType(), e.ToRawBytes())
 }
 
-func evalToSQLValueWithType(e eval, resultType sqltypes.Type) sqltypes.Value {
+func evalToSQLValueWithType(e eval, resultType Type) sqltypes.Value {
+	tt := resultType.Type()
 	switch {
-	case sqltypes.IsSigned(resultType):
+	case sqltypes.IsSigned(tt):
 		switch e := e.(type) {
 		case *evalInt64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, e.i, 10))
+			return sqltypes.MakeTrusted(tt, strconv.AppendInt(nil, e.i, 10))
 		case *evalUint64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
+			return sqltypes.MakeTrusted(tt, strconv.AppendUint(nil, e.u, 10))
 		case *evalFloat:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, int64(e.f), 10))
+			return sqltypes.MakeTrusted(tt, strconv.AppendInt(nil, int64(e.f), 10))
 		}
-	case sqltypes.IsUnsigned(resultType):
+	case sqltypes.IsUnsigned(tt):
 		switch e := e.(type) {
 		case *evalInt64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(e.i), 10))
+			return sqltypes.MakeTrusted(tt, strconv.AppendUint(nil, uint64(e.i), 10))
 		case *evalUint64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
+			return sqltypes.MakeTrusted(tt, strconv.AppendUint(nil, e.u, 10))
 		case *evalFloat:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(e.f), 10))
+			return sqltypes.MakeTrusted(tt, strconv.AppendUint(nil, uint64(e.f), 10))
 		}
-	case sqltypes.IsFloat(resultType):
+	case sqltypes.IsFloat(tt):
 		switch e := e.(type) {
 		case *evalInt64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, e.i, 10))
+			return sqltypes.MakeTrusted(tt, strconv.AppendInt(nil, e.i, 10))
 		case *evalUint64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
+			return sqltypes.MakeTrusted(tt, strconv.AppendUint(nil, e.u, 10))
 		case *evalFloat:
-			return sqltypes.MakeTrusted(resultType, format.FormatFloat(e.f))
+			return sqltypes.MakeTrusted(tt, format.FormatFloat(e.f))
 		case *evalDecimal:
-			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
+			return sqltypes.MakeTrusted(tt, e.dec.FormatMySQL(e.length))
 		}
-	case sqltypes.IsDecimal(resultType):
-		switch e := e.(type) {
-		case *evalInt64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, e.i, 10))
-		case *evalUint64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, e.u, 10))
-		case *evalFloat:
-			return sqltypes.MakeTrusted(resultType, hack.StringBytes(strconv.FormatFloat(e.f, 'f', -1, 64)))
-		case *evalDecimal:
-			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
+	case sqltypes.IsDecimal(tt):
+		if numeric, ok := e.(evalNumeric); ok {
+			dec := numeric.toDecimal(resultType.size, resultType.scale)
+			return sqltypes.MakeTrusted(tt, dec.dec.FormatMySQL(dec.length))
 		}
 	case e != nil:
-		return sqltypes.MakeTrusted(resultType, e.ToRawBytes())
+		return sqltypes.MakeTrusted(tt, e.ToRawBytes())
 	}
 	return sqltypes.NULL
 }
@@ -367,34 +361,6 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 		return t, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value: %v", v)
-}
-
-func valueToEvalNumeric(v sqltypes.Value) (eval, error) {
-	switch {
-	case v.IsSigned():
-		ival, err := v.ToInt64()
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		return &evalInt64{i: ival}, nil
-	case v.IsUnsigned():
-		var uval uint64
-		uval, err := v.ToUint64()
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		return newEvalUint64(uval), nil
-	default:
-		uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
-		if err == nil {
-			return newEvalUint64(uval), nil
-		}
-		ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
-		if err == nil {
-			return &evalInt64{i: ival}, nil
-		}
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", v.RawStr())
-	}
 }
 
 func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eval, error) {

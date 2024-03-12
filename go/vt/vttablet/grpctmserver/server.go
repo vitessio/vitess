@@ -367,6 +367,20 @@ func (s *server) DeleteVReplicationWorkflow(ctx context.Context, request *tablet
 	return s.tm.DeleteVReplicationWorkflow(ctx, request)
 }
 
+func (s *server) HasVReplicationWorkflows(ctx context.Context, request *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (response *tabletmanagerdatapb.HasVReplicationWorkflowsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "HasVReplicationWorkflows", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.HasVReplicationWorkflowsResponse{}
+	return s.tm.HasVReplicationWorkflows(ctx, request)
+}
+
+func (s *server) ReadVReplicationWorkflows(ctx context.Context, request *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (response *tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ReadVReplicationWorkflows", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{}
+	return s.tm.ReadVReplicationWorkflows(ctx, request)
+}
+
 func (s *server) ReadVReplicationWorkflow(ctx context.Context, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (response *tabletmanagerdatapb.ReadVReplicationWorkflowResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ReadVReplicationWorkflow", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -394,6 +408,13 @@ func (s *server) UpdateVReplicationWorkflow(ctx context.Context, request *tablet
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{}
 	return s.tm.UpdateVReplicationWorkflow(ctx, request)
+}
+
+func (s *server) UpdateVReplicationWorkflows(ctx context.Context, request *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (response *tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "UpdateVReplicationWorkflows", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse{}
+	return s.tm.UpdateVReplicationWorkflows(ctx, request)
 }
 
 func (s *server) VDiff(ctx context.Context, request *tabletmanagerdatapb.VDiffRequest) (response *tabletmanagerdatapb.VDiffResponse, err error) {

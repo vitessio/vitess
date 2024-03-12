@@ -41,6 +41,15 @@ type VReplicationStream struct {
 // some aggregate functionality.
 type VReplicationStreams []*VReplicationStream
 
+// IDs returns the IDs of the VReplicationStreams.
+func (streams VReplicationStreams) IDs() []int32 {
+	ids := make([]int32, len(streams))
+	for i := range streams {
+		ids[i] = streams[i].ID
+	}
+	return ids
+}
+
 // Values returns a string representing the IDs of the VReplicationStreams for
 // use in an IN clause.
 //

@@ -568,9 +568,25 @@ func isTableInDenyList(t *testing.T, vc *VitessCluster, ksShard string, table st
 	return found, nil
 }
 
-func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int) {
-	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where workflow='%s'", sidecarDBIdentifier, workflow).Query
+// expectNumberOfStreams waits for the given number of streams to be present and
+// by default RUNNING. If you want to wait for different states, then you can
+// pass in the state(s) you want to wait for.
+func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int, states ...string) {
+	var query string
+	if len(states) == 0 {
+		states = append(states, binlogdatapb.VReplicationWorkflowState_Running.String())
+	}
+	query = sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where workflow='%s' and state in ('%s')",
+		sidecarDBIdentifier, workflow, strings.Join(states, "','")).Query
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
+}
+
+// confirmAllStreamsRunning confirms that all of the migrated streams are running
+// after a Reshard.
+func confirmAllStreamsRunning(t *testing.T, vtgateConn *mysql.Conn, database string) {
+	query := sqlparser.BuildParsedQuery("select count(*) from %s.vreplication where state != '%s'",
+		sidecarDBIdentifier, binlogdatapb.VReplicationWorkflowState_Running.String()).Query
+	waitForQueryResult(t, vtgateConn, database, query, `[[INT64(0)]]`)
 }
 
 func printShardPositions(vc *VitessCluster, ksShards []string) {

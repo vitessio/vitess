@@ -345,8 +345,8 @@
     "plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct id)"
   },
   {
-    "comment": "update with multi table reference with multi target update",
-    "query": "update ignore user u, music m set u.foo = 21, m.bar = 'abc' where u.col = m.col",
-    "plan": "VT12001: unsupported: multi-table UPDATE statement with multi-target column update"
+    "comment": "Over clause isn't supported in sharded cases",
+    "query": "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM user",
+    "plan": "VT12001: unsupported: OVER CLAUSE with sharded keyspace"
   }
 ]

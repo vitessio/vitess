@@ -167,7 +167,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	mysqlctl.CompressionEngineName = "lz4"
 	defer func() { mysqlctl.CompressionEngineName = "pgzip" }()
 	// now bring up the other replica, letting it restore from backup.
-	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
+	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
 	require.Nil(t, err)
 	restore(t, replica2, "replica", "SERVING")
 	// Replica2 takes time to serve. Sleeping for 5 sec.
@@ -266,7 +266,7 @@ func removeBackups(t *testing.T) {
 func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 	// Initialize tablets
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
-		err := localCluster.VtctlclientProcess.InitTablet(&tablet, cell, keyspaceName, hostname, shardName)
+		err := localCluster.InitTablet(&tablet, keyspaceName, shardName)
 		require.Nil(t, err)
 
 		if startTablet {

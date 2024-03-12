@@ -157,10 +157,15 @@ func (fz *fuzzer) generateUpdateDMLQuery() string {
 	idValue := 1 + rand.Intn(fz.maxValForId)
 	tableName := fkTables[tableId]
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
+	updWithLimit := rand.Intn(2)
+	limitCount := rand.Intn(3)
 	if tableName == "fk_t20" {
 		colValue := convertIntValueToString(rand.Intn(1 + fz.maxValForCol))
 		col2Value := convertIntValueToString(rand.Intn(1 + fz.maxValForCol))
-		return fmt.Sprintf("update %v%v set col = %v, col2 = %v where id = %v", setVarFkChecksVal, tableName, colValue, col2Value, idValue)
+		if updWithLimit == 0 {
+			return fmt.Sprintf("update %v%v set col = %v, col2 = %v where id = %v", setVarFkChecksVal, tableName, colValue, col2Value, idValue)
+		}
+		return fmt.Sprintf("update %v%v set col = %v, col2 = %v order by id limit %v", setVarFkChecksVal, tableName, colValue, col2Value, limitCount)
 	} else if isMultiColFkTable(tableName) {
 		if rand.Intn(2) == 0 {
 			colaValue := convertIntValueToString(rand.Intn(1 + fz.maxValForCol))
@@ -169,15 +174,24 @@ func (fz *fuzzer) generateUpdateDMLQuery() string {
 				colaValue = fz.generateExpression(rand.Intn(4)+1, "cola", "colb", "id")
 				colbValue = fz.generateExpression(rand.Intn(4)+1, "cola", "colb", "id")
 			}
-			return fmt.Sprintf("update %v%v set cola = %v, colb = %v where id = %v", setVarFkChecksVal, tableName, colaValue, colbValue, idValue)
+			if updWithLimit == 0 {
+				return fmt.Sprintf("update %v%v set cola = %v, colb = %v where id = %v", setVarFkChecksVal, tableName, colaValue, colbValue, idValue)
+			}
+			return fmt.Sprintf("update %v%v set cola = %v, colb = %v order by id limit %v", setVarFkChecksVal, tableName, colaValue, colbValue, limitCount)
 		} else {
 			colValue := fz.generateExpression(rand.Intn(4)+1, "cola", "colb", "id")
 			colToUpdate := []string{"cola", "colb"}[rand.Intn(2)]
-			return fmt.Sprintf("update %v set %v = %v where id = %v", tableName, colToUpdate, colValue, idValue)
+			if updWithLimit == 0 {
+				return fmt.Sprintf("update %v set %v = %v where id = %v", tableName, colToUpdate, colValue, idValue)
+			}
+			return fmt.Sprintf("update %v set %v = %v order by id limit %v", tableName, colToUpdate, colValue, limitCount)
 		}
 	} else {
 		colValue := fz.generateExpression(rand.Intn(4)+1, "col", "id")
-		return fmt.Sprintf("update %v%v set col = %v where id = %v", setVarFkChecksVal, tableName, colValue, idValue)
+		if updWithLimit == 0 {
+			return fmt.Sprintf("update %v%v set col = %v where id = %v", setVarFkChecksVal, tableName, colValue, idValue)
+		}
+		return fmt.Sprintf("update %v%v set col = %v order by id limit %v", setVarFkChecksVal, tableName, colValue, limitCount)
 	}
 }
 

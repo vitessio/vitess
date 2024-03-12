@@ -31,7 +31,7 @@ import (
 type binder struct {
 	recursive ExprDependencies
 	direct    ExprDependencies
-	targets   map[sqlparser.IdentifierCS]TableSet
+	targets   TableSet
 	scoper    *scoper
 	tc        *tableCollector
 	org       originable
@@ -47,7 +47,6 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 	return &binder{
 		recursive:     map[sqlparser.Expr]TableSet{},
 		direct:        map[sqlparser.Expr]TableSet{},
-		targets:       map[sqlparser.IdentifierCS]TableSet{},
 		scoper:        scoper,
 		org:           org,
 		tc:            tc,
@@ -57,73 +56,104 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 }
 
 func (b *binder) up(cursor *sqlparser.Cursor) error {
-	node := cursor.Node()
-	switch node := node.(type) {
+	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
-		currScope := b.scoper.currentScope()
-		b.setSubQueryDependencies(node, currScope)
+		return b.setSubQueryDependencies(node)
 	case *sqlparser.JoinCondition:
-		currScope := b.scoper.currentScope()
-		for _, ident := range node.Using {
-			name := sqlparser.NewColName(ident.String())
-			deps, err := b.resolveColumn(name, currScope, true, true)
-			if err != nil {
-				return err
-			}
-			currScope.joinUsing[ident.Lowered()] = deps.direct
-		}
+		return b.bindJoinCondition(node)
 	case *sqlparser.ColName:
-		currentScope := b.scoper.currentScope()
-		deps, err := b.resolveColumn(node, currentScope, false, true)
-		if err != nil {
-			if deps.direct.IsEmpty() ||
-				!strings.HasSuffix(err.Error(), "is ambiguous") ||
-				!b.canRewriteUsingJoin(deps, node) {
-				return err
-			}
-
-			// if we got here it means we are dealing with a ColName that is involved in a JOIN USING.
-			// we do the rewriting of these ColName structs here because it would be difficult to copy all the
-			// needed state over to the earlyRewriter
-			deps, err = b.rewriteJoinUsingColName(deps, node, currentScope)
-			if err != nil {
-				return err
-			}
-		}
-		b.recursive[node] = deps.recursive
-		b.direct[node] = deps.direct
-		if deps.typ.Valid() {
-			b.typer.setTypeFor(node, deps.typ)
-		}
+		return b.bindColName(node)
 	case *sqlparser.CountStar:
-		b.bindCountStar(node)
+		return b.bindCountStar(node)
 	case *sqlparser.Union:
-		info := b.tc.unionInfo[node]
-		// TODO: this check can be removed and available type information should be used.
-		if !info.isAuthoritative {
-			return nil
+		return b.bindUnion(node)
+	case sqlparser.TableNames:
+		return b.bindTableNames(cursor, node)
+	case *sqlparser.UpdateExpr:
+		return b.bindUpdateExpr(node)
+	default:
+		return nil
+	}
+}
+
+func (b *binder) bindUpdateExpr(ue *sqlparser.UpdateExpr) error {
+	ts, ok := b.direct[ue.Name]
+	if !ok {
+		return nil
+	}
+	b.targets = b.targets.Merge(ts)
+	return nil
+}
+
+func (b *binder) bindTableNames(cursor *sqlparser.Cursor, tables sqlparser.TableNames) error {
+	_, isDelete := cursor.Parent().(*sqlparser.Delete)
+	if !isDelete {
+		return nil
+	}
+	current := b.scoper.currentScope()
+	for _, target := range tables {
+		finalDep, err := b.findDependentTableSet(current, target)
+		if err != nil {
+			return err
+		}
+		b.targets = b.targets.Merge(finalDep.direct)
+	}
+	return nil
+}
+
+func (b *binder) bindUnion(union *sqlparser.Union) error {
+	info := b.tc.unionInfo[union]
+	// TODO: this check can be removed and available type information should be used.
+	if !info.isAuthoritative {
+		return nil
+	}
+
+	for i, expr := range info.exprs {
+		ae := expr.(*sqlparser.AliasedExpr)
+		b.recursive[ae.Expr] = info.recursive[i]
+		if t := info.types[i]; t.Valid() {
+			b.typer.m[ae.Expr] = t
+		}
+	}
+	return nil
+}
+
+func (b *binder) bindColName(col *sqlparser.ColName) error {
+	currentScope := b.scoper.currentScope()
+	deps, err := b.resolveColumn(col, currentScope, false, true)
+	if err != nil {
+		s := err.Error()
+		if deps.direct.IsEmpty() ||
+			!strings.HasSuffix(s, "is ambiguous") ||
+			!b.canRewriteUsingJoin(deps, col) {
+			return err
 		}
 
-		for i, expr := range info.exprs {
-			ae := expr.(*sqlparser.AliasedExpr)
-			b.recursive[ae.Expr] = info.recursive[i]
-			if t := info.types[i]; t.Valid() {
-				b.typer.m[ae.Expr] = t
-			}
+		// if we got here it means we are dealing with a ColName that is involved in a JOIN USING.
+		// we do the rewriting of these ColName structs here because it would be difficult to copy all the
+		// needed state over to the earlyRewriter
+		deps, err = b.rewriteJoinUsingColName(deps, col, currentScope)
+		if err != nil {
+			return err
 		}
-	case sqlparser.TableNames:
-		_, isDelete := cursor.Parent().(*sqlparser.Delete)
-		if !isDelete {
-			return nil
+	}
+	b.recursive[col] = deps.recursive
+	b.direct[col] = deps.direct
+	if deps.typ.Valid() {
+		b.typer.setTypeFor(col, deps.typ)
+	}
+	return nil
+}
+
+func (b *binder) bindJoinCondition(condition *sqlparser.JoinCondition) error {
+	currScope := b.scoper.currentScope()
+	for _, ident := range condition.Using {
+		name := sqlparser.NewColName(ident.String())
+		deps, err := b.resolveColumn(name, currScope, true, true)
+		if err != nil {
+			return err
 		}
-		current := b.scoper.currentScope()
-		for _, target := range node {
-			finalDep, err := b.findDependentTableSet(current, target)
-			if err != nil {
-				return err
-			}
-			b.targets[target.Name] = finalDep.direct
-		}
+		currScope.joinUsing[ident.Lowered()] = deps.direct
 	}
 	return nil
 }
@@ -142,7 +172,7 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 		c := createCertain(ts, ts, evalengine.Type{})
 		deps = deps.merge(c, false)
 	}
-	finalDep, err := deps.get()
+	finalDep, err := deps.get(nil)
 	if err != nil {
 		return dependency{}, err
 	}
@@ -152,7 +182,7 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 	return finalDep, nil
 }
 
-func (b *binder) bindCountStar(node *sqlparser.CountStar) {
+func (b *binder) bindCountStar(node *sqlparser.CountStar) error {
 	scope := b.scoper.currentScope()
 	var ts TableSet
 	for _, tbl := range scope.tables {
@@ -169,6 +199,7 @@ func (b *binder) bindCountStar(node *sqlparser.CountStar) {
 	}
 	b.recursive[node] = ts
 	b.direct[node] = ts
+	return nil
 }
 
 func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColName, currentScope *scope) (dependency, error) {
@@ -210,7 +241,8 @@ func (b *binder) canRewriteUsingJoin(deps dependency, node *sqlparser.ColName) b
 // the binder usually only sets the dependencies of ColNames, but we need to
 // handle the subquery dependencies differently, so they are set manually here
 // this method will only keep dependencies to tables outside the subquery
-func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *scope) {
+func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery) error {
+	currScope := b.scoper.currentScope()
 	subqRecursiveDeps := b.recursive.dependencies(subq)
 	subqDirectDeps := b.direct.dependencies(subq)
 
@@ -225,11 +257,12 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 
 	b.recursive[subq] = subqRecursiveDeps.KeepOnly(tablesToKeep)
 	b.direct[subq] = subqDirectDeps.KeepOnly(tablesToKeep)
+	return nil
 }
 
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti, singleTableFallBack bool) (dependency, error) {
 	if !current.stmtScope && current.inGroupBy {
-		return b.resolveColInGroupBy(colName, current, allowMulti, singleTableFallBack)
+		return b.resolveColInGroupBy(colName, current, allowMulti)
 	}
 	if !current.stmtScope && current.inHaving && !current.inHavingAggr {
 		return b.resolveColumnInHaving(colName, current, allowMulti)
@@ -243,11 +276,10 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		var err error
 		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
 		if err != nil {
-			return dependency{}, makeAmbiguousError(colName, err)
+			return dependency{}, err
 		}
 		if !thisDeps.empty() {
-			deps, err := thisDeps.get()
-			return deps, makeAmbiguousError(colName, err)
+			return thisDeps.get(colName)
 		}
 		if current.parent == nil &&
 			len(current.tables) == 1 &&
@@ -294,16 +326,12 @@ func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scop
 	// Here we are searching among the SELECT expressions for a match
 	thisDeps, err := b.resolveColumnInScope(current, colName, allowMulti)
 	if err != nil {
-		return dependency{}, makeAmbiguousError(colName, err)
+		return dependency{}, err
 	}
 
 	if !thisDeps.empty() {
 		// we found something! let's return it
-		deps, err := thisDeps.get()
-		if err != nil {
-			err = makeAmbiguousError(colName, err)
-		}
-		return deps, err
+		return thisDeps.get(colName)
 	}
 
 	notFoundErr := &ColumnNotFoundClauseError{Column: colName.Name.String(), Clause: "having clause"}
@@ -376,7 +404,6 @@ func (b *binder) resolveColInGroupBy(
 	colName *sqlparser.ColName,
 	current *scope,
 	allowMulti bool,
-	singleTableFallBack bool,
 ) (dependency, error) {
 	if current.parent == nil {
 		return dependency{}, vterrors.VT13001("did not expect this to be the last scope")
@@ -408,7 +435,7 @@ func (b *binder) resolveColInGroupBy(
 		}
 		return deps, firstErr
 	}
-	return dependencies.get()
+	return dependencies.get(colName)
 }
 
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {
@@ -425,16 +452,9 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 	}
 	if deps, isUncertain := deps.(*uncertain); isUncertain && deps.fail {
 		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables
-		return nil, ProjError{Inner: &AmbiguousColumnError{Column: sqlparser.String(expr)}}
+		return nil, ProjError{Inner: newAmbiguousColumnError(expr)}
 	}
 	return deps, nil
-}
-
-func makeAmbiguousError(colName *sqlparser.ColName, err error) error {
-	if err == ambigousErr {
-		err = &AmbiguousColumnError{Column: sqlparser.String(colName)}
-	}
-	return err
 }
 
 // GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery

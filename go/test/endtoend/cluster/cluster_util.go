@@ -36,7 +36,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -360,7 +359,11 @@ func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
 // CheckSrvKeyspace confirms that the cell and keyspace contain the expected
 // shard mappings.
 func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartition map[topodatapb.TabletType][]string, ci LocalProcessCluster) {
-	srvKeyspace := GetSrvKeyspace(t, cell, ksname, ci)
+	srvKeyspaces, err := ci.VtctldClientProcess.GetSrvKeyspaces(ksname, cell)
+	require.NoError(t, err)
+
+	srvKeyspace := srvKeyspaces[cell]
+	require.NotNil(t, srvKeyspace, "srvKeyspace is nil for %s", cell)
 
 	currentPartition := map[topodatapb.TabletType][]string{}
 
@@ -372,17 +375,6 @@ func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartitio
 	}
 
 	assert.True(t, reflect.DeepEqual(currentPartition, expectedPartition))
-}
-
-// GetSrvKeyspace returns the SrvKeyspace structure for the cell and keyspace.
-func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci LocalProcessCluster) *topodatapb.SrvKeyspace {
-	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
-	require.Nil(t, err)
-	var srvKeyspace topodatapb.SrvKeyspace
-
-	err = json2.Unmarshal([]byte(output), &srvKeyspace)
-	require.Nil(t, err)
-	return &srvKeyspace
 }
 
 // ExecuteOnTablet executes a query on the specified vttablet.

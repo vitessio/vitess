@@ -1284,6 +1284,11 @@ func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replac
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Avg).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1419,6 +1424,11 @@ func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer 
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*BitAnd).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1451,6 +1461,11 @@ func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer re
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*BitOr).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1480,6 +1495,11 @@ func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer 
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*BitXor).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*BitXor).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -2140,6 +2160,11 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Count).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2167,12 +2192,15 @@ func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, rep
 			return true
 		}
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*CountStar).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -5486,6 +5514,11 @@ func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replac
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Max).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5552,6 +5585,11 @@ func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replac
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Min).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Min).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -7829,6 +7867,11 @@ func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replac
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Std).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7858,6 +7901,11 @@ func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer 
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*StdDev).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*StdDev).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -7893,6 +7941,11 @@ func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer 
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*StdPop).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7922,6 +7975,11 @@ func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replace
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*StdSamp).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*StdSamp).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -8208,6 +8266,11 @@ func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replac
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Sum).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Sum).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -9076,6 +9139,11 @@ func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer 
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*VarPop).OverClause = newNode.(*OverClause)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9105,6 +9173,11 @@ func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replace
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*VarSamp).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*VarSamp).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
@@ -9169,6 +9242,11 @@ func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, repla
 	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Variance).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
+		parent.(*Variance).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}

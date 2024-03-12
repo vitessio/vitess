@@ -93,6 +93,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:                  common.BaseOptions.Workflow,
+		MaterializationIntent:     vtctldatapb.MaterializationIntent_CUSTOM,
 		TargetKeyspace:            common.BaseOptions.TargetKeyspace,
 		SourceKeyspace:            createOptions.SourceKeyspace,
 		TableSettings:             createOptions.TableSettings.val,
