@@ -130,7 +130,7 @@ install_zookeeper() {
   # wget "https://dlcdn.apache.org/zookeeper/$zk/apache-$zk.tar.gz"
   "${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/apache-${zk}.tar.gz"
   tar -xzf "$dist/apache-$zk.tar.gz"
-  mvn -f $dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/pom.xml clean install -P fatjar -DskipTests
+  mvn -q -f $dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/pom.xml clean install -P fatjar -DskipTests
   mkdir -p $dist/lib
   cp "$dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/target/$zk-fatjar.jar" "$dist/lib/$zk-fatjar.jar"
   rm -rf "$dist/apache-$zk"

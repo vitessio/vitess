@@ -48,7 +48,7 @@ _
     'waitretry=i' => \$Opts{waitretry},
 );
 
-my $wget_cmd = $ENV{WGET_RETRY_WGET_CMD} || "wget";
+my $wget_cmd = $ENV{WGET_RETRY_WGET_CMD} || "wget -q";
 
 my $retries = 0;
 while (1) {
