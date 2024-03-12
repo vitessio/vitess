@@ -45,7 +45,7 @@ func (del *Delete) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, del.QueryTimeout)
 	defer cancelFunc()
 
-	rss, _, err := del.findRoute(ctx, vcursor, bindVars)
+	rss, bvs, err := del.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (del *Delete) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 	case Unsharded:
 		return del.execUnsharded(ctx, del, vcursor, bindVars, rss)
 	case Equal, IN, Scatter, ByDestination, SubShard, EqualUnique, MultiEqual:
-		return del.execMultiDestination(ctx, del, vcursor, bindVars, rss, del.deleteVindexEntries)
+		return del.execMultiDestination(ctx, del, vcursor, bindVars, rss, del.deleteVindexEntries, bvs)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", del.Opcode)

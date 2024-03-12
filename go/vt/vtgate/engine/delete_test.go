@@ -544,7 +544,7 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x01N\xb1\x90ɢ\xfa\x16\x9c" true`,
 		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"7" toc: type:VARBINARY value:"\x02N\xb1\x90ɢ\xfa\x16\x9c" true`,
 		// Finally, the actual delete, which is also sent to -20, same route as the subquery.
-		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+		`ExecuteMultiShard sharded.-20: dummy_update {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} true true`,
 	})
 }
 
