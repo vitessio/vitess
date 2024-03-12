@@ -3902,9 +3902,9 @@ index_info:
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
-| CONSTRAINT ID PRIMARY KEY name_opt
+| CONSTRAINT name_opt PRIMARY KEY name_opt
   {
-    $$ = &IndexInfo{Type: string($3) + " " + string($4), Name: NewColIdent(string($2)), Primary: true, Unique: true}
+    $$ = &IndexInfo{Type: string($3) + " " + string($4), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
 | SPATIAL index_or_key name_opt
   {
