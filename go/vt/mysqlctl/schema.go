@@ -536,6 +536,10 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 		sql = "SET sql_log_bin = 0;\n" + sql
 	}
 
+	if change.DisableForeignKeyChecks {
+		sql = "SET foreign_key_checks = 0;\n" + sql
+	}
+
 	// add a 'use XXX' in front of the SQL
 	sql = fmt.Sprintf("USE %s;\n%s", sqlescape.EscapeID(dbName), sql)
 

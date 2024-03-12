@@ -400,12 +400,13 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet
 	}
 	defer closer.Close()
 	response, err := c.ApplySchema(ctx, &tabletmanagerdatapb.ApplySchemaRequest{
-		Sql:              change.SQL,
-		Force:            change.Force,
-		AllowReplication: change.AllowReplication,
-		BeforeSchema:     change.BeforeSchema,
-		AfterSchema:      change.AfterSchema,
-		SqlMode:          change.SQLMode,
+		Sql:                     change.SQL,
+		Force:                   change.Force,
+		AllowReplication:        change.AllowReplication,
+		BeforeSchema:            change.BeforeSchema,
+		AfterSchema:             change.AfterSchema,
+		SqlMode:                 change.SQLMode,
+		DisableForeignKeyChecks: change.DisableForeignKeyChecks,
 	})
 	if err != nil {
 		return nil, err
