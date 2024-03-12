@@ -20880,6 +20880,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest batch_size */
         batch_size?: (number|Long|null);
+
+        /** ApplySchemaRequest disable_foreign_key_checks */
+        disable_foreign_key_checks?: (boolean|null);
     }
 
     /** Represents an ApplySchemaRequest. */
@@ -20911,6 +20914,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest batch_size. */
         public batch_size: (number|Long);
+
+        /** ApplySchemaRequest disable_foreign_key_checks. */
+        public disable_foreign_key_checks: boolean;
 
         /**
          * Creates a new ApplySchemaRequest instance using the specified properties.

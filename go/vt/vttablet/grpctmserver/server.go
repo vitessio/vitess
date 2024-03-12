@@ -161,12 +161,13 @@ func (s *server) ApplySchema(ctx context.Context, request *tabletmanagerdatapb.A
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ApplySchemaResponse{}
 	scr, err := s.tm.ApplySchema(ctx, &tmutils.SchemaChange{
-		SQL:              request.Sql,
-		Force:            request.Force,
-		AllowReplication: request.AllowReplication,
-		BeforeSchema:     request.BeforeSchema,
-		AfterSchema:      request.AfterSchema,
-		SQLMode:          request.SqlMode,
+		SQL:                     request.Sql,
+		Force:                   request.Force,
+		AllowReplication:        request.AllowReplication,
+		BeforeSchema:            request.BeforeSchema,
+		AfterSchema:             request.AfterSchema,
+		SQLMode:                 request.SqlMode,
+		DisableForeignKeyChecks: request.DisableForeignKeyChecks,
 	})
 	if err == nil {
 		response.BeforeSchema = scr.BeforeSchema

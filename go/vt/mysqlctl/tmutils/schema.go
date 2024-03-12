@@ -300,12 +300,13 @@ func DiffSchemaToArray(leftName string, left *tabletmanagerdatapb.SchemaDefiniti
 // SchemaChange contains all necessary information to apply a schema change.
 // It should not be sent over the wire, it's just a set of parameters.
 type SchemaChange struct {
-	SQL              string
-	Force            bool
-	AllowReplication bool
-	BeforeSchema     *tabletmanagerdatapb.SchemaDefinition
-	AfterSchema      *tabletmanagerdatapb.SchemaDefinition
-	SQLMode          string
+	SQL                     string
+	Force                   bool
+	AllowReplication        bool
+	BeforeSchema            *tabletmanagerdatapb.SchemaDefinition
+	AfterSchema             *tabletmanagerdatapb.SchemaDefinition
+	SQLMode                 string
+	DisableForeignKeyChecks bool
 }
 
 // Equal compares two SchemaChange objects.
