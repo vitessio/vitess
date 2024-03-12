@@ -1719,6 +1719,14 @@ func TestCreateTableDiff(t *testing.T) {
 			charset: TableCharsetCollateIgnoreEmpty,
 		},
 		{
+			name:    "non empty collate with ignore empty table collate",
+			from:    "create table t (id int, primary key(id)) COLLATE utf8mb4_0900_bin",
+			to:      "create table t (id int, primary key(id)) COLLATE utf8mb4_0900_ai_ci",
+			charset: TableCharsetCollateIgnoreEmpty,
+			diff:    "alter table t collate utf8mb4_0900_ai_ci",
+			cdiff:   "ALTER TABLE `t` COLLATE utf8mb4_0900_ai_ci",
+		},
+		{
 			name:    "ignore empty table charset and collate in target",
 			from:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_ai_ci",
 			to:      "create table t (id int, primary key(id))",
