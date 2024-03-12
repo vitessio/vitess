@@ -2556,6 +2556,16 @@ func (ra ReferenceAction) IsRestrict() bool {
 	}
 }
 
+// IsCascade returns true if the reference action is of cascade type.
+func (ra ReferenceAction) IsCascade() bool {
+	switch ra {
+	case Cascade:
+		return true
+	default:
+		return false
+	}
+}
+
 // IsLiteral returns true if the expression is of a literal type.
 func IsLiteral(expr Expr) bool {
 	switch expr.(type) {
