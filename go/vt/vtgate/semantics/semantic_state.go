@@ -119,7 +119,8 @@ type (
 		// It doesn't recurse inside derived tables to find the original dependencies.
 		Direct ExprDependencies
 
-		Targets map[sqlparser.IdentifierCS]TableSet
+		// Targets contains the TableSet of each table getting modified by the update/delete statement.
+		Targets TableSet
 
 		// ColumnEqualities is used for transitive closures (e.g., if a == b and b == c, then a == c).
 		ColumnEqualities map[columnName][]sqlparser.Expr
@@ -189,9 +190,17 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	}
 }
 
-// GetChildForeignKeysForTable gets the child foreign keys as a list for the specified table.
-func (st *SemTable) GetChildForeignKeysForTable(tableName sqlparser.TableName) []vindexes.ChildFKInfo {
-	return st.childForeignKeysInvolved[st.Targets[tableName.Name]]
+// GetChildForeignKeysForTargets gets the child foreign keys as a list for all the target tables.
+func (st *SemTable) GetChildForeignKeysForTargets() (fks []vindexes.ChildFKInfo) {
+	for _, ts := range st.Targets.Constituents() {
+		fks = append(fks, st.childForeignKeysInvolved[ts]...)
+	}
+	return fks
+}
+
+// GetChildForeignKeysForTableSet gets the child foreign keys as a list for the specified TableSet.
+func (st *SemTable) GetChildForeignKeysForTableSet(ts TableSet) []vindexes.ChildFKInfo {
+	return st.childForeignKeysInvolved[ts]
 }
 
 // GetChildForeignKeysList gets the child foreign keys as a list.
@@ -201,6 +210,14 @@ func (st *SemTable) GetChildForeignKeysList() []vindexes.ChildFKInfo {
 		childFkInfos = append(childFkInfos, infos...)
 	}
 	return childFkInfos
+}
+
+// GetParentForeignKeysForTargets gets the parent foreign keys as a list for all the target tables.
+func (st *SemTable) GetParentForeignKeysForTargets() (fks []vindexes.ParentFKInfo) {
+	for _, ts := range st.Targets.Constituents() {
+		fks = append(fks, st.parentForeignKeysInvolved[ts]...)
+	}
+	return fks
 }
 
 // GetParentForeignKeysList gets the parent foreign keys as a list.
@@ -928,6 +945,7 @@ func (st *SemTable) Clone(n sqlparser.SQLNode) sqlparser.SQLNode {
 	}, st.CopySemanticInfo)
 }
 
+// UpdateChildFKExpr updates the child foreign key expression with the new expression.
 func (st *SemTable) UpdateChildFKExpr(origUpdExpr *sqlparser.UpdateExpr, newExpr sqlparser.Expr) {
 	for _, exprs := range st.childFkToUpdExprs {
 		for idx, updateExpr := range exprs {
@@ -936,4 +954,18 @@ func (st *SemTable) UpdateChildFKExpr(origUpdExpr *sqlparser.UpdateExpr, newExpr
 			}
 		}
 	}
+}
+
+// GetTargetTableSetForTableName returns the TableSet for the given table name from the target tables.
+func (st *SemTable) GetTargetTableSetForTableName(name sqlparser.TableName) (TableSet, error) {
+	for _, target := range st.Targets.Constituents() {
+		tbl, err := st.Tables[target.TableOffset()].Name()
+		if err != nil {
+			return "", err
+		}
+		if tbl.Name == name.Name {
+			return target, nil
+		}
+	}
+	return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "target table '%s' not found", sqlparser.String(name))
 }

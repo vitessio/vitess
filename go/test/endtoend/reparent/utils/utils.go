@@ -510,7 +510,7 @@ func RestartTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, t
 	tab.MysqlctlProcess.InitMysql = false
 	err := tab.MysqlctlProcess.Start()
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitTablet(tab, tab.Cell, KeyspaceName, Hostname, ShardName)
+	err = clusterInstance.InitTablet(tab, KeyspaceName, ShardName)
 	require.NoError(t, err)
 }
 
@@ -519,7 +519,7 @@ func ResurrectTablet(ctx context.Context, t *testing.T, clusterInstance *cluster
 	tab.MysqlctlProcess.InitMysql = false
 	err := tab.MysqlctlProcess.Start()
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitTablet(tab, tab.Cell, KeyspaceName, Hostname, ShardName)
+	err = clusterInstance.InitTablet(tab, KeyspaceName, ShardName)
 	require.NoError(t, err)
 
 	// As there is already a primary the new replica will come directly in SERVING state
@@ -561,7 +561,7 @@ func GetNewPrimary(t *testing.T, clusterInstance *cluster.LocalProcessCluster) *
 // GetShardReplicationPositions gets the shards replication positions.
 // This should not generally be called directly, instead use the WaitForReplicationToCatchup method.
 func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, doPrint bool) []string {
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
 		"ShardReplicationPositions", fmt.Sprintf("%s/%s", keyspaceName, shardName))
 	require.NoError(t, err)
 	strArray := strings.Split(output, "\n")
@@ -608,12 +608,23 @@ func CheckReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttab
 
 // CheckReparentFromOutside checks that cluster was reparented from outside
 func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, downPrimary bool, baseTime int64) {
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, KeyspaceShard)
-	require.Nil(t, err, "error should be Nil")
-	if !downPrimary {
-		assertNodeCount(t, result, int(3))
+	if clusterInstance.VtctlMajorVersion > 19 { // TODO: (ajm188) remove else clause after next release
+		result, err := clusterInstance.VtctldClientProcess.GetShardReplication(KeyspaceName, ShardName, cell1)
+		require.Nil(t, err, "error should be Nil")
+		require.NotNil(t, result[cell1], "result should not be nil")
+		if !downPrimary {
+			assert.Len(t, result[cell1].Nodes, 3)
+		} else {
+			assert.Len(t, result[cell1].Nodes, 2)
+		}
 	} else {
-		assertNodeCount(t, result, int(2))
+		result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, KeyspaceShard)
+		require.Nil(t, err, "error should be Nil")
+		if !downPrimary {
+			assertNodeCount(t, result, int(3))
+		} else {
+			assertNodeCount(t, result, int(2))
+		}
 	}
 
 	// make sure the primary status page says it's the primary
@@ -622,7 +633,7 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 
 	// make sure the primary health stream says it's the primary too
 	// (health check is disabled on these servers, force it first)
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
+	err := clusterInstance.VtctldClientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
 	require.NoError(t, err)
 
 	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
@@ -631,6 +642,16 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 
 	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_PRIMARY)
 	assert.True(t, streamHealthResponse.PrimaryTermStartTimestamp >= baseTime)
+}
+
+func assertNodeCount(t *testing.T, result string, want int) {
+	resultMap := make(map[string]any)
+	err := json.Unmarshal([]byte(result), &resultMap)
+	require.NoError(t, err)
+
+	nodes := reflect.ValueOf(resultMap["nodes"])
+	got := nodes.Len()
+	assert.Equal(t, want, got)
 }
 
 // WaitForReplicationPosition waits for tablet B to catch up to the replication position of tablet A.
@@ -656,16 +677,6 @@ func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string)
 		isAtleast = true
 	}
 	return isAtleast
-}
-
-func assertNodeCount(t *testing.T, result string, want int) {
-	resultMap := make(map[string]any)
-	err := json.Unmarshal([]byte(result), &resultMap)
-	require.NoError(t, err)
-
-	nodes := reflect.ValueOf(resultMap["nodes"])
-	got := nodes.Len()
-	assert.Equal(t, want, got)
 }
 
 // CheckDBvar checks the db var
@@ -718,7 +729,7 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 }
 
 func WaitForTabletToBeServing(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, timeout time.Duration) {
-	vTablet, err := clusterInstance.VtctlclientGetTablet(tablet)
+	vTablet, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
 	require.NoError(t, err)
 
 	tConn, err := tabletconn.GetDialer()(vTablet, false)

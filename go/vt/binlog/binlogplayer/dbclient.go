@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -129,10 +130,14 @@ func LogError(msg string, err error) {
 
 // LimitString truncates string to specified size
 func LimitString(s string, limit int) string {
-	if len(s) > limit {
+	ts, err := textutil.TruncateText(s, limit, TruncationLocation, TruncationIndicator)
+	if err != nil { // Fallback to simple truncation
+		if len(s) <= limit {
+			return s
+		}
 		return s[:limit]
 	}
-	return s
+	return ts
 }
 
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {

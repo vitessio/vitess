@@ -22,18 +22,21 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
@@ -305,7 +308,7 @@ func performResharding(t *testing.T) {
 	shard0Primary.VttabletProcess.WaitForVReplicationToCatchup(t, "ks.reshardWorkflow", dbName, sidecar.DefaultName, waitTimeout)
 	shard1Primary.VttabletProcess.WaitForVReplicationToCatchup(t, "ks.reshardWorkflow", dbName, sidecar.DefaultName, waitTimeout)
 
-	waitForNoWorkflowLag(t, clusterInstance, "ks.reshardWorkflow")
+	waitForNoWorkflowLag(t, clusterInstance, "ks", "reshardWorkflow")
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Reshard", "SwitchTraffic", "--tablet-types=rdonly", "--target-keyspace", "ks", "--workflow", "reshardWorkflow")
 	require.NoError(t, err)
@@ -573,22 +576,26 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 
 // waitForNoWorkflowLag waits for the VReplication workflow's MaxVReplicationTransactionLag
 // value to be 0.
-func waitForNoWorkflowLag(t *testing.T, vc *cluster.LocalProcessCluster, ksWorkflow string) {
-	lag := int64(0)
+func waitForNoWorkflowLag(t *testing.T, vc *cluster.LocalProcessCluster, ks string, workflow string) {
+	var lag int64
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		output, err := vc.VtctlclientProcess.ExecuteCommandWithOutput("Workflow", "--", ksWorkflow, "show")
+		output, err := vc.VtctldClientProcess.ExecuteCommandWithOutput("Workflow", "--keyspace", ks, "show", "--workflow", workflow)
 		require.NoError(t, err)
-		lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
+
+		var resp vtctldatapb.GetWorkflowsResponse
+		err = json2.Unmarshal([]byte(output), &resp)
 		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(resp.Workflows), 1, "responce should have at least one workflow")
+		lag = resp.Workflows[0].MaxVReplicationTransactionLag
 		if lag == 0 {
 			return
 		}
 		select {
 		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("workflow %q did not eliminate VReplication lag before the timeout of %s; last seen MaxVReplicationTransactionLag: %d",
-				ksWorkflow, defaultTimeout, lag))
+				strings.Join([]string{ks, workflow}, "."), defaultTimeout, lag))
 		default:
 			time.Sleep(defaultTick)
 		}

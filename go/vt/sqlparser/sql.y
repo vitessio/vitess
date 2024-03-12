@@ -447,6 +447,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <frameClause> frame_clause frame_clause_opt
 %type <windowSpecification> window_spec
 %type <overClause> over_clause
+%type <overClause> over_clause_opt
 %type <nullTreatmentType> null_treatment_type
 %type <nullTreatmentClause> null_treatment_clause null_treatment_clause_opt
 %type <fromFirstLastType> from_first_last_type
@@ -469,7 +470,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
-%type <selectExprs> select_expression_list select_expression_list_opt
+%type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <strs> select_options select_options_opt flush_option_list
 %type <str> select_option algorithm_view security_view security_view_opt
@@ -4793,15 +4794,6 @@ deallocate_statement:
     $$ = &DeallocateStmt{Comments: Comments($2).Parsed(), Name: $4}
   }
 
-select_expression_list_opt:
-  {
-    $$ = nil
-  }
-| select_expression_list
-  {
-    $$ = $1
-  }
-
 select_options_opt:
   {
     $$ = nil
@@ -5675,6 +5667,17 @@ over_clause:
     $$ = &OverClause{WindowName: $2}
   }
 
+over_clause_opt:
+  over_clause
+  {
+    $$ = $1
+  }
+|
+  {
+    $$ = nil
+  }
+;
+
 null_treatment_clause_opt:
   {
     $$ = nil
@@ -5860,11 +5863,11 @@ expression_list:
   introduce side effects due to being a simple identifier
 */
 function_call_generic:
-  sql_id openb select_expression_list_opt closeb
+  sql_id openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
-| table_id '.' reserved_sql_id openb select_expression_list_opt closeb
+| table_id '.' reserved_sql_id openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
   }
@@ -5874,11 +5877,11 @@ function_call_generic:
   as a result
 */
 function_call_keyword:
-  LEFT openb select_expression_list closeb
+  LEFT openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: $3}
   }
-| RIGHT openb select_expression_list closeb
+| RIGHT openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: $3}
   }
@@ -5957,69 +5960,69 @@ UTC_DATE func_paren_opt
   {
     $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("current_time"), Fsp: $2}
   }
-| COUNT openb '*' closeb
+| COUNT openb '*' closeb over_clause_opt
   {
-    $$ = &CountStar{}
+    $$ = &CountStar{OverClause: $5}
   }
-| COUNT openb distinct_opt expression_list closeb
+| COUNT openb distinct_opt expression_list closeb over_clause_opt
   {
-    $$ = &Count{Distinct:$3, Args:$4}
+    $$ = &Count{Distinct:$3, Args:$4, OverClause: $6}
   }
-| MAX openb distinct_opt expression closeb
+| MAX openb distinct_opt expression closeb over_clause_opt
   {
-    $$ = &Max{Distinct:$3, Arg:$4}
+    $$ = &Max{Distinct:$3, Arg:$4, OverClause: $6}
   }
-| MIN openb distinct_opt expression closeb
+| MIN openb distinct_opt expression closeb over_clause_opt
   {
-    $$ = &Min{Distinct:$3, Arg:$4}
+    $$ = &Min{Distinct:$3, Arg:$4, OverClause: $6}
   }
-| SUM openb distinct_opt expression closeb
+| SUM openb distinct_opt expression closeb over_clause_opt
   {
-    $$ = &Sum{Distinct:$3, Arg:$4}
+    $$ = &Sum{Distinct:$3, Arg:$4, OverClause: $6}
   }
-| AVG openb distinct_opt expression closeb
+| AVG openb distinct_opt expression closeb over_clause_opt
   {
-    $$ = &Avg{Distinct:$3, Arg:$4}
+    $$ = &Avg{Distinct:$3, Arg:$4, OverClause: $6}
   }
-| BIT_AND openb expression closeb
+| BIT_AND openb expression closeb over_clause_opt
   {
-    $$ = &BitAnd{Arg:$3}
+    $$ = &BitAnd{Arg:$3, OverClause: $5}
   }
-| BIT_OR openb expression closeb
+| BIT_OR openb expression closeb over_clause_opt
   {
-    $$ = &BitOr{Arg:$3}
+    $$ = &BitOr{Arg:$3, OverClause: $5}
   }
-| BIT_XOR openb expression closeb
+| BIT_XOR openb expression closeb over_clause_opt
    {
-     $$ = &BitXor{Arg:$3}
+     $$ = &BitXor{Arg:$3, OverClause: $5}
    }
-| STD openb expression closeb
+| STD openb expression closeb over_clause_opt
     {
-      $$ = &Std{Arg:$3}
+      $$ = &Std{Arg:$3, OverClause: $5}
     }
-| STDDEV openb expression closeb
+| STDDEV openb expression closeb over_clause_opt
     {
-      $$ = &StdDev{Arg:$3}
+      $$ = &StdDev{Arg:$3, OverClause: $5}
     }
-| STDDEV_POP openb expression closeb
+| STDDEV_POP openb expression closeb over_clause_opt
     {
-      $$ = &StdPop{Arg:$3}
+      $$ = &StdPop{Arg:$3, OverClause: $5}
     }
-| STDDEV_SAMP openb expression closeb
+| STDDEV_SAMP openb expression closeb over_clause_opt
     {
-      $$ = &StdSamp{Arg:$3}
+      $$ = &StdSamp{Arg:$3, OverClause: $5}
     }
-| VAR_POP openb expression closeb
+| VAR_POP openb expression closeb over_clause_opt
      {
-       $$ = &VarPop{Arg:$3}
+       $$ = &VarPop{Arg:$3, OverClause: $5}
      }
-| VAR_SAMP openb expression closeb
+| VAR_SAMP openb expression closeb over_clause_opt
      {
-       $$ = &VarSamp{Arg:$3}
+       $$ = &VarSamp{Arg:$3, OverClause: $5}
      }
-| VARIANCE openb expression closeb
+| VARIANCE openb expression closeb over_clause_opt
      {
-       $$ = &Variance{Arg:$3}
+       $$ = &Variance{Arg:$3, OverClause: $5}
      }
 | GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
   {
@@ -7020,23 +7023,23 @@ func_datetime_precision:
   the names are non-reserved, they need a dedicated rule so as not to conflict
 */
 function_call_conflict:
-  IF openb select_expression_list closeb
+  IF openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: $3}
   }
-| DATABASE openb select_expression_list_opt closeb
+| DATABASE openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: $3}
   }
-| SCHEMA openb select_expression_list_opt closeb
+| SCHEMA openb expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: $3}
   }
-| MOD openb select_expression_list closeb
+| MOD openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: $3}
   }
-| REPLACE openb select_expression_list closeb
+| REPLACE openb expression_list closeb
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3}
   }

@@ -18,10 +18,13 @@ package grpcclient
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"google.golang.org/grpc"
@@ -67,4 +70,34 @@ func TestDialErrors(t *testing.T) {
 			t.Errorf("Dial(%s, FailFast=false): %v, must contain %s", address, err, wantErr)
 		}
 	}
+}
+
+func TestRegisterGRPCClientFlags(t *testing.T) {
+	oldArgs := os.Args
+	defer func() {
+		os.Args = oldArgs
+	}()
+
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterFlags(fs)
+
+	// Test current values
+	require.Equal(t, 10*time.Second, keepaliveTime)
+	require.Equal(t, 10*time.Second, keepaliveTimeout)
+	require.Equal(t, 0, initialWindowSize)
+	require.Equal(t, 0, initialConnWindowSize)
+	require.Equal(t, "", compression)
+	require.Equal(t, "", credsFile)
+
+	// Test setting flags from command-line arguments
+	os.Args = []string{"test", "--grpc_keepalive_time=5s", "--grpc_keepalive_timeout=5s", "--grpc_initial_conn_window_size=10", "--grpc_initial_window_size=10", "--grpc_compression=not-snappy", "--grpc_auth_static_client_creds=tempfile"}
+	err := fs.Parse(os.Args[1:])
+	require.NoError(t, err)
+
+	require.Equal(t, 5*time.Second, keepaliveTime)
+	require.Equal(t, 5*time.Second, keepaliveTimeout)
+	require.Equal(t, 10, initialWindowSize)
+	require.Equal(t, 10, initialConnWindowSize)
+	require.Equal(t, "not-snappy", compression)
+	require.Equal(t, "tempfile", credsFile)
 }

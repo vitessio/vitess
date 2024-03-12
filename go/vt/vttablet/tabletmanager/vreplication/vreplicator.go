@@ -288,9 +288,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 					return err
 				}
 				if numTablesToCopy == 0 {
-					if err := vr.insertLog(LogCopyEnd, fmt.Sprintf("Copy phase completed at gtid %s", settings.StartPos)); err != nil {
-						return err
-					}
+					vr.insertLog(LogCopyEnd, fmt.Sprintf("Copy phase completed at gtid %s", settings.StartPos))
 				}
 			}
 		case settings.StartPos.IsZero():
@@ -452,7 +450,7 @@ func (vr *vreplicator) readSettings(ctx context.Context, dbClient *vdbClient) (s
 	return settings, numTablesToCopy, nil
 }
 
-func (vr *vreplicator) setMessage(message string) error {
+func (vr *vreplicator) setMessage(message string) (err error) {
 	message = binlogplayer.MessageTruncate(message)
 	vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 		Time:    time.Now(),
@@ -464,14 +462,12 @@ func (vr *vreplicator) setMessage(message string) error {
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
-	if err := insertLog(vr.dbClient, LogMessage, vr.id, vr.state.String(), message); err != nil {
-		return err
-	}
+	insertLog(vr.dbClient, LogMessage, vr.id, vr.state.String(), message)
 	return nil
 }
 
-func (vr *vreplicator) insertLog(typ, message string) error {
-	return insertLog(vr.dbClient, typ, vr.id, vr.state.String(), message)
+func (vr *vreplicator) insertLog(typ, message string) {
+	insertLog(vr.dbClient, typ, vr.id, vr.state.String(), message)
 }
 
 func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, message string) error {
@@ -489,9 +485,7 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	if state == vr.state {
 		return nil
 	}
-	if err := insertLog(vr.dbClient, LogStateChange, vr.id, state.String(), message); err != nil {
-		return err
-	}
+	insertLog(vr.dbClient, LogStateChange, vr.id, state.String(), message)
 	vr.state = state
 
 	return nil
@@ -815,10 +809,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		return nil
 	}
 
-	if err := vr.insertLog(LogCopyStart, fmt.Sprintf("Executing %d post copy action(s) for %s table",
-		len(qr.Rows), tableName)); err != nil {
-		return err
-	}
+	vr.insertLog(LogCopyStart, fmt.Sprintf("Executing %d post copy action(s) for %s table", len(qr.Rows), tableName))
 
 	// Save our connection ID so we can use it to easily KILL any
 	// running SQL action we may perform later if needed.
@@ -1039,10 +1030,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		}
 	}
 
-	if err := vr.insertLog(LogCopyStart, fmt.Sprintf("Completed all post copy actions for %s table",
-		tableName)); err != nil {
-		return err
-	}
+	vr.insertLog(LogCopyStart, fmt.Sprintf("Completed all post copy actions for %s table", tableName))
 
 	return nil
 }

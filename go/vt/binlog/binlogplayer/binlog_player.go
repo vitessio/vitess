@@ -43,8 +43,10 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -65,7 +67,13 @@ var (
 	BlplTransaction = "Transaction"
 	// BlplBatchTransaction is the key for the stats map.
 	BlplBatchTransaction = "BatchTransaction"
+
+	// Truncate values in the middle to preserve the end of the message which
+	// typically contains the error text.
+	TruncationLocation = textutil.TruncationLocationMiddle
 )
+
+var TruncationIndicator = fmt.Sprintf(" ... %s ... ", sqlparser.TruncationText)
 
 // Stats is the internal stats of a player. It is a different
 // structure that is passed in so stats can be collected over the life
@@ -550,8 +558,7 @@ type VRSettings struct {
 	DeferSecondaryKeys bool
 }
 
-// ReadVRSettings retrieves the throttler settings for
-// vreplication from the checkpoint table.
+// ReadVRSettings retrieves the settings for a vreplication stream.
 func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)

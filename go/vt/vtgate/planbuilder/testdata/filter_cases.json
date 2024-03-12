@@ -4018,7 +4018,7 @@
           "Sharded": true
         },
         "FieldQuery": "select a + 2 as a from `user` where 1 != 1",
-        "Query": "select a + 2 as a from `user` where a + 2 = 42",
+        "Query": "select a + 2 as a from `user` where `user`.a + 2 = 42",
         "Table": "`user`"
       },
       "TablesUsed": [
@@ -4041,7 +4041,7 @@
         },
         "FieldQuery": "select a + 2 as a, weight_string(a + 2) from `user` where 1 != 1",
         "OrderBy": "(0|1) ASC",
-        "Query": "select a + 2 as a, weight_string(a + 2) from `user` order by a + 2 asc",
+        "Query": "select a + 2 as a, weight_string(a + 2) from `user` order by `user`.a + 2 asc",
         "ResultColumns": 1,
         "Table": "`user`"
       },

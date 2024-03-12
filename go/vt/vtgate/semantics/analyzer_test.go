@@ -289,7 +289,8 @@ func TestBindingDelete(t *testing.T) {
 			ts := semTable.TableSetFor(t1)
 			assert.Equal(t, SingleTableSet(0), ts)
 
-			actualTs := semTable.Targets[del.Targets[0].Name]
+			actualTs, err := semTable.GetTargetTableSetForTableName(del.Targets[0])
+			require.NoError(t, err)
 			assert.Equal(t, ts, actualTs)
 		})
 	}
@@ -722,7 +723,10 @@ func TestGroupByBinding(t *testing.T) {
 		TS1,
 	}, {
 		"select a.id from t as a, t1 group by id",
-		TS0,
+		// since we have authoritative info on t1, we know that it does have an `id` column,
+		// and we are missing column info for `t`, we just assume this is coming from t1.
+		// we really need schema tracking here
+		TS1,
 	}, {
 		"select a.id from t, t1 as a group by id",
 		TS1,
@@ -740,44 +744,47 @@ func TestGroupByBinding(t *testing.T) {
 
 func TestHavingBinding(t *testing.T) {
 	tcases := []struct {
-		sql  string
-		deps TableSet
+		sql, err string
+		deps     TableSet
 	}{{
-		"select col from tabl having col = 1",
-		TS0,
+		sql:  "select col from tabl having col = 1",
+		deps: TS0,
 	}, {
-		"select col from tabl having tabl.col = 1",
-		TS0,
+		sql:  "select col from tabl having tabl.col = 1",
+		deps: TS0,
 	}, {
-		"select col from tabl having d.tabl.col = 1",
-		TS0,
+		sql:  "select col from tabl having d.tabl.col = 1",
+		deps: TS0,
 	}, {
-		"select tabl.col as x from tabl having x = 1",
-		TS0,
+		sql:  "select tabl.col as x from tabl having col = 1",
+		deps: TS0,
 	}, {
-		"select tabl.col as x from tabl having col",
-		TS0,
+		sql:  "select tabl.col as x from tabl having x = 1",
+		deps: TS0,
 	}, {
-		"select col from tabl having 1 = 1",
-		NoTables,
+		sql:  "select tabl.col as x from tabl having col",
+		deps: TS0,
 	}, {
-		"select col as c from tabl having c = 1",
-		TS0,
+		sql:  "select col from tabl having 1 = 1",
+		deps: NoTables,
 	}, {
-		"select 1 as c from tabl having c = 1",
-		NoTables,
+		sql:  "select col as c from tabl having c = 1",
+		deps: TS0,
 	}, {
-		"select t1.id from t1, t2 having id = 1",
-		TS0,
+		sql:  "select 1 as c from tabl having c = 1",
+		deps: NoTables,
 	}, {
-		"select t.id from t, t1 having id = 1",
-		TS0,
+		sql:  "select t1.id from t1, t2 having id = 1",
+		deps: TS0,
 	}, {
-		"select t.id, count(*) as a from t, t1 group by t.id having a = 1",
-		MergeTableSets(TS0, TS1),
+		sql:  "select t.id from t, t1 having id = 1",
+		deps: TS0,
 	}, {
-		"select t.id, sum(t2.name) as a from t, t2 group by t.id having a = 1",
-		TS1,
+		sql:  "select t.id, count(*) as a from t, t1 group by t.id having a = 1",
+		deps: MergeTableSets(TS0, TS1),
+	}, {
+		sql:  "select t.id, sum(t2.name) as a from t, t2 group by t.id having a = 1",
+		deps: TS1,
 	}, {
 		sql:  "select u2.a, u1.a from u1, u2 having u2.a = 2",
 		deps: TS1,

@@ -38,7 +38,7 @@ jobs:
 
     - name: Check out commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -73,13 +73,13 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.22.0
+        go-version: 1.22.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -125,7 +125,7 @@ jobs:
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
@@ -147,7 +147,7 @@ jobs:
     # Checkout to this build's commit
     - name: Check out commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Get dependencies for this commit
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

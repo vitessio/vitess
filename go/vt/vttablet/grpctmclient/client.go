@@ -55,7 +55,7 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.IntVar(&concurrency, "tablet_manager_grpc_concurrency", concurrency, "concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App} and CheckThrottler)")
+	fs.IntVar(&concurrency, "tablet_manager_grpc_concurrency", concurrency, "concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus)")
 	fs.StringVar(&cert, "tablet_manager_grpc_cert", cert, "the cert to use to connect")
 	fs.StringVar(&key, "tablet_manager_grpc_key", key, "the key to use to connect")
 	fs.StringVar(&ca, "tablet_manager_grpc_ca", ca, "the server ca to use to validate servers when connecting")
@@ -94,8 +94,8 @@ type tmc struct {
 
 // grpcClient implements both dialer and poolDialer.
 type grpcClient struct {
-	// This cache of connections is to maximize QPS for ExecuteFetchAs{Dba,App} and
-	// CheckThrottler. Note we'll keep the clients open and close them upon Close() only.
+	// This cache of connections is to maximize QPS for ExecuteFetchAs{Dba,App},
+	// CheckThrottler and FullStatus. Note we'll keep the clients open and close them upon Close() only.
 	// But that's OK because usually the tasks that use them are one-purpose only.
 	// The map is protected by the mutex.
 	mu           sync.Mutex
@@ -115,7 +115,7 @@ type poolDialer interface {
 //
 // Connections are produced by the dialer implementation, which is either the
 // grpcClient implementation, which reuses connections only for ExecuteFetchAs{Dba,App}
-// and CheckThrottler, otherwise making single-purpose connections that are closed
+// CheckThrottler, and FullStatus, otherwise making single-purpose connections that are closed
 // after use.
 //
 // In order to more efficiently use the underlying tcp connections, you can
@@ -569,12 +569,28 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 }
 
 // FullStatus is part of the tmclient.TabletManagerClient interface.
+// It always tries to use a cached client via the dialer pool as this is
+// called very frequently from VTOrc, and the overhead of creating a new gRPC connection/channel
+// and dialing the other tablet every time is not practical.
 func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return nil, err
+	var c tabletmanagerservicepb.TabletManagerClient
+	var err error
+	if poolDialer, ok := client.dialer.(poolDialer); ok {
+		c, err = poolDialer.dialPool(ctx, tablet)
+		if err != nil {
+			return nil, err
+		}
 	}
-	defer closer.Close()
+
+	if c == nil {
+		var closer io.Closer
+		c, closer, err = client.dialer.dial(ctx, tablet)
+		if err != nil {
+			return nil, err
+		}
+		defer closer.Close()
+	}
+
 	response, err := c.FullStatus(ctx, &tabletmanagerdatapb.FullStatusRequest{})
 	if err != nil {
 		return nil, err
@@ -721,6 +737,32 @@ func (client *Client) DeleteVReplicationWorkflow(ctx context.Context, tablet *to
 	return response, nil
 }
 
+func (client *Client) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.HasVReplicationWorkflows(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (client *Client) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.ReadVReplicationWorkflows(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 func (client *Client) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
@@ -768,6 +810,19 @@ func (client *Client) UpdateVReplicationWorkflow(ctx context.Context, tablet *to
 	}
 	defer closer.Close()
 	response, err := c.UpdateVReplicationWorkflow(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (client *Client) UpdateVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.UpdateVReplicationWorkflows(ctx, request)
 	if err != nil {
 		return nil, err
 	}

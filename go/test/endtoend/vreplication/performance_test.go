@@ -43,8 +43,6 @@ create table largebin(pid int, maindata varbinary(4096), primary key(pid));
 create table customer(cid int, name varbinary(128), meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),ts timestamp not null default current_timestamp, primary key(cid))  CHARSET=utf8mb4;
 `
 
-	const defaultCellName = "zone1"
-
 	const sourceKs = "stress_src"
 	const targetKs = "stress_tgt"
 
