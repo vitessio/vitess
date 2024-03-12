@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
@@ -234,7 +235,12 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
-		exceedMemoryRowsLogger.Warningf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, len(result.Rows))
+		warningMsg := fmt.Sprintf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, len(result.Rows))
+		exceedMemoryRowsLogger.Warningf(sql, warningMsg)
+		safeSession.RecordWarning(&querypb.QueryWarning{
+			Code:    uint32(sqlerror.EROutOfMemory),
+			Message: warningMsg,
+		})
 	}
 
 	logStats.SaveEndTime()
@@ -368,7 +374,12 @@ func (e *Executor) StreamExecute(
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
-		exceedMemoryRowsLogger.Warningf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, srr.rowsReturned)
+		warningMsg := fmt.Sprintf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, srr.rowsReturned)
+		exceedMemoryRowsLogger.Warningf(sql, warningMsg)
+		safeSession.RecordWarning(&querypb.QueryWarning{
+			Code:    uint32(sqlerror.EROutOfMemory),
+			Message: warningMsg,
+		})
 	}
 
 	logStats.SaveEndTime()
