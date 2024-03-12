@@ -185,8 +185,10 @@ func TestAutocommitDeleteIn(t *testing.T) {
 	require.NoError(t, err)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{
-		Sql:           "delete from user_extra where user_id in (1, 2)",
-		BindVariables: map[string]*querypb.BindVariable{},
+		Sql: "delete from user_extra where user_id in ::__vals",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(2)}),
+		},
 	}})
 	testCommitCount(t, "sbc1", sbc1, 0)
 
@@ -391,11 +393,12 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 
 	// multi shard query - savepoint needed
 	sql = "update `user` set a = 2 where id in (1, 4)"
+	expectedSql := "update `user` set a = 2 where id in ::__vals"
 	_, err = executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.Len(t, sbc1.Queries, 2)
 	require.Contains(t, sbc1.Queries[0].Sql, "savepoint")
-	require.Equal(t, sql, sbc1.Queries[1].Sql)
+	require.Equal(t, expectedSql, sbc1.Queries[1].Sql)
 	testCommitCount(t, "sbc1", sbc1, 0)
 }
 
