@@ -661,7 +661,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		}
 	} else {
 		var wg sync.WaitGroup
-		panicChan := make(chan interface{}, 1) // buffer 1 to avoid blocking
+		panicChan := make(chan any, 1) // buffer 1 to avoid blocking
 
 		for i, rs := range rss {
 			wg.Add(1)
