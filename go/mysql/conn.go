@@ -1359,6 +1359,19 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			c.writeErrorPacketFromError(err)
 		}
 
+	case ComBinlogDumpGTID:
+		ok := c.handleComBinlogDumpGTID(handler, data)
+		if !ok {
+			return fmt.Errorf("error handling ComBinlogDumpGTID packet: %v", data)
+		}
+		return nil
+
+	case ComRegisterReplica:
+		// TODO: Seems like we probably need this command implemented, too, but it hasn't been needed
+		//       yet in a simple Vitess <-> Vitess replication test, so skipping for now.
+		//return c.handleComRegisterReplica(handler, data)
+		return fmt.Errorf("ComRegisterReplica not implemented")
+
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
@@ -1369,6 +1382,36 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	}
 
 	return nil
+}
+
+func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {
+	binlogReplicaHandler, ok := handler.(BinlogReplicaHandler)
+	if !ok {
+		log.Warningf("received BINLOG_DUMP_GTID command, but handler does not implement BinlogReplicaHandler")
+		return true
+	}
+
+	c.recycleReadPacket()
+	kontinue = true
+
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.flush(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			kontinue = false
+		}
+	}()
+
+	logFile, logPos, position, err := c.parseComBinlogDumpGTID(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		return false
+	}
+	if err := binlogReplicaHandler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
+		log.Error(err.Error())
+		return false
+	}
+	return kontinue
 }
 
 // writeNumRows writes the specified number of rows to the handler, the end result, and flushes
