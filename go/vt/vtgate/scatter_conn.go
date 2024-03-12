@@ -661,14 +661,30 @@ func (stc *ScatterConn) multiGoTransaction(
 		}
 	} else {
 		var wg sync.WaitGroup
+		panicChan := make(chan interface{}, 1) // buffer 1 to avoid blocking
+
 		for i, rs := range rss {
 			wg.Add(1)
 			go func(rs *srvtopo.ResolvedShard, i int) {
 				defer wg.Done()
+				defer func() {
+					if r := recover(); r != nil {
+						select {
+						case panicChan <- r:
+						default: // in case multiple goroutines panic, we only catch the first
+						}
+					}
+				}()
 				oneShard(rs, i)
 			}(rs, i)
 		}
+
 		wg.Wait()
+		close(panicChan) // Close channel after all goroutines are done
+
+		if r, ok := <-panicChan; ok {
+			panic(r) // rethrow the captured panic in the main thread
+		}
 	}
 
 	if session.MustRollback() {
