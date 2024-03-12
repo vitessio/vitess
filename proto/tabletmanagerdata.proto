@@ -221,8 +221,8 @@ message ApplySchemaRequest {
   string sql_mode = 6;
   // BatchSize indicates how many queries to apply together.
   int64 batch_size = 7;
-  // SetForeignKeyChecksOff will result in setting foreign_key_checks to off before applying the schema.
-  bool set_foreign_key_checks_off = 8;
+  // DisableForeignKeyChecks will result in setting foreign_key_checks to off before applying the schema.
+  bool disable_foreign_key_checks = 8;
 }
 
 message ApplySchemaResponse {

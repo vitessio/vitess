@@ -642,14 +642,14 @@ func (m *ApplySchemaRequest) CloneVT() *ApplySchemaRequest {
 		return (*ApplySchemaRequest)(nil)
 	}
 	r := &ApplySchemaRequest{
-		Sql:                    m.Sql,
-		Force:                  m.Force,
-		AllowReplication:       m.AllowReplication,
-		BeforeSchema:           m.BeforeSchema.CloneVT(),
-		AfterSchema:            m.AfterSchema.CloneVT(),
-		SqlMode:                m.SqlMode,
-		BatchSize:              m.BatchSize,
-		SetForeignKeyChecksOff: m.SetForeignKeyChecksOff,
+		Sql:                     m.Sql,
+		Force:                   m.Force,
+		AllowReplication:        m.AllowReplication,
+		BeforeSchema:            m.BeforeSchema.CloneVT(),
+		AfterSchema:             m.AfterSchema.CloneVT(),
+		SqlMode:                 m.SqlMode,
+		BatchSize:               m.BatchSize,
+		DisableForeignKeyChecks: m.DisableForeignKeyChecks,
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -3817,9 +3817,9 @@ func (m *ApplySchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.SetForeignKeyChecksOff {
+	if m.DisableForeignKeyChecks {
 		i--
-		if m.SetForeignKeyChecksOff {
+		if m.DisableForeignKeyChecks {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -8794,7 +8794,7 @@ func (m *ApplySchemaRequest) SizeVT() (n int) {
 	if m.BatchSize != 0 {
 		n += 1 + sov(uint64(m.BatchSize))
 	}
-	if m.SetForeignKeyChecksOff {
+	if m.DisableForeignKeyChecks {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -13650,7 +13650,7 @@ func (m *ApplySchemaRequest) UnmarshalVT(dAtA []byte) error {
 			}
 		case 8:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SetForeignKeyChecksOff", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field DisableForeignKeyChecks", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -13667,7 +13667,7 @@ func (m *ApplySchemaRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.SetForeignKeyChecksOff = bool(v != 0)
+			m.DisableForeignKeyChecks = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

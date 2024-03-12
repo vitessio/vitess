@@ -536,7 +536,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 		sql = "SET sql_log_bin = 0;\n" + sql
 	}
 
-	if change.SetForeignKeyChecksOff {
+	if change.DisableForeignKeyChecks {
 		sql = "SET foreign_key_checks = 0;\n" + sql
 	}
 
