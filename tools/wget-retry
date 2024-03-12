@@ -52,7 +52,7 @@ my $wget_cmd = $ENV{WGET_RETRY_WGET_CMD} || "wget";
 
 my $retries = 0;
 while (1) {
-    system {$wget_cmd} -q $wget_cmd, @ORIG_ARGV;
+    system {$wget_cmd} $wget_cmd, @ORIG_ARGV;
     last unless $?;
     my $exit_code = $? >> 8;
     if (grep { $exit_code == $_ } @{ $Opts{exit_statuses} }) {
