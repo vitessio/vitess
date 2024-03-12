@@ -1807,6 +1807,17 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
+			name:  "modify ENGINE option",
+			from:  "create table t1 (id int primary key) engine=myisam",
+			to:    "create table t1 (id int primary key) engine=InnoDB",
+			diff:  "alter table t1 engine InnoDB",
+			cdiff: "ALTER TABLE `t1` ENGINE InnoDB",
+			textdiffs: []string{
+				"-) ENGINE MyISAM",
+				"+) ENGINE InnoDB",
+			},
+		},
+		{
 			name:  "normalized ENGINE MEMORY value",
 			from:  "create table t1 (id int primary key) character set=utf8",
 			to:    "create table t1 (id int primary key) engine=memory, character set=utf8",
