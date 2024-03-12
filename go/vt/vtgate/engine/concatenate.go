@@ -285,35 +285,34 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 		currIndex, currSource := i, source
 		wg.Go(func() error {
 			err := vcursor.StreamExecutePrimitive(ctx, currSource, bindVars, true, func(resultChunk *sqltypes.Result) error {
+				muFields.Lock()
+
 				// Process fields when they arrive; coordinate field agreement across sources.
-				if resultChunk.Fields != nil {
-					muFields.Lock()
-
+				if resultChunk.Fields != nil && rest[currIndex] == nil {
 					// Capture the initial result chunk to determine field types later.
-					if rest[currIndex] == nil {
-						rest[currIndex] = resultChunk
+					rest[currIndex] = resultChunk
 
-						// If this was the last source to report its fields, derive the final output fields.
-						if !slices.Contains(rest, nil) {
+					// If this was the last source to report its fields, derive the final output fields.
+					if !slices.Contains(rest, nil) {
+						// We have received fields from all sources. We can now calculate the output types
+						var err error
+						resultChunk.Fields, fieldTypes, err = c.getFieldTypes(vcursor, rest)
+						if err != nil {
 							muFields.Unlock()
-
-							// We have received fields from all sources. We can now calculate the output types
-							var err error
-							resultChunk.Fields, fieldTypes, err = c.getFieldTypes(vcursor, rest)
-							if err != nil {
-								return err
-							}
-
-							defer condFields.Broadcast()
-							return callback(resultChunk, currIndex)
+							return err
 						}
+
+						muFields.Unlock()
+						defer condFields.Broadcast()
+						return callback(resultChunk, currIndex)
 					}
-					// Wait for fields from all sources.
-					for slices.Contains(rest, nil) {
-						condFields.Wait()
-					}
-					muFields.Unlock()
 				}
+
+				// Wait for fields from all sources.
+				for slices.Contains(rest, nil) {
+					condFields.Wait()
+				}
+				muFields.Unlock()
 
 				// Context check to avoid extra work.
 				if ctx.Err() != nil {
