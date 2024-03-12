@@ -1183,6 +1183,17 @@ func TestCreateTableDiff(t *testing.T) {
 			},
 		},
 		{
+			name:  "add partitioning",
+			from:  "create table t1 (id int primary key, a int)",
+			to:    "create table t1 (id int primary key, a int) partition by hash (id) partitions 4",
+			diff:  "alter table t1 \npartition by hash (id) partitions 4",
+			cdiff: "ALTER TABLE `t1` \nPARTITION BY HASH (`id`) PARTITIONS 4",
+			textdiffs: []string{
+				"+PARTITION BY HASH (`id`) PARTITIONS 4",
+			},
+		},
+
+		{
 			name:  "remove partitioning",
 			from:  "create table t1 (id int primary key) partition by hash (id) partitions 4",
 			to:    "create table t1 (id int primary key, a int)",
