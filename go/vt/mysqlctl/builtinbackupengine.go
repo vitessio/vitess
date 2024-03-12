@@ -80,6 +80,12 @@ var (
 	// engines during backups.  The backupstorage may be a physical file,
 	// network, or something else.
 	builtinBackupStorageWriteBufferSize = 2 * 1024 * 1024 /* 2 MiB */
+
+	// The directory where incremental restore files, namely binlog files, are extracted to.
+	// In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods.
+	// The path should exist.
+	// When empty, the default OS temp dir is assumed.
+	builtinIncrementalRestorePath = ""
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -157,6 +163,7 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&builtinBackupProgress, "builtinbackup_progress", builtinBackupProgress, "how often to send progress updates when backing up large files.")
 	fs.UintVar(&builtinBackupFileReadBufferSize, "builtinbackup-file-read-buffer-size", builtinBackupFileReadBufferSize, "read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 	fs.UintVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
+	fs.StringVar(&builtinIncrementalRestorePath, "builtinbackup-incremental-restore-path", builtinIncrementalRestorePath, "the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.")
 }
 
 // fullPath returns the full path of the entry, based on its type
@@ -1006,7 +1013,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 	}
 
 	if bm.Incremental {
-		createdDir, err = os.MkdirTemp("", "restore-incremental-*")
+		createdDir, err = os.MkdirTemp(builtinIncrementalRestorePath, "restore-incremental-*")
 		if err != nil {
 			return "", err
 		}
