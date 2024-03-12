@@ -134,7 +134,10 @@ type Handler interface {
 	// and the Vitess layer needs to parse the query to identify the query parameters so that the correct response
 	// packets can be sent.
 	ParserOptionsForConnection(c *Conn) (sqlparser.ParserOptions, error)
+}
 
+// BinlogReplicaHandler is an extension to the Handler interface, to add support for binlog replication server commands.
+type BinlogReplicaHandler interface {
 	// ComRegisterReplica is called when a connection receives a ComRegisterReplica request
 	ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error
 

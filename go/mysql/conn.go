@@ -1385,6 +1385,12 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 }
 
 func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {
+	binlogReplicaHandler, ok := handler.(BinlogReplicaHandler)
+	if !ok {
+		log.Warningf("received BINLOG_DUMP_GTID command, but handler does not implement BinlogReplicaHandler")
+		return true
+	}
+
 	c.recycleReadPacket()
 	kontinue = true
 
@@ -1401,7 +1407,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
 		return false
 	}
-	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
+	if err := binlogReplicaHandler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
 		log.Error(err.Error())
 		return false
 	}
