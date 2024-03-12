@@ -153,7 +153,7 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         export NOVTADMINBUILD=1
-        eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- make unit_test | grep -vE ' emitting | reading |(PASS|RUN).*TestFuzz|(PASS|RUN).*tpcc|(PASS|RUN).*TestParse|(PASS|RUN).*PITR|(PASS|RUN).*cases|(PASS|RUN).*TestPlan|Super.*long' | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
