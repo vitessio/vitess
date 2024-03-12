@@ -118,6 +118,15 @@ var (
 			output: "set global GTID_PURGED = '+beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126'",
 		},
 		{
+			input:  "show replicas",
+		},
+		{
+			input:  "show binary logs",
+		},
+		{
+			input:  "show binary log status",
+		},
+		{
 			input: "start replica",
 		},
 		{
@@ -6191,7 +6200,8 @@ func TestCreateTable(t *testing.T) {
 			"	time1 timestamp on update current_timestamp(0),\n" +
 			"	time2 timestamp default current_timestamp(0) on update current_timestamp(0)\n" +
 			")",
-	}, {
+	},
+	{
 		// test alternate key syntax
 		input: "create table t (\n" +
 			"	id int,\n" +
@@ -6207,6 +6217,26 @@ func TestCreateTable(t *testing.T) {
 			"	unique key (full_name),\n" +
 			"	unique index named (full_name),\n" +
 			"	unique  namedx (full_name),\n" +
+			"	primary key (id)\n" +
+			")",
+	},
+	{
+		input: "create table t (\n" +
+			"	id int,\n" +
+			"	constraint primary key (id)\n" +
+			")",
+		output: "create table t (\n" +
+			"	id int,\n" +
+			"	primary key (id)\n" +
+			")",
+	},
+	{
+		input: "create table t (\n" +
+			"	id int,\n" +
+			"	constraint abc primary key def (id)\n" +
+			")",
+		output: "create table t (\n" +
+			"	id int,\n" +
 			"	primary key (id)\n" +
 			")",
 	},
