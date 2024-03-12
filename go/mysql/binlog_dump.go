@@ -54,7 +54,7 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 	// see https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
 	pos := 1
 
-	flags2 := binary.LittleEndian.Uint16(data[pos : pos+2])
+	flags := binary.LittleEndian.Uint16(data[pos : pos+2])
 	pos += 2 // flags
 	pos += 4 // server-id
 
@@ -70,10 +70,10 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 		return logFile, logPos, position, readPacketErr
 	}
 
-	if flags2&BinlogDumpNonBlock != 0 {
+	if flags&BinlogDumpNonBlock != 0 {
 		return logFile, logPos, position, io.EOF
 	}
-	if flags2&BinlogThroughGTID != 0 {
+	if flags&BinlogThroughGTID != 0 {
 		dataSize, pos, ok := readUint32(data, pos)
 		if !ok {
 			return logFile, logPos, position, readPacketErr
