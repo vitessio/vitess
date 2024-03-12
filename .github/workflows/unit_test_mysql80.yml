@@ -73,7 +73,7 @@ jobs:
         # mysql80
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -q2 -i mysql-apt-config*
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config* 2>&1 > /dev/null
         sudo apt-get -qq -y update
         sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-server mysql-client
 
