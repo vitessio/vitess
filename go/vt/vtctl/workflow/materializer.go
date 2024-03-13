@@ -170,6 +170,10 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 	})
 }
 
+func (mz *materializer) getTenantClause() (*sqlparser.Expr, error) {
+	return getTenantClause(mz.ms.VReplicationWorkflowOptions, mz.targetVSchema, mz.env.Parser())
+}
+
 func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *topo.ShardInfo, sourceShards []*topo.ShardInfo, keyRangesEqual bool) ([]*binlogdatapb.BinlogSource, error) {
 	blses := make([]*binlogdatapb.BinlogSource, 0, len(mz.sourceShards))
 	for _, sourceShard := range sourceShards {
@@ -187,7 +191,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 		var tenantClause *sqlparser.Expr
 		var err error
 		if mz.ms.VReplicationWorkflowOptions != nil && mz.ms.VReplicationWorkflowOptions.TenantId != "" {
-			tenantClause, err = mz.getTenantClause(mz.env.Parser())
+			tenantClause, err = mz.getTenantClause()
 			if err != nil {
 				return nil, err
 			}

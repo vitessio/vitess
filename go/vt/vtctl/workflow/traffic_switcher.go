@@ -18,12 +18,15 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
@@ -174,6 +177,7 @@ type TargetInfo struct {
 	OptTabletTypes  string
 	WorkflowType    binlogdatapb.VReplicationWorkflowType
 	WorkflowSubType binlogdatapb.VReplicationWorkflowSubType
+	Options         *vtctldatapb.VReplicationWorkflowOptions
 }
 
 // MigrationSource contains the metadata for each migration source.
@@ -234,6 +238,7 @@ type trafficSwitcher struct {
 	targetTimeZone   string
 	workflowType     binlogdatapb.VReplicationWorkflowType
 	workflowSubType  binlogdatapb.VReplicationWorkflowSubType
+	options          *vtctldatapb.VReplicationWorkflowOptions
 }
 
 func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.ws.ts }
@@ -782,7 +787,7 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	return nil
 }
 
-func (ts *trafficSwitcher) getReverseVReplicationUpdateQuery(targetCell string, sourceCell string, dbname string) string {
+func (ts *trafficSwitcher) getReverseVReplicationUpdateQuery(targetCell string, sourceCell string, dbname string, options string) string {
 	// we try to be clever to understand what user intends:
 	// if target's cell is present in cells but not source's cell we replace it
 	// with the source's cell.
@@ -792,8 +797,8 @@ func (ts *trafficSwitcher) getReverseVReplicationUpdateQuery(targetCell string, 
 	}
 
 	if ts.optCells != "" || ts.optTabletTypes != "" {
-		query := fmt.Sprintf("update _vt.vreplication set cell = '%s', tablet_types = '%s' where workflow = '%s' and db_name = '%s'",
-			ts.optCells, ts.optTabletTypes, ts.ReverseWorkflowName(), dbname)
+		query := fmt.Sprintf("update _vt.vreplication set cell = '%s', tablet_types = '%s', options = '%s' where workflow = '%s' and db_name = '%s'",
+			ts.optCells, ts.optTabletTypes, options, ts.ReverseWorkflowName(), dbname)
 		return query
 	}
 	return ""
@@ -846,7 +851,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 			SourceTimeZone: bls.TargetTimeZone,
 			TargetTimeZone: bls.SourceTimeZone,
 		}
-
+		var err error
 		for _, rule := range bls.Filter.Rules {
 			if rule.Filter == "exclude" {
 				reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
@@ -883,6 +888,31 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 					}
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
+				if ts.options != nil && ts.options.TenantId != "" {
+					parser := ts.ws.env.Parser()
+					vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
+					if err != nil {
+						return err
+					}
+					targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ts.targetKeyspace, parser)
+					if err != nil {
+						return err
+					}
+					tenantClause, err := getTenantClause(ts.options, targetVSchema, parser)
+					if err != nil {
+						return err
+					}
+					stmt, err := parser.Parse(filter)
+					if err != nil {
+						return err
+					}
+					sel, ok := stmt.(*sqlparser.Select)
+					if !ok {
+						return fmt.Errorf("unrecognized statement: %s", filter)
+					}
+					addFilter(sel, *tenantClause)
+					filter = sqlparser.String(sel)
+				}
 			}
 			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
 				Match:  rule.Match,
@@ -891,7 +921,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		}
 		log.Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
 			source.GetPrimary().Alias, ts.ReverseWorkflowName(), target.Position)
-		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias,
+		_, err = ts.VReplicationExec(ctx, source.GetPrimary().Alias,
 			binlogplayer.CreateVReplicationState(ts.ReverseWorkflowName(), reverseBls, target.Position,
 				binlogdatapb.VReplicationWorkflowState_Stopped, source.GetPrimary().DbName(), ts.workflowType, ts.workflowSubType))
 		if err != nil {
@@ -899,7 +929,12 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		}
 
 		// if user has defined the cell/tablet_types parameters in the forward workflow, update the reverse workflow as well
-		updateQuery := ts.getReverseVReplicationUpdateQuery(target.GetPrimary().Alias.Cell, source.GetPrimary().Alias.Cell, source.GetPrimary().DbName())
+		optionsJSON, err := json.Marshal(ts.options)
+		if err != nil {
+			return err
+		}
+		updateQuery := ts.getReverseVReplicationUpdateQuery(target.GetPrimary().Alias.Cell,
+			source.GetPrimary().Alias.Cell, source.GetPrimary().DbName(), string(optionsJSON))
 		if updateQuery != "" {
 			log.Infof("Updating vreplication stream entry on %s with: %s", source.GetPrimary().Alias, updateQuery)
 			_, err = ts.VReplicationExec(ctx, source.GetPrimary().Alias, updateQuery)
