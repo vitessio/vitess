@@ -1367,10 +1367,11 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		return nil
 
 	case ComRegisterReplica:
-		// TODO: Seems like we probably need this command implemented, too, but it hasn't been needed
-		//       yet in a simple Vitess <-> Vitess replication test, so skipping for now.
-		//return c.handleComRegisterReplica(handler, data)
-		return fmt.Errorf("ComRegisterReplica not implemented")
+		ok := c.handleComRegisterReplica(handler, data)
+		if !ok {
+			return fmt.Errorf("error handling ComRegisterReplica packet: %v", data)
+		}
+		return nil
 
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
@@ -1382,6 +1383,31 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	}
 
 	return nil
+}
+
+func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue bool) {
+	binlogReplicaHandler, ok := handler.(BinlogReplicaHandler)
+	if !ok {
+		log.Warningf("received COM_REGISTER_REPLICA command, but handler does not implement BinlogReplicaHandler")
+		return true
+	}
+
+	c.recycleReadPacket()
+
+	replicaHost, replicaPort, replicaUser, replicaPassword, err := c.parseComRegisterReplica(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComRegisterReplica failed: %v", c.ID(), err)
+		return false
+	}
+	if err := binlogReplicaHandler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
+		c.writeErrorPacketFromError(err)
+		return false
+	}
+
+	if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+		c.writeErrorPacketFromError(err)
+	}
+	return true
 }
 
 func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {
