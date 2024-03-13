@@ -183,6 +183,16 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			TargetTimeZone:  mz.ms.TargetTimeZone,
 			OnDdl:           binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[mz.ms.OnDdl]),
 		}
+
+		var tenantClause *sqlparser.Expr
+		var err error
+		if mz.ms.VReplicationWorkflowOptions != nil && mz.ms.VReplicationWorkflowOptions.TenantId != "" {
+			tenantClause, err = mz.getTenantClause(mz.env.Parser())
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{
 				Match: ts.TargetTable,
@@ -202,7 +212,6 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			if !ok {
 				return nil, fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
 			}
-			filter := ts.SourceExpression
 			if !keyRangesEqual && mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
 				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 				if err != nil {
@@ -227,25 +236,12 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,
 				}
-				if sel.Where != nil {
-					sel.Where = &sqlparser.Where{
-						Type: sqlparser.WhereClause,
-						Expr: &sqlparser.AndExpr{
-							Left:  inKeyRange,
-							Right: sel.Where.Expr,
-						},
-					}
-				} else {
-					sel.Where = &sqlparser.Where{
-						Type: sqlparser.WhereClause,
-						Expr: inKeyRange,
-					}
-				}
-
-				filter = sqlparser.String(sel)
+				addFilter(sel, inKeyRange)
 			}
-
-			rule.Filter = filter
+			if tenantClause != nil {
+				addFilter(sel, *tenantClause)
+			}
+			rule.Filter = sqlparser.String(sel)
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
 		blses = append(blses, bls)
