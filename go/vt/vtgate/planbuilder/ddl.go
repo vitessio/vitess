@@ -112,9 +112,9 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		}
 		err = checkFKError(vschema, ddlStatement, keyspace)
 	case *sqlparser.CreateView:
-		destination, keyspace, err = buildCreateView(ctx, vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
+		destination, keyspace, err = buildCreateViewCommon(ctx, vschema, reservedVars, enableOnlineDDL, enableDirectDDL, ddl.Select, ddl)
 	case *sqlparser.AlterView:
-		destination, keyspace, err = buildAlterView(ctx, vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
+		destination, keyspace, err = buildCreateViewCommon(ctx, vschema, reservedVars, enableOnlineDDL, enableDirectDDL, ddl.Select, ddl)
 	case *sqlparser.DropView:
 		destination, keyspace, err = buildDropView(vschema, ddlStatement)
 	case *sqlparser.DropTable:
@@ -190,26 +190,6 @@ func findTableDestinationAndKeyspace(vschema plancontext.VSchema, ddlStatement s
 		ddlStatement.SetTable("", table.Name.String())
 	}
 	return destination, keyspace, nil
-}
-
-func buildAlterView(
-	ctx context.Context,
-	vschema plancontext.VSchema,
-	ddl *sqlparser.AlterView,
-	reservedVars *sqlparser.ReservedVars,
-	enableOnlineDDL, enableDirectDDL bool,
-) (key.Destination, *vindexes.Keyspace, error) {
-	return buildCreateViewCommon(ctx, vschema, reservedVars, enableOnlineDDL, enableDirectDDL, ddl.Select, ddl)
-}
-
-func buildCreateView(
-	ctx context.Context,
-	vschema plancontext.VSchema,
-	ddl *sqlparser.CreateView,
-	reservedVars *sqlparser.ReservedVars,
-	enableOnlineDDL, enableDirectDDL bool,
-) (key.Destination, *vindexes.Keyspace, error) {
-	return buildCreateViewCommon(ctx, vschema, reservedVars, enableOnlineDDL, enableDirectDDL, ddl.Select, ddl)
 }
 
 func buildCreateViewCommon(
