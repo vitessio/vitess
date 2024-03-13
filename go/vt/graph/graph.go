@@ -83,10 +83,10 @@ func (gr *Graph[C]) Empty() bool {
 // HasCycles checks whether the given graph has a cycle or not.
 // We are using a well-known DFS based colouring algorithm to check for cycles.
 // Look at https://cp-algorithms.com/graph/finding-cycle.html for more details on the algorithm.
-func (gr *Graph[C]) HasCycles() bool {
+func (gr *Graph[C]) HasCycles() (bool, []C) {
 	// If the graph is empty, then we don't need to check anything.
 	if gr.Empty() {
-		return false
+		return false, nil
 	}
 	// Initialize the coloring map.
 	// 0 represents white.
@@ -96,12 +96,12 @@ func (gr *Graph[C]) HasCycles() bool {
 	for vertex := range gr.edges {
 		// If any vertex is still white, we initiate a new DFS.
 		if color[vertex] == white {
-			if hasCycle, _ := gr.hasCyclesDfs(color, vertex); hasCycle {
-				return true
+			if hasCycle, cycle := gr.hasCyclesDfs(color, vertex); hasCycle {
+				return true, cycle
 			}
 		}
 	}
-	return false
+	return false, nil
 }
 
 // GetCycles returns all known cycles in the graph.
