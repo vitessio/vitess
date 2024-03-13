@@ -1217,6 +1217,7 @@ message MoveTablesCreateRequest {
   bool no_routing_rules = 18;
   // Run a single copy phase for the entire database.
   bool atomic_copy = 19;
+  string tenant_id = 20;
 }
 
 message MoveTablesCreateResponse {

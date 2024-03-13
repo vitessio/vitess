@@ -56,7 +56,14 @@ message Keyspace {
   }
 
   // multi_tenant_mode specifies that the keyspace is multi-tenant. Currently used during migrations with MoveTables.
-  bool multi_tenant = 6;
+  MultiTenantSpec multi_tenant_spec = 6;
+}
+
+message MultiTenantSpec {
+  // tenant_column is the name of the column that specifies the tenant id.
+  string tenant_id_column_name = 1;
+  // tenant_column_type is the type of the column that specifies the tenant id.
+  string tenant_id_column_type = 2;
 }
 
 // Vindex is the vindex info for a Keyspace.

@@ -251,36 +251,50 @@ func TestUnshardedVSchemaValid(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestMultiTenantAttribute verifies that the MultiTenant attribute is updated in KeyspaceSchema.
+// TestMultiTenantAttribute verifies that the MultiTenantSpec attribute is updated in KeyspaceSchema.
 func TestMultiTenantAttribute(t *testing.T) {
 	tests := []struct {
-		name         string
-		multiTenant  bool
-		wantedTenant bool
+		name            string
+		multiTenantSpec *vschemapb.MultiTenantSpec
+		wanted          *vschemapb.MultiTenantSpec
 	}{
 		{
-			name:         "Default Value",
-			wantedTenant: false,
+			name: "Default Value",
 		}, {
-			name:         "MultiTenant Set to True",
-			multiTenant:  true,
-			wantedTenant: true,
+			name: "MultiTenantSpec Set to True",
+			multiTenantSpec: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: "int64",
+			},
+			wanted: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: "int64",
+			},
 		}, {
-			name:         "MultiTenant Set to False",
-			multiTenant:  false,
-			wantedTenant: false,
+			name: "MultiTenantSpec Set to True",
+			multiTenantSpec: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "",
+			},
+			wanted: &vschemapb.MultiTenantSpec{},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ksSchema, err := BuildKeyspace(&vschemapb.Keyspace{
-				Sharded:     false,
-				MultiTenant: test.multiTenant,
-				Vindexes:    make(map[string]*vschemapb.Vindex),
-				Tables:      make(map[string]*vschemapb.Table),
+				Sharded:         false,
+				MultiTenantSpec: test.multiTenantSpec,
+				Vindexes:        make(map[string]*vschemapb.Vindex),
+				Tables:          make(map[string]*vschemapb.Table),
 			}, sqlparser.NewTestParser())
 			require.NoError(t, err)
-			require.Equal(t, test.wantedTenant, ksSchema.MultiTenant)
+			if test.multiTenantSpec == nil {
+				require.Empty(t, test.wanted)
+			} else {
+				require.NotNil(t, test.wanted)
+				require.Equal(t, test.wanted.TenantIdColumnName, ksSchema.MultiTenantSpec.TenantIdColumnName)
+				require.Equal(t, test.wanted.TenantIdColumnType, ksSchema.MultiTenantSpec.TenantIdColumnType)
+			}
+
 		})
 	}
 }
@@ -2644,7 +2658,10 @@ func TestVSchemaPBJSON(t *testing.T) {
 	{
 		"sharded": true,
 		"foreignKeyMode": "unmanaged",
-        "multiTenant": true,
+        "multi_tenant_spec": {
+			"tenant_id_column_name": "tenant_id",
+			"tenant_id_column_type": "int64"
+		},
 		"tables": {
 			"t1": {
 				"column_vindexes":[{
@@ -2675,7 +2692,10 @@ func TestVSchemaPBJSON(t *testing.T) {
 	want := vschemapb.Keyspace{
 		Sharded:        true,
 		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
-		MultiTenant:    true,
+		MultiTenantSpec: &vschemapb.MultiTenantSpec{
+			TenantIdColumnName: "tenant_id",
+			TenantIdColumnType: "int64",
+		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{
@@ -2720,7 +2740,10 @@ func TestVSchemaJSON(t *testing.T) {
 	in := map[string]*KeyspaceSchema{
 		"unsharded": {
 			ForeignKeyMode: vschemapb.Keyspace_managed,
-			MultiTenant:    true,
+			MultiTenantSpec: &vschemapb.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: "int64",
+			},
 			Keyspace: &Keyspace{
 				Name: "k1",
 			},
@@ -2743,7 +2766,6 @@ func TestVSchemaJSON(t *testing.T) {
 		},
 		"sharded": {
 			ForeignKeyMode: vschemapb.Keyspace_disallow,
-			MultiTenant:    false,
 			Keyspace: &Keyspace{
 				Name:    "k2",
 				Sharded: true,
@@ -2767,6 +2789,8 @@ func TestVSchemaJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(out)
+	//write got into a local file
+	// ioutil.WriteFile("vschema.json", out, 0644)
 	want := `{
   "sharded": {
     "sharded": true,
@@ -2816,7 +2840,10 @@ func TestVSchemaJSON(t *testing.T) {
         "name": "n2"
       }
     },
-    "multiTenant": true
+    "multi_tenant_spec": {
+      "tenant_id_column_name": "tenant_id",
+      "tenant_id_column_type": "int64"
+    }
   }
 }`
 	if got != want {
