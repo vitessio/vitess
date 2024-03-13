@@ -1,4 +1,50 @@
+<<<<<<< HEAD
 Usage of vttablet:
+=======
+The VTTablet server _controls_ a running MySQL server. VTTablet supports two primary types of deployments:
+
+* Managed MySQL (most common)
+* External MySQL
+
+In addition to these deployment types, a partially managed VTTablet is also possible by setting `--disable_active_reparents`.
+
+### Managed MySQL
+
+In this mode, Vitess actively manages MySQL.
+
+### External MySQL.
+
+In this mode, an external MySQL can be used such as AWS RDS, AWS Aurora, Google CloudSQL; or just an existing (vanilla) MySQL installation.
+
+See "Unmanaged Tablet" for the full guide.
+
+Even if a MySQL is external, you can still make vttablet perform some management functions. They are as follows:
+
+* `--disable_active_reparents`: If this flag is set, then any reparent or replica commands will not be allowed. These are InitShardPrimary, PlannedReparentShard, EmergencyReparentShard, and ReparentTablet. In this mode, you should use the TabletExternallyReparented command to inform vitess of the current primary.
+* `--replication_connect_retry`: This value is give to mysql when it connects a replica to the primary as the retry duration parameter.
+* `--heartbeat_enable` and `--heartbeat_interval duration`: cause vttablet to write heartbeats to the sidecar database. This information is also used by the replication reporter to assess replica lag.
+
+Usage:
+  vttablet [flags]
+
+Examples:
+
+vttablet \
+	--topo_implementation etcd2 \
+	--topo_global_server_address localhost:2379 \
+	--topo_global_root /vitess/ \
+	--tablet-path $alias \
+	--init_keyspace $keyspace \
+	--init_shard $shard \
+	--init_tablet_type $tablet_type \
+	--port $port \
+	--grpc_port $grpc_port \
+	--service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream'
+
+`$alias` needs to be of the form: `<cell>-id`, and the cell should match one of the local cells that was created in the topology. The id can be left padded with zeroes: `cell-100` and `cell-000000100` are synonymous.
+
+Flags:
+>>>>>>> f889134a7b (Fix docs for unmanaged tablets (#15437))
       --alsologtostderr                                                  log to standard error as well as files
       --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
       --app_pool_size int                                                Size of the connection pool for app connections (default 40)
