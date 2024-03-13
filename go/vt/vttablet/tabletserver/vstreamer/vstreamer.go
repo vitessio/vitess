@@ -768,7 +768,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		if err != nil {
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
-		// Use the the collation inherited or the one specified explicitly for the
+		// Use the collation inherited or the one specified explicitly for the
 		// column if one was provided in the event's optional metadata (MySQL only
 		// provides this for text based columns).
 		var coll collations.ID
