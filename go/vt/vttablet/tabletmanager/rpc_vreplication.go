@@ -322,7 +322,7 @@ func (tm *TabletManager) ReadVReplicationWorkflow(ctx context.Context, req *tabl
 	}
 	resp.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType(wfst)
 	resp.DeferSecondaryKeys = rows[0]["defer_secondary_keys"].ToString() == "1"
-
+	resp.Options = rows[0]["options"].ToString()
 	// Now the individual streams (there can be more than 1 with shard merges).
 	for i, row := range rows {
 		streams[i] = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{}

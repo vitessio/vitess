@@ -18,6 +18,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -524,7 +525,12 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			for i := range cells {
 				cells[i] = strings.TrimSpace(cells[i])
 			}
-
+			options := res.Options
+			if options != "" {
+				if err := json.Unmarshal([]byte(options), &workflow.Options); err != nil {
+					return err
+				}
+			}
 			stream := &vtctldatapb.Workflow_Stream{
 				Id:                        int64(rstream.Id),
 				Shard:                     tablet.Shard,
@@ -2509,6 +2515,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 		optTabletTypes:  optTabletTypes,
 		workflowType:    tgtInfo.WorkflowType,
 		workflowSubType: tgtInfo.WorkflowSubType,
+		options:         tgtInfo.Options,
 	}
 	log.Infof("Migration ID for workflow %s: %d", workflowName, ts.id)
 	sourceTopo := s.ts

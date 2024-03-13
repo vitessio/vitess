@@ -28,6 +28,8 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sets"
@@ -409,6 +411,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		OptTabletTypes:  optTabletTypes,
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
+		Options:         &options,
 	}, nil
 }
 
@@ -795,15 +798,16 @@ func addFilter(sel *sqlparser.Select, filter sqlparser.Expr) {
 	}
 }
 
-func (mz *materializer) getTenantClause(parser *sqlparser.Parser) (*sqlparser.Expr, error) {
-	if mz.ms.VReplicationWorkflowOptions.TenantId == "" {
+func getTenantClause(vrOptions *vtctldatapb.VReplicationWorkflowOptions,
+	targetVSchema *vindexes.KeyspaceSchema, parser *sqlparser.Parser) (*sqlparser.Expr, error) {
+	if vrOptions.TenantId == "" {
 		return nil, nil
 	}
-	if mz.targetVSchema == nil || mz.targetVSchema.MultiTenantSpec == nil {
+	if targetVSchema == nil || targetVSchema.MultiTenantSpec == nil {
 		return nil, fmt.Errorf("target keyspace not defined, or it does not have multi-tenant spec")
 	}
-	tenantColumnName := mz.targetVSchema.MultiTenantSpec.TenantIdColumnName
-	tenantColumnType := mz.targetVSchema.MultiTenantSpec.TenantIdColumnType
+	tenantColumnName := targetVSchema.MultiTenantSpec.TenantIdColumnName
+	tenantColumnType := targetVSchema.MultiTenantSpec.TenantIdColumnType
 	if tenantColumnName == "" {
 		return nil, fmt.Errorf("tenant column name not defined in multi-tenant spec")
 	}
@@ -811,13 +815,13 @@ func (mz *materializer) getTenantClause(parser *sqlparser.Parser) (*sqlparser.Ex
 	var tenantId string
 	switch tenantColumnType {
 	case "int", "int64":
-		_, err := strconv.Atoi(mz.ms.VReplicationWorkflowOptions.TenantId)
+		_, err := strconv.Atoi(vrOptions.TenantId)
 		if err != nil {
-			return nil, fmt.Errorf("tenant id is not a valid int: %s", mz.ms.VReplicationWorkflowOptions.TenantId)
+			return nil, fmt.Errorf("tenant id is not a valid int: %s", vrOptions.TenantId)
 		}
-		tenantId = mz.ms.VReplicationWorkflowOptions.TenantId
+		tenantId = vrOptions.TenantId
 	case "string":
-		tenantId = fmt.Sprintf("'%s'", mz.ms.VReplicationWorkflowOptions.TenantId)
+		tenantId = fmt.Sprintf("'%s'", vrOptions.TenantId)
 	default:
 		return nil, fmt.Errorf("unsupported tenant column type: %s", tenantColumnType)
 	}
