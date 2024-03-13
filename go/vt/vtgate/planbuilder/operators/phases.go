@@ -34,7 +34,7 @@ type (
 const (
 	physicalTransform Phase = iota
 	initialPlanning
-	pullDistinctFromUnion
+	expandUnion
 	delegateAggregation
 	addAggrOrdering
 	cleanOutPerfDistinct
@@ -49,8 +49,8 @@ func (p Phase) String() string {
 		return "physicalTransform"
 	case initialPlanning:
 		return "initial horizon planning optimization"
-	case pullDistinctFromUnion:
-		return "pull distinct from UNION1"
+	case expandUnion:
+		return "expand UNION"
 	case delegateAggregation:
 		return "split aggregation between vtgate and mysql"
 	case addAggrOrdering:
@@ -68,7 +68,7 @@ func (p Phase) String() string {
 
 func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 	switch p {
-	case pullDistinctFromUnion:
+	case expandUnion:
 		return s.Union
 	case delegateAggregation:
 		return s.Aggregation
@@ -87,8 +87,8 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 
 func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 	switch p {
-	case pullDistinctFromUnion:
-		return pullDistinctFromUNION(ctx, op)
+	case expandUnion:
+		return expandUNION(ctx, op)
 	case delegateAggregation:
 		return enableDelegateAggregation(ctx, op)
 	case addAggrOrdering:
