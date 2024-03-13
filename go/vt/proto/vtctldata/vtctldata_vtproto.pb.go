@@ -97,21 +97,21 @@ func (m *MaterializeSettings) CloneVT() *MaterializeSettings {
 		return (*MaterializeSettings)(nil)
 	}
 	r := &MaterializeSettings{
-		Workflow:                  m.Workflow,
-		SourceKeyspace:            m.SourceKeyspace,
-		TargetKeyspace:            m.TargetKeyspace,
-		StopAfterCopy:             m.StopAfterCopy,
-		Cell:                      m.Cell,
-		TabletTypes:               m.TabletTypes,
-		ExternalCluster:           m.ExternalCluster,
-		MaterializationIntent:     m.MaterializationIntent,
-		SourceTimeZone:            m.SourceTimeZone,
-		TargetTimeZone:            m.TargetTimeZone,
-		OnDdl:                     m.OnDdl,
-		DeferSecondaryKeys:        m.DeferSecondaryKeys,
-		TabletSelectionPreference: m.TabletSelectionPreference,
-		AtomicCopy:                m.AtomicCopy,
-		TenantId:                  m.TenantId,
+		Workflow:                    m.Workflow,
+		SourceKeyspace:              m.SourceKeyspace,
+		TargetKeyspace:              m.TargetKeyspace,
+		StopAfterCopy:               m.StopAfterCopy,
+		Cell:                        m.Cell,
+		TabletTypes:                 m.TabletTypes,
+		ExternalCluster:             m.ExternalCluster,
+		MaterializationIntent:       m.MaterializationIntent,
+		SourceTimeZone:              m.SourceTimeZone,
+		TargetTimeZone:              m.TargetTimeZone,
+		OnDdl:                       m.OnDdl,
+		DeferSecondaryKeys:          m.DeferSecondaryKeys,
+		TabletSelectionPreference:   m.TabletSelectionPreference,
+		AtomicCopy:                  m.AtomicCopy,
+		VReplicationWorkflowOptions: m.VReplicationWorkflowOptions.CloneVT(),
 	}
 	if rhs := m.TableSettings; rhs != nil {
 		tmpContainer := make([]*TableMaterializeSettings, len(rhs))
@@ -243,6 +243,25 @@ func (m *Shard) CloneVT() *Shard {
 }
 
 func (m *Shard) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *VReplicationWorkflowOptions) CloneVT() *VReplicationWorkflowOptions {
+	if m == nil {
+		return (*VReplicationWorkflowOptions)(nil)
+	}
+	r := &VReplicationWorkflowOptions{
+		TenantId:            m.TenantId,
+		SourceKeyspaceAlias: m.SourceKeyspaceAlias,
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *VReplicationWorkflowOptions) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -439,6 +458,7 @@ func (m *Workflow) CloneVT() *Workflow {
 		WorkflowSubType:               m.WorkflowSubType,
 		MaxVReplicationTransactionLag: m.MaxVReplicationTransactionLag,
 		DeferSecondaryKeys:            m.DeferSecondaryKeys,
+		Options:                       m.Options.CloneVT(),
 	}
 	if rhs := m.ShardStreams; rhs != nil {
 		tmpContainer := make(map[string]*Workflow_ShardStream, len(rhs))
@@ -3104,21 +3124,21 @@ func (m *MoveTablesCreateRequest) CloneVT() *MoveTablesCreateRequest {
 		return (*MoveTablesCreateRequest)(nil)
 	}
 	r := &MoveTablesCreateRequest{
-		Workflow:                  m.Workflow,
-		SourceKeyspace:            m.SourceKeyspace,
-		TargetKeyspace:            m.TargetKeyspace,
-		TabletSelectionPreference: m.TabletSelectionPreference,
-		AllTables:                 m.AllTables,
-		ExternalClusterName:       m.ExternalClusterName,
-		SourceTimeZone:            m.SourceTimeZone,
-		OnDdl:                     m.OnDdl,
-		StopAfterCopy:             m.StopAfterCopy,
-		DropForeignKeys:           m.DropForeignKeys,
-		DeferSecondaryKeys:        m.DeferSecondaryKeys,
-		AutoStart:                 m.AutoStart,
-		NoRoutingRules:            m.NoRoutingRules,
-		AtomicCopy:                m.AtomicCopy,
-		TenantId:                  m.TenantId,
+		Workflow:                    m.Workflow,
+		SourceKeyspace:              m.SourceKeyspace,
+		TargetKeyspace:              m.TargetKeyspace,
+		TabletSelectionPreference:   m.TabletSelectionPreference,
+		AllTables:                   m.AllTables,
+		ExternalClusterName:         m.ExternalClusterName,
+		SourceTimeZone:              m.SourceTimeZone,
+		OnDdl:                       m.OnDdl,
+		StopAfterCopy:               m.StopAfterCopy,
+		DropForeignKeys:             m.DropForeignKeys,
+		DeferSecondaryKeys:          m.DeferSecondaryKeys,
+		AutoStart:                   m.AutoStart,
+		NoRoutingRules:              m.NoRoutingRules,
+		AtomicCopy:                  m.AtomicCopy,
+		VReplicationWorkflowOptions: m.VReplicationWorkflowOptions.CloneVT(),
 	}
 	if rhs := m.Cells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
@@ -5633,10 +5653,13 @@ func (m *MaterializeSettings) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.TenantId) > 0 {
-		i -= len(m.TenantId)
-		copy(dAtA[i:], m.TenantId)
-		i = encodeVarint(dAtA, i, uint64(len(m.TenantId)))
+	if m.VReplicationWorkflowOptions != nil {
+		size, err := m.VReplicationWorkflowOptions.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1
 		i--
@@ -6405,6 +6428,53 @@ func (m *Shard) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *VReplicationWorkflowOptions) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *VReplicationWorkflowOptions) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *VReplicationWorkflowOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.SourceKeyspaceAlias) > 0 {
+		i -= len(m.SourceKeyspaceAlias)
+		copy(dAtA[i:], m.SourceKeyspaceAlias)
+		i = encodeVarint(dAtA, i, uint64(len(m.SourceKeyspaceAlias)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.TenantId) > 0 {
+		i -= len(m.TenantId)
+		copy(dAtA[i:], m.TenantId)
+		i = encodeVarint(dAtA, i, uint64(len(m.TenantId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *Workflow_ReplicationLocation) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
@@ -6961,6 +7031,16 @@ func (m *Workflow) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Options != nil {
+		size, err := m.Options.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x52
 	}
 	if m.DeferSecondaryKeys {
 		i--
@@ -13755,10 +13835,13 @@ func (m *MoveTablesCreateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.TenantId) > 0 {
-		i -= len(m.TenantId)
-		copy(dAtA[i:], m.TenantId)
-		i = encodeVarint(dAtA, i, uint64(len(m.TenantId)))
+	if m.VReplicationWorkflowOptions != nil {
+		size, err := m.VReplicationWorkflowOptions.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1
 		i--
@@ -20033,8 +20116,8 @@ func (m *MaterializeSettings) SizeVT() (n int) {
 	if m.AtomicCopy {
 		n += 3
 	}
-	l = len(m.TenantId)
-	if l > 0 {
+	if m.VReplicationWorkflowOptions != nil {
+		l = m.VReplicationWorkflowOptions.SizeVT()
 		n += 2 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -20282,6 +20365,24 @@ func (m *Shard) SizeVT() (n int) {
 	}
 	if m.Shard != nil {
 		l = m.Shard.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *VReplicationWorkflowOptions) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.TenantId)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.SourceKeyspaceAlias)
+	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -20556,6 +20657,10 @@ func (m *Workflow) SizeVT() (n int) {
 	}
 	if m.DeferSecondaryKeys {
 		n += 2
+	}
+	if m.Options != nil {
+		l = m.Options.SizeVT()
+		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -23088,8 +23193,8 @@ func (m *MoveTablesCreateRequest) SizeVT() (n int) {
 	if m.AtomicCopy {
 		n += 3
 	}
-	l = len(m.TenantId)
-	if l > 0 {
+	if m.VReplicationWorkflowOptions != nil {
+		l = m.VReplicationWorkflowOptions.SizeVT()
 		n += 2 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -26167,9 +26272,9 @@ func (m *MaterializeSettings) UnmarshalVT(dAtA []byte) error {
 			m.AtomicCopy = bool(v != 0)
 		case 17:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TenantId", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field VReplicationWorkflowOptions", wireType)
 			}
-			var stringLen uint64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -26179,23 +26284,27 @@ func (m *MaterializeSettings) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
+			if msglen < 0 {
 				return ErrInvalidLength
 			}
-			postIndex := iNdEx + intStringLen
+			postIndex := iNdEx + msglen
 			if postIndex < 0 {
 				return ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.TenantId = string(dAtA[iNdEx:postIndex])
+			if m.VReplicationWorkflowOptions == nil {
+				m.VReplicationWorkflowOptions = &VReplicationWorkflowOptions{}
+			}
+			if err := m.VReplicationWorkflowOptions.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -28041,6 +28150,121 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 			if err := m.Shard.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *VReplicationWorkflowOptions) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: VReplicationWorkflowOptions: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: VReplicationWorkflowOptions: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TenantId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TenantId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SourceKeyspaceAlias", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SourceKeyspaceAlias = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -29944,6 +30168,42 @@ func (m *Workflow) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.DeferSecondaryKeys = bool(v != 0)
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Options", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Options == nil {
+				m.Options = &VReplicationWorkflowOptions{}
+			}
+			if err := m.Options.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -46203,9 +46463,9 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 			m.AtomicCopy = bool(v != 0)
 		case 20:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TenantId", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field VReplicationWorkflowOptions", wireType)
 			}
-			var stringLen uint64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -46215,23 +46475,27 @@ func (m *MoveTablesCreateRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
+			if msglen < 0 {
 				return ErrInvalidLength
 			}
-			postIndex := iNdEx + intStringLen
+			postIndex := iNdEx + msglen
 			if postIndex < 0 {
 				return ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.TenantId = string(dAtA[iNdEx:postIndex])
+			if m.VReplicationWorkflowOptions == nil {
+				m.VReplicationWorkflowOptions = &VReplicationWorkflowOptions{}
+			}
+			if err := m.VReplicationWorkflowOptions.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

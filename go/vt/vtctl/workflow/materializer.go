@@ -18,6 +18,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -96,6 +97,24 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 	}
 }
 
+func (mz *materializer) getOptionsJSON() (string, error) {
+	vrOptions := &vtctldatapb.VReplicationWorkflowOptions{}
+	if mz.ms.VReplicationWorkflowOptions != nil && mz.ms.VReplicationWorkflowOptions.TenantId != "" {
+		vrOptions.TenantId = mz.ms.VReplicationWorkflowOptions.TenantId
+		if mz.ms.VReplicationWorkflowOptions.SourceKeyspaceAlias != "" {
+			vrOptions.SourceKeyspaceAlias = mz.ms.VReplicationWorkflowOptions.SourceKeyspaceAlias
+		}
+	}
+	optionsJSON, err := json.Marshal(vrOptions)
+	if err != nil {
+		return "", err
+	}
+	if optionsJSON == nil {
+		optionsJSON = []byte("{}")
+	}
+	return string(optionsJSON), nil
+}
+
 func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) error {
 	if err := validateNewWorkflow(mz.ctx, mz.ts, mz.tmc, mz.ms.TargetKeyspace, mz.ms.Workflow); err != nil {
 		return err
@@ -132,6 +151,12 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange) {
 			streamKeyRangesEqual = true
 		}
+
+		optionsJSON, err := mz.getOptionsJSON()
+		if err != nil {
+			return err
+		}
+		req.Options = optionsJSON
 		// Each tablet needs its own copy of the request as it will have a unique
 		// BinlogSource.
 		tabletReq := req.CloneVT()

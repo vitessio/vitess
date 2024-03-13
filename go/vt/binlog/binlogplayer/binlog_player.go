@@ -618,10 +618,11 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool) string {
 	protoutil.SortBinlogSourceTables(source)
 	return fmt.Sprintf("insert into _vt.vreplication "+
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v)",
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v, %s)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag,
-		timeUpdated, binlogdatapb.VReplicationWorkflowState_Running.String(), encodeString(dbName), workflowType, workflowSubType, deferSecondaryKeys)
+		timeUpdated, binlogdatapb.VReplicationWorkflowState_Running.String(), encodeString(dbName), workflowType,
+		workflowSubType, deferSecondaryKeys, encodeString("{}"))
 }
 
 // CreateVReplicationState returns a statement to create a stopped vreplication.
@@ -629,11 +630,11 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType) string {
 	protoutil.SortBinlogSourceTables(source)
 	return fmt.Sprintf("insert into _vt.vreplication "+
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d)",
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, options) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %s)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled,
 		throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state.String(), encodeString(dbName),
-		workflowType, workflowSubType)
+		workflowType, workflowSubType, encodeString("{}"))
 }
 
 // GenerateUpdatePos returns a statement to record the latest processed gtid in the _vt.vreplication table.
