@@ -236,7 +236,7 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 			piiSafeSQL = logStats.StmtType
 		}
 		warningMsg := fmt.Sprintf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, len(result.Rows))
-		exceedMemoryRowsLogger.Warningf(sql, warningMsg)
+		exceedMemoryRowsLogger.Warningf(warningMsg)
 		safeSession.RecordWarning(&querypb.QueryWarning{
 			Code:    uint32(sqlerror.EROutOfMemory),
 			Message: warningMsg,
@@ -375,7 +375,7 @@ func (e *Executor) StreamExecute(
 			piiSafeSQL = logStats.StmtType
 		}
 		warningMsg := fmt.Sprintf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, srr.rowsReturned)
-		exceedMemoryRowsLogger.Warningf(sql, warningMsg)
+		exceedMemoryRowsLogger.Warningf(warningMsg)
 		safeSession.RecordWarning(&querypb.QueryWarning{
 			Code:    uint32(sqlerror.EROutOfMemory),
 			Message: warningMsg,
