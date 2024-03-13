@@ -106,26 +106,25 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.GetTablet"))
 				return
 			}
-			validations := []struct {
-				query string
-				msg   string
-			}{{
-				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(primary.DbName()), encodeString(workflow)),
-				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias),
-			}, {
-				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN' and workflow_sub_type != %d", encodeString(primary.DbName()), binlogdatapb.VReplicationWorkflowSubType_Partial),
-				fmt.Sprintf("found previous frozen workflow on tablet %v, please review and delete it first before creating a new workflow",
-					primary.Alias),
-			}}
-			for _, validation := range validations {
-				p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, validation.query)
-				if err != nil {
-					allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.VReplicationExec"))
+			res, err := tmc.ReadVReplicationWorkflows(ctx, primary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{})
+			if err != nil {
+				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.ReadVReplicationWorkflows"))
+				return
+			}
+			if res == nil {
+				// There are no workflows on this tablet.
+				return
+			}
+			for _, wf := range res.Workflows {
+				if wf.Workflow == workflow {
+					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias))
 					return
 				}
-				if p3qr != nil && len(p3qr.Rows) != 0 {
-					allErrors.RecordError(vterrors.Wrap(fmt.Errorf(validation.msg), "validateWorkflowName.VReplicationExec"))
-					return
+				for _, stream := range wf.Streams {
+					if stream.Message == Frozen && wf.WorkflowSubType != binlogdatapb.VReplicationWorkflowSubType_Partial {
+						allErrors.RecordError(fmt.Errorf("found previous frozen workflow on tablet %v, please review and delete it first before creating a new workflow", primary.Alias))
+						return
+					}
 				}
 			}
 		}(si)
@@ -362,7 +361,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			return nil, err
 		}
 
-		if len(wf.Streams) < 1 {
+		if wf == nil || len(wf.Streams) < 1 {
 			continue
 		}
 
@@ -526,12 +525,20 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 	} else {
 		_ = ts.ForAllTargets(func(target *MigrationTarget) error {
 			wg.Add(1)
-			query := fmt.Sprintf("select 1 from _vt.vreplication where db_name='%s' and workflow='%s' and message!='FROZEN'", target.GetPrimary().DbName(), ts.WorkflowName())
-			rs, _ := ts.VReplicationExec(ctx, target.GetPrimary().Alias, query)
-			if len(rs.Rows) > 0 {
-				rec.RecordError(fmt.Errorf("vreplication streams are not frozen on tablet %d", target.GetPrimary().Alias.Uid))
+			defer wg.Done()
+			res, err := ts.ws.tmc.ReadVReplicationWorkflow(ctx, target.GetPrimary().Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+				Workflow: ts.WorkflowName(),
+			})
+			if err != nil {
+				rec.RecordError(err)
+				return nil
 			}
-			wg.Done()
+			for _, stream := range res.Streams {
+				if stream.Message != Frozen {
+					rec.RecordError(fmt.Errorf("vreplication streams are not frozen on tablet %d", target.GetPrimary().Alias.Uid))
+					return nil
+				}
+			}
 			return nil
 		})
 	}

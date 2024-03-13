@@ -435,7 +435,7 @@ func (bs *S3BackupStorage) Close() error {
 }
 
 func (bs *S3BackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
-	return &S3BackupStorage{params: params}
+	return &S3BackupStorage{params: params, transport: bs.transport}
 }
 
 var _ backupstorage.BackupStorage = (*S3BackupStorage)(nil)

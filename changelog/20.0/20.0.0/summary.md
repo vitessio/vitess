@@ -10,13 +10,16 @@
     - [Vindex Hints](#vindex-hints)
     - [Update with Limit Support](#update-limit)
     - [Update with Multi Table Support](#multi-table-update)
+    - [Update with Multi Target Support](#update-multi-target)
     - [Delete with Subquery Support](#delete-subquery)
+    - [Delete with Multi Target Support](#delete-multi-target)
   - **[Flag changes](#flag-changes)**
     - [`pprof-http` default change](#pprof-http-default)
     - [New `healthcheck-dial-concurrency` flag](#healthcheck-dial-concurrency-flag)
 - **[Minor Changes](#minor-changes)**
   - **[New Stats](#new-stats)**
     - [VTTablet Query Cache Hits and Misses](#vttablet-query-cache-hits-and-misses)
+  - **[`SIGHUP` reload of gRPC client static auth creds](#sighup-reload-of-grpc-client-auth-creds)**
 
 ## <a id="major-changes"/>Major Changes
 
@@ -65,12 +68,27 @@ Example: `update t1 join t2 on t1.id = t2.id join t3 on t1.col = t3.col set t1.b
 
 More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/update.html)
 
+#### <a id="update-multi-target"/> Update with Multi Target Support
+
+Support is added for sharded multi table target update.
+
+Example: `update t1 join t2 on t1.id = t2.id set t1.foo = 'abc', t2.bar = 23`
+
+More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/update.html)
+
 #### <a id="delete-subquery"/> Delete with Subquery Support
 
 Support is added for sharded table delete with subquery
 
 Example: `delete from t1 where id in (select col from t2 where foo = 32 and bar = 43)`
 
+#### <a id="delete-multi-target"/> Delete with Multi Target Support
+
+Support is added for sharded multi table target delete.
+
+Example: `delete t1, t3 from t1 join t2 on t1.id = t2.id join t3 on t1.col = t3.col`
+
+More details about how it works is available in [MySQL Docs](https://dev.mysql.com/doc/refman/8.0/en/delete.html)
 
 ### <a id="flag-changes"/>Flag Changes
 
@@ -94,3 +112,7 @@ VTTablet exposes two new counter stats:
 
  * `QueryCacheHits`: Query engine query cache hits
  * `QueryCacheMisses`: Query engine query cache misses
+
+### <a id="sighup-reload-of-grpc-client-auth-creds"/>`SIGHUP` reload of gRPC client static auth creds
+
+The internal gRPC client now caches the static auth credentials and supports reloading via the `SIGHUP` signal. Previous to v20 the credentials were not cached. They were re-loaded from disk on every use.
