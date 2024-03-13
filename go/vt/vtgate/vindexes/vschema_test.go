@@ -251,6 +251,40 @@ func TestUnshardedVSchemaValid(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestMultiTenantAttribute verifies that the MultiTenant attribute is updated in KeyspaceSchema.
+func TestMultiTenantAttribute(t *testing.T) {
+	tests := []struct {
+		name         string
+		multiTenant  bool
+		wantedTenant bool
+	}{
+		{
+			name:         "Default Value",
+			wantedTenant: false,
+		}, {
+			name:         "MultiTenant Set to True",
+			multiTenant:  true,
+			wantedTenant: true,
+		}, {
+			name:         "MultiTenant Set to False",
+			multiTenant:  false,
+			wantedTenant: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ksSchema, err := BuildKeyspace(&vschemapb.Keyspace{
+				Sharded:     false,
+				MultiTenant: test.multiTenant,
+				Vindexes:    make(map[string]*vschemapb.Vindex),
+				Tables:      make(map[string]*vschemapb.Table),
+			}, sqlparser.NewTestParser())
+			require.NoError(t, err)
+			require.Equal(t, test.wantedTenant, ksSchema.MultiTenant)
+		})
+	}
+}
+
 func TestForeignKeyMode(t *testing.T) {
 	tests := []struct {
 		name         string
