@@ -111,9 +111,11 @@ func TestUnionAll(t *testing.T) {
 			mcmp.AssertMatchesNoOrder("select tbl2.id1 FROM  ((select id1 from t1 order by id1 limit 5) union all (select id1 from t1 order by id1 desc limit 5)) as tbl1 INNER JOIN t1 as tbl2  ON tbl1.id1 = tbl2.id1",
 				"[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]")
 
-			// union all between two select unique in tables
-			mcmp.AssertMatchesNoOrder("select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)",
-				"[[INT64(1)] [INT64(2)] [INT64(1)] [INT64(2)]]")
+			for i := 0; i < 5000; i++ {
+				// union all between two select unique in tables
+				mcmp.AssertMatchesNoOrder("select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)",
+					"[[INT64(1)] [INT64(2)] [INT64(1)] [INT64(2)]]")
+			}
 
 			// 4 tables union all
 			mcmp.AssertMatchesNoOrder("select id1, id2 from t1 where id1 = 1 union all select id3,id4 from t2 where id3 = 3 union all select id1, id2 from t1 where id1 = 2 union all select id3,id4 from t2 where id3 = 4",

@@ -309,7 +309,7 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 						}
 					}
 					// Wait for fields from all sources.
-					for slices.Contains(rest, nil) {
+					for len(fieldTypes) == 0 {
 						condFields.Wait()
 					}
 					muFields.Unlock()
