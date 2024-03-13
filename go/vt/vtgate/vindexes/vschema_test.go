@@ -2643,6 +2643,8 @@ func TestVSchemaPBJSON(t *testing.T) {
 	in := `
 	{
 		"sharded": true,
+		"foreignKeyMode": "unmanaged",
+        "multiTenant": true,
 		"tables": {
 			"t1": {
 				"column_vindexes":[{
@@ -2671,7 +2673,9 @@ func TestVSchemaPBJSON(t *testing.T) {
 		t.Error(err)
 	}
 	want := vschemapb.Keyspace{
-		Sharded: true,
+		Sharded:        true,
+		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
+		MultiTenant:    true,
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{
@@ -2716,6 +2720,7 @@ func TestVSchemaJSON(t *testing.T) {
 	in := map[string]*KeyspaceSchema{
 		"unsharded": {
 			ForeignKeyMode: vschemapb.Keyspace_managed,
+			MultiTenant:    true,
 			Keyspace: &Keyspace{
 				Name: "k1",
 			},
@@ -2738,6 +2743,7 @@ func TestVSchemaJSON(t *testing.T) {
 		},
 		"sharded": {
 			ForeignKeyMode: vschemapb.Keyspace_disallow,
+			MultiTenant:    false,
 			Keyspace: &Keyspace{
 				Name:    "k2",
 				Sharded: true,
@@ -2809,7 +2815,8 @@ func TestVSchemaJSON(t *testing.T) {
         "type": "sequence",
         "name": "n2"
       }
-    }
+    },
+    "multiTenant": true
   }
 }`
 	if got != want {

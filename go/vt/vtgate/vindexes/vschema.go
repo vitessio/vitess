@@ -245,7 +245,7 @@ type ksJSON struct {
 	Vindexes       map[string]Vindex `json:"vindexes,omitempty"`
 	Views          map[string]string `json:"views,omitempty"`
 	Error          string            `json:"error,omitempty"`
-	MultiTenant    bool              `json:"multi_tenant,omitempty"`
+	MultiTenant    bool              `json:"multiTenant,omitempty"`
 }
 
 // findTable looks for the table with the requested tablename in the keyspace.
@@ -277,6 +277,7 @@ func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 		Sharded:        ks.Keyspace.Sharded,
 		Tables:         ks.Tables,
 		ForeignKeyMode: ks.ForeignKeyMode.String(),
+		MultiTenant:    ks.MultiTenant,
 		Vindexes:       ks.Vindexes,
 	}
 	if ks.Error != nil {
