@@ -235,6 +235,7 @@ type KeyspaceSchema struct {
 	Vindexes       map[string]Vindex
 	Views          map[string]sqlparser.SelectStatement
 	Error          error
+	MultiTenant    bool
 }
 
 type ksJSON struct {
@@ -244,6 +245,7 @@ type ksJSON struct {
 	Vindexes       map[string]Vindex `json:"vindexes,omitempty"`
 	Views          map[string]string `json:"views,omitempty"`
 	Error          string            `json:"error,omitempty"`
+	MultiTenant    bool              `json:"multi_tenant,omitempty"`
 }
 
 // findTable looks for the table with the requested tablename in the keyspace.
@@ -365,6 +367,7 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlp
 			ForeignKeyMode: replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
 			Tables:         make(map[string]*Table),
 			Vindexes:       make(map[string]Vindex),
+			MultiTenant:    ks.MultiTenant,
 		}
 		vschema.Keyspaces[ksname] = ksvschema
 		ksvschema.Error = buildTables(ks, vschema, ksvschema, parser)
