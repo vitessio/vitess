@@ -97,6 +97,7 @@ message MaterializeSettings {
   bool defer_secondary_keys = 14;
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
   bool atomic_copy = 16;
+  string tenant_id = 17;
 }
 
 /* Data types for VtctldServer */

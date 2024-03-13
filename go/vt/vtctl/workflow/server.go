@@ -1317,6 +1317,16 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if vschema == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vschema found for target keyspace %s", targetKeyspace)
 	}
+
+	var tenantId string
+	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && req.TenantId != "" {
+		multiTenantSpec := vschema.MultiTenantSpec
+		if multiTenantSpec == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "multi-tenant spec not found for target keyspace %s", targetKeyspace)
+		}
+		// TODO: check tenant id type
+	}
+
 	ksTables, err := getTablesInKeyspace(ctx, sourceTopo, s.tmc, sourceKeyspace)
 	if err != nil {
 		return nil, err
@@ -1373,6 +1383,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		OnDdl:                     req.OnDdl,
 		DeferSecondaryKeys:        req.DeferSecondaryKeys,
 		AtomicCopy:                req.AtomicCopy,
+		TenantId:                  tenantId,
 	}
 	if req.SourceTimeZone != "" {
 		ms.SourceTimeZone = req.SourceTimeZone

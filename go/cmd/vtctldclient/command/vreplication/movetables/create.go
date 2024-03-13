@@ -110,6 +110,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		StopAfterCopy:             common.CreateOptions.StopAfterCopy,
 		NoRoutingRules:            createOptions.NoRoutingRules,
 		AtomicCopy:                createOptions.AtomicCopy,
+		TenantId:                  createOptions.TenantId,
 	}
 
 	resp, err := common.GetClient().MoveTablesCreate(common.GetCommandCtx(), req)

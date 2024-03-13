@@ -44366,6 +44366,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings atomic_copy */
         atomic_copy?: (boolean|null);
+
+        /** MaterializeSettings tenant_id */
+        tenant_id?: (string|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -44424,6 +44427,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings atomic_copy. */
         public atomic_copy: boolean;
+
+        /** MaterializeSettings tenant_id. */
+        public tenant_id: string;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
