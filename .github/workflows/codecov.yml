@@ -1,0 +1,119 @@
+name: Code Coverage
+on: [push, pull_request]
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Code Coverage')
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  test:
+    name: Code Coverage
+    runs-on: gh-hosted-runners-16cores-1
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Check for changes in files relevant to code coverage
+      uses: dorny/paths-filter@v3.0.1
+      id: changes
+      with:
+        token: ''
+        filters: |
+          changed_files:
+            - .github/workflows/codecov.yml
+            - 'go/**'
+            - go.mod
+            - go.sum
+            - Makefile
+
+    - name: Set up Go
+      if: steps.changes.outputs.changed_files == 'true'
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.22.1
+
+    - name: Set up python
+      if: steps.changes.outputs.changed_files == 'true'
+      uses: actions/setup-python@v5
+
+    - name: Tune the OS
+      if: steps.changes.outputs.changed_files == 'true'
+      run: |
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+        # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
+        echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
+        sudo sysctl -p /etc/sysctl.conf
+
+    - name: Get dependencies
+      if: steps.changes.outputs.changed_files == 'true'
+      run: |
+        export DEBIAN_FRONTEND="noninteractive"
+        sudo apt-get update
+
+        # Uninstall any previously installed MySQL first
+        sudo systemctl stop apparmor
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo deluser mysql
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
+
+        # mysql80
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
+
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
+        sudo service mysql stop
+        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
+
+        mkdir -p dist bin
+        curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
+        mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
+
+        go mod download
+        go install golang.org/x/tools/cmd/goimports@latest
+        
+    - name: Run make tools
+      if: steps.changes.outputs.changed_files == 'true'
+      run: |
+        make tools
+
+    - name: Run unit tests and generate code coverage reports
+      if: steps.changes.outputs.changed_files == 'true'
+      timeout-minutes: 45
+      run: |
+        set -exo pipefail
+        # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+        # which musn't be more than 107 characters long.
+        export VTDATAROOT="/tmp/"
+
+        export NOVTADMINBUILD=1
+
+        # Exclude endtoend tests from the coverage report.
+        # TODO: figure out how best to include our endtoend tests in the coverage report.
+        rm -rf go/test/endtoend go/*/endtoend go/vt/*/endtoend go/cmd/vttestserver
+
+        eatmydata -- make unit_test_cover
+
+        # Restore the files we deleted as codecov tries to fix their paths.
+        git reset --hard HEAD
+
+    - name: Upload coverage reports to codecov.io
+      if: steps.changes.outputs.changed_files == 'true'
+      uses: codecov/codecov-action@v4
+      with:
+        fail_ci_if_error: true
+        verbose: true
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
