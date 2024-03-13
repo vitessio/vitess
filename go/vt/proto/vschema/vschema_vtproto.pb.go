@@ -74,6 +74,7 @@ func (m *Keyspace) CloneVT() *Keyspace {
 		Sharded:                m.Sharded,
 		RequireExplicitRouting: m.RequireExplicitRouting,
 		ForeignKeyMode:         m.ForeignKeyMode,
+		MultiTenant:            m.MultiTenant,
 	}
 	if rhs := m.Vindexes; rhs != nil {
 		tmpContainer := make(map[string]*Vindex, len(rhs))
@@ -430,6 +431,16 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.MultiTenant {
+		i--
+		if m.MultiTenant {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
 	}
 	if m.ForeignKeyMode != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.ForeignKeyMode))
@@ -1129,6 +1140,9 @@ func (m *Keyspace) SizeVT() (n int) {
 	}
 	if m.ForeignKeyMode != 0 {
 		n += 1 + sov(uint64(m.ForeignKeyMode))
+	}
+	if m.MultiTenant {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -1907,6 +1921,26 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MultiTenant", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.MultiTenant = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

@@ -54,6 +54,9 @@ message Keyspace {
     unmanaged = 2;
     managed = 3;
   }
+
+  // multi_tenant_mode specifies that the keyspace is multi-tenant. Currently used during migrations with MoveTables.
+  bool multi_tenant = 6;
 }
 
 // Vindex is the vindex info for a Keyspace.
