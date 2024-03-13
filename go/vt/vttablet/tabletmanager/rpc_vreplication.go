@@ -43,13 +43,13 @@ import (
 
 const (
 	// Create a new VReplication workflow record.
-	sqlCreateVReplicationWorkflow = "insert into %s.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a)"
+	sqlCreateVReplicationWorkflow = "insert into %s.vreplication (workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) values (%a, %a, '', 0, 0, %a, %a, now(), 0, %a, %a, %a, %a, %a, %a)"
 	sqlHasVReplicationWorkflows   = "select if(count(*) > 0, 1, 0) as has_workflows from %s.vreplication where db_name = %a"
 	// Read all VReplication workflows. The final format specifier is used to
 	// optionally add any additional predicates to the query.
 	sqlReadVReplicationWorkflows = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from %s.vreplication where db_name = %a%s group by workflow, id order by workflow, id"
 	// Read a VReplication workflow.
-	sqlReadVReplicationWorkflow = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys from %s.vreplication where workflow = %a and db_name = %a"
+	sqlReadVReplicationWorkflow = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from %s.vreplication where workflow = %a and db_name = %a"
 	// Delete VReplication records for the given workflow.
 	sqlDeleteVReplicationWorkflow = "delete from %s.vreplication where workflow = %a and db_name = %a"
 	// Retrieve the current configuration values for a workflow's vreplication stream(s).
@@ -96,9 +96,11 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 			"workflowType":       sqltypes.Int64BindVariable(int64(req.WorkflowType)),
 			"workflowSubType":    sqltypes.Int64BindVariable(int64(req.WorkflowSubType)),
 			"deferSecondaryKeys": sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
+			"options":            sqltypes.StringBindVariable(req.Options),
 		}
 		parsed := sqlparser.BuildParsedQuery(sqlCreateVReplicationWorkflow, sidecar.GetIdentifier(),
-			":workflow", ":source", ":cells", ":tabletTypes", ":state", ":dbname", ":workflowType", ":workflowSubType", ":deferSecondaryKeys",
+			":workflow", ":source", ":cells", ":tabletTypes", ":state", ":dbname", ":workflowType", ":workflowSubType",
+			":deferSecondaryKeys", ":options",
 		)
 		stmt, err := parsed.GenerateQuery(bindVars, nil)
 		if err != nil {

@@ -551,6 +551,7 @@ message CreateVReplicationWorkflowRequest {
   bool auto_start = 9;
   // Should the workflow stop after the copy phase.
   bool stop_after_copy = 10;
+  string options = 11;
 }
 
 message CreateVReplicationWorkflowResponse {
@@ -616,6 +617,7 @@ message ReadVReplicationWorkflowResponse {
     string component_throttled = 14;
   }
   repeated Stream streams = 11;
+  string options = 12;
 }
 
 message VDiffRequest {

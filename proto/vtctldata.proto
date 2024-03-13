@@ -97,7 +97,7 @@ message MaterializeSettings {
   bool defer_secondary_keys = 14;
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
   bool atomic_copy = 16;
-  string tenant_id = 17;
+  VReplicationWorkflowOptions v_replication_workflow_options = 17;
 }
 
 /* Data types for VtctldServer */
@@ -206,6 +206,11 @@ message Shard {
   topodata.Shard shard = 3;
 }
 
+message VReplicationWorkflowOptions {
+  string tenant_id = 1;
+  string source_keyspace_alias = 2;
+}
+
 // TODO: comment the hell out of this.
 message Workflow {
   string name = 1;
@@ -223,6 +228,7 @@ message Workflow {
   int64 max_v_replication_transaction_lag = 8;
   // This specifies whether to defer the creation of secondary keys.
   bool defer_secondary_keys = 9;
+  VReplicationWorkflowOptions options = 10;
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -1218,7 +1224,7 @@ message MoveTablesCreateRequest {
   bool no_routing_rules = 18;
   // Run a single copy phase for the entire database.
   bool atomic_copy = 19;
-  string tenant_id = 20;
+  VReplicationWorkflowOptions v_replication_workflow_options = 20;
 }
 
 message MoveTablesCreateResponse {

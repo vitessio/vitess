@@ -1318,8 +1318,8 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vschema found for target keyspace %s", targetKeyspace)
 	}
 
-	var tenantId string
-	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && req.TenantId != "" {
+	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
+		req.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.TenantId != "" {
 		multiTenantSpec := vschema.MultiTenantSpec
 		if multiTenantSpec == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "multi-tenant spec not found for target keyspace %s", targetKeyspace)
@@ -1370,20 +1370,20 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:                  req.Workflow,
-		MaterializationIntent:     vtctldatapb.MaterializationIntent_MOVETABLES,
-		SourceKeyspace:            sourceKeyspace,
-		TargetKeyspace:            targetKeyspace,
-		Cell:                      strings.Join(req.Cells, ","),
-		TabletTypes:               topoproto.MakeStringTypeCSV(req.TabletTypes),
-		TabletSelectionPreference: req.TabletSelectionPreference,
-		StopAfterCopy:             req.StopAfterCopy,
-		ExternalCluster:           req.ExternalClusterName,
-		SourceShards:              req.SourceShards,
-		OnDdl:                     req.OnDdl,
-		DeferSecondaryKeys:        req.DeferSecondaryKeys,
-		AtomicCopy:                req.AtomicCopy,
-		TenantId:                  tenantId,
+		Workflow:                    req.Workflow,
+		MaterializationIntent:       vtctldatapb.MaterializationIntent_MOVETABLES,
+		SourceKeyspace:              sourceKeyspace,
+		TargetKeyspace:              targetKeyspace,
+		Cell:                        strings.Join(req.Cells, ","),
+		TabletTypes:                 topoproto.MakeStringTypeCSV(req.TabletTypes),
+		TabletSelectionPreference:   req.TabletSelectionPreference,
+		StopAfterCopy:               req.StopAfterCopy,
+		ExternalCluster:             req.ExternalClusterName,
+		SourceShards:                req.SourceShards,
+		OnDdl:                       req.OnDdl,
+		DeferSecondaryKeys:          req.DeferSecondaryKeys,
+		AtomicCopy:                  req.AtomicCopy,
+		VReplicationWorkflowOptions: req.VReplicationWorkflowOptions,
 	}
 	if req.SourceTimeZone != "" {
 		ms.SourceTimeZone = req.SourceTimeZone
