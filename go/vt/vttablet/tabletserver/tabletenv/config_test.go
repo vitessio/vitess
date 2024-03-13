@@ -478,11 +478,6 @@ func TestVerifyUnmanagedTabletConfig(t *testing.T) {
 	assert.EqualError(t, err, "database app user password not specified")
 
 	config.DB.App.Password = "testPassword"
-	mysqlctl.DisableActiveReparents = false
-	err = config.verifyUnmanagedTabletConfig()
-	assert.EqualError(t, err, "fixing replication should be disabled on unmanaged tablets")
-
-	mysqlctl.DisableActiveReparents = true
 	err = config.verifyUnmanagedTabletConfig()
 	assert.Nil(t, err)
 }

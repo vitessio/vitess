@@ -909,9 +909,8 @@ func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
 	if c.DB.App.Password == "" {
 		return errors.New("database app user password not specified")
 	}
-	if !mysqlctl.DisableActiveReparents {
-		return errors.New("fixing replication should be disabled on unmanaged tablets")
-	}
+	// Replication fixes should be disabled for Unmanaged tablets.
+	mysqlctl.DisableActiveReparents = true
 
 	return c.checkConnectionForExternalMysql()
 }

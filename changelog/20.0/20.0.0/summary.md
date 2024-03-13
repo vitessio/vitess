@@ -5,7 +5,7 @@
 - **[Major Changes](#major-changes)**
   - **[Breaking changes](#breaking-changes)**
     - [`shutdown_grace_period` Default Change](#shutdown-grace-period-default)
-    - [New `unmanaged` Flag](#unmanaged-flag)
+    - [New `unmanaged` Flag and `disable_active_reparents` deprecation](#unmanaged-flag)
   - **[Query Compatibility](#query-compatibility)**
     - [Vindex Hints](#vindex-hints)
     - [Update with Limit Support](#update-limit)
@@ -32,9 +32,9 @@ This makes reparenting in Vitess resilient to client errors, and prevents Planne
 
 In order to preserve the old behaviour, the users can set the flag back to `0 seconds` causing open transactions to never be shutdown, but in that case, they run the risk of PlannedReparentShard calls timing out.
 
-#### <a id="unmanaged-tablet"/> New `unmanaged` Flag
+#### <a id="unmanaged-tablet"/> New `unmanaged` Flag and `disable_active_reparents` deprecation
 
-New flag `--unmanaged` has been introduced in this release to make it easier to flag unmanaged tablets. It also runs validations to make sure the unmanaged tablets are configured properly.
+New flag `--unmanaged` has been introduced in this release to make it easier to flag unmanaged tablets. It also runs validations to make sure the unmanaged tablets are configured properly. `--disable_active_reparents` flag has been deprecated for `vttablet`, `vtcombo` and `vttestserver` binaries and will be removed in future releases. Specifying the `--unmanaged` flag will also block replication commands and replication repairs.
 
 Starting this release, all unmanaged tablets should specify this flag.
 
