@@ -1,0 +1,56 @@
+name: Update Golang Dependencies
+
+on:
+  schedule:
+    - cron: "0 0 1,15 * *" # Runs every month on the 1st and 15th days at midnight UTC
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  update_golang_deps:
+    if: github.repository == 'vitessio/vitess'
+    permissions:
+      contents: write
+      pull-requests: write
+    name: Update Golang Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22.1
+
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Upgrade the Golang Dependencies
+        id: detect-and-update
+        run: |
+          go get -u ./...
+
+          output=$(git status -s)
+          if [ -z "${output}" ]; then
+            exit 0
+          fi
+
+          go mod tidy
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v4
+        with:
+          branch: "upgrade-go-deps-on-main"
+          commit-message: "upgrade go deps"
+          signoff: true
+          delete-branch: true
+          title: "Upgrade the Golang Dependencies"
+          body: |
+            This Pull Request updates all the Golang dependencies to their latest version using `go get -u ./...`.
+          base: main
+          labels: |
+            go
+            dependencies
+            Component: General
+            Type: Internal Cleanup
