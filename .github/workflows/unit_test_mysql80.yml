@@ -23,6 +23,7 @@ jobs:
       run: |
         if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
           echo "skipping CI due to the 'Skip CI' label"
+          echo "dummy line to have something to push"
           exit 1
         fi
 
