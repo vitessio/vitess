@@ -39,6 +39,7 @@ var (
 		SourceTimeZone      string
 		NoRoutingRules      bool
 		AtomicCopy          bool
+		TenantId            string
 	}{}
 
 	// create makes a MoveTablesCreate gRPC call to a vtctld.

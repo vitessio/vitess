@@ -42856,8 +42856,8 @@ export namespace vschema {
         /** Keyspace foreign_key_mode */
         foreign_key_mode?: (vschema.Keyspace.ForeignKeyMode|null);
 
-        /** Keyspace multi_tenant */
-        multi_tenant?: (boolean|null);
+        /** Keyspace multi_tenant_spec */
+        multi_tenant_spec?: (vschema.IMultiTenantSpec|null);
     }
 
     /** Represents a Keyspace. */
@@ -42884,8 +42884,8 @@ export namespace vschema {
         /** Keyspace foreign_key_mode. */
         public foreign_key_mode: vschema.Keyspace.ForeignKeyMode;
 
-        /** Keyspace multi_tenant. */
-        public multi_tenant: boolean;
+        /** Keyspace multi_tenant_spec. */
+        public multi_tenant_spec?: (vschema.IMultiTenantSpec|null);
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -42974,6 +42974,109 @@ export namespace vschema {
             unmanaged = 2,
             managed = 3
         }
+    }
+
+    /** Properties of a MultiTenantSpec. */
+    interface IMultiTenantSpec {
+
+        /** MultiTenantSpec tenant_id_column_name */
+        tenant_id_column_name?: (string|null);
+
+        /** MultiTenantSpec tenant_id_column_type */
+        tenant_id_column_type?: (string|null);
+    }
+
+    /** Represents a MultiTenantSpec. */
+    class MultiTenantSpec implements IMultiTenantSpec {
+
+        /**
+         * Constructs a new MultiTenantSpec.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IMultiTenantSpec);
+
+        /** MultiTenantSpec tenant_id_column_name. */
+        public tenant_id_column_name: string;
+
+        /** MultiTenantSpec tenant_id_column_type. */
+        public tenant_id_column_type: string;
+
+        /**
+         * Creates a new MultiTenantSpec instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MultiTenantSpec instance
+         */
+        public static create(properties?: vschema.IMultiTenantSpec): vschema.MultiTenantSpec;
+
+        /**
+         * Encodes the specified MultiTenantSpec message. Does not implicitly {@link vschema.MultiTenantSpec.verify|verify} messages.
+         * @param message MultiTenantSpec message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IMultiTenantSpec, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MultiTenantSpec message, length delimited. Does not implicitly {@link vschema.MultiTenantSpec.verify|verify} messages.
+         * @param message MultiTenantSpec message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IMultiTenantSpec, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MultiTenantSpec message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MultiTenantSpec
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.MultiTenantSpec;
+
+        /**
+         * Decodes a MultiTenantSpec message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MultiTenantSpec
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.MultiTenantSpec;
+
+        /**
+         * Verifies a MultiTenantSpec message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MultiTenantSpec message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MultiTenantSpec
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.MultiTenantSpec;
+
+        /**
+         * Creates a plain object from a MultiTenantSpec message. Also converts values to other types if specified.
+         * @param message MultiTenantSpec
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.MultiTenantSpec, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MultiTenantSpec to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MultiTenantSpec
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
     /** Properties of a Vindex. */
@@ -59226,6 +59329,9 @@ export namespace vtctldata {
 
         /** MoveTablesCreateRequest atomic_copy */
         atomic_copy?: (boolean|null);
+
+        /** MoveTablesCreateRequest tenant_id */
+        tenant_id?: (string|null);
     }
 
     /** Represents a MoveTablesCreateRequest. */
@@ -59293,6 +59399,9 @@ export namespace vtctldata {
 
         /** MoveTablesCreateRequest atomic_copy. */
         public atomic_copy: boolean;
+
+        /** MoveTablesCreateRequest tenant_id. */
+        public tenant_id: string;
 
         /**
          * Creates a new MoveTablesCreateRequest instance using the specified properties.

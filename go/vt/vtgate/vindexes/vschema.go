@@ -229,23 +229,23 @@ func (col *Column) ToEvalengineType(collationEnv *collations.Environment) evalen
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
 type KeyspaceSchema struct {
-	Keyspace       *Keyspace
-	ForeignKeyMode vschemapb.Keyspace_ForeignKeyMode
-	Tables         map[string]*Table
-	Vindexes       map[string]Vindex
-	Views          map[string]sqlparser.SelectStatement
-	Error          error
-	MultiTenant    bool
+	Keyspace        *Keyspace
+	ForeignKeyMode  vschemapb.Keyspace_ForeignKeyMode
+	Tables          map[string]*Table
+	Vindexes        map[string]Vindex
+	Views           map[string]sqlparser.SelectStatement
+	Error           error
+	MultiTenantSpec *vschemapb.MultiTenantSpec
 }
 
 type ksJSON struct {
-	Sharded        bool              `json:"sharded,omitempty"`
-	ForeignKeyMode string            `json:"foreignKeyMode,omitempty"`
-	Tables         map[string]*Table `json:"tables,omitempty"`
-	Vindexes       map[string]Vindex `json:"vindexes,omitempty"`
-	Views          map[string]string `json:"views,omitempty"`
-	Error          string            `json:"error,omitempty"`
-	MultiTenant    bool              `json:"multiTenant,omitempty"`
+	Sharded         bool                       `json:"sharded,omitempty"`
+	ForeignKeyMode  string                     `json:"foreignKeyMode,omitempty"`
+	Tables          map[string]*Table          `json:"tables,omitempty"`
+	Vindexes        map[string]Vindex          `json:"vindexes,omitempty"`
+	Views           map[string]string          `json:"views,omitempty"`
+	Error           string                     `json:"error,omitempty"`
+	MultiTenantSpec *vschemapb.MultiTenantSpec `json:"multi_tenant_spec,omitempty"`
 }
 
 // findTable looks for the table with the requested tablename in the keyspace.
@@ -274,11 +274,11 @@ func (ks *KeyspaceSchema) findTable(
 // MarshalJSON returns a JSON representation of KeyspaceSchema.
 func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 	ksJ := ksJSON{
-		Sharded:        ks.Keyspace.Sharded,
-		Tables:         ks.Tables,
-		ForeignKeyMode: ks.ForeignKeyMode.String(),
-		MultiTenant:    ks.MultiTenant,
-		Vindexes:       ks.Vindexes,
+		Sharded:         ks.Keyspace.Sharded,
+		Tables:          ks.Tables,
+		ForeignKeyMode:  ks.ForeignKeyMode.String(),
+		MultiTenantSpec: ks.MultiTenantSpec,
+		Vindexes:        ks.Vindexes,
 	}
 	if ks.Error != nil {
 		ksJ.Error = ks.Error.Error()
@@ -365,10 +365,10 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlp
 				Name:    ksname,
 				Sharded: ks.Sharded,
 			},
-			ForeignKeyMode: replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
-			Tables:         make(map[string]*Table),
-			Vindexes:       make(map[string]Vindex),
-			MultiTenant:    ks.MultiTenant,
+			ForeignKeyMode:  replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
+			Tables:          make(map[string]*Table),
+			Vindexes:        make(map[string]Vindex),
+			MultiTenantSpec: ks.MultiTenantSpec,
 		}
 		vschema.Keyspaces[ksname] = ksvschema
 		ksvschema.Error = buildTables(ks, vschema, ksvschema, parser)

@@ -32,4 +32,13 @@
 
 Steps:
 1. Add multi-tenant mode to VSchema
-2. 
+
+"multi_tenant_spec": {
+"tenant_id_column_name": "tenant_id",
+"tenant_id_column_type": "int64"
+}
+,
+"multi_tenant_spec": {
+"tenant_id_column_name": "tenant_id",
+"tenant_id_column_type": "int64"
+}
