@@ -1581,7 +1581,11 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 		log.Errorf("%w", err2)
 		return nil, err
 	}
-	rs, err := s.buildResharder(ctx, keyspace, req.Workflow, req.SourceShards, req.TargetShards, strings.Join(cells, ","), "")
+	tabletTypesStr := topoproto.MakeStringTypeCSV(req.TabletTypes)
+	if req.TabletSelectionPreference == tabletmanagerdatapb.TabletSelectionPreference_INORDER {
+		tabletTypesStr = discovery.InOrderHint + tabletTypesStr
+	}
+	rs, err := s.buildResharder(ctx, keyspace, req.Workflow, req.SourceShards, req.TargetShards, strings.Join(cells, ","), tabletTypesStr)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "buildResharder")
 	}
@@ -1604,7 +1608,10 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 	} else {
 		log.Warningf("Streams will not be started since --auto-start is set to false")
 	}
-	return nil, nil
+	return s.WorkflowStatus(ctx, &vtctldatapb.WorkflowStatusRequest{
+		Keyspace: keyspace,
+		Workflow: req.Workflow,
+	})
 }
 
 // VDiffCreate is part of the vtctlservicepb.VtctldServer interface.
