@@ -42855,6 +42855,9 @@ export namespace vschema {
 
         /** Keyspace foreign_key_mode */
         foreign_key_mode?: (vschema.Keyspace.ForeignKeyMode|null);
+
+        /** Keyspace multi_tenant */
+        multi_tenant?: (boolean|null);
     }
 
     /** Represents a Keyspace. */
@@ -42880,6 +42883,9 @@ export namespace vschema {
 
         /** Keyspace foreign_key_mode. */
         public foreign_key_mode: vschema.Keyspace.ForeignKeyMode;
+
+        /** Keyspace multi_tenant. */
+        public multi_tenant: boolean;
 
         /**
          * Creates a new Keyspace instance using the specified properties.
