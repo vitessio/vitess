@@ -276,12 +276,12 @@ func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
 		g := graph.NewGraph[string]()
 		for _, table := range ks.Tables {
 			for _, cfk := range table.ChildForeignKeys {
-				childTable := cfk.Table
-
 				// Check for case 1.
 				if cfk.OnUpdate.IsRestrict() && cfk.OnDelete.IsRestrict() {
 					continue
 				}
+
+				childTable := cfk.Table
 				var parentVertices []string
 				var childVertices []string
 				for _, column := range cfk.ParentColumns {
@@ -302,8 +302,9 @@ func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
 				addCrossEdges(g, parentVertices, childVertices)
 			}
 		}
-		if g.HasCycles() {
-			ks.Error = vterrors.VT09019(ksName)
+		hasCycle, cycle := g.HasCycles()
+		if hasCycle {
+			ks.Error = vterrors.VT09019(ksName, cycle)
 		}
 	}
 }

@@ -566,7 +566,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 				_ = vschema.AddForeignKey("ks", "t1", createFkDefinition([]string{"manager_id"}, "t1", []string{"id"}, sqlparser.SetNull, sqlparser.Cascade))
 				return vschema
 			},
-			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys",
+			errWanted: "VT09019: keyspace 'ks' has cyclic foreign keys. Cycle exists between [ks.t1.id ks.t1.id]",
 		}, {
 			name: "Self-referencing foreign key without delete cascade",
 			getVschema: func() *vindexes.VSchema {
@@ -674,7 +674,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 			vschema := tt.getVschema()
 			markErrorIfCyclesInFk(vschema)
 			if tt.errWanted != "" {
-				require.EqualError(t, vschema.Keyspaces[ksName].Error, tt.errWanted)
+				require.ErrorContains(t, vschema.Keyspaces[ksName].Error, tt.errWanted)
 				return
 			}
 			require.NoError(t, vschema.Keyspaces[ksName].Error)

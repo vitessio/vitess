@@ -82,7 +82,8 @@ func TestIntegerGraph(t *testing.T) {
 			}
 			require.Equal(t, tt.wantedGraph, graph.PrintGraph())
 			require.Equal(t, tt.wantEmpty, graph.Empty())
-			require.Equal(t, tt.wantHasCycles, graph.HasCycles())
+			hasCycle, _ := graph.HasCycles()
+			require.Equal(t, tt.wantHasCycles, hasCycle)
 		})
 	}
 }
@@ -155,7 +156,8 @@ F - A`,
 			}
 			require.Equal(t, tt.wantedGraph, graph.PrintGraph())
 			require.Equal(t, tt.wantEmpty, graph.Empty())
-			require.Equal(t, tt.wantHasCycles, graph.HasCycles())
+			hasCycle, _ := graph.HasCycles()
+			require.Equal(t, tt.wantHasCycles, hasCycle)
 			if tt.wantCycles == nil {
 				tt.wantCycles = map[string][]string{}
 			}
