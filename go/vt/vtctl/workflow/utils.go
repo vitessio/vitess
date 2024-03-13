@@ -19,10 +19,12 @@ package workflow
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -120,12 +122,14 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias))
 					return
 				}
+				/* FIXME: for now we are not checking for frozen workflows. See if that causes any issues.
 				for _, stream := range wf.Streams {
 					if stream.Message == Frozen && wf.WorkflowSubType != binlogdatapb.VReplicationWorkflowSubType_Partial {
 						allErrors.RecordError(fmt.Errorf("found previous frozen workflow on tablet %v, please review and delete it first before creating a new workflow", primary.Alias))
 						return
 					}
 				}
+				*/
 			}
 		}(si)
 	}
@@ -337,6 +341,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		targets         = make(map[string]*MigrationTarget, len(targetShards))
 		workflowType    binlogdatapb.VReplicationWorkflowType
 		workflowSubType binlogdatapb.VReplicationWorkflowSubType
+		options         vtctldatapb.VReplicationWorkflowOptions
 	)
 
 	// We check all shards in the target keyspace. Not all of them may have a
@@ -375,6 +380,13 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		optTabletTypes = topoproto.MakeStringTypeCSV(wf.TabletTypes)
 		workflowType = wf.WorkflowType
 		workflowSubType = wf.WorkflowSubType
+		optionsJSON := wf.GetOptions()
+		if optionsJSON != "" {
+			if err := json.Unmarshal([]byte(optionsJSON), &options); err != nil {
+				log.Errorf("failed to unmarshal options: %v %s", err, optionsJSON)
+				return nil, err
+			}
+		}
 
 		for _, stream := range wf.Streams {
 			if stream.Message == Frozen {
@@ -764,4 +776,59 @@ func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.Table
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
 	}, nil
+}
+
+func addFilter(sel *sqlparser.Select, filter sqlparser.Expr) {
+	if sel.Where != nil {
+		sel.Where = &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+			Expr: &sqlparser.AndExpr{
+				Left:  filter,
+				Right: sel.Where.Expr,
+			},
+		}
+	} else {
+		sel.Where = &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+			Expr: filter,
+		}
+	}
+}
+
+func (mz *materializer) getTenantClause(parser *sqlparser.Parser) (*sqlparser.Expr, error) {
+	if mz.ms.VReplicationWorkflowOptions.TenantId == "" {
+		return nil, nil
+	}
+	if mz.targetVSchema == nil || mz.targetVSchema.MultiTenantSpec == nil {
+		return nil, fmt.Errorf("target keyspace not defined, or it does not have multi-tenant spec")
+	}
+	tenantColumnName := mz.targetVSchema.MultiTenantSpec.TenantIdColumnName
+	tenantColumnType := mz.targetVSchema.MultiTenantSpec.TenantIdColumnType
+	if tenantColumnName == "" {
+		return nil, fmt.Errorf("tenant column name not defined in multi-tenant spec")
+	}
+
+	var tenantId string
+	switch tenantColumnType {
+	case "int", "int64":
+		_, err := strconv.Atoi(mz.ms.VReplicationWorkflowOptions.TenantId)
+		if err != nil {
+			return nil, fmt.Errorf("tenant id is not a valid int: %s", mz.ms.VReplicationWorkflowOptions.TenantId)
+		}
+		tenantId = mz.ms.VReplicationWorkflowOptions.TenantId
+	case "string":
+		tenantId = fmt.Sprintf("'%s'", mz.ms.VReplicationWorkflowOptions.TenantId)
+	default:
+		return nil, fmt.Errorf("unsupported tenant column type: %s", tenantColumnType)
+	}
+
+	stmt, err := parser.Parse(fmt.Sprintf("select * from t where %s = %s", tenantColumnName, tenantId))
+	if err != nil {
+		return nil, err
+	}
+	sel, ok := stmt.(*sqlparser.Select)
+	if !ok {
+		return nil, fmt.Errorf("error getting select: %s", tenantId)
+	}
+	return &sel.Where.Expr, nil
 }
