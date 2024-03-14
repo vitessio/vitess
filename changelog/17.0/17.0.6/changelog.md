@@ -40,8 +40,6 @@
 #### Throttler
  * [release-17.0] Enable 'heartbeat_on_demand_duration' in local/examples (#15204) [#15290](https://github.com/vitessio/vitess/pull/15290)
 ### Release 
-#### General
- * [release-17.0] Code Freeze for `v17.0.6` [#15478](https://github.com/vitessio/vitess/pull/15478)
 ### Testing 
 #### Build/CI
  * [release-17.0] Bump upgrade tests to `go1.21.7` [#15160](https://github.com/vitessio/vitess/pull/15160)
