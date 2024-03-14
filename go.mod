@@ -21,7 +21,7 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/golang/glog v1.1.2
-	github.com/golang/protobuf v1.5.3
+	github.com/golang/protobuf v1.5.4
 	github.com/golang/snappy v0.0.4
 	github.com/google/go-cmp v0.5.9
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
@@ -87,7 +87,7 @@ require (
 	google.golang.org/grpc v1.59.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.2.0
 	google.golang.org/grpc/examples v0.0.0-20210430044426-28078834f35b
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.33.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.47.0
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/gcfg.v1 v1.2.3
