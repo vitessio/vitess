@@ -786,10 +786,8 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 		}
 	})
 	t.Run("waiting for vschema deletions to apply", func(t *testing.T) {
-		timeoutCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
-		defer cancel()
 		for _, tableName := range tableNames {
-			utils.WaitForTableDeletions(timeoutCtx, t, clusterInstance.VtgateProcess, keyspaceName, tableName)
+			utils.WaitForTableDeletions(t, clusterInstance.VtgateProcess, keyspaceName, tableName)
 		}
 	})
 	t.Run("creating tables", func(t *testing.T) {
