@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -122,7 +121,7 @@ func parseEnumOrSetTokens(enumOrSetValues string) (tokens []string) {
 		// input should not contain `enum(...)` column definition, just the comma delimited list
 		return tokens
 	}
-	tokens = textutil.SplitDelimitedList(enumOrSetValues)
+	tokens = strings.Split(enumOrSetValues, ",")
 	for i := range tokens {
 		if strings.HasPrefix(tokens[i], `'`) && strings.HasSuffix(tokens[i], `'`) {
 			tokens[i] = strings.Trim(tokens[i], `'`)

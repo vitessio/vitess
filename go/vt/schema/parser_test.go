@@ -89,6 +89,19 @@ func TestParseEnumValues(t *testing.T) {
 			assert.Equal(t, input, enumValues)
 		}
 	}
+
+	{
+		inputs := []string{
+			``,
+			`abc`,
+			`func('x small','small','medium','large','x large')`,
+			`set('x small','small','medium','large','x large')`,
+		}
+		for _, input := range inputs {
+			enumValues := ParseEnumValues(input)
+			assert.Equal(t, input, enumValues)
+		}
+	}
 }
 
 func TestParseSetValues(t *testing.T) {
@@ -123,6 +136,12 @@ func TestParseEnumTokens(t *testing.T) {
 		input := `'x-small','small','medium','large','x-large'`
 		enumTokens := parseEnumOrSetTokens(input)
 		expect := []string{"x-small", "small", "medium", "large", "x-large"}
+		assert.Equal(t, expect, enumTokens)
+	}
+	{
+		input := `'x small','small','medium','large','x large'`
+		enumTokens := parseEnumOrSetTokens(input)
+		expect := []string{"x small", "small", "medium", "large", "x large"}
 		assert.Equal(t, expect, enumTokens)
 	}
 	{
