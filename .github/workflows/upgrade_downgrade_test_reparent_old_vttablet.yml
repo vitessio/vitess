@@ -13,7 +13,6 @@ permissions: read-all
 # (vtctl, vttablet, etc) built on different versions.
 
 jobs:
-
   upgrade_downgrade_test:
     name: Run Upgrade Downgrade Test - Reparent Old VTTablet
     runs-on: gh-hosted-runners-16cores-1
@@ -30,7 +29,7 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+        if [[ "${{github.event.pull_request}}" ==  "" ]]; then
           skip='true'
         fi
         echo Skip ${skip}
@@ -46,7 +45,7 @@ jobs:
       id: output-previous-release-ref
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
-        previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
+        previous_release_ref=$(./tools/get_previous_release_shopify.sh ${{github.base_ref}} ${{github.ref}})
         echo $previous_release_ref
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 

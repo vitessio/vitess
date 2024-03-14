@@ -10,7 +10,6 @@ concurrency:
 permissions: read-all
 
 jobs:
-
   # This job usually execute in ± 20 minutes
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
@@ -34,7 +33,7 @@ jobs:
     - name: Set output with latest release branch
       id: output-next-release-ref
       run: |
-        next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
+        next_release_ref=$(./tools/get_next_release_shopify.sh)
         echo $next_release_ref
         echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
@@ -42,7 +41,7 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+        if [[ "${{github.event.pull_request}}" ==  "" ]]; then
           skip='true'
         fi
         if [[ "${{steps.output-next-release-ref.outputs.next_release_ref}}" == "" ]]; then
