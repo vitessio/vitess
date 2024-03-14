@@ -1210,3 +1210,20 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 	}
 	return ExecDBWriteFunc(writeFunc)
 }
+
+// SnapshotDatabaseState takes the snapshot of the database and returns it.
+func SnapshotDatabaseState() (string, error) {
+	var finalOutput string
+	for _, tableName := range db.TableNames {
+		finalOutput += "Table " + tableName + "\n"
+		err := db.QueryVTOrc("select * from "+tableName, nil, func(rowMap sqlutils.RowMap) error {
+			finalOutput += fmt.Sprintf("%v\n", rowMap)
+			return nil
+		})
+		if err != nil {
+			return "", err
+		}
+		finalOutput += "\n"
+	}
+	return finalOutput, nil
+}
