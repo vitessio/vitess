@@ -166,6 +166,11 @@ func TestExecutePanic(t *testing.T) {
 		Autocommit: false,
 	}
 
+	original := log.Errorf
+	defer func() {
+		log.Errorf = original
+	}()
+
 	var logMessage string
 	log.Errorf = func(format string, args ...any) {
 		logMessage = fmt.Sprintf(format, args...)
