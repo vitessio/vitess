@@ -17,7 +17,10 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"testing"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -163,10 +166,16 @@ func TestExecutePanic(t *testing.T) {
 		Autocommit: false,
 	}
 
+	var logMessage string
+	log.Errorf = func(format string, args ...any) {
+		logMessage = fmt.Sprintf(format, args...)
+	}
+
 	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("The code did not panic")
-		}
+		r := recover()
+		require.NotNil(t, r, "The code did not panic")
+		// assert we are seeing the stack trace
+		require.Contains(t, logMessage, "(*ScatterConn).multiGoTransaction")
 	}()
 
 	_, _ = sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(session), true /*autocommit*/, false)

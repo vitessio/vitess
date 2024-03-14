@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"io"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -660,8 +661,12 @@ func (stc *ScatterConn) multiGoTransaction(
 			oneShard(rs, i)
 		}
 	} else {
+		type panicData struct {
+			p     any
+			trace []byte
+		}
 		var wg sync.WaitGroup
-		panicChan := make(chan any, 1) // buffer 1 to avoid blocking
+		panicChan := make(chan panicData, 1) // buffer 1 to avoid blocking
 
 		for i, rs := range rss {
 			wg.Add(1)
@@ -670,7 +675,10 @@ func (stc *ScatterConn) multiGoTransaction(
 				defer func() {
 					if r := recover(); r != nil {
 						select {
-						case panicChan <- r:
+						case panicChan <- panicData{
+							p:     r,
+							trace: debug.Stack(),
+						}:
 						default: // in case multiple goroutines panic, we only catch the first
 						}
 					}
@@ -683,6 +691,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		close(panicChan) // Close channel after all goroutines are done
 
 		if r, ok := <-panicChan; ok {
+			log.Errorf("caught an panic during parallel execution:\n%s", string(r.trace))
 			panic(r) // rethrow the captured panic in the main thread
 		}
 	}
