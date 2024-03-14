@@ -78,7 +78,15 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 		if !ok {
 			return logFile, logPos, position, readPacketErr
 		}
-		if gtid := string(data[pos : pos+int(dataSize)]); gtid != "" {
+
+		// NOTE: In testing a replication connection with a MySQL 8.0 replica, the replica sends back an 8 byte
+		//       GTID will all zero valued bytes, but Vitess was unable to parse it, so we added the nilGtid
+		//       check below. We may be able to remove this check if we find the primary is not sending back
+		//       some missing metadata, but documentation seems to indicate that the replica is allowed to send
+		//       an empty GTID set when no GTID was specified in the start replica statement. Looking through
+		//       MySQL primary <-> MySQL replica wire logs could help prove this out.
+		gtidBytes := data[pos : pos+int(dataSize)]
+		if gtid := string(gtidBytes); gtid != "" && !isNilGtid(gtidBytes) {
 			position, err = DecodePosition(gtid)
 			if err != nil {
 				return logFile, logPos, position, err
@@ -87,4 +95,15 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 	}
 
 	return logFile, logPos, position, nil
+}
+
+// isNilGtid returns true if the specified |bytes| that represent a serialized GTID are all zero valued,
+// otherwise returns false.
+func isNilGtid(bytes []byte) bool {
+	for _, b := range bytes {
+		if uint(b) != 0 {
+			return false
+		}
+	}
+	return true
 }
