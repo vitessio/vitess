@@ -6,7 +6,6 @@
   - [Schema-initialization stuck on semi-sync ACKs while upgrading to v17.0.0](#schema-init-upgrade)
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
-    - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
     - [Default Local Cell Preference for TabletPicker](#tablet-picker-cell-preference)
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
     - [VTAdmin web migrated from create-react-app to vite](#migrated-vtadmin)
