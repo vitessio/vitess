@@ -2674,7 +2674,7 @@ func (ct *ColumnType) merge(other ColumnType) error {
 
 	if other.KeyOpt != colKeyNone {
 		keyOptions := []ColumnKeyOption{ct.KeyOpt, other.KeyOpt}
-		sort.Slice(keyOptions, func(i, j int) bool {return keyOptions[i] < keyOptions[j]})
+		sort.Slice(keyOptions, func(i, j int) bool { return keyOptions[i] < keyOptions[j] })
 		if other.KeyOpt == ct.KeyOpt {
 			// MySQL will deduplicate key options when they are repeated.
 		} else if keyOptions[0] == colKeyPrimary && (keyOptions[1] == colKeyUnique || keyOptions[1] == colKeyUniqueKey) {
@@ -4789,7 +4789,7 @@ func (*ConvertExpr) iExpr()       {}
 func (*SubstrExpr) iExpr()        {}
 func (*TrimExpr) iExpr()          {}
 func (*ConvertUsingExpr) iExpr()  {}
-func (*CharExpr) iExpr()  {}
+func (*CharExpr) iExpr()          {}
 func (*MatchExpr) iExpr()         {}
 func (*GroupConcatExpr) iExpr()   {}
 func (*Default) iExpr()           {}
@@ -6893,6 +6893,15 @@ func (node *TableFuncExpr) UnmarshalJSON(b []byte) error {
 	}
 	node.Name = result
 	return nil
+}
+
+func (node *TableFuncExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Exprs)
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
