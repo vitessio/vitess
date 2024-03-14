@@ -1031,6 +1031,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vreplication_multitenant": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "MultiTenant"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_multi_tenant",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vreplication_partial_movetables_basic": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTablesBasic"],
