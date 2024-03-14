@@ -99,7 +99,8 @@ func (rs *resultStreamer) Stream() error {
 
 	response := &binlogdatapb.VStreamResultsResponse{}
 	byteCount := 0
-	logger := logutil.NewThrottledLogger(rs.vse.GetTabletInfo(), throttledLoggerInterval)
+	loggerName := fmt.Sprintf("%s (%v)", rs.vse.GetTabletInfo(), rs.tableName)
+	logger := logutil.NewThrottledLogger(loggerName, throttledLoggerInterval)
 	for {
 		select {
 		case <-rs.ctx.Done():
