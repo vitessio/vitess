@@ -314,6 +314,22 @@ message AddCellsAliasRequest {
 message AddCellsAliasResponse {
 }
 
+
+message ApplyKeyspaceRoutingRulesRequest {
+  vschema.KeyspaceRoutingRules keyspace_routing_rules = 1;
+  // SkipRebuild, if set, will cause ApplyKeyspaceRoutingRules to skip rebuilding the
+  // SrvVSchema objects in each cell in RebuildCells.
+  bool skip_rebuild = 2;
+  // RebuildCells limits the SrvVSchema rebuild to the specified cells. If not
+  // provided the SrvVSchema will be rebuilt in every cell in the topology.
+  //
+  // Ignored if SkipRebuild is set.
+  repeated string rebuild_cells = 3;
+}
+
+message ApplyKeyspaceRoutingRulesResponse {
+}
+
 message ApplyRoutingRulesRequest {
   vschema.RoutingRules routing_rules = 1;
   // SkipRebuild, if set, will cause ApplyRoutingRules to skip rebuilding the
@@ -343,6 +359,8 @@ message ApplyShardRoutingRulesRequest {
 
 message ApplyShardRoutingRulesResponse {
 }
+
+
 
 message ApplySchemaRequest {
   string keyspace = 1;
@@ -813,6 +831,13 @@ message GetPermissionsRequest {
 
 message GetPermissionsResponse {
   tabletmanagerdata.Permissions permissions = 1;
+}
+
+message GetKeyspaceRoutingRulesRequest {
+}
+
+message GetKeyspaceRoutingRulesResponse {
+  vschema.KeyspaceRoutingRules keyspace_routing_rules = 1;
 }
 
 message GetRoutingRulesRequest {

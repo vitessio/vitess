@@ -7,8 +7,6 @@
 * Options column
   * Set options from CLI. 
     * Set keyspace routing rules option if target has multi-tenant mode. 
-    * Also set a multi-tenant mode option. 
-    * Additional-filter
 
 ## VSchema
 

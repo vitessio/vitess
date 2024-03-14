@@ -152,6 +152,7 @@ message SrvVSchema {
   map<string, Keyspace> keyspaces = 1;
   RoutingRules routing_rules = 2; // table routing rules
   ShardRoutingRules shard_routing_rules = 3;
+  KeyspaceRoutingRules keyspace_routing_rules = 4;
 }
 
 // ShardRoutingRules specify the shard routing rules for the VSchema.
@@ -159,9 +160,19 @@ message ShardRoutingRules {
   repeated ShardRoutingRule rules = 1;
 }
 
-// RoutingRule specifies a routing rule.
+// ShardRoutingRule specifies a routing rule.
 message ShardRoutingRule {
   string from_keyspace = 1;
   string to_keyspace = 2;
   string shard = 3;
 }
+
+message KeyspaceRoutingRules {
+  repeated KeyspaceRoutingRule rules = 1;
+}
+
+message KeyspaceRoutingRule {
+  string from_keyspace = 1;
+  string to_keyspace = 2;
+}
+

@@ -122,3 +122,40 @@ func SaveShardRoutingRules(ctx context.Context, ts *topo.Server, srr map[string]
 
 	return ts.SaveShardRoutingRules(ctx, srs)
 }
+
+// endregion
+
+// region keyspace routing rules
+
+func GetKeyspaceRoutingRulesMap(rules *vschemapb.KeyspaceRoutingRules) map[string]string {
+	if rules == nil {
+		return nil
+	}
+	rulesMap := make(map[string]string, len(rules.Rules))
+	for _, rr := range rules.Rules {
+		rulesMap[rr.FromKeyspace] = rr.ToKeyspace
+	}
+	return rulesMap
+}
+
+func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (map[string]string, error) {
+	rrs, err := ts.GetKeyspaceRoutingRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rules := GetKeyspaceRoutingRulesMap(rrs)
+	return rules, nil
+}
+
+func SaveKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, rules map[string]string) error {
+	ks_rr := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(rules))}
+	for from, to := range rules {
+		ks_rr.Rules = append(ks_rr.Rules, &vschemapb.KeyspaceRoutingRule{
+			FromKeyspace: from,
+			ToKeyspace:   to,
+		})
+	}
+	return ts.SaveKeyspaceRoutingRules(ctx, ks_rr)
+}
+
+//endregion
