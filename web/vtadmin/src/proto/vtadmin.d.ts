@@ -43704,6 +43704,9 @@ export namespace vschema {
 
         /** SrvVSchema shard_routing_rules */
         shard_routing_rules?: (vschema.IShardRoutingRules|null);
+
+        /** SrvVSchema keyspace_routing_rules */
+        keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
     }
 
     /** Represents a SrvVSchema. */
@@ -43723,6 +43726,9 @@ export namespace vschema {
 
         /** SrvVSchema shard_routing_rules. */
         public shard_routing_rules?: (vschema.IShardRoutingRules|null);
+
+        /** SrvVSchema keyspace_routing_rules. */
+        public keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
 
         /**
          * Creates a new SrvVSchema instance using the specified properties.
@@ -44002,6 +44008,206 @@ export namespace vschema {
 
         /**
          * Gets the default type url for ShardRoutingRule
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a KeyspaceRoutingRules. */
+    interface IKeyspaceRoutingRules {
+
+        /** KeyspaceRoutingRules rules */
+        rules?: (vschema.IKeyspaceRoutingRule[]|null);
+    }
+
+    /** Represents a KeyspaceRoutingRules. */
+    class KeyspaceRoutingRules implements IKeyspaceRoutingRules {
+
+        /**
+         * Constructs a new KeyspaceRoutingRules.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IKeyspaceRoutingRules);
+
+        /** KeyspaceRoutingRules rules. */
+        public rules: vschema.IKeyspaceRoutingRule[];
+
+        /**
+         * Creates a new KeyspaceRoutingRules instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns KeyspaceRoutingRules instance
+         */
+        public static create(properties?: vschema.IKeyspaceRoutingRules): vschema.KeyspaceRoutingRules;
+
+        /**
+         * Encodes the specified KeyspaceRoutingRules message. Does not implicitly {@link vschema.KeyspaceRoutingRules.verify|verify} messages.
+         * @param message KeyspaceRoutingRules message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IKeyspaceRoutingRules, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified KeyspaceRoutingRules message, length delimited. Does not implicitly {@link vschema.KeyspaceRoutingRules.verify|verify} messages.
+         * @param message KeyspaceRoutingRules message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IKeyspaceRoutingRules, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a KeyspaceRoutingRules message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns KeyspaceRoutingRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.KeyspaceRoutingRules;
+
+        /**
+         * Decodes a KeyspaceRoutingRules message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns KeyspaceRoutingRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.KeyspaceRoutingRules;
+
+        /**
+         * Verifies a KeyspaceRoutingRules message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a KeyspaceRoutingRules message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns KeyspaceRoutingRules
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.KeyspaceRoutingRules;
+
+        /**
+         * Creates a plain object from a KeyspaceRoutingRules message. Also converts values to other types if specified.
+         * @param message KeyspaceRoutingRules
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.KeyspaceRoutingRules, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this KeyspaceRoutingRules to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for KeyspaceRoutingRules
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a KeyspaceRoutingRule. */
+    interface IKeyspaceRoutingRule {
+
+        /** KeyspaceRoutingRule from_keyspace */
+        from_keyspace?: (string|null);
+
+        /** KeyspaceRoutingRule to_keyspace */
+        to_keyspace?: (string|null);
+    }
+
+    /** Represents a KeyspaceRoutingRule. */
+    class KeyspaceRoutingRule implements IKeyspaceRoutingRule {
+
+        /**
+         * Constructs a new KeyspaceRoutingRule.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IKeyspaceRoutingRule);
+
+        /** KeyspaceRoutingRule from_keyspace. */
+        public from_keyspace: string;
+
+        /** KeyspaceRoutingRule to_keyspace. */
+        public to_keyspace: string;
+
+        /**
+         * Creates a new KeyspaceRoutingRule instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns KeyspaceRoutingRule instance
+         */
+        public static create(properties?: vschema.IKeyspaceRoutingRule): vschema.KeyspaceRoutingRule;
+
+        /**
+         * Encodes the specified KeyspaceRoutingRule message. Does not implicitly {@link vschema.KeyspaceRoutingRule.verify|verify} messages.
+         * @param message KeyspaceRoutingRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IKeyspaceRoutingRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified KeyspaceRoutingRule message, length delimited. Does not implicitly {@link vschema.KeyspaceRoutingRule.verify|verify} messages.
+         * @param message KeyspaceRoutingRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IKeyspaceRoutingRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a KeyspaceRoutingRule message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns KeyspaceRoutingRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.KeyspaceRoutingRule;
+
+        /**
+         * Decodes a KeyspaceRoutingRule message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns KeyspaceRoutingRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.KeyspaceRoutingRule;
+
+        /**
+         * Verifies a KeyspaceRoutingRule message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a KeyspaceRoutingRule message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns KeyspaceRoutingRule
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.KeyspaceRoutingRule;
+
+        /**
+         * Creates a plain object from a KeyspaceRoutingRule message. Also converts values to other types if specified.
+         * @param message KeyspaceRoutingRule
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.KeyspaceRoutingRule, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this KeyspaceRoutingRule to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for KeyspaceRoutingRule
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -46596,6 +46802,206 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for AddCellsAliasResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ApplyKeyspaceRoutingRulesRequest. */
+    interface IApplyKeyspaceRoutingRulesRequest {
+
+        /** ApplyKeyspaceRoutingRulesRequest keyspace_routing_rules */
+        keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
+
+        /** ApplyKeyspaceRoutingRulesRequest skip_rebuild */
+        skip_rebuild?: (boolean|null);
+
+        /** ApplyKeyspaceRoutingRulesRequest rebuild_cells */
+        rebuild_cells?: (string[]|null);
+    }
+
+    /** Represents an ApplyKeyspaceRoutingRulesRequest. */
+    class ApplyKeyspaceRoutingRulesRequest implements IApplyKeyspaceRoutingRulesRequest {
+
+        /**
+         * Constructs a new ApplyKeyspaceRoutingRulesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IApplyKeyspaceRoutingRulesRequest);
+
+        /** ApplyKeyspaceRoutingRulesRequest keyspace_routing_rules. */
+        public keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
+
+        /** ApplyKeyspaceRoutingRulesRequest skip_rebuild. */
+        public skip_rebuild: boolean;
+
+        /** ApplyKeyspaceRoutingRulesRequest rebuild_cells. */
+        public rebuild_cells: string[];
+
+        /**
+         * Creates a new ApplyKeyspaceRoutingRulesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyKeyspaceRoutingRulesRequest instance
+         */
+        public static create(properties?: vtctldata.IApplyKeyspaceRoutingRulesRequest): vtctldata.ApplyKeyspaceRoutingRulesRequest;
+
+        /**
+         * Encodes the specified ApplyKeyspaceRoutingRulesRequest message. Does not implicitly {@link vtctldata.ApplyKeyspaceRoutingRulesRequest.verify|verify} messages.
+         * @param message ApplyKeyspaceRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IApplyKeyspaceRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyKeyspaceRoutingRulesRequest message, length delimited. Does not implicitly {@link vtctldata.ApplyKeyspaceRoutingRulesRequest.verify|verify} messages.
+         * @param message ApplyKeyspaceRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IApplyKeyspaceRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyKeyspaceRoutingRulesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyKeyspaceRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplyKeyspaceRoutingRulesRequest;
+
+        /**
+         * Decodes an ApplyKeyspaceRoutingRulesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyKeyspaceRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplyKeyspaceRoutingRulesRequest;
+
+        /**
+         * Verifies an ApplyKeyspaceRoutingRulesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyKeyspaceRoutingRulesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyKeyspaceRoutingRulesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ApplyKeyspaceRoutingRulesRequest;
+
+        /**
+         * Creates a plain object from an ApplyKeyspaceRoutingRulesRequest message. Also converts values to other types if specified.
+         * @param message ApplyKeyspaceRoutingRulesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ApplyKeyspaceRoutingRulesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyKeyspaceRoutingRulesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyKeyspaceRoutingRulesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ApplyKeyspaceRoutingRulesResponse. */
+    interface IApplyKeyspaceRoutingRulesResponse {
+    }
+
+    /** Represents an ApplyKeyspaceRoutingRulesResponse. */
+    class ApplyKeyspaceRoutingRulesResponse implements IApplyKeyspaceRoutingRulesResponse {
+
+        /**
+         * Constructs a new ApplyKeyspaceRoutingRulesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IApplyKeyspaceRoutingRulesResponse);
+
+        /**
+         * Creates a new ApplyKeyspaceRoutingRulesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyKeyspaceRoutingRulesResponse instance
+         */
+        public static create(properties?: vtctldata.IApplyKeyspaceRoutingRulesResponse): vtctldata.ApplyKeyspaceRoutingRulesResponse;
+
+        /**
+         * Encodes the specified ApplyKeyspaceRoutingRulesResponse message. Does not implicitly {@link vtctldata.ApplyKeyspaceRoutingRulesResponse.verify|verify} messages.
+         * @param message ApplyKeyspaceRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IApplyKeyspaceRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyKeyspaceRoutingRulesResponse message, length delimited. Does not implicitly {@link vtctldata.ApplyKeyspaceRoutingRulesResponse.verify|verify} messages.
+         * @param message ApplyKeyspaceRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IApplyKeyspaceRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyKeyspaceRoutingRulesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyKeyspaceRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplyKeyspaceRoutingRulesResponse;
+
+        /**
+         * Decodes an ApplyKeyspaceRoutingRulesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyKeyspaceRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplyKeyspaceRoutingRulesResponse;
+
+        /**
+         * Verifies an ApplyKeyspaceRoutingRulesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyKeyspaceRoutingRulesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyKeyspaceRoutingRulesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ApplyKeyspaceRoutingRulesResponse;
+
+        /**
+         * Creates a plain object from an ApplyKeyspaceRoutingRulesResponse message. Also converts values to other types if specified.
+         * @param message ApplyKeyspaceRoutingRulesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ApplyKeyspaceRoutingRulesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyKeyspaceRoutingRulesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyKeyspaceRoutingRulesResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -53433,6 +53839,194 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for GetPermissionsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetKeyspaceRoutingRulesRequest. */
+    interface IGetKeyspaceRoutingRulesRequest {
+    }
+
+    /** Represents a GetKeyspaceRoutingRulesRequest. */
+    class GetKeyspaceRoutingRulesRequest implements IGetKeyspaceRoutingRulesRequest {
+
+        /**
+         * Constructs a new GetKeyspaceRoutingRulesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetKeyspaceRoutingRulesRequest);
+
+        /**
+         * Creates a new GetKeyspaceRoutingRulesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetKeyspaceRoutingRulesRequest instance
+         */
+        public static create(properties?: vtctldata.IGetKeyspaceRoutingRulesRequest): vtctldata.GetKeyspaceRoutingRulesRequest;
+
+        /**
+         * Encodes the specified GetKeyspaceRoutingRulesRequest message. Does not implicitly {@link vtctldata.GetKeyspaceRoutingRulesRequest.verify|verify} messages.
+         * @param message GetKeyspaceRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetKeyspaceRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetKeyspaceRoutingRulesRequest message, length delimited. Does not implicitly {@link vtctldata.GetKeyspaceRoutingRulesRequest.verify|verify} messages.
+         * @param message GetKeyspaceRoutingRulesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetKeyspaceRoutingRulesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetKeyspaceRoutingRulesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetKeyspaceRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetKeyspaceRoutingRulesRequest;
+
+        /**
+         * Decodes a GetKeyspaceRoutingRulesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetKeyspaceRoutingRulesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetKeyspaceRoutingRulesRequest;
+
+        /**
+         * Verifies a GetKeyspaceRoutingRulesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetKeyspaceRoutingRulesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetKeyspaceRoutingRulesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetKeyspaceRoutingRulesRequest;
+
+        /**
+         * Creates a plain object from a GetKeyspaceRoutingRulesRequest message. Also converts values to other types if specified.
+         * @param message GetKeyspaceRoutingRulesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetKeyspaceRoutingRulesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetKeyspaceRoutingRulesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetKeyspaceRoutingRulesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetKeyspaceRoutingRulesResponse. */
+    interface IGetKeyspaceRoutingRulesResponse {
+
+        /** GetKeyspaceRoutingRulesResponse keyspace_routing_rules */
+        keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
+    }
+
+    /** Represents a GetKeyspaceRoutingRulesResponse. */
+    class GetKeyspaceRoutingRulesResponse implements IGetKeyspaceRoutingRulesResponse {
+
+        /**
+         * Constructs a new GetKeyspaceRoutingRulesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetKeyspaceRoutingRulesResponse);
+
+        /** GetKeyspaceRoutingRulesResponse keyspace_routing_rules. */
+        public keyspace_routing_rules?: (vschema.IKeyspaceRoutingRules|null);
+
+        /**
+         * Creates a new GetKeyspaceRoutingRulesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetKeyspaceRoutingRulesResponse instance
+         */
+        public static create(properties?: vtctldata.IGetKeyspaceRoutingRulesResponse): vtctldata.GetKeyspaceRoutingRulesResponse;
+
+        /**
+         * Encodes the specified GetKeyspaceRoutingRulesResponse message. Does not implicitly {@link vtctldata.GetKeyspaceRoutingRulesResponse.verify|verify} messages.
+         * @param message GetKeyspaceRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetKeyspaceRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetKeyspaceRoutingRulesResponse message, length delimited. Does not implicitly {@link vtctldata.GetKeyspaceRoutingRulesResponse.verify|verify} messages.
+         * @param message GetKeyspaceRoutingRulesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetKeyspaceRoutingRulesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetKeyspaceRoutingRulesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetKeyspaceRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetKeyspaceRoutingRulesResponse;
+
+        /**
+         * Decodes a GetKeyspaceRoutingRulesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetKeyspaceRoutingRulesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetKeyspaceRoutingRulesResponse;
+
+        /**
+         * Verifies a GetKeyspaceRoutingRulesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetKeyspaceRoutingRulesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetKeyspaceRoutingRulesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetKeyspaceRoutingRulesResponse;
+
+        /**
+         * Creates a plain object from a GetKeyspaceRoutingRulesResponse message. Also converts values to other types if specified.
+         * @param message GetKeyspaceRoutingRulesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetKeyspaceRoutingRulesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetKeyspaceRoutingRulesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetKeyspaceRoutingRulesResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
