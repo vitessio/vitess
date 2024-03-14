@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
@@ -370,4 +371,57 @@ func TestAliasesInOuterJoinQueries(t *testing.T) {
 
 	mcmp.AssertMatches("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2", `[[INT64(1) INT64(1) INT64(42)] [INT64(42) INT64(42) NULL]]`)
 	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2")
+}
+
+func TestAlterTableWithView(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Test that create/alter view works and the output is as expected
+	mcmp.Exec(`use ks_misc`)
+	mcmp.Exec(`create view v1 as select * from t1`)
+	var viewDef string
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, keyspaceName, func(t *testing.T, ksMap map[string]any) bool {
+		views, ok := ksMap["views"]
+		if !ok {
+			return false
+		}
+		viewsMap := views.(map[string]any)
+		view, ok := viewsMap["v1"]
+		if ok {
+			viewDef = view.(string)
+		}
+		return ok
+	}, "Waiting for view creation")
+	mcmp.Exec(`insert into t1(id1, id2) values (1, 1)`)
+	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1)]]`)
+
+	// alter table add column
+	mcmp.Exec(`alter table t1 add column test bigint`)
+	time.Sleep(10 * time.Second)
+	mcmp.Exec(`alter view v1 as select * from t1`)
+
+	waitForChange := func(t *testing.T, ksMap map[string]any) bool {
+		// wait for the view definition to change
+		views := ksMap["views"]
+		viewsMap := views.(map[string]any)
+		newView := viewsMap["v1"]
+		if newView.(string) == viewDef {
+			return false
+		}
+		viewDef = newView.(string)
+		return true
+	}
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, keyspaceName, waitForChange, "Waiting for alter view")
+
+	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1) NULL]]`)
+
+	// alter table remove column
+	mcmp.Exec(`alter table t1 drop column test`)
+	mcmp.Exec(`alter view v1 as select * from t1`)
+
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, keyspaceName, waitForChange, "Waiting for alter view")
+
+	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1)]]`)
 }
