@@ -40,11 +40,11 @@ type mysqlVersions []mysqlVersion
 
 var (
 	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
-	allMySQLVersions     = []mysqlVersion{mysql57, mysql80}
+	allMySQLVersions     = []mysqlVersion{mysql80}
 )
 
 var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb103}
+	unitTestDatabases = []mysqlVersion{mysql80}
 )
 
 const (

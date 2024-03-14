@@ -142,17 +142,9 @@ mariadb103)
 esac
 
 # Get GPG keys for extra apt repositories.
-case "${FLAVOR}" in
-mysql57|mysql80)
-    # repo.mysql.com
-    add_apt_key 8C718D3B5072E1F5
-    add_apt_key 467B942D3A79BD29
-    ;;
-mariadb|mariadb103)
-    # digitalocean.com
-    add_apt_key F1656F24C74CD1D8
-    ;;
-esac
+# repo.mysql.com
+add_apt_key 8C718D3B5072E1F5
+add_apt_key A8D3785C
 
 # All flavors (except mariadb*) include Percona XtraBackup (from repo.percona.com).
 add_apt_key 9334A25F8507EFA5
