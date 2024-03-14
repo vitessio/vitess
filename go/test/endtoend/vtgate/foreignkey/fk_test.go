@@ -1078,12 +1078,11 @@ func TestCyclicFks(t *testing.T) {
 	// Drop the cyclic foreign key constraint.
 	utils.Exec(t, mcmp.VtConn, "alter table fk_t10 drop foreign key test_cyclic_fks")
 
-	// Wait for schema-tracking to be complete.
-	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, unshardedKs, func(t *testing.T, keyspace map[string]interface{}) bool {
+	// Let's clean out the cycle so that the other tests don't fail
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, unshardedKs, func(t *testing.T, keyspace map[string]any) bool {
 		_, fieldPresent := keyspace["error"]
 		return !fieldPresent
-	})
-
+	}, "wait for error to disappear")
 }
 
 func TestReplace(t *testing.T) {

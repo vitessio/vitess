@@ -125,7 +125,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "create view view_a as select user_id, col1, col2 from authoritative"
+        "Query": "create view view_a as select * from authoritative"
       },
       "TablesUsed": [
         "user.view_a"
@@ -144,7 +144,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "create view view_a as select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id"
+        "Query": "create view view_a as select * from authoritative as a join authoritative as b on a.user_id = b.user_id"
       },
       "TablesUsed": [
         "user.view_a"
@@ -163,7 +163,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "create view view_a as select user_id, col1, col2 from authoritative as a"
+        "Query": "create view view_a as select a.* from authoritative as a"
       },
       "TablesUsed": [
         "user.view_a"
@@ -201,7 +201,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "create view view_a as select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
+        "Query": "create view view_a as select `user`.id, a.*, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
       },
       "TablesUsed": [
         "user.view_a"
