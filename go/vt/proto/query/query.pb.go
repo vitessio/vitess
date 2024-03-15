@@ -5069,16 +5069,22 @@ type StreamHealthResponse struct {
 	//
 	// In practice, this field is set to:
 	// a) the last time the RPC tabletmanager.TabletExternallyReparented was
-	//    called on this tablet (usually done by an external failover tool e.g.
-	//    Orchestrator). The failover tool can call this as long as we are the
-	//    primary i.e. even ages after the last reparent occurred.
+	//
+	//	called on this tablet (usually done by an external failover tool e.g.
+	//	Orchestrator). The failover tool can call this as long as we are the
+	//	primary i.e. even ages after the last reparent occurred.
+	//
 	// OR
 	// b) the last time an active reparent was executed through a vtctl command
-	//    (InitShardPrimary, PlannedReparentShard, EmergencyReparentShard)
+	//
+	//	(InitShardPrimary, PlannedReparentShard, EmergencyReparentShard)
+	//
 	// OR
 	// c) the last time vttablet was started and it initialized its tablet type
-	//    as PRIMARY because it was recorded as the shard's current primary in the
-	//    topology (see go/vt/vttablet/tabletmanager/init_tablet.go)
+	//
+	//	as PRIMARY because it was recorded as the shard's current primary in the
+	//	topology (see go/vt/vttablet/tabletmanager/init_tablet.go)
+	//
 	// OR
 	// d) 0 if the vttablet was never a PRIMARY.
 	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,3,opt,name=tablet_externally_reparented_timestamp,json=tabletExternallyReparentedTimestamp,proto3" json:"tablet_externally_reparented_timestamp,omitempty"`

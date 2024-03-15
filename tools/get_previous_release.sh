@@ -18,27 +18,11 @@
 # into the release folder (app) for checkin. Prior to running this script,
 # bootstrap.sh and bootstrap_web.sh should already have been run.
 
-# github.base_ref $1
 
-target_release=""
-
-base_release_branch=$(echo "$1" | grep -E 'release-[0-9]*.0$')
-if [ "$base_release_branch" == "" ]; then
-  base_release_branch=$(echo "$2" | grep -E 'release-[0-9]*.0$')
-fi
-if [ "$base_release_branch" != "" ]; then
-  major_release=$(echo "$base_release_branch" | sed 's/release-*//' | sed 's/\.0//')
-  target_major_release=$((major_release-1))
-  target_release_number=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.[0-9]*$' | sed 's/[a-z0-9]* refs\/tags\/v//' | awk -v FS=. -v RELEASE="$target_major_release" '{if ($1 == RELEASE) print; }' | sort -nr | head -n1)
-  target_release="v$target_release_number"
-else
-  target_major_release=$(git show-ref | grep -E 'refs/remotes/origin/release-[0-9]*\.0$' | sed 's/[a-z0-9]* refs\/remotes\/origin\/release-//' | sed 's/\.0//' | sort -nr | head -n1)
-  target_release_number=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.[0-9]*$' | sed 's/[a-z0-9]* refs\/tags\/v//' | awk -v FS=. -v RELEASE="$target_major_release" '{if ($1 == RELEASE) print; }' | sort -nr | head -n1)
-  target_release="v$target_release_number"
-  if [ -z "$target_release_number" ]
-  then
-    target_release="release-$target_major_release.0"
-  fi
-fi
-
-echo "$target_release"
+# This script expects release names to follow the upstream release naming
+# scheme, but Slack has our own naming scheme. Updating the logic to
+# parse Slack release names became a rabbit hole I want to defer.
+#
+# I will hardcode the previous Slack release here because it is static.
+#
+echo slack-vitess-r14.0.5

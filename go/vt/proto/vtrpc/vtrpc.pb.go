@@ -39,7 +39,9 @@ const (
 
 // Code represents canonical error codes. The names, numbers and comments
 // must match the ones defined by grpc (0-16):
-//   https://godoc.org/google.golang.org/grpc/codes.
+//
+//	https://godoc.org/google.golang.org/grpc/codes.
+//
 // 17+ are custom codes
 type Code int32
 
@@ -88,18 +90,19 @@ const (
 	//
 	// A litmus test that may help a service implementor in deciding
 	// between FAILED_PRECONDITION, ABORTED, and UNAVAILABLE:
-	//  (a) Use UNAVAILABLE if the client can retry just the failing call.
-	//  (b) Use ABORTED if the client should retry at a higher-level
-	//      (e.g., restarting a read-modify-write sequence).
-	//  (c) Use FAILED_PRECONDITION if the client should not retry until
-	//      the system state has been explicitly fixed.  E.g., if an "rmdir"
-	//      fails because the directory is non-empty, FAILED_PRECONDITION
-	//      should be returned since the client should not retry unless
-	//      they have first fixed up the directory by deleting files from it.
-	//  (d) Use FAILED_PRECONDITION if the client performs conditional
-	//      REST Get/Update/Delete on a resource and the resource on the
-	//      server does not match the condition. E.g., conflicting
-	//      read-modify-write on the same resource.
+	//
+	//	(a) Use UNAVAILABLE if the client can retry just the failing call.
+	//	(b) Use ABORTED if the client should retry at a higher-level
+	//	    (e.g., restarting a read-modify-write sequence).
+	//	(c) Use FAILED_PRECONDITION if the client should not retry until
+	//	    the system state has been explicitly fixed.  E.g., if an "rmdir"
+	//	    fails because the directory is non-empty, FAILED_PRECONDITION
+	//	    should be returned since the client should not retry unless
+	//	    they have first fixed up the directory by deleting files from it.
+	//	(d) Use FAILED_PRECONDITION if the client performs conditional
+	//	    REST Get/Update/Delete on a resource and the resource on the
+	//	    server does not match the condition. E.g., conflicting
+	//	    read-modify-write on the same resource.
 	Code_FAILED_PRECONDITION Code = 9
 	// ABORTED indicates the operation was aborted, typically due to a
 	// concurrency issue like sequencer check failures, transaction aborts,

@@ -402,7 +402,6 @@ type Tablet struct {
 	// about which tablet should be the primary, such as via Vitess
 	// replication-management commands like PlannedReparentShard,
 	// EmergencyReparentShard, and TabletExternallyReparented.
-	//
 	PrimaryTermStartTime *vttime.Time `protobuf:"bytes,14,opt,name=primary_term_start_time,json=primaryTermStartTime,proto3" json:"primary_term_start_time,omitempty"`
 	// db_server_version represents the database version used by the tablet.
 	DbServerVersion string `protobuf:"bytes,15,opt,name=db_server_version,json=dbServerVersion,proto3" json:"db_server_version,omitempty"`

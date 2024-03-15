@@ -18,7 +18,6 @@ package vttls
 
 import (
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -29,12 +28,12 @@ import (
 
 type verifyPeerCertificateFunc func([][]byte, [][]*x509.Certificate) error
 
-func certIsRevoked(cert *x509.Certificate, crl *pkix.CertificateList) bool {
-	if crl.HasExpired(time.Now()) {
+func certIsRevoked(cert *x509.Certificate, crl *x509.RevocationList) bool {
+	if !time.Now().Before(crl.NextUpdate) {
 		log.Warningf("The current Certificate Revocation List (CRL) is past expiry date and must be updated. Revoked certificates will still be rejected in this state.")
 	}
 
-	for _, revoked := range crl.TBSCertList.RevokedCertificates {
+	for _, revoked := range crl.RevokedCertificates {
 		if cert.SerialNumber.Cmp(revoked.SerialNumber) == 0 {
 			return true
 		}
@@ -54,7 +53,7 @@ func verifyPeerCertificateAgainstCRL(crl string) (verifyPeerCertificateFunc, err
 				cert := chain[i]
 				issuerCert := chain[i+1]
 				for _, crl := range crlSet {
-					if issuerCert.CheckCRLSignature(crl) == nil {
+					if crl.CheckSignatureFrom(issuerCert) == nil {
 						if certIsRevoked(cert, crl) {
 							return fmt.Errorf("Certificate revoked: CommonName=%v", cert.Subject.CommonName)
 						}
@@ -66,13 +65,13 @@ func verifyPeerCertificateAgainstCRL(crl string) (verifyPeerCertificateFunc, err
 	}, nil
 }
 
-func loadCRLSet(crl string) ([]*pkix.CertificateList, error) {
+func loadCRLSet(crl string) ([]*x509.RevocationList, error) {
 	body, err := os.ReadFile(crl)
 	if err != nil {
 		return nil, err
 	}
 
-	crlSet := make([]*pkix.CertificateList, 0)
+	crlSet := make([]*x509.RevocationList, 0)
 	for len(body) > 0 {
 		var block *pem.Block
 		block, body = pem.Decode(body)
@@ -83,7 +82,7 @@ func loadCRLSet(crl string) ([]*pkix.CertificateList, error) {
 			continue
 		}
 
-		parsedCRL, err := x509.ParseCRL(block.Bytes)
+		parsedCRL, err := x509.ParseRevocationList(block.Bytes)
 		if err != nil {
 			return nil, err
 		}

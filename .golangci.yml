@@ -42,10 +42,6 @@ issues:
       - errcheck
       - goimports
 
-    - path: '^go/vt/vtadmin/cache/'
-      linters:
-      - structcheck
-
     ### BEGIN: errcheck exclusion rules. Each rule should be considered
     #   a TODO for removal after adding error checks to that package/file/etc,
     #   except where otherwise noted.
@@ -158,4 +154,4 @@ issues:
 
 # https://github.com/golangci/golangci/wiki/Configuration
 service:
-  golangci-lint-version: 1.46.2 # use the fixed version to not introduce new linters unexpectedly
+  golangci-lint-version: 1.51.2 # use the fixed version to not introduce new linters unexpectedly
