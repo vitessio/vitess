@@ -22,6 +22,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/decimal"
 )
 
 func TestParseDate(t *testing.T) {
@@ -329,6 +331,258 @@ func TestParseDateTimeInt64(t *testing.T) {
 			assert.Equal(t, test.output.minute, got.Time.Minute())
 			assert.Equal(t, test.output.second, got.Time.Second())
 			assert.Equal(t, test.output.nanosecond, got.Time.Nanosecond())
+		})
+	}
+}
+
+func TestParseDateTimeFloat(t *testing.T) {
+	type datetime struct {
+		year       int
+		month      int
+		day        int
+		hour       int
+		minute     int
+		second     int
+		nanosecond int
+	}
+	tests := []struct {
+		input   float64
+		prec    int
+		output  datetime
+		outPrec int
+		l       int
+		err     bool
+	}{
+		{input: 1, prec: 3, outPrec: 3, output: datetime{}, err: true},
+		{input: 20221012000000.101562, prec: -2, outPrec: 6, output: datetime{2022, 10, 12, 0, 0, 0, 101562500}},
+		{input: 20221012112233.125000, prec: 3, outPrec: 3, output: datetime{2022, 10, 12, 11, 22, 33, 125000000}},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%f", test.input), func(t *testing.T) {
+			got, p, ok := ParseDateTimeFloat(test.input, test.prec)
+			if test.err {
+				if !got.IsZero() {
+					assert.Equal(t, test.output.year, got.Date.Year())
+					assert.Equal(t, test.output.month, got.Date.Month())
+					assert.Equal(t, test.output.day, got.Date.Day())
+					assert.Equal(t, test.output.hour, got.Time.Hour())
+					assert.Equal(t, test.output.minute, got.Time.Minute())
+					assert.Equal(t, test.output.second, got.Time.Second())
+					assert.Equal(t, test.output.nanosecond, got.Time.Nanosecond())
+				}
+				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
+				return
+			}
+
+			require.True(t, ok)
+			assert.Equal(t, test.outPrec, p)
+			assert.Equal(t, test.output.year, got.Date.Year())
+			assert.Equal(t, test.output.month, got.Date.Month())
+			assert.Equal(t, test.output.day, got.Date.Day())
+			assert.Equal(t, test.output.hour, got.Time.Hour())
+			assert.Equal(t, test.output.minute, got.Time.Minute())
+			assert.Equal(t, test.output.second, got.Time.Second())
+			assert.Equal(t, test.output.nanosecond, got.Time.Nanosecond())
+		})
+	}
+}
+
+func TestParseDateTimeDecimal(t *testing.T) {
+	type datetime struct {
+		year       int
+		month      int
+		day        int
+		hour       int
+		minute     int
+		second     int
+		nanosecond int
+	}
+	tests := []struct {
+		input   decimal.Decimal
+		prec    int
+		output  datetime
+		outPrec int
+		l       int32
+		err     bool
+	}{
+		{input: decimal.NewFromFloat(1), l: 6, prec: 3, outPrec: 3, output: datetime{}, err: true},
+		{input: decimal.NewFromFloat(20221012000000.101562), l: 6, prec: -2, outPrec: 6, output: datetime{2022, 10, 12, 0, 0, 0, 100000000}},
+		{input: decimal.NewFromFloat(20221012112233.125000), l: 6, prec: 3, outPrec: 3, output: datetime{2022, 10, 12, 11, 22, 33, 125000000}},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test.input), func(t *testing.T) {
+			got, p, ok := ParseDateTimeDecimal(test.input, test.l, test.prec)
+			if test.err {
+				if !got.IsZero() {
+					assert.Equal(t, test.output.year, got.Date.Year())
+					assert.Equal(t, test.output.month, got.Date.Month())
+					assert.Equal(t, test.output.day, got.Date.Day())
+					assert.Equal(t, test.output.hour, got.Time.Hour())
+					assert.Equal(t, test.output.minute, got.Time.Minute())
+					assert.Equal(t, test.output.second, got.Time.Second())
+					assert.Equal(t, test.output.nanosecond, got.Time.Nanosecond())
+				}
+				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
+				return
+			}
+
+			require.True(t, ok)
+			assert.Equal(t, test.outPrec, p)
+			assert.Equal(t, test.output.year, got.Date.Year())
+			assert.Equal(t, test.output.month, got.Date.Month())
+			assert.Equal(t, test.output.day, got.Date.Day())
+			assert.Equal(t, test.output.hour, got.Time.Hour())
+			assert.Equal(t, test.output.minute, got.Time.Minute())
+			assert.Equal(t, test.output.second, got.Time.Second())
+			assert.Equal(t, test.output.nanosecond, got.Time.Nanosecond())
+		})
+	}
+}
+
+func TestParseDateFloatAndDecimal(t *testing.T) {
+	type date struct {
+		year  int
+		month int
+		day   int
+	}
+	tests := []struct {
+		input   float64
+		prec    int
+		output  date
+		outPrec int
+		l       int32
+		err     bool
+	}{
+		{input: 1, output: date{0, 0, 1}, err: true},
+		{input: 20221012.102, output: date{2022, 10, 12}},
+		{input: 20221212.52, output: date{2022, 12, 12}},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%f", test.input), func(t *testing.T) {
+			got, ok := ParseDateFloat(test.input)
+			if test.err {
+				if !got.IsZero() {
+					assert.Equal(t, test.output.year, got.Year())
+					assert.Equal(t, test.output.month, got.Month())
+					assert.Equal(t, test.output.day, got.Day())
+				}
+				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
+				return
+			}
+
+			require.True(t, ok)
+			assert.Equal(t, test.output.year, got.Year())
+			assert.Equal(t, test.output.month, got.Month())
+			assert.Equal(t, test.output.day, got.Day())
+
+			got, ok = ParseDateDecimal(decimal.NewFromFloat(test.input))
+			if test.err {
+				if !got.IsZero() {
+					assert.Equal(t, test.output.year, got.Year())
+					assert.Equal(t, test.output.month, got.Month())
+					assert.Equal(t, test.output.day, got.Day())
+				}
+				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
+				return
+			}
+
+			require.True(t, ok)
+			assert.Equal(t, test.output.year, got.Year())
+			assert.Equal(t, test.output.month, got.Month())
+			assert.Equal(t, test.output.day, got.Day())
+		})
+	}
+}
+
+func TestParseTimeFloat(t *testing.T) {
+	type time struct {
+		hour       int
+		minute     int
+		second     int
+		nanosecond int
+	}
+	tests := []struct {
+		input   float64
+		prec    int
+		outPrec int
+		output  time
+		err     bool
+	}{
+		{input: 1, prec: 1, outPrec: 1, output: time{0, 0, 1, 0}, err: false},
+		{input: 201012.102, prec: -1, outPrec: 6, output: time{20, 10, 12, 102000000}},
+		{input: 201212.52, prec: -1, outPrec: 6, output: time{20, 12, 12, 519999999}},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%f", test.input), func(t *testing.T) {
+			got, p, ok := ParseTimeFloat(test.input, test.prec)
+			if test.err {
+				if !got.IsZero() {
+					assert.Equal(t, test.outPrec, p)
+					assert.Equal(t, test.output.hour, got.Hour())
+					assert.Equal(t, test.output.minute, got.Minute())
+					assert.Equal(t, test.output.second, got.Second())
+					assert.Equal(t, test.output.nanosecond, got.Nanosecond())
+				}
+				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
+				return
+			}
+
+			require.True(t, ok)
+			assert.Equal(t, test.outPrec, p)
+			assert.Equal(t, test.output.hour, got.Hour())
+			assert.Equal(t, test.output.minute, got.Minute())
+			assert.Equal(t, test.output.second, got.Second())
+			assert.Equal(t, test.output.nanosecond, got.Nanosecond())
+		})
+	}
+}
+
+func TestParseTimeDecimal(t *testing.T) {
+	type time struct {
+		hour       int
+		minute     int
+		second     int
+		nanosecond int
+	}
+	tests := []struct {
+		input   decimal.Decimal
+		l       int32
+		prec    int
+		outPrec int
+		output  time
+		err     bool
+	}{
+		{input: decimal.NewFromFloat(1), l: 6, prec: 1, outPrec: 1, output: time{0, 0, 1, 0}, err: false},
+		{input: decimal.NewFromFloat(201012.102), l: 6, prec: -1, outPrec: 6, output: time{20, 10, 12, 102000000}},
+		{input: decimal.NewFromFloat(201212.52), l: 6, prec: -1, outPrec: 6, output: time{20, 12, 12, 520000000}},
+		{input: decimal.NewFromFloat(201212.52), l: 10, prec: -1, outPrec: 9, output: time{20, 12, 12, 520000000}},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test.input), func(t *testing.T) {
+			got, p, ok := ParseTimeDecimal(test.input, test.l, test.prec)
+			if test.err {
+				if !got.IsZero() {
+					assert.Equal(t, test.outPrec, p)
+					assert.Equal(t, test.output.hour, got.Hour())
+					assert.Equal(t, test.output.minute, got.Minute())
+					assert.Equal(t, test.output.second, got.Second())
+					assert.Equal(t, test.output.nanosecond, got.Nanosecond())
+				}
+				assert.Falsef(t, ok, "did not fail to parse %s", test.input)
+				return
+			}
+
+			require.True(t, ok)
+			assert.Equal(t, test.outPrec, p)
+			assert.Equal(t, test.output.hour, got.Hour())
+			assert.Equal(t, test.output.minute, got.Minute())
+			assert.Equal(t, test.output.second, got.Second())
+			assert.Equal(t, test.output.nanosecond, got.Nanosecond())
 		})
 	}
 }
