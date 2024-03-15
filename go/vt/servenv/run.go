@@ -59,7 +59,6 @@ func Run(bindAddress string, port int) {
 	signal.Notify(ExitChan, syscall.SIGTERM, syscall.SIGINT)
 	// Wait for signal
 	<-ExitChan
-	l.Close()
 
 	startTime := time.Now()
 	log.Infof("Entering lameduck mode for at least %v", lameduckPeriod)
@@ -72,6 +71,7 @@ func Run(bindAddress string, port int) {
 		time.Sleep(remain)
 	}
 
+	l.Close()
 	log.Info("Shutting down gracefully")
 	fireOnCloseHooks(onCloseTimeout)
 	ListeningURL = url.URL{}
