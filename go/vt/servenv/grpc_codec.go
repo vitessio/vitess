@@ -37,8 +37,18 @@ type vtprotoMessage interface {
 	UnmarshalVT([]byte) error
 }
 
+type vtcachedMessage interface {
+	vtprotoMessage
+	CachedVT() []byte
+}
+
 func (vtprotoCodec) Marshal(v any) ([]byte, error) {
 	switch v := v.(type) {
+	case vtcachedMessage:
+		if pb := v.CachedVT(); pb != nil {
+			return pb, nil
+		}
+		return v.MarshalVT()
 	case vtprotoMessage:
 		return v.MarshalVT()
 	case proto.Message:

@@ -409,6 +409,36 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 	return int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16), nil
 }
 
+func (c *Conn) readPacketAsProto(b *queryResultBuilder) ([]byte, error) {
+	r := c.getReader()
+
+	length, err := c.readHeaderFrom(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if length == 0 {
+		// This can be caused by the packet after a packet of
+		// exactly size MaxPacketSize.
+		return nil, nil
+	}
+
+	// Use the bufPool.
+	if length < MaxPacketSize {
+		buf := b.Packet(length)
+		c.currentEphemeralBuffer = bufPool.Get(length)
+		if _, err := io.ReadFull(r, buf); err != nil {
+			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
+		}
+		return buf, nil
+	}
+
+	// Much slower path, revert to allocating everything from scratch.
+	// We're going to concatenate a lot of data anyway, can't really
+	// optimize this code path easily.
+	panic("TODO: large packets")
+}
+
 // readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do
 // not use this method if the contents of the packet needs to be kept
 // after the next readEphemeralPacket.

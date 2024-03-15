@@ -24,17 +24,21 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // Result represents a query result.
 type Result struct {
-	Fields              []*querypb.Field `json:"fields"`
-	RowsAffected        uint64           `json:"rows_affected"`
-	InsertID            uint64           `json:"insert_id"`
-	Rows                []Row            `json:"rows"`
-	SessionStateChanges string           `json:"session_state_changes"`
-	StatusFlags         uint16           `json:"status_flags"`
-	Info                string           `json:"info"`
+	RowsAffected        uint64 `json:"rows_affected"`
+	InsertID            uint64 `json:"insert_id"`
+	SessionStateChanges string `json:"session_state_changes"`
+	StatusFlags         uint16 `json:"status_flags"`
+	Info                string `json:"info"`
+
+	Fields []*querypb.Field `json:"fields"`
+	Rows   []Row            `json:"rows"`
+
+	CachedProto []byte `json:"-"`
 }
 
 //goland:noinspection GoUnusedConst
@@ -350,4 +354,87 @@ func (result *Result) IsMoreResultsExists() bool {
 // IsInTransaction returns true if the status flag has SERVER_STATUS_IN_TRANS set
 func (result *Result) IsInTransaction() bool {
 	return result.StatusFlags&ServerStatusInTrans == ServerStatusInTrans
+}
+
+func (result *Result) ToExecuteResponse() *querypb.ExecuteResponse {
+	if result.CachedProto != nil {
+		return querypb.NewCachedExecuteResponse(result.CachedProto)
+	}
+	return &querypb.ExecuteResponse{Result: ResultToProto3(result)}
+}
+
+func (result *Result) ToBeginExecuteResponse(transactionID int64, tabletAlias *topodata.TabletAlias, sessionStateChanges string) *querypb.BeginExecuteResponse {
+	if result.CachedProto != nil {
+		res := querypb.CachedBeginExecuteResponse(result.CachedProto)
+		res.TransactionId = transactionID
+		res.TabletAlias = tabletAlias
+		res.SessionStateChanges = sessionStateChanges
+		return res
+	}
+	return &querypb.BeginExecuteResponse{
+		Result:              ResultToProto3(result),
+		TransactionId:       transactionID,
+		TabletAlias:         tabletAlias,
+		SessionStateChanges: sessionStateChanges,
+	}
+}
+
+func (result *Result) ToReserveExecuteResponse(reservedID int64, tabletAlias *topodata.TabletAlias) *querypb.ReserveExecuteResponse {
+	if result.CachedProto != nil {
+		res := querypb.CachedReserveExecuteResponse(result.CachedProto)
+		res.ReservedId = reservedID
+		res.TabletAlias = tabletAlias
+		return res
+	}
+	return &querypb.ReserveExecuteResponse{
+		Result:      ResultToProto3(result),
+		ReservedId:  reservedID,
+		TabletAlias: tabletAlias,
+	}
+}
+
+func (result *Result) ToReserveBeginExecuteResponse(transactionID, reservedID int64, tabletAlias *topodata.TabletAlias, sessionStateChanges string) *querypb.ReserveBeginExecuteResponse {
+	if result.CachedProto != nil {
+		res := querypb.CachedReserveBeginExecuteResponse(result.CachedProto)
+		res.TransactionId = transactionID
+		res.ReservedId = reservedID
+		res.TabletAlias = tabletAlias
+		res.SessionStateChanges = sessionStateChanges
+		return res
+	}
+	return &querypb.ReserveBeginExecuteResponse{
+		Result:              ResultToProto3(result),
+		TransactionId:       transactionID,
+		ReservedId:          reservedID,
+		TabletAlias:         tabletAlias,
+		SessionStateChanges: sessionStateChanges,
+	}
+}
+
+func (result *Result) ToReserveStreamExecuteResponse() *querypb.ReserveStreamExecuteResponse {
+	if result.CachedProto != nil {
+		return querypb.CachedReserveStreamExecuteResponse(result.CachedProto)
+	}
+	return &querypb.ReserveStreamExecuteResponse{Result: ResultToProto3(result)}
+}
+
+func (result *Result) ToReserveBeginStreamExecuteResponse() *querypb.ReserveBeginStreamExecuteResponse {
+	if result.CachedProto != nil {
+		return querypb.CachedReserveBeginStreamExecuteResponse(result.CachedProto)
+	}
+	return &querypb.ReserveBeginStreamExecuteResponse{Result: ResultToProto3(result)}
+}
+
+func (result *Result) ToStreamExecuteResponse() *querypb.StreamExecuteResponse {
+	if result.CachedProto != nil {
+		return querypb.CachedStreamExecuteResponse(result.CachedProto)
+	}
+	return &querypb.StreamExecuteResponse{Result: ResultToProto3(result)}
+}
+
+func (result *Result) ToBeginStreamExecuteResponse() *querypb.BeginStreamExecuteResponse {
+	if result.CachedProto != nil {
+		return querypb.CachedBeginStreamExecuteResponse(result.CachedProto)
+	}
+	return &querypb.BeginStreamExecuteResponse{Result: ResultToProto3(result)}
 }

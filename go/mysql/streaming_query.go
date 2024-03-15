@@ -136,7 +136,7 @@ func (c *Conn) FetchNext(in []sqltypes.Value) ([]sqltypes.Value, error) {
 	}
 
 	// Regular row.
-	return c.parseRow(data, c.fields, readLenEncStringAsBytes, in)
+	return parseRow(data, c.fields, readLenEncStringAsBytes, in)
 }
 
 // CloseResult can be used to terminate a streaming query
