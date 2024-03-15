@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -112,22 +113,61 @@ func ParseSetValues(setColumnType string) string {
 // returns the (unquoted) text values
 // Expected input: `'x-small','small','medium','large','x-large'`
 // Unexpected input: `enum('x-small','small','medium','large','x-large')`
-func parseEnumOrSetTokens(enumOrSetValues string) (tokens []string) {
-	if submatch := enumValuesRegexp.FindStringSubmatch(enumOrSetValues); len(submatch) > 0 {
-		// input should not contain `enum(...)` column definition, just the comma delimited list
-		return tokens
-	}
-	if submatch := setValuesRegexp.FindStringSubmatch(enumOrSetValues); len(submatch) > 0 {
-		// input should not contain `enum(...)` column definition, just the comma delimited list
-		return tokens
-	}
-	tokens = strings.Split(enumOrSetValues, ",")
-	for i := range tokens {
-		if strings.HasPrefix(tokens[i], `'`) && strings.HasSuffix(tokens[i], `'`) {
-			tokens[i] = strings.Trim(tokens[i], `'`)
+func parseEnumOrSetTokens(enumOrSetValues string) []string {
+	// We need to track both the start of the current value and current
+	// position, since there might be quoted quotes inside the value
+	// which we need to handle.
+	start := 0
+	pos := 1
+	var tokens []string
+	for {
+		// If the input does not start with a quote, it's not a valid enum/set definition
+		if enumOrSetValues[start] != '\'' {
+			return nil
 		}
+		i := strings.IndexByte(enumOrSetValues[pos:], '\'')
+		// If there's no closing quote, we have invalid input
+		if i < 0 {
+			return nil
+		}
+		// We're at the end here of the last quoted value,
+		// so we add the last token and return them.
+		if i == len(enumOrSetValues[pos:])-1 {
+			tok, err := sqltypes.DecodeStringSQL(enumOrSetValues[start:])
+			if err != nil {
+				return nil
+			}
+			tokens = append(tokens, tok)
+			return tokens
+		}
+		// MySQL double quotes things as escape value, so if we see another
+		// single quote, we skip the character and remove it from the input.
+		if enumOrSetValues[pos+i+1] == '\'' {
+			pos = pos + i + 2
+			continue
+		}
+		// Next value needs to be a comma as a separator, otherwise
+		// the data is invalid so we return nil.
+		if enumOrSetValues[pos+i+1] != ',' {
+			return nil
+		}
+		// If we're at the end of the input here, it's invalid
+		// since we have a trailing comma which is not what MySQL
+		// returns.
+		if pos+i+1 == len(enumOrSetValues) {
+			return nil
+		}
+
+		tok, err := sqltypes.DecodeStringSQL(enumOrSetValues[start : pos+i+1])
+		if err != nil {
+			return nil
+		}
+
+		tokens = append(tokens, tok)
+		// We add 2 to the position to skip the closing quote & comma
+		start = pos + i + 2
+		pos = start + 1
 	}
-	return tokens
 }
 
 // ParseEnumOrSetTokensMap parses the comma delimited part of an enum column definition

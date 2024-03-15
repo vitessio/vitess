@@ -145,6 +145,12 @@ func TestParseEnumTokens(t *testing.T) {
 		assert.Equal(t, expect, enumTokens)
 	}
 	{
+		input := `'with '' quote','and \n newline'`
+		enumTokens := parseEnumOrSetTokens(input)
+		expect := []string{"with ' quote", "and \n newline"}
+		assert.Equal(t, expect, enumTokens)
+	}
+	{
 		input := `enum('x-small','small','medium','large','x-large')`
 		enumTokens := parseEnumOrSetTokens(input)
 		assert.Nil(t, enumTokens)
