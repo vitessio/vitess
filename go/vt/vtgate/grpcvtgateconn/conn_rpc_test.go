@@ -108,6 +108,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
 
+	grpcclient.ResetStaticAuth()
 	err = fs.Parse([]string{
 		"--grpc_auth_static_client_creds",
 		f.Name(),
@@ -148,6 +149,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	fs = pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
 
+	grpcclient.ResetStaticAuth()
 	err = fs.Parse([]string{
 		"--grpc_auth_static_client_creds",
 		f.Name(),

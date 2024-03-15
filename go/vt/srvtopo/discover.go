@@ -29,20 +29,23 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// FindAllTargets goes through all serving shards in the topology
-// for the provided tablet types. It returns one Target object per
-// keyspace / shard / matching TabletType.
-func FindAllTargets(ctx context.Context, ts Server, cell string, tabletTypes []topodatapb.TabletType) ([]*querypb.Target, error) {
-	ksNames, err := ts.GetSrvKeyspaceNames(ctx, cell, true)
-	if err != nil {
-		return nil, err
+// FindAllTargets goes through all serving shards in the topology for the provided keyspaces
+// and tablet types. If no keyspaces are provided all available keyspaces in the topo are
+// fetched. It returns one Target object per keyspace/shard/matching TabletType.
+func FindAllTargets(ctx context.Context, ts Server, cell string, keyspaces []string, tabletTypes []topodatapb.TabletType) ([]*querypb.Target, error) {
+	var err error
+	if len(keyspaces) == 0 {
+		keyspaces, err = ts.GetSrvKeyspaceNames(ctx, cell, true)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var targets []*querypb.Target
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var errRecorder concurrency.AllErrorRecorder
-	for _, ksName := range ksNames {
+	for _, ksName := range keyspaces {
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
