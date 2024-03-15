@@ -89,39 +89,49 @@ func (c *SimpleConcatenate) parallelExec(
 	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
-) (result *sqltypes.Result, outerErr error) {
-	var mu sync.Mutex
-
+) (*sqltypes.Result, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var wg sync.WaitGroup
-	for _, source := range c.Sources {
+	var (
+		wg       errgroup.Group
+		rows     sync.Mutex
+		fieldsWg sync.WaitGroup
+		fields   []*querypb.Field
+		result   *sqltypes.Result
+	)
+
+	fieldsWg.Add(1)
+
+	for i, source := range c.Sources {
 		vars := copyBindVars(bindVars)
-		wg.Add(1)
-		go func(src Primitive) {
-			defer wg.Done()
-			chunk, err := vcursor.ExecutePrimitive(ctx, src, vars, true)
+		// the first source will be used to get the fields
+		// the other sources will run in parallel
+		wg.Go(func() error {
+			chunk, err := vcursor.ExecutePrimitive(ctx, source, vars, true)
 			if err != nil {
-				outerErr = err
 				cancel()
+				return err
+			}
+			if i == 0 {
+				fields = chunk.Fields
+				fieldsWg.Done()
+			} else {
+				fieldsWg.Wait()
+				chunk.Fields = fields
 			}
 
-			mu.Lock()
-			defer mu.Unlock()
-			if result == nil {
-				result = &sqltypes.Result{
-					Fields:              chunk.Fields,
-					SessionStateChanges: chunk.SessionStateChanges,
-					StatusFlags:         chunk.StatusFlags,
-					Info:                chunk.Info,
-				}
-			}
+			rows.Lock()
+			defer rows.Unlock()
 			result.Rows = append(result.Rows, chunk.Rows...)
-		}(source)
+			return nil
+		})
 	}
-	wg.Wait()
-	return
+	err := wg.Wait()
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (c *SimpleConcatenate) sequentialExec(
@@ -148,6 +158,7 @@ func (c *SimpleConcatenate) sequentialExec(
 	return
 }
 
+// parallelStreamExec executes the sources in parallel and streams the results.
 func (c *SimpleConcatenate) parallelStreamExec(
 	inCtx context.Context,
 	vcursor VCursor,
@@ -159,21 +170,33 @@ func (c *SimpleConcatenate) parallelStreamExec(
 	defer cancel()
 
 	// Mutex for dealing with concurrent access to shared state.
-	var muCallback sync.Mutex
-	var wg errgroup.Group
+	var (
+		muCallback sync.Mutex
+		wg         errgroup.Group
+		fieldsWg   sync.WaitGroup
+		fields     []*querypb.Field
+	)
 
-	// Start streaming query execution in parallel for all sources.
-	for _, source := range c.Sources {
+	fieldsWg.Add(1)
+	// Start streaming query execution in parallel for all source
+	for i, source := range c.Sources {
 		wg.Go(func() error {
-			return vcursor.StreamExecutePrimitive(ctx, source, bindVars, true, func(resultChunk *sqltypes.Result) error {
-				muCallback.Lock()
-				defer muCallback.Unlock()
-
+			return vcursor.StreamExecutePrimitive(ctx, source, bindVars, true, func(chunk *sqltypes.Result) error {
 				// Context check to avoid extra work.
 				if ctx.Err() != nil {
 					return nil
 				}
-				return callback(resultChunk)
+				if i == 0 {
+					fields = chunk.Fields
+					fieldsWg.Done()
+				} else {
+					fieldsWg.Wait()
+					chunk.Fields = fields
+				}
+
+				muCallback.Lock()
+				defer muCallback.Unlock()
+				return callback(chunk)
 			})
 		})
 	}
@@ -187,11 +210,17 @@ func (c *SimpleConcatenate) sequentialStreamExec(
 	bindVars map[string]*querypb.BindVariable,
 	callback func(*sqltypes.Result) error,
 ) error {
-	for _, source := range c.Sources {
+	var fields []*querypb.Field
+	for i, source := range c.Sources {
 		err := vcursor.StreamExecutePrimitive(ctx, source, bindVars, true, func(resultChunk *sqltypes.Result) error {
 			// check if context has expired.
 			if ctx.Err() != nil {
 				return ctx.Err()
+			}
+			if i == 0 && fields == nil {
+				fields = resultChunk.Fields
+			} else {
+				resultChunk.Fields = fields
 			}
 
 			return callback(resultChunk)

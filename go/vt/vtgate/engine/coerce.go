@@ -28,7 +28,6 @@ import (
 type Coerce struct {
 	Source Primitive
 	Types  []*evalengine.Type
-	Names  []string
 }
 
 var _ Primitive = (*Coerce)(nil)
@@ -46,19 +45,38 @@ func (c *Coerce) GetTableName() string {
 }
 
 func (c *Coerce) GetFields(
-	_ context.Context,
-	_ VCursor,
-	_ map[string]*querypb.BindVariable,
+	ctx context.Context,
+	vcursor VCursor,
+	bvars map[string]*querypb.BindVariable,
 ) (*sqltypes.Result, error) {
-	return &sqltypes.Result{Fields: c.buildFields()}, nil
+	res, err := c.Source.GetFields(ctx, vcursor, bvars)
+	if err != nil {
+		return nil, err
+	}
+	c.setFields(res)
+
+	return res, nil
 }
 
-func (c *Coerce) buildFields() []*querypb.Field {
-	fields := make([]*querypb.Field, 0, len(c.Types))
-	for i, typ := range c.Types {
-		fields = append(fields, typ.ToField(c.Names[i]))
+func (c *Coerce) setFields(res *sqltypes.Result) {
+	for i, t := range c.Types {
+		if t == nil {
+			continue
+		}
+
+		typ := t.Type()
+		field := res.Fields[i]
+		_, flags := sqltypes.TypeToMySQL(typ)
+		if t.Nullable() {
+			flags |= int64(querypb.MySqlFlag_NOT_NULL_FLAG)
+		}
+
+		field.Type = typ
+		field.Flags = uint32(flags)
+		field.Charset = uint32(t.Collation())
+		field.ColumnLength = uint32(t.Size())
+		field.Decimals = uint32(t.Scale())
 	}
-	return fields
 }
 
 func (c *Coerce) NeedsTransaction() bool {
@@ -85,7 +103,7 @@ func (c *Coerce) TryExecute(
 		}
 	}
 
-	res.Fields = c.buildFields()
+	c.setFields(res)
 	return res, nil
 }
 
@@ -114,7 +132,7 @@ func (c *Coerce) TryStreamExecute(
 	callback func(*sqltypes.Result) error,
 ) error {
 	sqlmode := evalengine.ParseSQLMode(vcursor.SQLMode())
-	fields := c.buildFields()
+
 	return vcursor.StreamExecutePrimitive(ctx, c.Source, bindVars, wantfields, func(result *sqltypes.Result) error {
 		for _, row := range result.Rows {
 			err := c.coerceValuesTo(row, sqlmode)
@@ -122,8 +140,7 @@ func (c *Coerce) TryStreamExecute(
 				return err
 			}
 		}
-
-		result.Fields = fields
+		c.setFields(result)
 		return callback(result)
 	})
 }
@@ -134,8 +151,8 @@ func (c *Coerce) Inputs() ([]Primitive, []map[string]any) {
 
 func (c *Coerce) description() PrimitiveDescription {
 	var cols []string
-	for i, typ := range c.Types {
-		cols = append(cols, typ.ToField(c.Names[i]).String())
+	for _, typ := range c.Types {
+		cols = append(cols, typ.Type().String())
 	}
 	return PrimitiveDescription{
 		OperatorType: "Coerce",
