@@ -836,3 +836,21 @@ func getTenantClause(vrOptions *vtctldatapb.VReplicationWorkflowOptions,
 	}
 	return &sel.Where.Expr, nil
 }
+
+// updateKeyspaceRoutingRule updates the keyspace routing rule for the (effective) source keyspace to the target keyspace.
+func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, routes map[string]string) error {
+	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+	if err != nil {
+		return err
+	}
+	if rules == nil {
+		rules = make(map[string]string)
+	}
+	for fromKeyspace, toKeyspace := range routes {
+		rules[fromKeyspace] = toKeyspace
+	}
+	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts, rules); err != nil {
+		return err
+	}
+	return nil
+}

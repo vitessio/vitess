@@ -25,6 +25,9 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topotools"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqlescape"
@@ -67,10 +70,11 @@ type VSchema struct {
 	// table is uniquely named, the value will be the qualified Table object
 	// with the keyspace where this table exists. If multiple keyspaces have a
 	// table with the same name, the value will be a `nil`.
-	globalTables      map[string]*Table
-	uniqueVindexes    map[string]Vindex
-	Keyspaces         map[string]*KeyspaceSchema `json:"keyspaces"`
-	ShardRoutingRules map[string]string          `json:"shard_routing_rules"`
+	globalTables         map[string]*Table
+	uniqueVindexes       map[string]Vindex
+	Keyspaces            map[string]*KeyspaceSchema `json:"keyspaces"`
+	ShardRoutingRules    map[string]string          `json:"shard_routing_rules"`
+	KeyspaceRoutingRules map[string]string          `json:"keyspace_routing_rules"`
 	// created is the time when the VSchema object was created. Used to detect if a cached
 	// copy of the vschema is stale.
 	created time.Time
@@ -325,6 +329,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 	buildReferences(source, vschema)
 	buildRoutingRule(source, vschema, parser)
 	buildShardRoutingRule(source, vschema)
+	buildKeyspaceRoutingRule(source, vschema)
 	// Resolve auto-increments after routing rules are built since sequence tables also obey routing rules.
 	resolveAutoIncrement(source, vschema, parser)
 	return vschema
@@ -985,6 +990,15 @@ func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	}
 }
 
+func buildKeyspaceRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	vschema.KeyspaceRoutingRules = nil
+	if source.KeyspaceRoutingRules == nil || len(source.KeyspaceRoutingRules.Rules) == 0 {
+		return
+	}
+	rulesMap := topotools.GetKeyspaceRoutingRulesMap(source.KeyspaceRoutingRules)
+	vschema.KeyspaceRoutingRules = rulesMap
+}
+
 // FindTable returns a pointer to the Table. If a keyspace is specified, only tables
 // from that keyspace are searched. If the specified keyspace is unsharded
 // and no tables matched, it's considered valid: FindTable will construct a table
@@ -1097,6 +1111,12 @@ func (vschema *VSchema) FirstKeyspace() *Keyspace {
 
 // FindRoutedTable finds a table checking the routing rules.
 func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
+	routedKeyspace, ok := vschema.KeyspaceRoutingRules[keyspace]
+	if ok {
+		log.Infof("Found keyspace routing rule for %s routed to %s", keyspace, routedKeyspace)
+		keyspace = routedKeyspace
+	}
+
 	qualified := tablename
 	if keyspace != "" {
 		qualified = keyspace + "." + tablename
