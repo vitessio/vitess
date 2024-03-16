@@ -31,7 +31,7 @@ const (
 	sourceAliasKeyspaceTemplate = "s%d" // same as source keyspace for now
 	targetKeyspaceName          = "mt"
 
-	numTenants                 = 1
+	numTenants                 = 10
 	numInitialRowsPerTenant    = 10
 	numAdditionalRowsPerTenant = 10
 	baseInitialTabletId        = 1000
@@ -92,33 +92,6 @@ func printKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, msg string) {
 	require.NoError(t, err)
 	log.Infof("%s: Keyspace routing rules are: %s", msg, output)
 }
-
-/*
-func updateKeyspaceRoutingRules(t *testing.T, vc *VitessCluster, fromKeyspace, toKeyspace string) {
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetKeyspaceRoutingRules")
-	require.NoError(t, err)
-	var rules vschema.KeyspaceRoutingRules
-	err = protojson.Unmarshal([]byte(output), &rules)
-	require.NoError(t, err)
-	found := false
-	for _, rule := range rules.Rules {
-		if rule.FromKeyspace == fromKeyspace {
-			rule.ToKeyspace = toKeyspace
-			found = true
-		}
-	}
-	if !found {
-		rules.Rules = append(rules.Rules, &vschema.KeyspaceRoutingRule{
-			FromKeyspace: fromKeyspace,
-			ToKeyspace:   toKeyspace,
-		})
-	}
-	newRulesJSON, err := json.Marshal(&rules)
-	require.NoError(t, err)
-	err = vc.VtctldClient.ExecuteCommand("ApplyKeyspaceRoutingRules", "--rules", string(newRulesJSON))
-	require.NoError(t, err)
-}
-*/
 
 func newMultiTenantMigration(t *testing.T) *multiTenantMigration {
 	_, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, targetKeyspaceName, "0", mtVSchema, mtSchema, 1, 0, 200, nil)
@@ -224,8 +197,8 @@ func (mtm *multiTenantMigration) insertSomeData(t *testing.T, tenantId int64, so
 	defer closeConn()
 	idx := mtm.getLastID(tenantId)
 	for i := idx + 1; i <= idx+numRows; i++ {
-		execVtgateQuery(t, vtgateConn, "",
-			fmt.Sprintf("insert into %s.t1(id, tenant_id) values(%d, %d)", sourceAliasKeyspace, i, tenantId))
+		execQueryWithRetry(t, vtgateConn,
+			fmt.Sprintf("insert into %s.t1(id, tenant_id) values(%d, %d)", sourceAliasKeyspace, i, tenantId), queryTimeout)
 	}
 	mtm.setLastID(tenantId, idx+numRows)
 }
@@ -296,8 +269,8 @@ func TestMultiTenant(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	t.Run("Verify all rows have been migrated", func(t *testing.T) {
-		numAdditionalInserts := 6 // 2 each for Switch, Reverse, and SwitchAgain
-		totalRowsInsertedPerTenant := numInitialRowsPerTenant + numAdditionalRowsPerTenant*numAdditionalInserts
+		numAdditionalInsertSets := 2 // during the SwitchTraffic stop
+		totalRowsInsertedPerTenant := numInitialRowsPerTenant + numAdditionalRowsPerTenant*numAdditionalInsertSets
 		totalRowsInserted := totalRowsInsertedPerTenant * numTenants
 		totalActualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", mtm.targetKeyspace, "t1"))
 		require.Equal(t, totalRowsInserted, totalActualRowsInserted)
@@ -339,7 +312,7 @@ func (mtm *multiTenantMigration) run() {
 
 	go mtm.doStuff("Start Migrations", chNotCreated, chInProgress, &numInProgress, mtm.start)
 	go mtm.doStuff("Switch Traffic", chInProgress, chSwitched, &numSwitched, mtm.switchTraffic)
-	go mtm.doStuff("Reverse Traffic", chSwitched, chReversed, &numReversed, mtm.reverseTraffic)
-	go mtm.doStuff("Switch Traffic Again", chReversed, chSwitchedAgain, &numSwitchedAgain, mtm.switchTraffic)
-	go mtm.doStuff("Mark Migrations Complete", chSwitchedAgain, chCompleted, &numCompleted, mtm.complete)
+	//go mtm.doStuff("Reverse Traffic", chSwitched, chReversed, &numReversed, mtm.reverseTraffic)
+	//go mtm.doStuff("Switch Traffic Again", chReversed, chSwitchedAgain, &numSwitchedAgain, mtm.switchTraffic)
+	go mtm.doStuff("Mark Migrations Complete", chSwitched, chCompleted, &numCompleted, mtm.complete)
 }

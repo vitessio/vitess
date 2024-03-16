@@ -1565,7 +1565,9 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 	if mz.ms.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.TenantId != "" {
 		log.Infof("Setting up keyspace routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
 		var keyspaces []string
-		keyspaces = append(keyspaces, sourceKeyspace, targetKeyspace)
+		// Note that you can never point the target keyspace to the source keyspace in a multi-tenant migration
+		// since the target takes write traffic for all tenants!
+		keyspaces = append(keyspaces, sourceKeyspace)
 		if req.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.SourceKeyspaceAlias != "" {
 			keyspaces = append(keyspaces, req.VReplicationWorkflowOptions.SourceKeyspaceAlias)
 		}

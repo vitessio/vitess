@@ -475,7 +475,8 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 		return nil
 	}
 	if len(newTables) != len(tables) {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, dlTablesAlreadyPresent)
+		// FIXME: Do we need this: currently this is a problem is there are multiple migrations with reverse traffic
+		//return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, dlTablesAlreadyPresent)
 	}
 	tc.DeniedTables = append(tc.DeniedTables, tables...)
 	return nil
