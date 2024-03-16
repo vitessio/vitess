@@ -641,3 +641,10 @@ func primaryVindexesDiffer(ms *vtctldatapb.MaterializeSettings, source, target *
 	}
 	return false
 }
+
+func (mz *materializer) IsMultiTenantMigration() bool {
+	if mz.ms.VReplicationWorkflowOptions != nil && mz.ms.VReplicationWorkflowOptions.TenantId != "" {
+		return true
+	}
+	return false
+}

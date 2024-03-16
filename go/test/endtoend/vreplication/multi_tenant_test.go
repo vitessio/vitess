@@ -285,7 +285,7 @@ func TestMultiTenant(t *testing.T) {
 	timer := time.NewTimer(waitTimeout)
 	for numTenantsMigrated < numTenants {
 		select {
-		case tenantId := <-chSwitched:
+		case tenantId := <-chCompleted:
 			mtm.setTenantMigrationStatus(tenantId, tenantMigrationStatusMigrated)
 			numTenantsMigrated++
 			timer.Reset(waitTimeout)
@@ -324,8 +324,6 @@ func (mtm *multiTenantMigration) doStuff(name string, chIn, chOut chan int64, co
 	}
 }
 
-var finalStateCh = chSwitched
-
 // run starts the migration process for all tenants. It starts concurrent
 func (mtm *multiTenantMigration) run() {
 	go mtm.doStuff("Setup tenant keyspace/schemas", chNotSetup, chNotCreated, &numSetup, mtm.setup)
@@ -333,7 +331,7 @@ func (mtm *multiTenantMigration) run() {
 		chNotSetup <- i
 	}
 	// Wait for all tenants to be created before starting the workflows: 10 seconds per tenant to account for CI overhead.
-	perTenantLoadTimeout := 10 * time.Second
+	perTenantLoadTimeout := 1 * time.Minute
 	require.NoError(mtm.t, waitForCondition("All tenants created",
 		func() bool {
 			return numSetup.Load() == numTenants
@@ -341,7 +339,7 @@ func (mtm *multiTenantMigration) run() {
 
 	go mtm.doStuff("Start Migrations", chNotCreated, chInProgress, &numInProgress, mtm.start)
 	go mtm.doStuff("Switch Traffic", chInProgress, chSwitched, &numSwitched, mtm.switchTraffic)
-	//go mtm.doStuff("Reverse Traffic", chSwitched, chReversed, &numReversed, mtm.reverseTraffic)
-	//go mtm.doStuff("Switch Traffic Again", chReversed, chSwitchedAgain, &numSwitchedAgain, mtm.switchTraffic)
-	//go mtm.doStuff("Mark Migrations Complete", chSwitchedAgain, chCompleted, &numCompleted, mtm.complete)
+	go mtm.doStuff("Reverse Traffic", chSwitched, chReversed, &numReversed, mtm.reverseTraffic)
+	go mtm.doStuff("Switch Traffic Again", chReversed, chSwitchedAgain, &numSwitchedAgain, mtm.switchTraffic)
+	go mtm.doStuff("Mark Migrations Complete", chSwitchedAgain, chCompleted, &numCompleted, mtm.complete)
 }

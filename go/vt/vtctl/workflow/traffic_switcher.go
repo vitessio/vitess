@@ -713,7 +713,21 @@ func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
-	if ts.isPartialMigration {
+	if ts.IsMultiTenantMigration() {
+		ts.Logger().Infof("Pointing keyspace routing rules to %s", ts.TargetKeyspaceName())
+		var keyspaces []string
+		keyspaces = append(keyspaces, ts.SourceKeyspaceName(), ts.TargetKeyspaceName())
+		if ts.options.SourceKeyspaceAlias != "" {
+			keyspaces = append(keyspaces, ts.options.SourceKeyspaceAlias)
+		}
+		routes := make(map[string]string)
+		for _, ks := range keyspaces {
+			routes[ks] = ts.TargetKeyspaceName()
+		}
+		if err := updateKeyspaceRoutingRule(ctx, ts.TopoServer(), routes); err != nil {
+			return err
+		}
+	} else if ts.isPartialMigration {
 		srr, err := topotools.GetShardRoutingRules(ctx, ts.TopoServer())
 		if err != nil {
 			return err
@@ -888,30 +902,11 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 					}
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
-				if ts.options != nil && ts.options.TenantId != "" {
-					parser := ts.ws.env.Parser()
-					vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
+				if ts.IsMultiTenantMigration() {
+					filter, err = ts.addTenantFilter(ctx, filter)
 					if err != nil {
 						return err
 					}
-					targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ts.targetKeyspace, parser)
-					if err != nil {
-						return err
-					}
-					tenantClause, err := getTenantClause(ts.options, targetVSchema, parser)
-					if err != nil {
-						return err
-					}
-					stmt, err := parser.Parse(filter)
-					if err != nil {
-						return err
-					}
-					sel, ok := stmt.(*sqlparser.Select)
-					if !ok {
-						return fmt.Errorf("unrecognized statement: %s", filter)
-					}
-					addFilter(sel, *tenantClause)
-					filter = sqlparser.String(sel)
 				}
 			}
 			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
@@ -943,6 +938,33 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		return nil
 	})
 	return err
+}
+
+func (ts *trafficSwitcher) addTenantFilter(ctx context.Context, filter string) (string, error) {
+	parser := ts.ws.env.Parser()
+	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
+	if err != nil {
+		return "", err
+	}
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ts.targetKeyspace, parser)
+	if err != nil {
+		return "", err
+	}
+	tenantClause, err := getTenantClause(ts.options, targetVSchema, parser)
+	if err != nil {
+		return "", err
+	}
+	stmt, err := parser.Parse(filter)
+	if err != nil {
+		return "", err
+	}
+	sel, ok := stmt.(*sqlparser.Select)
+	if !ok {
+		return "", fmt.Errorf("unrecognized statement: %s", filter)
+	}
+	addFilter(sel, *tenantClause)
+	filter = sqlparser.String(sel)
+	return filter, nil
 }
 
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
@@ -1595,4 +1617,11 @@ func (ts *trafficSwitcher) resetSequences(ctx context.Context) error {
 			source.GetShard().Keyspace(), source.GetShard().ShardName(), source.GetPrimary().String())
 		return ts.TabletManagerClient().ResetSequences(ctx, source.GetPrimary().Tablet, ts.Tables())
 	})
+}
+
+func (ts *trafficSwitcher) IsMultiTenantMigration() bool {
+	if ts.options != nil && ts.options.TenantId != "" {
+		return true
+	}
+	return false
 }

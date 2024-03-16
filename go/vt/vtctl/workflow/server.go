@@ -977,7 +977,19 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 		}
 		table := ts.Tables()[0]
 
-		if ts.isPartialMigration { // shard level traffic switching is all or nothing
+		if ts.IsMultiTenantMigration() {
+			keyspaceRoutingRules, err := topotools.GetKeyspaceRoutingRules(ctx, ts.TopoServer())
+			if err != nil {
+				return nil, nil, err
+			}
+			currentTargetKeyspace := keyspaceRoutingRules[ts.sourceKeyspace]
+			if currentTargetKeyspace == ts.targetKeyspace {
+				log.Infof("Keyspace routing rules: routing currently to target, so marking all traffic as switched")
+				state.WritesSwitched = true
+				state.ReplicaCellsNotSwitched = nil
+				state.RdonlyCellsNotSwitched = nil
+			}
+		} else if ts.isPartialMigration { // shard level traffic switching is all or nothing
 			shardRoutingRules, err := s.ts.GetShardRoutingRules(ctx)
 			if err != nil {
 				return nil, nil, err
@@ -1455,36 +1467,8 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	// Now that the streams have been successfully created, let's put the associated
 	// routing rules in place.
 	if externalTopo == nil {
-		if req.NoRoutingRules {
-			log.Warningf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
-		} else {
-			// Save routing rules before vschema. If we save vschema first, and routing
-			// rules fails to save, we may generate duplicate table errors.
-			if mz.isPartial {
-				if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
-					return nil, err
-				}
-			}
-
-			rules, err := topotools.GetRoutingRules(ctx, s.ts)
-			if err != nil {
-				return nil, err
-			}
-			for _, table := range tables {
-				toSource := []string{sourceKeyspace + "." + table}
-				rules[table] = toSource
-				rules[table+"@replica"] = toSource
-				rules[table+"@rdonly"] = toSource
-				rules[targetKeyspace+"."+table] = toSource
-				rules[targetKeyspace+"."+table+"@replica"] = toSource
-				rules[targetKeyspace+"."+table+"@rdonly"] = toSource
-				rules[targetKeyspace+"."+table] = toSource
-				rules[sourceKeyspace+"."+table+"@replica"] = toSource
-				rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
-			}
-			if err := topotools.SaveRoutingRules(ctx, s.ts, rules); err != nil {
-				return nil, err
-			}
+		if err := s.setupInitialRoutingRules(ctx, req, mz, tables, vschema); err != nil {
+			return nil, err
 		}
 
 		// We added to the vschema.
@@ -1537,6 +1521,88 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		Keyspace: targetKeyspace,
 		Workflow: req.Workflow,
 	})
+}
+
+func (s *Server) validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateRequest, mz *materializer) error {
+	if mz.IsMultiTenantMigration() {
+		switch {
+		case req.NoRoutingRules:
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use --no-routing-rules in a multi-tenant migration")
+		case mz.isPartial:
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use run partial shard migration along with multi-tenant migration")
+		}
+	}
+	return nil
+}
+
+func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest, mz *materializer, tables []string, vschema *vschemapb.Keyspace) error {
+	if err := s.validateRoutingRuleFlags(req, mz); err != nil {
+		return err
+	}
+
+	const (
+		primaryType = ""
+		globalRoute
+	)
+	sourceKeyspace := req.SourceKeyspace
+	targetKeyspace := req.TargetKeyspace
+
+	if req.NoRoutingRules {
+		log.Warningf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
+		return nil
+	}
+
+	// Save routing rules before vschema. If we save vschema first, and routing
+	// rules fails to save, we may generate duplicate table errors.
+	if mz.isPartial {
+		if err := createDefaultShardRoutingRules(mz.ctx, mz.ms, mz.ts); err != nil {
+			return err
+		}
+	}
+
+	// This needs to be protected with a mutex or a lock. FIXME: confirm this.
+	// Otherwise the map could be overwritten if multiple movetables are run at the same time.
+	if mz.ms.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.TenantId != "" {
+		log.Infof("Setting up keyspace routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
+		var keyspaces []string
+		keyspaces = append(keyspaces, sourceKeyspace, targetKeyspace)
+		if req.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.SourceKeyspaceAlias != "" {
+			keyspaces = append(keyspaces, req.VReplicationWorkflowOptions.SourceKeyspaceAlias)
+		}
+		routes := make(map[string]string)
+		for _, ks := range keyspaces {
+			routes[ks] = sourceKeyspace
+		}
+		if err := updateKeyspaceRoutingRule(ctx, s.ts, routes); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// Setup table routing rules.
+	rules, err := topotools.GetRoutingRules(ctx, s.ts)
+	if err != nil {
+		return err
+	}
+	routeTableToSource := func(keyspace, table string) {
+		key := table
+		route := fmt.Sprintf("%s.%s", sourceKeyspace, table)
+		if keyspace != "" {
+			key = fmt.Sprintf("%s.%s", keyspace, table)
+		}
+		for _, typ := range []string{primaryType, "@replica", "@rdonly"} {
+			rules[key+typ] = []string{route}
+		}
+	}
+	for _, table := range tables {
+		for _, ks := range []string{globalRoute, targetKeyspace, sourceKeyspace} {
+			routeTableToSource(ks, table)
+		}
+	}
+	if err := topotools.SaveRoutingRules(ctx, s.ts, rules); err != nil {
+		return err
+	}
+	return nil
 }
 
 // MoveTablesComplete is part of the vtctlservicepb.VtctldServer interface.
@@ -2936,6 +3002,16 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			return nil, err
 		}
 	}
+	hasReplica, hasRdonly, hasPrimary, err = parseTabletTypes(req.TabletTypes)
+	if err != nil {
+		return nil, err
+	}
+	if ts.IsMultiTenantMigration() && !(hasRdonly && hasReplica && hasPrimary) {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"for multi-tenant migrations, all traffic needs to be switched at once for workflow %s", req.Workflow)
+		return nil, err
+	}
+
 	reason, err := s.canSwitch(ctx, ts, startState, direction, int64(maxReplicationLagAllowed.Seconds()), req.Shards)
 	if err != nil {
 		return nil, err
@@ -2997,6 +3073,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		} else {
 			resp.CurrentState = currentState.String()
 		}
+		log.Infof("SwitchTraffic done for workflow %s.%s, returning response %v", req.Keyspace, req.Workflow, resp)
 	}
 	return resp, nil
 }
@@ -3036,7 +3113,20 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	if !switchReplica && !switchRdonly {
 		return handleError("invalid tablet types", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet types must be REPLICA or RDONLY: %s", roTypesToSwitchStr))
 	}
-	if !ts.isPartialMigration { // shard level traffic switching is all or nothing
+	// For partial (shard-by-shard migrations) and if keyspace routing rules are used, traffic for all tablet types
+	// is expected to be switched at once. For other MoveTables migrations where we use table routing rules
+	// replica/rdonly traffic can be switched first and then primary traffic can be switched later.
+	trafficSwitchingIsAllOrNothing := false
+	switch {
+	case !ts.isPartialMigration:
+		// shard level traffic switching is all or nothing
+		trafficSwitchingIsAllOrNothing = true
+	case ts.MigrationType() == binlogdatapb.MigrationType_TABLES && ts.IsMultiTenantMigration():
+		// keyspace routing rules are used, traffic is all or nothing per keyspace
+		trafficSwitchingIsAllOrNothing = true
+	}
+
+	if !trafficSwitchingIsAllOrNothing {
 		if direction == DirectionBackward && switchReplica && len(state.ReplicaCellsSwitched) == 0 {
 			return handleError("invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched"))
 		}
@@ -3087,10 +3177,16 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	defer unlock(&err)
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		if ts.isPartialMigration {
+		switch {
+		case ts.IsMultiTenantMigration():
+			ts.Logger().Infof("If keyspace routing rules are used, traffic is all or nothing per keyspace.")
+		case ts.isPartialMigration:
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
-		} else if err := sw.switchTableReads(ctx, req.Cells, roTabletTypes, direction); err != nil {
-			return handleError("failed to switch read traffic for the tables", err)
+		default:
+			err := sw.switchTableReads(ctx, req.Cells, roTabletTypes, direction)
+			if err != nil {
+				return handleError("failed to switch read traffic for the tables", err)
+			}
 		}
 		return sw.logs(), nil
 	}
