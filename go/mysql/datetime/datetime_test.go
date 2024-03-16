@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 var testGoTime = time.Date(2024, 03, 12, 12, 30, 20, 987654321, time.UTC)
@@ -898,4 +899,34 @@ func TestDateTimeRound(t *testing.T) {
 	}
 }
 
-// TODO: Write tests for Hash time/date
+func TestHash(t *testing.T) {
+	time := NewTimeFromStd(testGoTime)
+	h := vthash.New()
+	time.Hash(&h)
+
+	want := [16]byte{
+		0xaa, 0x5c, 0xb4, 0xd3, 0x02, 0x85, 0xb3, 0xf3,
+		0xb2, 0x44, 0x7d, 0x7c, 0x00, 0xda, 0x4a, 0xec,
+	}
+	assert.Equal(t, want, h.Sum128())
+
+	date := Date{2024, 3, 16}
+	h = vthash.New()
+	date.Hash(&h)
+
+	want = [16]byte{
+		0xa8, 0xa0, 0x91, 0xbd, 0x3b, 0x27, 0xfc, 0x8b,
+		0xf2, 0xfa, 0xe3, 0x09, 0xba, 0x23, 0x56, 0xe5,
+	}
+	assert.Equal(t, want, h.Sum128())
+
+	dt := DateTime{Date: date, Time: time}
+	h = vthash.New()
+	dt.Hash(&h)
+
+	want = [16]byte{
+		0x0f, 0xd7, 0x67, 0xa0, 0xd8, 0x6, 0x1c, 0xc,
+		0xe7, 0xbd, 0x71, 0x74, 0xfa, 0x74, 0x66, 0x38,
+	}
+	assert.Equal(t, want, h.Sum128())
+}

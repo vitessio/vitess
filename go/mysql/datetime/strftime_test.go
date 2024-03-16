@@ -80,4 +80,25 @@ func TestStrftimeFormat(t *testing.T) {
 	}
 }
 
-// TODO: Add test for FormatNumeric
+func TestFormatNumeric(t *testing.T) {
+	in := "%Y%h%H%s%d"
+	res, err := New(in)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		dt   string
+		want int64
+	}{
+		{"1999-12-31 23:59:58.999", 199911235831},
+		{"2000-01-02 03:04:05", 200003030502},
+		{"2001-01-01 01:04:05", 200101010501},
+	}
+
+	for _, tc := range testCases {
+		dt, _, ok := ParseDateTime(tc.dt, -1)
+		require.True(t, ok)
+
+		n := res.FormatNumeric(dt)
+		assert.Equal(t, tc.want, n)
+	}
+}
