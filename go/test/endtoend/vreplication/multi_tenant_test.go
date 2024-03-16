@@ -42,10 +42,9 @@ const (
 
 var (
 	// channels to coordinate the migration workflow
-	chNotSetup, chNotCreated, chInProgress               chan int64
-	chSwitched, chReversed, chSwitchedAgain, chCompleted chan int64
+	chNotSetup, chNotCreated, chInProgress, chSwitched, chCompleted chan int64
 	// counters to keep track of the number of tenants in each state
-	numSetup, numInProgress, numSwitched, numReversed, numSwitchedAgain, numCompleted atomic.Int64
+	numSetup, numInProgress, numSwitched, numCompleted atomic.Int64
 )
 
 // multiTenantMigration manages the migration of multiple tenants to a single target keyspace.
@@ -109,7 +108,7 @@ func newMultiTenantMigration(t *testing.T) *multiTenantMigration {
 		mtm.setTenantMigrationStatus(int64(i), tenantMigrationStatusNotMigrated)
 	}
 	channelSize := numTenants + 1 // +1 to make sure the channels never block
-	for _, ch := range []*chan int64{&chNotSetup, &chNotCreated, &chInProgress, &chReversed, &chSwitchedAgain, &chSwitched, &chCompleted} {
+	for _, ch := range []*chan int64{&chNotSetup, &chNotCreated, &chInProgress, &chSwitched, &chCompleted} {
 		*ch = make(chan int64, channelSize)
 	}
 	return mtm
@@ -167,7 +166,6 @@ func (mtm *multiTenantMigration) setup(tenantId int64) {
 	_, err := vc.AddKeyspace(mtm.t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", mtVSchema, mtSchema,
 		1, 0, getInitialTabletIdForTenant(tenantId), nil)
 	require.NoError(mtm.t, err)
-	//updateKeyspaceRoutingRules(mtm.t, vc, sourceAliasKeyspace, sourceKeyspace)
 	mtm.initTenantData(mtm.t, tenantId, sourceAliasKeyspace)
 }
 
@@ -214,17 +212,6 @@ func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 	mtm.insertSomeData(t, tenantId, sourceAliasKeyspace, numAdditionalRowsPerTenant)
 	mt.SwitchReadsAndWrites()
 	mtm.insertSomeData(t, tenantId, sourceKeyspaceName, numAdditionalRowsPerTenant)
-}
-
-func (mtm *multiTenantMigration) reverseTraffic(tenantId int64) {
-	t := mtm.t
-	mt := mtm.activeMoveTables[tenantId]
-	sourceKeyspaceName := getSourceKeyspace(tenantId)
-	reverseKsWorkflow := fmt.Sprintf("%s.%s_reverse", sourceKeyspaceName, mt.workflowName)
-	waitForWorkflowState(t, vc, reverseKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-	mtm.insertSomeData(t, tenantId, targetKeyspaceName, numAdditionalRowsPerTenant)
-	mt.ReverseReadsAndWrites()
-	mtm.insertSomeData(t, tenantId, targetKeyspaceName, numAdditionalRowsPerTenant)
 }
 
 func (mtm *multiTenantMigration) complete(tenantId int64) {
@@ -312,7 +299,5 @@ func (mtm *multiTenantMigration) run() {
 
 	go mtm.doStuff("Start Migrations", chNotCreated, chInProgress, &numInProgress, mtm.start)
 	go mtm.doStuff("Switch Traffic", chInProgress, chSwitched, &numSwitched, mtm.switchTraffic)
-	//go mtm.doStuff("Reverse Traffic", chSwitched, chReversed, &numReversed, mtm.reverseTraffic)
-	//go mtm.doStuff("Switch Traffic Again", chReversed, chSwitchedAgain, &numSwitchedAgain, mtm.switchTraffic)
 	go mtm.doStuff("Mark Migrations Complete", chSwitched, chCompleted, &numCompleted, mtm.complete)
 }
