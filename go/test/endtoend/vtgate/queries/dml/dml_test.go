@@ -54,12 +54,6 @@ func TestMultiTableDelete(t *testing.T) {
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
 	mcmp.Exec("insert into oevent_tbl(oid, ename) values (1,'a'), (2,'b'), (3,'a'), (4,'c')")
 
-	// check rows
-	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
-		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
-	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
-		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("a")] [INT64(4) VARCHAR("c")]]`)
-
 	// multi table delete
 	qr := mcmp.Exec(`delete o from order_tbl o join oevent_tbl ev where o.oid = ev.oid and ev.ename = 'a'`)
 	assert.EqualValues(t, 2, qr.RowsAffected)
@@ -90,12 +84,6 @@ func TestDeleteWithLimit(t *testing.T) {
 	// initial rows
 	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (2,10), (3,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
-
-	// check rows
-	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
-		`[[INT64(1) INT64(10)] [INT64(2) INT64(10)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(5)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
-	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
-		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
 
 	// delete with limit
 	qr := mcmp.Exec(`delete from s_tbl order by num, id limit 3`)
@@ -151,12 +139,6 @@ func TestUpdateWithLimit(t *testing.T) {
 	// initial rows
 	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (2,10), (3,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
-
-	// check rows
-	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
-		`[[INT64(1) INT64(10)] [INT64(2) INT64(10)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(5)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
-	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
-		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
 
 	// update with limit
 	qr := mcmp.Exec(`update s_tbl set num = 12 order by num, id limit 3`)
@@ -216,13 +198,7 @@ func TestMultiTableUpdate(t *testing.T) {
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
 	mcmp.Exec("insert into oevent_tbl(oid, ename) values (1,'a'), (2,'b'), (3,'a'), (4,'c')")
 
-	// check rows
-	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
-		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
-	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
-		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("a")] [INT64(4) VARCHAR("c")]]`)
-
-	// multi table delete
+	// multi table update
 	qr := mcmp.Exec(`update order_tbl o join oevent_tbl ev on o.oid = ev.oid set ev.ename = 'a' where ev.oid > 3`)
 	assert.EqualValues(t, 1, qr.RowsAffected)
 
@@ -252,12 +228,6 @@ func TestDeleteWithSubquery(t *testing.T) {
 	// initial rows
 	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (2,10), (3,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
-
-	// check rows
-	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
-		`[[INT64(1) INT64(10)] [INT64(2) INT64(10)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(5)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
-	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
-		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
 
 	// delete with subquery on s_tbl
 	qr := mcmp.Exec(`delete from s_tbl where id in (select oid from order_tbl)`)
@@ -304,12 +274,6 @@ func TestMultiTargetDelete(t *testing.T) {
 	// initial rows
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
 	mcmp.Exec("insert into oevent_tbl(oid, ename) values (1,'a'), (2,'b'), (3,'a'), (2,'c')")
-
-	// check rows
-	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
-		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
-	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
-		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(2) VARCHAR("c")] [INT64(3) VARCHAR("a")]]`)
 
 	// multi table delete
 	qr := mcmp.Exec(`delete o, ev from order_tbl o join oevent_tbl ev where o.oid = ev.oid and ev.ename = 'a'`)
@@ -367,4 +331,35 @@ func TestMultiTargetDeleteMore(t *testing.T) {
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
 	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
 		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(2) VARCHAR("c")] [INT64(3) VARCHAR("a")]]`)
+}
+
+// TestMultiTargetUpdate executed multi-target update queries
+func TestMultiTargetUpdate(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// initial rows
+	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
+	mcmp.Exec("insert into oevent_tbl(oid, ename) values (1,'a'), (2,'b'), (3,'a'), (4,'c')")
+
+	// multi target update
+	qr := mcmp.Exec(`update order_tbl o join oevent_tbl ev on o.oid = ev.oid set ev.ename = 'a', o.cust_no = 1 where ev.oid > 3`)
+	assert.EqualValues(t, 2, qr.RowsAffected)
+
+	// check rows
+	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
+		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(1)]]`)
+	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
+		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("a")] [INT64(4) VARCHAR("a")]]`)
+
+	qr = mcmp.Exec(`update order_tbl o, oevent_tbl ev set ev.ename = 'xyz', o.oid = 40 where o.cust_no = ev.oid and ev.ename = 'b'`)
+	assert.EqualValues(t, 2, qr.RowsAffected)
+
+	// check rows
+	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid, region_id`,
+		`[[INT64(1) INT64(1) INT64(4)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(1)] [INT64(1) INT64(40) INT64(2)]]`)
+	mcmp.AssertMatches(`select oid, ename from oevent_tbl order by oid`,
+		`[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("xyz")] [INT64(3) VARCHAR("a")] [INT64(4) VARCHAR("a")]]`)
 }

@@ -122,8 +122,11 @@ func init() {
 	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerMySQLDFlags)
 	}
-	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
+	for _, cmd := range []string{"vtctld", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerReparentFlags)
+	}
+	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver"} {
+		servenv.OnParseFor(cmd, registerDeprecatedReparentFlags)
 	}
 	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerPoolFlags)
@@ -139,6 +142,11 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 
 func registerReparentFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&DisableActiveReparents, "disable_active_reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+}
+
+func registerDeprecatedReparentFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&DisableActiveReparents, "disable_active_reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+	fs.MarkDeprecated("disable_active_reparents", "Use --unmanaged flag instead for unmanaged tablets.")
 }
 
 func registerPoolFlags(fs *pflag.FlagSet) {
@@ -460,6 +468,10 @@ func cleanupLockfile(socket string, ts string) error {
 		log.Errorf("%v: error parsing pid from lock file: %v", ts, err)
 		return err
 	}
+	if os.Getpid() == p {
+		log.Infof("%v: lock file at %s is ours, removing it", ts, lockPath)
+		return os.Remove(lockPath)
+	}
 	proc, err := os.FindProcess(p)
 	if err != nil {
 		log.Errorf("%v: error finding process: %v", ts, err)
@@ -469,7 +481,13 @@ func cleanupLockfile(socket string, ts string) error {
 	if err == nil {
 		// If the process still exists, it's not safe to
 		// remove the lock file, so we have to keep it around.
-		log.Errorf("%v: not removing socket lock file: %v with pid %v", ts, lockPath, p)
+		cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", p))
+		if err == nil {
+			name := string(bytes.ReplaceAll(cmdline, []byte{0}, []byte(" ")))
+			log.Errorf("%v: not removing socket lock file: %v with pid %v for %q", ts, lockPath, p, name)
+		} else {
+			log.Errorf("%v: not removing socket lock file: %v with pid %v (failed to read process name: %v)", ts, lockPath, p, err)
+		}
 		return fmt.Errorf("process %v is still running", p)
 	}
 	if !errors.Is(err, os.ErrProcessDone) {

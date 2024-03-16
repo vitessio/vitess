@@ -463,22 +463,12 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 
 	currentScope := r.scoper.currentScope()
 	aliases := r.getAliasMap(sel)
-	insideAggr := false
-	downF := func(node, _ sqlparser.SQLNode) bool {
-		switch node.(type) {
-		case *sqlparser.Subquery:
-			return false
-		case sqlparser.AggrFunc:
-			insideAggr = true
-		}
+	aggrTrack := &aggrTracker{}
 
-		return true
-	}
-
-	output := sqlparser.CopyOnRewrite(node, downF, func(cursor *sqlparser.CopyOnWriteCursor) {
+	output := sqlparser.CopyOnRewrite(node, aggrTrack.down, func(cursor *sqlparser.CopyOnWriteCursor) {
 		switch col := cursor.Node().(type) {
 		case sqlparser.AggrFunc:
-			insideAggr = false
+			aggrTrack.popAggr()
 		case *sqlparser.ColName:
 			if col.Qualifier.NonEmpty() {
 				// we are only interested in columns not qualified by table names
@@ -504,8 +494,8 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 			}
 
 			if item.ambiguous {
-				err = &AmbiguousColumnError{Column: sqlparser.String(col)}
-			} else if insideAggr && sqlparser.ContainsAggregation(item.expr) {
+				err = newAmbiguousColumnError(col)
+			} else if aggrTrack.insideAggr && sqlparser.ContainsAggregation(item.expr) {
 				err = &InvalidUseOfGroupFunction{}
 			}
 			if err != nil {
@@ -529,23 +519,13 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 	}
 
 	aliases := r.getAliasMap(sel)
-	insideAggr := false
-	dontEnterSubquery := func(node, _ sqlparser.SQLNode) bool {
-		switch node.(type) {
-		case *sqlparser.Subquery:
-			return false
-		case sqlparser.AggrFunc:
-			insideAggr = true
-		}
-
-		return true
-	}
-	output := sqlparser.CopyOnRewrite(node, dontEnterSubquery, func(cursor *sqlparser.CopyOnWriteCursor) {
+	aggrTrack := &aggrTracker{}
+	output := sqlparser.CopyOnRewrite(node, aggrTrack.down, func(cursor *sqlparser.CopyOnWriteCursor) {
 		var col *sqlparser.ColName
 
 		switch node := cursor.Node().(type) {
 		case sqlparser.AggrFunc:
-			insideAggr = false
+			aggrTrack.popAggr()
 			return
 		case *sqlparser.ColName:
 			col = node
@@ -559,7 +539,7 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 		}
 
 		item, found := aliases[col.Name.Lowered()]
-		if insideAggr {
+		if aggrTrack.insideAggr {
 			// inside aggregations, we want to first look for columns in the FROM clause
 			isColumnOnTable, sure := r.isColumnOnTable(col, currentScope)
 			if isColumnOnTable {
@@ -576,8 +556,8 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 
 		// If we get here, it means we have found an alias and want to use it
 		if item.ambiguous {
-			err = &AmbiguousColumnError{Column: sqlparser.String(col)}
-		} else if insideAggr && sqlparser.ContainsAggregation(item.expr) {
+			err = newAmbiguousColumnError(col)
+		} else if aggrTrack.insideAggr && sqlparser.ContainsAggregation(item.expr) {
 			err = &InvalidUseOfGroupFunction{}
 		}
 		if err != nil {
@@ -594,6 +574,25 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 	return
 }
 
+type aggrTracker struct {
+	insideAggr bool
+}
+
+func (at *aggrTracker) down(node, _ sqlparser.SQLNode) bool {
+	switch node.(type) {
+	case *sqlparser.Subquery:
+		return false
+	case sqlparser.AggrFunc:
+		at.insideAggr = true
+	}
+
+	return true
+}
+
+func (at *aggrTracker) popAggr() {
+	at.insideAggr = false
+}
+
 // rewriteAliasesInOrderBy rewrites columns in the ORDER BY to use aliases
 // from the SELECT expressions when applicable, following MySQL scoping rules:
 //   - A column identifier without a table qualifier that matches an alias introduced
@@ -608,23 +607,13 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlpar
 	}
 
 	aliases := r.getAliasMap(sel)
-	insideAggr := false
-	dontEnterSubquery := func(node, _ sqlparser.SQLNode) bool {
-		switch node.(type) {
-		case *sqlparser.Subquery:
-			return false
-		case sqlparser.AggrFunc:
-			insideAggr = true
-		}
-
-		return true
-	}
-	output := sqlparser.CopyOnRewrite(node, dontEnterSubquery, func(cursor *sqlparser.CopyOnWriteCursor) {
+	aggrTrack := &aggrTracker{}
+	output := sqlparser.CopyOnRewrite(node, aggrTrack.down, func(cursor *sqlparser.CopyOnWriteCursor) {
 		var col *sqlparser.ColName
 
 		switch node := cursor.Node().(type) {
 		case sqlparser.AggrFunc:
-			insideAggr = false
+			aggrTrack.popAggr()
 			return
 		case *sqlparser.ColName:
 			col = node
@@ -661,8 +650,8 @@ func (r *earlyRewriter) rewriteAliasesInOrderBy(node sqlparser.Expr, sel *sqlpar
 		}
 
 		if item.ambiguous {
-			err = &AmbiguousColumnError{Column: sqlparser.String(col)}
-		} else if insideAggr && sqlparser.ContainsAggregation(item.expr) {
+			err = newAmbiguousColumnError(col)
+		} else if aggrTrack.insideAggr && sqlparser.ContainsAggregation(item.expr) {
 			err = &InvalidUseOfGroupFunction{}
 		}
 		if err != nil {
@@ -1237,16 +1226,12 @@ type expanderState struct {
 // addColumn adds columns to the expander state. If we have vschema info about the query,
 // we also store which columns were expanded
 func (e *expanderState) addColumn(col ColumnInfo, tbl TableInfo, tblName sqlparser.TableName) {
-	withQualifier := e.needsQualifier
 	var colName *sqlparser.ColName
 	var alias sqlparser.IdentifierCI
-	if withQualifier {
+	if e.needsQualifier {
 		colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
 	} else {
 		colName = sqlparser.NewColName(col.Name)
-	}
-	if e.needsQualifier {
-		alias = sqlparser.NewIdentifierCI(col.Name)
 	}
 	e.colNames = append(e.colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
 	e.storeExpandInfo(tbl, tblName, colName)

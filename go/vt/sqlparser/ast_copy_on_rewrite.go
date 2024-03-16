@@ -1074,9 +1074,11 @@ func (c *cow) copyOnRewriteRefOfAvg(n *Avg, parent SQLNode) (out SQLNode, change
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1158,9 +1160,11 @@ func (c *cow) copyOnRewriteRefOfBitAnd(n *BitAnd, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1180,9 +1184,11 @@ func (c *cow) copyOnRewriteRefOfBitOr(n *BitOr, parent SQLNode) (out SQLNode, ch
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1202,9 +1208,11 @@ func (c *cow) copyOnRewriteRefOfBitXor(n *BitXor, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1639,9 +1647,11 @@ func (c *cow) copyOnRewriteRefOfCount(n *Count, parent SQLNode) (out SQLNode, ch
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Args, changedArgs := c.copyOnRewriteExprs(n.Args, n)
-		if changedArgs {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArgs || changedOverClause {
 			res := *n
 			res.Args, _ = _Args.(Exprs)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1660,6 +1670,16 @@ func (c *cow) copyOnRewriteRefOfCountStar(n *CountStar, parent SQLNode) (out SQL
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedOverClause {
+			res := *n
+			res.OverClause, _ = _OverClause.(*OverClause)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -3870,9 +3890,11 @@ func (c *cow) copyOnRewriteRefOfMax(n *Max, parent SQLNode) (out SQLNode, change
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -3916,9 +3938,11 @@ func (c *cow) copyOnRewriteRefOfMin(n *Min, parent SQLNode) (out SQLNode, change
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5441,9 +5465,11 @@ func (c *cow) copyOnRewriteRefOfStd(n *Std, parent SQLNode) (out SQLNode, change
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5463,9 +5489,11 @@ func (c *cow) copyOnRewriteRefOfStdDev(n *StdDev, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5485,9 +5513,11 @@ func (c *cow) copyOnRewriteRefOfStdPop(n *StdPop, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5507,9 +5537,11 @@ func (c *cow) copyOnRewriteRefOfStdSamp(n *StdSamp, parent SQLNode) (out SQLNode
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5702,9 +5734,11 @@ func (c *cow) copyOnRewriteRefOfSum(n *Sum, parent SQLNode) (out SQLNode, change
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6277,9 +6311,11 @@ func (c *cow) copyOnRewriteRefOfVarPop(n *VarPop, parent SQLNode) (out SQLNode, 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6299,9 +6335,11 @@ func (c *cow) copyOnRewriteRefOfVarSamp(n *VarSamp, parent SQLNode) (out SQLNode
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6343,9 +6381,11 @@ func (c *cow) copyOnRewriteRefOfVariance(n *Variance, parent SQLNode) (out SQLNo
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Arg, changedArg := c.copyOnRewriteExpr(n.Arg, n)
-		if changedArg {
+		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
+		if changedArg || changedOverClause {
 			res := *n
 			res.Arg, _ = _Arg.(Expr)
+			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

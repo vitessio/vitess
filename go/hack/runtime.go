@@ -46,6 +46,3 @@ func Atof64(s string) (float64, int, error)
 
 //go:linkname Atof32 strconv.atof32
 func Atof32(s string) (float32, int, error)
-
-//go:linkname FastRand runtime.fastrand
-func FastRand() uint32

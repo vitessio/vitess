@@ -794,9 +794,81 @@
     }
   },
   {
-    "comment": "update in a table with limit - disallowed",
+    "comment": "update with limit with foreign keys",
     "query": "update u_tbl2 set col2 = 'bar' limit 2",
-    "plan": "VT12001: unsupported: update with limit with foreign key constraints"
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update u_tbl2 set col2 = 'bar' limit 2",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "FieldQuery": "select u_tbl2.id from u_tbl2 where 1 != 1",
+            "Query": "select /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2.id from u_tbl2 limit 2 for update",
+            "Table": "u_tbl2"
+          },
+          {
+            "OperatorType": "FkCascade",
+            "Inputs": [
+              {
+                "InputName": "Selection",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
+                "Query": "select /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals for update",
+                "Table": "u_tbl2"
+              },
+              {
+                "InputName": "CascadeChild-1",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "BvName": "fkc_vals",
+                "Cols": [
+                  0
+                ],
+                "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl3 set col3 = null where (col3) in ::fkc_vals and (col3) not in ((cast('bar' as CHAR)))",
+                "Table": "u_tbl3"
+              },
+              {
+                "InputName": "Parent",
+                "OperatorType": "Update",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "unsharded_fk_allow",
+                  "Sharded": false
+                },
+                "TargetTabletType": "PRIMARY",
+                "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2 set col2 = 'bar' where u_tbl2.id in ::dml_vals",
+                "Table": "u_tbl2"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_fk_allow.u_tbl2",
+        "unsharded_fk_allow.u_tbl3"
+      ]
+    }
   },
   {
     "comment": "update in a table with non-literal value - set null fail due to child update where condition",
@@ -1266,7 +1338,7 @@
               "Sharded": false
             },
             "FieldQuery": "select u_tbl2.id from u_tbl2 where 1 != 1",
-            "Query": "select /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2.id from u_tbl2 limit 2",
+            "Query": "select /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2.id from u_tbl2 limit 2 for update",
             "Table": "u_tbl2"
           },
           {
@@ -1281,7 +1353,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select u_tbl2.col2 from u_tbl2 where 1 != 1",
-                "Query": "select /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals",
+                "Query": "select /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2.col2 from u_tbl2 where u_tbl2.id in ::dml_vals for update",
                 "Table": "u_tbl2"
               },
               {

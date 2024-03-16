@@ -129,9 +129,10 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 
 	size := len(firstSelect.SelectExprs)
 	info.recursive = make([]TableSet, size)
-	info.types = make([]evalengine.Type, size)
+	typers := make([]evalengine.TypeAggregator, size)
+	collations := tc.org.collationEnv()
 
-	_ = sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
+	err := sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
 		for i, expr := range s.SelectExprs {
 			ae, ok := expr.(*sqlparser.AliasedExpr)
 			if !ok {
@@ -139,13 +140,19 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 			}
 			_, recursiveDeps, qt := tc.org.depsForExpr(ae.Expr)
 			info.recursive[i] = info.recursive[i].Merge(recursiveDeps)
-			if idx == 0 {
-				// TODO: we probably should coerce these types together somehow, but I'm not sure how
-				info.types[i] = qt
+			if err := typers[i].Add(qt, collations); err != nil {
+				return err
 			}
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	for _, ts := range typers {
+		info.types = append(info.types, ts.Type())
+	}
 	tc.unionInfo[union] = info
 	return nil
 }

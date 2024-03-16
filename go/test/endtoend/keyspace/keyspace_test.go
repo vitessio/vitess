@@ -18,7 +18,6 @@ package sequence
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"flag"
 	"os"
 	"testing"
@@ -211,12 +210,9 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 
 func TestShardNames(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, keyspaceShardedName)
-	require.Nil(t, err)
-	var srvKeyspace topodatapb.SrvKeyspace
-
-	err = json.Unmarshal([]byte(output), &srvKeyspace)
-	require.Nil(t, err)
+	output, err := clusterForKSTest.VtctldClientProcess.GetSrvKeyspaces(keyspaceShardedName, cell)
+	require.NoError(t, err)
+	require.NotNil(t, output[cell], "no srvkeyspace for cell %s", cell)
 }
 
 func TestGetKeyspace(t *testing.T) {
@@ -229,7 +225,11 @@ func TestDeleteKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	_ = clusterForKSTest.VtctldClientProcess.CreateKeyspace("test_delete_keyspace", sidecar.DefaultName)
 	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--", "--keyspace=test_delete_keyspace", "--shard=0", "zone1-0000000100", "primary")
+	_ = clusterForKSTest.InitTablet(&cluster.Vttablet{
+		Type:      "primary",
+		TabletUID: 100,
+		Cell:      "zone1",
+	}, "test_delete_keyspace", "0")
 
 	// Can't delete keyspace if there are shards present.
 	err := clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteKeyspace", "test_delete_keyspace")
@@ -247,13 +247,18 @@ func TestDeleteKeyspace(t *testing.T) {
 	// Start over and this time use recursive DeleteKeyspace to do everything.
 	_ = clusterForKSTest.VtctldClientProcess.CreateKeyspace("test_delete_keyspace", sidecar.DefaultName)
 	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--", "--port=1234", "--bind-address=127.0.0.1", "--keyspace=test_delete_keyspace", "--shard=0", "zone1-0000000100", "primary")
+	_ = clusterForKSTest.InitTablet(&cluster.Vttablet{
+		Type:      "primary",
+		TabletUID: 100,
+		Cell:      "zone1",
+		HTTPPort:  1234,
+	}, "test_delete_keyspace", "0")
 
 	// Create the serving/replication entries and check that they exist,
 	//  so we can later check they're deleted.
 	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", cell, "test_delete_keyspace/0")
-	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspaces", "test_delete_keyspace", cell)
+	_, _ = clusterForKSTest.VtctldClientProcess.GetShardReplication("test_delete_keyspace", "0", cell)
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", cell, "test_delete_keyspace")
 
 	// Recursive DeleteKeyspace
 	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteKeyspace", "--recursive", "test_delete_keyspace")
@@ -265,7 +270,9 @@ func TestDeleteKeyspace(t *testing.T) {
 	require.Error(t, err)
 	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetTablet", "zone1-0000000100")
 	require.Error(t, err)
-	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", cell, "test_delete_keyspace/0")
+	_, err = clusterForKSTest.VtctldClientProcess.GetShardReplication("test_delete_keyspace", "0", cell)
+	require.Error(t, err)
+	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", cell, "test_delete_keyspace")
 	require.Error(t, err)
 	ksMap, err := clusterForKSTest.VtctldClientProcess.GetSrvKeyspaces("test_delete_keyspace", cell)
 	require.NoError(t, err)
@@ -419,11 +426,11 @@ func packKeyspaceID(keyspaceID uint64) []byte {
 }
 
 func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodatapb.SrvKeyspace {
-	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
-	require.Nil(t, err)
-	var srvKeyspace topodatapb.SrvKeyspace
+	output, err := clusterForKSTest.VtctldClientProcess.GetSrvKeyspaces(ksname, cell)
+	require.NoError(t, err)
 
-	err = json.Unmarshal([]byte(output), &srvKeyspace)
-	require.Nil(t, err)
-	return &srvKeyspace
+	srvKeyspace := output[cell]
+	require.NotNil(t, srvKeyspace, "no srvkeyspace for cell %s", cell)
+
+	return srvKeyspace
 }

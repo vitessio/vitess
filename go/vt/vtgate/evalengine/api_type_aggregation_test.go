@@ -51,28 +51,21 @@ var aggregationCases = []struct {
 	{[]sqltypes.Type{sqltypes.Geometry, sqltypes.Geometry}, sqltypes.Geometry},
 }
 
-func TestTypeAggregations(t *testing.T) {
-	for i, tc := range aggregationCases {
-		t.Run(fmt.Sprintf("%d.%v", i, tc.result), func(t *testing.T) {
-			res := AggregateTypes(tc.types)
-			require.Equalf(t, tc.result, res, "expected aggregate(%v) = %v, got %v", tc.types, tc.result, res)
-		})
-	}
-}
-
 func TestEvalengineTypeAggregations(t *testing.T) {
 	for i, tc := range aggregationCases {
 		t.Run(fmt.Sprintf("%d.%v", i, tc.result), func(t *testing.T) {
-			var types []Type
+			var typer TypeAggregator
+
 			for _, tt := range tc.types {
 				// this test only aggregates binary collations because textual collation
 				// aggregation is tested in the `mysql/collations` package
-				types = append(types, NewType(tt, collations.CollationBinaryID))
+
+				err := typer.Add(NewType(tt, collations.CollationBinaryID), collations.MySQL8())
+				require.NoError(t, err)
 			}
 
-			res, err := AggregateEvalTypes(types, collations.MySQL8())
-			require.NoError(t, err)
-			require.Equalf(t, tc.result, res.Type(), "expected aggregate(%v) = %v, got %v", tc.types, tc.result, res)
+			res := typer.Type()
+			require.Equalf(t, tc.result, res.Type(), "expected aggregate(%v) = %v, got %v", tc.types, tc.result, res.Type())
 		})
 	}
 }

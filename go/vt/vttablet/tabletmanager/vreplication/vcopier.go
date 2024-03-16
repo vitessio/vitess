@@ -246,10 +246,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		if err := vc.vr.setState(binlogdatapb.VReplicationWorkflowState_Copying, ""); err != nil {
 			return err
 		}
-		if err := vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase started for %d table(s)",
-			len(plan.TargetTables))); err != nil {
-			return err
-		}
+		vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase started for %d table(s)", len(plan.TargetTables)))
 
 		if vc.vr.supportsDeferredSecondaryKeys() {
 			settings, err := binlogplayer.ReadVRSettings(vc.vr.dbClient, vc.vr.id)
@@ -257,20 +254,15 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 				return err
 			}
 			if settings.DeferSecondaryKeys {
-				if err := vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase temporarily dropping secondary keys for %d table(s)",
-					len(plan.TargetTables))); err != nil {
-					return err
-				}
+				vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase temporarily dropping secondary keys for %d table(s)", len(plan.TargetTables)))
 				for _, tableName := range tableNames {
 					if err := vc.vr.stashSecondaryKeys(ctx, tableName); err != nil {
 						return err
 					}
 				}
-				if err := vc.vr.insertLog(LogCopyStart,
+				vc.vr.insertLog(LogCopyStart,
 					fmt.Sprintf("Copy phase finished dropping secondary keys and saving post copy actions to restore them for %d table(s)",
-						len(plan.TargetTables))); err != nil {
-					return err
-				}
+						len(plan.TargetTables)))
 			}
 		}
 	} else {
@@ -838,7 +830,7 @@ func (vtl *vcopierCopyTaskLifecycle) after(state vcopierCopyTaskState) *vcopierC
 }
 
 // before returns a vcopierCopyTaskHooks that can be used to register callbacks
-// to be triggered before the the specified vcopierCopyTaskState.
+// to be triggered before the specified vcopierCopyTaskState.
 func (vtl *vcopierCopyTaskLifecycle) before(state vcopierCopyTaskState) *vcopierCopyTaskHooks {
 	key := "before:" + state.String()
 	if _, ok := vtl.hooks[key]; !ok {

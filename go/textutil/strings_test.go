@@ -17,9 +17,11 @@ limitations under the License.
 package textutil
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -205,6 +207,81 @@ func TestTitle(t *testing.T) {
 		t.Run(tc.s, func(t *testing.T) {
 			title := Title(tc.s)
 			assert.Equal(t, tc.expect, title)
+		})
+	}
+}
+
+func TestTruncateText(t *testing.T) {
+	defaultLocation := TruncationLocationMiddle
+	defaultMaxLen := 100
+	defaultTruncationIndicator := "..."
+
+	tests := []struct {
+		name                string
+		text                string
+		maxLen              int
+		location            TruncationLocation
+		truncationIndicator string
+		want                string
+		wantErr             string
+	}{
+		{
+			name:     "no truncation",
+			text:     "hello world",
+			maxLen:   defaultMaxLen,
+			location: defaultLocation,
+			want:     "hello world",
+		},
+		{
+			name:     "no truncation - exact",
+			text:     strings.Repeat("a", defaultMaxLen),
+			maxLen:   defaultMaxLen,
+			location: defaultLocation,
+			want:     strings.Repeat("a", defaultMaxLen),
+		},
+		{
+			name:                "barely too long - mid",
+			text:                strings.Repeat("a", defaultMaxLen+1),
+			truncationIndicator: defaultTruncationIndicator,
+			maxLen:              defaultMaxLen,
+			location:            defaultLocation,
+			want:                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		{
+			name:                "barely too long - end",
+			text:                strings.Repeat("a", defaultMaxLen+1),
+			truncationIndicator: defaultTruncationIndicator,
+			maxLen:              defaultMaxLen,
+			location:            TruncationLocationEnd,
+			want:                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...",
+		},
+		{
+			name:                "too small",
+			text:                strings.Repeat("a", defaultMaxLen),
+			truncationIndicator: defaultTruncationIndicator,
+			maxLen:              4,
+			location:            defaultLocation,
+			wantErr:             "the truncation indicator is too long for the provided text",
+		},
+		{
+			name:                "bad location",
+			text:                strings.Repeat("a", defaultMaxLen+1),
+			truncationIndicator: defaultTruncationIndicator,
+			maxLen:              defaultMaxLen,
+			location:            100,
+			wantErr:             "invalid truncation location: 100",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, err := TruncateText(tt.text, tt.maxLen, tt.location, tt.truncationIndicator)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.want, val)
+				require.LessOrEqual(t, len(val), tt.maxLen)
+			}
 		})
 	}
 }

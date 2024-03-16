@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -355,10 +356,10 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return nil, err
 	}
 
-	if cols := op.AllOffsets(); cols != nil {
+	if cols, colNames := op.AllOffsets(); cols != nil {
 		// if all this op is doing is passing through columns from the input, we
 		// can use the faster SimpleProjection
-		return useSimpleProjection(ctx, op, cols, src)
+		return useSimpleProjection(ctx, op, cols, colNames, src)
 	}
 
 	ap, err := op.GetAliasedProjections()
@@ -403,7 +404,7 @@ func getEvalEngingeExpr(ctx *plancontext.PlanningContext, pe *operators.ProjExpr
 
 // useSimpleProjection uses nothing at all if the output is already correct,
 // or SimpleProjection when we have to reorder or truncate the columns
-func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Projection, cols []int, src logicalPlan) (logicalPlan, error) {
+func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Projection, cols []int, colNames []string, src logicalPlan) (logicalPlan, error) {
 	columns := op.Source.GetColumns(ctx)
 	if len(columns) == len(cols) && elementsMatchIndices(cols) {
 		// the columns are already in the right order. we don't need anything at all here
@@ -412,7 +413,8 @@ func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Project
 	return &simpleProjection{
 		logicalPlanCommon: newBuilderCommon(src),
 		eSimpleProj: &engine.SimpleProjection{
-			Cols: cols,
+			Cols:     cols,
+			ColNames: colNames,
 		},
 	}, nil
 }
@@ -699,6 +701,9 @@ func buildUpdateLogicalPlan(
 		if upd.OwnedVindexQuery.Limit != nil && len(upd.OwnedVindexQuery.OrderBy) == 0 {
 			return nil, vterrors.VT12001("Vindex update should have ORDER BY clause when using LIMIT")
 		}
+	}
+	if upd.VerifyAll {
+		stmt.SetComments(stmt.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, "OFF"))
 	}
 
 	edml := createDMLPrimitive(ctx, rb, hints, upd.Target.VTable, generateQuery(stmt), vindexes, vQuery)

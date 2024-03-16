@@ -23,15 +23,16 @@ import (
 	"reflect"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
-	"github.com/stretchr/testify/assert"
-
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
@@ -143,44 +144,39 @@ func TestHook(t *testing.T) {
 	// test a regular program works
 	defer cluster.PanicHandler(t)
 	runHookAndAssert(t, []string{
-		"ExecuteHook", "--", primaryTablet.Alias, "test.sh", "--flag1", "--param1=hello"}, "0", false, "")
+		"ExecuteHook", primaryTablet.Alias, "test.sh", "--", "--flag1", "--param1=hello"}, 0, false, "")
 
 	// test stderr output
 	runHookAndAssert(t, []string{
-		"ExecuteHook", "--", primaryTablet.Alias, "test.sh", "--to-stderr"}, "0", false, "ERR: --to-stderr\n")
+		"ExecuteHook", primaryTablet.Alias, "test.sh", "--", "--to-stderr"}, 0, false, "ERR: --to-stderr\n")
 
 	// test commands that fail
 	runHookAndAssert(t, []string{
-		"ExecuteHook", "--", primaryTablet.Alias, "test.sh", "--exit-error"}, "1", false, "ERROR: exit status 1\n")
+		"ExecuteHook", primaryTablet.Alias, "test.sh", "--", "--exit-error"}, 1, false, "ERROR: exit status 1\n")
 
 	// test hook that is not present
 	runHookAndAssert(t, []string{
-		"ExecuteHook", "--", primaryTablet.Alias, "not_here.sh", "--exit-error"}, "-1", false, "missing hook")
+		"ExecuteHook", primaryTablet.Alias, "not_here.sh", "--", "--exit-error"}, -1, false, "missing hook")
 
 	// test hook with invalid name
 
 	runHookAndAssert(t, []string{
-		"ExecuteHook", "--", primaryTablet.Alias, "/bin/ls"}, "-1", true, "hook name cannot have")
+		"ExecuteHook", primaryTablet.Alias, "/bin/ls"}, -1, true, "hook name cannot have")
 }
 
-func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expectedError bool, expectedStderr string) {
-
-	hr, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(params...)
+func runHookAndAssert(t *testing.T, params []string, expectedStatus int64, expectedError bool, expectedStderr string) {
+	hr, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(params...)
 	if expectedError {
 		assert.Error(t, err, "Expected error")
 	} else {
 		require.Nil(t, err)
 
-		resultMap := make(map[string]any)
-		err = json.Unmarshal([]byte(hr), &resultMap)
+		var resp vtctldatapb.ExecuteHookResponse
+		err = json2.Unmarshal([]byte(hr), &resp)
 		require.Nil(t, err)
 
-		exitStatus := reflect.ValueOf(resultMap["ExitStatus"]).Float()
-		status := fmt.Sprintf("%.0f", exitStatus)
-		assert.Equal(t, expectedStatus, status)
-
-		stderr := reflect.ValueOf(resultMap["Stderr"]).String()
-		assert.Contains(t, stderr, expectedStderr)
+		assert.Equal(t, expectedStatus, resp.HookResult.ExitStatus)
+		assert.Contains(t, resp.HookResult.Stderr, expectedStderr)
 	}
 
 }
@@ -188,23 +184,26 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expe
 func TestShardReplicationFix(t *testing.T) {
 	// make sure the replica is in the replication graph, 2 nodes: 1 primary, 1 replica
 	defer cluster.PanicHandler(t)
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	result, err := clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)
 	require.Nil(t, err, "error should be Nil")
-	assertNodeCount(t, result, int(3))
+	require.NotNil(t, result[cell], "result should not be Nil")
+	assert.Len(t, result[cell].Nodes, 3)
 
 	// Manually add a bogus entry to the replication graph, and check it is removed by ShardReplicationFix
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, fmt.Sprintf("%s-9000", cell))
 	require.Nil(t, err, "error should be Nil")
 
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)
 	require.Nil(t, err, "error should be Nil")
-	assertNodeCount(t, result, int(4))
+	require.NotNil(t, result[cell], "result should not be Nil")
+	assert.Len(t, result[cell].Nodes, 4)
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ShardReplicationFix", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	result, err = clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)
 	require.Nil(t, err, "error should be Nil")
-	assertNodeCount(t, result, int(3))
+	require.NotNil(t, result[cell], "result should not be Nil")
+	assert.Len(t, result[cell].Nodes, 3)
 }
 
 func TestGetSchema(t *testing.T) {
@@ -219,14 +218,4 @@ func TestGetSchema(t *testing.T) {
 	assert.Contains(t, []string{getSchemaT1Results8030, getSchemaT1Results80, getSchemaT1Results57}, t1Create.String())
 	v1Create := gjson.Get(res, "table_definitions.#(name==\"v1\").schema")
 	assert.Equal(t, getSchemaV1Results, v1Create.String())
-}
-
-func assertNodeCount(t *testing.T, result string, want int) {
-	resultMap := make(map[string]any)
-	err := json.Unmarshal([]byte(result), &resultMap)
-	require.Nil(t, err)
-
-	nodes := reflect.ValueOf(resultMap["nodes"])
-	got := nodes.Len()
-	assert.Equal(t, want, got)
 }

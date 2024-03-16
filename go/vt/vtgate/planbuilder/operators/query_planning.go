@@ -137,7 +137,7 @@ func pushLockAndComment(l *LockAndComment) (Operator, *ApplyResult) {
 		return l, NoRewrite
 	case *Route:
 		src.Comments = l.Comments
-		src.Lock = l.Lock
+		src.Lock = l.Lock.GetHighestOrderLock(src.Lock)
 		return src, Rewrote("put lock and comment into route")
 	case *SubQueryContainer:
 		src.Outer = &LockAndComment{

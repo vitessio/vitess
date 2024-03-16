@@ -88,6 +88,10 @@ func eprintf(e error, format string, args ...any) string {
 	return fmt.Sprintf(format, args...)
 }
 
+func newAmbiguousColumnError(name *sqlparser.ColName) error {
+	return &AmbiguousColumnError{Column: sqlparser.String(name)}
+}
+
 // Specific error implementations follow
 
 // UnionColumnsDoNotMatchError
