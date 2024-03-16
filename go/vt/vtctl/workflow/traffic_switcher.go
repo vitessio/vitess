@@ -716,7 +716,7 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 	if ts.IsMultiTenantMigration() {
 		ts.Logger().Infof("Pointing keyspace routing rules to %s", ts.TargetKeyspaceName())
 		var keyspaces []string
-		keyspaces = append(keyspaces, ts.SourceKeyspaceName(), ts.TargetKeyspaceName())
+		keyspaces = append(keyspaces, ts.SourceKeyspaceName())
 		if ts.options.SourceKeyspaceAlias != "" {
 			keyspaces = append(keyspaces, ts.options.SourceKeyspaceAlias)
 		}
