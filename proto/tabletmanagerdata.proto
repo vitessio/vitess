@@ -268,6 +268,26 @@ message ExecuteFetchAsDbaResponse {
   query.QueryResult result = 1;
 }
 
+message ExecuteMultiFetchAsDbaRequest {
+  bytes query = 1;
+  string db_name = 2;
+  uint64 max_rows = 3;
+  bool disable_binlogs = 4;
+  bool reload_schema = 5;
+  bool disable_foreign_key_checks = 6;
+  // IgnoreErrors instructs the tablet to continue executing all queries even if
+  // one or more of them fail.
+  bool ignore_errors = 7;
+}
+
+message ExecuteMultiFetchAsDbaResponse {
+  repeated query.QueryResult results = 1;
+
+  // Errors is a list of errors encountered while executing the queries.
+  // It is either nil/empty, or maps 1:1 to the results.
+  repeated string errors = 2;
+}
+
 message ExecuteFetchAsAllPrivsRequest {
   bytes query = 1;
   string db_name = 2;
