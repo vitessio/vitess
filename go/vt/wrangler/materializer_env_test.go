@@ -25,6 +25,8 @@ import (
 	"sync"
 	"testing"
 
+	_flag "vitess.io/vitess/go/internal/flag"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
@@ -298,4 +300,9 @@ func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *to
 	}
 
 	return nil, nil
+}
+
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	m.Run()
 }

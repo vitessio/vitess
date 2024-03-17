@@ -69,6 +69,9 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			globalStats.ErrorCount.Add(1)
 		}
 	}()
+	if !vde.isOpen {
+		return nil, nil
+	}
 	if req == nil {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "nil vdiff request")
 	}
