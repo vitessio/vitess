@@ -381,8 +381,8 @@ func applyEvents(blp *BinlogPlayer) func() error {
 
 func TestCreateVReplicationKeyRange(t *testing.T) {
 	want := "insert into _vt.vreplication " +
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) " +
-		`values ('Resharding', 'keyspace:\"ks\" shard:\"0\" key_range:{end:\"\\x80\"}', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db', 0, 0, false)`
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) " +
+		`values ('Resharding', 'keyspace:\"ks\" shard:\"0\" key_range:{end:\"\\x80\"}', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db', 0, 0, false, '{}')`
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -400,8 +400,8 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 
 func TestCreateVReplicationTables(t *testing.T) {
 	want := "insert into _vt.vreplication " +
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) " +
-		`values ('Resharding', 'keyspace:\"ks\" shard:\"0\" tables:\"a\" tables:\"b\"', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db', 0, 0, false)`
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) " +
+		`values ('Resharding', 'keyspace:\"ks\" shard:\"0\" tables:\"a\" tables:\"b\"', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db', 0, 0, false, '{}')`
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
