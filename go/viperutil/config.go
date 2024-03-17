@@ -69,7 +69,7 @@ var (
 	configFileNotFoundHandling = Configure(
 		"config.notfound.handling",
 		Options[ConfigFileNotFoundHandling]{
-			Default:  IgnoreConfigFileNotFound,
+			Default:  WarnOnConfigFileNotFound,
 			GetFunc:  getHandlingValue,
 			FlagName: "config-file-not-found-handling",
 		},
