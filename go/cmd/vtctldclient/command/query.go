@@ -46,6 +46,15 @@ var (
 		RunE:                  commandExecuteFetchAsDBA,
 		Aliases:               []string{"ExecuteFetchAsDba"},
 	}
+	// ExecuteMultiFetchAsDBA makes an ExecuteMultiFetchAsDBA gRPC call to a vtctld.
+	ExecuteMultiFetchAsDBA = &cobra.Command{
+		Use:                   "ExecuteMultiFetchAsDBA [--max-rows <max-rows>] [--json|-j] [--disable-binlogs] [--reload-schema] <tablet alias> <sql>",
+		Short:                 "Executes given multiple queries as the DBA user on the remote tablet.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandExecuteMultiFetchAsDBA,
+		Aliases:               []string{"ExecuteMultiFetchAsDba"},
+	}
 )
 
 var executeFetchAsAppOptions = struct {
@@ -138,6 +147,54 @@ func commandExecuteFetchAsDBA(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var executeMultiFetchAsDBAOptions = struct {
+	MaxRows        int64
+	DisableBinlogs bool
+	ReloadSchema   bool
+	JSON           bool
+}{
+	MaxRows: 10_000,
+}
+
+func commandExecuteMultiFetchAsDBA(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	sql := cmd.Flags().Arg(1)
+
+	resp, err := client.ExecuteMultiFetchAsDBA(commandCtx, &vtctldatapb.ExecuteMultiFetchAsDBARequest{
+		TabletAlias:    alias,
+		Sql:            sql,
+		MaxRows:        executeMultiFetchAsDBAOptions.MaxRows,
+		DisableBinlogs: executeMultiFetchAsDBAOptions.DisableBinlogs,
+		ReloadSchema:   executeMultiFetchAsDBAOptions.ReloadSchema,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, result := range resp.Results {
+		qr := sqltypes.Proto3ToResult(result)
+		switch executeMultiFetchAsDBAOptions.JSON {
+		case true:
+			data, err := cli.MarshalJSON(qr)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("%s\n", data)
+		default:
+			cli.WriteQueryResultTable(cmd.OutOrStdout(), qr)
+		}
+	}
+
+	return nil
+}
+
 func init() {
 	ExecuteFetchAsApp.Flags().Int64Var(&executeFetchAsAppOptions.MaxRows, "max-rows", 10_000, "The maximum number of rows to fetch from the remote tablet.")
 	ExecuteFetchAsApp.Flags().BoolVar(&executeFetchAsAppOptions.UsePool, "use-pool", false, "Use the tablet connection pool instead of creating a fresh connection.")
@@ -149,4 +206,10 @@ func init() {
 	ExecuteFetchAsDBA.Flags().BoolVar(&executeFetchAsDBAOptions.ReloadSchema, "reload-schema", false, "Instructs the tablet to reload its schema after executing the query.")
 	ExecuteFetchAsDBA.Flags().BoolVarP(&executeFetchAsDBAOptions.JSON, "json", "j", false, "Output the results in JSON instead of a human-readable table.")
 	Root.AddCommand(ExecuteFetchAsDBA)
+
+	ExecuteMultiFetchAsDBA.Flags().Int64Var(&executeMultiFetchAsDBAOptions.MaxRows, "max-rows", 10_000, "The maximum number of rows to fetch from the remote tablet.")
+	ExecuteMultiFetchAsDBA.Flags().BoolVar(&executeMultiFetchAsDBAOptions.DisableBinlogs, "disable-binlogs", false, "Disables binary logging during the query.")
+	ExecuteMultiFetchAsDBA.Flags().BoolVar(&executeMultiFetchAsDBAOptions.ReloadSchema, "reload-schema", false, "Instructs the tablet to reload its schema after executing the query.")
+	ExecuteMultiFetchAsDBA.Flags().BoolVarP(&executeMultiFetchAsDBAOptions.JSON, "json", "j", false, "Output the results in JSON instead of a human-readable table.")
+	Root.AddCommand(ExecuteMultiFetchAsDBA)
 }
