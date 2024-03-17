@@ -28,7 +28,7 @@ const (
 	tenantMigrationStatusMigrated
 
 	sourceKeyspaceTemplate      = "s%d"
-	sourceAliasKeyspaceTemplate = "s%d" // same as source keyspace for now
+	sourceAliasKeyspaceTemplate = "a%d"
 	targetKeyspaceName          = "mt"
 
 	numTenants                 = 10
@@ -224,46 +224,6 @@ func (mtm *multiTenantMigration) complete(tenantId int64) {
 		fmt.Sprintf("[[INT64(%d)]]", mtm.getLastID(tenantId)))
 }
 
-// TestMultiTenant tests a multi-tenant migration scenario where each tenant is in a separate database.
-// It uses MoveTables to migrate all tenants to the same target keyspace. The test creates a separate source keyspace
-// for each tenant. It then steps through the migration process for each tenant, and verifies that the data is migrated
-// correctly. The migration steps are done concurrently and randomly to simulate an actual multi-tenant migration.
-func TestMultiTenant(t *testing.T) {
-	setSidecarDBName("_vt")
-	// Don't create RDONLY tablets to reduce number of tablets created to reduce resource requirements for the test.
-	origDefaultRdonly := defaultRdonly
-	defer func() {
-		defaultRdonly = origDefaultRdonly
-	}()
-	defaultRdonly = 0
-	vc = setupMinimalCluster(t)
-	defer vc.TearDown()
-
-	mtm := newMultiTenantMigration(t)
-	numTenantsMigrated := 0
-	mtm.run() // Start the migration process for all tenants.
-	timer := time.NewTimer(waitTimeout)
-	for numTenantsMigrated < numTenants {
-		select {
-		case tenantId := <-chCompleted:
-			mtm.setTenantMigrationStatus(tenantId, tenantMigrationStatusMigrated)
-			numTenantsMigrated++
-			timer.Reset(waitTimeout)
-		case <-timer.C:
-			require.FailNow(t, "Timed out waiting for all tenants to complete")
-		}
-	}
-	vtgateConn, closeConn := getVTGateConn()
-	defer closeConn()
-	t.Run("Verify all rows have been migrated", func(t *testing.T) {
-		numAdditionalInsertSets := 2 // during the SwitchTraffic stop
-		totalRowsInsertedPerTenant := numInitialRowsPerTenant + numAdditionalRowsPerTenant*numAdditionalInsertSets
-		totalRowsInserted := totalRowsInsertedPerTenant * numTenants
-		totalActualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", mtm.targetKeyspace, "t1"))
-		require.Equal(t, totalRowsInserted, totalActualRowsInserted)
-	})
-}
-
 func randomWait() {
 	time.Sleep(time.Duration(rand.IntN(maxRandomDelaySeconds)) * time.Second)
 }
@@ -300,4 +260,100 @@ func (mtm *multiTenantMigration) run() {
 	go mtm.doStuff("Start Migrations", chNotCreated, chInProgress, &numInProgress, mtm.start)
 	go mtm.doStuff("Switch Traffic", chInProgress, chSwitched, &numSwitched, mtm.switchTraffic)
 	go mtm.doStuff("Mark Migrations Complete", chSwitched, chCompleted, &numCompleted, mtm.complete)
+}
+
+// TestMultiTenant tests a multi-tenant migration scenario where each tenant is in a separate database.
+// It uses MoveTables to migrate all tenants to the same target keyspace. The test creates a separate source keyspace
+// for each tenant. It then steps through the migration process for each tenant, and verifies that the data is migrated
+// correctly. The migration steps are done concurrently and randomly to simulate an actual multi-tenant migration.
+func TestMultiTenantComplex(t *testing.T) {
+	setSidecarDBName("_vt")
+	// Don't create RDONLY tablets to reduce number of tablets created to reduce resource requirements for the test.
+	origDefaultRdonly := defaultRdonly
+	defer func() {
+		defaultRdonly = origDefaultRdonly
+	}()
+	defaultRdonly = 0
+	vc = setupMinimalCluster(t)
+	defer vc.TearDown()
+
+	mtm := newMultiTenantMigration(t)
+	numTenantsMigrated := 0
+	mtm.run() // Start the migration process for all tenants.
+	timer := time.NewTimer(waitTimeout)
+	for numTenantsMigrated < numTenants {
+		select {
+		case tenantId := <-chCompleted:
+			mtm.setTenantMigrationStatus(tenantId, tenantMigrationStatusMigrated)
+			numTenantsMigrated++
+			timer.Reset(waitTimeout)
+		case <-timer.C:
+			require.FailNow(t, "Timed out waiting for all tenants to complete")
+		}
+	}
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	t.Run("Verify all rows have been migrated", func(t *testing.T) {
+		numAdditionalInsertSets := 2 // during the SwitchTraffic stop
+		totalRowsInsertedPerTenant := numInitialRowsPerTenant + numAdditionalRowsPerTenant*numAdditionalInsertSets
+		totalRowsInserted := totalRowsInsertedPerTenant * numTenants
+		totalActualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", mtm.targetKeyspace, "t1"))
+		require.Equal(t, totalRowsInserted, totalActualRowsInserted)
+	})
+}
+
+func TestMultiTenantSimple(t *testing.T) {
+	setSidecarDBName("_vt")
+	// Don't create RDONLY tablets to reduce number of tablets created to reduce resource requirements for the test.
+	origDefaultRdonly := defaultRdonly
+	defer func() {
+		defaultRdonly = origDefaultRdonly
+	}()
+	defaultRdonly = 0
+	vc = setupMinimalCluster(t)
+	defer vc.TearDown()
+	targetKeyspace := "mt"
+	_, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, targetKeyspace, "0", mtVSchema, mtSchema, 1, 0, 200, nil)
+	require.NoError(t, err)
+	tenantId := int64(1)
+	sourceKeyspace := getSourceKeyspace(tenantId)
+	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
+	_, err = vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", mtVSchema, mtSchema, 1, 0, getInitialTabletIdForTenant(tenantId), nil)
+	require.NoError(t, err)
+
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	numRows := 10
+	lastIndex := int64(0)
+	insRows := func(lastIndex int64, keyspace string) int64 {
+		for i := 1; i <= numRows; i++ {
+			execQueryWithRetry(t, vtgateConn,
+				fmt.Sprintf("insert into %s.t1(id, tenant_id) values(%d, %d)", keyspace, int64(i)+lastIndex, tenantId), queryTimeout)
+		}
+		return int64(numRows) + lastIndex
+	}
+	lastIndex = insRows(lastIndex, sourceKeyspace)
+	mt := newVtctldMoveTables(&moveTablesWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   fmt.Sprintf("wf%d", tenantId),
+			targetKeyspace: targetKeyspace,
+		},
+		sourceKeyspace: sourceKeyspace,
+		createFlags: []string{
+			"--tenant-id", strconv.FormatInt(tenantId, 10),
+			"--source-keyspace-alias", sourceAliasKeyspace,
+		},
+	})
+	mt.Create()
+	lastIndex = insRows(lastIndex, sourceKeyspace)
+	lastIndex = insRows(lastIndex, sourceAliasKeyspace)
+	lastIndex = insRows(lastIndex, targetKeyspace)
+	mt.SwitchReadsAndWrites()
+	lastIndex = insRows(lastIndex, sourceKeyspace)
+	lastIndex = insRows(lastIndex, sourceAliasKeyspace)
+	lastIndex = insRows(lastIndex, targetKeyspace)
+	mt.Complete()
+	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
+	require.Equal(t, lastIndex, int64(actualRowsInserted))
 }
