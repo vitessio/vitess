@@ -21919,9 +21919,6 @@ export namespace tabletmanagerdata {
 
         /** ExecuteMultiFetchAsDbaRequest disable_foreign_key_checks */
         disable_foreign_key_checks?: (boolean|null);
-
-        /** ExecuteMultiFetchAsDbaRequest ignore_errors */
-        ignore_errors?: (boolean|null);
     }
 
     /** Represents an ExecuteMultiFetchAsDbaRequest. */
@@ -21950,9 +21947,6 @@ export namespace tabletmanagerdata {
 
         /** ExecuteMultiFetchAsDbaRequest disable_foreign_key_checks. */
         public disable_foreign_key_checks: boolean;
-
-        /** ExecuteMultiFetchAsDbaRequest ignore_errors. */
-        public ignore_errors: boolean;
 
         /**
          * Creates a new ExecuteMultiFetchAsDbaRequest instance using the specified properties.
@@ -50862,9 +50856,6 @@ export namespace vtctldata {
 
         /** ExecuteMultiFetchAsDBARequest reload_schema */
         reload_schema?: (boolean|null);
-
-        /** ExecuteMultiFetchAsDBARequest ignore_errors */
-        ignore_errors?: (boolean|null);
     }
 
     /** Represents an ExecuteMultiFetchAsDBARequest. */
@@ -50890,9 +50881,6 @@ export namespace vtctldata {
 
         /** ExecuteMultiFetchAsDBARequest reload_schema. */
         public reload_schema: boolean;
-
-        /** ExecuteMultiFetchAsDBARequest ignore_errors. */
-        public ignore_errors: boolean;
 
         /**
          * Creates a new ExecuteMultiFetchAsDBARequest instance using the specified properties.

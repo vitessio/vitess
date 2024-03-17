@@ -700,9 +700,6 @@ message ExecuteMultiFetchAsDBARequest {
   // ReloadSchema instructs the tablet to reload its schema after executing the
   // query.
   bool reload_schema = 5;
-  // IgnoreErrors instructs the tablet to continue executing all queries even if
-  // one or more of them fail.
-  bool ignore_errors = 6;
 }
 
 message ExecuteMultiFetchAsDBAResponse {

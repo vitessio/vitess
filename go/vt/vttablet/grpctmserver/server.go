@@ -228,6 +228,18 @@ func (s *server) ExecuteFetchAsDba(ctx context.Context, request *tabletmanagerda
 	return response, nil
 }
 
+func (s *server) ExecuteMultiFetchAsDba(ctx context.Context, request *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) (response *tabletmanagerdatapb.ExecuteMultiFetchAsDbaResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ExecuteFetchAsDba", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.ExecuteMultiFetchAsDbaResponse{}
+	qrs, err := s.tm.ExecuteMultiFetchAsDba(ctx, request)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+	response.Results = qrs
+	return response, nil
+}
+
 func (s *server) ExecuteFetchAsAllPrivs(ctx context.Context, request *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (response *tabletmanagerdatapb.ExecuteFetchAsAllPrivsResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ExecuteFetchAsAllPrivs", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

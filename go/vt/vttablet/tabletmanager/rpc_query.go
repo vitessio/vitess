@@ -167,6 +167,99 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 	return sqltypes.ResultToProto3(result), err
 }
 
+// ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
+func (tm *TabletManager) ExecuteMultiFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
+		return nil, err
+	}
+	// Get a connection.
+	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	// Disable binlogs if necessary.
+	if req.DisableBinlogs {
+		_, err := conn.ExecuteFetch("SET sql_log_bin = OFF", 0, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Disable FK checks if requested.
+	if req.DisableForeignKeyChecks {
+		_, err := conn.ExecuteFetch("SET SESSION foreign_key_checks = OFF", 0, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if req.DbName != "" {
+		// This execute might fail if db does not exist.
+		// Error is ignored because given query might create this database.
+		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
+	}
+
+	queries, _, _, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(string(req.Sql), tm.Env.Parser())
+	if err != nil {
+		return nil, err
+	}
+	if allowZeroInDate {
+		if _, err := conn.ExecuteFetch("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 1, false); err != nil {
+			return nil, err
+		}
+	}
+	// Replace any provided sidecar database qualifiers with the correct one.
+	// TODO(shlomi): we use ReplaceTableQualifiersMultiQuery for backwards compatibility. In v20 we will not accept
+	// multi statement queries in ExecuteFetchAsDBA. This will be rewritten as ReplaceTableQualifiers()
+	uq, err := tm.Env.Parser().ReplaceTableQualifiersMultiQuery(string(req.Sql), sidecar.DefaultName, sidecar.GetName())
+	if err != nil {
+		return nil, err
+	}
+	// TODO(shlomi): we use ExecuteFetchMulti for backwards compatibility. In v20 we will not accept
+	// multi statement queries in ExecuteFetchAsDBA. This will be rewritten as:
+	//  (in v20): result, err := ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
+	results := make([]*querypb.QueryResult, 0, len(queries))
+	result, more, err := conn.ExecuteFetchMulti(uq, int(req.MaxRows), true /*wantFields*/)
+	results = append(results, sqltypes.ResultToProto3(result))
+	for more {
+		result, more, _, err = conn.ReadQueryResult(0, false)
+		results = append(results, sqltypes.ResultToProto3(result))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Re-enable FK checks if necessary.
+	if req.DisableForeignKeyChecks && !conn.IsClosed() {
+		_, err := conn.ExecuteFetch("SET SESSION foreign_key_checks = ON", 0, false)
+		if err != nil {
+			// If we can't reset the FK checks flag,
+			// let's just close the connection.
+			conn.Close()
+		}
+	}
+
+	// Re-enable binlogs if necessary.
+	if req.DisableBinlogs && !conn.IsClosed() {
+		_, err := conn.ExecuteFetch("SET sql_log_bin = ON", 0, false)
+		if err != nil {
+			// if we can't reset the sql_log_bin flag,
+			// let's just close the connection.
+			conn.Close()
+		}
+	}
+
+	if err == nil && req.ReloadSchema {
+		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
+		if reloadErr != nil {
+			log.Errorf("failed to reload the schema %v", reloadErr)
+		}
+	}
+	return results, err
+}
+
 // ExecuteFetchAsAllPrivs will execute the given query, possibly reloading schema.
 func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
