@@ -50609,6 +50609,236 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of an ExecuteMultiFetchAsDBARequest. */
+    interface IExecuteMultiFetchAsDBARequest {
+
+        /** ExecuteMultiFetchAsDBARequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ExecuteMultiFetchAsDBARequest sql */
+        sql?: (string|null);
+
+        /** ExecuteMultiFetchAsDBARequest max_rows */
+        max_rows?: (number|Long|null);
+
+        /** ExecuteMultiFetchAsDBARequest disable_binlogs */
+        disable_binlogs?: (boolean|null);
+
+        /** ExecuteMultiFetchAsDBARequest reload_schema */
+        reload_schema?: (boolean|null);
+
+        /** ExecuteMultiFetchAsDBARequest ignore_errors */
+        ignore_errors?: (boolean|null);
+    }
+
+    /** Represents an ExecuteMultiFetchAsDBARequest. */
+    class ExecuteMultiFetchAsDBARequest implements IExecuteMultiFetchAsDBARequest {
+
+        /**
+         * Constructs a new ExecuteMultiFetchAsDBARequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IExecuteMultiFetchAsDBARequest);
+
+        /** ExecuteMultiFetchAsDBARequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ExecuteMultiFetchAsDBARequest sql. */
+        public sql: string;
+
+        /** ExecuteMultiFetchAsDBARequest max_rows. */
+        public max_rows: (number|Long);
+
+        /** ExecuteMultiFetchAsDBARequest disable_binlogs. */
+        public disable_binlogs: boolean;
+
+        /** ExecuteMultiFetchAsDBARequest reload_schema. */
+        public reload_schema: boolean;
+
+        /** ExecuteMultiFetchAsDBARequest ignore_errors. */
+        public ignore_errors: boolean;
+
+        /**
+         * Creates a new ExecuteMultiFetchAsDBARequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteMultiFetchAsDBARequest instance
+         */
+        public static create(properties?: vtctldata.IExecuteMultiFetchAsDBARequest): vtctldata.ExecuteMultiFetchAsDBARequest;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDBARequest message. Does not implicitly {@link vtctldata.ExecuteMultiFetchAsDBARequest.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDBARequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IExecuteMultiFetchAsDBARequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDBARequest message, length delimited. Does not implicitly {@link vtctldata.ExecuteMultiFetchAsDBARequest.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDBARequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IExecuteMultiFetchAsDBARequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDBARequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteMultiFetchAsDBARequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteMultiFetchAsDBARequest;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDBARequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteMultiFetchAsDBARequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteMultiFetchAsDBARequest;
+
+        /**
+         * Verifies an ExecuteMultiFetchAsDBARequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteMultiFetchAsDBARequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteMultiFetchAsDBARequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteMultiFetchAsDBARequest;
+
+        /**
+         * Creates a plain object from an ExecuteMultiFetchAsDBARequest message. Also converts values to other types if specified.
+         * @param message ExecuteMultiFetchAsDBARequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ExecuteMultiFetchAsDBARequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteMultiFetchAsDBARequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteMultiFetchAsDBARequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ExecuteMultiFetchAsDBAResponse. */
+    interface IExecuteMultiFetchAsDBAResponse {
+
+        /** ExecuteMultiFetchAsDBAResponse results */
+        results?: (query.IQueryResult[]|null);
+
+        /** ExecuteMultiFetchAsDBAResponse errors */
+        errors?: (string[]|null);
+    }
+
+    /** Represents an ExecuteMultiFetchAsDBAResponse. */
+    class ExecuteMultiFetchAsDBAResponse implements IExecuteMultiFetchAsDBAResponse {
+
+        /**
+         * Constructs a new ExecuteMultiFetchAsDBAResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IExecuteMultiFetchAsDBAResponse);
+
+        /** ExecuteMultiFetchAsDBAResponse results. */
+        public results: query.IQueryResult[];
+
+        /** ExecuteMultiFetchAsDBAResponse errors. */
+        public errors: string[];
+
+        /**
+         * Creates a new ExecuteMultiFetchAsDBAResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExecuteMultiFetchAsDBAResponse instance
+         */
+        public static create(properties?: vtctldata.IExecuteMultiFetchAsDBAResponse): vtctldata.ExecuteMultiFetchAsDBAResponse;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDBAResponse message. Does not implicitly {@link vtctldata.ExecuteMultiFetchAsDBAResponse.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDBAResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IExecuteMultiFetchAsDBAResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExecuteMultiFetchAsDBAResponse message, length delimited. Does not implicitly {@link vtctldata.ExecuteMultiFetchAsDBAResponse.verify|verify} messages.
+         * @param message ExecuteMultiFetchAsDBAResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IExecuteMultiFetchAsDBAResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDBAResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExecuteMultiFetchAsDBAResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ExecuteMultiFetchAsDBAResponse;
+
+        /**
+         * Decodes an ExecuteMultiFetchAsDBAResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExecuteMultiFetchAsDBAResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ExecuteMultiFetchAsDBAResponse;
+
+        /**
+         * Verifies an ExecuteMultiFetchAsDBAResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExecuteMultiFetchAsDBAResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExecuteMultiFetchAsDBAResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ExecuteMultiFetchAsDBAResponse;
+
+        /**
+         * Creates a plain object from an ExecuteMultiFetchAsDBAResponse message. Also converts values to other types if specified.
+         * @param message ExecuteMultiFetchAsDBAResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ExecuteMultiFetchAsDBAResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExecuteMultiFetchAsDBAResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExecuteMultiFetchAsDBAResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of an ExecuteHookRequest. */
     interface IExecuteHookRequest {
 
