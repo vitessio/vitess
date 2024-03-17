@@ -177,7 +177,7 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 var openRetryInterval = 1 * time.Second
 
 func (vde *Engine) retry(ctx context.Context, err error) {
-	//log.Errorf("Error starting vdiff engine: %v, will keep retrying.", err)
+	log.Errorf("Error starting vdiff engine: %v, will keep retrying.", err)
 	for {
 		timer := time.NewTimer(openRetryInterval)
 		select {
