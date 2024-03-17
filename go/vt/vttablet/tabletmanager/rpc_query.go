@@ -167,7 +167,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 	return sqltypes.ResultToProto3(result), err
 }
 
-// ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
+// ExecuteMultiFetchAsDba will execute the given queries, possibly disabling binlogs and reload schema.
 func (tm *TabletManager) ExecuteMultiFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err

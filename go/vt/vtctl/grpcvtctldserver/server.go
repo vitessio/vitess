@@ -1257,6 +1257,36 @@ func (s *VtctldServer) ExecuteFetchAsDBA(ctx context.Context, req *vtctldatapb.E
 	return &vtctldatapb.ExecuteFetchAsDBAResponse{Result: qr}, nil
 }
 
+// ExecuteMultiFetchAsDBA is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ExecuteMultiFetchAsDBA(ctx context.Context, req *vtctldatapb.ExecuteMultiFetchAsDBARequest) (resp *vtctldatapb.ExecuteMultiFetchAsDBAResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteMultiFetchAsDBA")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("max_rows", req.MaxRows)
+	span.Annotate("disable_binlogs", req.DisableBinlogs)
+	span.Annotate("reload_schema", req.ReloadSchema)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	qrs, err := s.tmc.ExecuteMultiFetchAsDba(ctx, ti.Tablet, false, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+		Sql:            []byte(req.Sql),
+		MaxRows:        uint64(req.MaxRows),
+		DisableBinlogs: req.DisableBinlogs,
+		ReloadSchema:   req.ReloadSchema,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ExecuteMultiFetchAsDBAResponse{Results: qrs}, nil
+}
+
 // ExecuteHook is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ExecuteHook(ctx context.Context, req *vtctldatapb.ExecuteHookRequest) (resp *vtctldatapb.ExecuteHookResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteHook")

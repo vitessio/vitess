@@ -551,6 +551,30 @@ func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *
 	return nil, fmt.Errorf("%w: no ExecuteFetchAsDba result set for tablet %s", assert.AnError, key)
 }
 
+// ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	if fake.ExecuteFetchAsDbaResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteMultiFetchAsDba results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteFetchAsDbaDelays != nil {
+		if delay, ok := fake.ExecuteFetchAsDbaDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteFetchAsDbaResults[key]; ok {
+		return []*querypb.QueryResult{result.Response}, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteMultiFetchAsDba result set for tablet %s", assert.AnError, key)
+}
+
 // ExecuteHook is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hook *hk.Hook) (*hk.HookResult, error) {
 	if fake.ExecuteHookResults == nil {
