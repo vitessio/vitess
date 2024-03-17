@@ -21902,8 +21902,8 @@ export namespace tabletmanagerdata {
     /** Properties of an ExecuteMultiFetchAsDbaRequest. */
     interface IExecuteMultiFetchAsDbaRequest {
 
-        /** ExecuteMultiFetchAsDbaRequest query */
-        query?: (Uint8Array|null);
+        /** ExecuteMultiFetchAsDbaRequest sql */
+        sql?: (Uint8Array|null);
 
         /** ExecuteMultiFetchAsDbaRequest db_name */
         db_name?: (string|null);
@@ -21933,8 +21933,8 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.IExecuteMultiFetchAsDbaRequest);
 
-        /** ExecuteMultiFetchAsDbaRequest query. */
-        public query: Uint8Array;
+        /** ExecuteMultiFetchAsDbaRequest sql. */
+        public sql: Uint8Array;
 
         /** ExecuteMultiFetchAsDbaRequest db_name. */
         public db_name: string;

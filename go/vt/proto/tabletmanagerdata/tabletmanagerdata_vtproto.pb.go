@@ -845,10 +845,10 @@ func (m *ExecuteMultiFetchAsDbaRequest) CloneVT() *ExecuteMultiFetchAsDbaRequest
 		DisableForeignKeyChecks: m.DisableForeignKeyChecks,
 		IgnoreErrors:            m.IgnoreErrors,
 	}
-	if rhs := m.Query; rhs != nil {
+	if rhs := m.Sql; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
 		copy(tmpBytes, rhs)
-		r.Query = tmpBytes
+		r.Sql = tmpBytes
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -4442,10 +4442,10 @@ func (m *ExecuteMultiFetchAsDbaRequest) MarshalToSizedBufferVT(dAtA []byte) (int
 		i--
 		dAtA[i] = 0x12
 	}
-	if len(m.Query) > 0 {
-		i -= len(m.Query)
-		copy(dAtA[i:], m.Query)
-		i = encodeVarint(dAtA, i, uint64(len(m.Query)))
+	if len(m.Sql) > 0 {
+		i -= len(m.Sql)
+		copy(dAtA[i:], m.Sql)
+		i = encodeVarint(dAtA, i, uint64(len(m.Sql)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -9150,7 +9150,7 @@ func (m *ExecuteMultiFetchAsDbaRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Query)
+	l = len(m.Sql)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -14847,7 +14847,7 @@ func (m *ExecuteMultiFetchAsDbaRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Query", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Sql", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -14874,9 +14874,9 @@ func (m *ExecuteMultiFetchAsDbaRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Query = append(m.Query[:0], dAtA[iNdEx:postIndex]...)
-			if m.Query == nil {
-				m.Query = []byte{}
+			m.Sql = append(m.Sql[:0], dAtA[iNdEx:postIndex]...)
+			if m.Sql == nil {
+				m.Sql = []byte{}
 			}
 			iNdEx = postIndex
 		case 2:
