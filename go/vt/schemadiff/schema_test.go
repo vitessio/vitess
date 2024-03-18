@@ -17,7 +17,6 @@ limitations under the License.
 package schemadiff
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -356,10 +355,6 @@ func TestInvalidSchema(t *testing.T) {
 				create table t11 (id int primary key, i int, constraint f1101 foreign key (i) references t12 (i) on delete restrict);
 				create table t12 (id int primary key, i int, constraint f1201 foreign key (i) references t11 (i) on delete set null)
 			`,
-			expectErr: errors.Join(
-				&ForeignKeyLoopError{Table: "t11", Loop: []*ForeignKeyTableColumns{{"t11", []string{"i"}}, {"t12", []string{"i"}}, {"t11", []string{"i"}}}},
-				&ForeignKeyLoopError{Table: "t12", Loop: []*ForeignKeyTableColumns{{"t12", []string{"i"}}, {"t11", []string{"i"}}, {"t12", []string{"i"}}}},
-			),
 		},
 		{
 			// t10, t12<->t11
@@ -388,10 +383,6 @@ func TestInvalidSchema(t *testing.T) {
 				create table t12 (id int primary key, i int, constraint f1205 foreign key (id) references t11 (i) on delete restrict);
 				create table t13 (id int primary key, i int, constraint f1305 foreign key (i) references t11 (id) on delete restrict)
 			`,
-			expectErr: errors.Join(
-				&ForeignKeyLoopError{Table: "t11", Loop: []*ForeignKeyTableColumns{{"t11", []string{"i"}}, {"t12", []string{"id"}}, {"t11", []string{"i"}}}},
-				&ForeignKeyLoopError{Table: "t12", Loop: []*ForeignKeyTableColumns{{"t12", []string{"id"}}, {"t11", []string{"i"}}, {"t12", []string{"id"}}}},
-			),
 		},
 		{
 			// t10, t12<->t11<-t13<-t14
@@ -411,11 +402,6 @@ func TestInvalidSchema(t *testing.T) {
 				create table t12 (id int primary key, i int, key i_idx (i), constraint f1207 foreign key (id) references t13 (i));
 				create table t13 (id int primary key, i int, key i_idx (i), constraint f1307 foreign key (i) references t11 (i));
 			`,
-			expectErr: errors.Join(
-				&ForeignKeyLoopError{Table: "t11", Loop: []*ForeignKeyTableColumns{{"t11", []string{"i"}}, {"t13", []string{"i"}}, {"t12", []string{"id"}}, {"t11", []string{"i"}}}},
-				&ForeignKeyLoopError{Table: "t12", Loop: []*ForeignKeyTableColumns{{"t12", []string{"id"}}, {"t11", []string{"i"}}, {"t13", []string{"i"}}, {"t12", []string{"id"}}}},
-				&ForeignKeyLoopError{Table: "t13", Loop: []*ForeignKeyTableColumns{{"t13", []string{"i"}}, {"t12", []string{"id"}}, {"t11", []string{"i"}}, {"t13", []string{"i"}}}},
-			),
 		},
 		{
 			schema:    "create table t11 (id int primary key, i int, key ix(i), constraint f11 foreign key (i) references t11(id2) on delete restrict)",
@@ -535,11 +521,7 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 			"create table t12 (id int primary key, i int, constraint f13 foreign key (i) references t13(i) on delete restrict)",
 		}
 		_, err := NewSchemaFromQueries(NewTestEnv(), fkQueries)
-		assert.Error(t, err)
-
-		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t11", Loop: []*ForeignKeyTableColumns{{"t11", []string{"i"}}, {"t13", []string{"i"}}, {"t12", []string{"i"}}, {"t11", []string{"i"}}}}).Error())
-		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t12", Loop: []*ForeignKeyTableColumns{{"t12", []string{"i"}}, {"t11", []string{"i"}}, {"t13", []string{"i"}}, {"t12", []string{"i"}}}}).Error())
-		assert.ErrorContains(t, err, (&ForeignKeyLoopError{Table: "t13", Loop: []*ForeignKeyTableColumns{{"t13", []string{"i"}}, {"t12", []string{"i"}}, {"t11", []string{"i"}}, {"t13", []string{"i"}}}}).Error())
+		assert.NoError(t, err)
 	}
 	{
 		fkQueries := []string{
