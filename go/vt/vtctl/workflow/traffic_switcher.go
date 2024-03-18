@@ -177,7 +177,7 @@ type TargetInfo struct {
 	OptTabletTypes  string
 	WorkflowType    binlogdatapb.VReplicationWorkflowType
 	WorkflowSubType binlogdatapb.VReplicationWorkflowSubType
-	Options         *vtctldatapb.VReplicationWorkflowOptions
+	Options         *vtctldatapb.WorkflowOptions
 }
 
 // MigrationSource contains the metadata for each migration source.
@@ -238,7 +238,7 @@ type trafficSwitcher struct {
 	targetTimeZone   string
 	workflowType     binlogdatapb.VReplicationWorkflowType
 	workflowSubType  binlogdatapb.VReplicationWorkflowSubType
-	options          *vtctldatapb.VReplicationWorkflowOptions
+	options          *vtctldatapb.WorkflowOptions
 }
 
 func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.ws.ts }

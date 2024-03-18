@@ -30,16 +30,16 @@ import (
 
 var (
 	createOptions = struct {
-		SourceKeyspace              string
-		SourceShards                []string
-		ExternalClusterName         string
-		AllTables                   bool
-		IncludeTables               []string
-		ExcludeTables               []string
-		SourceTimeZone              string
-		NoRoutingRules              bool
-		AtomicCopy                  bool
-		VReplicationWorkflowOptions vtctldatapb.VReplicationWorkflowOptions
+		SourceKeyspace      string
+		SourceShards        []string
+		ExternalClusterName string
+		AllTables           bool
+		IncludeTables       []string
+		ExcludeTables       []string
+		SourceTimeZone      string
+		NoRoutingRules      bool
+		AtomicCopy          bool
+		WorkflowOptions     vtctldatapb.WorkflowOptions
 	}{}
 
 	// create makes a MoveTablesCreate gRPC call to a vtctld.
@@ -93,24 +93,24 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.MoveTablesCreateRequest{
-		Workflow:                    common.BaseOptions.Workflow,
-		TargetKeyspace:              common.BaseOptions.TargetKeyspace,
-		SourceKeyspace:              createOptions.SourceKeyspace,
-		SourceShards:                createOptions.SourceShards,
-		SourceTimeZone:              createOptions.SourceTimeZone,
-		Cells:                       common.CreateOptions.Cells,
-		TabletTypes:                 common.CreateOptions.TabletTypes,
-		TabletSelectionPreference:   tsp,
-		AllTables:                   createOptions.AllTables,
-		IncludeTables:               createOptions.IncludeTables,
-		ExcludeTables:               createOptions.ExcludeTables,
-		OnDdl:                       common.CreateOptions.OnDDL,
-		DeferSecondaryKeys:          common.CreateOptions.DeferSecondaryKeys,
-		AutoStart:                   common.CreateOptions.AutoStart,
-		StopAfterCopy:               common.CreateOptions.StopAfterCopy,
-		NoRoutingRules:              createOptions.NoRoutingRules,
-		AtomicCopy:                  createOptions.AtomicCopy,
-		VReplicationWorkflowOptions: &createOptions.VReplicationWorkflowOptions,
+		Workflow:                  common.BaseOptions.Workflow,
+		TargetKeyspace:            common.BaseOptions.TargetKeyspace,
+		SourceKeyspace:            createOptions.SourceKeyspace,
+		SourceShards:              createOptions.SourceShards,
+		SourceTimeZone:            createOptions.SourceTimeZone,
+		Cells:                     common.CreateOptions.Cells,
+		TabletTypes:               common.CreateOptions.TabletTypes,
+		TabletSelectionPreference: tsp,
+		AllTables:                 createOptions.AllTables,
+		IncludeTables:             createOptions.IncludeTables,
+		ExcludeTables:             createOptions.ExcludeTables,
+		OnDdl:                     common.CreateOptions.OnDDL,
+		DeferSecondaryKeys:        common.CreateOptions.DeferSecondaryKeys,
+		AutoStart:                 common.CreateOptions.AutoStart,
+		StopAfterCopy:             common.CreateOptions.StopAfterCopy,
+		NoRoutingRules:            createOptions.NoRoutingRules,
+		AtomicCopy:                createOptions.AtomicCopy,
+		WorkflowOptions:           &createOptions.WorkflowOptions,
 	}
 
 	resp, err := common.GetClient().MoveTablesCreate(common.GetCommandCtx(), req)
