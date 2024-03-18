@@ -854,3 +854,18 @@ func updateKeyspaceRoutingRule(ctx context.Context, ts *topo.Server, routes map[
 	}
 	return nil
 }
+
+func validateTenantId(dataType, value string) error {
+	switch dataType {
+	case "int", "int64":
+		_, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("value %s is not a valid int", value)
+		}
+	case "string":
+	// no validation needed
+	default:
+		return fmt.Errorf("unsupported data type: %s", dataType)
+	}
+	return nil
+}
