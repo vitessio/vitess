@@ -177,21 +177,24 @@ func commandExecuteMultiFetchAsDBA(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	var qrs []*sqltypes.Result
 	for _, result := range resp.Results {
 		qr := sqltypes.Proto3ToResult(result)
-		switch executeMultiFetchAsDBAOptions.JSON {
-		case true:
-			data, err := cli.MarshalJSON(qr)
-			if err != nil {
-				return err
-			}
+		qrs = append(qrs, qr)
+	}
 
-			fmt.Printf("%s\n", data)
-		default:
+	switch executeMultiFetchAsDBAOptions.JSON {
+	case true:
+		data, err := cli.MarshalJSON(qrs)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s\n", data)
+	default:
+		for _, qr := range qrs {
 			cli.WriteQueryResultTable(cmd.OutOrStdout(), qr)
 		}
 	}
-
 	return nil
 }
 
