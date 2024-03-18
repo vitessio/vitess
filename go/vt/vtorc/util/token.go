@@ -24,10 +24,6 @@ import (
 	"time"
 )
 
-const (
-	shortTokenLength = 8
-)
-
 func toHash(input []byte) string {
 	hasher := sha256.New()
 	hasher.Write(input)
@@ -48,13 +44,6 @@ func RandomHash() string {
 // Token is used to identify and validate requests to this service
 type Token struct {
 	Hash string
-}
-
-func (token *Token) Short() string {
-	if len(token.Hash) <= shortTokenLength {
-		return token.Hash
-	}
-	return token.Hash[0:shortTokenLength]
 }
 
 var ProcessToken = NewToken()

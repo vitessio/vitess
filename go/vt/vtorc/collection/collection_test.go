@@ -61,27 +61,6 @@ func TestCreateOrReturnCollection(t *testing.T) {
 	}
 }
 
-// TestExpirePeriod checks that the set expire period is returned
-func TestExpirePeriod(t *testing.T) {
-	oneSecond := time.Second
-	twoSeconds := 2 * oneSecond
-
-	// create a new collection
-	c := &Collection{}
-
-	// check if we change it we get back the value we provided
-	c.SetExpirePeriod(oneSecond)
-	if c.ExpirePeriod() != oneSecond {
-		t.Errorf("TestExpirePeriod: did not get back oneSecond")
-	}
-
-	// change the period and check again
-	c.SetExpirePeriod(twoSeconds)
-	if c.ExpirePeriod() != twoSeconds {
-		t.Errorf("TestExpirePeriod: did not get back twoSeconds")
-	}
-}
-
 // dummy structure for testing
 type testMetric struct {
 }
@@ -100,18 +79,6 @@ func (tm *testMetric2) When() time.Time {
 // check that Append() works as expected
 func TestAppend(t *testing.T) {
 	c := &Collection{}
-
-	if len(c.Metrics()) != 0 {
-		t.Errorf("TestAppend: len(Metrics) = %d, expecting %d", len(c.Metrics()), 0)
-	}
-	for _, v := range []int{1, 2, 3} {
-		tm := &testMetric{}
-		_ = c.Append(tm)
-		if len(c.Metrics()) != v {
-			t.Errorf("TestExpirePeriod: len(Metrics) = %d, expecting %d", len(c.Metrics()), v)
-		}
-	}
-
 	// Test for nil metric
 	err := c.Append(nil)
 	assert.Error(t, err)
@@ -120,9 +87,6 @@ func TestAppend(t *testing.T) {
 
 func TestNilCollection(t *testing.T) {
 	var c *Collection
-
-	metrics := c.Metrics()
-	assert.Nil(t, metrics)
 
 	err := c.Append(nil)
 	assert.Error(t, err)
