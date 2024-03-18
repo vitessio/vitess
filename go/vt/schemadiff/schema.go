@@ -18,14 +18,10 @@ package schemadiff
 
 import (
 	"errors"
-	"slices"
 	"sort"
 	"strings"
 
-	"golang.org/x/exp/maps"
-
 	"vitess.io/vitess/go/mysql/capabilities"
-	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -288,63 +284,6 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			// Table is part of a loop or references a loop
 			s.sorted = append(s.sorted, t)
 			dependencyLevels[t.Name()] = iterationLevel // all in same level
-		}
-
-		// Now, let's see if the loop is valid or invalid. For example:
-		//   users.avatar_id -> avatars.id
-		//   avatars.creator_id -> users.id
-		// is a valid loop, because even though the two tables reference each other, the loop ends in different columns.
-		type tableCol struct {
-			tableName sqlparser.TableName
-			colNames  sqlparser.Columns
-		}
-		var tableColHash = func(tc tableCol) string {
-			res := sqlparser.String(tc.tableName)
-			for _, colName := range tc.colNames {
-				res += "|" + sqlparser.String(colName)
-			}
-			return res
-		}
-		var decodeTableColHash = func(hash string) *ForeignKeyTableColumns {
-			tokens := strings.Split(hash, "|")
-			return &ForeignKeyTableColumns{tokens[0], tokens[1:]}
-		}
-		g := graph.NewGraph[string]()
-		for _, table := range s.tables {
-			for _, cfk := range table.TableSpec.Constraints {
-				check, ok := cfk.Details.(*sqlparser.ForeignKeyDefinition)
-				if !ok {
-					// Not a foreign key
-					continue
-				}
-
-				parentVertex := tableCol{
-					tableName: check.ReferenceDefinition.ReferencedTable,
-					colNames:  check.ReferenceDefinition.ReferencedColumns,
-				}
-				childVertex := tableCol{
-					tableName: table.Table,
-					colNames:  check.Source,
-				}
-				g.AddEdge(tableColHash(parentVertex), tableColHash(childVertex))
-			}
-		}
-		cycles := g.GetCycles() // map of table name to cycle
-		// golang maps have undefined iteration order. For consistent output, we sort the keys.
-		vertices := maps.Keys(cycles)
-		slices.Sort(vertices)
-		for _, vertex := range vertices {
-			cycle := cycles[vertex]
-			if len(cycle) == 0 {
-				continue
-			}
-			cycleTables := make([]*ForeignKeyTableColumns, len(cycle))
-			for i := range cycle {
-				// Reduce tablename|colname(s) to just tablename
-				cycleTables[i] = decodeTableColHash(cycle[i])
-			}
-			tableName := cycleTables[0].Table
-			errs = errors.Join(errs, addEntityFkError(s.named[tableName], &ForeignKeyLoopError{Table: tableName, Loop: cycleTables}))
 		}
 	}
 
