@@ -2345,7 +2345,7 @@ func (asm *assembler) Fn_BIT_LENGTH() {
 	}, "FN BIT_LENGTH VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_FIELD(args int, containsOnlyString, containsOnlyInt64 bool) {
+func (asm *assembler) Fn_FIELD_i(args int) {
 	asm.adjustStack(-args + 1)
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-args] == nil {
@@ -2354,64 +2354,92 @@ func (asm *assembler) Fn_FIELD(args int, containsOnlyString, containsOnlyInt64 b
 			return 1
 		}
 
-		if containsOnlyInt64 {
-			tar := env.vm.stack[env.vm.sp-args].(*evalInt64)
+		tar := env.vm.stack[env.vm.sp-args].(*evalInt64)
 
-			for i := range args - 1 {
-				if env.vm.stack[env.vm.sp-args+i+1] == nil {
-					continue
+		for i := range args - 1 {
+			if env.vm.stack[env.vm.sp-args+i+1] == nil {
+				continue
+			}
+
+			arg := env.vm.stack[env.vm.sp-args+i+1].(*evalInt64)
+
+			if tar.i == arg.i {
+				env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
+				env.vm.sp -= args - 1
+				return 1
+			}
+		}
+
+		env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN FIELD INT64(SP-%d)...INT64(SP-1)", args)
+}
+
+func (asm *assembler) Fn_FIELD_b(args int) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-args] == nil {
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= args - 1
+			return 1
+		}
+
+		tar := env.vm.stack[env.vm.sp-args].(*evalBytes)
+
+		for i := range args - 1 {
+			if env.vm.stack[env.vm.sp-args+i+1] == nil {
+				continue
+			}
+
+			str := env.vm.stack[env.vm.sp-args+i+1].(*evalBytes)
+
+			// Compare target and current string
+			if len(tar.bytes) == len(str.bytes) {
+				eq := true
+				for i, b := range tar.bytes {
+					if str.bytes[i] != b {
+						eq = false
+						break
+					}
 				}
 
-				arg := env.vm.stack[env.vm.sp-args+i+1].(*evalInt64)
-
-				if tar.i == arg.i {
+				if eq {
 					env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
 					env.vm.sp -= args - 1
 					return 1
 				}
 			}
-		} else if containsOnlyString {
-			tar := env.vm.stack[env.vm.sp-args].(*evalBytes)
+		}
 
-			for i := range args - 1 {
-				if env.vm.stack[env.vm.sp-args+i+1] == nil {
-					continue
-				}
+		env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN FIELD VARCHAR(SP-%d)...VARCHAR(SP-1)", args)
+}
 
-				str := env.vm.stack[env.vm.sp-args+i+1].(*evalBytes)
+func (asm *assembler) Fn_FIELD_f(args int) {
+	asm.adjustStack(-args + 1)
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-args] == nil {
+			env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
+			env.vm.sp -= args - 1
+			return 1
+		}
 
-				// Compare target and current string
-				if len(tar.bytes) == len(str.bytes) {
-					eq := true
-					for i, b := range tar.bytes {
-						if str.bytes[i] != b {
-							eq = false
-							break
-						}
-					}
+		tar := env.vm.stack[env.vm.sp-args].(*evalFloat)
 
-					if eq {
-						env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
-						env.vm.sp -= args - 1
-						return 1
-					}
-				}
+		for i := range args - 1 {
+			if env.vm.stack[env.vm.sp-args+i+1] == nil {
+				continue
 			}
-		} else {
-			tar := env.vm.stack[env.vm.sp-args].(*evalFloat)
 
-			for i := range args - 1 {
-				if env.vm.stack[env.vm.sp-args+i+1] == nil {
-					continue
-				}
+			arg := env.vm.stack[env.vm.sp-args+i+1].(*evalFloat)
 
-				arg := env.vm.stack[env.vm.sp-args+i+1].(*evalFloat)
-
-				if tar.f == arg.f {
-					env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
-					env.vm.sp -= args - 1
-					return 1
-				}
+			if tar.f == arg.f {
+				env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
+				env.vm.sp -= args - 1
+				return 1
 			}
 		}
 

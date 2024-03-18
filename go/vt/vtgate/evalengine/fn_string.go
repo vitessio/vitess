@@ -260,6 +260,8 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 			_ = c.compileToInt64(str, offset)
 			c.asm.jumpDestination(skip)
 		}
+
+		c.asm.Fn_FIELD_i(len(call.Arguments))
 	} else if containsOnlyString {
 		for i, str := range strs {
 			offset := len(strs) - i
@@ -272,6 +274,8 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 			}
 			c.asm.jumpDestination(skip)
 		}
+
+		c.asm.Fn_FIELD_b(len(call.Arguments))
 	} else {
 		for i, str := range strs {
 			offset := len(strs) - i
@@ -280,9 +284,9 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 			c.asm.Convert_xf(offset)
 			c.asm.jumpDestination(skip)
 		}
-	}
 
-	c.asm.Fn_FIELD(len(call.Arguments), containsOnlyString, containsOnlyInt64)
+		c.asm.Fn_FIELD_f(len(call.Arguments))
+	}
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 }
