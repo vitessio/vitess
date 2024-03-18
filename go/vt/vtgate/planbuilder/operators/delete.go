@@ -84,6 +84,11 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		}
 	}
 
+	var err error
+	childFks, err = ctx.SemTable.GetChildForeignKeysForTable(deleteStmt.Targets[0])
+	if err != nil {
+		panic(err)
+	}
 	// If there are no foreign key constraints, then we don't need to do anything special.
 	if len(childFks) == 0 {
 		return op

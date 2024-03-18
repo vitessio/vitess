@@ -3873,49 +3873,15 @@
             ]
           },
           {
-            "OperatorType": "FkCascade",
-            "Inputs": [
-              {
-                "InputName": "Selection",
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "FieldQuery": "select m.col6 from u_tbl5 as m where 1 != 1",
-                "Query": "select m.col6 from u_tbl5 as m where m.id in ::dml_vals for update",
-                "Table": "u_tbl5"
-              },
-              {
-                "InputName": "CascadeChild-1",
-                "OperatorType": "Delete",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "BvName": "fkc_vals1",
-                "Cols": [
-                  0
-                ],
-                "Query": "delete from u_tbl8 where (col8) in ::fkc_vals1",
-                "Table": "u_tbl8"
-              },
-              {
-                "InputName": "Parent",
-                "OperatorType": "Delete",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "unsharded_fk_allow",
-                  "Sharded": false
-                },
-                "TargetTabletType": "PRIMARY",
-                "Query": "delete from u_tbl5 as m where m.id in ::dml_vals",
-                "Table": "u_tbl5"
-              }
-            ]
+            "OperatorType": "Delete",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_fk_allow",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from u_tbl5 as m where m.id in ::dml_vals",
+            "Table": "u_tbl5"
           }
         ]
       },
