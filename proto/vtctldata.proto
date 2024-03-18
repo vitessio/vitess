@@ -704,10 +704,6 @@ message ExecuteMultiFetchAsDBARequest {
 
 message ExecuteMultiFetchAsDBAResponse {
   repeated query.QueryResult results = 1;
-
-  // Errors is a list of errors encountered while executing the queries.
-  // It is either nil/empty, or maps 1:1 to the results.
-  repeated string errors = 2;
 }
 
 message ExecuteHookRequest {

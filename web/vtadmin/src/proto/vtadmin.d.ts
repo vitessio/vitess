@@ -50959,9 +50959,6 @@ export namespace vtctldata {
 
         /** ExecuteMultiFetchAsDBAResponse results */
         results?: (query.IQueryResult[]|null);
-
-        /** ExecuteMultiFetchAsDBAResponse errors */
-        errors?: (string[]|null);
     }
 
     /** Represents an ExecuteMultiFetchAsDBAResponse. */
@@ -50975,9 +50972,6 @@ export namespace vtctldata {
 
         /** ExecuteMultiFetchAsDBAResponse results. */
         public results: query.IQueryResult[];
-
-        /** ExecuteMultiFetchAsDBAResponse errors. */
-        public errors: string[];
 
         /**
          * Creates a new ExecuteMultiFetchAsDBAResponse instance using the specified properties.
