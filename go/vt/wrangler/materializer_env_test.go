@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -304,5 +305,5 @@ func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *to
 
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
-	m.Run()
+	os.Exit(m.Run())
 }
