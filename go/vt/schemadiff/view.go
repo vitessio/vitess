@@ -45,6 +45,10 @@ func (d *AlterViewEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
 }
 
+func (d *AlterViewEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
+}
+
 // Statement implements EntityDiff
 func (d *AlterViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
@@ -118,6 +122,10 @@ func (d *CreateViewEntityDiff) Entities() (from Entity, to Entity) {
 	return nil, &CreateViewEntity{CreateView: d.createView}
 }
 
+func (d *CreateViewEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
+}
+
 // Statement implements EntityDiff
 func (d *CreateViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
@@ -189,6 +197,10 @@ func (d *DropViewEntityDiff) EntityName() string {
 // Entities implements EntityDiff
 func (d *DropViewEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, nil
+}
+
+func (d *DropViewEntityDiff) Annotated() (from *TextualAnnotations, to *TextualAnnotations, unified *TextualAnnotations) {
+	return annotatedDiff(d, nil)
 }
 
 // Statement implements EntityDiff
