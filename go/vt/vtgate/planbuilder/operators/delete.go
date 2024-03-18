@@ -94,9 +94,6 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 
 func deleteWithInputPlanningRequired(childFks []vindexes.ChildFKInfo, deleteStmt *sqlparser.Delete) bool {
 	if len(deleteStmt.Targets) > 1 {
-		if len(childFks) > 0 {
-			panic(vterrors.VT12001("multi table delete with foreign keys"))
-		}
 		return true
 	}
 	// If there are no foreign keys, we don't need to use delete with input.
@@ -354,6 +351,7 @@ func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator
 func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo, deletedTbl *vindexes.Table) Operator {
 	var fkChildren []*FkChild
 	var selectExprs []sqlparser.SelectExpr
+	tblName := delStmt.Targets[0]
 	for _, fk := range childFks {
 		// Any RESTRICT type foreign keys that arrive here,
 		// are cross-shard/cross-keyspace RESTRICT cases, which we don't currently support.
@@ -363,7 +361,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Opera
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.
 		var offsets []int
-		offsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs, deletedTbl.GetTableName())
+		offsets, selectExprs = addColumns(ctx, fk.ParentColumns, selectExprs, tblName)
 
 		fkChildren = append(fkChildren,
 			createFkChildForDelete(ctx, fk, offsets))
