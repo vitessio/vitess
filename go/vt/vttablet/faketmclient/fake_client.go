@@ -192,6 +192,11 @@ func (client *FakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 	return &querypb.QueryResult{}, nil
 }
 
+// FakeTabletManagerClient is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	return []*querypb.QueryResult{{}}, nil
+}
+
 // ExecuteFetchAsAllPrivs is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	return &querypb.QueryResult{}, nil
