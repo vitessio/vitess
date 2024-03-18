@@ -43,8 +43,7 @@ var (
 	// GetKeyspaceRoutingRules makes a GetKeyspaceRoutingRules gRPC call to a vtctld.
 	GetKeyspaceRoutingRules = &cobra.Command{
 		Use:                   "GetKeyspaceRoutingRules",
-		Short:                 "Displays the currently active keyspace routing rules as a JSON document.",
-		Long:                  "Displays the currently active keyspace routing rules as a JSON document.",
+		Short:                 "Displays the currently active keyspace routing rules.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.NoArgs,
 		RunE:                  commandGetKeyspaceRoutingRules,
@@ -146,11 +145,11 @@ func commandGetKeyspaceRoutingRules(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	ApplyKeyspaceRoutingRules.Flags().StringVarP(&applyKeyspaceRoutingRulesOptions.Rules, "rules", "r", "", "Shard routing rules, specified as a string")
-	ApplyKeyspaceRoutingRules.Flags().StringVarP(&applyKeyspaceRoutingRulesOptions.RulesFilePath, "rules-file", "f", "", "Path to a file containing shard routing rules specified as JSON")
+	ApplyKeyspaceRoutingRules.Flags().StringVarP(&applyKeyspaceRoutingRulesOptions.Rules, "rules", "r", "", "Keyspace routing rules, specified as a string")
+	ApplyKeyspaceRoutingRules.Flags().StringVarP(&applyKeyspaceRoutingRulesOptions.RulesFilePath, "rules-file", "f", "", "Path to a file containing keyspace routing rules specified as JSON")
 	ApplyKeyspaceRoutingRules.Flags().StringSliceVarP(&applyKeyspaceRoutingRulesOptions.Cells, "cells", "c", nil, "Limit the VSchema graph rebuilding to the specified cells. Ignored if --skip-rebuild is specified.")
 	ApplyKeyspaceRoutingRules.Flags().BoolVar(&applyKeyspaceRoutingRulesOptions.SkipRebuild, "skip-rebuild", false, "Skip rebuilding the SrvVSchema objects.")
-	ApplyKeyspaceRoutingRules.Flags().BoolVarP(&applyKeyspaceRoutingRulesOptions.DryRun, "dry-run", "d", false, "Validate the specified shard routing rules and note actions that would be taken, but do not actually apply the rules to the topo.")
+	ApplyKeyspaceRoutingRules.Flags().BoolVarP(&applyKeyspaceRoutingRulesOptions.DryRun, "dry-run", "d", false, "Validate the specified keyspace routing rules and note actions that would be taken, but do not actually apply the rules to the topo.")
 	Root.AddCommand(ApplyKeyspaceRoutingRules)
 
 	Root.AddCommand(GetKeyspaceRoutingRules)
