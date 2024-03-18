@@ -47,8 +47,8 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringSliceVar(&createOptions.ExcludeTables, "exclude-tables", nil, "Source tables to exclude from copying.")
 	create.Flags().BoolVar(&createOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
 	create.Flags().BoolVar(&createOptions.AtomicCopy, "atomic-copy", false, "(EXPERIMENTAL) A single copy phase is run for all tables from the source. Use this, for example, if your source keyspace has tables which use foreign key constraints.")
-	create.Flags().StringVar(&createOptions.VReplicationWorkflowOptions.TenantId, "tenant-id", "", "(EXPERIMENTAL) The tenant ID to use for the MoveTables workflow into a multi-tenant keyspace.")
-	create.Flags().StringVar(&createOptions.VReplicationWorkflowOptions.SourceKeyspaceAlias, "source-keyspace-alias", "", "(EXPERIMENTAL) Used currently only for multi-tenant migrations. This value will be used instead of the source keyspace name in the keyspace routing rules.")
+	create.Flags().StringVar(&createOptions.WorkflowOptions.TenantId, "tenant-id", "", "(EXPERIMENTAL) The tenant ID to use for the MoveTables workflow into a multi-tenant keyspace.")
+	create.Flags().StringVar(&createOptions.WorkflowOptions.SourceKeyspaceAlias, "source-keyspace-alias", "", "(EXPERIMENTAL) Used currently only for multi-tenant migrations. This value will be used instead of the source keyspace name in the keyspace routing rules.")
 	base.AddCommand(create)
 
 	opts := &common.SubCommandsOpts{

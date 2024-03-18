@@ -44585,8 +44585,8 @@ export namespace vtctldata {
         /** MaterializeSettings atomic_copy */
         atomic_copy?: (boolean|null);
 
-        /** MaterializeSettings v_replication_workflow_options */
-        v_replication_workflow_options?: (vtctldata.IVReplicationWorkflowOptions|null);
+        /** MaterializeSettings workflow_options */
+        workflow_options?: (vtctldata.IWorkflowOptions|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -44646,8 +44646,8 @@ export namespace vtctldata {
         /** MaterializeSettings atomic_copy. */
         public atomic_copy: boolean;
 
-        /** MaterializeSettings v_replication_workflow_options. */
-        public v_replication_workflow_options?: (vtctldata.IVReplicationWorkflowOptions|null);
+        /** MaterializeSettings workflow_options. */
+        public workflow_options?: (vtctldata.IWorkflowOptions|null);
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
@@ -45386,103 +45386,103 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a VReplicationWorkflowOptions. */
-    interface IVReplicationWorkflowOptions {
+    /** Properties of a WorkflowOptions. */
+    interface IWorkflowOptions {
 
-        /** VReplicationWorkflowOptions tenant_id */
+        /** WorkflowOptions tenant_id */
         tenant_id?: (string|null);
 
-        /** VReplicationWorkflowOptions source_keyspace_alias */
+        /** WorkflowOptions source_keyspace_alias */
         source_keyspace_alias?: (string|null);
     }
 
-    /** Represents a VReplicationWorkflowOptions. */
-    class VReplicationWorkflowOptions implements IVReplicationWorkflowOptions {
+    /** Represents a WorkflowOptions. */
+    class WorkflowOptions implements IWorkflowOptions {
 
         /**
-         * Constructs a new VReplicationWorkflowOptions.
+         * Constructs a new WorkflowOptions.
          * @param [properties] Properties to set
          */
-        constructor(properties?: vtctldata.IVReplicationWorkflowOptions);
+        constructor(properties?: vtctldata.IWorkflowOptions);
 
-        /** VReplicationWorkflowOptions tenant_id. */
+        /** WorkflowOptions tenant_id. */
         public tenant_id: string;
 
-        /** VReplicationWorkflowOptions source_keyspace_alias. */
+        /** WorkflowOptions source_keyspace_alias. */
         public source_keyspace_alias: string;
 
         /**
-         * Creates a new VReplicationWorkflowOptions instance using the specified properties.
+         * Creates a new WorkflowOptions instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns VReplicationWorkflowOptions instance
+         * @returns WorkflowOptions instance
          */
-        public static create(properties?: vtctldata.IVReplicationWorkflowOptions): vtctldata.VReplicationWorkflowOptions;
+        public static create(properties?: vtctldata.IWorkflowOptions): vtctldata.WorkflowOptions;
 
         /**
-         * Encodes the specified VReplicationWorkflowOptions message. Does not implicitly {@link vtctldata.VReplicationWorkflowOptions.verify|verify} messages.
-         * @param message VReplicationWorkflowOptions message or plain object to encode
+         * Encodes the specified WorkflowOptions message. Does not implicitly {@link vtctldata.WorkflowOptions.verify|verify} messages.
+         * @param message WorkflowOptions message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: vtctldata.IVReplicationWorkflowOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: vtctldata.IWorkflowOptions, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified VReplicationWorkflowOptions message, length delimited. Does not implicitly {@link vtctldata.VReplicationWorkflowOptions.verify|verify} messages.
-         * @param message VReplicationWorkflowOptions message or plain object to encode
+         * Encodes the specified WorkflowOptions message, length delimited. Does not implicitly {@link vtctldata.WorkflowOptions.verify|verify} messages.
+         * @param message WorkflowOptions message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: vtctldata.IVReplicationWorkflowOptions, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: vtctldata.IWorkflowOptions, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a VReplicationWorkflowOptions message from the specified reader or buffer.
+         * Decodes a WorkflowOptions message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns VReplicationWorkflowOptions
+         * @returns WorkflowOptions
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VReplicationWorkflowOptions;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowOptions;
 
         /**
-         * Decodes a VReplicationWorkflowOptions message from the specified reader or buffer, length delimited.
+         * Decodes a WorkflowOptions message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns VReplicationWorkflowOptions
+         * @returns WorkflowOptions
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VReplicationWorkflowOptions;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowOptions;
 
         /**
-         * Verifies a VReplicationWorkflowOptions message.
+         * Verifies a WorkflowOptions message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a VReplicationWorkflowOptions message from a plain object. Also converts values to their respective internal types.
+         * Creates a WorkflowOptions message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns VReplicationWorkflowOptions
+         * @returns WorkflowOptions
          */
-        public static fromObject(object: { [k: string]: any }): vtctldata.VReplicationWorkflowOptions;
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowOptions;
 
         /**
-         * Creates a plain object from a VReplicationWorkflowOptions message. Also converts values to other types if specified.
-         * @param message VReplicationWorkflowOptions
+         * Creates a plain object from a WorkflowOptions message. Also converts values to other types if specified.
+         * @param message WorkflowOptions
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vtctldata.VReplicationWorkflowOptions, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: vtctldata.WorkflowOptions, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this VReplicationWorkflowOptions to JSON.
+         * Converts this WorkflowOptions to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for VReplicationWorkflowOptions
+         * Gets the default type url for WorkflowOptions
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -45520,7 +45520,7 @@ export namespace vtctldata {
         defer_secondary_keys?: (boolean|null);
 
         /** Workflow options */
-        options?: (vtctldata.IVReplicationWorkflowOptions|null);
+        options?: (vtctldata.IWorkflowOptions|null);
     }
 
     /** Represents a Workflow. */
@@ -45560,7 +45560,7 @@ export namespace vtctldata {
         public defer_secondary_keys: boolean;
 
         /** Workflow options. */
-        public options?: (vtctldata.IVReplicationWorkflowOptions|null);
+        public options?: (vtctldata.IWorkflowOptions|null);
 
         /**
          * Creates a new Workflow instance using the specified properties.
@@ -60051,8 +60051,8 @@ export namespace vtctldata {
         /** MoveTablesCreateRequest atomic_copy */
         atomic_copy?: (boolean|null);
 
-        /** MoveTablesCreateRequest v_replication_workflow_options */
-        v_replication_workflow_options?: (vtctldata.IVReplicationWorkflowOptions|null);
+        /** MoveTablesCreateRequest workflow_options */
+        workflow_options?: (vtctldata.IWorkflowOptions|null);
     }
 
     /** Represents a MoveTablesCreateRequest. */
@@ -60121,8 +60121,8 @@ export namespace vtctldata {
         /** MoveTablesCreateRequest atomic_copy. */
         public atomic_copy: boolean;
 
-        /** MoveTablesCreateRequest v_replication_workflow_options. */
-        public v_replication_workflow_options?: (vtctldata.IVReplicationWorkflowOptions|null);
+        /** MoveTablesCreateRequest workflow_options. */
+        public workflow_options?: (vtctldata.IWorkflowOptions|null);
 
         /**
          * Creates a new MoveTablesCreateRequest instance using the specified properties.

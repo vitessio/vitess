@@ -1337,7 +1337,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	}
 
 	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
-		req.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.TenantId != "" {
+		req.WorkflowOptions != nil && req.WorkflowOptions.TenantId != "" {
 		multiTenantSpec := vschema.MultiTenantSpec
 		if multiTenantSpec == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "multi-tenant spec not found for target keyspace %s", targetKeyspace)
@@ -1388,20 +1388,20 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:                    req.Workflow,
-		MaterializationIntent:       vtctldatapb.MaterializationIntent_MOVETABLES,
-		SourceKeyspace:              sourceKeyspace,
-		TargetKeyspace:              targetKeyspace,
-		Cell:                        strings.Join(req.Cells, ","),
-		TabletTypes:                 topoproto.MakeStringTypeCSV(req.TabletTypes),
-		TabletSelectionPreference:   req.TabletSelectionPreference,
-		StopAfterCopy:               req.StopAfterCopy,
-		ExternalCluster:             req.ExternalClusterName,
-		SourceShards:                req.SourceShards,
-		OnDdl:                       req.OnDdl,
-		DeferSecondaryKeys:          req.DeferSecondaryKeys,
-		AtomicCopy:                  req.AtomicCopy,
-		VReplicationWorkflowOptions: req.VReplicationWorkflowOptions,
+		Workflow:                  req.Workflow,
+		MaterializationIntent:     vtctldatapb.MaterializationIntent_MOVETABLES,
+		SourceKeyspace:            sourceKeyspace,
+		TargetKeyspace:            targetKeyspace,
+		Cell:                      strings.Join(req.Cells, ","),
+		TabletTypes:               topoproto.MakeStringTypeCSV(req.TabletTypes),
+		TabletSelectionPreference: req.TabletSelectionPreference,
+		StopAfterCopy:             req.StopAfterCopy,
+		ExternalCluster:           req.ExternalClusterName,
+		SourceShards:              req.SourceShards,
+		OnDdl:                     req.OnDdl,
+		DeferSecondaryKeys:        req.DeferSecondaryKeys,
+		AtomicCopy:                req.AtomicCopy,
+		WorkflowOptions:           req.WorkflowOptions,
 	}
 	if req.SourceTimeZone != "" {
 		ms.SourceTimeZone = req.SourceTimeZone
@@ -1562,14 +1562,14 @@ func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.
 
 	// This needs to be protected with a mutex or a lock. FIXME: confirm this.
 	// Otherwise the map could be overwritten if multiple movetables are run at the same time.
-	if mz.ms.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.TenantId != "" {
+	if mz.ms.WorkflowOptions != nil && req.WorkflowOptions.TenantId != "" {
 		log.Infof("Setting up keyspace routing rules for workflow %s.%s", targetKeyspace, req.Workflow)
 		var keyspaces []string
 		// Note that you can never point the target keyspace to the source keyspace in a multi-tenant migration
 		// since the target takes write traffic for all tenants!
 		keyspaces = append(keyspaces, sourceKeyspace)
-		if req.VReplicationWorkflowOptions != nil && req.VReplicationWorkflowOptions.SourceKeyspaceAlias != "" {
-			keyspaces = append(keyspaces, req.VReplicationWorkflowOptions.SourceKeyspaceAlias)
+		if req.WorkflowOptions != nil && req.WorkflowOptions.SourceKeyspaceAlias != "" {
+			keyspaces = append(keyspaces, req.WorkflowOptions.SourceKeyspaceAlias)
 		}
 		routes := make(map[string]string)
 		for _, ks := range keyspaces {

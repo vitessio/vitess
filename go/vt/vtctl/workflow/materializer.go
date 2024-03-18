@@ -98,11 +98,11 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 }
 
 func (mz *materializer) getOptionsJSON() (string, error) {
-	vrOptions := &vtctldatapb.VReplicationWorkflowOptions{}
-	if mz.ms.VReplicationWorkflowOptions != nil && mz.ms.VReplicationWorkflowOptions.TenantId != "" {
-		vrOptions.TenantId = mz.ms.VReplicationWorkflowOptions.TenantId
-		if mz.ms.VReplicationWorkflowOptions.SourceKeyspaceAlias != "" {
-			vrOptions.SourceKeyspaceAlias = mz.ms.VReplicationWorkflowOptions.SourceKeyspaceAlias
+	vrOptions := &vtctldatapb.WorkflowOptions{}
+	if mz.ms.WorkflowOptions != nil && mz.ms.WorkflowOptions.TenantId != "" {
+		vrOptions.TenantId = mz.ms.WorkflowOptions.TenantId
+		if mz.ms.WorkflowOptions.SourceKeyspaceAlias != "" {
+			vrOptions.SourceKeyspaceAlias = mz.ms.WorkflowOptions.SourceKeyspaceAlias
 		}
 	}
 	optionsJSON, err := json.Marshal(vrOptions)
@@ -171,7 +171,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 }
 
 func (mz *materializer) getTenantClause() (*sqlparser.Expr, error) {
-	return getTenantClause(mz.ms.VReplicationWorkflowOptions, mz.targetVSchema, mz.env.Parser())
+	return getTenantClause(mz.ms.WorkflowOptions, mz.targetVSchema, mz.env.Parser())
 }
 
 func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *topo.ShardInfo, sourceShards []*topo.ShardInfo, keyRangesEqual bool) ([]*binlogdatapb.BinlogSource, error) {
@@ -190,7 +190,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 
 		var tenantClause *sqlparser.Expr
 		var err error
-		if mz.ms.VReplicationWorkflowOptions != nil && mz.ms.VReplicationWorkflowOptions.TenantId != "" {
+		if mz.ms.WorkflowOptions != nil && mz.ms.WorkflowOptions.TenantId != "" {
 			tenantClause, err = mz.getTenantClause()
 			if err != nil {
 				return nil, err
@@ -643,7 +643,7 @@ func primaryVindexesDiffer(ms *vtctldatapb.MaterializeSettings, source, target *
 }
 
 func (mz *materializer) IsMultiTenantMigration() bool {
-	if mz.ms.VReplicationWorkflowOptions != nil && mz.ms.VReplicationWorkflowOptions.TenantId != "" {
+	if mz.ms.WorkflowOptions != nil && mz.ms.WorkflowOptions.TenantId != "" {
 		return true
 	}
 	return false

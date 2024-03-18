@@ -343,7 +343,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		targets         = make(map[string]*MigrationTarget, len(targetShards))
 		workflowType    binlogdatapb.VReplicationWorkflowType
 		workflowSubType binlogdatapb.VReplicationWorkflowSubType
-		options         vtctldatapb.VReplicationWorkflowOptions
+		options         vtctldatapb.WorkflowOptions
 	)
 
 	// We check all shards in the target keyspace. Not all of them may have a
@@ -798,7 +798,7 @@ func addFilter(sel *sqlparser.Select, filter sqlparser.Expr) {
 	}
 }
 
-func getTenantClause(vrOptions *vtctldatapb.VReplicationWorkflowOptions,
+func getTenantClause(vrOptions *vtctldatapb.WorkflowOptions,
 	targetVSchema *vindexes.KeyspaceSchema, parser *sqlparser.Parser) (*sqlparser.Expr, error) {
 	if vrOptions.TenantId == "" {
 		return nil, nil
