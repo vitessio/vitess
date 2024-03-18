@@ -133,6 +133,11 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 	req.WorkflowSubType = workflowSubType
+	optionsJSON, err := mz.getOptionsJSON()
+	if err != nil {
+		return err
+	}
+	req.Options = optionsJSON
 
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
@@ -152,11 +157,6 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 			streamKeyRangesEqual = true
 		}
 
-		optionsJSON, err := mz.getOptionsJSON()
-		if err != nil {
-			return err
-		}
-		req.Options = optionsJSON
 		// Each tablet needs its own copy of the request as it will have a unique
 		// BinlogSource.
 		tabletReq := req.CloneVT()
