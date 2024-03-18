@@ -30,6 +30,7 @@ Available Commands:
   ExecuteFetchAsApp           Executes the given query as the App user on the remote tablet.
   ExecuteFetchAsDBA           Executes the given query as the DBA user on the remote tablet.
   ExecuteHook                 Runs the specified hook on the given tablet.
+  ExecuteMultiFetchAsDBA      Executes given multiple queries as the DBA user on the remote tablet.
   FindAllShardsInKeyspace     Returns a map of shard names to shard references for a given keyspace.
   GenerateShardRanges         Print a set of shard ranges assuming a keyspace with N shards.
   GetBackups                  Lists backups for the given shard.
