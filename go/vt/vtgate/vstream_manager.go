@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -973,13 +975,15 @@ func (vs *vstream) keyspaceHasBeenResharded(ctx context.Context, keyspace string
 
 	// Now that we know there MAY have been an applicable reshard, let's make a
 	// definitive determination by looking at the shard keyranges.
-	for _, i := range shards {
-		for _, j := range shards {
-			if i.ShardName() == j.ShardName() && key.KeyRangeEqual(i.GetKeyRange(), j.GetKeyRange()) {
+	// All we care about are the shard info records now.
+	sis := maps.Values(shards)
+	for i := range sis {
+		for j := range sis {
+			if sis[i].ShardName() == sis[j].ShardName() && key.KeyRangeEqual(sis[i].GetKeyRange(), sis[j].GetKeyRange()) {
 				// It's the same shard so skip it.
 				continue
 			}
-			if key.KeyRangeIntersect(i.GetKeyRange(), j.GetKeyRange()) {
+			if key.KeyRangeIntersect(sis[i].GetKeyRange(), sis[j].GetKeyRange()) {
 				// We have different shards with overlapping keyranges so we know
 				// that a reshard has happened.
 				return true, nil
