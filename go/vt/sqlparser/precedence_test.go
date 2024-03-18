@@ -18,7 +18,6 @@ package sqlparser
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -175,10 +174,7 @@ func TestParens(t *testing.T) {
 func TestRandom(t *testing.T) {
 	// The purpose of this test is to find discrepancies between Format and parsing. If for example our precedence rules are not consistent between the two, this test should find it.
 	// The idea is to generate random queries, and pass them through the parser and then the unparser, and one more time. The result of the first unparse should be the same as the second result.
-	seed := time.Now().UnixNano()
-	r := rand.New(rand.NewSource(seed))
-	fmt.Printf("seed is %d\n", seed)
-	g := NewGenerator(r, 5)
+	g := NewGenerator(5)
 	endBy := time.Now().Add(1 * time.Second)
 
 	parser := NewTestParser()

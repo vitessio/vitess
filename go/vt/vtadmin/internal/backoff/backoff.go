@@ -27,13 +27,13 @@ package backoff
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"time"
 
 	grpcbackoff "google.golang.org/grpc/backoff"
 
 	"vitess.io/vitess/go/vt/log"
-	vtrand "vitess.io/vitess/go/vt/vtadmin/internal/rand"
 )
 
 // Strategy defines the interface for different backoff strategies.
@@ -83,7 +83,7 @@ func backoffCommon(retries int, cfg grpcbackoff.Config, adjust func(cur float64)
 	}
 	// Randomize backoff delays so that if a cluster of requests start at
 	// the same time, they won't operate in lockstep.
-	backoff *= 1 + cfg.Jitter*(vtrand.Float64()*2-1)
+	backoff *= 1 + cfg.Jitter*(rand.Float64()*2-1)
 	if backoff < 0 {
 		return 0
 	}

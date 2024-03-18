@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -576,7 +576,7 @@ func (rp *ResourcePool) extendedMaxLifetime() time.Duration {
 	if maxLifetime == 0 {
 		return 0
 	}
-	return time.Duration(maxLifetime + rand.Int63n(maxLifetime))
+	return time.Duration(maxLifetime + rand.Int64N(maxLifetime))
 }
 
 // MaxLifetimeClosed returns the count of resources closed due to refresh timeout.
