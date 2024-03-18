@@ -73,7 +73,7 @@ func TestTabletCommands(t *testing.T) {
 		sql := "select * from t1; select * from t1 limit 100"
 		result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDBA", "--json", primaryTablet.Alias, sql)
 		require.Nil(t, err)
-		assertExecuteFetch(t, result)
+		assertExecuteMultiFetch(t, result)
 	})
 	// check Ping / RefreshState / RefreshStateByShard
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", primaryTablet.Alias)
