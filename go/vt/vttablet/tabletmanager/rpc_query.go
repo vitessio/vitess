@@ -222,13 +222,15 @@ func (tm *TabletManager) ExecuteMultiFetchAsDba(ctx context.Context, req *tablet
 	//  (in v20): result, err := ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 	results := make([]*querypb.QueryResult, 0, len(queries))
 	result, more, err := conn.ExecuteFetchMulti(uq, int(req.MaxRows), true /*wantFields*/)
-	results = append(results, sqltypes.ResultToProto3(result))
-	for more {
-		result, more, _, err = conn.ReadQueryResult(0, false)
+	if err == nil {
 		results = append(results, sqltypes.ResultToProto3(result))
+	}
+	for more {
+		result, more, _, err = conn.ReadQueryResult(int(req.MaxRows), true /*wantFields*/)
 		if err != nil {
 			return nil, err
 		}
+		results = append(results, sqltypes.ResultToProto3(result))
 	}
 
 	// Re-enable FK checks if necessary.
