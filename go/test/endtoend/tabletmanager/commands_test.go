@@ -60,12 +60,21 @@ func TestTabletCommands(t *testing.T) {
 	utils.Exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
-	// make sure direct dba queries work
-	sql := "select * from t1"
-	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", "--json", primaryTablet.Alias, sql)
-	require.Nil(t, err)
-	assertExecuteFetch(t, result)
+	t.Run("ExecuteFetchAsDBA", func(t *testing.T) {
+		// make sure direct dba queries work
+		sql := "select * from t1"
+		result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", "--json", primaryTablet.Alias, sql)
+		require.Nil(t, err)
+		assertExecuteFetch(t, result)
+	})
 
+	t.Run("ExecuteMultiFetchAsDBA", func(t *testing.T) {
+		// make sure direct dba queries work
+		sql := "select * from t1; select * from t1 limit 100"
+		result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDBA", "--json", primaryTablet.Alias, sql)
+		require.Nil(t, err)
+		assertExecuteFetch(t, result)
+	})
 	// check Ping / RefreshState / RefreshStateByShard
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")
@@ -135,6 +144,22 @@ func assertExecuteFetch(t *testing.T, qr string) {
 	assert.Equal(t, want, got)
 
 	fields := reflect.ValueOf(resultMap["fields"])
+	got = fields.Len()
+	want = int(2)
+	assert.Equal(t, want, got)
+}
+func assertExecuteMultiFetch(t *testing.T, qr string) {
+	resultMap := make([]map[string]any, 0)
+	err := json.Unmarshal([]byte(qr), &resultMap)
+	require.Nil(t, err)
+	require.NotEmpty(t, resultMap)
+
+	rows := reflect.ValueOf(resultMap[0]["rows"])
+	got := rows.Len()
+	want := int(2)
+	assert.Equal(t, want, got)
+
+	fields := reflect.ValueOf(resultMap[0]["fields"])
 	got = fields.Len()
 	want = int(2)
 	assert.Equal(t, want, got)
