@@ -22031,9 +22031,6 @@ export namespace tabletmanagerdata {
 
         /** ExecuteMultiFetchAsDbaResponse results */
         results?: (query.IQueryResult[]|null);
-
-        /** ExecuteMultiFetchAsDbaResponse errors */
-        errors?: (string[]|null);
     }
 
     /** Represents an ExecuteMultiFetchAsDbaResponse. */
@@ -22047,9 +22044,6 @@ export namespace tabletmanagerdata {
 
         /** ExecuteMultiFetchAsDbaResponse results. */
         public results: query.IQueryResult[];
-
-        /** ExecuteMultiFetchAsDbaResponse errors. */
-        public errors: string[];
 
         /**
          * Creates a new ExecuteMultiFetchAsDbaResponse instance using the specified properties.
