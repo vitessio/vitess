@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	_ "modernc.org/sqlite"
 
 	"vitess.io/vitess/go/protoutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
