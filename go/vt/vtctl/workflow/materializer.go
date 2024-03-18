@@ -190,7 +190,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 
 		var tenantClause *sqlparser.Expr
 		var err error
-		if mz.ms.WorkflowOptions != nil && mz.ms.WorkflowOptions.TenantId != "" {
+		if mz.IsMultiTenantMigration() {
 			tenantClause, err = mz.getTenantClause()
 			if err != nil {
 				return nil, err

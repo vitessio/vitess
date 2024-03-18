@@ -1,7 +1,6 @@
 package vreplication
 
 import (
-	_ "encoding/json"
 	"fmt"
 	"math/rand/v2"
 	"strconv"
@@ -10,13 +9,9 @@ import (
 	"testing"
 	"time"
 
-	_ "google.golang.org/protobuf/encoding/protojson"
-
-	"vitess.io/vitess/go/vt/log"
-	_ "vitess.io/vitess/go/vt/proto/vschema"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -176,7 +171,7 @@ func (mtm *multiTenantMigration) start(tenantId int64) {
 	mt := newVtctldMoveTables(&moveTablesWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
-			workflowName:   fmt.Sprintf("wf_tenant%d", tenantId),
+			workflowName:   fmt.Sprintf("wf%d", tenantId),
 			targetKeyspace: mtm.targetKeyspace,
 		},
 		sourceKeyspace: sourceKeyspace,

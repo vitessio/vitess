@@ -164,7 +164,6 @@ func (ts *Server) SaveKeyspaceRoutingRules(ctx context.Context, rules *vschemapb
 	if err != nil {
 		return err
 	}
-
 	if len(data) == 0 {
 		// No rules, remove it.
 		if err := ts.globalCell.Delete(ctx, KeyspaceRoutingRulesFile, nil); err != nil && !IsErrType(err, NoNode) {
@@ -172,7 +171,6 @@ func (ts *Server) SaveKeyspaceRoutingRules(ctx context.Context, rules *vschemapb
 		}
 		return nil
 	}
-
 	_, err = ts.globalCell.Update(ctx, KeyspaceRoutingRulesFile, data, nil)
 	return err
 }

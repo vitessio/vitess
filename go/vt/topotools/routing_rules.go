@@ -128,10 +128,10 @@ func SaveShardRoutingRules(ctx context.Context, ts *topo.Server, srr map[string]
 // region keyspace routing rules
 
 func GetKeyspaceRoutingRulesMap(rules *vschemapb.KeyspaceRoutingRules) map[string]string {
-	rulesMap := make(map[string]string)
 	if rules == nil {
-		return rulesMap
+		return make(map[string]string)
 	}
+	rulesMap := make(map[string]string, len(rules.Rules))
 	for _, rr := range rules.Rules {
 		rulesMap[rr.FromKeyspace] = rr.ToKeyspace
 	}
