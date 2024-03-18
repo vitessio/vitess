@@ -1342,6 +1342,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		if multiTenantSpec == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "multi-tenant spec not found for target keyspace %s", targetKeyspace)
 		}
+		// Validate that the tenant id matches the data type of the column provided in the multi-tenant spec of the vschema.
 		if err := validateTenantId(multiTenantSpec.TenantIdColumnType, req.WorkflowOptions.TenantId); err != nil {
 			return nil, err
 		}

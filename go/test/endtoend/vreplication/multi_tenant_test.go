@@ -146,7 +146,7 @@ func (mtm *multiTenantMigration) getLastID(tenantId int64) int64 {
 }
 
 func (mtm *multiTenantMigration) initTenantData(t *testing.T, tenantId int64, sourceAliasKeyspace string) {
-	mtm.insertSomeData(t, tenantId, sourceAliasKeyspace, numInitialRowsPerTenant)
+	mtm.insertSomeData(t, tenantId, getSourceKeyspace(tenantId), numInitialRowsPerTenant)
 }
 
 func getInitialTabletIdForTenant(tenantId int64) int {
@@ -200,7 +200,7 @@ func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 	t := mtm.t
 	sourceAliasKeyspace := getSourceAliasKeyspace(tenantId)
 	sourceKeyspaceName := getSourceKeyspace(tenantId)
-	mt := mtm.activeMoveTables[tenantId]
+	mt := mtm.getActiveMoveTables(tenantId)
 	ksWorkflow := fmt.Sprintf("%s.%s", mtm.targetKeyspace, mt.workflowName)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 	// we intentionally insert first into the source alias keyspace and then the source keyspace to test routing rules for both.
@@ -210,7 +210,7 @@ func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 }
 
 func (mtm *multiTenantMigration) complete(tenantId int64) {
-	mt := mtm.activeMoveTables[tenantId]
+	mt := mtm.getActiveMoveTables(tenantId)
 	mt.Complete()
 	vtgateConn := vc.GetVTGateConn(mtm.t)
 	defer vtgateConn.Close()
