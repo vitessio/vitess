@@ -187,8 +187,10 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		func(queries []string, countCreate int) error {
 			// Up to v19, we allow multi-statement SQL in ExecuteFetchAsDba, but only for the specific case
 			// where all statements are CREATE TABLE or CREATE VIEW. This is to support `ApplySchema --batch-size`.
-			// In v20, we will not support multi statements whatsoever.
-			// v20 will throw an error by virtua of using ExecuteFetch instead of ExecuteFetchMulti.
+			// In v20, we still support multi-statement SQL, but again only if all statements are CREATE TABLE or CREATE VIEW.
+			// We then also add ExecuteMultiFetchAsDba for future use of multiple statements.
+			// In v21 we will not tolerate multi-statement SQL in ExecuteFetchAsDba at all, and
+			// ExecuteMultiFetchAsDba will be the only way to execute multiple statements.
 			if len(queries) > 1 && len(queries) != countCreate {
 				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba unless all are CREATE TABLE or CREATE VIEW")
 			}
