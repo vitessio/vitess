@@ -159,6 +159,8 @@ func (node *Insert) FormatFast(buf *TrackedBuffer) {
 
 		node.Rows.FormatFast(buf)
 
+		node.RowAlias.FormatFast(buf)
+
 		node.OnDup.FormatFast(buf)
 
 	case ReplaceAct:
@@ -178,6 +180,8 @@ func (node *Insert) FormatFast(buf *TrackedBuffer) {
 
 		node.Rows.FormatFast(buf)
 
+		node.RowAlias.FormatFast(buf)
+
 		node.OnDup.FormatFast(buf)
 
 	default:
@@ -196,6 +200,8 @@ func (node *Insert) FormatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 
 		node.Rows.FormatFast(buf)
+
+		node.RowAlias.FormatFast(buf)
 
 		node.OnDup.FormatFast(buf)
 
@@ -2671,6 +2677,20 @@ func (node OnDup) FormatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteString(" on duplicate key update ")
 	UpdateExprs(node).FormatFast(buf)
+}
+
+func (node *RowAlias) FormatFast(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+
+	buf.WriteString(" as ")
+	node.TableName.FormatFast(buf)
+
+	if node.Columns != nil {
+		buf.WriteByte(' ')
+		node.Columns.FormatFast(buf)
+	}
 }
 
 // FormatFast formats the node.

@@ -84,6 +84,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   ctes          []*CommonTableExpr
   order         *Order
   limit         *Limit
+  rowAlias      *RowAlias
 
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
@@ -542,6 +543,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <identifierCS> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt use_table_name
+%type <rowAlias> row_alias_opt
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
@@ -921,7 +923,7 @@ query_primary:
   }
 
 insert_statement:
-  insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
+  insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data row_alias_opt on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $6
@@ -930,7 +932,8 @@ insert_statement:
     ins.Ignore = $3
     ins.Table = getAliasedTableExprFromTableName($4)
     ins.Partitions = $5
-    ins.OnDup = OnDup($7)
+    ins.RowAlias = $7
+    ins.OnDup = OnDup($8)
     $$ = ins
   }
 | insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET update_list on_dup_opt
@@ -7747,6 +7750,19 @@ ins_column_list:
 | ins_column_list ',' sql_id '.' sql_id
   {
     $$ = append($$, $5)
+  }
+
+row_alias_opt:
+  {
+    $$ = nil
+  }
+| AS table_alias
+  {
+    $$ = &RowAlias{TableName: $2}
+  }
+| AS table_alias openb column_list closeb
+  {
+    $$ = &RowAlias{TableName: $2, Columns: $4}
   }
 
 on_dup_opt:

@@ -423,6 +423,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfRollback(in)
 	case RootNode:
 		return CloneRootNode(in)
+	case *RowAlias:
+		return CloneRefOfRowAlias(in)
 	case *SRollback:
 		return CloneRefOfSRollback(in)
 	case *Savepoint:
@@ -1633,6 +1635,7 @@ func CloneRefOfInsert(n *Insert) *Insert {
 	out.Columns = CloneColumns(n.Columns)
 	out.Rows = CloneInsertRows(n.Rows)
 	out.OnDup = CloneOnDup(n.OnDup)
+	out.RowAlias = CloneRefOfRowAlias(n.RowAlias)
 	return &out
 }
 
@@ -2690,6 +2693,17 @@ func CloneRefOfRollback(n *Rollback) *Rollback {
 // CloneRootNode creates a deep clone of the input.
 func CloneRootNode(n RootNode) RootNode {
 	return *CloneRefOfRootNode(&n)
+}
+
+// CloneRefOfRowAlias creates a deep clone of the input.
+func CloneRefOfRowAlias(n *RowAlias) *RowAlias {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.TableName = CloneIdentifierCS(n.TableName)
+	out.Columns = CloneColumns(n.Columns)
+	return &out
 }
 
 // CloneRefOfSRollback creates a deep clone of the input.
