@@ -364,10 +364,6 @@ func TestInRange(t *testing.T) {
 	for _, tc := range testCases {
 		got := tc.in.inRange()
 
-		if tc.wantInRange {
-			assert.True(t, got, "Interval %v should be within valid range", tc.in)
-		} else {
-			assert.False(t, got, "Interval %v should be out of valid range", tc.in)
-		}
+		assert.Equal(t, tc.wantInRange, got)
 	}
 }
