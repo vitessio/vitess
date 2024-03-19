@@ -2776,6 +2776,10 @@ func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw is
 		if err := sw.deleteShardRoutingRules(ctx); err != nil {
 			return err
 		}
+		if err := sw.deleteKeyspaceRoutingRules(ctx); err != nil {
+			return err
+		}
+
 	}
 
 	return nil

@@ -439,6 +439,27 @@ func (ts *trafficSwitcher) deleteShardRoutingRules(ctx context.Context) error {
 	return nil
 }
 
+func (ts *trafficSwitcher) deleteKeyspaceRoutingRules(ctx context.Context) error {
+	log.Infof("deleteKeyspaceRoutingRules: %s", ts.TargetKeyspaceName())
+	if !ts.IsMultiTenantMigration() {
+		return nil
+	}
+	krr, err := topotools.GetKeyspaceRoutingRules(ctx, ts.TopoServer())
+	if err != nil {
+		return err
+	}
+	log.Infof("deleteKeyspaceRoutingRules before: %s", krr)
+	delete(krr, ts.SourceKeyspaceName())
+	if ts.options.SourceKeyspaceAlias != "" {
+		delete(krr, ts.options.SourceKeyspaceAlias)
+	}
+	log.Infof("deleteKeyspaceRoutingRules after: %s", krr)
+	if err := topotools.SaveKeyspaceRoutingRules(ctx, ts.TopoServer(), krr); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {

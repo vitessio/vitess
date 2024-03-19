@@ -27,7 +27,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-//region routing rules
+// region routing rules
 
 func GetRoutingRulesMap(rules *vschemapb.RoutingRules) map[string][]string {
 	if rules == nil {
@@ -69,9 +69,9 @@ func SaveRoutingRules(ctx context.Context, ts *topo.Server, rules map[string][]s
 	return ts.SaveRoutingRules(ctx, rrs)
 }
 
-//endregion
+// endregion
 
-//region shard routing rules
+// region shard routing rules
 
 func GetShardRoutingRuleKey(fromKeyspace, shard string) string {
 	return fmt.Sprintf("%s.%s", fromKeyspace, shard)
@@ -148,9 +148,6 @@ func GetKeyspaceRoutingRules(ctx context.Context, ts *topo.Server) (map[string]s
 }
 
 func SaveKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, rules map[string]string) error {
-	if len(rules) == 0 {
-		return nil
-	}
 	ks_rr := &vschemapb.KeyspaceRoutingRules{Rules: make([]*vschemapb.KeyspaceRoutingRule, 0, len(rules))}
 	for from, to := range rules {
 		ks_rr.Rules = append(ks_rr.Rules, &vschemapb.KeyspaceRoutingRule{
@@ -161,4 +158,4 @@ func SaveKeyspaceRoutingRules(ctx context.Context, ts *topo.Server, rules map[st
 	return ts.SaveKeyspaceRoutingRules(ctx, ks_rr)
 }
 
-//endregion
+// endregion
