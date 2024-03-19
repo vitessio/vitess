@@ -25,6 +25,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/callerid"
@@ -108,7 +109,7 @@ type dialer interface {
 }
 
 type poolDialer interface {
-	dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error)
+	dialPool(ctx context.Context, tablet *topodatapb.Tablet) (c tabletmanagerservicepb.TabletManagerClient, invalidator func(error), err error)
 }
 
 // Client implements tmclient.TabletManagerClient.
@@ -152,11 +153,11 @@ func (client *grpcClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (
 	return tabletmanagerservicepb.NewTabletManagerClient(cc), cc, nil
 }
 
-func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error) {
+func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, func(error) /* map invalidator */, error) {
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
 	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	client.mu.Lock()
@@ -172,7 +173,7 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 		for i := 0; i < cap(c); i++ {
 			cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			c <- &tmc{
 				cc:     cc,
@@ -185,7 +186,19 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 
 	result := <-c
 	c <- result
-	return result.client, nil
+	invalidator := func(err error) {
+		if err == nil {
+			return
+		}
+		if _, ok := status.FromError(err); !ok {
+			// Not a gRPC error
+			return
+		}
+		client.mu.Lock()
+		defer client.mu.Unlock()
+		delete(client.rpcClientMap, addr)
+	}
+	return result.client, invalidator, nil
 }
 
 // Close is part of the tmclient.TabletManagerClient interface.
@@ -470,9 +483,10 @@ func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Table
 func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
+	var invalidator func(error)
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, err = poolDialer.dialPool(ctx, tablet)
+			c, invalidator, err = poolDialer.dialPool(ctx, tablet)
 			if err != nil {
 				return nil, err
 			}
@@ -497,6 +511,9 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 		DisableForeignKeyChecks: req.DisableForeignKeyChecks,
 	})
 	if err != nil {
+		if invalidator != nil {
+			invalidator(err)
+		}
 		return nil, err
 	}
 	return response.Result, nil
@@ -526,9 +543,10 @@ func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topoda
 func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
+	var invalidator func(error)
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, err = poolDialer.dialPool(ctx, tablet)
+			c, invalidator, err = poolDialer.dialPool(ctx, tablet)
 			if err != nil {
 				return nil, err
 			}
@@ -546,6 +564,9 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 
 	response, err := c.ExecuteFetchAsApp(ctx, req)
 	if err != nil {
+		if invalidator != nil {
+			invalidator(err)
+		}
 		return nil, err
 	}
 	return response.Result, nil
@@ -576,8 +597,9 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
+	var invalidator func(error)
 	if poolDialer, ok := client.dialer.(poolDialer); ok {
-		c, err = poolDialer.dialPool(ctx, tablet)
+		c, invalidator, err = poolDialer.dialPool(ctx, tablet)
 		if err != nil {
 			return nil, err
 		}
@@ -594,6 +616,9 @@ func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet)
 
 	response, err := c.FullStatus(ctx, &tabletmanagerdatapb.FullStatusRequest{})
 	if err != nil {
+		if invalidator != nil {
+			invalidator(err)
+		}
 		return nil, err
 	}
 	return response.Status, nil
@@ -1066,8 +1091,9 @@ func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, req
 func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
+	var invalidator func(error)
 	if poolDialer, ok := client.dialer.(poolDialer); ok {
-		c, err = poolDialer.dialPool(ctx, tablet)
+		c, invalidator, err = poolDialer.dialPool(ctx, tablet)
 		if err != nil {
 			return nil, err
 		}
@@ -1084,6 +1110,9 @@ func (client *Client) CheckThrottler(ctx context.Context, tablet *topodatapb.Tab
 
 	response, err := c.CheckThrottler(ctx, req)
 	if err != nil {
+		if invalidator != nil {
+			invalidator(err)
+		}
 		return nil, err
 	}
 	return response, nil
