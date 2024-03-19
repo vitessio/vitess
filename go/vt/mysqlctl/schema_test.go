@@ -1,14 +1,19 @@
 package mysqlctl
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var queryMap map[string]*sqltypes.Result
@@ -102,4 +107,29 @@ func TestColumnList(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, `[name:"col1" type:VARCHAR]`, fmt.Sprintf("%+v", fields))
 
+}
+
+func TestGetSchema(t *testing.T) {
+	uid := uint32(11111)
+	cnf := NewMycnf(uid, 6802)
+	// Assigning ServerID to be different from tablet UID to make sure that there are no
+	// assumptions in the code that those IDs are the same.
+	cnf.ServerID = 22222
+
+	// expect these in the output my.cnf
+	os.Setenv("KEYSPACE", "test-messagedb")
+	os.Setenv("SHARD", "0")
+	os.Setenv("TABLET_TYPE", "PRIMARY")
+	os.Setenv("TABLET_ID", "11111")
+	os.Setenv("TABLET_DIR", TabletDir(uid))
+	os.Setenv("MYSQL_PORT", "15306")
+	// this is not being passed, so it should be nil
+	os.Setenv("MY_VAR", "myvalue")
+
+	dbconfigs.GlobalDBConfigs.InitWithSocket(cnf.SocketFile, collations.MySQL8())
+	mysqld := NewMysqld(&dbconfigs.GlobalDBConfigs)
+	sc, err := mysqld.GetSchema(context.Background(), mysqld.dbcfgs.DBName, &tabletmanagerdata.GetSchemaRequest{})
+
+	// TODO: This needs to be fixed
+	fmt.Println(sc, err)
 }

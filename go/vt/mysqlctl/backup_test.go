@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
@@ -148,9 +149,8 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 	rocksdbDir := path.Join(dataDir, ".rocksdb")
 	sdiOnlyDir := path.Join(dataDir, "sdi_dir")
 	for _, s := range []string{innodbDataDir, innodbLogDir, dataDbDir, extraDir, outsideDbDir, rocksdbDir, sdiOnlyDir} {
-		if err := os.MkdirAll(s, os.ModePerm); err != nil {
-			t.Fatalf("failed to create directory %v: %v", s, err)
-		}
+		err := os.MkdirAll(s, os.ModePerm)
+		require.NoErrorf(t, err, "failed to create directory %v: %v", s, err)
 	}
 
 	innodbLogFile := "innodb_log_1"
@@ -677,4 +677,38 @@ func (fbe *fakeBackupRestoreEnv) setStats(stats *backupstats.FakeStats) {
 	fbe.backupParams.Stats = nil
 	fbe.restoreParams.Stats = nil
 	fbe.stats = nil
+}
+
+func TestParseBackupName(t *testing.T) {
+	// backup name doesn't contain 3 parts
+	_, _, err := ParseBackupName("dir", "asd.saddsa")
+	assert.ErrorContains(t, err, "cannot backup name")
+
+	// Invalid time
+	bt, al, err := ParseBackupName("dir", "2024-03-18.123.tablet_id")
+	assert.Nil(t, bt)
+	assert.Nil(t, al)
+	assert.NoError(t, err)
+
+	// Valid case
+	bt, al, err = ParseBackupName("dir", "2024-03-18.180911.cell1-42")
+	assert.NotNil(t, *bt, time.Date(2024, 03, 18, 18, 9, 11, 0, time.UTC))
+	assert.Equal(t, "cell1", al.Cell)
+	assert.Equal(t, uint32(42), al.Uid)
+	assert.NoError(t, err)
+}
+
+func TestShouldRestore(t *testing.T) {
+	env := createFakeBackupRestoreEnv(t)
+
+	b, err := ShouldRestore(env.ctx, env.restoreParams)
+	assert.False(t, b)
+	assert.Error(t, err)
+
+	env.restoreParams.DeleteBeforeRestore = true
+	b, err = ShouldRestore(env.ctx, env.restoreParams)
+	assert.True(t, b)
+	assert.NoError(t, err)
+
+	// TODO: Add more tests for checkNoDb
 }
