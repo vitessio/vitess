@@ -886,6 +886,49 @@
     }
   },
   {
+    "comment": "test handling of TEXT column type handling",
+    "query": "select table_comment from information_schema.tables union select table_comment from information_schema.tables",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select table_comment from information_schema.tables union select table_comment from information_schema.tables",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select table_comment from information_schema.`tables` where 1 != 1",
+                "Query": "select distinct table_comment from information_schema.`tables`",
+                "Table": "information_schema.`tables`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select table_comment from information_schema.`tables` where 1 != 1",
+                "Query": "select distinct table_comment from information_schema.`tables`",
+                "Table": "information_schema.`tables`"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
     "comment": "UNION that needs to be reordered to be merged more aggressively. Gen4 is able to get it down to 2 routes",
     "query": "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra",
     "plan": {
