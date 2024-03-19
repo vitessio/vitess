@@ -140,6 +140,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
   indexColumns  []*IndexColumn
   constraintDefinition *ConstraintDefinition
   constraintInfo ConstraintInfo
+  tableOption   *TableOption
+  tableOptions  []*TableOption
   ReferenceAction ReferenceAction
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
@@ -551,13 +553,15 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> name_opt
 %type <str> equal_opt assignment_op
 %type <TableSpec> table_spec table_column_list
-%type <str> table_option_list table_option table_opt_value row_fmt_opt
+%type <str> table_opt_value row_fmt_opt
 %type <str> partition_options partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
+%type <tableOption> table_option
+%type <tableOptions> table_option_list
 %type <flushOption> flush_option
 %type <replicationOptions> replication_option_list replication_filter_option_list
 %type <replicationOption> replication_option replication_filter_option
@@ -2791,7 +2795,10 @@ table_spec:
   '(' table_column_list ')' table_option_list partition_options
   {
     $$ = $2
-    $$.Options = $4 + $5
+    for _, opt := range $4 {
+      $$.AddTableOption(opt)
+    }
+    $$.PartitionOpts = $5
   }
 
 table_column_list:
@@ -4148,193 +4155,181 @@ enforced_opt:
 
 table_option_list:
   {
-    $$ = ""
+    $$ = nil
   }
 | table_option_list table_option
   {
-    $$ = $1 + " " + string($2)
+    $$ = append($1, $2)
   }
 | table_option_list ',' table_option
   {
-    $$ = string($1) + ", " + string($3)
+    $$ = append($1, $3)
   }
 
 table_option:
   AUTOEXTEND_SIZE equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | AUTO_INCREMENT equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | AVG_ROW_LENGTH equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
-| CHARSET equal_opt charset
+| default_keyword_opt CHARSET equal_opt charset
   {
-    $$ = "CHARACTER SET " + string($3) + " "
+    $$ = &TableOption{Name: "CHARACTER SET", Value: $4}
   }
-| DEFAULT CHARSET equal_opt charset
+| default_keyword_opt CHARACTER SET equal_opt charset
   {
-    $$ = string($1) + " " + "CHARACTER SET " + $4
-  }
-| CHARACTER SET equal_opt charset
-  {
-    $$ = string($1) + " " + string($2) + " " + $4
-  }
-| DEFAULT CHARACTER SET equal_opt charset
-  {
-    $$ = string($1) + " "  + string($2) + " "  + string($3) + " " + $5
+    $$ = &TableOption{Name: string($2) + " " + string($3), Value: $5}
   }
 | CHECKSUM equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | TABLE_CHECKSUM equal_opt coericble_to_integral
   {
-    $$ = "CHECKSUM" + " " + string($3)
+    $$ = &TableOption{Name: "CHECKSUM", Value: string($3)}
   }
-| COLLATE equal_opt table_option_collate
+| default_keyword_opt COLLATE equal_opt table_option_collate
   {
-    $$ = string($1) + " " + $3
-  }
-| DEFAULT COLLATE equal_opt table_option_collate
-  {
-    $$ = string($1) + " "  + string($2) + " " + $4
+    $$ = &TableOption{Name: string($2), Value: $4}
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | COMPRESSION equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | CONNECTION equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | DATA DIRECTORY equal_opt STRING
   {
-    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
+    $$ = &TableOption{Name: string($1) + " "  + string($2), Value: string($4)}
   }
 | INDEX DIRECTORY equal_opt STRING
   {
-    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
+    $$ = &TableOption{Name: string($1) + " "  + string($2), Value: string($4)}
   }
 | DELAY_KEY_WRITE equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENCRYPTION equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENGINE equal_opt any_identifier
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | INSERT_METHOD equal_opt NO
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | INSERT_METHOD equal_opt FIRST
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | INSERT_METHOD equal_opt LAST
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | KEY_BLOCK_SIZE equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | MAX_ROWS equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | MIN_ROWS equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | PACK_KEYS equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | PASSWORD equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ROW_FORMAT equal_opt row_fmt_opt
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | START TRANSACTION
   {
-    $$ = string($1) + " "  + string($2)
+    $$ = &TableOption{Name: string($1) + string($2)}
   }
 | SECONDARY_ENGINE equal_opt ID
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE equal_opt NULL
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE equal_opt STRING
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_AUTO_RECALC equal_opt DEFAULT
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_AUTO_RECALC equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_PERSISTENT equal_opt DEFAULT
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_PERSISTENT equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_SAMPLE_PAGES equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | TABLESPACE table_opt_value
   {
-    $$ = string($1) + $2
+    $$ = &TableOption{Name: string($1), Value: $2}
   }
 | TABLESPACE any_identifier
-    {
-      $$ = string($1) + " "  + string($2)
-    }
+  {
+    $$ = &TableOption{Name: string($1), Value: string($2)}
+  }
 | TABLESPACE any_identifier STORAGE DISK
   {
-    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+    $$ = &TableOption{Name: string($1), Value: string($2) + " "  + string($3) + " "  + string($4)}
   }
 | TABLESPACE any_identifier STORAGE MEMORY
   {
-    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+    $$ = &TableOption{Name: string($1), Value: string($2) + " "  + string($3) + " "  + string($4)}
   }
 | UNION equal_opt openb any_identifier_list closeb
   {
-    $$ = string($1) + " " + "(" + $4 + ")"
+    $$ = &TableOption{Name: string($1), Value: "(" + $4 + ")"}
   }
 
 table_option_collate:
@@ -4457,9 +4452,9 @@ partition_option:
     $$ = string($1) + " (" + string($3) + ")"
   }
 | LIST COLUMNS openb column_list closeb
- {
-   $$ = string($1) + " " + string($2) + " (column_list)"
- }
+  {
+    $$ = string($1) + " " + string($2) + " (column_list)"
+  }
 
 linear_partition_opt:
   linear_opt HASH openb value closeb
@@ -6786,7 +6781,7 @@ value_expression:
   }
 | value_expression COLLATE charset
   {
-    $$ = &CollateExpr{Expr: $1, Charset: $3}
+    $$ = &CollateExpr{Expr: $1, Collation: $3}
   }
 | BINARY value_expression %prec UNARY
   {

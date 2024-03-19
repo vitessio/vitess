@@ -2502,7 +2502,10 @@ type TableSpec struct {
 	Columns     []*ColumnDefinition
 	Indexes     []*IndexDefinition
 	Constraints []*ConstraintDefinition
-	Options     string
+	TableOpts   []*TableOption
+
+	// TODO: should be some sort of struct
+	PartitionOpts string
 }
 
 // Format formats the node.
@@ -2521,8 +2524,15 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	for _, c := range ts.Constraints {
 		buf.Myprintf(",\n\t%v", c)
 	}
+	buf.Myprintf("\n)")
+	for _, tblOpt := range ts.TableOpts {
+		buf.Myprintf(" %s %s", tblOpt.Name, tblOpt.Value)
+	}
+	if len(ts.PartitionOpts) > 0 {
+		buf.Myprintf(" %s", ts.PartitionOpts)
+	}
 
-	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
+	//buf.Myprintf("\n)%s", strings.Replace(ts.TableOpts, ", ", ",\n  ", -1))
 }
 
 // AddColumn appends the given column to the list in the spec
@@ -2543,6 +2553,11 @@ func (ts *TableSpec) AddIndex(id *IndexDefinition) {
 // AddConstraint appends the given index to the list in the spec
 func (ts *TableSpec) AddConstraint(cd *ConstraintDefinition) {
 	ts.Constraints = append(ts.Constraints, cd)
+}
+
+// AddOption appends the given option to the list in the spec
+func (ts *TableSpec) AddTableOption(to *TableOption) {
+	ts.TableOpts = append(ts.TableOpts, to)
 }
 
 func (ts *TableSpec) walkSubtree(visit Visit) error {
@@ -3299,6 +3314,12 @@ type IndexOption struct {
 	Name  string
 	Value *SQLVal
 	Using string
+}
+
+// TableOption describes a table option in a CREATE TABLE statement
+type TableOption struct {
+	Name  string
+	Value string
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -5623,13 +5644,13 @@ func (node *TimestampFuncExpr) replace(from, to Expr) bool {
 
 // CollateExpr represents dynamic collate operator.
 type CollateExpr struct {
-	Expr    Expr
-	Charset string
+	Expr      Expr
+	Collation string
 }
 
 // Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v collate %s", node.Expr, node.Charset)
+	buf.Myprintf("%v collate %s", node.Expr, node.Collation)
 }
 
 func (node *CollateExpr) walkSubtree(visit Visit) error {
