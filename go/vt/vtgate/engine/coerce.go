@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -151,8 +152,11 @@ func (c *Coerce) Inputs() ([]Primitive, []map[string]any) {
 
 func (c *Coerce) description() PrimitiveDescription {
 	var cols []string
-	for _, typ := range c.Types {
-		cols = append(cols, typ.Type().String())
+	for idx, typ := range c.Types {
+		if typ == nil {
+			continue
+		}
+		cols = append(cols, fmt.Sprintf("%d:%s", idx, typ.Type().String()))
 	}
 	return PrimitiveDescription{
 		OperatorType: "Coerce",

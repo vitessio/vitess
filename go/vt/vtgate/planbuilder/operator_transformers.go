@@ -811,7 +811,51 @@ func getAllTableNames(op *operators.Route) ([]string, error) {
 }
 
 func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (logicalPlan, error) {
-	sources, err := slice.MapWithError(op.Sources, func(src operators.Operator) (logicalPlan, error) {
+	sources, coerced, err := coercedInputs(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+
+	return &concatenate{
+		sources: sources,
+		coerced: coerced,
+	}, nil
+}
+
+func typeForExpr(ctx *plancontext.PlanningContext, e sqlparser.Expr) (evalengine.Type, bool) {
+	if typ, found := ctx.SemTable.TypeForExpr(e); found {
+		return typ, true
+	}
+
+	cfg := &evalengine.Config{
+		ResolveColumn: func(name *sqlparser.ColName) (int, error) {
+			return 0, nil // we are not going to use these for anything other than getting the type
+		},
+		ResolveType: func(expr sqlparser.Expr) (evalengine.Type, bool) {
+			return ctx.SemTable.TypeForExpr(e)
+		},
+		Collation:   ctx.SemTable.Collation,
+		Environment: ctx.VSchema.Environment(),
+	}
+	evalExpr, err := evalengine.Translate(e, cfg)
+	if err != nil {
+		return evalengine.Type{}, false
+	}
+	env := evalengine.ExpressionEnv{
+		BindVars: nil,
+		Row:      nil,
+		Fields:   nil,
+	}
+	typ, err := env.TypeOf(evalExpr)
+	if err != nil {
+		return evalengine.Type{}, false
+	}
+	ctx.SemTable.ExprTypes[e] = typ
+	return typ, true
+}
+
+func coercedInputs(ctx *plancontext.PlanningContext, op *operators.Union) ([]logicalPlan, bool, error) {
+	orgSources, err := slice.MapWithError(op.Sources, func(src operators.Operator) (logicalPlan, error) {
 		plan, err := transformToLogicalPlan(ctx, src)
 		if err != nil {
 			return nil, err
@@ -819,17 +863,57 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (
 		return plan, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+	collationEnv := ctx.VSchema.Environment().CollationEnv()
+	typers := make([]evalengine.TypeAggregator, len(op.Sources[0].GetColumns(ctx)))
+	for _, src := range op.Sources {
+		cols := src.GetColumns(ctx)
+		for idx, col := range cols {
+			typ, found := typeForExpr(ctx, col.Expr)
+			if !found {
+				return orgSources, false, nil
+			}
+			err := typers[idx].Add(typ, collationEnv)
+			if err != nil {
+				// let's ignore this and just return the
+				return orgSources, false, nil
+			}
+		}
 	}
 
-	if len(sources) == 1 {
-		return sources[0], nil
+	newSources := make([]logicalPlan, 0, len(orgSources))
+	for srcIdx, src := range op.Sources {
+		cols := src.GetColumns(ctx)
+		coerceTypes := make([]*evalengine.Type, len(cols))
+		coerce := false
+		for colIdx, col := range cols {
+			typ, found := ctx.SemTable.TypeForExpr(col.Expr)
+			if !found {
+				return orgSources, false, nil
+			}
+			resultType := typers[colIdx].Type()
+			if resultType.Type() == sqltypes.Unknown {
+				// if the resulting type is a null type, the type aggregator probably messed up the
+				// type calculus, and we can't trust these types
+				return orgSources, false, nil
+			}
+			if resultType != typ {
+				coerceTypes[colIdx] = &resultType
+				coerce = true
+			}
+		}
+		if coerce {
+			newSources = append(newSources, &coercePlan{
+				input:   orgSources[srcIdx],
+				columns: coerceTypes,
+			})
+		} else {
+			newSources = append(newSources, orgSources[srcIdx])
+		}
 	}
-	return &concatenate{
-		sources:           sources,
-		noNeedToTypeCheck: nil,
-	}, nil
 
+	return newSources, true, nil
 }
 
 func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (logicalPlan, error) {

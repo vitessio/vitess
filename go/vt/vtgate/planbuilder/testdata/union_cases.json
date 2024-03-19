@@ -443,7 +443,7 @@
         ],
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
+            "OperatorType": "SimpleConcatenate",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -696,7 +696,7 @@
         ],
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
+            "OperatorType": "SimpleConcatenate",
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
@@ -1187,7 +1187,7 @@
             ],
             "Inputs": [
               {
-                "OperatorType": "Concatenate",
+                "OperatorType": "SimpleConcatenate",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -1278,7 +1278,7 @@
             ],
             "Inputs": [
               {
-                "OperatorType": "Concatenate",
+                "OperatorType": "SimpleConcatenate",
                 "Inputs": [
                   {
                     "OperatorType": "Route",

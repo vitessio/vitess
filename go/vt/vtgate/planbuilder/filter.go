@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 type (
@@ -34,4 +35,17 @@ var _ logicalPlan = (*filter)(nil)
 func (l *filter) Primitive() engine.Primitive {
 	l.efilter.Input = l.input.Primitive()
 	return l.efilter
+}
+
+type coercePlan struct {
+	input   logicalPlan
+	columns []*evalengine.Type
+}
+
+func (c *coercePlan) Primitive() engine.Primitive {
+	src := c.input.Primitive()
+	return &engine.Coerce{
+		Source: src,
+		Types:  c.columns,
+	}
 }
