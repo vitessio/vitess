@@ -1113,6 +1113,7 @@ func (vschema *VSchema) FirstKeyspace() *Keyspace {
 func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
 	routedKeyspace, ok := vschema.KeyspaceRoutingRules[keyspace]
 	if ok {
+		// FIXME: remove before merging
 		log.Infof("Found keyspace routing rule for %s routed to %s", keyspace, routedKeyspace)
 		keyspace = routedKeyspace
 	}
