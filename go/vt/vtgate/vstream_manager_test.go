@@ -25,28 +25,22 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
-	"vitess.io/vitess/go/test/utils"
 )
 
 var mu sync.Mutex
@@ -1283,123 +1277,284 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 	}
 }
 
-// TestVStreamManagerHealthCheckResponseHandling tests the handling of healthcheck responses by
-// the vstream manager to confirm that we are correctly restarting the vstream when we should.
-func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
+func TestKeyspaceHasBeenSharded(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
-	// Capture the vstream warning log. Otherwise we need to re-implement the vstream error
-	// handling in SandboxConn's implementation and then we're not actually testing the
-	// production code.
-	logger := logutil.NewMemoryLogger()
-	log.Warningf = logger.Warningf
-
-	cell := "aa"
-	ks := "TestVStream"
-	shard := "0"
-	tabletType := topodatapb.TabletType_REPLICA
-	_ = createSandbox(ks)
-	hc := discovery.NewFakeHealthCheck(nil)
-	st := getSandboxTopo(ctx, cell, ks, []string{shard})
-	vsm := newTestVStreamManager(ctx, hc, st, cell)
-	vgtid := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: ks,
-			Shard:    shard,
-		}},
-	}
-	source := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, shard, tabletType, true, 0, nil)
-	tabletAlias := topoproto.TabletAliasString(source.Tablet().Alias)
-	addTabletToSandboxTopo(t, ctx, st, ks, shard, source.Tablet())
-	target := &querypb.Target{
-		Cell:       cell,
-		Keyspace:   ks,
-		Shard:      shard,
-		TabletType: tabletType,
-	}
-	highLag := uint32(discovery.GetLowReplicationLag().Seconds()) + 1
+	cell := "zone1"
+	ks := "testks"
 
 	type testcase struct {
-		name    string
-		hcRes   *querypb.StreamHealthResponse
-		wantErr string
+		name            string
+		oldshards       []string
+		newshards       []string
+		vgtid           *binlogdatapb.VGtid
+		trafficSwitched bool
+		want            bool
+		wantErr         string
 	}
 	testcases := []testcase{
 		{
-			name: "all healthy", // Will hit the context timeout
-		},
-		{
-			name: "failure",
-			hcRes: &querypb.StreamHealthResponse{
-				TabletAlias: source.Tablet().Alias,
-				Target:      nil, // This is seen as a healthcheck stream failure
+			name: "2 to 4, split both, traffic not switched",
+			oldshards: []string{
+				"-80",
+				"80-",
 			},
-			wantErr: fmt.Sprintf("health check failed on %s", tabletAlias),
-		},
-		{
-			name: "tablet type changed",
-			hcRes: &querypb.StreamHealthResponse{
-				TabletAlias: source.Tablet().Alias,
-				Target: &querypb.Target{
-					Cell:       cell,
-					Keyspace:   ks,
-					Shard:      shard,
-					TabletType: topodatapb.TabletType_PRIMARY,
-				},
-				PrimaryTermStartTimestamp: time.Now().Unix(),
-				RealtimeStats:             &querypb.RealtimeStats{},
+			newshards: []string{
+				"-40",
+				"40-80",
+				"80-c0",
+				"c0-",
 			},
-			wantErr: fmt.Sprintf("tablet %s type has changed from %s to %s",
-				tabletAlias, tabletType, topodatapb.TabletType_PRIMARY.String()),
-		},
-		{
-			name: "unhealthy",
-			hcRes: &querypb.StreamHealthResponse{
-				TabletAlias: source.Tablet().Alias,
-				Target:      target,
-				RealtimeStats: &querypb.RealtimeStats{
-					HealthError: "unhealthy",
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-",
+					},
 				},
 			},
-			wantErr: fmt.Sprintf("tablet %s is no longer healthy", tabletAlias),
+			trafficSwitched: false,
+			want:            false,
 		},
 		{
-			name: "replication lag too high",
-			hcRes: &querypb.StreamHealthResponse{
-				TabletAlias: source.Tablet().Alias,
-				Target:      target,
-				RealtimeStats: &querypb.RealtimeStats{
-					ReplicationLagSeconds: highLag,
+			name: "2 to 4, split both, traffic not switched",
+			oldshards: []string{
+				"-80",
+				"80-",
+			},
+			newshards: []string{
+				"-40",
+				"40-80",
+				"80-c0",
+				"c0-",
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-",
+					},
 				},
 			},
-			wantErr: fmt.Sprintf("%s has a replication lag of %d seconds which is beyond the value provided",
-				tabletAlias, highLag),
+			trafficSwitched: false,
+			want:            false,
 		},
+		{
+			name: "2 to 8, split both, traffic switched",
+			oldshards: []string{
+				"-80",
+				"80-",
+			},
+			newshards: []string{
+				"-20",
+				"20-40",
+				"40-60",
+				"60-80",
+				"80-a0",
+				"a0-c0",
+				"c0-e0",
+				"e0-",
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-",
+					},
+				},
+			},
+			trafficSwitched: true,
+			want:            true,
+		},
+		{
+			name: "2 to 4, split only first shard, traffic switched",
+			oldshards: []string{
+				"-80",
+				"80-",
+			},
+			newshards: []string{
+				"-20",
+				"20-40",
+				"40-60",
+				"60-80",
+				// 80- is not being resharded.
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-",
+					},
+				},
+			},
+			trafficSwitched: true,
+			want:            true,
+		},
+		{
+			name: "4 to 2, merge both shards, traffic switched",
+			oldshards: []string{
+				"-40",
+				"40-80",
+				"80-c0",
+				"c0-",
+			},
+			newshards: []string{
+				"-80",
+				"80-",
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-40",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "40-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-c0",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "c0-",
+					},
+				},
+			},
+			trafficSwitched: true,
+			want:            true,
+		},
+		{
+			name: "4 to 3, merge second half, traffic not switched",
+			oldshards: []string{
+				"-40",
+				"40-80",
+				"80-c0",
+				"c0-",
+			},
+			newshards: []string{
+				// -40 and 40-80 are not being resharded.
+				"80-", // Merge of 80-c0 and c0-
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-40",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "40-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-c0",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "c0-",
+					},
+				},
+			},
+			trafficSwitched: false,
+			want:            false,
+		},
+		{
+			name: "4 to 3, merge second half, traffic switched",
+			oldshards: []string{
+				"-40",
+				"40-80",
+				"80-c0",
+				"c0-",
+			},
+			newshards: []string{
+				// -40 and 40-80 are not being resharded.
+				"80-", // Merge of 80-c0 and c0-
+			},
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{
+					{
+						Keyspace: ks,
+						Shard:    "-40",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "40-80",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "80-c0",
+					},
+					{
+						Keyspace: ks,
+						Shard:    "c0-",
+					},
+				},
+			},
+			trafficSwitched: true,
+			want:            true,
+		},
+	}
+
+	addTablet := func(t *testing.T, ctx context.Context, host string, port int32, cell, ks, shard string, ts *topo.Server, hc *discovery.FakeHealthCheck, serving bool) {
+		tabletconn := hc.AddTestTablet(cell, host, port, ks, shard, topodatapb.TabletType_PRIMARY, serving, 0, nil)
+		err := ts.CreateTablet(ctx, tabletconn.Tablet())
+		require.NoError(t, err)
+		var alias *topodatapb.TabletAlias
+		if serving {
+			alias = tabletconn.Tablet().Alias
+		}
+		_, err = ts.UpdateShardFields(ctx, ks, shard, func(si *topo.ShardInfo) error {
+			si.PrimaryAlias = alias
+			si.IsPrimaryServing = serving
+			return nil
+		})
+		require.NoError(t, err)
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			done := make(chan struct{})
-			go func() {
-				sctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-				defer cancel()
-				defer close(done)
-				// SandboxConn's VStream implementation always waits for the context to timeout.
-				err := vsm.VStream(sctx, tabletType, vgtid, nil, nil, func(events []*binlogdatapb.VEvent) error {
-					require.Fail(t, "unexpected event", "Received unexpected events: %v", events)
-					return nil
-				})
-				if tc.wantErr != "" { // Otherwise we simply expect the context to timeout
-					if !strings.Contains(logger.String(), tc.wantErr) {
-						require.Fail(t, "unexpected vstream error", "vstream ended with error: %v, which did not contain: %s", err, tc.wantErr)
-					}
-				}
-			}()
-			if tc.wantErr != "" {
-				source.SetStreamHealthResponse(tc.hcRes)
+			hc := discovery.NewFakeHealthCheck(nil)
+			_ = createSandbox(ks)
+			st := getSandboxTopo(ctx, cell, ks, append(tc.oldshards, tc.newshards...))
+			vsm := newTestVStreamManager(ctx, hc, st, cell)
+			vs := vstream{
+				vgtid:      tc.vgtid,
+				tabletType: topodatapb.TabletType_PRIMARY,
+				optCells:   cell,
+				vsm:        vsm,
+				ts:         st.topoServer,
 			}
-			<-done
-			logger.Clear()
+			for i, shard := range tc.oldshards {
+				addTablet(t, ctx, fmt.Sprintf("1.1.0.%d", i), int32(1000+i), cell, ks, shard, st.topoServer, hc, !tc.trafficSwitched)
+			}
+			for i, shard := range tc.newshards {
+				addTablet(t, ctx, fmt.Sprintf("1.1.1.%d", i), int32(2000+i), cell, ks, shard, st.topoServer, hc, tc.trafficSwitched)
+			}
+			got, err := vs.keyspaceHasBeenResharded(ctx, ks)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.want, got)
 		})
 	}
 }

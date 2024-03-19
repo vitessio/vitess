@@ -1130,6 +1130,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"multi_vstreams_keyspace_reshard": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMultiVStreamsKeyspaceReshard", "-timeout", "15m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vstream",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vstream_failover": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamFailover"],
