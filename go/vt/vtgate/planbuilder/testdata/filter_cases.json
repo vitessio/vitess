@@ -4426,5 +4426,109 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "order by with filter removing the keyspace from order by",
+    "query": "select col from user.user where id = 1 order by user.user.user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col from user.user where id = 1 order by user.user.user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` where id = 1 order by `user`.user_id asc",
+        "Table": "`user`",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "group by with filter removing the keyspace from order by",
+    "query": "select col from user.user where id = 1 group by user.user.user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col from user.user where id = 1 group by user.user.user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1 group by `user`.user_id",
+        "Query": "select col from `user` where id = 1 group by `user`.user_id",
+        "Table": "`user`",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "order with authoritative table - removing keyspace from group by",
+    "query": "select * from user.authoritative where user_id = 5 order by user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user.authoritative where user_id = 5 order by user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1",
+        "Query": "select user_id, col1, col2 from authoritative where user_id = 5 order by authoritative.user_id asc",
+        "Table": "authoritative",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "group by and having with authoritative table - removing keyspace from having",
+    "query": "select * from user.authoritative where user_id = 5 group by user_id having count(user_id) = 6 order by user_id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user.authoritative where user_id = 5 group by user_id having count(user_id) = 6 order by user_id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1 group by user_id",
+        "Query": "select user_id, col1, col2 from authoritative where user_id = 5 group by user_id having count(user_id) = 6 order by authoritative.user_id asc",
+        "Table": "authoritative",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
   }
 ]

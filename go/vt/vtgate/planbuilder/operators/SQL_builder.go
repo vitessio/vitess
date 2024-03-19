@@ -679,12 +679,7 @@ func buildHorizon(op *Horizon, qb *queryBuilder) error {
 	if err != nil {
 		return err
 	}
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
-			removeKeyspaceFromSelectExpr(aliasedExpr)
-		}
-		return true, nil
-	}, qb.stmt)
+	sqlparser.RemoveKeyspace(qb.stmt)
 	return nil
 }
 
