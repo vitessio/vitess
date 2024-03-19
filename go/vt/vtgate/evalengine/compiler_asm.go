@@ -2395,20 +2395,10 @@ func (asm *assembler) Fn_FIELD_b(args int) {
 			str := env.vm.stack[env.vm.sp-args+i+1].(*evalBytes)
 
 			// Compare target and current string
-			if len(tar.bytes) == len(str.bytes) {
-				eq := true
-				for i, b := range tar.bytes {
-					if str.bytes[i] != b {
-						eq = false
-						break
-					}
-				}
-
-				if eq {
-					env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
-					env.vm.sp -= args - 1
-					return 1
-				}
+			if bytes.Equal(tar.bytes, str.bytes) {
+				env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(int64(i + 1))
+				env.vm.sp -= args - 1
+				return 1
 			}
 		}
 
@@ -2446,7 +2436,7 @@ func (asm *assembler) Fn_FIELD_f(args int) {
 		env.vm.stack[env.vm.sp-args] = env.vm.arena.newEvalInt64(0)
 		env.vm.sp -= args - 1
 		return 1
-	}, "FN FIELD VARCHAR(SP-%d)...VARCHAR(SP-1)", args)
+	}, "FN FIELD FLOAT64(SP-%d)...FLOAT64(SP-1)", args)
 }
 
 func (asm *assembler) Fn_ELT(args int, tt sqltypes.Type, tc collations.TypedCollation) {

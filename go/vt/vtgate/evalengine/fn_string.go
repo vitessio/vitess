@@ -197,18 +197,8 @@ func (call *builtinField) eval(env *ExpressionEnv) (eval, error) {
 			}
 
 			// Compare target and current string
-			if len(tar.bytes) == len(e.bytes) {
-				eq := true
-				for i, b := range tar.bytes {
-					if e.bytes[i] != b {
-						eq = false
-						break
-					}
-				}
-
-				if eq {
-					return newEvalInt64(int64(i + 1)), nil
-				}
+			if bytes.Equal(tar.bytes, e.bytes) {
+				return newEvalInt64(int64(i + 1)), nil
 			}
 		}
 	} else {
@@ -281,7 +271,12 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 			offset := len(strs) - i
 			skip := c.compileNullCheckOffset(str, offset)
 
-			c.asm.Convert_xf(offset)
+			switch str.Type {
+			case sqltypes.Float64:
+			default:
+				c.asm.Convert_xf(offset)
+			}
+
 			c.asm.jumpDestination(skip)
 		}
 
