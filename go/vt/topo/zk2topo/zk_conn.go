@@ -76,11 +76,6 @@ func Time(i int64) time.Time {
 	return time.Unix(i/1000, i%1000*1000000)
 }
 
-// ZkTime returns a ZK time (int64) from a time.Time
-func ZkTime(t time.Time) int64 {
-	return t.Unix()*1000 + int64(t.Nanosecond()/1000000)
-}
-
 // ZkConn is a wrapper class on top of a zk.Conn.
 // It will do a few things for us:
 //   - add the context parameter. However, we do not enforce its deadlines
