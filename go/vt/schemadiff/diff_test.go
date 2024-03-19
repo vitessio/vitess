@@ -1158,3 +1158,43 @@ func TestSchemaApplyError(t *testing.T) {
 		})
 	}
 }
+
+func TestEntityDiffByStatement(t *testing.T) {
+	env := NewTestEnv()
+
+	{
+		queries := []string{
+			"create table t1(id int primary key)",
+			"alter table t1 add column i int",
+			"rename table t1 to t2",
+			"drop table t1",
+			"create view v1 as select * from t1",
+			"alter view v1 as select * from t2",
+			"drop view v1",
+		}
+		for _, query := range queries {
+			t.Run(query, func(t *testing.T) {
+				stmt, err := env.Parser().ParseStrictDDL(query)
+				require.NoError(t, err)
+				entityDiff := EntityDiffByStatement(stmt)
+				require.NotNil(t, entityDiff)
+				require.NotNil(t, entityDiff.Statement())
+				require.Equal(t, stmt, entityDiff.Statement())
+			})
+		}
+	}
+	{
+		queries := []string{
+			"drop database d1",
+			"optimize table t1",
+		}
+		for _, query := range queries {
+			t.Run(query, func(t *testing.T) {
+				stmt, err := env.Parser().ParseStrictDDL(query)
+				require.NoError(t, err)
+				entityDiff := EntityDiffByStatement(stmt)
+				require.Nil(t, entityDiff)
+			})
+		}
+	}
+}
