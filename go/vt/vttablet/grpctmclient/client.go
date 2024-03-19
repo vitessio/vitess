@@ -502,6 +502,42 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 	return response.Result, nil
 }
 
+// ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	var c tabletmanagerservicepb.TabletManagerClient
+	var err error
+	if usePool {
+		if poolDialer, ok := client.dialer.(poolDialer); ok {
+			c, err = poolDialer.dialPool(ctx, tablet)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if !usePool || c == nil {
+		var closer io.Closer
+		c, closer, err = client.dialer.dial(ctx, tablet)
+		if err != nil {
+			return nil, err
+		}
+		defer closer.Close()
+	}
+
+	response, err := c.ExecuteMultiFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+		Sql:                     req.Sql,
+		DbName:                  topoproto.TabletDbName(tablet),
+		MaxRows:                 req.MaxRows,
+		DisableBinlogs:          req.DisableBinlogs,
+		ReloadSchema:            req.DisableBinlogs,
+		DisableForeignKeyChecks: req.DisableForeignKeyChecks,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return response.Results, err
+}
+
 // ExecuteFetchAsAllPrivs is part of the tmclient.TabletManagerClient interface.
 func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
