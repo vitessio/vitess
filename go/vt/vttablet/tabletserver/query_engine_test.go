@@ -19,7 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -457,7 +457,7 @@ func BenchmarkPlanCacheThroughput(b *testing.B) {
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 
 	for i := 0; i < b.N; i++ {
-		query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.Intn(500))
+		query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.IntN(500))
 		_, err := qe.GetPlan(ctx, logStats, query, false)
 		if err != nil {
 			b.Fatal(err)
@@ -487,7 +487,7 @@ func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, par int) {
 		logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 
 		for pb.Next() {
-			query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.Intn(500))
+			query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.IntN(500))
 			_, err := qe.GetPlan(ctx, logStats, query, false)
 			require.NoErrorf(b, err, "bad query: %s", query)
 		}
@@ -619,7 +619,7 @@ func TestPlanCachePollution(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		runner(NormalQueries, &stats1, func() string {
-			return fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.Intn(5000))
+			return fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.IntN(5000))
 		})
 	}()
 

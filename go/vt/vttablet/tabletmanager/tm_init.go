@@ -38,7 +38,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"regexp"
 	"strings"
 	"sync"
@@ -912,8 +912,7 @@ func (tm *TabletManager) withRetry(ctx context.Context, description string, work
 			// Exponential backoff with 1.3 as a factor,
 			// and randomized down by at most 20
 			// percent. The generated time series looks
-			// good.  Also note rand.Seed is called at
-			// init() time in binlog_players.go.
+			// good.
 			f := float64(backoff) * 1.3
 			f -= f * 0.2 * rand.Float64()
 			backoff = time.Duration(f)

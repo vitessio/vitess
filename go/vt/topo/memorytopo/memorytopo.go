@@ -22,7 +22,7 @@ package memorytopo
 import (
 	"context"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -249,7 +249,7 @@ func (n *node) PropagateWatchError(err error) {
 func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *Factory) {
 	f := &Factory{
 		cells:      make(map[string]*node),
-		generation: uint64(rand.Int63n(1 << 60)),
+		generation: uint64(rand.Int64N(1 << 60)),
 		callstats:  stats.NewCountersWithMultiLabels("", "", []string{"Call"}),
 	}
 	f.cells[topo.GlobalCell] = f.newDirectory(topo.GlobalCell, nil)

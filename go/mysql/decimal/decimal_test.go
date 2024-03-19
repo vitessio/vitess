@@ -20,7 +20,7 @@ package decimal
 
 import (
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"strconv"
 	"strings"
@@ -142,13 +142,12 @@ func TestNewFromFloat(t *testing.T) {
 
 func TestNewFromFloatRandom(t *testing.T) {
 	n := 0
-	rng := rand.New(rand.NewSource(0xdead1337))
 	for {
 		n++
 		if n == 10 {
 			break
 		}
-		in := (rng.Float64() - 0.5) * math.MaxFloat64 * 2
+		in := (rand.Float64() - 0.5) * math.MaxFloat64 * 2
 		want, err := NewFromString(strconv.FormatFloat(in, 'f', -1, 64))
 		if err != nil {
 			t.Error(err)
@@ -176,13 +175,12 @@ func TestNewFromFloatQuick(t *testing.T) {
 
 func TestNewFromFloat32Random(t *testing.T) {
 	n := 0
-	rng := rand.New(rand.NewSource(0xdead1337))
 	for {
 		n++
 		if n == 10 {
 			break
 		}
-		in := float32((rng.Float64() - 0.5) * math.MaxFloat32 * 2)
+		in := float32((rand.Float64() - 0.5) * math.MaxFloat32 * 2)
 		want, err := NewFromString(strconv.FormatFloat(float64(in), 'f', -1, 32))
 		if err != nil {
 			t.Error(err)

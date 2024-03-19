@@ -18,7 +18,7 @@ package sqlparser
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -616,9 +616,9 @@ func randtmpl(template string) string {
 	for i, c := range result {
 		switch c {
 		case '#':
-			result[i] = numberBytes[rand.Intn(len(numberBytes))]
+			result[i] = numberBytes[rand.IntN(len(numberBytes))]
 		case '@':
-			result[i] = letterBytes[rand.Intn(len(letterBytes))]
+			result[i] = letterBytes[rand.IntN(len(letterBytes))]
 		}
 	}
 	return string(result)
@@ -628,7 +628,7 @@ func randString(n int) string {
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+		b[i] = letterBytes[rand.IntN(len(letterBytes))]
 	}
 	return string(b)
 }
@@ -648,14 +648,14 @@ func BenchmarkNormalizeTPCCInsert(b *testing.B) {
 		for i := 0; i < rows; i++ {
 			fmt.Fprintf(&query, "(%d, %d, %d, '%s','OE','%s','%s', '%s', '%s', '%s', '%s','%s',NOW(),'%s',50000,%f,-10,10,1,0,'%s' )",
 				rand.Int(), rand.Int(), rand.Int(),
-				"first-"+randString(rand.Intn(10)),
+				"first-"+randString(rand.IntN(10)),
 				randtmpl("last-@@@@"),
 				randtmpl("street1-@@@@@@@@@@@@"),
 				randtmpl("street2-@@@@@@@@@@@@"),
 				randtmpl("city-@@@@@@@@@@@@"),
 				randtmpl("@@"), randtmpl("zip-#####"),
 				randtmpl("################"),
-				"GC", rand.Float64(), randString(300+rand.Intn(200)),
+				"GC", rand.Float64(), randString(300+rand.IntN(200)),
 			)
 			if i < rows-1 {
 				query.WriteString(", ")

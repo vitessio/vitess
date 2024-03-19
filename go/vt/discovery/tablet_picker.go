@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"sync"
@@ -298,7 +298,7 @@ func (tp *TabletPicker) orderByTabletType(candidates []*topo.TabletInfo) []*topo
 	sort.Slice(candidates, func(i, j int) bool {
 		if orderMap[candidates[i].Type] == orderMap[candidates[j].Type] {
 			// identical tablet types: randomize order of tablets for this type
-			return rand.Intn(2) == 0 // 50% chance
+			return rand.IntN(2) == 0 // 50% chance
 		}
 		return orderMap[candidates[i].Type] < orderMap[candidates[j].Type]
 	})

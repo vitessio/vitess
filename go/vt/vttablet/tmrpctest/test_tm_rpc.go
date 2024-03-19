@@ -672,6 +672,18 @@ func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerd
 	return testExecuteFetchResult, nil
 }
 
+func (fra *fakeRPCTM) ExecuteMultiFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "ExecuteMultiFetchAsDba query", req.Sql, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteMultiFetchAsDba maxrows", req.MaxRows, testExecuteFetchMaxRows)
+	compareBool(fra.t, "ExecuteMultiFetchAsDba disableBinlogs", req.DisableBinlogs)
+	compareBool(fra.t, "ExecuteMultiFetchAsDba reloadSchema", req.ReloadSchema)
+
+	return []*querypb.QueryResult{testExecuteFetchResult}, nil
+}
+
 func (fra *fakeRPCTM) ExecuteFetchAsAllPrivs(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
