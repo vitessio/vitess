@@ -215,7 +215,7 @@ func (fz *fuzzer) generateMultiDeleteDMLQuery() string {
 	idValue := 1 + rand.IntN(fz.maxValForId)
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
 	target := fkTables[tableId]
-	if rand.Intn(2)%2 == 0 {
+	if rand.IntN(2)%2 == 0 {
 		target += ", " + fkTables[tableId2]
 	}
 	query := fmt.Sprintf("delete %v%v from %v join %v using (id) where %v.id = %v", setVarFkChecksVal, target, fkTables[tableId], fkTables[tableId2], fkTables[tableId], idValue)
