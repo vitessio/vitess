@@ -18,7 +18,7 @@ package random
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 
 	"vitess.io/vitess/go/slice"
@@ -36,7 +36,6 @@ const testFailingQueries = false
 type (
 	// selectGenerator generates select statements
 	selectGenerator struct {
-		r            *rand.Rand
 		genConfig    sqlparser.ExprGeneratorConfig
 		maxTables    int
 		maxAggrs     int
@@ -74,19 +73,18 @@ var _ sqlparser.ExprGenerator = (*column)(nil)
 var _ sqlparser.QueryGenerator = (*selectGenerator)(nil)
 var _ sqlparser.QueryGenerator = (*queryGenerator)(nil)
 
-func newQueryGenerator(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAggrs, maxGBs int, schemaTables []tableT) *queryGenerator {
+func newQueryGenerator(genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAggrs, maxGBs int, schemaTables []tableT) *queryGenerator {
 	return &queryGenerator{
-		selGen: newSelectGenerator(r, genConfig, maxTables, maxAggrs, maxGBs, schemaTables),
+		selGen: newSelectGenerator(genConfig, maxTables, maxAggrs, maxGBs, schemaTables),
 	}
 }
 
-func newSelectGenerator(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAggrs, maxGBs int, schemaTables []tableT) *selectGenerator {
+func newSelectGenerator(genConfig sqlparser.ExprGeneratorConfig, maxTables, maxAggrs, maxGBs int, schemaTables []tableT) *selectGenerator {
 	if maxTables <= 0 {
 		log.Fatalf("maxTables must be at least 1, currently %d\n", maxTables)
 	}
 
 	return &selectGenerator{
-		r:            r,
 		genConfig:    genConfig,
 		maxTables:    maxTables,
 		maxAggrs:     maxAggrs,
@@ -140,7 +138,7 @@ func (t *tableT) clone() *tableT {
 	}
 }
 
-func (c *column) Generate(_ *rand.Rand, genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
+func (c *column) Generate(genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
 	if c.typ == genConfig.Type || genConfig.Type == "" {
 		return c.getASTExpr()
 	}
@@ -148,11 +146,11 @@ func (c *column) Generate(_ *rand.Rand, genConfig sqlparser.ExprGeneratorConfig)
 	return nil
 }
 
-func (t *tableT) Generate(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
+func (t *tableT) Generate(genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
 	colsCopy := slices.Clone(t.cols)
 
 	for len(colsCopy) > 0 {
-		idx := r.Intn(len(colsCopy))
+		idx := rand.IntN(len(colsCopy))
 		randCol := colsCopy[idx]
 		if randCol.typ == genConfig.Type || genConfig.Type == "" {
 			return randCol.getASTExpr()
@@ -168,26 +166,26 @@ func (t *tableT) Generate(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig)
 
 // Generate generates a subquery based on sg
 // TODO: currently unused; generate random expressions with union
-func (sg *selectGenerator) Generate(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
+func (sg *selectGenerator) Generate(genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
 	var schemaTablesCopy []tableT
 	for _, tbl := range sg.schemaTables {
 		schemaTablesCopy = append(schemaTablesCopy, *tbl.clone())
 	}
 
-	newSG := newQueryGenerator(r, genConfig, sg.maxTables, sg.maxAggrs, sg.maxGBs, schemaTablesCopy)
+	newSG := newQueryGenerator(genConfig, sg.maxTables, sg.maxAggrs, sg.maxGBs, schemaTablesCopy)
 	newSG.randomQuery()
 
 	return &sqlparser.Subquery{Select: newSG.selGen.sel}
 }
 
 // Generate generates a subquery based on qg
-func (qg *queryGenerator) Generate(r *rand.Rand, genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
+func (qg *queryGenerator) Generate(genConfig sqlparser.ExprGeneratorConfig) sqlparser.Expr {
 	var schemaTablesCopy []tableT
 	for _, tbl := range qg.selGen.schemaTables {
 		schemaTablesCopy = append(schemaTablesCopy, *tbl.clone())
 	}
 
-	newQG := newQueryGenerator(r, genConfig, qg.selGen.maxTables, qg.selGen.maxAggrs, qg.selGen.maxGBs, schemaTablesCopy)
+	newQG := newQueryGenerator(genConfig, qg.selGen.maxTables, qg.selGen.maxAggrs, qg.selGen.maxGBs, schemaTablesCopy)
 	newQG.randomQuery()
 
 	return &sqlparser.Subquery{Select: newQG.stmt}
@@ -197,7 +195,7 @@ func (sg *selectGenerator) IsQueryGenerator() {}
 func (qg *queryGenerator) IsQueryGenerator()  {}
 
 func (qg *queryGenerator) randomQuery() {
-	if qg.selGen.r.Intn(10) < 1 && testFailingQueries {
+	if rand.IntN(10) < 1 && testFailingQueries {
 		qg.createUnion()
 	} else {
 		qg.selGen.randomSelect()
@@ -209,12 +207,12 @@ func (qg *queryGenerator) randomQuery() {
 func (qg *queryGenerator) createUnion() {
 	union := &sqlparser.Union{}
 
-	if qg.selGen.r.Intn(2) < 1 {
+	if rand.IntN(2) < 1 {
 		union.Distinct = true
 	}
 
 	// specify between 1-4 columns
-	qg.selGen.genConfig.NumCols = qg.selGen.r.Intn(4) + 1
+	qg.selGen.genConfig.NumCols = rand.IntN(4) + 1
 
 	qg.randomQuery()
 	union.Left = qg.stmt
@@ -232,7 +230,7 @@ func (sg *selectGenerator) randomSelect() {
 	sg.sel.SetComments(sqlparser.Comments{"/*vt+ PLANNER=Gen4 */"})
 
 	// select distinct (fails with group by bigint)
-	isDistinct := sg.r.Intn(2) < 1
+	isDistinct := rand.IntN(2) < 1
 	if isDistinct {
 		sg.sel.MakeDistinct()
 	}
@@ -242,7 +240,7 @@ func (sg *selectGenerator) randomSelect() {
 
 	// canAggregate determines if the query will have
 	// aggregate columns, group by, and having
-	canAggregate := sg.r.Intn(4) < 3
+	canAggregate := rand.IntN(4) < 3
 
 	var (
 		grouping, aggregates []column
@@ -258,7 +256,7 @@ func (sg *selectGenerator) randomSelect() {
 		}
 
 		// having
-		isHaving := sg.r.Intn(2) < 1
+		isHaving := rand.IntN(2) < 1
 		// TODO: having creates a lot of results mismatched
 		if isHaving && testFailingQueries {
 			sg.createHavingPredicates(grouping)
@@ -280,7 +278,7 @@ func (sg *selectGenerator) randomSelect() {
 
 	// add random expression to select
 	// TODO: random expressions cause a lot of failures
-	isRandomExpr := sg.r.Intn(2) < 1 && testFailingQueries
+	isRandomExpr := rand.IntN(2) < 1 && testFailingQueries
 
 	// TODO: selecting a random expression potentially with columns creates
 	// TODO: only_full_group_by related errors in Vitess
@@ -288,7 +286,7 @@ func (sg *selectGenerator) randomSelect() {
 	if canAggregate && testFailingQueries {
 		exprGenerators = slice.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
 		// add scalar subqueries
-		if sg.r.Intn(10) < 1 {
+		if rand.IntN(10) < 1 {
 			exprGenerators = append(exprGenerators, sg)
 		}
 	}
@@ -325,14 +323,14 @@ func (sg *selectGenerator) randomSelect() {
 
 	// can add both aggregate and grouping columns to order by
 	// TODO: order fails with distinct and outer joins
-	isOrdered := sg.r.Intn(2) < 1 && (!isDistinct || testFailingQueries) && (!isJoin || testFailingQueries)
+	isOrdered := rand.IntN(2) < 1 && (!isDistinct || testFailingQueries) && (!isJoin || testFailingQueries)
 	if isOrdered || (!canAggregate && sg.genConfig.SingleRow) /* TODO: might be redundant */ {
 		sg.createOrderBy()
 	}
 
 	// only add a limit if there is an ordering
 	// TODO: limit fails a lot
-	isLimit := sg.r.Intn(2) < 1 && len(sg.sel.OrderBy) > 0 && testFailingQueries
+	isLimit := rand.IntN(2) < 1 && len(sg.sel.OrderBy) > 0 && testFailingQueries
 	if isLimit || (!canAggregate && sg.genConfig.SingleRow) /* TODO: might be redundant */ {
 		sg.createLimit()
 	}
@@ -345,7 +343,7 @@ func (sg *selectGenerator) randomSelect() {
 	sg.schemaTables = append(sg.schemaTables, newTable)
 
 	// derived tables (partially unsupported)
-	if sg.r.Intn(10) < 1 {
+	if rand.IntN(10) < 1 {
 		sg.randomSelect()
 	}
 }
@@ -353,24 +351,24 @@ func (sg *selectGenerator) randomSelect() {
 func (sg *selectGenerator) createTablesAndJoin() ([]tableT, bool) {
 	var tables []tableT
 	// add at least one of original emp/dept tables
-	tables = append(tables, sg.schemaTables[sg.r.Intn(2)])
+	tables = append(tables, sg.schemaTables[rand.IntN(2)])
 
 	tables[0].setAlias("tbl0")
 	sg.sel.From = append(sg.sel.From, newAliasedTable(tables[0], "tbl0"))
 
-	numTables := sg.r.Intn(sg.maxTables)
+	numTables := rand.IntN(sg.maxTables)
 	for i := 0; i < numTables; i++ {
-		tables = append(tables, randomEl(sg.r, sg.schemaTables))
+		tables = append(tables, randomEl(sg.schemaTables))
 		alias := fmt.Sprintf("tbl%d", i+1)
 		sg.sel.From = append(sg.sel.From, newAliasedTable(tables[i+1], alias))
 		tables[i+1].setAlias(alias)
 	}
 
 	// TODO: outer joins produce results mismatched
-	isJoin := sg.r.Intn(2) < 1 && testFailingQueries
+	isJoin := rand.IntN(2) < 1 && testFailingQueries
 	if isJoin {
 		// TODO: do nested joins
-		newTable := randomEl(sg.r, sg.schemaTables)
+		newTable := randomEl(sg.schemaTables)
 		alias := fmt.Sprintf("tbl%d", numTables+1)
 		newTable.setAlias(alias)
 		tables = append(tables, newTable)
@@ -392,7 +390,7 @@ func (sg *selectGenerator) createJoin(tables []tableT) {
 	joinPredicate := sqlparser.AndExpressions(sg.createJoinPredicates(tables)...)
 	joinCondition := sqlparser.NewJoinCondition(joinPredicate, nil)
 	newTable := newAliasedTable(tables[n], fmt.Sprintf("tbl%d", n))
-	sg.sel.From[n-1] = sqlparser.NewJoinTableExpr(sg.sel.From[n-1], getRandomJoinType(sg.r), newTable, joinCondition)
+	sg.sel.From[n-1] = sqlparser.NewJoinTableExpr(sg.sel.From[n-1], getRandomJoinType(), newTable, joinCondition)
 }
 
 // returns 1-3 random expressions based on the last two elements of tables
@@ -405,7 +403,7 @@ func (sg *selectGenerator) createJoinPredicates(tables []tableT) sqlparser.Exprs
 	exprGenerators := []sqlparser.ExprGenerator{&tables[len(tables)-2], &tables[len(tables)-1]}
 	// add scalar subqueries
 	// TODO: subqueries fail
-	if sg.r.Intn(10) < 1 && testFailingQueries {
+	if rand.IntN(10) < 1 && testFailingQueries {
 		exprGenerators = append(exprGenerators, sg)
 	}
 
@@ -417,10 +415,10 @@ func (sg *selectGenerator) createGroupBy(tables []tableT) (grouping []column) {
 	if sg.maxGBs <= 0 {
 		return
 	}
-	numGBs := sg.r.Intn(sg.maxGBs + 1)
+	numGBs := rand.IntN(sg.maxGBs + 1)
 	for i := 0; i < numGBs; i++ {
-		tblIdx := sg.r.Intn(len(tables))
-		col := randomEl(sg.r, tables[tblIdx].cols)
+		tblIdx := rand.IntN(len(tables))
+		col := randomEl(tables[tblIdx].cols)
 		// TODO: grouping by a date column sometimes errors
 		if col.typ == "date" && !testFailingQueries {
 			continue
@@ -428,7 +426,7 @@ func (sg *selectGenerator) createGroupBy(tables []tableT) (grouping []column) {
 		sg.sel.GroupBy = append(sg.sel.GroupBy, col.getASTExpr())
 
 		// add to select
-		if sg.r.Intn(2) < 1 {
+		if rand.IntN(2) < 1 {
 			sg.sel.SelectExprs = append(sg.sel.SelectExprs, newAliasedColumn(col, ""))
 			grouping = append(grouping, col)
 		}
@@ -444,7 +442,7 @@ func (sg *selectGenerator) aliasGroupingColumns(grouping []column) []column {
 	}
 
 	for i := range grouping {
-		if sg.r.Intn(2) < 1 {
+		if rand.IntN(2) < 1 {
 			if aliasedExpr, ok := sg.sel.SelectExprs[i].(*sqlparser.AliasedExpr); ok {
 				alias := fmt.Sprintf("cgroup%d", i)
 				aliasedExpr.SetAlias(alias)
@@ -461,7 +459,7 @@ func (sg *selectGenerator) createAggregations(tables []tableT) (aggregates []col
 	exprGenerators := slice.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
 	// add scalar subqueries
 	// TODO: subqueries fail
-	if sg.r.Intn(10) < 1 && testFailingQueries {
+	if rand.IntN(10) < 1 && testFailingQueries {
 		exprGenerators = append(exprGenerators, sg)
 	}
 
@@ -481,18 +479,18 @@ func (sg *selectGenerator) createAggregations(tables []tableT) (aggregates []col
 func (sg *selectGenerator) createOrderBy() {
 	// always order on grouping expressions
 	for _, expr := range sg.sel.GroupBy {
-		sg.sel.OrderBy = append(sg.sel.OrderBy, sqlparser.NewOrder(expr, getRandomOrderDirection(sg.r)))
+		sg.sel.OrderBy = append(sg.sel.OrderBy, sqlparser.NewOrder(expr, getRandomOrderDirection()))
 	}
 
 	// randomly order on SelectExprs
 	for _, selExpr := range sg.sel.SelectExprs {
-		if aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr); ok && sg.r.Intn(2) < 1 {
+		if aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr); ok && rand.IntN(2) < 1 {
 			literal, ok := aliasedExpr.Expr.(*sqlparser.Literal)
 			isIntLiteral := ok && literal.Type == sqlparser.IntVal
 			if isIntLiteral {
 				continue
 			}
-			sg.sel.OrderBy = append(sg.sel.OrderBy, sqlparser.NewOrder(aliasedExpr.Expr, getRandomOrderDirection(sg.r)))
+			sg.sel.OrderBy = append(sg.sel.OrderBy, sqlparser.NewOrder(aliasedExpr.Expr, getRandomOrderDirection()))
 		}
 	}
 }
@@ -502,7 +500,7 @@ func (sg *selectGenerator) createWherePredicates(tables []tableT) {
 	exprGenerators := slice.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
 	// add scalar subqueries
 	// TODO: subqueries fail
-	if sg.r.Intn(10) < 1 && testFailingQueries {
+	if rand.IntN(10) < 1 && testFailingQueries {
 		exprGenerators = append(exprGenerators, sg)
 	}
 
@@ -515,7 +513,7 @@ func (sg *selectGenerator) createHavingPredicates(grouping []column) {
 	exprGenerators := slice.Map(grouping, func(c column) sqlparser.ExprGenerator { return &c })
 	// add scalar subqueries
 	// TODO: subqueries fail
-	if sg.r.Intn(10) < 1 && testFailingQueries {
+	if rand.IntN(10) < 1 && testFailingQueries {
 		exprGenerators = append(exprGenerators, sg)
 	}
 
@@ -533,7 +531,7 @@ func (sg *selectGenerator) createRandomExprs(minExprs, maxExprs int, generators 
 	} else if maxExprs <= 0 {
 		return
 	}
-	numPredicates := sg.r.Intn(maxExprs-minExprs+1) + minExprs
+	numPredicates := rand.IntN(maxExprs-minExprs+1) + minExprs
 	for i := 0; i < numPredicates; i++ {
 		predicates = append(predicates, sg.getRandomExpr(generators...))
 	}
@@ -545,9 +543,9 @@ func (sg *selectGenerator) createRandomExprs(minExprs, maxExprs int, generators 
 func (sg *selectGenerator) getRandomExpr(generators ...sqlparser.ExprGenerator) sqlparser.Expr {
 	var g *sqlparser.Generator
 	if generators == nil {
-		g = sqlparser.NewGenerator(sg.r, 2)
+		g = sqlparser.NewGenerator(2)
 	} else {
-		g = sqlparser.NewGenerator(sg.r, 2, generators...)
+		g = sqlparser.NewGenerator(2, generators...)
 	}
 
 	return g.Expression(sg.genConfig.SingleRowConfig().SetNumCols(1))
@@ -560,9 +558,9 @@ func (sg *selectGenerator) createLimit() {
 		return
 	}
 
-	limitNum := sg.r.Intn(10)
-	if sg.r.Intn(2) < 1 {
-		offset := sg.r.Intn(10)
+	limitNum := rand.IntN(10)
+	if rand.IntN(2) < 1 {
+		offset := rand.IntN(10)
 		sg.sel.Limit = sqlparser.NewLimit(offset, limitNum)
 	} else {
 		sg.sel.Limit = sqlparser.NewLimitWithoutOffset(limitNum)
@@ -572,7 +570,7 @@ func (sg *selectGenerator) createLimit() {
 // randomlyAlias randomly aliases expr with alias alias, adds it to sel.SelectExprs, and returns the column created
 func (sg *selectGenerator) randomlyAlias(expr sqlparser.Expr, alias string) column {
 	var col column
-	if sg.r.Intn(2) < 1 {
+	if rand.IntN(2) < 1 {
 		alias = ""
 		col.name = sqlparser.String(expr)
 	} else {
@@ -588,7 +586,7 @@ func (sg *selectGenerator) matchNumCols(tables []tableT, newTable tableT, canAgg
 	// remove SelectExprs and newTable.cols randomly until there are sg.genConfig.NumCols amount
 	for len(sg.sel.SelectExprs) > sg.genConfig.NumCols && sg.genConfig.NumCols > 0 {
 		// select a random index and remove it from SelectExprs and newTable
-		idx := sg.r.Intn(len(sg.sel.SelectExprs))
+		idx := rand.IntN(len(sg.sel.SelectExprs))
 
 		sg.sel.SelectExprs[idx] = sg.sel.SelectExprs[len(sg.sel.SelectExprs)-1]
 		sg.sel.SelectExprs = sg.sel.SelectExprs[:len(sg.sel.SelectExprs)-1]
@@ -616,18 +614,18 @@ func (sg *selectGenerator) matchNumCols(tables []tableT, newTable tableT, canAgg
 	return newTable
 }
 
-func getRandomOrderDirection(r *rand.Rand) sqlparser.OrderDirection {
+func getRandomOrderDirection() sqlparser.OrderDirection {
 	// asc, desc
-	return randomEl(r, []sqlparser.OrderDirection{0, 1})
+	return randomEl([]sqlparser.OrderDirection{0, 1})
 }
 
-func getRandomJoinType(r *rand.Rand) sqlparser.JoinType {
+func getRandomJoinType() sqlparser.JoinType {
 	// normal, straight, left, right, natural, natural left, natural right
-	return randomEl(r, []sqlparser.JoinType{0, 1, 2, 3, 4, 5, 6})
+	return randomEl([]sqlparser.JoinType{0, 1, 2, 3, 4, 5, 6})
 }
 
-func randomEl[K any](r *rand.Rand, in []K) K {
-	return in[r.Intn(len(in))]
+func randomEl[K any](in []K) K {
+	return in[rand.IntN(len(in))]
 }
 
 func newAliasedTable(tbl tableT, alias string) *sqlparser.AliasedTableExpr {

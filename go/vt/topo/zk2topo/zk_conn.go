@@ -21,7 +21,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"os"
 	"strings"
@@ -251,7 +251,7 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 		if i > 0 {
 			// Add a bit of backoff time before retrying:
 			// 1 second base + up to 5 seconds.
-			time.Sleep(1*time.Second + time.Duration(rand.Int63n(5e9)))
+			time.Sleep(1*time.Second + time.Duration(rand.Int64N(5e9)))
 		}
 
 		// Get the current connection, or connect.

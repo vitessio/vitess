@@ -19,7 +19,7 @@ package vreplication
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"
@@ -301,7 +301,7 @@ func (lg *SimpleLoadGenerator) Start() error {
 				return
 			default:
 			}
-			op := rand.Intn(100)
+			op := rand.IntN(100)
 			switch {
 			case op < 50: // 50% chance to insert
 				lg.insert()
@@ -388,7 +388,7 @@ func (lg *SimpleLoadGenerator) insert() {
 	require.NoError(t, err)
 	require.NotNil(t, qr)
 	// Insert one or more children, some with valid foreign keys, some without.
-	for i := 0; i < rand.Intn(4)+1; i++ {
+	for i := 0; i < rand.IntN(4)+1; i++ {
 		currentChildId++
 		if i == 3 && lg.overrideConstraints {
 			query = fmt.Sprintf(insertChildQueryOverrideConstraints, lg.keyspace, currentChildId, currentParentId+1000000)

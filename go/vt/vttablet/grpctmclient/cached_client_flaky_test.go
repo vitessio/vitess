@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"runtime"
 	"sync"
@@ -117,7 +117,7 @@ func BenchmarkCachedConnClientSteadyState(b *testing.B) {
 						ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 						defer cancel()
 
-						x := rand.Intn(len(tablets))
+						x := rand.IntN(len(tablets))
 						err := client.Ping(ctx, tablets[x])
 						assert.NoError(b, err)
 					}()
@@ -185,7 +185,7 @@ func BenchmarkCachedConnClientSteadyStateRedials(b *testing.B) {
 						ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 						defer cancel()
 
-						x := rand.Intn(len(tablets))
+						x := rand.IntN(len(tablets))
 						err := client.Ping(ctx, tablets[x])
 						assert.NoError(b, err)
 					}()
@@ -340,10 +340,10 @@ func TestCachedConnClient(t *testing.T) {
 					longestDials <- longestDial
 					return
 				case <-time.After(jitter):
-					jitter = time.Millisecond * (time.Duration(rand.Intn(11) + 50))
+					jitter = time.Millisecond * (time.Duration(rand.IntN(11) + 50))
 					attempts++
 
-					tablet := tablets[rand.Intn(len(tablets))]
+					tablet := tablets[rand.IntN(len(tablets))]
 					start := time.Now()
 					_, closer, err := client.dialer.dial(context.Background(), tablet)
 					if err != nil {

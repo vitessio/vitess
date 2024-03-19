@@ -22,7 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strings"
@@ -1615,7 +1615,7 @@ func testDeclarative(t *testing.T) {
 	var uuids []string
 
 	generateInsert := func(t *testing.T, conn *mysql.Conn) error {
-		id := rand.Int31n(int32(maxTableRows))
+		id := rand.Int32N(int32(maxTableRows))
 		query := fmt.Sprintf(insertRowStatement, id)
 		qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1639,7 +1639,7 @@ func testDeclarative(t *testing.T) {
 	}
 
 	generateUpdate := func(t *testing.T, conn *mysql.Conn) error {
-		id := rand.Int31n(int32(maxTableRows))
+		id := rand.Int32N(int32(maxTableRows))
 		query := fmt.Sprintf(updateRowStatement, id)
 		qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -1663,7 +1663,7 @@ func testDeclarative(t *testing.T) {
 	}
 
 	generateDelete := func(t *testing.T, conn *mysql.Conn) error {
-		id := rand.Int31n(int32(maxTableRows))
+		id := rand.Int32N(int32(maxTableRows))
 		query := fmt.Sprintf(deleteRowStatement, id)
 		qr, err := conn.ExecuteFetch(query, 1000, true)
 

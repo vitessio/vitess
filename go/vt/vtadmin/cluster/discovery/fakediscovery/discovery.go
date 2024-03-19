@@ -19,7 +19,7 @@ package fakediscovery
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 
 	"github.com/stretchr/testify/assert"
@@ -189,7 +189,7 @@ func (d *Fake) DiscoverVTGate(ctx context.Context, tags []string) (*vtadminpb.VT
 		return nil, assert.AnError
 	}
 
-	return gates[rand.Intn(len(gates))], nil
+	return gates[rand.IntN(len(gates))], nil
 }
 
 // DiscoverVTGateAddr is part of the discovery.Discovery interface.
@@ -299,5 +299,5 @@ func (d *Fake) DiscoverVtctld(ctx context.Context, tags []string) (*vtadminpb.Vt
 		return nil, assert.AnError
 	}
 
-	return vtctlds[rand.Intn(len(vtctlds))], nil
+	return vtctlds[rand.IntN(len(vtctlds))], nil
 }

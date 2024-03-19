@@ -17,7 +17,7 @@ limitations under the License.
 package debug
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -44,10 +44,10 @@ func TestSanitizeString(t *testing.T) {
 			t.Run("", func(t *testing.T) {
 				t.Parallel()
 
-				length := rand.Intn(20) + 1 // [1, 21)
+				length := rand.IntN(20) + 1 // [1, 21)
 				word := ""
 				for j := 0; j < length; j++ {
-					k := rand.Intn(len(letters))
+					k := rand.IntN(len(letters))
 					word += letters[k : k+1]
 				}
 
@@ -66,8 +66,8 @@ func TestTimeToString(t *testing.T) {
 			t.Parallel()
 
 			start := time.Now()
-			secondsoff := rand.Intn(60)
-			minutesoff := rand.Intn(60)
+			secondsoff := rand.IntN(60)
+			minutesoff := rand.IntN(60)
 
 			in := start.Add(time.Second*time.Duration(secondsoff) + time.Minute*time.Duration(minutesoff))
 			out, err := time.Parse(time.RFC3339, TimeToString(in))

@@ -21,7 +21,7 @@ import (
 	_ "embed"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"strconv"
 	"strings"

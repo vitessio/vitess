@@ -19,7 +19,7 @@ package sync_test
 import (
 	"context"
 	"encoding/json"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"sync"
 	"testing"
@@ -53,7 +53,7 @@ func TestWatchConfig(t *testing.T) {
 		return atomicWrite(tmp.Name(), data)
 	}
 	writeRandomConfig := func(tmp *os.File) error {
-		a, b := rand.Intn(100), rand.Intn(100)
+		a, b := rand.IntN(100), rand.IntN(100)
 		return writeConfig(tmp, a, b)
 	}
 
@@ -155,5 +155,5 @@ func TestWatchConfig(t *testing.T) {
 }
 
 func jitter(min, max int) int {
-	return min + rand.Intn(max-min+1)
+	return min + rand.IntN(max-min+1)
 }

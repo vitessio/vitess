@@ -21,7 +21,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strings"
@@ -3813,7 +3813,7 @@ func TestParallelValid(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < numIters; j++ {
-				tcase := validSQL[rand.Intn(len(validSQL))]
+				tcase := validSQL[rand.IntN(len(validSQL))]
 				if tcase.output == "" {
 					tcase.output = tcase.input
 				}

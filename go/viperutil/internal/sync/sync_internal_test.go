@@ -19,7 +19,7 @@ package sync
 import (
 	"context"
 	"encoding/json"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -132,5 +132,5 @@ func TestPersistConfig(t *testing.T) {
 }
 
 func jitter(min, max int) int {
-	return min + rand.Intn(max-min+1)
+	return min + rand.IntN(max-min+1)
 }

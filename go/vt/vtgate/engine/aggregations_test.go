@@ -19,7 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -58,7 +58,7 @@ func benchmarkName(fields []*querypb.Field) string {
 func BenchmarkScalarAggregate(b *testing.B) {
 	var rand_i64 = sqltypes.RandomGenerators[sqltypes.Int64]
 	var rand_i64small = func() sqltypes.Value {
-		return sqltypes.NewInt64(rand.Int63n(1024))
+		return sqltypes.NewInt64(rand.Int64N(1024))
 	}
 	var rand_f64 = sqltypes.RandomGenerators[sqltypes.Float64]
 	var rand_dec = sqltypes.RandomGenerators[sqltypes.Decimal]
@@ -142,7 +142,7 @@ func BenchmarkScalarAggregate(b *testing.B) {
 					return sqltypes.NewVarChar(uuid.New().String())
 				},
 				func() sqltypes.Value {
-					return sqltypes.NewVarChar(fmt.Sprintf("%x-%x", rand.Intn(256), rand.Intn(256)))
+					return sqltypes.NewVarChar(fmt.Sprintf("%x-%x", rand.IntN(256), rand.IntN(256)))
 				},
 			},
 			params: []*AggregateParams{
