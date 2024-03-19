@@ -523,9 +523,10 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 func (client *Client) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
+	var invalidator func(error)
 	if usePool {
 		if poolDialer, ok := client.dialer.(poolDialer); ok {
-			c, err = poolDialer.dialPool(ctx, tablet)
+			c, invalidator, err = poolDialer.dialPool(ctx, tablet)
 			if err != nil {
 				return nil, err
 			}
@@ -550,6 +551,9 @@ func (client *Client) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topoda
 		DisableForeignKeyChecks: req.DisableForeignKeyChecks,
 	})
 	if err != nil {
+		if invalidator != nil {
+			invalidator(err)
+		}
 		return nil, err
 	}
 	return response.Results, err
