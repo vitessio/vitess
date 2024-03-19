@@ -80,11 +80,6 @@ func TabletAliasString(ta *topodatapb.TabletAlias) string {
 	return fmt.Sprintf("%v-%010d", ta.Cell, ta.Uid)
 }
 
-// TabletAliasUIDStr returns a string version of the uid
-func TabletAliasUIDStr(ta *topodatapb.TabletAlias) string {
-	return fmt.Sprintf("%010d", ta.Uid)
-}
-
 const tabletAliasFormat = "^(?P<cell>[-_.a-zA-Z0-9]+)-(?P<uid>[0-9]+)$"
 
 var tabletAliasRegexp = regexp.MustCompile(tabletAliasFormat)
@@ -288,13 +283,6 @@ func TabletDbName(tablet *topodatapb.Tablet) string {
 		return ""
 	}
 	return VtDbPrefix + tablet.Keyspace
-}
-
-// TabletIsAssigned returns if this tablet is assigned to a keyspace and shard.
-// A "scrap" node will show up as assigned even though its data cannot be used
-// for serving.
-func TabletIsAssigned(tablet *topodatapb.Tablet) bool {
-	return tablet != nil && tablet.Keyspace != "" && tablet.Shard != ""
 }
 
 // IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
