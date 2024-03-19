@@ -178,11 +178,14 @@ func TestMultiTenantSimple(t *testing.T) {
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
 	mt.Create()
 	validateKeyspaceRoutingRules(t, vc, primaries, rulesMap, false)
-	for _, ks := range []string{sourceKeyspace, sourceAliasKeyspace, targetKeyspace} {
+	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
+	for _, ks := range []string{sourceKeyspace, sourceAliasKeyspace} {
 		lastIndex = insertRows(lastIndex, ks)
 	}
 	mt.SwitchReadsAndWrites()
 	validateKeyspaceRoutingRules(t, vc, primaries, rulesMap, true)
+	// Note: here we have already switched and we can insert into the target keyspace and it should get reverse
+	// replicated to the source keyspace. The source and alias are also routed to the target keyspace at this point.
 	for _, ks := range []string{sourceKeyspace, sourceAliasKeyspace, targetKeyspace} {
 		lastIndex = insertRows(lastIndex, ks)
 	}
