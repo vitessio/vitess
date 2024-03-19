@@ -13,9 +13,12 @@ type queryResultBuilder struct {
 	last int
 }
 
-func newQueryResultBuilder(sizehint int) queryResultBuilder {
-	if sizehint <= 0 {
+func newQueryResultBuilder(sizehint uint64) queryResultBuilder {
+	switch {
+	case sizehint == 0:
 		sizehint = 1024
+	default:
+		sizehint = sizehint + sizehint>>3
 	}
 	b := make([]byte, 0, sizehint)
 	b = protowire.AppendTag(b, 1, protowire.BytesType)

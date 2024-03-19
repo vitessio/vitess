@@ -329,7 +329,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 
 type ExecuteOptions struct {
 	MaxRows    int
-	SizeHint   int
+	SizeHint   uint64
 	WantFields bool
 	RawPackets bool
 }
@@ -417,7 +417,7 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 	return res, warnings, err
 }
 
-func (c *Conn) ReadQueryResultAsProto(maxrows int, sizehint int) (*sqltypes.Result, bool, uint16, error) {
+func (c *Conn) ReadQueryResultAsProto(maxrows int, sizehint uint64) (*sqltypes.Result, bool, uint16, error) {
 	var packetOk PacketOK
 
 	// Get the result.

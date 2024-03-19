@@ -151,6 +151,9 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 		qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
 		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
+		if reply.CachedProto != nil {
+			qre.plan.PacketSize.Add(uint64(len(reply.CachedProto)))
+		}
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
@@ -1097,6 +1100,7 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 		MaxRows:    int(qre.tsv.qe.maxResultSize.Load()),
 		WantFields: wantfields,
 		RawPackets: qre.options.RawMysqlPackets,
+		SizeHint:   qre.plan.PacketSize.Value(),
 	}
 	return conn.ExecOpt(ctx, sql, opt)
 }
@@ -1115,6 +1119,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 		MaxRows:    int(qre.tsv.qe.maxResultSize.Load()),
 		WantFields: wantfields,
 		RawPackets: qre.options.RawMysqlPackets,
+		SizeHint:   qre.plan.PacketSize.Value(),
 	}
 	return conn.ExecOpt(ctx, sql, opt)
 }
