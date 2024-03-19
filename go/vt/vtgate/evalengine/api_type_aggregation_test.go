@@ -49,6 +49,7 @@ var aggregationCases = []struct {
 	{[]sqltypes.Type{sqltypes.Char, sqltypes.Char, sqltypes.Set, sqltypes.Enum}, sqltypes.VarChar},
 	{[]sqltypes.Type{sqltypes.TypeJSON, sqltypes.TypeJSON}, sqltypes.TypeJSON},
 	{[]sqltypes.Type{sqltypes.Geometry, sqltypes.Geometry}, sqltypes.Geometry},
+	{[]sqltypes.Type{sqltypes.Text, sqltypes.Text}, sqltypes.Text},
 }
 
 func TestEvalengineTypeAggregations(t *testing.T) {
