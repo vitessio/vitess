@@ -1380,13 +1380,12 @@ func (m *ExecuteMultiFetchAsDBARequest) CloneVT() *ExecuteMultiFetchAsDBARequest
 	if m == nil {
 		return (*ExecuteMultiFetchAsDBARequest)(nil)
 	}
-	r := &ExecuteMultiFetchAsDBARequest{
-		TabletAlias:    m.TabletAlias.CloneVT(),
-		Sql:            m.Sql,
-		MaxRows:        m.MaxRows,
-		DisableBinlogs: m.DisableBinlogs,
-		ReloadSchema:   m.ReloadSchema,
-	}
+	r := new(ExecuteMultiFetchAsDBARequest)
+	r.TabletAlias = m.TabletAlias.CloneVT()
+	r.Sql = m.Sql
+	r.MaxRows = m.MaxRows
+	r.DisableBinlogs = m.DisableBinlogs
+	r.ReloadSchema = m.ReloadSchema
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1402,7 +1401,7 @@ func (m *ExecuteMultiFetchAsDBAResponse) CloneVT() *ExecuteMultiFetchAsDBARespon
 	if m == nil {
 		return (*ExecuteMultiFetchAsDBAResponse)(nil)
 	}
-	r := &ExecuteMultiFetchAsDBAResponse{}
+	r := new(ExecuteMultiFetchAsDBAResponse)
 	if rhs := m.Results; rhs != nil {
 		tmpContainer := make([]*query.QueryResult, len(rhs))
 		for k, v := range rhs {
@@ -9445,14 +9444,14 @@ func (m *ExecuteMultiFetchAsDBARequest) MarshalToSizedBufferVT(dAtA []byte) (int
 		dAtA[i] = 0x20
 	}
 	if m.MaxRows != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.MaxRows))
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.MaxRows))
 		i--
 		dAtA[i] = 0x18
 	}
 	if len(m.Sql) > 0 {
 		i -= len(m.Sql)
 		copy(dAtA[i:], m.Sql)
-		i = encodeVarint(dAtA, i, uint64(len(m.Sql)))
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Sql)))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -9462,7 +9461,7 @@ func (m *ExecuteMultiFetchAsDBARequest) MarshalToSizedBufferVT(dAtA []byte) (int
 			return 0, err
 		}
 		i -= size
-		i = encodeVarint(dAtA, i, uint64(size))
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -9506,7 +9505,7 @@ func (m *ExecuteMultiFetchAsDBAResponse) MarshalToSizedBufferVT(dAtA []byte) (in
 				return 0, err
 			}
 			i -= size
-			i = encodeVarint(dAtA, i, uint64(size))
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -21281,14 +21280,14 @@ func (m *ExecuteMultiFetchAsDBARequest) SizeVT() (n int) {
 	_ = l
 	if m.TabletAlias != nil {
 		l = m.TabletAlias.SizeVT()
-		n += 1 + l + sov(uint64(l))
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	l = len(m.Sql)
 	if l > 0 {
-		n += 1 + l + sov(uint64(l))
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.MaxRows != 0 {
-		n += 1 + sov(uint64(m.MaxRows))
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.MaxRows))
 	}
 	if m.DisableBinlogs {
 		n += 2
@@ -21309,7 +21308,7 @@ func (m *ExecuteMultiFetchAsDBAResponse) SizeVT() (n int) {
 	if len(m.Results) > 0 {
 		for _, e := range m.Results {
 			l = e.SizeVT()
-			n += 1 + l + sov(uint64(l))
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
 	n += len(m.unknownFields)
@@ -35722,7 +35721,7 @@ func (m *ExecuteMultiFetchAsDBARequest) UnmarshalVT(dAtA []byte) error {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
 			if shift >= 64 {
-				return ErrIntOverflow
+				return protohelpers.ErrIntOverflow
 			}
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
@@ -35750,7 +35749,7 @@ func (m *ExecuteMultiFetchAsDBARequest) UnmarshalVT(dAtA []byte) error {
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return ErrIntOverflow
+					return protohelpers.ErrIntOverflow
 				}
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
@@ -35763,11 +35762,11 @@ func (m *ExecuteMultiFetchAsDBARequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			if msglen < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			postIndex := iNdEx + msglen
 			if postIndex < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
@@ -35786,7 +35785,7 @@ func (m *ExecuteMultiFetchAsDBARequest) UnmarshalVT(dAtA []byte) error {
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return ErrIntOverflow
+					return protohelpers.ErrIntOverflow
 				}
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
@@ -35800,11 +35799,11 @@ func (m *ExecuteMultiFetchAsDBARequest) UnmarshalVT(dAtA []byte) error {
 			}
 			intStringLen := int(stringLen)
 			if intStringLen < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			postIndex := iNdEx + intStringLen
 			if postIndex < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
@@ -35818,7 +35817,7 @@ func (m *ExecuteMultiFetchAsDBARequest) UnmarshalVT(dAtA []byte) error {
 			m.MaxRows = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return ErrIntOverflow
+					return protohelpers.ErrIntOverflow
 				}
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
@@ -35837,7 +35836,7 @@ func (m *ExecuteMultiFetchAsDBARequest) UnmarshalVT(dAtA []byte) error {
 			var v int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return ErrIntOverflow
+					return protohelpers.ErrIntOverflow
 				}
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
@@ -35857,7 +35856,7 @@ func (m *ExecuteMultiFetchAsDBARequest) UnmarshalVT(dAtA []byte) error {
 			var v int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return ErrIntOverflow
+					return protohelpers.ErrIntOverflow
 				}
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
@@ -35872,12 +35871,12 @@ func (m *ExecuteMultiFetchAsDBARequest) UnmarshalVT(dAtA []byte) error {
 			m.ReloadSchema = bool(v != 0)
 		default:
 			iNdEx = preIndex
-			skippy, err := skip(dAtA[iNdEx:])
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
 			if (skippy < 0) || (iNdEx+skippy) < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
@@ -35900,7 +35899,7 @@ func (m *ExecuteMultiFetchAsDBAResponse) UnmarshalVT(dAtA []byte) error {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
 			if shift >= 64 {
-				return ErrIntOverflow
+				return protohelpers.ErrIntOverflow
 			}
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
@@ -35928,7 +35927,7 @@ func (m *ExecuteMultiFetchAsDBAResponse) UnmarshalVT(dAtA []byte) error {
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return ErrIntOverflow
+					return protohelpers.ErrIntOverflow
 				}
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
@@ -35941,11 +35940,11 @@ func (m *ExecuteMultiFetchAsDBAResponse) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			if msglen < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			postIndex := iNdEx + msglen
 			if postIndex < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
@@ -35957,12 +35956,12 @@ func (m *ExecuteMultiFetchAsDBAResponse) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skip(dAtA[iNdEx:])
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
 			if (skippy < 0) || (iNdEx+skippy) < 0 {
-				return ErrInvalidLength
+				return protohelpers.ErrInvalidLength
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
