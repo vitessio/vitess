@@ -18,7 +18,7 @@ package txthrottler
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"strings"
 	"sync"
@@ -251,7 +251,7 @@ func (t *txThrottler) Throttle(priority int, workload string) (result bool) {
 
 	// Throttle according to both what the throttler state says and the priority. Workloads with lower priority value
 	// are less likely to be throttled.
-	result = rand.Intn(sqlparser.MaxPriorityValue) < priority && t.state.throttle()
+	result = rand.IntN(sqlparser.MaxPriorityValue) < priority && t.state.throttle()
 
 	t.requestsTotal.Add(workload, 1)
 	if result {

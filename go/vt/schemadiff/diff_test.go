@@ -18,6 +18,7 @@ package schemadiff
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,6 +44,7 @@ func TestDiffTables(t *testing.T) {
 		expectError string
 		hints       *DiffHints
 		env         *Environment
+		annotated   []string
 	}{
 		{
 			name: "identical",
@@ -58,6 +60,9 @@ func TestDiffTables(t *testing.T) {
 			action:   "alter",
 			fromName: "t",
 			toName:   "t",
+			annotated: []string{
+				" CREATE TABLE `t` (", " \t`id` int,", "+\t`i` int,", " \tPRIMARY KEY (`id`)", " )",
+			},
 		},
 		{
 			name:     "change of columns, boolean type",
@@ -106,6 +111,9 @@ func TestDiffTables(t *testing.T) {
 			cdiff:  "CREATE TABLE `t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			action: "create",
 			toName: "t",
+			annotated: []string{
+				"+CREATE TABLE `t` (", "+\t`id` int,", "+\tPRIMARY KEY (`id`)", "+)",
+			},
 		},
 		{
 			name:     "drop",
@@ -114,6 +122,9 @@ func TestDiffTables(t *testing.T) {
 			cdiff:    "DROP TABLE `t`",
 			action:   "drop",
 			fromName: "t",
+			annotated: []string{
+				"-CREATE TABLE `t` (", "-\t`id` int,", "-\tPRIMARY KEY (`id`)", "-)",
+			},
 		},
 		{
 			name: "none",
@@ -390,6 +401,12 @@ func TestDiffTables(t *testing.T) {
 					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
+				if ts.annotated != nil {
+					// Optional test for assorted scenarios.
+					_, _, unified := d.Annotated()
+					unifiedExport := unified.Export()
+					assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
+				}
 				// let's also check dq, and also validate that dq's statement is identical to d's
 				assert.NoError(t, dqerr)
 				require.NotNil(t, dq)
@@ -403,15 +420,16 @@ func TestDiffTables(t *testing.T) {
 
 func TestDiffViews(t *testing.T) {
 	tt := []struct {
-		name     string
-		from     string
-		to       string
-		diff     string
-		cdiff    string
-		fromName string
-		toName   string
-		action   string
-		isError  bool
+		name      string
+		from      string
+		to        string
+		diff      string
+		cdiff     string
+		fromName  string
+		toName    string
+		action    string
+		isError   bool
+		annotated []string
 	}{
 		{
 			name: "identical",
@@ -427,6 +445,10 @@ func TestDiffViews(t *testing.T) {
 			action:   "alter",
 			fromName: "v1",
 			toName:   "v1",
+			annotated: []string{
+				"-CREATE VIEW `v1`(`col1`, `col2`, `col3`) AS SELECT `a`, `b`, `c` FROM `t`",
+				"+CREATE VIEW `v1`(`col1`, `col2`, `colother`) AS SELECT `a`, `b`, `c` FROM `t`",
+			},
 		},
 		{
 			name:   "create",
@@ -435,6 +457,9 @@ func TestDiffViews(t *testing.T) {
 			cdiff:  "CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
 			action: "create",
 			toName: "v1",
+			annotated: []string{
+				"+CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+			},
 		},
 		{
 			name:     "drop",
@@ -443,6 +468,9 @@ func TestDiffViews(t *testing.T) {
 			cdiff:    "DROP VIEW `v1`",
 			action:   "drop",
 			fromName: "v1",
+			annotated: []string{
+				"-CREATE VIEW `v1` AS SELECT `a`, `b`, `c` FROM `t`",
+			},
 		},
 		{
 			name: "none",
@@ -523,7 +551,12 @@ func TestDiffViews(t *testing.T) {
 					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
-
+				if ts.annotated != nil {
+					// Optional test for assorted scenarios.
+					_, _, unified := d.Annotated()
+					unifiedExport := unified.Export()
+					assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
+				}
 				// let's also check dq, and also validate that dq's statement is identical to d's
 				assert.NoError(t, dqerr)
 				require.NotNil(t, dq)
@@ -545,6 +578,7 @@ func TestDiffSchemas(t *testing.T) {
 		cdiffs      []string
 		expectError string
 		tableRename int
+		annotated   []string
 		fkStrategy  int
 	}{
 		{
@@ -682,6 +716,9 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"CREATE TABLE `t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			},
+			annotated: []string{
+				"+CREATE TABLE `t` (\n+\t`id` int,\n+\tPRIMARY KEY (`id`)\n+)",
+			},
 		},
 		{
 			name: "drop table",
@@ -691,6 +728,9 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"DROP TABLE `t`",
+			},
+			annotated: []string{
+				"-CREATE TABLE `t` (\n-\t`id` int,\n-\tPRIMARY KEY (`id`)\n-)",
 			},
 		},
 		{
@@ -706,6 +746,11 @@ func TestDiffSchemas(t *testing.T) {
 				"DROP TABLE `t1`",
 				"ALTER TABLE `t2` MODIFY COLUMN `id` bigint",
 				"CREATE TABLE `t4` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
+			},
+			annotated: []string{
+				"-CREATE TABLE `t1` (\n-\t`id` int,\n-\tPRIMARY KEY (`id`)\n-)",
+				" CREATE TABLE `t2` (\n-\t`id` int,\n+\t`id` bigint,\n \tPRIMARY KEY (`id`)\n )",
+				"+CREATE TABLE `t4` (\n+\t`id` int,\n+\tPRIMARY KEY (`id`)\n+)",
 			},
 		},
 		{
@@ -732,6 +777,9 @@ func TestDiffSchemas(t *testing.T) {
 				"RENAME TABLE `t2a` TO `t2b`",
 			},
 			tableRename: TableRenameHeuristicStatement,
+			annotated: []string{
+				"-CREATE TABLE `t2a` (\n-\t`id` int unsigned,\n-\tPRIMARY KEY (`id`)\n-)\n+CREATE TABLE `t2b` (\n+\t`id` int unsigned,\n+\tPRIMARY KEY (`id`)\n+)",
+			},
 		},
 		{
 			name: "drop and create all",
@@ -1009,6 +1057,16 @@ func TestDiffSchemas(t *testing.T) {
 					assert.NoError(t, err)
 				}
 
+				if ts.annotated != nil {
+					// Optional test for assorted scenarios.
+					if assert.Equalf(t, len(diffs), len(ts.annotated), "%+v", cstatements) {
+						for i, d := range diffs {
+							_, _, unified := d.Annotated()
+							assert.Equal(t, ts.annotated[i], unified.Export())
+						}
+					}
+				}
+
 				{
 					// Validate "apply()" on "from" converges with "to"
 					schema1, err := NewSchemaFromSQL(env, ts.from)
@@ -1098,5 +1156,45 @@ func TestSchemaApplyError(t *testing.T) {
 				require.Error(t, err, "applying diffs to schema1: %v", schema1.ToSQL())
 			}
 		})
+	}
+}
+
+func TestEntityDiffByStatement(t *testing.T) {
+	env := NewTestEnv()
+
+	{
+		queries := []string{
+			"create table t1(id int primary key)",
+			"alter table t1 add column i int",
+			"rename table t1 to t2",
+			"drop table t1",
+			"create view v1 as select * from t1",
+			"alter view v1 as select * from t2",
+			"drop view v1",
+		}
+		for _, query := range queries {
+			t.Run(query, func(t *testing.T) {
+				stmt, err := env.Parser().ParseStrictDDL(query)
+				require.NoError(t, err)
+				entityDiff := EntityDiffByStatement(stmt)
+				require.NotNil(t, entityDiff)
+				require.NotNil(t, entityDiff.Statement())
+				require.Equal(t, stmt, entityDiff.Statement())
+			})
+		}
+	}
+	{
+		queries := []string{
+			"drop database d1",
+			"optimize table t1",
+		}
+		for _, query := range queries {
+			t.Run(query, func(t *testing.T) {
+				stmt, err := env.Parser().ParseStrictDDL(query)
+				require.NoError(t, err)
+				entityDiff := EntityDiffByStatement(stmt)
+				require.Nil(t, entityDiff)
+			})
+		}
 	}
 }

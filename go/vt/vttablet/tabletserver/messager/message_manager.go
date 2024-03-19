@@ -21,7 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 

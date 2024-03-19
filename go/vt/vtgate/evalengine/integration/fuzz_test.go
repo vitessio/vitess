@@ -21,7 +21,7 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"regexp"
 	"strings"
@@ -42,7 +42,6 @@ import (
 
 type (
 	gencase struct {
-		rand         *rand.Rand
 		ratioTuple   int
 		ratioSubexpr int
 		tupleLen     int
@@ -62,24 +61,24 @@ var rhsOfIs = []string{
 }
 
 func (g *gencase) arg(tuple bool) string {
-	if tuple || g.rand.Intn(g.ratioTuple) == 0 {
+	if tuple || rand.IntN(g.ratioTuple) == 0 {
 		var exprs []string
 		for i := 0; i < g.tupleLen; i++ {
 			exprs = append(exprs, g.arg(false))
 		}
 		return fmt.Sprintf("(%s)", strings.Join(exprs, ", "))
 	}
-	if g.rand.Intn(g.ratioSubexpr) == 0 {
+	if rand.IntN(g.ratioSubexpr) == 0 {
 		return fmt.Sprintf("(%s)", g.expr())
 	}
-	return g.primitives[g.rand.Intn(len(g.primitives))]
+	return g.primitives[rand.IntN(len(g.primitives))]
 }
 
 func (g *gencase) expr() string {
-	op := g.operators[g.rand.Intn(len(g.operators))]
+	op := g.operators[rand.IntN(len(g.operators))]
 	rhs := g.arg(op == "IN" || op == "NOT IN")
 	if op == "IS" {
-		rhs = rhsOfIs[g.rand.Intn(len(rhsOfIs))]
+		rhs = rhsOfIs[rand.IntN(len(rhsOfIs))]
 	}
 	return fmt.Sprintf("%s %s %s", g.arg(false), op, rhs)
 }
@@ -183,7 +182,6 @@ func TestGenerateFuzzCases(t *testing.T) {
 		t.Skipf("skipping fuzz test generation")
 	}
 	var gen = gencase{
-		rand:         rand.New(rand.NewSource(fuzzSeed)),
 		ratioTuple:   8,
 		ratioSubexpr: 8,
 		tupleLen:     4,

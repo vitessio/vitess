@@ -17,9 +17,7 @@ limitations under the License.
 package random
 
 import (
-	"math/rand"
 	"testing"
-	"time"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -49,11 +47,8 @@ func TestRandomExprWithTables(t *testing.T) {
 	}...)
 
 	for i := 0; i < 100; i++ {
-
-		seed := time.Now().UnixNano()
-		r := rand.New(rand.NewSource(seed))
 		genConfig := sqlparser.NewExprGeneratorConfig(sqlparser.CanAggregate, "", 0, false)
-		g := sqlparser.NewGenerator(r, 3, slice.Map(schemaTables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
+		g := sqlparser.NewGenerator(3, slice.Map(schemaTables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
 		g.Expression(genConfig)
 	}
 }
