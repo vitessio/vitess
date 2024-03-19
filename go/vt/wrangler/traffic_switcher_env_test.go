@@ -19,7 +19,7 @@ package wrangler
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"sync"
@@ -158,7 +158,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
 
-	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.Intn(1000000000))
+	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.IntN(1000000000))
 	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tme.mu.Lock()
 		defer tme.mu.Unlock()
@@ -424,7 +424,7 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
 
-	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.Intn(1000000000))
+	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.IntN(1000000000))
 	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tme.mu.Lock()
 		defer tme.mu.Unlock()
@@ -589,7 +589,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
 
-	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.Intn(1000000000))
+	dialerName := fmt.Sprintf("TrafficSwitcherTest-%s-%d", t.Name(), rand.IntN(1000000000))
 	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		tme.mu.Lock()
 		defer tme.mu.Unlock()

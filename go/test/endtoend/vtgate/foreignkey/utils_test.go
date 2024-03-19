@@ -20,7 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"strings"
 	"testing"
@@ -55,16 +55,16 @@ func (fz *fuzzer) generateExpression(length int, cols ...string) string {
 		return expr
 	}
 	rhsExpr := fz.generateExpression(length-1, cols...)
-	op := supportedOpps[rand.Intn(len(supportedOpps))]
+	op := supportedOpps[rand.IntN(len(supportedOpps))]
 	return fmt.Sprintf("%v %s (%v)", expr, op, rhsExpr)
 }
 
 // getColOrInt gets a column or an integer/NULL literal with equal probability.
 func (fz *fuzzer) getColOrInt(cols ...string) string {
-	if len(cols) == 0 || rand.Intn(2) == 0 {
-		return convertIntValueToString(rand.Intn(1 + fz.maxValForCol))
+	if len(cols) == 0 || rand.IntN(2) == 0 {
+		return convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
 	}
-	return cols[rand.Intn(len(cols))]
+	return cols[rand.IntN(len(cols))]
 }
 
 // convertIntValueToString converts the given value to a string

@@ -23,7 +23,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"sync"
@@ -1795,7 +1795,7 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 				return nil, fmt.Errorf("%w for shard %s/%s", errors.ErrNoServingTablet, shard.Keyspace, shard.Name)
 			}
 
-			randomServingTablet := shardTablets[rand.Intn(len(shardTablets))]
+			randomServingTablet := shardTablets[rand.IntN(len(shardTablets))]
 			tabletsToQuery = append(tabletsToQuery, randomServingTablet)
 		}
 
@@ -1812,7 +1812,7 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 		return nil, err
 	}
 
-	randomServingTablet := keyspaceTablets[rand.Intn(len(keyspaceTablets))]
+	randomServingTablet := keyspaceTablets[rand.IntN(len(keyspaceTablets))]
 	return []*vtadminpb.Tablet{randomServingTablet}, nil
 }
 

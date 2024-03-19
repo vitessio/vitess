@@ -19,7 +19,7 @@ package wrangler
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"testing"
 
@@ -81,7 +81,7 @@ func newTestVDiffEnv(t testing.TB, ctx context.Context, sourceShards, targetShar
 	env.wr = New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), env.topoServ, env.tmc)
 
 	// Generate a unique dialer name.
-	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.Intn(1000000000))
+	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.IntN(1000000000))
 	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		env.mu.Lock()
 		defer env.mu.Unlock()
