@@ -174,3 +174,25 @@ func DiffSchemas(env *Environment, schema1 *Schema, schema2 *Schema, hints *Diff
 	}
 	return schema1.SchemaDiff(schema2, hints)
 }
+
+// EntityDiffByStatement is a helper function that returns a simplified and incomplete EntityDiff based on the given SQL statement.
+// It is useful for testing purposes as a quick mean to wrap a statement with a diff.
+func EntityDiffByStatement(statement sqlparser.Statement) EntityDiff {
+	switch stmt := statement.(type) {
+	case *sqlparser.CreateTable:
+		return &CreateTableEntityDiff{createTable: stmt}
+	case *sqlparser.RenameTable:
+		return &RenameTableEntityDiff{renameTable: stmt}
+	case *sqlparser.AlterTable:
+		return &AlterTableEntityDiff{alterTable: stmt}
+	case *sqlparser.DropTable:
+		return &DropTableEntityDiff{dropTable: stmt}
+	case *sqlparser.CreateView:
+		return &CreateViewEntityDiff{createView: stmt}
+	case *sqlparser.AlterView:
+		return &AlterViewEntityDiff{alterView: stmt}
+	case *sqlparser.DropView:
+		return &DropViewEntityDiff{dropView: stmt}
+	}
+	return nil
+}
