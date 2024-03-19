@@ -208,6 +208,13 @@ type TabletManagerClient struct {
 		Error    error
 	}
 	// keyed by tablet alias.
+	ExecuteMultiFetchAsDbaDelays map[string]time.Duration
+	// keyed by tablet alias.
+	ExecuteMultiFetchAsDbaResults map[string]struct {
+		Response []*querypb.QueryResult
+		Error    error
+	}
+	// keyed by tablet alias.
 	ExecuteHookDelays map[string]time.Duration
 	// keyed by tablet alias.
 	ExecuteHookResults map[string]struct {
@@ -549,6 +556,30 @@ func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *
 	}
 
 	return nil, fmt.Errorf("%w: no ExecuteFetchAsDba result set for tablet %s", assert.AnError, key)
+}
+
+// ExecuteMultiFetchAsDba is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	if fake.ExecuteMultiFetchAsDbaResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteMultiFetchAsDba results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteMultiFetchAsDbaDelays != nil {
+		if delay, ok := fake.ExecuteMultiFetchAsDbaDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteMultiFetchAsDbaResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteMultiFetchAsDba result set for tablet %s", assert.AnError, key)
 }
 
 // ExecuteHook is part of the tmclient.TabletManagerClient interface.

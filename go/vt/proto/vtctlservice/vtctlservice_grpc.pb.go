@@ -203,6 +203,8 @@ type VtctldClient interface {
 	ExecuteFetchAsApp(ctx context.Context, in *vtctldata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsAppResponse, error)
 	// ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
 	ExecuteFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsDBAResponse, error)
+	// ExecuteMultiFetchAsDBA executes one or more SQL queries on the remote tablet as the DBA user.
+	ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error)
 	// ExecuteHook runs the hook on the tablet.
 	ExecuteHook(ctx context.Context, in *vtctldata.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteHookResponse, error)
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
@@ -711,6 +713,15 @@ func (c *vtctldClient) ExecuteFetchAsApp(ctx context.Context, in *vtctldata.Exec
 func (c *vtctldClient) ExecuteFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsDBAResponse, error) {
 	out := new(vtctldata.ExecuteFetchAsDBAResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ExecuteFetchAsDBA", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ExecuteMultiFetchAsDBA(ctx context.Context, in *vtctldata.ExecuteMultiFetchAsDBARequest, opts ...grpc.CallOption) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error) {
+	out := new(vtctldata.ExecuteMultiFetchAsDBAResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ExecuteMultiFetchAsDBA", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1612,6 +1623,8 @@ type VtctldServer interface {
 	ExecuteFetchAsApp(context.Context, *vtctldata.ExecuteFetchAsAppRequest) (*vtctldata.ExecuteFetchAsAppResponse, error)
 	// ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
 	ExecuteFetchAsDBA(context.Context, *vtctldata.ExecuteFetchAsDBARequest) (*vtctldata.ExecuteFetchAsDBAResponse, error)
+	// ExecuteMultiFetchAsDBA executes one or more SQL queries on the remote tablet as the DBA user.
+	ExecuteMultiFetchAsDBA(context.Context, *vtctldata.ExecuteMultiFetchAsDBARequest) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error)
 	// ExecuteHook runs the hook on the tablet.
 	ExecuteHook(context.Context, *vtctldata.ExecuteHookRequest) (*vtctldata.ExecuteHookResponse, error)
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
@@ -1938,6 +1951,9 @@ func (UnimplementedVtctldServer) ExecuteFetchAsApp(context.Context, *vtctldata.E
 }
 func (UnimplementedVtctldServer) ExecuteFetchAsDBA(context.Context, *vtctldata.ExecuteFetchAsDBARequest) (*vtctldata.ExecuteFetchAsDBAResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteFetchAsDBA not implemented")
+}
+func (UnimplementedVtctldServer) ExecuteMultiFetchAsDBA(context.Context, *vtctldata.ExecuteMultiFetchAsDBARequest) (*vtctldata.ExecuteMultiFetchAsDBAResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteMultiFetchAsDBA not implemented")
 }
 func (UnimplementedVtctldServer) ExecuteHook(context.Context, *vtctldata.ExecuteHookRequest) (*vtctldata.ExecuteHookResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteHook not implemented")
@@ -2635,6 +2651,24 @@ func _Vtctld_ExecuteFetchAsDBA_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ExecuteFetchAsDBA(ctx, req.(*vtctldata.ExecuteFetchAsDBARequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ExecuteMultiFetchAsDBA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ExecuteMultiFetchAsDBARequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ExecuteMultiFetchAsDBA(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ExecuteMultiFetchAsDBA",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ExecuteMultiFetchAsDBA(ctx, req.(*vtctldata.ExecuteMultiFetchAsDBARequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4334,6 +4368,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExecuteFetchAsDBA",
 			Handler:    _Vtctld_ExecuteFetchAsDBA_Handler,
+		},
+		{
+			MethodName: "ExecuteMultiFetchAsDBA",
+			Handler:    _Vtctld_ExecuteMultiFetchAsDBA_Handler,
 		},
 		{
 			MethodName: "ExecuteHook",
