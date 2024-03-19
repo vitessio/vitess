@@ -103,7 +103,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	childFks := ctx.SemTable.GetChildForeignKeysForTargets()
 
 	// We check if dml with input plan is required. DML with input planning is generally
-	// slower, because it does a selection and then creates a update statement wherein we have to
+	// slower, because it does a selection and then creates an update statement wherein we have to
 	// list all the primary key values.
 	if updateWithInputPlanningRequired(ctx, childFks, parentFks, updStmt) {
 		return createUpdateWithInputOp(ctx, updStmt)
@@ -120,6 +120,12 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		Lock:     sqlparser.ShareModeLock,
 	}
 
+	var ts semantics.TableSet
+	for _, ue := range updStmt.Exprs {
+		ts = ts.Merge(ctx.SemTable.DirectDeps(ue.Name))
+	}
+	parentFks = ctx.SemTable.GetParentForeignKeysForTableSet(ts)
+	childFks = ctx.SemTable.GetChildForeignKeysForTableSet(ts)
 	if len(childFks) == 0 && len(parentFks) == 0 {
 		return op
 	}
@@ -133,7 +139,7 @@ func updateWithInputPlanningRequired(
 	parentFks []vindexes.ParentFKInfo,
 	updateStmt *sqlparser.Update,
 ) bool {
-	if isMultiTargetUpdate(ctx, childFks, parentFks, updateStmt) {
+	if isMultiTargetUpdate(ctx, updateStmt) {
 		return true
 	}
 	// If there are no foreign keys, we don't need to use delete with input.
@@ -147,20 +153,12 @@ func updateWithInputPlanningRequired(
 	return false
 }
 
-func isMultiTargetUpdate(ctx *plancontext.PlanningContext, childFks []vindexes.ChildFKInfo, parentFks []vindexes.ParentFKInfo, updateStmt *sqlparser.Update) bool {
+func isMultiTargetUpdate(ctx *plancontext.PlanningContext, updateStmt *sqlparser.Update) bool {
 	var targetTS semantics.TableSet
 	for _, ue := range updateStmt.Exprs {
 		targetTS = targetTS.Merge(ctx.SemTable.DirectDeps(ue.Name))
 	}
-	if targetTS.NumberOfTables() == 1 {
-		return false
-	}
-
-	if len(childFks) > 0 || len(parentFks) > 0 {
-		panic(vterrors.VT12001("multi table update with foreign keys"))
-	}
-
-	return true
+	return targetTS.NumberOfTables() > 1
 }
 
 func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Update) (op Operator) {
